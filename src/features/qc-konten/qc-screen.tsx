@@ -1,0 +1,566 @@
+"use client";
+
+// ============================================================
+// QcScreen — halaman utama Modul QC Konten Sosmed.
+// Header periode → tombol Mulai Analisis (checklist beranimasi)
+// → ringkasan → filter platform → daftar akun wajib.
+// ============================================================
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Zap,
+  RefreshCw,
+  CalendarDays,
+  ChevronDown,
+  CheckCircle2,
+  Loader2,
+  Circle,
+  ChevronRight,
+  ScanSearch,
+  Clock,
+} from "lucide-react";
+import {
+  EmptyState,
+  FadeInUp,
+  GlassSkeleton,
+  SectionTitle,
+  StatusBadge,
+  ThemeToggle,
+} from "@/components/pri-ui";
+import { GlassCard } from "@/components/glass-card";
+import { ProgressRing } from "@/components/progress-ring";
+import { PlatformIcon } from "@/components/platform-icon";
+import {
+  getAkunWajib,
+  getPeriodeList,
+  type AkunWajibWithStats,
+} from "@/services";
+import { toast } from "@/hooks/use-app-store";
+import { cn } from "@/lib/utils";
+
+// ------------------------------------------------------------
+// Konstanta & helper
+// ------------------------------------------------------------
+
+const BULAN_ID = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+
+/** "2026-08-23 17:00-15:59" → "23 Agustus 2026 · 17:00–15:59" */
+function labelPeriode(periode: string): string {
+  const [tanggal, jam] = periode.split(" ");
+  if (!tanggal) return periode;
+  const [y, m, d] = tanggal.split("-");
+  const namaBulan = BULAN_ID[parseInt(m ?? "1", 10) - 1] ?? "";
+  const jamTampil = (jam ?? "").replace("-", "–");
+  return `${parseInt(d ?? "0", 10)} ${namaBulan} ${y} · ${jamTampil}`;
+}
+
+const TAHAP_ANALISIS = [
+  "Mengambil daftar akun wajib...",
+  "Memindai postingan @dpp.pri...",
+  "Memindai postingan @muhammad.nazaruddin_...",
+  "Memindai postingan @tvrakyat.official...",
+  "Mengambil komentar dari 12 postingan...",
+  "Mencocokkan dengan roster kader...",
+  "Menyusun rekap kepatuhan...",
+];
+
+const CHIP_PLATFORM = [
+  { id: "semua", label: "Semua", tersedia: true },
+  { id: "instagram", label: "Instagram", tersedia: true },
+  { id: "tiktok", label: "TikTok", tersedia: false },
+  { id: "twitter", label: "X", tersedia: false },
+  { id: "facebook", label: "Facebook", tersedia: false },
+  { id: "threads", label: "Threads", tersedia: false },
+  { id: "youtube", label: "YouTube", tersedia: false },
+];
+
+/** Waktu relatif singkat dari timestamp */
+function laluSejak(ts: number): string {
+  const detik = Math.floor((Date.now() - ts) / 1000);
+  if (detik < 30) return "baru saja";
+  const menit = Math.floor(detik / 60);
+  if (menit < 60) return `${menit} menit lalu`;
+  return `${Math.floor(menit / 60)} jam lalu`;
+}
+
+// ------------------------------------------------------------
+// Komponen utama
+// ------------------------------------------------------------
+
+export function QcScreen({ onBukaAkun }: { onBukaAkun: (akunWajib: string) => void }) {
+  // Periode
+  const [periodeList, setPeriodeList] = useState<string[]>([]);
+  const [periodeAktif, setPeriodeAktif] = useState<string>("");
+  const [dropdownPeriode, setDropdownPeriode] = useState(false);
+
+  // Data akun
+  const [akunList, setAkunList] = useState<AkunWajibWithStats[] | null>(null);
+  const [gagalMuat, setGagalMuat] = useState(false);
+
+  // Analisis
+  const [tahap, setTahap] = useState<number>(-1); // -1 belum mulai, 0..6 berjalan, 7 selesai
+  const [terakhirAnalisis, setTerakhirAnalisis] = useState<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Filter platform
+  const [platform, setPlatform] = useState("semua");
+
+  const sedangAnalisis = tahap >= 0 && tahap < TAHAP_ANALISIS.length;
+  const sudahAnalisis = tahap >= TAHAP_ANALISIS.length;
+
+  // Muat data awal
+  useEffect(() => {
+    let hidup = true;
+    void (async () => {
+      try {
+        const [list, periode] = await Promise.all([getAkunWajib(), getPeriodeList()]);
+        if (!hidup) return;
+        setAkunList(list);
+        setPeriodeList(periode);
+        setPeriodeAktif(periode[0] ?? "");
+      } catch {
+        if (hidup) {
+          setGagalMuat(true);
+          toast("error", "Gagal memuat data QC", "Periksa koneksi lalu coba lagi.");
+        }
+      }
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, []);
+
+  // Bersihkan timer saat unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  // Rantai tahap analisis
+  function jalankanTahap(n: number) {
+    if (n >= TAHAP_ANALISIS.length) {
+      setTahap(TAHAP_ANALISIS.length);
+      setTerakhirAnalisis(Date.now());
+      toast("sukses", "Analisis selesai", "12 postingan diperiksa");
+      return;
+    }
+    setTahap(n);
+    timerRef.current = setTimeout(() => jalankanTahap(n + 1), 800 + Math.random() * 700);
+  }
+
+  function mulaiAnalisis() {
+    if (sedangAnalisis) return;
+    jalankanTahap(0);
+  }
+
+  // Ringkasan agregat dari data services
+  const ringkasan = useMemo(() => {
+    if (!akunList) return null;
+    const totalPostingan = akunList.reduce((a, x) => a + x.total_postingan, 0);
+    const patuhPenuh = akunList.reduce((a, x) => a + x.kader_patuh_penuh, 0);
+    const totalPasangan = akunList.length * 24;
+    return { totalPostingan, patuhPenuh, totalPasangan };
+  }, [akunList]);
+
+  const akunTampil = useMemo(() => {
+    if (!akunList) return [];
+    if (platform === "semua") return akunList;
+    return akunList.filter((a) => a.platform === platform);
+  }, [akunList, platform]);
+
+  const persenAnalisis = Math.min(100, Math.round(((tahap + 1) / TAHAP_ANALISIS.length) * 100));
+
+  return (
+    <div className="kolom-aplikasi px-4 pb-32">
+      {/* Header modul */}
+      <header className="flex items-start justify-between gap-3 pt-5">
+        <div>
+          <h1 className="font-heading text-2xl font-extrabold tracking-tight text-teks-utama">
+            QC Konten Sosmed
+          </h1>
+          <p className="mt-0.5 text-xs text-teks-sekunder">
+            Pantau kepatuhan komentar kader di akun wajib
+          </p>
+        </div>
+        <ThemeToggle />
+      </header>
+
+      {/* Header periode */}
+      <FadeInUp delay={0.05} className="mt-4">
+        <GlassCard className="relative p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-heading text-sm font-bold text-teks-utama">
+                {periodeAktif ? labelPeriode(periodeAktif) : "Memuat periode..."}
+              </p>
+              <div className="mt-1 flex items-center gap-1.5">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sukses opacity-60" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sukses" />
+                </span>
+                <span className="text-[11px] font-medium text-teks-sekunder">
+                  {periodeList.length > 0 && periodeAktif === periodeList[0]
+                    ? "Periode berjalan"
+                    : "Periode selesai"}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDropdownPeriode((v) => !v)}
+              aria-label="Pilih periode"
+              aria-expanded={dropdownPeriode}
+              className="glass btn-tekan flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-teks-utama"
+            >
+              <CalendarDays className="h-4.5 w-4.5" />
+            </button>
+          </div>
+
+          {/* Dropdown 7 periode terakhir */}
+          <AnimatePresence>
+            {dropdownPeriode && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.22 }}
+                className="overflow-hidden"
+              >
+                <div className="scrollbar-tipis mt-3 max-h-56 overflow-y-auto rounded-xl border border-black/5 bg-black/[0.03] dark:border-white/10 dark:bg-white/[0.06]">
+                  {periodeList.map((p, i) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => {
+                        setPeriodeAktif(p);
+                        setDropdownPeriode(false);
+                        if (p !== periodeAktif) {
+                          toast(
+                            "info",
+                            "Periode diganti",
+                            `Menampilkan data ${labelPeriode(p)}`,
+                          );
+                        }
+                      }}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-2 px-3.5 py-2.5 text-left text-xs transition-colors hover:bg-black/5 dark:hover:bg-white/10",
+                        p === periodeAktif && "font-bold text-pri",
+                      )}
+                    >
+                      <span>{labelPeriode(p)}</span>
+                      {i === 0 ? (
+                        <StatusBadge label="Berjalan" warna="hijau" />
+                      ) : (
+                        <StatusBadge label="Selesai" warna="netral" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </GlassCard>
+      </FadeInUp>
+
+      {/* Tombol Mulai Analisis / Panel proses */}
+      <FadeInUp delay={0.1} className="mt-4">
+        {sedangAnalisis ? (
+          <GlassCard className="p-4">
+            <div className="flex items-start gap-4">
+              <ProgressRing value={persenAnalisis} size={72} strokeWidth={7} color="#DC2626">
+                <span className="angka-tab font-heading text-sm font-extrabold text-teks-utama">
+                  {persenAnalisis}%
+                </span>
+              </ProgressRing>
+              <div className="min-w-0 flex-1">
+                <p className="font-heading text-sm font-bold text-teks-utama">
+                  Menganalisis kepatuhan...
+                </p>
+                <ul className="mt-2 flex flex-col gap-1.5">
+                  {TAHAP_ANALISIS.map((label, i) => {
+                    const selesai = i < tahap;
+                    const berjalan = i === tahap;
+                    return (
+                      <motion.li
+                        key={label}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: selesai || berjalan ? 1 : 0.35, x: 0 }}
+                        className="flex items-center gap-2 text-xs"
+                      >
+                        {selesai ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-sukses" />
+                        ) : berjalan ? (
+                          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-pri" />
+                        ) : (
+                          <Circle className="h-3.5 w-3.5 shrink-0 text-teks-sekunder/50" />
+                        )}
+                        <span
+                          className={cn(
+                            "leading-snug",
+                            selesai
+                              ? "text-teks-sekunder line-through decoration-sukses/50"
+                              : berjalan
+                                ? "font-semibold text-teks-utama"
+                                : "text-teks-sekunder",
+                          )}
+                        >
+                          {label}
+                        </span>
+                      </motion.li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+          </GlassCard>
+        ) : (
+          <div>
+            <button
+              type="button"
+              onClick={mulaiAnalisis}
+              className="btn-tekan flex h-13 w-full items-center justify-center gap-2.5 rounded-2xl font-heading text-[15px] font-bold text-white"
+              style={{
+                background: "linear-gradient(135deg, #DC2626, #B91C1C)",
+                boxShadow: "0 10px 24px rgba(220, 38, 38, 0.35)",
+                height: "3.25rem",
+              }}
+            >
+              {sudahAnalisis ? (
+                <RefreshCw className="h-5 w-5" />
+              ) : (
+                <Zap className="h-5 w-5" />
+              )}
+              {sudahAnalisis ? "Analisis Ulang" : "Mulai Analisis"}
+            </button>
+            {terakhirAnalisis && (
+              <p className="mt-2 flex items-center justify-center gap-1 text-[11px] text-teks-sekunder">
+                <Clock className="h-3 w-3" />
+                Terakhir dianalisis {laluSejak(terakhirAnalisis)}
+              </p>
+            )}
+          </div>
+        )}
+      </FadeInUp>
+
+      {/* Konten hasil */}
+      {sudahAnalisis ? (
+        <>
+          {/* Ringkasan 3 kartu */}
+          <FadeInUp delay={0.05} className="mt-5">
+            <div className="grid grid-cols-3 gap-2.5">
+              <GlassCard className="flex flex-col items-center p-3">
+                <span className="angka-tab font-heading text-xl font-extrabold text-teks-utama">
+                  {ringkasan?.totalPostingan ?? "–"}
+                </span>
+                <span className="mt-0.5 text-center text-[10px] leading-tight font-medium text-teks-sekunder">
+                  Total Postingan
+                </span>
+              </GlassCard>
+              <GlassCard className="flex flex-col items-center p-3">
+                <span className="angka-tab font-heading text-xl font-extrabold text-sukses">
+                  {ringkasan ? `${ringkasan.patuhPenuh}/${ringkasan.totalPasangan}` : "–"}
+                </span>
+                <span className="mt-0.5 text-center text-[10px] leading-tight font-medium text-teks-sekunder">
+                  Kader Patuh Penuh
+                </span>
+              </GlassCard>
+              <GlassCard className="flex flex-col items-center p-3">
+                <span className="angka-tab font-heading text-xl font-extrabold text-gagal">
+                  {ringkasan ? ringkasan.totalPasangan - ringkasan.patuhPenuh : "–"}
+                </span>
+                <span className="mt-0.5 text-center text-[10px] leading-tight font-medium text-teks-sekunder">
+                  Perlu Ditindaklanjuti
+                </span>
+              </GlassCard>
+            </div>
+          </FadeInUp>
+
+          {/* Filter chip platform */}
+          <FadeInUp delay={0.1} className="mt-5">
+            <SectionTitle judul="Daftar Akun Wajib" />
+            <div className="tanpa-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+              {CHIP_PLATFORM.map((chip) => {
+                const aktif = platform === chip.id;
+                return (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    disabled={!chip.tersedia}
+                    onClick={() => setPlatform(chip.id)}
+                    aria-pressed={aktif}
+                    className={cn(
+                      "btn-tekan relative flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all",
+                      aktif
+                        ? "border-transparent text-white"
+                        : "glass text-teks-sekunder",
+                      !chip.tersedia && "cursor-not-allowed opacity-45",
+                    )}
+                    style={
+                      aktif
+                        ? {
+                            background: "linear-gradient(135deg, #DC2626, #B91C1C)",
+                            boxShadow: "0 6px 16px rgba(220, 38, 38, 0.3)",
+                          }
+                        : undefined
+                    }
+                  >
+                    {chip.id !== "semua" && (
+                      <PlatformIcon platform={chip.id} size={13} />
+                    )}
+                    {chip.label}
+                    {!chip.tersedia && (
+                      <span className="ml-0.5 rounded-full bg-emas/20 px-1.5 py-px text-[8px] font-bold text-emas">
+                        Segera hadir
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </FadeInUp>
+
+          {/* Daftar akun */}
+          <div className="mt-3 flex flex-col gap-3">
+            {akunList === null && !gagalMuat ? (
+              [0, 1, 2].map((i) => (
+                <GlassCard key={i} className="flex items-center gap-4 p-4">
+                  <GlassSkeleton className="h-14 w-14 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <GlassSkeleton className="h-4 w-32" />
+                    <GlassSkeleton className="h-3 w-44" />
+                    <GlassSkeleton className="h-3 w-40" />
+                  </div>
+                  <GlassSkeleton className="h-[84px] w-[84px] rounded-full" />
+                </GlassCard>
+              ))
+            ) : gagalMuat ? (
+              <GlassCard>
+                <EmptyState
+                  ikon={ScanSearch}
+                  judul="Gagal Memuat Data"
+                  keterangan="Terjadi kendala saat mengambil daftar akun wajib. Silakan coba lagi."
+                  labelAksi="Coba Lagi"
+                  onAksi={() => window.location.reload()}
+                />
+              </GlassCard>
+            ) : akunTampil.length === 0 ? (
+              <GlassCard>
+                <EmptyState
+                  ikon={ScanSearch}
+                  judul="Belum Ada Akun di Platform Ini"
+                  keterangan="Akun wajib untuk platform ini akan segera ditambahkan."
+                />
+              </GlassCard>
+            ) : (
+              akunTampil.map((akun, i) => (
+                <FadeInUp key={akun.id} delay={0.05 + i * 0.07}>
+                  <GlassCard
+                    onClick={() => onBukaAkun(akun.akun_wajib)}
+                    ariaLabel={`Buka detail akun ${akun.akun_wajib}`}
+                    className="p-4"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      {/* Avatar + badge platform */}
+                      <div className="relative shrink-0">
+                        <span
+                          className="flex h-14 w-14 items-center justify-center rounded-full font-heading text-base font-extrabold text-white shadow-md"
+                          style={{
+                            background: `linear-gradient(135deg, ${
+                              i === 0 ? "#DC2626, #F59E0B" : i === 1 ? "#DB2777, #F472B6" : "#B45309, #FBBF24"
+                            })`,
+                          }}
+                          aria-hidden="true"
+                        >
+                          {akun.nama_tampilan
+                            .split(" ")
+                            .slice(0, 2)
+                            .map((k) => k[0])
+                            .join("")}
+                        </span>
+                        <span className="absolute -right-1 -bottom-1">
+                          <PlatformIcon platform={akun.platform} size={13} denganWadah />
+                        </span>
+                      </div>
+
+                      {/* Info akun */}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-heading text-[15px] font-bold text-teks-utama">
+                          @{akun.akun_wajib}
+                        </p>
+                        <p className="truncate text-xs text-teks-sekunder">
+                          {akun.nama_tampilan}
+                        </p>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <StatusBadge
+                            label={`${akun.total_postingan} postingan`}
+                            warna="netral"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Ring kepatuhan */}
+                      <div className="flex shrink-0 flex-col items-center">
+                        <ProgressRing value={akun.persen} size={84} strokeWidth={8}>
+                          <span
+                            className="angka-tab font-heading text-lg font-extrabold"
+                            style={{
+                              color:
+                                akun.persen >= 80
+                                  ? "#10B981"
+                                  : akun.persen >= 50
+                                    ? "#F59E0B"
+                                    : "#EF4444",
+                            }}
+                          >
+                            {akun.persen}%
+                          </span>
+                          <span className="text-[8px] font-medium text-teks-sekunder">
+                            kepatuhan
+                          </span>
+                        </ProgressRing>
+                      </div>
+                    </div>
+
+                    {/* Baris ringkas */}
+                    <div className="mt-3 flex items-center justify-between gap-2 border-t border-black/5 pt-3 dark:border-white/10">
+                      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-teks-sekunder">
+                        <span className="flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-sukses" />
+                          {akun.sudah} komentar masuk
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 rounded-full bg-gagal" />
+                          {akun.belum} kader belum lengkap
+                        </span>
+                      </p>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-teks-sekunder" />
+                    </div>
+                  </GlassCard>
+                </FadeInUp>
+              ))
+            )}
+          </div>
+        </>
+      ) : (
+        !sedangAnalisis && (
+          <FadeInUp delay={0.15} className="mt-5">
+            <GlassCard>
+              <EmptyState
+                ikon={ScanSearch}
+                judul="Belum Ada Analisis Hari Ini"
+                keterangan="Tekan tombol Mulai Analisis untuk memeriksa kepatuhan kader."
+                labelAksi="Mulai Analisis"
+                onAksi={mulaiAnalisis}
+              />
+            </GlassCard>
+          </FadeInUp>
+        )
+      )}
+    </div>
+  );
+}
