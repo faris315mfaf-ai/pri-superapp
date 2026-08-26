@@ -44,8 +44,16 @@ export async function POST(request: Request) {
 
     const user = data as BarisUser | null;
     if (!user) {
-      throw Object.assign(new Error("Akun untuk nomor ini tidak ditemukan."), {
-        status: 404,
+      // ANTI-ENUMERASI: dulu jalur ini membalas 404 "akun tidak
+      // ditemukan" — artinya siapa pun bisa memetakan nomor mana saja
+      // yang terdaftar. Kini jawabannya generik dan berstatus sama
+      // dengan salah kode, PLUS kerja tiruan yang menyerupai jalur
+      // sukses (satu update + satu pembuatan sesi ≈ dua query) supaya
+      // bedanya tidak bisa diendus lewat selisih waktu respons.
+      await db.from("app_user").update({ wa_terverifikasi: true }).eq("id", -1);
+      await db.from("sesi_perangkat").select("id").eq("id", -1).maybeSingle();
+      throw Object.assign(new Error("Nomor atau kode OTP tidak sesuai."), {
+        status: 401,
       });
     }
 
