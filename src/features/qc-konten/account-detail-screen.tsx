@@ -26,7 +26,7 @@ import {
   type PostinganWithKepatuhan,
 } from "@/services";
 import { toast } from "@/hooks/use-app-store";
-import { formatAngka, warnaKepatuhan } from "@/lib/format";
+import { formatAngkaRingkas, warnaKepatuhan } from "@/lib/format";
 
 type AccountDetailScreenProps = {
   akunWajib: string;
@@ -134,7 +134,7 @@ export function AccountDetailScreen({
             </div>
             <div className="flex flex-col items-center">
               <span className="angka-tab font-heading text-lg font-extrabold text-teks-utama">
-                {statistik ? formatAngka(statistik.totalKomentarKader) : "–"}
+                {statistik ? formatAngkaRingkas(statistik.totalKomentarKader) : "–"}
               </span>
               <span className="text-[10px] font-medium text-teks-sekunder">
                 Komentar Kader
@@ -215,11 +215,11 @@ export function AccountDetailScreen({
                     <div className="mt-2.5 flex items-center gap-4 text-xs text-teks-sekunder">
                       <span className="flex items-center gap-1">
                         <Heart className="h-3.5 w-3.5 text-pri" />
-                        <span className="angka-tab">{formatAngka(p.jumlah_like)}</span>
+                        <span className="angka-tab">{formatAngkaRingkas(p.jumlah_like)}</span>
                       </span>
                       <span className="flex items-center gap-1">
                         <MessageCircle className="h-3.5 w-3.5 text-teks-sekunder" />
-                        <span className="angka-tab">{formatAngka(p.jumlah_komentar)}</span>
+                        <span className="angka-tab">{formatAngkaRingkas(p.jumlah_komentar)}</span>
                       </span>
                     </div>
 

@@ -36,7 +36,7 @@ import {
 } from "@/services";
 import { toast } from "@/hooks/use-app-store";
 import {
-  formatAngka,
+  formatAngkaRingkas,
   linkWhatsApp,
   pesanPengingat,
   warnaKepatuhan,
@@ -220,14 +220,14 @@ export function PostDetailScreen({
               <GlassCard className="flex flex-col items-center gap-1 p-3">
                 <Heart className="h-4 w-4 text-pri" />
                 <span className="angka-tab font-heading text-base font-extrabold text-teks-utama">
-                  {formatAngka(postingan.jumlah_like)}
+                  {formatAngkaRingkas(postingan.jumlah_like)}
                 </span>
                 <span className="text-[9px] font-medium text-teks-sekunder">Like</span>
               </GlassCard>
               <GlassCard className="flex flex-col items-center gap-1 p-3">
                 <MessageCircle className="h-4 w-4 text-emas" />
                 <span className="angka-tab font-heading text-base font-extrabold text-teks-utama">
-                  {formatAngka(postingan.jumlah_komentar)}
+                  {formatAngkaRingkas(postingan.jumlah_komentar)}
                 </span>
                 <span className="text-[9px] font-medium text-teks-sekunder">Komentar</span>
               </GlassCard>

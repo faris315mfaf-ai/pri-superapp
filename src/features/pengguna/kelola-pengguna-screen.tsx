@@ -28,6 +28,7 @@ import {
   UserX,
   Users,
   X,
+  Search,
 } from "lucide-react";
 import { EmptyState, FadeInUp, GlassSkeleton, StatusBadge } from "@/components/pri-ui";
 import { GlassCard } from "@/components/glass-card";
@@ -73,6 +74,8 @@ export function KelolaPenggunaScreen({ onKembali }: { onKembali: () => void }) {
   const [daftar, setDaftar] = useState<PenggunaAdmin[] | null>(null);
   const [ringkasan, setRingkasan] = useState<Record<string, number>>({});
   const [saringan, setSaringan] = useState<Saringan>("menunggu");
+  const [cari, setCari] = useState("");
+  const [divisiPilih, setDivisiPilih] = useState<string>("semua");
   // Akun yang sedang dibukakan pilihan perannya untuk disetujui
   const [memilihPeran, setMemilihPeran] = useState<PenggunaAdmin | null>(null);
   // Akun yang sedang dipilihkan jabatan struktur partainya
@@ -141,9 +144,24 @@ export function KelolaPenggunaScreen({ onKembali }: { onKembali: () => void }) {
     }
   }
 
-  const terfilter = (daftar ?? []).filter((u) =>
-    saringan === "semua" ? true : u.status === saringan,
-  );
+  // Pencarian nama/username & saringan divisi. Dengan 100+ anggota,
+  // menggulir daftar untuk mencari satu orang sudah tidak masuk akal.
+  const kunci = cari.trim().toLowerCase();
+  const terfilter = (daftar ?? []).filter((u) => {
+    if (saringan !== "semua" && u.status !== saringan) return false;
+    if (divisiPilih !== "semua") {
+      // "tanpa" = belum punya divisi sama sekali (perlu ditindaklanjuti HR).
+      if (divisiPilih === "tanpa" ? Boolean(u.divisi) : u.divisi !== divisiPilih) {
+        return false;
+      }
+    }
+    if (!kunci) return true;
+    return (
+      u.nama.toLowerCase().includes(kunci) ||
+      (u.username ?? "").toLowerCase().includes(kunci) ||
+      (u.nomor_wa ?? "").includes(kunci)
+    );
+  });
 
   const CHIP: { id: Saringan; label: string; jumlah?: number }[] = [
     { id: "menunggu", label: "Menunggu", jumlah: ringkasan.menunggu },
@@ -197,7 +215,38 @@ export function KelolaPenggunaScreen({ onKembali }: { onKembali: () => void }) {
       </header>
 
       {/* Saringan */}
-      <div className="scrollbar-tipis mt-4 flex gap-2 overflow-x-auto pb-1">
+      {/* Cari nama/username/WA + saring divisi */}
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+        <div className="relative min-w-0 flex-1">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-teks-sekunder"
+            aria-hidden="true"
+          />
+          <input
+            value={cari}
+            onChange={(e) => setCari(e.target.value)}
+            placeholder="Cari nama, username, atau nomor WA…"
+            aria-label="Cari pengguna"
+            className="glass-input h-11 w-full rounded-xl pr-3 pl-10 text-sm text-teks-utama outline-none placeholder:text-teks-sekunder/60"
+          />
+        </div>
+        <select
+          value={divisiPilih}
+          onChange={(e) => setDivisiPilih(e.target.value)}
+          aria-label="Saring berdasarkan divisi"
+          className="glass-input h-11 rounded-xl px-3 text-sm text-teks-utama outline-none sm:w-52"
+        >
+          <option value="semua">Semua divisi</option>
+          <option value="tanpa">Belum ada divisi</option>
+          {DIVISI.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="scrollbar-tipis mt-3 flex gap-2 overflow-x-auto pb-1">
         {CHIP.map((c) => (
           <button
             key={c.id}
@@ -234,14 +283,18 @@ export function KelolaPenggunaScreen({ onKembali }: { onKembali: () => void }) {
           <EmptyState
             ikon={Users}
             judul={
-              saringan === "menunggu"
-                ? "Tidak ada pendaftar baru"
-                : "Tidak ada pengguna"
+              kunci || divisiPilih !== "semua"
+                ? "Tidak ada yang cocok"
+                : saringan === "menunggu"
+                  ? "Tidak ada pendaftar baru"
+                  : "Tidak ada pengguna"
             }
             keterangan={
-              saringan === "menunggu"
-                ? "Semua pendaftaran sudah ditindaklanjuti."
-                : "Coba pilih saringan lain."
+              kunci || divisiPilih !== "semua"
+                ? "Coba kata kunci lain atau ubah saringan divisinya."
+                : saringan === "menunggu"
+                  ? "Semua pendaftaran sudah ditindaklanjuti."
+                  : "Coba pilih saringan lain."
             }
             className="py-8"
           />

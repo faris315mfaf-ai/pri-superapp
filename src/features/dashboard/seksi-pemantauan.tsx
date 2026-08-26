@@ -29,7 +29,7 @@ import {
   type KerjaKpiBaris,
   type RencanaBesarBaris,
 } from "@/services";
-import { formatAngka, jamWIB } from "@/lib/format";
+import { formatAngkaRingkas, jamWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const PLATFORM_PILIHAN = [
@@ -134,7 +134,7 @@ export function SeksiInsightTvr() {
                 <div key={m.label} className="glass-soft rounded-xl px-2 py-2 text-center">
                   <m.Ikon className="mx-auto h-3.5 w-3.5" style={{ color: m.warna }} aria-hidden="true" />
                   <p className="angka-tab mt-1 font-heading text-sm font-extrabold text-teks-utama">
-                    {m.nilai === null ? "–" : formatAngka(m.nilai)}
+                    {m.nilai === null ? "–" : formatAngkaRingkas(m.nilai)}
                   </p>
                   <p className="text-[9px] text-teks-sekunder">{m.label}</p>
                 </div>
