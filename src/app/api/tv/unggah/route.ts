@@ -15,6 +15,7 @@ import { userDariToken } from "@/lib/sesi";
 import { bolehProsesVideo } from "@/types";
 import { ambilAkunTertaut, unggahVideo, ayrshareSiap } from "@/lib/ayrshare";
 import { adalahPimred } from "@/lib/jabatan";
+import { bolehUploadVideo } from "@/lib/tv-tim";
 import { kirimKabar } from "@/lib/notifikasi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 
@@ -55,10 +56,11 @@ export async function POST(request: Request) {
     // dengan menyembunyikan tombolnya.
     const pengguna = await userDariToken(tokenDari(request));
     if (!pengguna) throw Object.assign(new Error("Sesi tidak berlaku. Masuk lagi."), { status: 401 });
-    if (!bolehProsesVideo(pengguna.role) && !adalahPimred(pengguna)) {
-      throw Object.assign(new Error("Hanya Admin TV Rakyat yang boleh mengunggah video."), {
-        status: 403,
-      });
+    if (!(await bolehUploadVideo(pengguna))) {
+      throw Object.assign(
+        new Error("Anda belum ditunjuk Pimpinan Redaksi untuk mengunggah video."),
+        { status: 403 },
+      );
     }
     await pastikanFiturAktif(
       pengguna,

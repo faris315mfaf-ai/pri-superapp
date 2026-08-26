@@ -23,6 +23,8 @@ import { KirimVideoPanel } from "./kirim-video-panel";
 import { ProgressPanel } from "./progress-panel";
 import { PreviewModal } from "./preview-modal";
 import { RiwayatVideo } from "./riwayat-video";
+import { KelolaTimPanel } from "./kelola-tim-panel";
+import { SectionTitle } from "@/components/pri-ui";
 import type { Berita, HasilProsesVideo, User, VideoAntrian } from "@/types";
 import { adalahPimred } from "@/lib/jabatan";
 
@@ -154,8 +156,10 @@ export function TvScreen({
             <p className="text-xs text-teks-sekunder">Otomatisasi video TV Rakyat</p>
           </div>
         </div>
-        <TombolLonceng onBuka={onBukaNotifikasi} />
-        <ThemeToggle />
+        <div className="flex shrink-0 items-center gap-2">
+          <TombolLonceng onBuka={onBukaNotifikasi} />
+          <ThemeToggle />
+        </div>
       </header>
 
       {/* Insight profil sosmed — angka asli dari Ayrshare */}
@@ -163,76 +167,103 @@ export function TvScreen({
         <InsightPanel onBukaRinci={() => setInsightRinci(true)} />
       </FadeInUp>
 
-      {/* Di PC: dua kolom — berita di kiri, form + riwayat di kanan */}
-      <div className="lg:grid lg:grid-cols-2 lg:items-start lg:gap-5">
+      {/* ── Kelola tim (khusus Pimred): tanpa dua kolom, lebar penuh ── */}
+      {pimred && <KelolaTimPanel />}
 
-      {/* 1. Panel cek berita */}
-      <FadeInUp delay={0.05} className="mt-5">
-        <BeritaPanel
-          onPilihVideo={setVideoSumber}
-          idTerpilih={videoSumber?.id ?? null}
-        />
-      </FadeInUp>
-
-      {/* 1b. Distribusi tugas link ke anggota — khusus Pimred.
-          Link video yang dipilih di panel Berita otomatis terisi. */}
-      {pimred && <PanelTugasLink linkAwal={videoSumber?.link_video} />}
-
-      {/* Kolom kanan (PC): form + riwayat */}
-      <div className="lg:mt-1">
-
-      {/* 2. Form kirim video ↔ panel progress (bergantian) */}
-      <div className="mt-4">
-        <AnimatePresence mode="wait" initial={false}>
-          {fase === "proses" && payload ? (
-            <motion.div
-              key={`proses-${sesiProses}`}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -16 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-            >
-              <ProgressPanel
-                payload={payload}
-                onSelesai={prosesSelesai}
-                onBatal={batalkanProses}
+      {/*
+        Tata letak dua bagian yang jelas, bukan tumpukan panel acak:
+        - KIRI (PC): SUMBER — cek berita & bagi tugas link.
+        - KANAN (PC): PRODUKSI — buat video, upload manual, pipeline,
+          riwayat. Di HP keduanya menumpuk satu kolom secara wajar.
+        Tiap bagian diberi judul supaya alurnya terbaca.
+      */}
+      <div className="mt-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6">
+        {/* ── Bagian KIRI: Sumber ── */}
+        <section className="flex flex-col gap-4">
+          <div>
+            <SectionTitle judul="Sumber Berita" />
+            <FadeInUp delay={0.05}>
+              <BeritaPanel
+                onPilihVideo={setVideoSumber}
+                idTerpilih={videoSumber?.id ?? null}
               />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="form"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -16 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-            >
-              <KirimVideoPanel
-                videoSumber={videoSumber}
-                onMulaiProses={mulaiProses}
-              />
-            </motion.div>
+            </FadeInUp>
+          </div>
+
+          {/* Distribusi tugas link ke anggota — khusus Pimred. Link video
+              yang dipilih di panel Berita otomatis terisi. */}
+          {pimred && (
+            <div>
+              <SectionTitle judul="Bagi Tugas ke Anggota" />
+              <FadeInUp delay={0.06}>
+                <PanelTugasLink linkAwal={videoSumber?.link_video} />
+              </FadeInUp>
+            </div>
           )}
-        </AnimatePresence>
-      </div>
+        </section>
 
-      {/* 3. Upload video manual (hasil edit sendiri) — antrean ACC Pimred */}
-      <KirimVideoManual />
+        {/* ── Bagian KANAN: Produksi ── */}
+        <section className="mt-6 flex flex-col gap-4 lg:mt-0">
+          <div>
+            <SectionTitle judul="Buat Video" />
+            <AnimatePresence mode="wait" initial={false}>
+              {fase === "proses" && payload ? (
+                <motion.div
+                  key={`proses-${sesiProses}`}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -16 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                >
+                  <ProgressPanel
+                    payload={payload}
+                    onSelesai={prosesSelesai}
+                    onBatal={batalkanProses}
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="form"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -16 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                >
+                  <KirimVideoPanel
+                    videoSumber={videoSumber}
+                    onMulaiProses={mulaiProses}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
-      {/* 3b. Status pipeline (pindahan dari dashboard super admin) */}
-      <FadeInUp delay={0.08} className="mt-4">
-        <PipelinePanel muatUlang={refreshKey} />
-      </FadeInUp>
+          {/* Upload video manual (hasil edit sendiri) — antrean ACC Pimred */}
+          <div>
+            <SectionTitle judul="Upload Manual" />
+            <KirimVideoManual />
+          </div>
 
-      {/* 4. Riwayat pemrosesan */}
-      <FadeInUp delay={0.1} className="mt-4">
-        <RiwayatVideo
-          refreshKey={refreshKey}
-          onBukaVideo={bukaDariRiwayat}
-          onDataBerubah={() => setRefreshKey((k) => k + 1)}
-        />
-      </FadeInUp>
+          {/* Status pipeline (pindahan dari dashboard super admin) */}
+          <div>
+            <SectionTitle judul="Status Pipeline" />
+            <FadeInUp delay={0.08}>
+              <PipelinePanel muatUlang={refreshKey} />
+            </FadeInUp>
+          </div>
 
-      </div>
+          {/* Riwayat pemrosesan */}
+          <div>
+            <SectionTitle judul="Riwayat" />
+            <FadeInUp delay={0.1}>
+              <RiwayatVideo
+                refreshKey={refreshKey}
+                onBukaVideo={bukaDariRiwayat}
+                onDataBerubah={() => setRefreshKey((k) => k + 1)}
+              />
+            </FadeInUp>
+          </div>
+        </section>
       </div>
 
       {/* Layar insight rinci — menutupi layar TV Rakyat */}

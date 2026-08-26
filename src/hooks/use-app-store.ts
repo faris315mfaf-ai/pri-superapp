@@ -79,6 +79,10 @@ type AppState = {
    */
   izinFitur: PetaIzin;
   setIzinFitur: (izin: PetaIzin) => void;
+
+  /** true bila pengguna anggota tim TV Rakyat (buka modul TV) */
+  tvAnggota: boolean;
+  setTvAnggota: (v: boolean) => void;
   toggleTema: () => void;
 
   // Toast
@@ -161,6 +165,8 @@ export const useAppStore = create<AppState>()(
       setNotifikasiSiap: () => set({ notifikasiSiap: true }),
       izinFitur: {},
       setIzinFitur: (izinFitur) => set({ izinFitur }),
+      tvAnggota: false,
+      setTvAnggota: (tvAnggota) => set({ tvAnggota }),
       toggleTema: () => set({ tema: get().tema === "light" ? "dark" : "light" }),
 
       // Toast — otomatis hilang setelah 4 detik

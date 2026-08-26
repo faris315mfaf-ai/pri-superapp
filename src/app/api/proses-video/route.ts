@@ -14,6 +14,7 @@ import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { bolehProsesVideo } from "@/types";
 import { adalahPimred } from "@/lib/jabatan";
+import { wewenangTv } from "@/lib/tv-tim";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 
 export const dynamic = "force-dynamic";
@@ -60,9 +61,9 @@ export async function POST(request: NextRequest) {
       "tv.proses",
       "Pemrosesan video otomatis sedang dimatikan untuk peran Anda.",
     );
-    if (!bolehProsesVideo(pengguna.role) && !adalahPimred(pengguna)) {
+    if (!(await wewenangTv(pengguna)).proses) {
       throw errorStatus(
-        "Hanya Admin TV Rakyat yang boleh memproses video.",
+        "Hanya tim TV Rakyat yang boleh memproses video.",
         403,
       );
     }

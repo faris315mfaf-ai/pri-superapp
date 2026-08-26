@@ -2189,3 +2189,74 @@ export async function getCakupanAyrshare(): Promise<CakupanAyrshare> {
     return { siap: false, tercakup: [], terlewat: [] };
   }
 }
+
+// ------------------------------------------------------------
+// Tim TV Rakyat (wewenang yang ditunjuk Pimpinan Redaksi)
+// ------------------------------------------------------------
+
+export type WewenangTv = {
+  anggota: boolean;
+  acc: boolean;
+  upload: boolean;
+  proses: boolean;
+};
+
+export type AnggotaTv = {
+  user_id: string;
+  nama: string;
+  avatar_url: string;
+  jabatan: string;
+  boleh_acc: boolean;
+  boleh_upload: boolean;
+};
+
+export type KandidatTv = {
+  id: string;
+  nama: string;
+  avatar_url: string;
+  jabatan: string;
+  divisi: string;
+};
+
+/** Wewenang TV Rakyat saya (dipakai untuk tab & tombol). */
+export async function getWewenangTv(): Promise<WewenangTv> {
+  try {
+    const json = await fetchJson("/api/tv/tim", { headers: headerToken() });
+    return (json.wewenang ?? { anggota: false, acc: false, upload: false, proses: false }) as WewenangTv;
+  } catch {
+    return { anggota: false, acc: false, upload: false, proses: false };
+  }
+}
+
+/** Daftar tim + kandidat, untuk layar kelola Pimred. */
+export async function getKelolaTimTv(): Promise<{ tim: AnggotaTv[]; kandidat: KandidatTv[] }> {
+  const json = await fetchJson("/api/tv/tim?kelola=1", { headers: headerToken() });
+  return { tim: (json.tim ?? []) as AnggotaTv[], kandidat: (json.kandidat ?? []) as KandidatTv[] };
+}
+
+export async function tambahAnggotaTv(userId: string): Promise<void> {
+  await fetchJson("/api/tv/tim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ user_id: userId, aksi: "tambah" }),
+  });
+}
+
+export async function keluarkanAnggotaTv(userId: string): Promise<void> {
+  await fetchJson("/api/tv/tim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ user_id: userId, aksi: "hapus" }),
+  });
+}
+
+export async function aturWewenangTv(
+  userId: string,
+  wewenang: { boleh_acc?: boolean; boleh_upload?: boolean },
+): Promise<void> {
+  await fetchJson("/api/tv/tim", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ user_id: userId, ...wewenang }),
+  });
+}

@@ -213,6 +213,11 @@
   body {
     @apply bg-app-bg text-teks-utama font-sans antialiased;
     overscroll-behavior-y: none;
+    /* Tidak pernah menggulir ke samping. Blob dekoratif latar sengaja
+       lebih lebar dari layar untuk efek, dan tanpa ini ia membuat
+       seluruh halaman bisa digeser ke kanan — terlihat seperti tata
+       letak yang bocor padahal cuma hiasan. */
+    overflow-x: hidden;
   }
   ::selection {
     background: rgba(220, 38, 38, 0.25);

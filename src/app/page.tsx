@@ -39,6 +39,7 @@ import { toast, useAppStore } from "@/hooks/use-app-store";
 import { adalahPimred } from "@/lib/jabatan";
 import {
   getIzinFitur,
+  getWewenangTv,
   getNotifikasi,
   keluar as keluarService,
   masukOtomatis,
@@ -94,6 +95,7 @@ export default function Page() {
   const setUser = useAppStore((s) => s.setUser);
   const tema = useAppStore((s) => s.tema);
   const skalaFont = useAppStore((s) => s.skalaFont);
+  const tvAnggota = useAppStore((s) => s.tvAnggota);
 
   // Deteksi mount tanpa setState-in-effect (aman SSR/hidrasi)
   const siap = useSyncExternalStore(
@@ -184,11 +186,13 @@ export default function Page() {
   const tabBoleh = useMemo<KunciTab[]>(() => {
     if (!user) return [];
     const dasar = [...TAB_ROLE[user.role]];
-    if (adalahPimred(user) && !dasar.includes("tv")) {
+    // Modul TV terbuka untuk Pimred (jabatan) ATAU anggota tim TV yang
+    // ditunjuk Pimred (tvAnggota dari server).
+    if ((adalahPimred(user) || tvAnggota) && !dasar.includes("tv")) {
       dasar.splice(dasar.indexOf("tvrku") >= 0 ? dasar.indexOf("tvrku") : 1, 0, "tv");
     }
     return dasar;
-  }, [user]);
+  }, [user, tvAnggota]);
 
   // Pengaman tanpa effect: tab efektif selalu valid untuk role aktif
   const tabEfektif = useMemo(() => {
@@ -208,8 +212,11 @@ export default function Page() {
     if (!aplikasiAktif) return;
     let hidup = true;
     async function muatIzin() {
-      const izin = await getIzinFitur();
-      if (hidup) useAppStore.getState().setIzinFitur(izin);
+      const [izin, wewenang] = await Promise.all([getIzinFitur(), getWewenangTv()]);
+      if (hidup) {
+        useAppStore.getState().setIzinFitur(izin);
+        useAppStore.getState().setTvAnggota(wewenang.anggota);
+      }
     }
     void muatIzin();
     const detak = setInterval(() => void muatIzin(), 5 * 60_000);

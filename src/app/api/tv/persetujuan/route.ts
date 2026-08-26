@@ -15,6 +15,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { adalahPimred } from "@/lib/jabatan";
+import { bolehAccVideo } from "@/lib/tv-tim";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { hapusVideoCloudinary } from "@/lib/cloudinary";
 import { kirimKabar } from "@/lib/notifikasi";
@@ -35,9 +36,9 @@ export async function PATCH(request: Request) {
       "tv.approval",
       "Approval video sedang dimatikan untuk peran Anda.",
     );
-    if (!adalahPimred(user)) {
+    if (!(await bolehAccVideo(user))) {
       throw Object.assign(
-        new Error("Hanya Pimpinan Redaksi TV Rakyat yang boleh menyetujui video."),
+        new Error("Anda belum ditunjuk Pimpinan Redaksi untuk menyetujui video."),
         { status: 403 },
       );
     }
