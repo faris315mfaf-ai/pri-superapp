@@ -33,6 +33,7 @@ import {
 import { GlassCard } from "@/components/glass-card";
 import { FotoBulat } from "@/components/foto-bulat";
 import { SwitchKaca } from "./switch-kaca";
+import { KontrolPerbaikan } from "./kontrol-perbaikan";
 import {
   AvatarInisial,
   FadeInUp,
@@ -152,33 +153,8 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
 
           {/* 1. Peran istimewa */}
           <FadeInUp delay={0.04}>
-            {/* Mode perbaikan: hanya master yang bisa mengakses aplikasi */}
-            <SectionTitle judul="Mode Perbaikan" className="mt-6" />
-            <GlassCard className="flex items-center gap-3 p-4">
-              <span className="text-xl" aria-hidden="true">🛠️</span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold text-teks-utama">
-                  Aplikasi dalam masa perbaikan
-                </p>
-                <p className="mt-0.5 text-[11px] leading-snug text-teks-sekunder">
-                  Saat menyala, HANYA akun master yang bisa masuk — semua orang
-                  lain melihat layar &quot;sedang dalam perbaikan&quot;.
-                </p>
-              </div>
-              <SwitchKaca
-                aktif={data.pengaturan.mode_perbaikan === "true"}
-                onUbah={() =>
-                  void jalankan(
-                    "mode_perbaikan",
-                    { nilai: data.pengaturan.mode_perbaikan !== "true" },
-                    data.pengaturan.mode_perbaikan === "true"
-                      ? "Mode perbaikan DIMATIKAN — aplikasi terbuka lagi"
-                      : "Mode perbaikan MENYALA — hanya master yang bisa masuk",
-                  )
-                }
-                labelAria="Mode perbaikan aplikasi"
-              />
-            </GlassCard>
+            {/* Mode perbaikan: kontrol lengkap (jam selesai + pesan) */}
+            <KontrolPerbaikan />
 
             <SectionTitle judul="Peran Istimewa" className="mt-6" />
             <p className="mb-2 text-[11px] leading-relaxed text-teks-sekunder">

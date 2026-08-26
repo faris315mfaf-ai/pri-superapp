@@ -42,8 +42,12 @@ export async function bungkus<T>(
     // pustaka pihak ketiga. Detail aslinya sudah tercatat di
     // console.error di atas. Pesan 4xx tetap dikirim apa adanya
     // karena memang ditulis untuk pengguna.
+    // Error boleh menandai dirinya "aman ditampilkan" (mis. mode
+    // perbaikan): pesannya memang untuk dilihat pengguna, jadi tidak
+    // ikut disamarkan meski statusnya >= 500.
+    const bolehTampil = (e as { pesanAman?: boolean })?.pesanAman === true;
     const pesanAman =
-      status >= 500 && process.env.NODE_ENV === "production"
+      status >= 500 && process.env.NODE_ENV === "production" && !bolehTampil
         ? "Terjadi kesalahan di server. Silakan coba beberapa saat lagi."
         : pesan;
 

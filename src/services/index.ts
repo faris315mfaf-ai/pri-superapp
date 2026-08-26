@@ -2060,14 +2060,6 @@ export async function tandaiInteraksiVideo(
 }
 
 /** Sakelar mode perbaikan — khusus master (lihat /api/master). */
-export async function setModePerbaikan(nyala: boolean): Promise<void> {
-  await fetchJson("/api/master", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ aksi: "mode_perbaikan", nilai: nyala }),
-  });
-}
-
 /** Analisis ulang QC berbasis data Ayrshare (tanpa n8n/TikHub). */
 export type HasilAnalisisAyrshare = {
   periode: string;
@@ -2258,5 +2250,44 @@ export async function aturWewenangTv(
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ user_id: userId, ...wewenang }),
+  });
+}
+
+// ------------------------------------------------------------
+// Mode perbaikan
+// ------------------------------------------------------------
+
+export type StatusPerbaikan = {
+  aktif: boolean;
+  sampai: string | null;
+  pesan: string;
+};
+
+/** Status perbaikan (publik) — dipakai layar terkunci untuk auto-berakhir. */
+export async function getStatusPerbaikan(): Promise<StatusPerbaikan> {
+  try {
+    const json = await fetchJson("/api/perbaikan");
+    return {
+      aktif: json?.aktif === true,
+      sampai: json?.sampai ?? null,
+      pesan: json?.pesan ?? "",
+    };
+  } catch {
+    // Gagal memeriksa = anggap masih perbaikan (jangan buka aplikasi
+    // yang mungkin belum siap). Layar tetap menampilkan tombol Coba Lagi.
+    return { aktif: true, sampai: null, pesan: "" };
+  }
+}
+
+/** Master menyalakan/mematikan mode perbaikan. */
+export async function setModePerbaikan(opsi: {
+  aktif: boolean;
+  sampai?: string;
+  pesan?: string;
+}): Promise<void> {
+  await fetchJson("/api/perbaikan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(opsi),
   });
 }

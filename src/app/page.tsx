@@ -34,12 +34,14 @@ import { PengaturanFiturScreen } from "@/features/profil/pengaturan-fitur";
 import { BerandaScreen } from "@/features/beranda/beranda-screen";
 import { DatabaseScreen } from "@/features/database/database-screen";
 import { ModalVerifikasiWa } from "@/features/profil/pengaturan-akun";
+import { LayarPerbaikan } from "@/features/perbaikan/layar-perbaikan";
 import { bolehFitur } from "@/lib/fitur";
 import { toast, useAppStore } from "@/hooks/use-app-store";
 import { adalahPimred } from "@/lib/jabatan";
 import {
   getIzinFitur,
   getWewenangTv,
+  getStatusPerbaikan,
   getNotifikasi,
   keluar as keluarService,
   masukOtomatis,
@@ -144,7 +146,7 @@ export default function Page() {
   const [memeriksaSesi, setMemeriksaSesi] = useState(true);
   // true = master menyalakan mode perbaikan; semua orang selain master
   // tertahan di layar khusus sampai perbaikan selesai.
-  const [modePerbaikan, setModePerbaikan] = useState(false);
+  const [infoPerbaikan, setInfoPerbaikan] = useState<{ sampai: string | null; pesan: string } | null>(null);
   useEffect(() => {
     if (!siap) return;
     let hidup = true;
@@ -156,8 +158,10 @@ export default function Page() {
         if (tersimpan === "perbaikan") {
           // Token masih sah, tapi aplikasi sedang diperbaiki. Jangan
           // buang apa pun — begitu master mematikannya, buka ulang
-          // aplikasi langsung masuk seperti biasa.
-          setModePerbaikan(true);
+          // aplikasi langsung masuk seperti biasa. Ambil perkiraan jam
+          // selesai untuk hitung mundur di layar terkunci.
+          const st = await getStatusPerbaikan();
+          if (hidup) setInfoPerbaikan({ sampai: st.sampai, pesan: st.pesan });
         } else if (tersimpan) {
           setUser(tersimpan);
           setTab(TAB_AWAL[tersimpan.role]);
@@ -587,36 +591,13 @@ export default function Page() {
       {/* Boot singkat: hindari ketidakcocokan hidrasi */}
       {!siap && null}
 
-      {/* Mode perbaikan: pengganti seluruh aplikasi bagi non-master */}
-      {siap && modePerbaikan && (
-        <div className="flex min-h-dvh flex-col items-center justify-center px-8 text-center">
-          <span
-            className="flex h-20 w-20 items-center justify-center rounded-3xl text-4xl"
-            style={{ background: "linear-gradient(135deg, #F59E0B22, #D9770622)" }}
-            aria-hidden="true"
-          >
-            🛠️
-          </span>
-          <h1 className="font-heading mt-5 text-xl font-extrabold tracking-tight text-teks-utama">
-            Sedang Dalam Perbaikan
-          </h1>
-          <p className="mt-2 max-w-[300px] text-sm leading-relaxed text-teks-sekunder">
-            Aplikasi sedang ditingkatkan oleh pengelola. Data Anda aman — silakan
-            coba lagi beberapa saat lagi.
-          </p>
-          <button
-            type="button"
-            onClick={() => location.reload()}
-            className="btn-tekan mt-6 rounded-xl px-6 py-3 text-sm font-bold text-white"
-            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
-          >
-            Coba Lagi
-          </button>
-        </div>
+      {/* Mode perbaikan: layar terkunci penuh (maskot + hitung mundur) */}
+      {siap && infoPerbaikan && (
+        <LayarPerbaikan sampai={infoPerbaikan.sampai} pesan={infoPerbaikan.pesan} />
       )}
 
       {/* Layar login */}
-      {siap && !user && !memeriksaSesi && !modePerbaikan && (
+      {siap && !user && !memeriksaSesi && !infoPerbaikan && (
         <motion.div
           key="login"
           initial={{ opacity: 0 }}
