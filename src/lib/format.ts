@@ -116,6 +116,43 @@ export function pesanPengingat(
   return `Assalamualaikum Kak ${namaKader}, mohon bantuannya untuk memberi komentar di postingan @${akunWajib} berikut ya: ${linkPostingan} — Terima kasih 🙏 (Pesan otomatis dari PRI SuperApp)`;
 }
 
+/** Nama platform untuk ditampilkan: "instagram" → "INSTAGRAM" */
+export function labelPlatformBesar(platform: string): string {
+  const p = platform.toLowerCase();
+  if (p === "twitter" || p === "x") return "X";
+  if (p === "youtube") return "YOUTUBE";
+  return p.toUpperCase();
+}
+
+/**
+ * Susun pesan bagikan WhatsApp berisi SELURUH tautan platform sebuah
+ * video, dikelompokkan per platform:
+ *
+ *   🎬 Judul video
+ *
+ *   INSTAGRAM
+ *   https://…
+ *
+ *   TIKTOK
+ *   https://…
+ *
+ * Sebelumnya tombol bagikan hanya mengirim satu tautan (Instagram),
+ * padahal satu video tayang di banyak platform sekaligus — penerima
+ * jadi tidak tahu ada versi lainnya.
+ */
+export function pesanBagikanVideo(
+  judul: string,
+  tautan: { platform: string; url: string }[],
+): string {
+  const bagian = tautan
+    .filter((t) => t.url)
+    .map((t) => `${labelPlatformBesar(t.platform)}\n${t.url}`)
+    .join("\n\n");
+  const kepala = `🎬 Video baru TV Rakyat: "${judul}"`;
+  const ekor = "\n\nYuk ditonton, dikomentari, dan dibagikan 🙏";
+  return bagian ? `${kepala}\n\n${bagian}${ekor}` : `${kepala}${ekor}`;
+}
+
 /**
  * URL profil sosmed dari username — pengguna cukup mengetik username,
  * sistem yang merangkai tautannya supaya bisa diklik langsung.

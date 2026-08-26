@@ -2035,6 +2035,8 @@ export type VideoInteraksi = {
   kode: string;
   judul: string;
   link: string;
+  /** Semua platform tempat video ini tayang, untuk tombol bagikan */
+  tautan: { platform: string; url: string }[];
   thumbnail_url: string;
   diunggah_pada: string;
   sudah_komen: boolean;

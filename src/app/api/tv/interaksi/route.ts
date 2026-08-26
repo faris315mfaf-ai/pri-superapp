@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     const [{ data: video }, { data: interaksi }] = await Promise.all([
       db
         .from("video_antrian")
-        .select("kode, judul, judul_overlay, link_instagram, thumbnail_url, diunggah_pada")
+        .select("kode, judul, judul_overlay, link_instagram, thumbnail_url, diunggah_pada, ayrshare_hasil")
         .eq("status", "SUDAH DIPROSES")
         .gte("diunggah_pada", batas)
         .order("diunggah_pada", { ascending: false })
@@ -52,6 +52,17 @@ export async function GET(request: Request) {
         kode: v.kode,
         judul: v.judul_overlay || v.judul || v.kode,
         link: v.link_instagram ?? "",
+        // SELURUH tautan platform tempat video ini tayang, supaya
+        // tombol bagikan bisa mengirim semuanya sekaligus — bukan
+        // hanya tautan Instagram seperti sebelumnya.
+        tautan: (Array.isArray(v.ayrshare_hasil) ? v.ayrshare_hasil : [])
+          .filter(
+            (h): h is { platform: string; postUrl: string } =>
+              Boolean(h) &&
+              typeof (h as { postUrl?: unknown }).postUrl === "string" &&
+              Boolean((h as { postUrl?: string }).postUrl),
+          )
+          .map((h) => ({ platform: String(h.platform ?? ""), url: h.postUrl })),
         thumbnail_url: v.thumbnail_url ?? "",
         diunggah_pada: v.diunggah_pada,
         sudah_komen: punya.has(`${v.kode}|komen`),
