@@ -26,6 +26,7 @@ import {
   Tv,
   User as UserIcon,
   Zap,
+  Sparkles,
 } from "lucide-react";
 import { LogoPri } from "@/components/logo-pri";
 import {
@@ -59,6 +60,7 @@ import {
   TombolAkunSosmed,
 } from "./pengaturan-akun";
 import { VERSI_APLIKASI, VERSI_TAMPIL } from "@/lib/versi";
+import { ModalChangelog } from "./modal-changelog";
 import { AntreanAccTim, KartuTim, MenuUpdateAplikasi } from "./keanggotaan-tim";
 import { BarisUkuranTeks, SeksiMasukan } from "./masukan-dan-font";
 
@@ -354,6 +356,7 @@ export function ProfilScreen({
   // terlihat seketika, tanpa menunggu profil dimuat ulang dari server.
   const [avatarBaru, setAvatarBaru] = useState<string>("");
   const [modalTentang, setModalTentang] = useState(false);
+  const [modalChangelog, setModalChangelog] = useState(false);
   const [modalKeluar, setModalKeluar] = useState(false);
 
   const gelap = tema === "dark";
@@ -597,6 +600,17 @@ export function ProfilScreen({
             }
           />
 
+          {/* Changelog "Apa yang Baru" (spek 1.4) */}
+          <BarisPengaturan
+            ikon={Sparkles}
+            warnaIkon="#F59E0B"
+            label="Apa yang Baru"
+            onClick={() => setModalChangelog(true)}
+            kanan={
+              <span className="text-xs font-medium text-teks-sekunder">v{VERSI_APLIKASI}</span>
+            }
+          />
+
           {/* 5. Tentang Aplikasi */}
           <BarisPengaturan
             ikon={Info}
@@ -625,6 +639,8 @@ export function ProfilScreen({
           PRI SuperApp · © 2026 Partai Rakyat Indonesia
         </p>
       </FadeInUp>
+
+      {modalChangelog && <ModalChangelog onTutup={() => setModalChangelog(false)} />}
 
       {/* Modal Tentang Aplikasi */}
       {modalSosmed && (

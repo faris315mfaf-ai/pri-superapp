@@ -33,7 +33,6 @@ import { AksesCepatPanel } from "./akses-cepat-panel";
 import { Database } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { KartuKelolaPengguna } from "./kartu-kelola-pengguna";
-import { AktivitasFeed } from "./aktivitas-feed";
 
 type DashboardScreenProps = {
   user: User;
@@ -243,10 +242,9 @@ export function DashboardScreen({
             <SeksiAbsensiHarian />
             <SeksiRencanaAnggota />
 
-            {/* h) Aktivitas terbaru */}
-            <FadeInUp delay={0.36}>
-              <AktivitasFeed aktivitas={data.aktivitas} />
-            </FadeInUp>
+            {/* Aktivitas terbaru DIHAPUS dari beranda (spek 1.7):
+                isinya duplikat layar Notifikasi — daftar yang sama
+                kini hanya hidup di lonceng notifikasi. */}
           </>
         )}
       </div>

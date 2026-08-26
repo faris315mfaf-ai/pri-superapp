@@ -36,6 +36,9 @@ import { DatabaseScreen } from "@/features/database/database-screen";
 import { ModalVerifikasiWa } from "@/features/profil/pengaturan-akun";
 import { LayarPerbaikan } from "@/features/perbaikan/layar-perbaikan";
 import { PilihUcapanUltah } from "@/features/notifikasi/pilih-ucapan-ultah";
+import { ModalChangelog } from "@/features/profil/modal-changelog";
+import { KUNCI_CHANGELOG_DILIHAT } from "@/lib/changelog";
+import { VERSI_APLIKASI } from "@/lib/versi";
 import { bolehFitur } from "@/lib/fitur";
 import { toast, useAppStore } from "@/hooks/use-app-store";
 import { adalahPimred } from "@/lib/jabatan";
@@ -365,6 +368,34 @@ export default function Page() {
   const izinFitur = useAppStore((s) => s.izinFitur);
   const [nagVerifWa, setNagVerifWa] = useState(false);
   const [ultahBuka, setUltahBuka] = useState(false);
+  // Changelog "Apa yang Baru" (spek 1.4): tampil otomatis SEKALI
+  // begitu pengguna pertama membuka aplikasi setelah update.
+  const [changelogBuka, setChangelogBuka] = useState(false);
+
+  useEffect(() => {
+    if (!aplikasiAktif) return;
+    // Jeda mikro supaya setState tidak sinkron di dalam effect
+    // (menghindari render beruntun; aturan react-hooks/set-state-in-effect).
+    const id = setTimeout(() => {
+      try {
+        if (localStorage.getItem(KUNCI_CHANGELOG_DILIHAT) !== VERSI_APLIKASI) {
+          setChangelogBuka(true);
+        }
+      } catch {
+        // localStorage bisa tidak tersedia (mode privat) — lewati saja.
+      }
+    }, 600);
+    return () => clearTimeout(id);
+  }, [aplikasiAktif]);
+
+  function tutupChangelog() {
+    setChangelogBuka(false);
+    try {
+      localStorage.setItem(KUNCI_CHANGELOG_DILIHAT, VERSI_APLIKASI);
+    } catch {
+      // Gagal menyimpan penanda hanya berarti modalnya muncul lagi nanti.
+    }
+  }
   useEffect(() => {
     if (!aplikasiAktif || !user || user.wa_terverifikasi !== false) return;
     const JEDA_MS = 3 * 60 * 60 * 1000;
@@ -622,6 +653,9 @@ export default function Page() {
           <SplashScreen user={user} />
         </motion.div>
       )}
+
+      {/* Changelog otomatis pasca-update (spek 1.4) */}
+      {aplikasiAktif && changelogBuka && <ModalChangelog onTutup={tutupChangelog} />}
 
       {/* Pemilih ucapan ulang tahun (dari notifikasi ultah yang diklik) */}
       {siap && user && !menyambut && ultahBuka && (
