@@ -11,6 +11,12 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { supabase } from "@/lib/supabase";
 import type { Role, User } from "@/types";
 import { after } from "next/server";
+import {
+  ambilCacheSesi,
+  hapusCacheToken,
+  hapusCacheUser,
+  simpanCacheSesi,
+} from "@/lib/cache-sesi";
 
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -93,11 +99,25 @@ export async function userDariToken(token: string): Promise<UserPublik | null> {
   const bersih = (token ?? "").trim();
   if (!bersih) return null;
 
+  const hash = hashToken(bersih);
+
+  // Jalur cepat: profil yang baru saja diambil dipakai ulang, sehingga
+  // dua query di bawah tidak perlu dijalankan lagi. Aman karena setiap
+  // perubahan/pencabutan akses membuang entri ini seketika (lihat
+  // hapusCacheUser di src/lib/cache-sesi.ts).
+  const dariCache = await ambilCacheSesi(hash);
+  if (dariCache) {
+    // Pemakaian tetap dicatat — tapi lewat penahan 5 menit, jadi
+    // jalur cepat ini benar-benar tanpa query di kebanyakan permintaan.
+    await catatPemakaianToken(hash);
+    return dariCache;
+  }
+
   const db = supabase();
   const { data: sesi } = await db
     .from("sesi_perangkat")
     .select("id, user_id, token_hash")
-    .eq("token_hash", hashToken(bersih))
+    .eq("token_hash", hash)
     .maybeSingle();
 
   if (!sesi) return null;
@@ -105,7 +125,7 @@ export async function userDariToken(token: string): Promise<UserPublik | null> {
   // Perbandingan waktu-tetap: mencegah penebakan token lewat selisih
   // waktu respons.
   const a = Buffer.from(sesi.token_hash, "hex");
-  const b = Buffer.from(hashToken(bersih), "hex");
+  const b = Buffer.from(hash, "hex");
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
 
   const { data: user } = await db
@@ -132,7 +152,12 @@ export async function userDariToken(token: string): Promise<UserPublik | null> {
   // menunggu satu round-trip tambahan di setiap permintaan.
   await catatPemakaian(db, sesi.id);
 
-  return keUserPublik(u);
+  const publik = keUserPublik(u);
+  // Ingat pasangan hash → sesi supaya jalur cepat berikutnya juga bisa
+  // mencatat pemakaian tanpa mencari ulang id sesinya.
+  idSesiPerHash.set(hash, String(sesi.id));
+  await simpanCacheSesi(hash, publik);
+  return publik;
 }
 
 /**
@@ -146,6 +171,16 @@ async function catatPemakaian(
   db: ReturnType<typeof supabase>,
   idSesi: string,
 ): Promise<void> {
+  // Penahan 5 menit: kolom dipakai_pada hanya ditulis bila tulisan
+  // terakhir untuk sesi ini sudah lewat JEDA_CATAT_MS. Layar "perangkat
+  // aktif" di Profil tetap masuk akal karena presisinya memang
+  // menit-an, bukan detik-an — sementara satu penulisan per permintaan
+  // menjadi satu penulisan per lima menit.
+  const terakhir = catatanTerakhir.get(idSesi) ?? 0;
+  if (Date.now() - terakhir < JEDA_CATAT_MS) return;
+  catatanTerakhir.set(idSesi, Date.now());
+  bersihkanCatatanBasi();
+
   const tulis = async () => {
     await db
       .from("sesi_perangkat")
@@ -160,19 +195,57 @@ async function catatPemakaian(
   }
 }
 
+/** Jarak minimum antar penulisan dipakai_pada untuk satu sesi. */
+const JEDA_CATAT_MS = 5 * 60_000;
+
+/** id sesi → kapan terakhir dipakai_pada ditulis. */
+const catatanTerakhir = new Map<string, number>();
+
+/** token_hash → id sesi, supaya jalur cache tidak perlu query lagi. */
+const idSesiPerHash = new Map<string, string>();
+
+/** Jaga kedua Map di atas tidak tumbuh tanpa batas. */
+function bersihkanCatatanBasi(): void {
+  if (catatanTerakhir.size <= 5000) return;
+  const batas = Date.now() - JEDA_CATAT_MS * 2;
+  for (const [id, waktu] of catatanTerakhir) {
+    if (waktu < batas) catatanTerakhir.delete(id);
+  }
+  if (idSesiPerHash.size > 5000) idSesiPerHash.clear();
+}
+
+/**
+ * Catat pemakaian pada jalur cache, saat id sesi belum tentu diketahui.
+ * Bila hash-nya belum pernah dipetakan, pencatatan dilewati saja —
+ * permintaan berikutnya yang meleset dari cache akan memetakannya.
+ */
+async function catatPemakaianToken(hash: string): Promise<void> {
+  const idSesi = idSesiPerHash.get(hash);
+  if (!idSesi) return;
+  await catatPemakaian(supabase(), idSesi);
+}
+
 /** Cabut satu sesi (keluar dari perangkat ini saja). */
 export async function cabutSesi(token: string): Promise<void> {
   const bersih = (token ?? "").trim();
   if (!bersih) return;
-  await supabase().from("sesi_perangkat").delete().eq("token_hash", hashToken(bersih));
+  const hash = hashToken(bersih);
+  await supabase().from("sesi_perangkat").delete().eq("token_hash", hash);
+  // Tanpa baris ini, token yang baru dicabut masih diterima sampai TTL
+  // cache habis — persis lubang yang tidak boleh ada.
+  await hapusCacheToken(hash);
+  idSesiPerHash.delete(hash);
 }
 
 /** Cabut SEMUA sesi milik satu akun (keluar dari semua perangkat). */
 export async function cabutSemuaSesi(userId: number | string): Promise<void> {
   await supabase().from("sesi_perangkat").delete().eq("user_id", Number(userId));
+  await hapusCacheUser(userId);
 }
 
 export { KOLOM_USER };
+// Diekspor ulang agar route API cukup mengimpor dari satu tempat.
+export { hapusCacheUser } from "@/lib/cache-sesi";
 export type { BarisUser };
 
 /**
