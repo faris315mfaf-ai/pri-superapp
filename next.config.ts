@@ -8,6 +8,15 @@ const nextConfig: NextConfig = {
   env: { NEXT_PUBLIC_VERSI_APLIKASI: versiPaket },
   ...(process.env.VERCEL ? {} : { output: "standalone" as const }),
   reactStrictMode: false,
+  // Host gambar yang boleh dioptimalkan next/image. Thumbnail berita
+  // hasil pindaian TIDAK didaftarkan (host CDN-nya berubah-ubah) dan
+  // tetap memakai <img> biasa.
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "pichnkyjepsirpclofhs.supabase.co" },
+      { protocol: "https", hostname: "res.cloudinary.com" },
+    ],
+  },
   // Jangan mengiklankan teknologi server ke setiap pengunjung.
   poweredByHeader: false,
 
