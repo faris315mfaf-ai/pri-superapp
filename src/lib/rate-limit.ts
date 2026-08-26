@@ -19,29 +19,14 @@
 // ============================================================
 
 import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
+import { klienRedis, redisAktif } from "@/lib/redis";
 
 // ------------------------------------------------------------
 // Lapisan 1 — Upstash Redis
 // ------------------------------------------------------------
 
-/**
- * Alamat + token Redis, menerima DUA penamaan variabel:
- * - UPSTASH_REDIS_REST_URL / _TOKEN  → bila didaftarkan manual
- * - KV_REST_API_URL / KV_REST_API_TOKEN → nama yang dipakai integrasi
- *   Upstash lewat Vercel Marketplace
- * Menerima keduanya menghapus satu penyebab gagal yang membingungkan:
- * Redis sudah dibuat, tetapi aplikasi diam-diam tetap memakai memori.
- */
-function konfigRedis(): { url: string; token: string } | null {
-  const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
-  const token =
-    process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
-  return url && token ? { url, token } : null;
-}
-
 function redisSiap(): boolean {
-  return konfigRedis() !== null;
+  return redisAktif();
 }
 
 // Satu Ratelimit per kombinasi batas+jendela, dibuat sekali lalu
@@ -50,13 +35,13 @@ function redisSiap(): boolean {
 const gudangRedis = new Map<string, Ratelimit>();
 
 function pembatasRedis(maks: number, jendelaDetik: number): Ratelimit | null {
-  const konfig = konfigRedis();
-  if (!konfig) return null;
+  const redis = klienRedis();
+  if (!redis) return null;
   const kunci = `${maks}|${jendelaDetik}`;
   let ada = gudangRedis.get(kunci);
   if (!ada) {
     ada = new Ratelimit({
-      redis: new Redis({ url: konfig.url, token: konfig.token }),
+      redis,
       // Jendela geser: lebih adil daripada jendela tetap, karena
       // tidak bisa diakali dengan menembak tepat di pergantian menit.
       limiter: Ratelimit.slidingWindow(maks, `${jendelaDetik} s`),
