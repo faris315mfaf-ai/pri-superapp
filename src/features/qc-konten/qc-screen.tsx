@@ -545,7 +545,7 @@ export function QcScreen({
       <header className="flex items-start justify-between gap-3 pt-5">
         <div>
           <h1 className="font-heading text-2xl font-extrabold tracking-tight text-teks-utama">
-            QC Konten Sosmed
+            HR Center
           </h1>
           <p className="mt-0.5 text-xs text-teks-sekunder">
             Pantau kepatuhan komentar kader di akun wajib

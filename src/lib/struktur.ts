@@ -27,6 +27,7 @@ export const DIVISI = [
   "Divisi KTA",
   "Divisi Sayap Partai",
   "Divisi Zona",
+  "Divisi Acara",
 ] as const;
 
 export type Divisi = (typeof DIVISI)[number];

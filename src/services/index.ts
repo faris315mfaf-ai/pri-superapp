@@ -2494,3 +2494,44 @@ export async function setKpiVideo(userId: string, kpi: number | null): Promise<n
   });
   return Number(json.kpi_target ?? 5);
 }
+
+// ------------------------------------------------------------
+// Modul Acara (spek 1.5)
+// ------------------------------------------------------------
+
+export type AcaraPenting = {
+  id: string;
+  judul: string;
+  keterangan: string;
+  tanggal: string;
+  dibuat_oleh: string;
+  pembuat_nama: string;
+};
+
+export async function getAcara(): Promise<{ boleh_kelola: boolean; data: AcaraPenting[] }> {
+  const json = await fetchJson("/api/acara", { headers: headerToken() });
+  return {
+    boleh_kelola: json.boleh_kelola === true,
+    data: (json.data ?? []) as AcaraPenting[],
+  };
+}
+
+export async function tambahAcara(
+  judul: string,
+  tanggal: string,
+  keterangan: string,
+): Promise<void> {
+  await fetchJson("/api/acara", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ judul, tanggal, keterangan }),
+  });
+}
+
+export async function hapusAcara(id: string): Promise<void> {
+  await fetchJson("/api/acara", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id }),
+  });
+}

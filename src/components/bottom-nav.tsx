@@ -6,7 +6,7 @@
 // ============================================================
 
 import { motion } from "framer-motion";
-import { Home, Newspaper, ShieldCheck, Tv, Clapperboard, MessagesSquare, Bell, User } from "lucide-react";
+import { Home, Newspaper, ShieldCheck, Tv, Clapperboard, MessagesSquare, Bell, User, CalendarDays } from "lucide-react";
 import type { KomponenIkon, Role } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +14,7 @@ export type KunciTab =
   | "beranda"
   | "konten"
   | "qc"
+  | "acara"
   | "tv"
   | "tvrku"
   | "chat"
@@ -26,8 +27,9 @@ export const KONFIG_TAB: Record<
 > = {
   beranda: { label: "Beranda", ikon: Home },
   konten: { label: "Konten", ikon: Newspaper },
-  qc: { label: "QC Konten", ikon: ShieldCheck },
-  tv: { label: "TV Rakyat", ikon: Tv },
+  qc: { label: "HR Center", ikon: ShieldCheck },
+  tv: { label: "TV Rakyat Ofc", ikon: Tv },
+  acara: { label: "Acara", ikon: CalendarDays },
   tvrku: { label: "TVR Saya", ikon: Clapperboard },
   chat: { label: "Chat", ikon: MessagesSquare },
   notifikasi: { label: "Notifikasi", ikon: Bell },

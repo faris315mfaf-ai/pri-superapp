@@ -37,6 +37,8 @@ import { ModalVerifikasiWa } from "@/features/profil/pengaturan-akun";
 import { LayarPerbaikan } from "@/features/perbaikan/layar-perbaikan";
 import { PilihUcapanUltah } from "@/features/notifikasi/pilih-ucapan-ultah";
 import { ModalChangelog } from "@/features/profil/modal-changelog";
+import { AcaraScreen } from "@/features/acara/acara-screen";
+import { modulUntukDivisi } from "@/lib/modul-divisi";
 import { KUNCI_CHANGELOG_DILIHAT } from "@/lib/changelog";
 import { VERSI_APLIKASI } from "@/lib/versi";
 import { bolehFitur } from "@/lib/fitur";
@@ -198,6 +200,12 @@ export default function Page() {
     // ditunjuk Pimred (tvAnggota dari server).
     if ((adalahPimred(user) || tvAnggota) && !dasar.includes("tv")) {
       dasar.splice(dasar.indexOf("tvrku") >= 0 ? dasar.indexOf("tvrku") : 1, 0, "tv");
+    }
+    // Modul per-divisi (spek 1.5): tiap divisi punya SATU modul
+    // tambahan — daftarnya di lib/modul-divisi.ts, gampang diperluas.
+    const modul = modulUntukDivisi(user.divisi);
+    if (modul && !dasar.includes(modul)) {
+      dasar.splice(dasar.indexOf("chat") >= 0 ? dasar.indexOf("chat") : dasar.length - 1, 0, modul);
     }
     return dasar;
   }, [user, tvAnggota]);
@@ -571,6 +579,17 @@ export default function Page() {
         kunci: "tvrku",
         isi: (
           <TvrKuScreen
+            user={user}
+            onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
+          />
+        ),
+      });
+    }
+    if (tabBoleh.includes("acara")) {
+      layarTab.push({
+        kunci: "acara",
+        isi: (
+          <AcaraScreen
             user={user}
             onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           />

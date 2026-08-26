@@ -27,12 +27,12 @@ type TombolModul = {
 export function AksesCepatPanel({ onBukaModulQc, onBukaModulTv }: AksesCepatPanelProps) {
   const tombol: TombolModul[] = [
     {
-      label: "Modul QC Konten",
+      label: "HR Center",
       Ikon: ShieldCheck,
       gradien: "linear-gradient(135deg, #DC2626, #B91C1C)",
       bayangan: "0 8px 18px rgba(220, 38, 38, 0.35)",
       onBuka: onBukaModulQc,
-      ariaLabel: "Buka Modul QC Konten",
+      ariaLabel: "Buka HR Center",
     },
     {
       label: "Otomatisasi TV",

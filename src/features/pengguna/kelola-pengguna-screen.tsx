@@ -690,7 +690,7 @@ function PilihPeran({
                     : p.id === "admin_tv"
                       ? "Modul TV Rakyat: berita & proses video"
                       : p.id === "admin_hr"
-                        ? "Modul QC Konten: kepatuhan kader"
+                        ? "HR Center: kepatuhan kader"
                         : "Hanya melihat konten & mengurus profilnya"}
                 </span>
               </span>
