@@ -13,6 +13,30 @@ export function formatAngka(n: number): string {
   return n.toLocaleString("id-ID");
 }
 
+/**
+ * Angka RINGKAS untuk chip insight yang sempit: 1.234 → "1,2rb",
+ * 1.500.000 → "1,5jt". Di bawah 1.000 tetap utuh. Dipakai di kartu
+ * metrik agar angka besar (views/likes) tidak meluber/terpotong;
+ * versi utuh (formatAngka) tetap dipakai di tempat yang lega.
+ *
+ * KENAPA: sebelumnya angka jutaan dirender penuh di kotak kecil
+ * sehingga terpotong atau membungkus ke dua baris dan merusak grid.
+ */
+export function formatAngkaRingkas(n: number): string {
+  const abs = Math.abs(n);
+  if (abs < 1000) return String(n);
+  // Satu angka desimal, koma gaya Indonesia, buang ",0" yang mubazir.
+  const ringkas = (nilai: number, satuan: string) => {
+    const s = nilai.toFixed(1).replace(/\.0$/, "").replace(".", ",");
+    return `${s}${satuan}`;
+  };
+  // Ambang naik SATUAN memakai 999.950 dst, bukan 1.000.000 — supaya
+  // 999.999 tampil "1jt", bukan "1000rb" yang canggung.
+  if (abs < 999_950) return ringkas(n / 1000, "rb");
+  if (abs < 999_950_000) return ringkas(n / 1_000_000, "jt");
+  return ringkas(n / 1_000_000_000, "M");
+}
+
 /** Ambil jam WIB dari ISO string: "2026-08-23T09:42:00+07:00" → "09:42" */
 export function jamWIB(iso: string): string {
   const d = new Date(iso);
@@ -90,4 +114,29 @@ export function pesanPengingat(
   linkPostingan: string,
 ): string {
   return `Assalamualaikum Kak ${namaKader}, mohon bantuannya untuk memberi komentar di postingan @${akunWajib} berikut ya: ${linkPostingan} — Terima kasih 🙏 (Pesan otomatis dari PRI SuperApp)`;
+}
+
+/**
+ * URL profil sosmed dari username — pengguna cukup mengetik username,
+ * sistem yang merangkai tautannya supaya bisa diklik langsung.
+ */
+export function urlProfilSosmed(platform: string, username: string): string {
+  const u = username.replace(/^@+/, "").trim();
+  switch (platform.toLowerCase()) {
+    case "instagram":
+      return `https://instagram.com/${u}`;
+    case "tiktok":
+      return `https://tiktok.com/@${u}`;
+    case "youtube":
+      return `https://youtube.com/@${u}`;
+    case "facebook":
+      return `https://facebook.com/${u}`;
+    case "threads":
+      return `https://threads.net/@${u}`;
+    case "twitter":
+    case "x":
+      return `https://x.com/${u}`;
+    default:
+      return `https://${platform}.com/${u}`;
+  }
 }
