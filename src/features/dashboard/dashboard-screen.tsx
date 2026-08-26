@@ -20,15 +20,19 @@ import {
 import { getDashboard } from "@/services";
 import type { DashboardData } from "@/services";
 import { toast } from "@/hooks/use-app-store";
+import {
+  SeksiAbsensiHarian,
+  SeksiInsightTvr,
+  SeksiRencanaAnggota,
+} from "./seksi-pemantauan";
+import { KartuPengumumanTerbaru } from "@/features/konten/beranda-anggota";
 import { sapaanHari, tanggalIndonesia } from "@/lib/format";
 import { APP_TODAY_ISO } from "@/types";
 import type { User } from "@/types";
-import { KpiCard } from "./kpi-card";
-import { TrendChart } from "./trend-chart";
-import { KepatuhanAkunCard } from "./kepatuhan-akun-card";
-import { PipelineVideoCard } from "./pipeline-video-card";
-import { TopKaderCard } from "./top-kader-card";
 import { AksesCepatPanel } from "./akses-cepat-panel";
+import { Database } from "lucide-react";
+import { GlassCard } from "@/components/glass-card";
+import { KartuKelolaPengguna } from "./kartu-kelola-pengguna";
 import { AktivitasFeed } from "./aktivitas-feed";
 
 type DashboardScreenProps = {
@@ -38,10 +42,18 @@ type DashboardScreenProps = {
   onBukaNotifikasi: () => void;
   /** Jumlah notifikasi yang belum dibaca (badge merah lonceng) */
   jumlahBelumBaca: number;
+  /**
+   * Buka panel kelola pengguna. Hanya diisi untuk super admin —
+   * peran lain menerima undefined dan kartunya tidak dirender.
+   */
+  onBukaKelolaPengguna?: () => void;
+  onBukaDatabase?: () => void;
 };
 
 export function DashboardScreen({
   user,
+  onBukaKelolaPengguna,
+  onBukaDatabase,
   onBukaModulQc,
   onBukaModulTv,
   onBukaNotifikasi,
@@ -51,6 +63,7 @@ export function DashboardScreen({
   const [memuat, setMemuat] = useState(true);
   const [pesanError, setPesanError] = useState<string | null>(null);
 
+  // Dipakai tombol "Coba Lagi" (event handler — boleh setState sinkron).
   const muatData = useCallback(async () => {
     setMemuat(true);
     setPesanError(null);
@@ -67,10 +80,32 @@ export function DashboardScreen({
     }
   }, []);
 
-  // Muat data dashboard sekali saat layar dibuka
+  // Muat data sekali saat layar dibuka. Ditulis inline (bukan memanggil
+  // muatData) karena aturan lint react-hooks melarang setState sinkron
+  // dari fungsi yang dipanggil effect; di sini semua setState terjadi
+  // setelah await, dan penanda `hidup` mencegah setState pasca-unmount.
   useEffect(() => {
-    void muatData();
-  }, [muatData]);
+    let hidup = true;
+    void (async () => {
+      try {
+        const hasil = await getDashboard();
+        if (!hidup) return;
+        setData(hasil);
+        setPesanError(null);
+      } catch (err) {
+        if (!hidup) return;
+        setData(null);
+        setPesanError(
+          err instanceof Error ? err.message : "Terjadi kesalahan tak terduga saat memuat data.",
+        );
+      } finally {
+        if (hidup) setMemuat(false);
+      }
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, []);
 
   // Toast setiap kali pemuatan gagal
   useEffect(() => {
@@ -127,12 +162,15 @@ export function DashboardScreen({
         </div>
       </header>
 
+      {/* Pengumuman terbaru — beranda tidak boleh ketinggalan info */}
+      <KartuPengumumanTerbaru />
+
       {/* ===== Konten ===== */}
       <div className="mt-5 flex flex-col gap-4">
         {/* Skeleton saat memuat */}
         {memuat && !data && (
           <>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               {[0, 1, 2, 3].map((i) => (
                 <GlassSkeleton key={i} className="h-[136px] rounded-[1.25rem]" />
               ))}
@@ -154,41 +192,58 @@ export function DashboardScreen({
 
         {data && (
           <>
-            {/* a) KPI — grid 2×2 */}
-            <FadeInUp delay={0}>
-              <div className="grid grid-cols-2 gap-3">
-                {data.kpi.map((kpi, i) => (
-                  <KpiCard key={kpi.id} kpi={kpi} delay={0.06 + i * 0.05} />
-                ))}
-              </div>
-            </FadeInUp>
+            {/* Angka kepatuhan & tren kini tinggal di modul QC Konten,
+                pipeline video di modul TV Rakyat — beranda super admin
+                fokus ke pemantauan orang: absensi, rencana, aktivitas. */}
 
-            {/* b) Tren kepatuhan 7 hari */}
-            <FadeInUp delay={0.06}>
-              <TrendChart data={data.tren} />
-            </FadeInUp>
-
-            {/* c) Kepatuhan per akun wajib */}
-            <FadeInUp delay={0.12}>
-              <KepatuhanAkunCard data={data.kepatuhanAkun} />
-            </FadeInUp>
-
-            {/* d) Status pipeline video TV Rakyat */}
-            <FadeInUp delay={0.18}>
-              <PipelineVideoCard ringkasan={data.ringkasanVideo} />
-            </FadeInUp>
-
-            {/* e) Peringkat kader teraktif */}
-            <FadeInUp delay={0.24}>
-              <TopKaderCard peringkat={data.peringkat} />
-            </FadeInUp>
+            {/* Database anggota: detail kewajiban/KPI/absen/video per orang.
+                Tampil hanya bila perannya diberi fitur "database.detail". */}
+            {onBukaDatabase && (
+              <FadeInUp delay={0.24}>
+                <button
+                  type="button"
+                  onClick={onBukaDatabase}
+                  className="btn-tekan w-full text-left"
+                  aria-label="Buka Database Anggota"
+                >
+                  <GlassCard className="flex items-center gap-3 p-4">
+                    <span
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
+                      style={{ background: "linear-gradient(135deg, #8B5CF6, #6D28D9)" }}
+                      aria-hidden="true"
+                    >
+                      <Database className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-heading text-[15px] font-bold text-teks-utama">
+                        Database Anggota
+                      </span>
+                      <span className="mt-0.5 block text-[11.5px] leading-snug text-teks-sekunder">
+                        Detail per orang: kewajiban komentar, KPI kerja, absensi, laporan video.
+                      </span>
+                    </span>
+                  </GlassCard>
+                </button>
+              </FadeInUp>
+            )}
 
             {/* f) Akses cepat */}
+            {onBukaKelolaPengguna && (
+              <FadeInUp delay={0.27}>
+                <KartuKelolaPengguna onBuka={onBukaKelolaPengguna} />
+              </FadeInUp>
+            )}
+
             <FadeInUp delay={0.3}>
               <AksesCepatPanel onBukaModulQc={onBukaModulQc} onBukaModulTv={onBukaModulTv} />
             </FadeInUp>
 
-            {/* g) Aktivitas terbaru */}
+            {/* g) Pemantauan: insight TVR, absensi, rencana anggota */}
+            <SeksiInsightTvr />
+            <SeksiAbsensiHarian />
+            <SeksiRencanaAnggota />
+
+            {/* h) Aktivitas terbaru */}
             <FadeInUp delay={0.36}>
               <AktivitasFeed aktivitas={data.aktivitas} />
             </FadeInUp>

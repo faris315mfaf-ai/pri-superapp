@@ -6,27 +6,46 @@
 // ============================================================
 
 import { motion } from "framer-motion";
-import { Home, ShieldCheck, Tv, Bell, User } from "lucide-react";
+import { Home, Newspaper, ShieldCheck, Tv, Clapperboard, MessagesSquare, Bell, User } from "lucide-react";
 import type { Role } from "@/types";
 import { cn } from "@/lib/utils";
 
-export type KunciTab = "beranda" | "qc" | "tv" | "notifikasi" | "profil";
+export type KunciTab =
+  | "beranda"
+  | "konten"
+  | "qc"
+  | "tv"
+  | "tvrku"
+  | "chat"
+  | "notifikasi"
+  | "profil";
 
-const KONFIG_TAB: Record<
+export const KONFIG_TAB: Record<
   KunciTab,
   { label: string; ikon: React.ElementType }
 > = {
   beranda: { label: "Beranda", ikon: Home },
+  konten: { label: "Konten", ikon: Newspaper },
   qc: { label: "QC Konten", ikon: ShieldCheck },
   tv: { label: "TV Rakyat", ikon: Tv },
+  tvrku: { label: "TVR Saya", ikon: Clapperboard },
+  chat: { label: "Chat", ikon: MessagesSquare },
   notifikasi: { label: "Notifikasi", ikon: Bell },
   profil: { label: "Profil", ikon: User },
 };
 
-const TAB_PER_ROLE: Record<Role, KunciTab[]> = {
-  super_admin: ["beranda", "qc", "tv", "notifikasi", "profil"],
-  admin_hr: ["qc", "notifikasi", "profil"],
-  admin_tv: ["tv", "notifikasi", "profil"],
+export const TAB_PER_ROLE: Record<Role, KunciTab[]> = {
+  // Master melihat semuanya — termasuk modul TV Rakyat, yang justru
+  // TIDAK boleh diakses super admin.
+  master: ["beranda", "qc", "tv", "tvrku", "chat", "profil"],
+  super_admin: ["beranda", "qc", "chat", "profil"],
+  admin_hr: ["qc", "chat", "profil"],
+  admin_tv: ["tv", "chat", "profil"],
+  // Ketua & anggota: konten + TVR Saya + chat. Ketua tambahannya ada
+  // di hak (membentuk tim), bukan di tab.
+  // Ketua & anggota kini punya Beranda sendiri sebagai halaman awal.
+  ketua: ["beranda", "konten", "tvrku", "chat", "profil"],
+  anggota: ["beranda", "konten", "tvrku", "chat", "profil"],
 };
 
 type BottomNavProps = {
@@ -34,17 +53,34 @@ type BottomNavProps = {
   tabAktif: KunciTab;
   onTab: (tab: KunciTab) => void;
   belumBaca?: number;
+  /** Daftar tab eksplisit (mis. + "tv" untuk Pimred). Kosong = per peran. */
+  tabs?: KunciTab[];
 };
 
-export function BottomNav({ role, tabAktif, onTab, belumBaca = 0 }: BottomNavProps) {
-  const tabs = TAB_PER_ROLE[role];
+export function BottomNav({ role, tabAktif, onTab, belumBaca = 0, tabs: tabsProp }: BottomNavProps) {
+  const tabs = tabsProp ?? TAB_PER_ROLE[role];
 
   return (
     <nav
-      className="pointer-events-none fixed bottom-0 left-1/2 z-50 w-full max-w-[480px] -translate-x-1/2 px-4"
+      className="pointer-events-none fixed bottom-0 left-1/2 z-50 w-full max-w-[480px] -translate-x-1/2 px-4 lg:hidden"
       style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
       aria-label="Navigasi utama"
     >
+      {/* Lapisan buram di belakang navigasi.
+          Dipasang selebar layar (bukan cuma selebar pil navigasi) supaya
+          konten yang menggulir ke bawah larut perlahan, bukan terpotong
+          tajam di tepi pil. Masknya membuat efek buram menguat ke bawah:
+          bening di atas, penuh di dekat navigasi. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-[calc(100%+2.5rem)]"
+        style={{
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          maskImage: "linear-gradient(to bottom, transparent 0%, black 45%)",
+          WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 45%)",
+        }}
+      />
       <div className="glass pointer-events-auto flex items-center justify-around rounded-[1.6rem] px-2 py-2">
         {tabs.map((kunci) => {
           const { label, ikon: Ikon } = KONFIG_TAB[kunci];

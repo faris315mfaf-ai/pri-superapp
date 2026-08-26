@@ -4,8 +4,42 @@
 // JANGAN di-camelCase-kan atau diterjemahkan ke Inggris.
 // ============================================================
 
-/** Peran pengguna aplikasi */
-export type Role = "super_admin" | "admin_hr" | "admin_tv";
+/**
+ * Peran pengguna aplikasi.
+ *
+ * `master` sengaja TIDAK pernah ditampilkan di panel kelola pengguna
+ * maupun di mana pun — ia hanya diketahui pemiliknya. Karena itu setiap
+ * daftar pengguna wajib menyaringnya, bukan sekadar menyembunyikan
+ * tombolnya di layar.
+ */
+// "ketua": pemimpin tim lapangan — boleh membentuk tim (dengan ACC
+// super admin/HR). "super_admin"/"admin_hr"/"admin_tv" tetap ada untuk
+// akun lama, tapi DISEMBUNYIKAN dari pemilih peran di panel.
+export type Role =
+  | "master"
+  | "super_admin"
+  | "admin_hr"
+  | "admin_tv"
+  | "ketua"
+  | "anggota";
+
+/** Peran yang boleh dipilih super admin saat menyetujui pendaftar */
+export const PERAN_DAPAT_DIPILIH = [
+  "super_admin",
+  "admin_hr",
+  "admin_tv",
+  "anggota",
+] as const;
+
+/**
+ * Boleh menjalankan otomatisasi video TV Rakyat (proses video by link).
+ * Super admin sengaja TIDAK termasuk: pekerjaan produksi video adalah
+ * tanggung jawab tim TV Rakyat, dan setiap video tercatat atas nama
+ * penggeneratenya.
+ */
+export function bolehProsesVideo(role: Role): boolean {
+  return role === "master" || role === "admin_tv";
+}
 
 /** Akun login pengguna aplikasi */
 export type User = {
@@ -15,6 +49,17 @@ export type User = {
   role: Role;
   avatar_url: string;
   jabatan: string;
+  /** Struktur divisi (lihat src/lib/struktur.ts) — opsional karena
+   *  baris lama/embed ringkas tidak selalu membawanya. */
+  divisi?: string;
+  sub_divisi?: string;
+  posisi_divisi?: "kepala" | "anggota";
+  nama_panggilan?: string;
+  /** "YYYY-MM-DD" — dasar fitur ulang tahun */
+  tanggal_lahir?: string | null;
+  /** false = belum verifikasi WA; aplikasi menagih tiap 3 jam */
+  wa_terverifikasi?: boolean;
+  nomor_wa?: string | null;
 };
 
 // Akun sosmed yang wajib dikomentari
@@ -49,7 +94,7 @@ export type Postingan = {
   waktu_posting: string; // ISO 8601
   jumlah_like: number;
   jumlah_komentar: number;
-  periode: string; // format: "2026-08-23 17:00-15:59"
+  periode: string; // format: "2026-08-23 00:00-23:59" (jendela HARIAN WIB)
 };
 
 // Komentar yang tertangkap
@@ -89,9 +134,21 @@ export type VideoAntrian = {
   thumbnail_url: string;
   jam_tanggal: string; // ISO 8601
   platform_terunggah: string[];
+  /** Link video hasil render Creatomate; kosong bila belum selesai diproses */
+  hasil_render_url?: string;
+  /** Nama pengguna yang menjalankan pemrosesan — untuk pertanggungjawaban */
+  digenerate_oleh?: string | null;
+  /** Caption khusus per platform tujuan; kosong = pakai caption_asli */
+  caption_platform?: Record<string, string> | null;
+  /** Persetujuan Pimpinan Redaksi: menunggu | disetujui | ditolak */
+  persetujuan?: string;
+  persetujuan_oleh?: string | null;
+  /** 'workflow' = hasil proses otomatis; 'manual' = unggahan anggota */
+  sumber_upload?: string;
+  diupload_oleh?: string | null;
 };
 
-// Berita terbaru dari Nusantara TV
+// Berita terbaru dari Nusantara TV (hasil scraping Apify via n8n)
 export type Berita = {
   id: string;
   judul: string;
@@ -101,6 +158,14 @@ export type Berita = {
   link_video: string;
   thumbnail_url: string;
   ringkasan: string;
+  /** Username akun sumber, mis. "official.ntv" — dipakai teks SUMBER di overlay */
+  sumber_akun?: string;
+  /** "TIKTOK" | "INSTAGRAM" */
+  jenis?: string;
+  /** true bila video ini sudah pernah direplikasi */
+  dipakai?: boolean;
+  /** Umur video dalam menit, dihitung di database */
+  selisih_menit?: number;
 };
 
 // Notifikasi dalam aplikasi
@@ -108,7 +173,9 @@ export type NotifikasiItem = {
   id: string;
   judul: string;
   isi: string;
-  kategori: "QC" | "VIDEO" | "SISTEM";
+  // String bebas dari server — layar wajib punya cadangan untuk
+  // kategori yang belum dikenalnya (jangan ulangi crash 25 Agu 2026).
+  kategori: string;
   waktu_relatif: string; // "5 menit lalu"
   kelompok: "HARI_INI" | "KEMARIN" | "LEBIH_LAMA";
   dibaca: boolean;
@@ -140,10 +207,62 @@ export type HasilProsesVideo = {
   caption_asli: string;
   sumber: string;
   jenis: "TIKTOK" | "INSTAGRAM";
+  /** Kode antrian di Supabase — dipakai menyimpan suntingan & memantau */
+  kode?: string;
+  /** Link video hasil render Creatomate (kosong bila belum selesai) */
+  hasil_render_url?: string;
+  /** Gambar sampul hasil render, dipakai sebagai poster pemutar */
+  thumbnail_url?: string;
+  /** Caption khusus per platform tujuan; kosong = pakai caption_asli */
+  caption_platform?: Record<string, string> | null;
+  /** Persetujuan Pimpinan Redaksi: menunggu | disetujui | ditolak */
+  persetujuan?: string;
+  persetujuan_oleh?: string | null;
+  /** 'workflow' = hasil proses otomatis; 'manual' = unggahan anggota */
+  sumber_upload?: string;
+  diupload_oleh?: string | null;
 };
 
+/**
+ * Kemajuan proses video apa adanya dari n8n.
+ * `tahap` 1–5 dan `persen` ditulis oleh workflow n8n lewat fungsi
+ * tv_maju_tahap() di Supabase, jadi angkanya bukan tebakan aplikasi.
+ */
+export type KemajuanVideo = {
+  id: string;
+  judul: string;
+  jenis: string;
+  link: string;
+  video_asli: string;
+  caption_asli: string;
+  judul_overlay: string;
+  highlight: string;
+  status: string;
+  tahap: number;
+  tahap_nama: string;
+  persen: number;
+  hasil_render_url: string;
+  pesan_error: string;
+  sumber_akun: string;
+  thumbnail_url: string;
+};
+
+/**
+ * Nama tahap pipeline TV Rakyat, URUT sesuai workflow n8n
+ * "TV Rakyat - Proses Video". Harus sama persis dengan yang ditulis
+ * fungsi tv_maju_tahap() di Supabase (sql/07) — kalau salah satu diubah,
+ * yang lain ikut diubah.
+ */
+export const TAHAP_VIDEO: { nama: string; sampai: number }[] = [
+  { nama: "Mengambil video sumber", sampai: 15 },
+  { nama: "Membuat judul & caption dengan AI", sampai: 30 },
+  { nama: "Mengunggah ke penyimpanan sementara", sampai: 50 },
+  { nama: "Merender overlay judul & highlight", sampai: 85 },
+  { nama: "Finalisasi video", sampai: 100 },
+];
+
 /** Periode aktif sistem QC */
-export const PERIODE_AKTIF = "2026-08-23 17:00-15:59";
+export const PERIODE_AKTIF = "2026-08-23 00:00-23:59";
 
 /** Tanggal jangkar data dummy (aplikasi demo mengacu tanggal ini) */
 export const APP_TODAY_ISO = "2026-08-23T15:30:00+07:00";

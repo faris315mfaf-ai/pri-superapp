@@ -16,6 +16,7 @@ import {
   useTransform,
 } from "framer-motion";
 import {
+  ArrowLeft,
   BellOff,
   CheckCheck,
   Settings2,
@@ -41,16 +42,33 @@ type TargetLayar = "qc" | "tv" | "dashboard" | null;
 
 type NotifikasiScreenProps = {
   onTarget: (target: TargetLayar) => void;
+  /** Kembali ke layar sebelumnya (notifikasi kini sub-layar) */
+  onKembali?: () => void;
 };
 
-const KONFIG_KATEGORI: Record<
-  NotifikasiItem["kategori"],
-  { ikon: React.ElementType; warna: string }
-> = {
+const KONFIG_KATEGORI: Record<string, { ikon: React.ElementType; warna: string }> = {
   QC: { ikon: ShieldCheck, warna: "#DC2626" },
   VIDEO: { ikon: Video, warna: "#F59E0B" },
   SISTEM: { ikon: Settings2, warna: "#10B981" },
+  // Kategori dari pengirim kabar server (penugasan, perizinan, rilis)
+  info: { ikon: Settings2, warna: "#3B82F6" },
+  sukses: { ikon: ShieldCheck, warna: "#10B981" },
+  peringatan: { ikon: Video, warna: "#F59E0B" },
 };
+
+/**
+ * Konfigurasi kategori dengan CADANGAN WAJIB.
+ *
+ * Pelajaran mahal 25 Agu 2026: satu baris notifikasi berkategori
+ * "info" (yang belum terdaftar di peta) membuat lookup ini undefined,
+ * `.ikon`-nya melempar TypeError, dan karena semua layar tab dipasang
+ * bersamaan di page.tsx, SELURUH aplikasi ikut runtuh — setiap
+ * pengguna hanya melihat "This page couldn't load". Data dari server
+ * tidak boleh pernah dianggap pasti dikenal.
+ */
+function konfigKategori(kategori: string) {
+  return KONFIG_KATEGORI[kategori] ?? { ikon: Settings2, warna: "#94A3B8" };
+}
 
 const SEKSI: { kelompok: NotifikasiItem["kelompok"]; judul: string }[] = [
   { kelompok: "HARI_INI", judul: "Hari Ini" },
@@ -86,7 +104,7 @@ function BarisNotifikasi({ item, onTarget }: BarisNotifikasiProps) {
   const x = useMotionValue(0);
   const opasitasAksi = useTransform(x, [-16, -56], [0, 1]);
 
-  const kategori = KONFIG_KATEGORI[item.kategori];
+  const kategori = konfigKategori(item.kategori);
   const IkonKategori = kategori.ikon;
 
   async function prosesHapus() {
@@ -207,25 +225,37 @@ function BarisNotifikasi({ item, onTarget }: BarisNotifikasiProps) {
 // NotifikasiScreen
 // ------------------------------------------------------------
 
-export function NotifikasiScreen({ onTarget }: NotifikasiScreenProps) {
+export function NotifikasiScreen({ onTarget, onKembali }: NotifikasiScreenProps) {
   const notifikasi = useAppStore((s) => s.notifikasi);
   const tandaiSemuaDibaca = useAppStore((s) => s.tandaiSemuaDibaca);
-
-  useEffect(() => {
-    if (notifikasi.length > 0) sudahAdaDataNotifikasi = true;
-  }, [notifikasi.length]);
+  // Penanda dari page.tsx: pemuatan pertama sudah selesai (sukses ATAU
+  // gagal). Dulu skeleton menunggu daftar TERISI — bila notifikasi
+  // memang kosong, layar "loading terus" selamanya.
+  const notifikasiSiap = useAppStore((s) => s.notifikasiSiap);
 
   const adaBelumDibaca = notifikasi.some((n) => !n.dibaca);
-  const sedangMemuat = notifikasi.length === 0 && !sudahAdaDataNotifikasi;
+  const sedangMemuat = notifikasi.length === 0 && !notifikasiSiap;
 
   return (
     <div className="kolom-aplikasi px-4 pt-5 pb-32">
       {/* Header tab utama — tanpa tombol kembali */}
       <header className="sticky top-0 z-30 -mx-4 bg-gradient-to-b from-[var(--app-bg)] via-[var(--app-bg)] to-transparent px-4 pb-2 pt-1">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="font-heading text-2xl font-extrabold tracking-tight text-teks-utama">
-            Notifikasi
-          </h1>
+          <div className="flex min-w-0 items-center gap-2.5">
+            {onKembali && (
+              <button
+                type="button"
+                onClick={onKembali}
+                aria-label="Kembali"
+                className="glass btn-tekan flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-teks-utama"
+              >
+                <ArrowLeft className="h-4.5 w-4.5" />
+              </button>
+            )}
+            <h1 className="font-heading truncate text-2xl font-extrabold tracking-tight text-teks-utama">
+              Notifikasi
+            </h1>
+          </div>
           <ThemeToggle />
         </div>
         <div className="mt-2.5 flex justify-end">

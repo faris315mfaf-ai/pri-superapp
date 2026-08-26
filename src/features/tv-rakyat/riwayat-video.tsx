@@ -7,19 +7,31 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
-import { ExternalLink, History, RotateCcw, VideoOff } from "lucide-react";
+import {
+  ExternalLink,
+  History,
+  Loader2,
+  Play,
+  RotateCcw,
+  Trash2,
+  VideoOff,
+} from "lucide-react";
 import { EmptyState, FadeInUp, GlassSkeleton, StatusBadge } from "@/components/pri-ui";
 import { GlassCard } from "@/components/glass-card";
 import { PlatformIcon } from "@/components/platform-icon";
-import { getVideoAntrian } from "@/services";
+import { getVideoAntrian, hapusVideoAntrian } from "@/services";
 import { toast } from "@/hooks/use-app-store";
 import { jamWIB } from "@/lib/format";
 import type { VideoAntrian } from "@/types";
 import { cn } from "@/lib/utils";
 
+// "SIAP DITINJAU" adalah status baru dari pipeline n8n: render
+// Creatomate sudah selesai tapi video belum diunggah — menunggu
+// admin meninjau dan menyetujuinya.
 type StatusFilter =
   | "SEMUA"
   | "SUDAH DIPROSES"
+  | "SIAP DITINJAU"
   | "SEDANG DIPROSES"
   | "MENUNGGU DOKSLI"
   | "GAGAL";
@@ -27,6 +39,7 @@ type StatusFilter =
 const CHIP_FILTER: { id: StatusFilter; label: string }[] = [
   { id: "SEMUA", label: "Semua" },
   { id: "SUDAH DIPROSES", label: "Diposting" },
+  { id: "SIAP DITINJAU", label: "Siap Ditinjau" },
   { id: "SEDANG DIPROSES", label: "Diproses" },
   { id: "MENUNGGU DOKSLI", label: "Menunggu" },
   { id: "GAGAL", label: "Gagal" },
@@ -36,6 +49,7 @@ type WarnaBadge = "hijau" | "biru" | "kuning" | "merah" | "netral";
 
 const BADGE_STATUS: Record<string, { label: string; warna: WarnaBadge; berkedip?: boolean }> = {
   "SUDAH DIPROSES": { label: "Sudah Diposting", warna: "hijau" },
+  "SIAP DITINJAU": { label: "Siap Ditinjau", warna: "biru" },
   "SEDANG DIPROSES": { label: "Sedang Diproses", warna: "biru", berkedip: true },
   "MENUNGGU DOKSLI": { label: "Menunggu Doksli", warna: "kuning" },
   GAGAL: { label: "Gagal", warna: "merah" },
@@ -60,7 +74,17 @@ type CacheRiwayat = {
   ringkasan: Record<string, number>;
 };
 
-export function RiwayatVideo({ refreshKey }: { refreshKey: number }) {
+export function RiwayatVideo({
+  refreshKey,
+  onBukaVideo,
+  onDataBerubah,
+}: {
+  refreshKey: number;
+  /** Dipanggil setelah video dihapus supaya daftar dimuat ulang */
+  onDataBerubah?: () => void;
+  /** Dipanggil saat satu baris riwayat diklik — membuka pratinjau */
+  onBukaVideo: (video: VideoAntrian) => void;
+}) {
   const [cache, setCache] = useState<CacheRiwayat | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("SEMUA");
 
@@ -155,7 +179,7 @@ export function RiwayatVideo({ refreshKey }: { refreshKey: number }) {
       </div>
 
       {/* Isi daftar */}
-      <div className="mt-4 flex flex-col gap-3">
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 md:items-start">
         {video === null ? (
           // Skeleton loading (4 baris)
           <>
@@ -178,7 +202,15 @@ export function RiwayatVideo({ refreshKey }: { refreshKey: number }) {
             className="py-8"
           />
         ) : (
-          terfilter.map((v, i) => <ItemVideo key={v.id} video={v} urutan={i} />)
+          terfilter.map((v, i) => (
+            <ItemVideo
+              key={v.id}
+              video={v}
+              urutan={i}
+              onBuka={onBukaVideo}
+              onDataBerubah={onDataBerubah}
+            />
+          ))
         )}
       </div>
     </GlassCard>
@@ -189,22 +221,79 @@ export function RiwayatVideo({ refreshKey }: { refreshKey: number }) {
 // ItemVideo — satu baris riwayat video
 // ------------------------------------------------------------
 
-function ItemVideo({ video, urutan }: { video: VideoAntrian; urutan: number }) {
+function ItemVideo({
+  video,
+  urutan,
+  onBuka,
+  onDataBerubah,
+}: {
+  video: VideoAntrian;
+  urutan: number;
+  onBuka: (video: VideoAntrian) => void;
+  onDataBerubah?: () => void;
+}) {
+  const [konfirmasiHapus, setKonfirmasiHapus] = useState(false);
+  const [sedangHapus, setSedangHapus] = useState(false);
+
+  // Video yang SUDAH tayang tidak bisa dihapus dari sini: barisnya
+  // adalah catatan bahwa unggahan itu benar terjadi, dan menghapusnya
+  // tidak akan menurunkan postingannya dari sosmed. Server menolaknya
+  // juga — tombolnya disembunyikan supaya tidak memancing salah paham.
+  const bolehHapus = video.status !== "SUDAH DIPROSES";
+
+  async function hapus() {
+    if (sedangHapus) return;
+    setSedangHapus(true);
+    try {
+      await hapusVideoAntrian(video.id);
+      toast("sukses", "Video dihapus dari antrian");
+      setKonfirmasiHapus(false);
+      onDataBerubah?.();
+    } catch (e) {
+      toast("error", "Gagal menghapus", e instanceof Error ? e.message : "");
+      setSedangHapus(false);
+    }
+  }
   const badge = BADGE_STATUS[video.status] ?? { label: video.status, warna: "netral" as WarnaBadge };
+  const adaVideo = Boolean(video.hasil_render_url);
 
   return (
     <FadeInUp delay={Math.min(urutan * 0.04, 0.25)}>
-      <div className="glass-soft rounded-2xl p-3">
+      {/* Seluruh baris dapat diklik untuk membuka pratinjau. Memakai div
+          ber-role button (bukan <button>) karena di dalamnya masih ada
+          tombol lain — tombol di dalam tombol tidak sah di HTML. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onBuka(video)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onBuka(video);
+          }
+        }}
+        aria-label={`Buka pratinjau ${video.judul}`}
+        className="glass-soft btn-tekan w-full cursor-pointer rounded-2xl p-3 text-left transition-colors hover:bg-white/50 focus:ring-2 focus:ring-pri/50 focus:outline-none dark:hover:bg-white/10"
+      >
         <div className="flex gap-3">
-          <img
-            src={video.thumbnail_url}
-            alt=""
-            loading="lazy"
-            onError={(e) => {
-              e.currentTarget.style.opacity = "0";
-            }}
-            className="h-14 w-14 shrink-0 rounded-xl bg-black/10 object-cover dark:bg-white/10"
-          />
+          <div className="relative h-14 w-14 shrink-0">
+            <img
+              src={video.thumbnail_url}
+              alt=""
+              loading="lazy"
+              onError={(e) => {
+                e.currentTarget.style.opacity = "0";
+              }}
+              className="h-14 w-14 rounded-xl bg-black/10 object-cover dark:bg-white/10"
+            />
+            {/* Penanda bahwa baris ini benar-benar punya video yang bisa
+                diputar — membedakannya dari yang baru menunggu proses. */}
+            {adaVideo && (
+              <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/35">
+                <Play className="h-5 w-5 translate-x-px text-white drop-shadow" />
+              </span>
+            )}
+          </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
               <p className="line-clamp-1 min-w-0 flex-1 text-sm leading-snug font-semibold text-teks-utama">
@@ -217,8 +306,18 @@ function ItemVideo({ video, urutan }: { video: VideoAntrian; urutan: number }) {
                 className="shrink-0"
               />
             </div>
-            <p className="mt-1 text-[11px] text-teks-sekunder angka-tab">
-              {formatJamTanggal(video.jam_tanggal)}
+            {/* Waktu + penanggung jawab. Nama penggenerate ditampilkan
+                supaya setiap video yang tayang punya pemilik yang jelas. */}
+            <p className="mt-1 text-[11px] text-teks-sekunder">
+              <span className="angka-tab">{formatJamTanggal(video.jam_tanggal)}</span>
+              {video.digenerate_oleh && (
+                <>
+                  {" · oleh "}
+                  <span className="font-semibold text-teks-utama/80">
+                    {video.digenerate_oleh}
+                  </span>
+                </>
+              )}
             </p>
 
             {/* Baris platform terunggah + tautan postingan */}
@@ -234,9 +333,12 @@ function ItemVideo({ video, urutan }: { video: VideoAntrian; urutan: number }) {
                 {video.link_instagram && (
                   <button
                     type="button"
-                    onClick={() =>
-                      window.open(video.link_instagram, "_blank", "noopener,noreferrer")
-                    }
+                    onClick={(e) => {
+                      // Jangan ikut membuka pratinjau — tombol ini punya
+                      // tujuan sendiri (membuka postingan di sosmed).
+                      e.stopPropagation();
+                      window.open(video.link_instagram, "_blank", "noopener,noreferrer");
+                    }}
                     className="btn-tekan inline-flex items-center gap-1 text-[11px] font-semibold text-pri"
                   >
                     <ExternalLink className="h-3 w-3" />
@@ -250,12 +352,66 @@ function ItemVideo({ video, urutan }: { video: VideoAntrian; urutan: number }) {
             {video.status === "GAGAL" && (
               <button
                 type="button"
-                onClick={() => toast("info", "Video dimasukkan kembali ke antrian")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toast("info", "Video dimasukkan kembali ke antrian");
+                }}
                 className="btn-tekan mt-1.5 inline-flex items-center gap-1 rounded-lg border border-pri/40 bg-pri/5 px-2.5 py-1 text-[11px] font-semibold text-pri"
               >
                 <RotateCcw className="h-3 w-3" />
                 Coba Lagi
               </button>
+            )}
+
+            {/* Hapus dari antrian — tersedia pada semua tahap sebelum tayang */}
+            {bolehHapus && (
+              <div className="mt-1.5">
+                {konfirmasiHapus ? (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] font-semibold text-teks-utama">
+                      Hapus video ini?
+                    </span>
+                    <button
+                      type="button"
+                      disabled={sedangHapus}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void hapus();
+                      }}
+                      className="btn-tekan inline-flex items-center gap-1 rounded-lg bg-gagal px-2.5 py-1 text-[11px] font-bold text-white disabled:opacity-60"
+                    >
+                      {sedangHapus ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
+                      Ya, hapus
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setKonfirmasiHapus(false);
+                      }}
+                      className="glass btn-tekan rounded-lg px-2.5 py-1 text-[11px] font-semibold text-teks-utama"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setKonfirmasiHapus(true);
+                    }}
+                    className="btn-tekan inline-flex items-center gap-1 rounded-lg border border-gagal/40 bg-gagal/5 px-2.5 py-1 text-[11px] font-semibold text-gagal"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Hapus
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

@@ -31,6 +31,13 @@ export const maxDuration = 120;
 
 const BOLEH = new Set(["master", "super_admin", "admin_hr"]);
 
+/**
+ * Banyaknya riwayat yang diminta per platform sebelum disaring ke
+ * periode hari ini. Dibuat longgar karena akun resmi bisa memposting
+ * puluhan kali sehari; sisanya dibuang oleh penyaring periode.
+ */
+const AMBIL_RIWAYAT = 120;
+
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
   return h.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : "";
@@ -142,16 +149,33 @@ export async function POST(request: Request) {
       }
     }
 
+    const peringatan: string[] = [];
     let totalPost = 0;
     let totalKomentar = 0;
     let totalComply = 0;
 
     for (const akun of cocokTertaut) {
-      // 1. Postingan periode ini (riwayat akun tertaut)
-      const riwayat = await ambilRiwayatPostingan(akun.platform, 20);
+      // 1. Postingan periode ini (riwayat akun tertaut).
+      //
+      // AMBIL BANYAK, LALU SARING. TV Rakyat bisa memposting puluhan kali
+      // sehari (terukur 39 kali di Instagram dalam satu hari), jadi
+      // meminta sedikit berarti diam-diam kehilangan sebagian kepatuhan.
+      const riwayat = await ambilRiwayatPostingan(akun.platform, AMBIL_RIWAYAT);
       const postPeriode = riwayat.filter(
         (p) => p.id && p.waktu && new Date(p.waktu).getTime() >= batasMs,
       );
+
+      // Bila SELURUH riwayat yang dikembalikan ternyata masih di dalam
+      // periode ini, berarti batas atasnya kemungkinan tercapai dan
+      // masih ada postingan lebih lama yang belum terlihat. Dilaporkan
+      // apa adanya — lebih baik pengurus tahu daripada mengira angkanya
+      // sudah lengkap padahal terpotong diam-diam.
+      if (riwayat.length >= AMBIL_RIWAYAT && postPeriode.length === riwayat.length) {
+        peringatan.push(
+          `${akun.username} (${akun.platform}): postingan hari ini melebihi ${AMBIL_RIWAYAT} yang bisa dibaca sekali jalan — jalankan lagi bila ada yang terlewat.`,
+        );
+      }
+
       if (postPeriode.length === 0) continue;
       totalPost += postPeriode.length;
 
@@ -250,6 +274,7 @@ export async function POST(request: Request) {
       postingan: totalPost,
       komentar: totalKomentar,
       comply: totalComply,
+      peringatan,
     };
   });
 }

@@ -6,7 +6,9 @@
 // QC (merah), VIDEO (emas), ROSTER (hijau), SISTEM (abu).
 // ============================================================
 
+import { useState } from "react";
 import { History, Settings2, ShieldCheck, Users, Video } from "lucide-react";
+import { NavHalaman } from "@/components/nav-halaman";
 import { EmptyState } from "@/components/pri-ui";
 import { GlassCard } from "@/components/glass-card";
 import type { Aktivitas } from "@/types";
@@ -22,8 +24,16 @@ type AktivitasFeedProps = {
   aktivitas: Aktivitas[];
 };
 
+const PER_HALAMAN = 10;
+
 export function AktivitasFeed({ aktivitas }: AktivitasFeedProps) {
-  const enamTerbaru = aktivitas.slice(0, 6);
+  // Ringkas: 10 baris per halaman, riwayat sampai 50+ data tetap bisa
+  // ditelusuri lewat tombol halaman 1, 2, 3, … di bawah.
+  const [halaman, setHalaman] = useState(1);
+  const enamTerbaru = aktivitas.slice(
+    (halaman - 1) * PER_HALAMAN,
+    halaman * PER_HALAMAN,
+  );
 
   return (
     <GlassCard className="p-4">
@@ -42,7 +52,7 @@ export function AktivitasFeed({ aktivitas }: AktivitasFeedProps) {
             const kfg = KONFIG_JENIS[item.jenis] ?? KONFIG_JENIS.SISTEM;
             const terakhir = i === enamTerbaru.length - 1;
             return (
-              <li key={item.id} className="relative flex gap-3 pb-4 last:pb-0">
+              <li key={item.id} className="relative flex gap-3 pb-3 last:pb-0">
                 {/* Garis vertikal kaca tipis */}
                 {!terakhir && (
                   <span
@@ -70,6 +80,12 @@ export function AktivitasFeed({ aktivitas }: AktivitasFeedProps) {
           })}
         </ol>
       )}
+      <NavHalaman
+        total={aktivitas.length}
+        perHalaman={PER_HALAMAN}
+        halaman={halaman}
+        onGanti={setHalaman}
+      />
     </GlassCard>
   );
 }

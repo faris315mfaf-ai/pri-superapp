@@ -19,6 +19,8 @@ import {
   ChevronRight,
   ScanSearch,
   Clock,
+  History,
+  X,
 } from "lucide-react";
 import {
   EmptyState,
@@ -33,10 +35,19 @@ import { ProgressRing } from "@/components/progress-ring";
 import { PlatformIcon } from "@/components/platform-icon";
 import {
   getAkunWajib,
+  getAntrianQc,
   getPeriodeList,
+  lanjutkanPemeriksaanQc,
+  mulaiAnalisisQc,
+  pantauAnalisisQc,
   type AkunWajibWithStats,
+  type AntrianQc,
 } from "@/services";
 import { toast } from "@/hooks/use-app-store";
+import { RiwayatAnalisisModal } from "./riwayat-analisis-modal";
+import { RingkasanQc } from "./ringkasan-qc";
+import { analisisUlangAyrshare } from "@/services";
+import { TombolLonceng } from "@/components/tombol-lonceng";
 import { cn } from "@/lib/utils";
 
 // ------------------------------------------------------------
@@ -48,7 +59,7 @@ const BULAN_ID = [
   "Juli", "Agustus", "September", "Oktober", "November", "Desember",
 ];
 
-/** "2026-08-23 17:00-15:59" → "23 Agustus 2026 · 17:00–15:59" */
+/** "2026-08-23 17:00-16:00" → "23 Agustus 2026 · 17:00–16:00" */
 function labelPeriode(periode: string): string {
   const [tanggal, jam] = periode.split(" ");
   if (!tanggal) return periode;
@@ -58,20 +69,44 @@ function labelPeriode(periode: string): string {
   return `${parseInt(d ?? "0", 10)} ${namaBulan} ${y} · ${jamTampil}`;
 }
 
+/**
+ * Tahap analisis — MENGIKUTI PROSES NYATA n8n, bukan hitungan waktu.
+ *
+ * Workflow n8n menulis kode tahapnya ke tabel qc_progres di tiap titik
+ * alur (mulai → ambil_postingan → ambil_komentar → simpan → selesai), dan
+ * layar ini hanya MEMBACANYA lewat polling. Jadi lamanya tiap tahap di
+ * layar = lamanya tahap itu di n8n sungguhan. Tahap terakhir tetap punya
+ * bukti ganda: ia baru dicentang setelah notifikasi laporan benar-benar
+ * masuk database.
+ */
 const TAHAP_ANALISIS = [
-  "Mengambil daftar akun wajib...",
-  "Memindai postingan @dpp.pri...",
-  "Memindai postingan @muhammad.nazaruddin_...",
-  "Memindai postingan @tvrakyat.official...",
-  "Mengambil komentar dari 12 postingan...",
-  "Mencocokkan dengan roster kader...",
-  "Menyusun rekap kepatuhan...",
+  { kode: "mulai", label: "Membaca daftar akun wajib" },
+  { kode: "ambil_postingan", label: "Memindai postingan (scraping)" },
+  { kode: "ambil_komentar", label: "Mengambil & mencocokkan komentar" },
+  { kode: "simpan", label: "Menyusun rekap & menyimpan ke database" },
+  { kode: "selesai", label: "Laporan akhir dari n8n" },
 ];
+
+/** kode tahap qc_progres -> posisi di daftar tampilan */
+const INDEKS_TAHAP = new Map(TAHAP_ANALISIS.map((t, i) => [t.kode, i]));
+
+/**
+ * Batas menunggu laporan sebelum layar berhenti memantau. Analisis harian
+ * biasanya hitungan menit, tapi hari yang ramai bisa lebih lama (plafon
+ * waktu n8n 30 menit) — lewat batas ini layar cuma berhenti MENUNGGU,
+ * pekerjaannya sendiri tetap jalan dan hasilnya muncul sendiri.
+ */
+const BATAS_ANALISIS_MS = 600_000;
+
+/** Hari ini menurut kalender WIB (bukan kalender server/peramban) */
+function hariIniWIB(): string {
+  return new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+}
 
 const CHIP_PLATFORM = [
   { id: "semua", label: "Semua", tersedia: true },
   { id: "instagram", label: "Instagram", tersedia: true },
-  { id: "tiktok", label: "TikTok", tersedia: false },
+  { id: "tiktok", label: "TikTok", tersedia: true },
   { id: "twitter", label: "X", tersedia: false },
   { id: "facebook", label: "Facebook", tersedia: false },
   { id: "threads", label: "Threads", tersedia: false },
@@ -87,11 +122,33 @@ function laluSejak(ts: number): string {
   return `${Math.floor(menit / 60)} jam lalu`;
 }
 
+/** 95000 → "1 mnt 35 dtk" — dipakai penghitung waktu berjalan */
+function durasiSingkat(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const menit = Math.floor(total / 60);
+  const detik = total % 60;
+  return menit > 0 ? `${menit} mnt ${detik} dtk` : `${detik} dtk`;
+}
+
+/**
+ * Keadaan analisis.
+ * "latar" = layar berhenti memantau tapi n8n kemungkinan masih bekerja —
+ * dibedakan dari "selesai" supaya layar tidak pernah mengaku selesai
+ * padahal laporannya belum pernah datang.
+ */
+type FaseAnalisis = "diam" | "berjalan" | "selesai" | "latar";
+
 // ------------------------------------------------------------
 // Komponen utama
 // ------------------------------------------------------------
 
-export function QcScreen({ onBukaAkun }: { onBukaAkun: (akunWajib: string) => void }) {
+export function QcScreen({
+  onBukaAkun,
+  onBukaNotifikasi,
+}: {
+  onBukaAkun: (akunWajib: string) => void;
+  onBukaNotifikasi?: () => void;
+}) {
   // Periode
   const [periodeList, setPeriodeList] = useState<string[]>([]);
   const [periodeAktif, setPeriodeAktif] = useState<string>("");
@@ -102,15 +159,47 @@ export function QcScreen({ onBukaAkun }: { onBukaAkun: (akunWajib: string) => vo
   const [gagalMuat, setGagalMuat] = useState(false);
 
   // Analisis
-  const [tahap, setTahap] = useState<number>(-1); // -1 belum mulai, 0..6 berjalan, 7 selesai
+  const [fase, setFase] = useState<FaseAnalisis>("diam");
+  const [tahap, setTahap] = useState<number>(0);
   const [terakhirAnalisis, setTerakhirAnalisis] = useState<number | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [mulaiPada, setMulaiPada] = useState<number | null>(null);
+  const [sekarang, setSekarang] = useState<number>(() => Date.now());
+
+  const pembatalRef = useRef<AbortController | null>(null);
+  const hidupRef = useRef(true);
+  // Penjaga klik ganda memakai ref, bukan state: dua ketukan dalam satu
+  // tick React masih membaca state lama, jadi keduanya lolos.
+  const jalanRef = useRef(false);
+  // true setelah webhook n8n benar-benar berhasil dipicu
+  const dipicuRef = useRef(false);
+  // Kembaran `dipicuRef` dalam bentuk state, khusus untuk menggambar layar.
+  // Selama permintaan pemicu masih di jalan, permintaan itu TIDAK bisa
+  // dibatalkan (fetch-nya tanpa signal), jadi tombol "Berhenti Memantau"
+  // belum boleh muncul — kalau muncul, ia akan berkata "dibatalkan sebelum
+  // terkirim" padahal webhook tetap terkirim dan kuota TikHub tetap terpakai.
+  const [terpicu, setTerpicu] = useState(false);
 
   // Filter platform
   const [platform, setPlatform] = useState("semua");
 
-  const sedangAnalisis = tahap >= 0 && tahap < TAHAP_ANALISIS.length;
-  const sudahAnalisis = tahap >= TAHAP_ANALISIS.length;
+  // Tanggal yang mau dianalisis. Aturan baru: scraping PER HARI, dan
+  // harinya bisa dipilih (maksimal hari ini — masa depan ditolak server).
+  const [tanggalAnalisis, setTanggalAnalisis] = useState<string>(() => hariIniWIB());
+
+  // Kemajuan pemeriksaan yang dibaca dari DATABASE, bukan dari memori layar.
+  // Inilah yang memperbaiki bug lama: dulu status analisis cuma hidup di
+  // memori peramban, jadi setelah halaman dimuat ulang layar selalu menulis
+  // "Belum Ada Analisis Hari Ini" padahal datanya sudah ada di database.
+  const [antrian, setAntrian] = useState<AntrianQc | null>(null);
+  // Modal riwayat seluruh analisis (tombol Riwayat di header)
+  const [riwayatBuka, setRiwayatBuka] = useState(false);
+  const [sedangLanjut, setSedangLanjut] = useState(false);
+
+  const sedangAnalisis = fase === "berjalan";
+  // Sumber kebenaran: ADA data di database untuk periode ini. Fase lokal
+  // hanya menambah, tidak lagi menentukan sendiri.
+  const adaDataTersimpan = Boolean(antrian && antrian.total > 0);
+  const sudahAnalisis = fase === "selesai" || fase === "latar" || adaDataTersimpan;
 
   // Muat data awal
   useEffect(() => {
@@ -134,28 +223,245 @@ export function QcScreen({ onBukaAkun }: { onBukaAkun: (akunWajib: string) => vo
     };
   }, []);
 
-  // Bersihkan timer saat unmount
+  // Bersihkan timer & pemantauan saat unmount.
+  // WAJIB: page.tsx memasang layar QC secara permanen dan hanya
+  // menyembunyikannya, jadi polling yang lupa dihentikan akan terus
+  // memukul server selamanya.
   useEffect(() => {
+    hidupRef.current = true;
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
+      hidupRef.current = false;
+      pembatalRef.current?.abort();
     };
   }, []);
 
-  // Rantai tahap analisis
-  function jalankanTahap(n: number) {
-    if (n >= TAHAP_ANALISIS.length) {
-      setTahap(TAHAP_ANALISIS.length);
-      setTerakhirAnalisis(Date.now());
-      toast("sukses", "Analisis selesai", "12 postingan diperiksa");
-      return;
+  // Penghitung waktu berjalan — hidup hanya selagi menganalisis,
+  // jadi ia berhenti sendiri begitu fase berubah.
+  useEffect(() => {
+    if (fase !== "berjalan") return;
+    const detak = setInterval(() => setSekarang(Date.now()), 1000);
+    return () => clearInterval(detak);
+  }, [fase]);
+
+  // Baca kemajuan antrian dari database. Dijalankan saat tanggal berubah,
+  // lalu diulang tiap 8 detik SELAMA masih ada yang menunggu — supaya angka
+  // "12 dari 53 diperiksa" bergerak sendiri mengikuti kerja n8n, tanpa
+  // pengguna perlu memuat ulang halaman.
+  useEffect(() => {
+    const periodeTanggal = tanggalAnalisis + " 00:00-23:59";
+    let hidup = true;
+
+    async function baca() {
+      const hasil = await getAntrianQc(periodeTanggal);
+      if (!hidup || !hidupRef.current) return;
+      setAntrian(hasil);
+      return hasil;
     }
-    setTahap(n);
-    timerRef.current = setTimeout(() => jalankanTahap(n + 1), 800 + Math.random() * 700);
+
+    void baca();
+
+    const detak = setInterval(() => {
+      // Berhenti memukul server saat tab tidak terlihat: page.tsx memasang
+      // semua layar sekaligus, jadi timer ini tetap hidup walau pengguna
+      // sedang berada di tab lain.
+      if (document.visibilityState === "hidden") return;
+      void baca();
+    }, 8000);
+
+    return () => {
+      hidup = false;
+      clearInterval(detak);
+    };
+  }, [tanggalAnalisis, fase]);
+
+  /** Lanjutkan pemeriksaan sisa antrian tanpa mendata ulang postingan */
+  async function lanjutkanPemeriksaan() {
+    if (sedangLanjut) return;
+    setSedangLanjut(true);
+    try {
+      await lanjutkanPemeriksaanQc(tanggalAnalisis + " 00:00-23:59");
+      toast(
+        "info",
+        "Pemeriksaan dilanjutkan",
+        "n8n melanjutkan sisa antrian. Angkanya bergerak sendiri di layar ini.",
+      );
+    } catch (e) {
+      toast(
+        "error",
+        "Gagal melanjutkan",
+        e instanceof Error ? e.message : "Coba lagi sebentar.",
+      );
+    } finally {
+      if (hidupRef.current) setSedangLanjut(false);
+    }
   }
 
-  function mulaiAnalisis() {
-    if (sedangAnalisis) return;
-    jalankanTahap(0);
+  // Analisis ulang berbasis Ayrshare — sinkron (tanpa n8n), hasilnya
+  // langsung tertulis ke database saat permintaan selesai.
+  const [sedangAyrshare, setSedangAyrshare] = useState(false);
+  async function jalankanAyrshare() {
+    if (sedangAyrshare) return;
+    setSedangAyrshare(true);
+    try {
+      const hasil = await analisisUlangAyrshare();
+      toast(
+        "sukses",
+        "Analisis Ayrshare selesai",
+        `${hasil.postingan} postingan, ${hasil.komentar} komentar dibaca. Tercakup: ${hasil.akun_tercakup.join(", ")}.` +
+          (hasil.akun_terlewat.length > 0
+            ? ` Akun di luar Ayrshare (${hasil.akun_terlewat.join(", ")}) tetap lewat analisis biasa.`
+            : ""),
+      );
+      setTerakhirAnalisis(Date.now());
+      await muatUlangData();
+    } catch (e) {
+      toast("error", "Analisis Ayrshare gagal", e instanceof Error ? e.message : "");
+    } finally {
+      if (hidupRef.current) setSedangAyrshare(false);
+    }
+  }
+
+  /** Ambil ulang angka QC dari database setelah n8n menulis rekap baru */
+  async function muatUlangData() {
+    try {
+      const [list, periode] = await Promise.all([getAkunWajib(), getPeriodeList()]);
+      if (!hidupRef.current) return;
+      setAkunList(list);
+      setGagalMuat(false);
+      setPeriodeList(periode);
+      // Periode pilihan admin dihormati; hanya diisi bila memang kosong.
+      setPeriodeAktif((p) => p || periode[0] || "");
+    } catch {
+      if (hidupRef.current) {
+        toast(
+          "error",
+          "Gagal memuat ulang data QC",
+          "Angka di layar mungkin belum yang terbaru. Tarik untuk menyegarkan.",
+        );
+      }
+    }
+  }
+
+  /**
+   * Picu workflow n8n lalu tunggu laporannya benar-benar masuk.
+   *
+   * Tidak ada animasi palsu di sini: tahap perkiraan boleh maju sendiri,
+   * tapi status "selesai" HANYA diberikan kalau notifikasi laporan QC
+   * yang lebih baru sudah muncul di database.
+   */
+  async function mulaiAnalisis() {
+    if (jalanRef.current) return;
+    jalanRef.current = true;
+
+    const pembatal = new AbortController();
+    pembatalRef.current = pembatal;
+    dipicuRef.current = false;
+    setTerpicu(false);
+
+    setFase("berjalan");
+    setTahap(0);
+    setMulaiPada(Date.now());
+    setSekarang(Date.now());
+
+    try {
+      // Penanda laporan LAMA diambil server sebelum webhook dipicu —
+      // itulah pembanding yang mencegah laporan run kemarin dikira
+      // hasil run sekarang.
+      const { penanda: penandaSebelum, progresSebelum } =
+        await mulaiAnalisisQc(tanggalAnalisis);
+      dipicuRef.current = true;
+      if (!hidupRef.current || pembatal.signal.aborted) return;
+      setTerpicu(true);
+
+      toast(
+        "info",
+        "Analisis dimulai",
+        `n8n memeriksa postingan & komentar tanggal ${tanggalAnalisis}. ` +
+          "Tahapan di panel mengikuti proses n8n secara langsung.",
+      );
+
+      const hasil = await pantauAnalisisQc(penandaSebelum, {
+        signal: pembatal.signal,
+        batasMs: BATAS_ANALISIS_MS,
+        progresSebelum,
+        // Tahap di layar digerakkan oleh catatan progres yang ditulis n8n
+        // sendiri — hanya boleh MAJU, karena hasil poll bisa tiba tak
+        // berurutan dan tahap tidak boleh terlihat mundur.
+        onProgres: (prg) => {
+          if (!hidupRef.current || pembatal.signal.aborted) return;
+          const idx = INDEKS_TAHAP.get(prg.tahap);
+          if (idx !== undefined) setTahap((lama) => Math.max(lama, idx));
+        },
+      });
+      if (!hidupRef.current || pembatal.signal.aborted) return;
+
+      if (hasil.selesai) {
+        setTahap(TAHAP_ANALISIS.length);
+        setFase("selesai");
+        setTerakhirAnalisis(Date.now());
+        await muatUlangData();
+        if (!hidupRef.current) return;
+        toast(
+          "sukses",
+          "Analisis selesai",
+          hasil.laporan?.isi ?? "Rekap kepatuhan sudah diperbarui.",
+        );
+      } else {
+        // Lewat batas waktu ≠ gagal. Katakan apa adanya.
+        setFase("latar");
+        await muatUlangData();
+        if (!hidupRef.current) return;
+        toast(
+          "info",
+          "Analisis masih berjalan",
+          "n8n belum mengirim laporan. Hasilnya akan muncul sendiri — cek lagi beberapa menit lagi.",
+        );
+      }
+    } catch (e) {
+      if (!hidupRef.current || pembatal.signal.aborted) return;
+      setFase("diam");
+      toast(
+        "error",
+        "Gagal memulai analisis",
+        e instanceof Error ? e.message : "Coba lagi beberapa saat lagi.",
+      );
+    } finally {
+      // Hanya bereskan bila run INI masih yang aktif. Kalau admin sudah
+      // menekan berhenti lalu memulai run baru, run lama tidak boleh
+      // ikut mematikan pewaktu maupun penjaga milik run baru.
+      if (pembatalRef.current === pembatal) {
+        jalanRef.current = false;
+        pembatalRef.current = null;
+      }
+    }
+  }
+
+  /**
+   * Berhenti MEMANTAU — bukan membatalkan pekerjaan n8n. Sekali webhook
+   * dipicu, workflow tetap jalan sampai tuntas; yang berhenti hanya
+   * polling di layar ini.
+   */
+  function berhentiMemantau() {
+    // Bedakan "sudah terpicu" dari "belum sempat terpicu": kalau
+    // permintaan pemicu belum berhasil, tidak jujur bilang ada analisis
+    // yang sedang berjalan di latar belakang.
+    const sudahDipicu = dipicuRef.current;
+
+    pembatalRef.current?.abort();
+    pembatalRef.current = null;
+    jalanRef.current = false;
+    setFase(sudahDipicu ? "latar" : "diam");
+
+    if (sudahDipicu) {
+      void muatUlangData();
+      toast(
+        "info",
+        "Berhenti memantau",
+        "Analisis tetap berjalan di n8n. Hasilnya akan muncul saat data dimuat ulang nanti.",
+      );
+    } else {
+      toast("info", "Dibatalkan", "Permintaan analisis dibatalkan sebelum terkirim.");
+    }
   }
 
   // Ringkasan agregat dari data services
@@ -173,7 +479,17 @@ export function QcScreen({ onBukaAkun }: { onBukaAkun: (akunWajib: string) => vo
     return akunList.filter((a) => a.platform === platform);
   }, [akunList, platform]);
 
-  const persenAnalisis = Math.min(100, Math.round(((tahap + 1) / TAHAP_ANALISIS.length) * 100));
+  /**
+   * Kemajuan yang JUJUR: selagi menunggu, angkanya dibatasi 92% —
+   * 100% hanya boleh muncul setelah laporan n8n benar-benar masuk.
+   */
+  const persenAnalisis =
+    fase === "berjalan"
+      ? Math.min(92, Math.max(6, Math.round((tahap / TAHAP_ANALISIS.length) * 100)))
+      : 100;
+
+  /** Lama analisis berjalan, untuk teks "sudah 1 mnt 20 dtk" */
+  const durasiBerjalan = mulaiPada ? sekarang - mulaiPada : 0;
 
   return (
     <div className="kolom-aplikasi px-4 pb-32">
@@ -187,8 +503,24 @@ export function QcScreen({ onBukaAkun }: { onBukaAkun: (akunWajib: string) => vo
             Pantau kepatuhan komentar kader di akun wajib
           </p>
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRiwayatBuka(true)}
+            aria-label="Riwayat analisis"
+            className="glass btn-tekan flex h-10 w-10 items-center justify-center rounded-xl text-teks-utama"
+          >
+            <History className="h-4.5 w-4.5" />
+          </button>
+          <TombolLonceng onBuka={onBukaNotifikasi} />
+          <ThemeToggle />
+        </div>
       </header>
+
+      {/* Modal riwayat analisis */}
+      <AnimatePresence>
+        {riwayatBuka && <RiwayatAnalisisModal onTutup={() => setRiwayatBuka(false)} />}
+      </AnimatePresence>
 
       {/* Header periode */}
       <FadeInUp delay={0.05} className="mt-4">
@@ -281,13 +613,17 @@ export function QcScreen({ onBukaAkun }: { onBukaAkun: (akunWajib: string) => vo
                 <p className="font-heading text-sm font-bold text-teks-utama">
                   Menganalisis kepatuhan...
                 </p>
+                <p className="mt-0.5 text-[11px] leading-snug text-teks-sekunder">
+                  Dikerjakan n8n di latar belakang · sudah{" "}
+                  <span className="angka-tab">{durasiSingkat(durasiBerjalan)}</span>
+                </p>
                 <ul className="mt-2 flex flex-col gap-1.5">
-                  {TAHAP_ANALISIS.map((label, i) => {
+                  {TAHAP_ANALISIS.map((t, i) => {
                     const selesai = i < tahap;
                     const berjalan = i === tahap;
                     return (
                       <motion.li
-                        key={label}
+                        key={t.kode}
                         initial={{ opacity: 0, x: -8 }}
                         animate={{ opacity: selesai || berjalan ? 1 : 0.35, x: 0 }}
                         className="flex items-center gap-2 text-xs"
@@ -309,21 +645,74 @@ export function QcScreen({ onBukaAkun }: { onBukaAkun: (akunWajib: string) => vo
                                 : "text-teks-sekunder",
                           )}
                         >
-                          {label}
+                          {t.label}
                         </span>
                       </motion.li>
                     );
                   })}
                 </ul>
+                <p className="mt-2 text-[10px] leading-snug text-teks-sekunder">
+                  Tahap di atas mengikuti proses n8n secara langsung — n8n
+                  mencatat kemajuannya ke database dan layar ini membacanya.
+                </p>
+                {terpicu ? (
+                  <button
+                    type="button"
+                    onClick={berhentiMemantau}
+                    className="glass btn-tekan mt-2.5 flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[11px] font-semibold text-teks-sekunder"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Berhenti Memantau
+                  </button>
+                ) : (
+                  // Permintaan pemicu belum bisa dibatalkan, jadi jangan
+                  // tawarkan tombol yang tidak sanggup menepati janjinya.
+                  <p className="mt-2.5 text-[11px] font-semibold text-teks-sekunder">
+                    Mengirim permintaan ke n8n...
+                  </p>
+                )}
               </div>
             </div>
           </GlassCard>
         ) : (
           <div>
+            {/* Pilihan tanggal — aturan scraping PER HARI */}
+            <GlassCard className="mb-2.5 flex items-center gap-3 p-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-pri/10">
+                <CalendarDays className="h-4.5 w-4.5 text-pri" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-medium text-teks-sekunder">
+                  Tanggal yang dianalisis
+                </p>
+                <input
+                  type="date"
+                  value={tanggalAnalisis}
+                  max={hariIniWIB()}
+                  onChange={(e) => {
+                    // Kosong (tombol clear peramban) → kembali ke hari ini,
+                    // supaya tombol Analisis tidak pernah mengirim tanggal kosong.
+                    setTanggalAnalisis(e.target.value || hariIniWIB());
+                  }}
+                  className="angka-tab mt-0.5 w-full bg-transparent font-heading text-sm font-bold text-teks-utama outline-none"
+                  aria-label="Pilih tanggal yang mau dianalisis"
+                />
+              </div>
+              {tanggalAnalisis !== hariIniWIB() && (
+                <button
+                  type="button"
+                  onClick={() => setTanggalAnalisis(hariIniWIB())}
+                  className="glass btn-tekan shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-teks-sekunder"
+                >
+                  Hari ini
+                </button>
+              )}
+            </GlassCard>
             <button
               type="button"
-              onClick={mulaiAnalisis}
-              className="btn-tekan flex h-13 w-full items-center justify-center gap-2.5 rounded-2xl font-heading text-[15px] font-bold text-white"
+              onClick={() => void mulaiAnalisis()}
+              disabled={sedangAnalisis}
+              className="btn-tekan flex h-13 w-full items-center justify-center gap-2.5 rounded-2xl font-heading text-[15px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
               style={{
                 background: "linear-gradient(135deg, #DC2626, #B91C1C)",
                 boxShadow: "0 10px 24px rgba(220, 38, 38, 0.35)",
@@ -337,7 +726,16 @@ export function QcScreen({ onBukaAkun }: { onBukaAkun: (akunWajib: string) => vo
               )}
               {sudahAnalisis ? "Analisis Ulang" : "Mulai Analisis"}
             </button>
-            {terakhirAnalisis && (
+            {/* Jujur: run yang belum terbukti selesai tidak boleh
+                ditampilkan seolah sudah menghasilkan angka final. */}
+            {fase === "latar" && (
+              <p className="mt-2 flex items-center justify-center gap-1 text-center text-[11px] text-teks-sekunder">
+                <Loader2 className="h-3 w-3 shrink-0 animate-spin text-pri" />
+                Analisis masih berjalan di latar belakang. Hasilnya muncul sendiri
+                setelah n8n selesai.
+              </p>
+            )}
+            {fase !== "latar" && terakhirAnalisis && (
               <p className="mt-2 flex items-center justify-center gap-1 text-[11px] text-teks-sekunder">
                 <Clock className="h-3 w-3" />
                 Terakhir dianalisis {laluSejak(terakhirAnalisis)}
@@ -346,6 +744,108 @@ export function QcScreen({ onBukaAkun }: { onBukaAkun: (akunWajib: string) => vo
           </div>
         )}
       </FadeInUp>
+
+      {/* Analisis ulang cepat: baca komentar akun resmi TV Rakyat
+          langsung dari Ayrshare — tanpa scraping, tanpa antre n8n. */}
+      <FadeInUp delay={0.11} className="mt-2">
+        <button
+          type="button"
+          onClick={() => void jalankanAyrshare()}
+          disabled={sedangAyrshare || fase === "berjalan"}
+          className="glass btn-tekan flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[13px] font-bold text-teks-utama disabled:opacity-50"
+        >
+          {sedangAyrshare ? (
+            <Loader2 className="h-4 w-4 animate-spin text-pri" aria-hidden="true" />
+          ) : (
+            <RefreshCw className="h-4 w-4 text-pri" aria-hidden="true" />
+          )}
+          {sedangAyrshare
+            ? "Membaca data Ayrshare…"
+            : "Analisis Ulang (data Ayrshare)"}
+        </button>
+      </FadeInUp>
+
+      {/* Ringkasan kepatuhan (pindahan dari dashboard): KPI, tren,
+          kepatuhan per akun wajib — kini tinggal di rumah datanya. */}
+      <RingkasanQc muatUlang={terakhirAnalisis ?? 0} />
+
+      {/* Kemajuan pemeriksaan — angkanya dari DATABASE, jadi tetap benar
+          walau aplikasi ditutup lalu dibuka lagi. */}
+      {antrian && antrian.total > 0 ? (
+        <FadeInUp delay={0.12} className="mt-3">
+          <GlassCard className="p-4">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="font-heading text-sm font-bold text-teks-utama">
+                Kemajuan Pemeriksaan
+              </p>
+              <span className="angka-tab text-xs font-semibold text-teks-sekunder">
+                {antrian.selesai}/{antrian.total} postingan
+              </span>
+            </div>
+
+            {/* Bar kemajuan */}
+            <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+              <div
+                className="h-full rounded-full transition-[width] duration-500"
+                style={{
+                  width: `${Math.round((antrian.selesai / Math.max(antrian.total, 1)) * 100)}%`,
+                  background: "linear-gradient(90deg, #DC2626, #F59E0B)",
+                }}
+              />
+            </div>
+
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="flex flex-col items-center">
+                <span className="angka-tab font-heading text-base font-extrabold text-sukses">
+                  {antrian.selesai}
+                </span>
+                <span className="text-[10px] text-teks-sekunder">Selesai</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <span className="angka-tab font-heading text-base font-extrabold text-emas">
+                  {antrian.menunggu}
+                </span>
+                <span className="text-[10px] text-teks-sekunder">Menunggu</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <span className="angka-tab font-heading text-base font-extrabold text-gagal">
+                  {antrian.gagal}
+                </span>
+                <span className="text-[10px] text-teks-sekunder">Gagal</span>
+              </div>
+            </div>
+
+            {/* Cakupan komentar yang tidak lengkap WAJIB terlihat: angka
+                kepatuhan yang terlihat rapi padahal datanya tidak lengkap
+                adalah kesalahan paling berbahaya di sistem ini. */}
+            {antrian.perlu_cek_manual > 0 && (
+              <p className="mt-2.5 text-[11px] leading-snug text-teks-sekunder">
+                <span className="font-semibold text-emas">
+                  {antrian.perlu_cek_manual} postingan
+                </span>{" "}
+                perlu dicek manual — komentarnya tidak bisa diambil lengkap,
+                jadi kader di postingan itu tidak divonis.
+              </p>
+            )}
+
+            {antrian.menunggu > 0 && (
+              <button
+                type="button"
+                onClick={() => void lanjutkanPemeriksaan()}
+                disabled={sedangLanjut || sedangAnalisis}
+                className="glass btn-tekan mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-teks-utama disabled:opacity-60"
+              >
+                {sedangLanjut ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-pri" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 text-pri" />
+                )}
+                Lanjutkan Pemeriksaan ({antrian.menunggu} tersisa)
+              </button>
+            )}
+          </GlassCard>
+        </FadeInUp>
+      ) : null}
 
       {/* Konten hasil */}
       {sudahAnalisis ? (
@@ -425,7 +925,7 @@ export function QcScreen({ onBukaAkun }: { onBukaAkun: (akunWajib: string) => vo
           </FadeInUp>
 
           {/* Daftar akun */}
-          <div className="mt-3 flex flex-col gap-3">
+          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 md:items-start">
             {akunList === null && !gagalMuat ? (
               [0, 1, 2].map((i) => (
                 <GlassCard key={i} className="flex items-center gap-4 p-4">
@@ -439,7 +939,7 @@ export function QcScreen({ onBukaAkun }: { onBukaAkun: (akunWajib: string) => vo
                 </GlassCard>
               ))
             ) : gagalMuat ? (
-              <GlassCard>
+              <GlassCard className="md:col-span-2">
                 <EmptyState
                   ikon={ScanSearch}
                   judul="Gagal Memuat Data"
@@ -449,7 +949,7 @@ export function QcScreen({ onBukaAkun }: { onBukaAkun: (akunWajib: string) => vo
                 />
               </GlassCard>
             ) : akunTampil.length === 0 ? (
-              <GlassCard>
+              <GlassCard className="md:col-span-2">
                 <EmptyState
                   ikon={ScanSearch}
                   judul="Belum Ada Akun di Platform Ini"
@@ -465,23 +965,9 @@ export function QcScreen({ onBukaAkun }: { onBukaAkun: (akunWajib: string) => vo
                     className="p-4"
                   >
                     <div className="flex items-center gap-3.5">
-                      {/* Avatar + badge platform */}
+                      {/* Avatar (foto profil hasil scraping) + badge platform */}
                       <div className="relative shrink-0">
-                        <span
-                          className="flex h-14 w-14 items-center justify-center rounded-full font-heading text-base font-extrabold text-white shadow-md"
-                          style={{
-                            background: `linear-gradient(135deg, ${
-                              i === 0 ? "#DC2626, #F59E0B" : i === 1 ? "#DB2777, #F472B6" : "#B45309, #FBBF24"
-                            })`,
-                          }}
-                          aria-hidden="true"
-                        >
-                          {akun.nama_tampilan
-                            .split(" ")
-                            .slice(0, 2)
-                            .map((k) => k[0])
-                            .join("")}
-                        </span>
+                        <AvatarAkunWajib akun={akun} urut={i} />
                         <span className="absolute -right-1 -bottom-1">
                           <PlatformIcon platform={akun.platform} size={13} denganWadah />
                         </span>
@@ -555,12 +1041,54 @@ export function QcScreen({ onBukaAkun }: { onBukaAkun: (akunWajib: string) => vo
                 judul="Belum Ada Analisis Hari Ini"
                 keterangan="Tekan tombol Mulai Analisis untuk memeriksa kepatuhan kader."
                 labelAksi="Mulai Analisis"
-                onAksi={mulaiAnalisis}
+                onAksi={() => void mulaiAnalisis()}
               />
             </GlassCard>
           </FadeInUp>
         )
       )}
     </div>
+  );
+}
+
+// ------------------------------------------------------------
+
+/**
+ * Foto profil akun wajib. Sumbernya kolom avatar_url yang diisi scraper
+ * (dipungut dari data postingan, tanpa request tambahan). Bila belum ada
+ * atau gagal dimuat — URL avatar CDN bisa kedaluwarsa — jatuh kembali ke
+ * lingkaran inisial seperti desain lama, jadi tidak pernah ada kotak kosong.
+ */
+function AvatarAkunWajib({ akun, urut }: { akun: AkunWajibWithStats; urut: number }) {
+  const [gagalGambar, setGagalGambar] = useState(false);
+
+  if (akun.avatar_url && !gagalGambar) {
+    return (
+      <img
+        src={akun.avatar_url}
+        alt=""
+        loading="lazy"
+        onError={() => setGagalGambar(true)}
+        className="h-14 w-14 rounded-full object-cover shadow-md"
+      />
+    );
+  }
+
+  return (
+    <span
+      className="flex h-14 w-14 items-center justify-center rounded-full font-heading text-base font-extrabold text-white shadow-md"
+      style={{
+        background: `linear-gradient(135deg, ${
+          urut === 0 ? "#DC2626, #F59E0B" : urut === 1 ? "#DB2777, #F472B6" : "#B45309, #FBBF24"
+        })`,
+      }}
+      aria-hidden="true"
+    >
+      {akun.nama_tampilan
+        .split(" ")
+        .slice(0, 2)
+        .map((k) => k[0])
+        .join("")}
+    </span>
   );
 }

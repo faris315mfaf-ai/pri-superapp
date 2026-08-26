@@ -2,24 +2,33 @@
 
 // ============================================================
 // KirimVideoPanel — panel "Kirim Video untuk Diproses".
-// Input link TikTok/Instagram dengan validasi langsung +
-// dua kolom opsional (judul overlay & highlight).
+//
+// Kolom link di sini adalah LINK DOKSLI (video asli tanpa
+// watermark) yang DICARI DAN DIISI SENDIRI oleh admin. Panel
+// Berita di atas hanya menandai video mana yang akan direplikasi;
+// linknya sengaja tidak disalin ke sini, karena yang dibutuhkan
+// pipeline adalah doksli-nya, bukan link postingan aslinya.
 // ============================================================
 
-import { useEffect, useState } from "react";
-import { CheckCircle2, Link2, Send, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { CheckCircle2, Film, Link2, Send, Sparkles } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
+import { PlatformIcon } from "@/components/platform-icon";
+import type { Berita } from "@/types";
 import { cn } from "@/lib/utils";
 
 type PayloadProses = {
   link: string;
+  video_asli?: string;
   judul_overlay?: string;
   highlight?: string;
+  sumber_akun?: string;
+  caption_sumber?: string;
 };
 
 type KirimVideoPanelProps = {
-  /** Link yang diisi otomatis dari panel Berita */
-  linkAwal: string;
+  /** Video sumber yang dipilih di panel Berita (boleh null) */
+  videoSumber: Berita | null;
   onMulaiProses: (payload: PayloadProses) => void;
 };
 
@@ -38,16 +47,10 @@ function linkValid(link: string): boolean {
   }
 }
 
-export function KirimVideoPanel({ linkAwal, onMulaiProses }: KirimVideoPanelProps) {
-  const [link, setLink] = useState(linkAwal);
+export function KirimVideoPanel({ videoSumber, onMulaiProses }: KirimVideoPanelProps) {
+  const [link, setLink] = useState("");
   const [judul, setJudul] = useState("");
   const [highlight, setHighlight] = useState("");
-
-  // Sinkronkan input saat link dikirim dari panel Berita
-  // (berjalan saat prop linkAwal berubah; di mount nilainya sama)
-  useEffect(() => {
-    setLink(linkAwal);
-  }, [linkAwal]);
 
   const teks = link.trim();
   const terisi = teks.length > 0;
@@ -56,10 +59,16 @@ export function KirimVideoPanel({ linkAwal, onMulaiProses }: KirimVideoPanelProp
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!sah) return;
+    const doksli = /^https?:\/\//i.test(teks) ? teks : `https://${teks}`;
     onMulaiProses({
-      link: /^https?:\/\//i.test(teks) ? teks : `https://${teks}`,
+      // `link` = postingan sumber yang direplikasi (kalau ada),
+      // `video_asli` = doksli yang benar-benar diunduh & dirender.
+      link: videoSumber?.link_video || doksli,
+      video_asli: doksli,
       judul_overlay: judul.trim() || undefined,
       highlight: highlight.trim() || undefined,
+      sumber_akun: videoSumber?.sumber_akun || undefined,
+      caption_sumber: videoSumber?.ringkasan || undefined,
     });
   }
 
@@ -83,8 +92,36 @@ export function KirimVideoPanel({ linkAwal, onMulaiProses }: KirimVideoPanelProp
         </div>
       </div>
 
+      {/* Video sumber yang sedang direplikasi — muncul hanya bila admin
+          sudah memilih satu di panel Berita di atas. Ini yang memberi
+          konteks "doksli untuk video yang mana". */}
+      {videoSumber && (
+        <div className="glass-soft mt-4 flex items-start gap-2.5 rounded-xl p-2.5">
+          <span
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-pri"
+            aria-hidden="true"
+          >
+            <Film className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10.5px] font-semibold tracking-wide text-teks-sekunder uppercase">
+              Video yang direplikasi
+            </p>
+            <p className="line-clamp-2 text-xs leading-snug font-semibold text-teks-utama">
+              {videoSumber.judul}
+            </p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <PlatformIcon platform={videoSumber.platform_asal} size={11} />
+              <span className="text-[10.5px] text-teks-sekunder">
+                {videoSumber.sumber} · {videoSumber.waktu_relatif}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <form className="mt-4 flex flex-col" onSubmit={submit} noValidate>
-        {/* Link video sumber */}
+        {/* Link doksli — dicari & diisi admin sendiri */}
         <div>
           <label
             htmlFor="link-video"

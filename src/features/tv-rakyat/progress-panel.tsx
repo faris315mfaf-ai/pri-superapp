@@ -1,10 +1,16 @@
 "use client";
 
 // ============================================================
-// ProgressPanel — progress generate video TV Rakyat.
-// Ring progress besar (±13 detik) + 5 tahapan status +
-// pembatalan dengan modal konfirmasi kaca.
-// prosesVideo() dipanggil SEKALI per sesi (guard useRef).
+// ProgressPanel — kemajuan proses video TV Rakyat.
+//
+// PENTING: panel ini TIDAK lagi menyimulasikan progress. Angka
+// persen dan tahap yang berjalan dibaca dari Supabase, tempat
+// workflow n8n "TV Rakyat - Proses Video" menuliskan posisinya
+// setiap kali selesai satu tahap. Jadi yang dilihat admin adalah
+// kemajuan sesungguhnya, bukan animasi yang menebak-nebak.
+//
+// prosesVideo() dipanggil SEKALI per sesi (guard useRef), lalu
+// kodenya dipakai untuk menanyakan kemajuan tiap 2 detik.
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
@@ -19,15 +25,18 @@ import {
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { ProgressRing } from "@/components/progress-ring";
-import { prosesVideo } from "@/services";
+import { prosesVideo, pantauVideo } from "@/services";
 import { toast } from "@/hooks/use-app-store";
-import type { HasilProsesVideo } from "@/types";
+import { TAHAP_VIDEO, type HasilProsesVideo, type KemajuanVideo } from "@/types";
 import { cn } from "@/lib/utils";
 
 type PayloadProses = {
   link: string;
+  video_asli?: string;
   judul_overlay?: string;
   highlight?: string;
+  sumber_akun?: string;
+  caption_sumber?: string;
 };
 
 type ProgressPanelProps = {
@@ -36,89 +45,131 @@ type ProgressPanelProps = {
   onBatal: () => void;
 };
 
-/** Total durasi simulasi progress (detik) */
-const DURASI_TOTAL_DETIK = 13;
-/** Interval tick progress (milidetik) */
-const INTERVAL_MS = 100;
+/** Jeda antar pengecekan kemajuan ke server (milidetik) */
+const INTERVAL_PANTAU_MS = 2000;
 
-const TAHAPAN: { nama: string; sampai: number }[] = [
-  { nama: "Mengambil video sumber", sampai: 15 },
-  { nama: "Membuat judul & caption dengan AI", sampai: 30 },
-  { nama: "Mengunggah ke penyimpanan sementara", sampai: 50 },
-  { nama: "Merender overlay judul & highlight", sampai: 85 },
-  { nama: "Finalisasi video", sampai: 100 },
-];
+/**
+ * Batas aman menunggu. n8n sendiri berhenti di sekitar 5 menit
+ * (batas eksekusi instance), jadi 6 menit sudah pasti melewatinya.
+ */
+const BATAS_TUNGGU_MS = 6 * 60 * 1000;
+
+const TAHAPAN = TAHAP_VIDEO;
 
 export function ProgressPanel({ payload, onSelesai, onBatal }: ProgressPanelProps) {
   const [persen, setPersen] = useState(0);
+  const [tahapAktif, setTahapAktif] = useState(0);
   const [hasil, setHasil] = useState<HasilProsesVideo | null>(null);
   const [pesanError, setPesanError] = useState<string | null>(null);
   const [konfirmasiBuka, setKonfirmasiBuka] = useState(false);
 
-  const janjiRef = useRef<Promise<HasilProsesVideo> | null>(null);
-  const akumulasiRef = useRef(0);
-  const hasilRef = useRef<HasilProsesVideo | null>(null);
-  const errorRef = useRef(false);
+  const janjiRef = useRef<Promise<{ kode: string }> | null>(null);
   const selesaiDipanggilRef = useRef(false);
 
-  // Panggil prosesVideo SEKALI di mount (guard ref), lalu jalankan timer.
+  // Mulai proses SEKALI, lalu pantau kemajuannya sampai selesai/gagal.
   useEffect(() => {
     let aktif = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const mulaiPadaMs = Date.now();
+
+    function gagal(pesan: string) {
+      if (!aktif) return;
+      setPesanError(pesan);
+      toast("error", "Gagal memproses video", pesan);
+    }
+
+    function terapkan(k: KemajuanVideo) {
+      setPersen(k.persen ?? 0);
+      setTahapAktif(k.tahap ?? 0);
+
+      if (k.status === "GAGAL") {
+        gagal(k.pesan_error || "Proses video gagal di n8n");
+        return true;
+      }
+
+      // n8n menandai SIAP DITINJAU begitu render Creatomate selesai.
+      if (k.status === "SIAP DITINJAU" || k.persen >= 100) {
+        setHasil({
+          judul_overlay: k.judul_overlay || k.judul || "",
+          highlight: k.highlight || "",
+          caption_asli: k.caption_asli || "",
+          sumber: k.link || k.video_asli || "",
+          jenis: k.jenis === "TIKTOK" ? "TIKTOK" : "INSTAGRAM",
+          kode: k.id,
+          hasil_render_url: k.hasil_render_url || "",
+          thumbnail_url: k.thumbnail_url || "",
+        });
+        return true;
+      }
+      return false;
+    }
+
+    function pantauBerulang(kode: string) {
+      if (!aktif) return;
+
+      if (Date.now() - mulaiPadaMs > BATAS_TUNGGU_MS) {
+        gagal(
+          "Proses video melebihi batas waktu tunggu. Cek riwayat di bawah — video mungkin tetap selesai beberapa saat lagi.",
+        );
+        return;
+      }
+
+      pantauVideo(kode)
+        .then((k) => {
+          if (!aktif) return;
+          const berhenti = terapkan(k);
+          if (!berhenti) {
+            timer = setTimeout(() => pantauBerulang(kode), INTERVAL_PANTAU_MS);
+          }
+        })
+        .catch(() => {
+          // Sekali gagal menanyakan bukan berarti prosesnya gagal —
+          // bisa jadi jaringan sekejap terputus. Coba lagi.
+          if (!aktif) return;
+          timer = setTimeout(() => pantauBerulang(kode), INTERVAL_PANTAU_MS);
+        });
+    }
 
     if (!janjiRef.current) {
       janjiRef.current = prosesVideo(payload);
     }
     janjiRef.current
-      .then((h) => {
+      .then((r) => {
         if (!aktif) return;
-        hasilRef.current = h;
-        setHasil(h);
+        pantauBerulang(r.kode);
       })
       .catch((err: unknown) => {
-        if (!aktif) return;
-        errorRef.current = true;
-        const pesan = err instanceof Error ? err.message : "Terjadi kesalahan tak terduga";
-        setPesanError(pesan);
-        toast("error", "Gagal memproses video", pesan);
+        gagal(
+          err instanceof Error ? err.message : "Terjadi kesalahan tak terduga",
+        );
       });
-
-    const timer: ReturnType<typeof setInterval> = setInterval(() => {
-      if (!aktif || errorRef.current) return;
-      // Naik ~0,77 per tick dengan sedikit variasi (total ±13 detik)
-      akumulasiRef.current = Math.min(
-        100,
-        akumulasiRef.current + 0.77 + (Math.random() - 0.5) * 0.16,
-      );
-      if (akumulasiRef.current >= 100) {
-        // Tahan di 99% bila hasil API belum datang
-        setPersen(hasilRef.current ? 100 : 99);
-      } else {
-        setPersen(akumulasiRef.current);
-      }
-    }, INTERVAL_MS);
 
     return () => {
       aktif = false;
-      clearInterval(timer);
+      if (timer) clearTimeout(timer);
     };
   }, []);
 
-  // Saat 100% & hasil sudah ada → jeda 500ms agar user melihat 100%.
+  // Saat hasil sudah ada → jeda 500ms agar user melihat 100%.
   useEffect(() => {
-    if (persen === 100 && hasil && !selesaiDipanggilRef.current) {
+    if (hasil && !selesaiDipanggilRef.current) {
       selesaiDipanggilRef.current = true;
       const jeda: ReturnType<typeof setTimeout> = setTimeout(() => {
         onSelesai(hasil);
       }, 500);
       return () => clearTimeout(jeda);
     }
-  }, [persen, hasil, onSelesai]);
+  }, [hasil, onSelesai]);
 
+  /**
+   * Status tiap tahap dibaca dari nomor tahap n8n, bukan dari persen.
+   * Nomor tahap lebih jujur: kalau n8n masih di tahap 4, tahap 4
+   * ditandai berjalan walaupun persennya belum bergerak.
+   */
   function statusTahap(indeks: number): "menunggu" | "berjalan" | "selesai" {
-    const batasBawah = indeks === 0 ? 0 : TAHAPAN[indeks - 1].sampai;
-    const batasAtas = TAHAPAN[indeks].sampai;
-    if (persen >= batasAtas) return "selesai";
-    if (persen >= batasBawah) return "berjalan";
+    const nomor = indeks + 1;
+    if (tahapAktif > nomor) return "selesai";
+    if (tahapAktif === nomor) return persen >= 100 ? "selesai" : "berjalan";
     return "menunggu";
   }
 
@@ -128,7 +179,11 @@ export function ProgressPanel({ payload, onSelesai, onBatal }: ProgressPanelProp
     onBatal();
   }
 
-  const sisaDetik = Math.max(1, Math.ceil(((100 - persen) / 100) * DURASI_TOTAL_DETIK));
+  /** Nama tahap yang sedang dikerjakan n8n (untuk teks di bawah ring) */
+  const namaTahapAktif =
+    tahapAktif >= 1 && tahapAktif <= TAHAPAN.length
+      ? TAHAPAN[tahapAktif - 1].nama
+      : "Menghubungi otomatisasi";
 
   return (
     <GlassCard className="p-4 sm:p-5">
@@ -176,8 +231,11 @@ export function ProgressPanel({ payload, onSelesai, onBatal }: ProgressPanelProp
                 <span className="text-lg">%</span>
               </span>
             </ProgressRing>
+            {/* Menampilkan tahap yang BENAR-BENAR sedang dikerjakan n8n.
+                Dulu di sini ada hitung mundur detik, tapi itu tebakan —
+                lama proses tergantung Apify, DeepSeek, dan Creatomate. */}
             <p className="mt-2 h-5 text-xs font-medium text-teks-sekunder">
-              {persen >= 100 ? "Selesai!" : `Perkiraan selesai ${sisaDetik} detik lagi`}
+              {persen >= 100 ? "Selesai!" : namaTahapAktif}
             </p>
           </div>
 
