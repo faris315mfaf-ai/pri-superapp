@@ -32,6 +32,13 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# KECUALI contoh tanpa isi rahasia — ini justru harus ikut tersimpan
+# supaya orang lain tahu variabel apa saja yang perlu diisi.
+!.env.example
+
+# CATATAN PENTING: taruh kunci rahasia HANYA di .env.local.
+# Jangan di .env — file itu sudah terlanjur terlacak Git sejak awal,
+# jadi isinya akan ikut ter-commit dan bisa terbaca orang lain.
 
 # vercel
 .vercel
@@ -52,3 +59,19 @@ prompt
 server.log
 # Skills directory
 /skills/
+.vercel
+
+# Kunci penanda tangan APK — RAHASIA, jangan pernah di-commit
+apk/*.keystore
+apk/KUNCI-PENTING.txt
+apk/build/
+# Artefak hasil build Gradle. Tanpa tiga baris di bawah, sekali `node
+# scripts/bangun-apk.mjs` dijalankan ada ~514 berkas (33 MB) yang ikut masuk
+# ke git dan mengotori tiap diff. Berkasnya bisa dibuat ulang kapan saja.
+apk/.gradle/
+apk/app/build/
+apk/*.apk
+apk/*.idsig
+
+# Kredensial Cloudflare (jangan pernah di-commit)
+.env.cloudflare
