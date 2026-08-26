@@ -1,36 +1,50 @@
-// GET /api/rekap — rekap kepatuhan 288 baris
-// Query: ?id_postingan=IG-DPP-01 (opsional) atau ?periode= (opsional)
-// Jika ?id_postingan diberikan, respons menyertakan ringkasan
+// GET /api/rekap — rekap kepatuhan kader
+// Query: ?id_postingan=IG-001 (opsional) atau ?periode= (opsional)
+// Bila ?id_postingan diberikan, respons menyertakan ringkasan
 // { sudah, belum, persen } untuk postingan tersebut.
-import { NextRequest, NextResponse } from "next/server";
-import { rekap } from "@/data/rekap";
+// Sumber: Supabase (view v_app_rekap).
+import { supabase } from "@/lib/supabase";
+import { bungkus, pastikanSukses } from "@/lib/api-helper";
+import { adalahPengurus, pastikanMasuk } from "@/lib/sesi";
 
 export const dynamic = "force-dynamic";
 
-const jeda = () => new Promise((r) => setTimeout(r, 300 + Math.random() * 500));
+type BarisRekap = { sudah_komentar: boolean; nomor_wa?: string | null };
 
-export async function GET(request: NextRequest) {
-  await jeda();
+export async function GET(request: Request) {
+  return bungkus(async () => {
+    // Data internal partai — wajib login (dulu endpoint ini terbuka).
+    const user = await pastikanMasuk(request);
+    const { searchParams } = new URL(request.url);
+    const idPostingan = searchParams.get("id_postingan");
+    const periode = searchParams.get("periode");
 
-  const { searchParams } = new URL(request.url);
-  const idPostingan = searchParams.get("id_postingan");
-  const periode = searchParams.get("periode");
+    let q = supabase()
+      .from("v_app_rekap")
+      .select(
+        "id_unik, periode, nama_kader, platform, akun_wajib, id_postingan, sudah_komentar, jumlah_komentar, nomor_wa",
+      )
+      .order("nama_kader");
+    if (idPostingan) q = q.eq("id_postingan", idPostingan);
+    if (periode) q = q.eq("periode", periode);
 
-  let data = rekap;
-  if (idPostingan) data = data.filter((r) => r.id_postingan === idPostingan);
-  if (periode) data = data.filter((r) => r.periode === periode);
+    const data = pastikanSukses(await q, "rekap kepatuhan") as BarisRekap[];
 
-  const payload: {
-    data: typeof data;
-    ringkasan?: { sudah: number; belum: number; persen: number };
-  } = { data };
+    // Nomor WhatsApp hanya untuk pengurus (dipakai fitur "ingatkan").
+    if (!adalahPengurus(user.role)) {
+      for (const baris of data) baris.nomor_wa = null;
+    }
 
-  if (idPostingan) {
-    const sudah = data.filter((r) => r.sudah_komentar).length;
-    const belum = data.length - sudah;
-    const persen = data.length > 0 ? Math.round((sudah / data.length) * 100) : 0;
-    payload.ringkasan = { sudah, belum, persen };
-  }
-
-  return NextResponse.json(payload);
+    const payload: Record<string, unknown> = { data };
+    if (idPostingan) {
+      const sudah = data.filter((r) => r.sudah_komentar).length;
+      const belum = data.length - sudah;
+      payload.ringkasan = {
+        sudah,
+        belum,
+        persen: data.length > 0 ? Math.round((sudah / data.length) * 100) : 0,
+      };
+    }
+    return payload;
+  });
 }

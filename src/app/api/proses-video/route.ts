@@ -1,20 +1,22 @@
-// POST /api/proses-video — proses link video TikTok/Instagram
-// Body: { link: string, judul_overlay?: string, highlight?: string }
-// Menggunakan z-ai-web-dev-sdk (LLM) untuk melengkapi judul_overlay,
-// highlight, dan caption_asli yang belum diisi pengguna.
-// Jika LLM gagal/timeout → fallback template (selalu respons sukses).
-import { NextRequest, NextResponse } from "next/server";
-import ZAI from "z-ai-web-dev-sdk";
+// POST /api/proses-video — mulai proses video TV Rakyat
+// Body: { link, video_asli, judul_overlay?, highlight?, caption_asli?, sumber_akun? }
+//
+// Aplikasi TIDAK memproses video sendiri. Seluruh pekerjaan berat
+// (unduh dari Apify, judul/caption DeepSeek, unggah Cloudinary, render
+// Creatomate) dikerjakan workflow n8n "TV Rakyat - Proses Video".
+//
+// n8n membalas CEPAT dengan kode antrian, lalu bekerja di latar belakang
+// sambil menuliskan tahapnya ke Supabase. Aplikasi memantau kemajuannya
+// lewat GET /api/video-antrian/<kode>.
+import { NextRequest } from "next/server";
+import { panggilWebhookN8n, N8nBelumDiaturError } from "@/lib/n8n";
+import { bungkus } from "@/lib/api-helper";
+import { userDariToken } from "@/lib/sesi";
+import { bolehProsesVideo } from "@/types";
+import { adalahPimred } from "@/lib/jabatan";
+import { pastikanFiturAktif } from "@/lib/fitur-server";
 
 export const dynamic = "force-dynamic";
-
-const jeda = () => new Promise((r) => setTimeout(r, 300 + Math.random() * 500));
-
-/** Batas waktu menunggu LLM sebelum beralih ke fallback */
-const BATAS_TIMEOUT_LLM_MS = 20000;
-
-const BATAS_JUDUL = 60;
-const BATAS_HIGHLIGHT = 80;
 
 /** Tambahkan skema https:// bila pengguna lupa menuliskannya */
 function normalisasiLink(link: string): string {
@@ -35,121 +37,89 @@ function linkValid(link: string): boolean {
   }
 }
 
-function deteksiJenis(link: string): "TIKTOK" | "INSTAGRAM" {
-  return /tiktok\.com/i.test(link) ? "TIKTOK" : "INSTAGRAM";
-}
-
-/** Ambil objek JSON pertama dari teks respons (tahan code fence) */
-function ekstrakJSON(teks: string): Record<string, unknown> | null {
-  const mulai = teks.indexOf("{");
-  const akhir = teks.lastIndexOf("}");
-  if (mulai === -1 || akhir <= mulai) return null;
-  try {
-    return JSON.parse(teks.slice(mulai, akhir + 1)) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
-function teksAtauKosong(nilai: unknown): string {
-  return typeof nilai === "string" ? nilai.trim() : "";
-}
-
-async function panggilLLM(
-  link: string,
-  judulUser: string,
-  highlightUser: string,
-): Promise<string> {
-  const zai = await ZAI.create();
-  const completion = await zai.chat.completions.create({
-    messages: [
-      {
-        role: "assistant",
-        content:
-          "Kamu editor konten TV Rakyat Indonesia. Balas HANYA JSON valid tanpa teks lain.",
-      },
-      {
-        role: "user",
-        content: `Buat konten untuk video vertikal dari link: ${link}. ${
-          judulUser ? `Judul overlay sudah ada: ${judulUser}.` : ""
-        } ${
-          highlightUser ? `Highlight sudah ada: ${highlightUser}.` : ""
-        } Format JSON: {"judul_overlay": string maksimal 60 karakter, "highlight": string maksimal 80 karakter, "caption_asli": string caption Instagram/TikTok 2-3 kalimat dengan hashtag}. Bahasa Indonesia.`,
-      },
-    ],
-    thinking: { type: "disabled" },
-  });
-  const isi = completion?.choices?.[0]?.message?.content;
-  return typeof isi === "string" ? isi : "";
+function errorStatus(pesan: string, status: number): Error {
+  return Object.assign(new Error(pesan), { status });
 }
 
 export async function POST(request: NextRequest) {
-  await jeda();
+  return bungkus(async () => {
+    // Otomatisasi video hanya untuk tim TV Rakyat (dan master).
+    // Super admin sengaja TIDAK diberi akses: produksi video adalah
+    // tanggung jawab timnya, dan setiap video tercatat atas nama
+    // penggeneratenya. Diperiksa di server, bukan sekadar dengan
+    // menyembunyikan tabnya.
+    const auth = request.headers.get("authorization") ?? "";
+    const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+    const pengguna = await userDariToken(token);
 
-  let body: { link?: string; judul_overlay?: string; highlight?: string } = {};
-  try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    return NextResponse.json({ error: "Permintaan tidak valid" }, { status: 400 });
-  }
-
-  const linkMentah = (body.link ?? "").trim();
-  if (!linkMentah) {
-    return NextResponse.json({ error: "Link video wajib diisi" }, { status: 400 });
-  }
-  if (!linkValid(linkMentah)) {
-    return NextResponse.json(
-      { error: "Link harus berasal dari tiktok.com atau instagram.com" },
-      { status: 400 },
-    );
-  }
-
-  const link = normalisasiLink(linkMentah);
-  const jenis = deteksiJenis(link);
-  const judulUser = (body.judul_overlay ?? "").trim();
-  const highlightUser = (body.highlight ?? "").trim();
-
-  // Nilai dari LLM (kosong bila gagal)
-  let judulLLM = "";
-  let highlightLLM = "";
-  let captionLLM = "";
-  try {
-    const teks = await Promise.race([
-      panggilLLM(link, judulUser, highlightUser),
-      new Promise<never>((_, tolak) =>
-        setTimeout(() => tolak(new Error("Timeout LLM")), BATAS_TIMEOUT_LLM_MS),
-      ),
-    ]);
-    const obj = ekstrakJSON(teks);
-    if (obj) {
-      judulLLM = teksAtauKosong(obj.judul_overlay);
-      highlightLLM = teksAtauKosong(obj.highlight);
-      captionLLM = teksAtauKosong(obj.caption_asli);
+    if (!pengguna) {
+      throw errorStatus("Sesi tidak berlaku. Masuk lagi.", 401);
     }
-  } catch {
-    // LLM gagal / timeout → lanjut dengan fallback template
-  }
+    await pastikanFiturAktif(
+      pengguna,
+      "tv.proses",
+      "Pemrosesan video otomatis sedang dimatikan untuk peran Anda.",
+    );
+    if (!bolehProsesVideo(pengguna.role) && !adalahPimred(pengguna)) {
+      throw errorStatus(
+        "Hanya Admin TV Rakyat yang boleh memproses video.",
+        403,
+      );
+    }
 
-  // Fallback template yang tetap masuk akal
-  const fallbackJudul =
-    jenis === "TIKTOK" ? "Video Pilihan dari TikTok" : "Reel Pilihan TV Rakyat";
-  const fallbackHighlight = "Sorotan informasi terkini untuk rakyat Indonesia";
-  const fallbackCaption =
-    "Simak video pilihan TV Rakyat hari ini! Jangan lupa like, komentar, dan bagikan ke semua. #TVRakyat #RakyatBersatu #PRIkuat";
+    const body = (await request.json().catch(() => ({}))) as {
+      link?: string;
+      video_asli?: string;
+      judul_overlay?: string;
+      highlight?: string;
+      caption_asli?: string;
+      sumber_akun?: string;
+      caption_sumber?: string;
+    };
 
-  // Nilai pengguna menang, lalu hasil LLM, lalu fallback
-  const judul_overlay = (judulUser || judulLLM || fallbackJudul).slice(0, BATAS_JUDUL);
-  const highlight = (highlightUser || highlightLLM || fallbackHighlight).slice(
-    0,
-    BATAS_HIGHLIGHT,
-  );
-  const caption_asli = captionLLM || fallbackCaption;
+    // `video_asli` (doksli) adalah yang benar-benar diunduh & dirender.
+    // `link` hanya penanda sumber aslinya. Kalau doksli tidak diisi,
+    // pakai link biasa supaya alur lama tetap jalan.
+    const linkSumber = (body.link ?? "").trim();
+    const doksli = (body.video_asli ?? "").trim() || linkSumber;
 
-  return NextResponse.json({
-    judul_overlay,
-    highlight,
-    caption_asli,
-    sumber: link,
-    jenis,
+    if (!doksli) {
+      throw errorStatus("Link video wajib diisi", 400);
+    }
+    if (!linkValid(doksli)) {
+      throw errorStatus(
+        "Link harus berasal dari tiktok.com atau instagram.com",
+        400,
+      );
+    }
+
+    try {
+      const hasil = (await panggilWebhookN8n("N8N_WEBHOOK_PROSES_VIDEO", {
+        link: linkSumber ? normalisasiLink(linkSumber) : normalisasiLink(doksli),
+        video_asli: normalisasiLink(doksli),
+        judul_overlay: (body.judul_overlay ?? "").trim(),
+        highlight: (body.highlight ?? "").trim(),
+        caption_asli: (body.caption_asli ?? "").trim(),
+        sumber_akun: (body.sumber_akun ?? "").trim(),
+        caption_sumber: (body.caption_sumber ?? "").trim(),
+        // Jejak pertanggungjawaban: nama ini tampil di riwayat
+        // pemrosesan, sehingga setiap video punya penanggung jawab.
+        digenerate_oleh: pengguna.nama,
+        digenerate_user_id: Number(pengguna.id),
+      })) as { kode?: string };
+
+      if (!hasil?.kode) {
+        throw new Error(
+          "Otomatisasi n8n tidak mengembalikan kode antrian. Cek workflow 'TV Rakyat - Proses Video'.",
+        );
+      }
+
+      return { kode: hasil.kode };
+    } catch (e) {
+      if (e instanceof N8nBelumDiaturError) {
+        throw errorStatus(e.message, 503);
+      }
+      throw e;
+    }
   });
 }

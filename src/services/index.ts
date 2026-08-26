@@ -11,6 +11,7 @@ import type {
   Berita,
   HasilProsesVideo,
   Kader,
+  KemajuanVideo,
   Komentar,
   KpiItem,
   NotifikasiItem,
@@ -71,18 +72,19 @@ export type DashboardData = {
 // Helper internal
 // ------------------------------------------------------------
 
-/** Jeda simulasi jaringan 300–800 ms */
-async function delay(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 300 + Math.random() * 500));
-}
-
 /**
  * Fetch JSON dari API route (path relatif) dengan penanganan error
  * berbahasa Indonesia. Mengembalikan objek respons apa adanya.
  */
 async function fetchJson(path: string, init?: RequestInit): Promise<any> {
-  await delay();
-  const res = await fetch(path, init);
+  // Token perangkat DISERTAKAN OTOMATIS untuk setiap panggilan API.
+  // Sebelumnya tiap pemanggil harus ingat menambahkan headerToken()
+  // sendiri, dan yang lupa membuat endpoint-nya terpaksa dibiarkan
+  // terbuka tanpa login. Sekarang kebalikannya: aman secara bawaan.
+  const res = await fetch(path, {
+    ...init,
+    headers: { ...headerToken(), ...((init?.headers ?? {}) as Record<string, string>) },
+  });
 
   let json: any = null;
   try {
@@ -112,13 +114,379 @@ async function ambilData<T>(path: string): Promise<T> {
 // ------------------------------------------------------------
 
 /** Login pengguna (melempar Error berbahasa Indonesia bila 401) */
-export async function login(email: string, password: string): Promise<User> {
+/**
+ * Nama kunci token perangkat di penyimpanan lokal.
+ *
+ * Token inilah yang membuat pengguna tidak perlu mengetik apa pun saat
+ * membuka aplikasi. Disimpan terpisah dari state Zustand supaya tetap
+ * ada meski store di-reset.
+ */
+const KUNCI_TOKEN = "pri-token-perangkat";
+
+export function ambilToken(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(KUNCI_TOKEN) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function simpanToken(token: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (token) window.localStorage.setItem(KUNCI_TOKEN, token);
+    else window.localStorage.removeItem(KUNCI_TOKEN);
+  } catch {
+    // Penyimpanan penuh atau ditolak — aplikasi tetap jalan, hanya
+    // pengguna harus masuk lagi lain kali.
+  }
+}
+
+/** Header Authorization bila ada token; kosong bila belum masuk. */
+function headerToken(): Record<string, string> {
+  const t = ambilToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+/** Label perangkat sederhana untuk daftar sesi di profil */
+function namaPerangkat(): string {
+  if (typeof navigator === "undefined") return "Perangkat";
+  const ua = navigator.userAgent;
+  if (/Android/i.test(ua)) return "Android";
+  if (/iPhone|iPad/i.test(ua)) return "iPhone/iPad";
+  if (/Windows/i.test(ua)) return "Windows";
+  if (/Mac/i.test(ua)) return "Mac";
+  return "Perangkat";
+}
+
+/** Data akun beserta status pendaftarannya */
+export type UserLengkap = User & {
+  status: string;
+  profil_lengkap: boolean;
+  username: string | null;
+  nomor_wa: string | null;
+};
+
+/**
+ * Masuk dengan username, nomor WhatsApp, atau email.
+ * Token perangkat langsung disimpan agar pembukaan berikutnya otomatis.
+ */
+export async function login(
+  identitas: string,
+  password: string,
+): Promise<UserLengkap> {
   const json = await fetchJson("/api/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      identitas,
+      password,
+      nama_perangkat: namaPerangkat(),
+    }),
   });
-  return json.user as User;
+  if (json.token) simpanToken(json.token as string);
+  return json.user as UserLengkap;
+}
+
+/**
+ * Coba masuk otomatis dengan token tersimpan.
+ * Mengembalikan null bila belum pernah masuk atau tokennya sudah dicabut.
+ */
+export async function masukOtomatis(): Promise<UserLengkap | null | "perbaikan"> {
+  if (!ambilToken()) return null;
+  try {
+    const res = await fetch("/api/sesi", { headers: headerToken() });
+    if (!res.ok) {
+      // 503 dari sesi = master menyalakan mode perbaikan. Token TIDAK
+      // dibuang — begitu perbaikan selesai, pengguna langsung masuk lagi.
+      if (res.status === 503) return "perbaikan";
+      // 401 = token dicabut / akun dinonaktifkan. Buang supaya tidak
+      // dicoba terus setiap kali aplikasi dibuka.
+      if (res.status === 401) simpanToken("");
+      return null;
+    }
+    const json = (await res.json()) as { user?: UserLengkap };
+    return json.user ?? null;
+  } catch {
+    // Tidak ada koneksi — jangan buang token, cukup gagal diam-diam.
+    return null;
+  }
+}
+
+/** Keluar dari perangkat ini (atau semua perangkat bila diminta). */
+export async function keluar(semuaPerangkat = false): Promise<void> {
+  const t = ambilToken();
+  if (t) {
+    await fetch(`/api/sesi${semuaPerangkat ? "?semua=1" : ""}`, {
+      method: "DELETE",
+      headers: headerToken(),
+    }).catch(() => undefined);
+  }
+  simpanToken("");
+}
+
+// ------------------------------------------------------------
+// Pendaftaran
+// ------------------------------------------------------------
+
+/** Langkah 1 — kirim data diri, kode OTP dikirim ke WhatsApp */
+export async function daftar(data: {
+  username: string;
+  password: string;
+  nomor_wa: string;
+  nama?: string;
+}): Promise<{ nomor_wa: string }> {
+  const json = await fetchJson("/api/daftar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return { nomor_wa: json.nomor_wa as string };
+}
+
+/** Langkah 2 — verifikasi kode; berhasil = token tersimpan */
+export async function verifikasiOtp(
+  nomor_wa: string,
+  kode: string,
+): Promise<UserLengkap> {
+  const json = await fetchJson("/api/otp", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nomor_wa, kode, nama_perangkat: namaPerangkat() }),
+  });
+  if (json.token) simpanToken(json.token as string);
+  return json.user as UserLengkap;
+}
+
+/** Minta kode baru dikirim ulang */
+export async function kirimUlangOtp(nomor_wa: string): Promise<void> {
+  await fetchJson("/api/otp", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nomor_wa }),
+  });
+}
+
+/** Langkah 3 — lengkapi profil (nama, jabatan, foto opsional) */
+export async function lengkapiProfil(data: {
+  nama: string;
+  nama_panggilan: string;
+  tanggal_lahir: string; // YYYY-MM-DD
+  divisi: string;
+  sub_divisi?: string;
+  foto?: string;
+}): Promise<UserLengkap> {
+  const json = await fetchJson("/api/profil", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+  return json.user as UserLengkap;
+}
+
+// ------------------------------------------------------------
+// Konten akun resmi (halaman anggota)
+// ------------------------------------------------------------
+
+export type PostinganKonten = {
+  id: string;
+  caption: string;
+  thumbnail_url: string;
+  link: string;
+  waktu_posting: string | null;
+  /** Umur postingan yang sudah dihitung database, mis. "3 jam lalu" */
+  waktu_relatif: string;
+  jumlah_like: number;
+  jumlah_komentar: number;
+};
+
+export type AkunKonten = {
+  username: string;
+  nama_akun: string;
+  platform: string;
+  link_profil: string;
+  postingan: PostinganKonten[];
+};
+
+export type FeedKonten = {
+  akun: AkunKonten[];
+  /**
+   * Kapan tabel feed terakhir diisi workflow n8n (ISO), null bila
+   * workflow-nya belum pernah jalan. Dipakai layar untuk menulis
+   * "Diperbarui X menit lalu" — jadi anggota tahu datanya masih segar
+   * atau sudah basi, bukan menebak-nebak.
+   */
+  diperbarui_pada: string | null;
+};
+
+/**
+ * Postingan terbaru akun resmi partai, dikelompokkan per akun.
+ *
+ * Berbeda dari fungsi lain di berkas ini, respons API-nya dibaca utuh
+ * (bukan lewat `ambilData`) karena `diperbarui_pada` berada di tingkat
+ * respons, di luar field `data`.
+ */
+export async function getKonten(): Promise<FeedKonten> {
+  const json = await fetchJson("/api/konten");
+  return {
+    akun: (json?.data ?? []) as AkunKonten[],
+    diperbarui_pada: (json?.diperbarui_pada ?? null) as string | null,
+  };
+}
+
+// ------------------------------------------------------------
+// Akun media sosial milik pengguna (acuan QC)
+// ------------------------------------------------------------
+
+export type AkunSosmed = {
+  id: string;
+  platform: "instagram" | "tiktok";
+  username: string;
+  catatan: string | null;
+  aktif: boolean;
+};
+
+/** Semua akun sosmed milik pengguna (boleh lebih dari satu per platform) */
+export async function getAkunSosmed(): Promise<AkunSosmed[]> {
+  const res = await fetch("/api/akun-sosmed", { headers: headerToken() });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(json?.error ?? "Gagal memuat akun sosmed");
+  return json.data as AkunSosmed[];
+}
+
+export async function tambahAkunSosmed(data: {
+  platform: "instagram" | "tiktok";
+  username: string;
+  catatan?: string;
+}): Promise<AkunSosmed> {
+  const json = await fetchJson("/api/akun-sosmed", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+  return json.data as AkunSosmed;
+}
+
+export async function ubahAkunSosmed(data: {
+  id: string;
+  platform: "instagram" | "tiktok";
+  username: string;
+  catatan?: string;
+}): Promise<void> {
+  await fetchJson("/api/akun-sosmed", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function hapusAkunSosmed(id: string): Promise<void> {
+  await fetchJson("/api/akun-sosmed", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id }),
+  });
+}
+
+// ------------------------------------------------------------
+// Ganti kata sandi (lewat OTP WhatsApp, maksimal 1x per minggu)
+// ------------------------------------------------------------
+
+/** Langkah 1: minta kode ke nomor WhatsApp terdaftar */
+export async function mintaOtpGantiSandi(nomor_wa: string): Promise<void> {
+  await fetchJson("/api/sandi", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ nomor_wa }),
+  });
+}
+
+/** Langkah 2: kirim kode + sandi baru */
+export async function gantiSandi(data: {
+  nomor_wa: string;
+  kode: string;
+  sandi_baru: string;
+}): Promise<void> {
+  await fetchJson("/api/sandi", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+}
+
+/** Ganti foto profil saja (sudah dipotong & dikompres di sisi klien) */
+export async function gantiFotoProfil(foto: string): Promise<UserLengkap> {
+  const json = await fetchJson("/api/profil", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ foto }),
+  });
+  return json.user as UserLengkap;
+}
+
+// ------------------------------------------------------------
+// Kelola pengguna (khusus super admin)
+// ------------------------------------------------------------
+
+export type PenggunaAdmin = {
+  id: string;
+  nama: string;
+  email: string;
+  username: string | null;
+  nomor_wa: string | null;
+  role: string;
+  jabatan: string;
+  avatar_url: string;
+  status: string;
+  aktif: boolean;
+  wa_terverifikasi: boolean;
+  profil_lengkap: boolean;
+  created_at: string;
+  disetujui_oleh: string | null;
+  /** Bidang pelengkap jabatan, mis. "Bidang IT dan Infrastruktur" */
+  bidang_jabatan?: string;
+  divisi?: string;
+  sub_divisi?: string;
+  posisi_divisi?: string;
+};
+
+export async function getPengguna(): Promise<{
+  data: PenggunaAdmin[];
+  ringkasan: Record<string, number>;
+}> {
+  const res = await fetch("/api/pengguna", { headers: headerToken() });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(json?.error ?? "Gagal memuat daftar pengguna");
+  }
+  return {
+    data: json.data as PenggunaAdmin[],
+    ringkasan: json.ringkasan as Record<string, number>,
+  };
+}
+
+export async function ubahPengguna(
+  id: string,
+  tindakan:
+    | "setujui"
+    | "tolak"
+    | "ubah_peran"
+    | "nonaktifkan"
+    | "aktifkan"
+    | "hapus"
+    | "ubah_jabatan"
+    | "ubah_divisi",
+  role?: string,
+  jabatan?: string,
+  bidang?: string,
+  divisiInfo?: { divisi: string; sub_divisi?: string; posisi_divisi?: string },
+): Promise<void> {
+  await fetchJson("/api/pengguna", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id, tindakan, role, jabatan, bidang, ...(divisiInfo ?? {}) }),
+  });
 }
 
 // ------------------------------------------------------------
@@ -166,6 +534,249 @@ export async function getRekapPostingan(
 }
 
 // ------------------------------------------------------------
+// QC Konten — memicu analisis n8n lalu memantau sampai benar-benar selesai
+// ------------------------------------------------------------
+
+/**
+ * Penanda laporan QC terakhir yang ADA DI DATABASE.
+ * Bentuknya sama persis dengan yang dikirim /api/analisis.
+ */
+export type PenandaLaporanQc = {
+  id: string | null;
+  waktu: string | null;
+  judul: string | null;
+  isi: string | null;
+};
+
+export type HasilPantauAnalisis = {
+  /** true hanya bila laporan BARU (milik run ini) sudah muncul */
+  selesai: boolean;
+  /** true bila pemantauan dihentikan layar (pindah halaman / tombol berhenti) */
+  dibatalkan: boolean;
+  laporan: PenandaLaporanQc | null;
+};
+
+/**
+ * Tahap yang SEDANG dikerjakan n8n, ditulis workflow-nya sendiri ke tabel
+ * qc_progres di tiap titik alur. Dipakai layar supaya daftar tahap loading
+ * mengikuti proses nyata - bukan animasi berbasis hitungan waktu.
+ */
+export type ProgresAnalisis = {
+  tahap: string;
+  keterangan: string;
+  selesai: boolean;
+  mulai_pada: string | null;
+  diperbarui_pada: string | null;
+};
+
+/**
+ * Kemajuan pemeriksaan komentar untuk satu periode, dihitung dari status
+ * per postingan di database. Inilah sumber kebenaran layar QC soal
+ * "sudah dianalisis atau belum" -- bertahan walau aplikasi ditutup.
+ */
+export type AntrianQc = {
+  periode: string;
+  total: number;
+  selesai: number;
+  menunggu: number;
+  gagal: number;
+  perlu_cek_manual: number;
+  terakhir_diperiksa: string | null;
+};
+
+/** Baca kemajuan antrian untuk satu periode. null = belum pernah didata. */
+export async function getAntrianQc(periode: string): Promise<AntrianQc | null> {
+  if (!periode) return null;
+  try {
+    const res = await fetch(
+      "/api/analisis?periode=" + encodeURIComponent(periode),
+      { cache: "no-store" },
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    return (json?.antrian ?? null) as AntrianQc | null;
+  } catch {
+    // Gangguan sesaat tidak perlu meledak di layar -- pemanggilan
+    // berikutnya akan mencoba lagi.
+    return null;
+  }
+}
+
+/**
+ * Lanjutkan pemeriksaan antrian TANPA mendata ulang postingan.
+ * Dipakai saat masih ada postingan berstatus menunggu.
+ */
+/** Riwayat seluruh analisis QC yang pernah dijalankan (per periode). */
+export async function getRiwayatAnalisis(): Promise<AntrianQc[]> {
+  const json = await fetchJson("/api/analisis?riwayat=1");
+  return (json?.data ?? []) as AntrianQc[];
+}
+
+export async function lanjutkanPemeriksaanQc(periode: string): Promise<void> {
+  await fetchJson("/api/analisis/lanjut", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ periode }),
+  });
+}
+
+export type AwalAnalisis = {
+  penanda: PenandaLaporanQc;
+  /** Progres yang tercatat SEBELUM run ini dipicu - pembanding anti-basi */
+  progresSebelum: ProgresAnalisis | null;
+};
+
+const PENANDA_KOSONG: PenandaLaporanQc = {
+  id: null,
+  waktu: null,
+  judul: null,
+  isi: null,
+};
+
+/** Jeda antar-pengecekan saat memantau analisis */
+const JEDA_PANTAU_MS = 5000;
+
+/** Batas menunggu laporan n8n; workflow normalnya 1–3 menit */
+const BATAS_PANTAU_MS = 240_000;
+
+/**
+ * Apakah `baru` benar-benar laporan yang lebih baru dari `lama`?
+ *
+ * Ini inti kebenaran fitur ini. Laporan QC dari run KEMARIN tetap ada di
+ * tabel notifikasi, jadi "ada laporan QC" bukan bukti apa-apa — yang jadi
+ * bukti adalah id yang lebih besar dari yang tercatat sebelum tombol
+ * ditekan. Tanpa perbandingan ini, analisis akan tampak selesai seketika.
+ */
+function laporanLebihBaru(
+  baru: PenandaLaporanQc,
+  lama: PenandaLaporanQc | null,
+): boolean {
+  if (!baru.id) return false;
+  if (!lama?.id) return true; // sebelumnya belum pernah ada laporan sama sekali
+
+  const a = Number(baru.id);
+  const b = Number(lama.id);
+  // id adalah bigint berurut; bandingkan sebagai angka bila memungkinkan
+  if (Number.isFinite(a) && Number.isFinite(b)) return a > b;
+  return baru.id !== lama.id;
+}
+
+/**
+ * Tidur `ms`, tapi langsung bangun bila pemantauan dibatalkan.
+ * Tanpa ini, membatalkan analisis masih harus menunggu sisa jeda 5 detik.
+ */
+function tidur(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((selesai) => {
+    if (signal?.aborted) {
+      selesai();
+      return;
+    }
+    let batal = () => {};
+    const pewaktu = setTimeout(() => {
+      signal?.removeEventListener("abort", batal);
+      selesai();
+    }, ms);
+    batal = () => {
+      clearTimeout(pewaktu);
+      selesai();
+    };
+    signal?.addEventListener("abort", batal, { once: true });
+  });
+}
+
+/**
+ * Picu workflow n8n "QC Konten v5 (TikHub)".
+ *
+ * Balasannya BUKAN tanda selesai — n8n sengaja membalas seketika lalu
+ * bekerja 1–3 menit di latar belakang. Yang dikembalikan di sini adalah
+ * penanda laporan LAMA, yang wajib diteruskan ke pantauAnalisisQc().
+ */
+export async function mulaiAnalisisQc(tanggal?: string): Promise<AwalAnalisis> {
+  const json = await fetchJson("/api/analisis", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    // Aturan baru: analisis PER HARI. Tanpa tanggal = hari ini (WIB).
+    body: JSON.stringify(tanggal ? { tanggal } : {}),
+  });
+  return {
+    penanda: (json?.penanda_sebelum ?? PENANDA_KOSONG) as PenandaLaporanQc,
+    progresSebelum: (json?.progres_sebelum ?? null) as ProgresAnalisis | null,
+  };
+}
+
+/**
+ * Tunggu sampai n8n menuliskan laporan QC yang lebih baru dari
+ * `penandaSebelum`.
+ *
+ * Memakai fetch langsung (bukan fetchJson) karena dipanggil berulang:
+ * jeda buatan 300–800 ms milik fetchJson justru mengganggu polling.
+ */
+export async function pantauAnalisisQc(
+  penandaSebelum: PenandaLaporanQc | null,
+  opsi: {
+    batasMs?: number;
+    jedaMs?: number;
+    signal?: AbortSignal;
+    /**
+     * Dipanggil tiap poll dengan progres TERBARU milik run ini. Progres yang
+     * belum berubah dari `progresSebelum` disaring di sini, supaya layar
+     * tidak menampilkan tahap sisa run kemarin sebagai tahap run sekarang.
+     */
+    onProgres?: (p: ProgresAnalisis) => void;
+    progresSebelum?: ProgresAnalisis | null;
+  } = {},
+): Promise<HasilPantauAnalisis> {
+  const jeda = opsi.jedaMs ?? JEDA_PANTAU_MS;
+  const batas = opsi.batasMs ?? BATAS_PANTAU_MS;
+  const mulai = Date.now();
+
+  while (Date.now() - mulai < batas) {
+    await tidur(jeda, opsi.signal);
+    if (opsi.signal?.aborted) {
+      return { selesai: false, dibatalkan: true, laporan: null };
+    }
+
+    let penanda: PenandaLaporanQc;
+    try {
+      // `no-store`: seluruh gunanya polling adalah melihat baris yang BARU.
+      // Respons route ini tidak membawa header Cache-Control, jadi jangan
+      // beri peramban kesempatan menyajikan jawaban lama — analisisnya bisa
+      // tampak tidak pernah selesai.
+      const res = await fetch("/api/analisis", {
+        signal: opsi.signal,
+        cache: "no-store",
+      });
+      if (!res.ok) continue; // gangguan sesaat bukan berarti analisisnya gagal
+      const json = await res.json();
+      penanda = (json?.penanda ?? PENANDA_KOSONG) as PenandaLaporanQc;
+
+      // Teruskan progres HANYA bila benar-benar lebih baru dari catatan
+      // sebelum run dipicu - pembanding diperbarui_pada (string ISO dari
+      // jam database, jadi aman dibandingkan leksikografis).
+      const progres = (json?.progres ?? null) as ProgresAnalisis | null;
+      if (progres && opsi.onProgres) {
+        const acuan = opsi.progresSebelum?.diperbarui_pada ?? "";
+        if ((progres.diperbarui_pada ?? "") > acuan) opsi.onProgres(progres);
+      }
+    } catch {
+      // Dibatalkan di tengah permintaan → berhenti; selain itu coba lagi.
+      if (opsi.signal?.aborted) {
+        return { selesai: false, dibatalkan: true, laporan: null };
+      }
+      continue;
+    }
+
+    if (laporanLebihBaru(penanda, penandaSebelum)) {
+      return { selesai: true, dibatalkan: false, laporan: penanda };
+    }
+  }
+
+  // Lewat batas waktu. Ini BUKAN kegagalan: n8n hampir pasti masih
+  // bekerja, hanya lebih lambat dari biasanya. Layar yang menjelaskan.
+  return { selesai: false, dibatalkan: false, laporan: null };
+}
+
+// ------------------------------------------------------------
 // TV Rakyat — antrian video, proses video, berita
 // ------------------------------------------------------------
 
@@ -182,26 +793,119 @@ export async function getVideoAntrian(): Promise<{
 }
 
 /**
- * Proses link video (TikTok/Instagram) → judul overlay, highlight,
- * dan caption. Field yang tidak diisi pengguna dilengkapi oleh LLM
- * (server), dengan fallback template bila LLM gagal.
+ * Mulai proses video. Mengembalikan KODE ANTRIAN, bukan hasil jadi —
+ * pekerjaannya (unduh, judul AI, render) dikerjakan n8n di latar
+ * belakang dan bisa makan beberapa menit.
+ *
+ * Pantau kemajuannya dengan pantauVideo(kode).
  */
 export async function prosesVideo(payload: {
   link: string;
+  video_asli?: string;
   judul_overlay?: string;
   highlight?: string;
-}): Promise<HasilProsesVideo> {
+  caption_asli?: string;
+  sumber_akun?: string;
+  caption_sumber?: string;
+}): Promise<{ kode: string }> {
   const json = await fetchJson("/api/proses-video", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return json as HasilProsesVideo;
+  return json as { kode: string };
 }
 
-/** Berita terbaru dari Nusantara TV */
+/**
+ * Tanyakan sudah sampai tahap mana n8n memproses sebuah video.
+ * Tanpa jeda buatan — ini dipanggil berulang kali (polling), jadi
+ * jeda 300–800 ms milik fetchJson justru mengganggu.
+ */
+export async function pantauVideo(kode: string): Promise<KemajuanVideo> {
+  const res = await fetch(`/api/video-antrian/${encodeURIComponent(kode)}`, {
+    headers: headerToken(),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(
+      json && typeof json.error === "string"
+        ? json.error
+        : `Gagal memantau proses video (${res.status})`,
+    );
+  }
+  return json as KemajuanVideo;
+}
+
+/** Simpan suntingan admin pada judul overlay / caption / highlight */
+export async function simpanSuntinganVideo(
+  kode: string,
+  ubahan: {
+    judul_overlay?: string;
+    caption_asli?: string;
+    highlight?: string;
+    /** Caption khusus per platform tujuan ({instagram: "...", ...}) */
+    caption_platform?: Record<string, string>;
+  },
+): Promise<void> {
+  await fetchJson(`/api/video-antrian/${encodeURIComponent(kode)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(ubahan),
+  });
+}
+
+/** Berita terbaru dari Nusantara TV (dibaca dari database) */
 export async function getBeritaTerbaru(): Promise<Berita[]> {
   return ambilData<Berita[]>("/api/berita");
+}
+
+/**
+ * Mulai pemindaian berita baru lewat n8n (Apify), lalu TUNGGU sampai
+ * hasil barunya muncul di database.
+ *
+ * n8n membalas segera dan menyelesaikan scraping di latar belakang
+ * (sekitar 60 detik untuk 6 profil), jadi fungsi ini memantau tabel
+ * berita secara berkala alih-alih menunggu satu permintaan panjang
+ * yang pasti kena batas waktu.
+ *
+ * Mengembalikan daftar terbaru + berapa yang benar-benar baru.
+ */
+export async function pindaiBeritaBaru(): Promise<{
+  data: Berita[];
+  jumlah_baru: number;
+  selesai: boolean;
+}> {
+  const awal = await fetchJson("/api/berita", { method: "POST" });
+  const sebelum = new Set(((awal.data as Berita[]) ?? []).map((b) => b.id));
+
+  const JEDA_MS = 3000;
+  const BATAS_MS = 120_000; // scraping 6 profil ~60 dtk; beri kelonggaran
+  const mulai = Date.now();
+
+  while (Date.now() - mulai < BATAS_MS) {
+    await new Promise((r) => setTimeout(r, JEDA_MS));
+
+    let sekarang: Berita[];
+    try {
+      sekarang = await ambilData<Berita[]>("/api/berita");
+    } catch {
+      continue; // gangguan sesaat bukan berarti pemindaian gagal
+    }
+
+    const baru = sekarang.filter((b) => !sebelum.has(b.id));
+    if (baru.length > 0) {
+      return { data: sekarang, jumlah_baru: baru.length, selesai: true };
+    }
+  }
+
+  // Lewat batas tanpa ada yang baru. Bisa jadi memang tidak ada video
+  // baru sejak pindai terakhir — bukan kegagalan, jadi tetap kembalikan
+  // datanya dan biarkan layar yang menjelaskan.
+  return {
+    data: await ambilData<Berita[]>("/api/berita"),
+    jumlah_baru: 0,
+    selesai: false,
+  };
 }
 
 // ------------------------------------------------------------
@@ -210,7 +914,54 @@ export async function getBeritaTerbaru(): Promise<Berita[]> {
 
 /** Daftar notifikasi dalam aplikasi */
 export async function getNotifikasi(): Promise<NotifikasiItem[]> {
-  return ambilData<NotifikasiItem[]>("/api/notifikasi");
+  // Token disertakan supaya server bisa menyaring notifikasi sesuai
+  // peran — tanpa itu semua orang menerima semua notifikasi.
+  const res = await fetch("/api/notifikasi", { headers: headerToken() });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(json?.error ?? "Gagal memuat notifikasi");
+  return json.data as NotifikasiItem[];
+}
+
+/** Tandai satu notifikasi sudah dibaca (tersimpan permanen di database) */
+export async function tandaiNotifikasiDibaca(id: string): Promise<void> {
+  await fetchJson("/api/notifikasi", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+}
+
+/** Tandai SEMUA notifikasi sudah dibaca */
+export async function tandaiSemuaNotifikasiDibaca(): Promise<void> {
+  await fetchJson("/api/notifikasi", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ semua: true }),
+  });
+}
+
+/** Hapus satu notifikasi (dipakai gestur geser di layar Notifikasi) */
+export async function hapusNotifikasiServer(id: string): Promise<void> {
+  await fetchJson("/api/notifikasi", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+}
+
+/**
+ * Kirim pengingat WhatsApp ke semua kader yang belum komentar di
+ * sebuah postingan. Pengirimannya dikerjakan n8n + Fonnte, bukan
+ * oleh aplikasi ini.
+ */
+export async function ingatkanKaderBelumKomentar(
+  id_postingan: string,
+): Promise<{ terkirim: number; tanpa_nomor?: number; pesan?: string }> {
+  return fetchJson("/api/ingatkan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id_postingan }),
+  });
 }
 
 /** Seluruh data dashboard super admin */
@@ -224,18 +975,1191 @@ export async function getDashboard(): Promise<DashboardData> {
 // ------------------------------------------------------------
 
 /**
- * 7 periode terakhir untuk dropdown pemilih periode.
- * Elemen pertama adalah periode aktif (PERIODE_AKTIF), disusul
- * 6 periode harian sebelumnya. Format: "2026-08-22 17:00-15:59".
+ * Daftar periode untuk dropdown pemilih periode (terbaru dulu).
+ * Diambil dari periode yang BENAR-BENAR ada di database, bukan
+ * ditebak dari tanggal hari ini seperti versi dummy dulu.
+ *
+ * Bila database belum berisi rekap sama sekali, dipakai daftar
+ * cadangan berbasis tanggal supaya dropdown tidak kosong melompong.
  */
 export async function getPeriodeList(): Promise<string[]> {
-  await delay();
-  const tanggalAktif = PERIODE_AKTIF.slice(0, 10); // "2026-08-23"
-  const dasar = new Date(`${tanggalAktif}T00:00:00Z`);
-  const daftar: string[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(dasar.getTime() - i * 24 * 60 * 60 * 1000);
-    daftar.push(`${d.toISOString().slice(0, 10)} 17:00-15:59`);
+  try {
+    const daftar = await ambilData<string[]>("/api/periode");
+    if (daftar.length > 0) return daftar;
+  } catch {
+    // database belum siap → pakai cadangan di bawah
   }
-  return daftar;
+
+  const dasar = new Date(`${PERIODE_AKTIF.slice(0, 10)}T00:00:00Z`);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(dasar.getTime() - i * 24 * 60 * 60 * 1000);
+    return `${d.toISOString().slice(0, 10)} 00:00-23:59`;
+  });
+}
+
+// ------------------------------------------------------------
+// Absensi (kamera depan + GPS; data terhapus otomatis 7 hari)
+// ------------------------------------------------------------
+
+export type AbsensiBaris = {
+  id: string;
+  user_id: string;
+  nama: string;
+  jabatan: string;
+  jenis: "masuk" | "pulang";
+  waktu: string;
+  tanggal_wib: string;
+  lat: number;
+  lng: number;
+  akurasi_m: number | null;
+  alamat: string | null;
+  foto_url: string;
+};
+
+export async function getAbsensi(semua = false): Promise<{
+  data: AbsensiBaris[];
+  tanggal_hari_ini: string;
+}> {
+  const json = await fetchJson(`/api/absensi${semua ? "?semua=1" : ""}`, {
+    headers: headerToken(),
+  });
+  return json as { data: AbsensiBaris[]; tanggal_hari_ini: string };
+}
+
+export async function kirimAbsen(data: {
+  jenis: "masuk" | "pulang";
+  lat: number;
+  lng: number;
+  akurasi?: number;
+  fotoDataUrl: string;
+}): Promise<AbsensiBaris> {
+  const json = await fetchJson("/api/absensi", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+  return json.data as AbsensiBaris;
+}
+
+// ------------------------------------------------------------
+// Laporan Kerja (rencana pagi → laporan sore → KPI)
+// ------------------------------------------------------------
+
+export type KerjaItem = {
+  id: string;
+  user_id: string;
+  tanggal_wib: string;
+  deskripsi: string;
+  jenis: "rencana" | "tambahan";
+  status: "direncanakan" | "selesai" | "tidak_selesai";
+  catatan_realisasi: string | null;
+  dibuat_pada: string;
+  dilaporkan_pada: string | null;
+  kategori: "harian" | "besar";
+  tenggat: string | null;
+  ditugaskan_oleh: string | null;
+  /** Nama atasan pemberi tugas; null = ditulis sendiri */
+  nama_penugas: string | null;
+};
+
+export type KerjaKpi = {
+  rencana_total: number;
+  rencana_selesai: number;
+  rencana_gagal: number;
+  rencana_belum_lapor: number;
+  tambahan_total: number;
+  kpi_persen: number | null;
+};
+
+export type KerjaKpiBaris = KerjaKpi & {
+  user_id: string;
+  nama: string;
+  jabatan: string | null;
+  tanggal_wib: string;
+};
+
+export async function getLaporanKerja(
+  tanggal?: string,
+  userId?: string,
+  kategori: "harian" | "besar" = "harian",
+): Promise<{ tanggal: string; hari_ini: string; data: KerjaItem[]; kpi: KerjaKpi }> {
+  const params = new URLSearchParams({ kategori });
+  if (tanggal) params.set("tanggal", tanggal);
+  if (userId) params.set("user", userId);
+  const json = await fetchJson(`/api/laporan-kerja?${params.toString()}`, {
+    headers: headerToken(),
+  });
+  return json as { tanggal: string; hari_ini: string; data: KerjaItem[]; kpi: KerjaKpi };
+}
+
+export async function getKpiSemua(
+  tanggal?: string,
+): Promise<{ tanggal: string; data: KerjaKpiBaris[] }> {
+  const params = new URLSearchParams({ semua: "1" });
+  if (tanggal) params.set("tanggal", tanggal);
+  const json = await fetchJson(`/api/laporan-kerja?${params.toString()}`, {
+    headers: headerToken(),
+  });
+  return json as { tanggal: string; data: KerjaKpiBaris[] };
+}
+
+export async function tambahRencanaKerja(
+  deskripsi: string[],
+  kategori: "harian" | "besar" = "harian",
+  tenggat?: string,
+): Promise<KerjaItem[]> {
+  const json = await fetchJson("/api/laporan-kerja", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "rencana", deskripsi, kategori, tenggat }),
+  });
+  return json.data as KerjaItem[];
+}
+
+export async function tambahAktivitasKerja(deskripsi: string): Promise<KerjaItem> {
+  const json = await fetchJson("/api/laporan-kerja", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "tambahan", deskripsi }),
+  });
+  return json.data as KerjaItem;
+}
+
+export async function laporkanKerjaItem(data: {
+  id: string;
+  status: "selesai" | "tidak_selesai";
+  catatan?: string;
+}): Promise<KerjaItem> {
+  const json = await fetchJson("/api/laporan-kerja", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+  return json.data as KerjaItem;
+}
+
+export async function hapusKerjaItem(id: string): Promise<void> {
+  await fetchJson("/api/laporan-kerja", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id }),
+  });
+}
+
+// ------------------------------------------------------------
+// Ayrshare — insight profil & unggah sosmed sungguhan (TV Rakyat)
+// ------------------------------------------------------------
+
+export type InsightProfil = {
+  platform: string;
+  username: string;
+  nama: string;
+  fotoProfil: string;
+  pengikut: number | null;
+  mengikuti: number | null;
+  jumlahMedia: number | null;
+  suka: number | null;
+  komentar: number | null;
+  jangkauan: number | null;
+  tayangan: number | null;
+  diperbarui: string | null;
+  berikutnya: string | null;
+  catatan: string[];
+};
+
+export type AkunTertaut = {
+  platform: string;
+  username: string;
+  displayName: string;
+  profileUrl: string;
+  userImage: string;
+};
+
+export type BalasanInsight = {
+  siap: boolean;
+  pesan?: string;
+  dariCache?: boolean;
+  kedaluwarsa?: boolean;
+  insight: InsightProfil | null;
+  akun: { platformAktif: string[]; akun: AkunTertaut[]; postBulanIni: number } | null;
+};
+
+/** Insight profil sosmed. `paksa` melewati cache — pakai hemat, kuota API terbatas. */
+export async function getInsightSosmed(
+  paksa = false,
+  platform = "instagram",
+): Promise<BalasanInsight> {
+  const params = new URLSearchParams({ platform });
+  if (paksa) params.set("paksa", "1");
+  const json = await fetchJson(`/api/tv/insight?${params.toString()}`, {
+    headers: headerToken(),
+  });
+  return json as BalasanInsight;
+}
+
+export type HasilUnggahPlatform = {
+  platform: string;
+  status: string;
+  id: string;
+  postUrl: string;
+  pesan: string;
+};
+
+export type BalasanUnggah = {
+  sukses: boolean;
+  hasil: HasilUnggahPlatform[];
+  berhasil: number;
+  total: number;
+  link: string;
+  catatan_simpan: string | null;
+};
+
+/** Unggah video ke sosmed lewat Ayrshare — SUNGGUHAN, tidak bisa ditarik kembali. */
+export async function unggahVideoSosmed(
+  kode: string,
+  platforms: string[],
+): Promise<BalasanUnggah> {
+  const json = await fetchJson("/api/tv/unggah", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ kode, platforms }),
+  });
+  return json as BalasanUnggah;
+}
+
+// ------------------------------------------------------------
+// Akun TV Rakyat anggota + pelaporan video (KPI 5/hari)
+// ------------------------------------------------------------
+
+export type AkunTvr = {
+  id: string;
+  platform: string;
+  username: string;
+  aktif: boolean;
+};
+
+export async function getAkunTvr(): Promise<AkunTvr[]> {
+  const json = await fetchJson("/api/tvr/akun", { headers: headerToken() });
+  return json.data as AkunTvr[];
+}
+
+export async function tambahAkunTvr(platform: string, username: string): Promise<AkunTvr> {
+  const json = await fetchJson("/api/tvr/akun", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ platform, username }),
+  });
+  return json.data as AkunTvr;
+}
+
+export async function hapusAkunTvr(id: string): Promise<void> {
+  await fetchJson("/api/tvr/akun", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id }),
+  });
+}
+
+export type LaporanVideo = {
+  id: string;
+  platform: string;
+  url_video: string;
+  tanggal_wib: string;
+  dibuat_pada: string;
+};
+
+export type BalasanLaporanVideo = {
+  tanggal: string;
+  hari_ini: string;
+  data: LaporanVideo[];
+  kpi_target: number;
+  kpi_tercapai: boolean;
+  dibebaskan: string | null;
+};
+
+export async function getLaporanVideo(tanggal?: string): Promise<BalasanLaporanVideo> {
+  const params = new URLSearchParams();
+  if (tanggal) params.set("tanggal", tanggal);
+  const json = await fetchJson(`/api/tvr/laporan?${params.toString()}`, {
+    headers: headerToken(),
+  });
+  return json as BalasanLaporanVideo;
+}
+
+export type RekapVideoBaris = {
+  user_id: string;
+  nama: string;
+  jumlah: number;
+  tercapai: boolean;
+  dibebaskan: string | null;
+};
+
+export async function getRekapVideoSemua(
+  tanggal?: string,
+): Promise<{ tanggal: string; kpi_target: number; data: RekapVideoBaris[] }> {
+  const params = new URLSearchParams({ semua: "1" });
+  if (tanggal) params.set("tanggal", tanggal);
+  const json = await fetchJson(`/api/tvr/laporan?${params.toString()}`, {
+    headers: headerToken(),
+  });
+  return json as { tanggal: string; kpi_target: number; data: RekapVideoBaris[] };
+}
+
+export async function tambahLaporanVideo(platform: string, url: string): Promise<LaporanVideo> {
+  const json = await fetchJson("/api/tvr/laporan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ platform, url }),
+  });
+  return json.data as LaporanVideo;
+}
+
+export async function hapusLaporanVideo(id: string): Promise<void> {
+  await fetchJson("/api/tvr/laporan", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id }),
+  });
+}
+
+// ------------------------------------------------------------
+// Struktur tim & penugasan
+// ------------------------------------------------------------
+
+export type AnggotaTimPantau = {
+  user_id: string;
+  nama: string;
+  jabatan: string;
+  avatar_url: string;
+  /** 'menunggu' = pengajuan belum di-ACC super admin / HR */
+  status_tim: "menunggu" | "disetujui";
+  kehadiran: string;
+  video_hari_ini: number;
+  kpi_persen: number | null;
+  rencana_total: number;
+  rencana_selesai: number;
+};
+
+export type KandidatTim = {
+  id: string;
+  nama: string;
+  jabatan: string;
+  avatar_url: string;
+};
+
+export type BalasanTim = {
+  boleh_punya_tim: boolean;
+  atasan: { nama: string } | null;
+  tanggal?: string;
+  tim: AnggotaTimPantau[];
+  kandidat: KandidatTim[];
+};
+
+export async function getTim(): Promise<BalasanTim> {
+  const json = await fetchJson("/api/tim", { headers: headerToken() });
+  return json as BalasanTim;
+}
+
+export async function tambahAnggotaTim(anggotaId: string): Promise<void> {
+  await fetchJson("/api/tim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "tambah", anggota_id: anggotaId }),
+  });
+}
+
+export async function keluarkanAnggotaTim(anggotaId: string): Promise<void> {
+  await fetchJson("/api/tim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "keluarkan", anggota_id: anggotaId }),
+  });
+}
+
+export async function kirimTugas(data: {
+  anggotaId: string;
+  deskripsi: string;
+  kategori: "harian" | "besar";
+  tenggat?: string;
+}): Promise<void> {
+  await fetchJson("/api/tim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({
+      aksi: "tugas",
+      anggota_id: data.anggotaId,
+      deskripsi: data.deskripsi,
+      kategori: data.kategori,
+      tenggat: data.tenggat,
+    }),
+  });
+}
+
+// ------------------------------------------------------------
+// Perizinan (izin/sakit + surat)
+// ------------------------------------------------------------
+
+export type Perizinan = {
+  id: string;
+  user_id: string;
+  nama: string;
+  tanggal_wib: string;
+  jenis: "izin" | "sakit";
+  keterangan: string | null;
+  status: "menunggu" | "disetujui" | "ditolak";
+  catatan_keputusan: string | null;
+  dibuat_pada: string;
+  diputuskan_pada: string | null;
+  surat_url: string;
+};
+
+export async function getPerizinan(semua = false): Promise<Perizinan[]> {
+  const json = await fetchJson(`/api/perizinan${semua ? "?semua=1" : ""}`, {
+    headers: headerToken(),
+  });
+  return json.data as Perizinan[];
+}
+
+export async function ajukanPerizinan(data: {
+  jenis: "izin" | "sakit";
+  keterangan?: string;
+  suratDataUrl: string;
+}): Promise<void> {
+  await fetchJson("/api/perizinan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function putuskanPerizinan(data: {
+  id: string;
+  keputusan: "disetujui" | "ditolak";
+  catatan?: string;
+}): Promise<void> {
+  await fetchJson("/api/perizinan", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+}
+
+// ------------------------------------------------------------
+// Rilis / update aplikasi
+// ------------------------------------------------------------
+
+export type RilisAplikasi = {
+  versi: string;
+  catatan: string[];
+  wajib: boolean;
+  url_unduhan: string | null;
+  dibuat_pada: string;
+};
+
+export async function getVersiTerbaru(): Promise<RilisAplikasi | null> {
+  try {
+    const json = await fetchJson("/api/versi");
+    return (json?.terbaru ?? null) as RilisAplikasi | null;
+  } catch {
+    return null;
+  }
+}
+
+export async function umumkanRilis(data: {
+  versi: string;
+  catatan: string[];
+  wajib?: boolean;
+  url_unduhan?: string;
+}): Promise<void> {
+  await fetchJson("/api/versi", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+}
+
+/** Riwayat 7 hari jumlah laporan video sendiri (untuk grafik). */
+export async function getRiwayatVideo7Hari(): Promise<{
+  data: { tanggal: string; jumlah: number }[];
+  kpi_target: number;
+}> {
+  const json = await fetchJson("/api/tvr/laporan?riwayat=1", { headers: headerToken() });
+  return json as { data: { tanggal: string; jumlah: number }[]; kpi_target: number };
+}
+
+/** Rencana besar SEMUA anggota (pantauan admin) — belum tuntas dulu. */
+export type RencanaBesarBaris = KerjaItem & { nama: string };
+export async function getRencanaBesarSemua(): Promise<RencanaBesarBaris[]> {
+  const json = await fetchJson("/api/laporan-kerja?semua=1&kategori=besar", {
+    headers: headerToken(),
+  });
+  return json.data as RencanaBesarBaris[];
+}
+
+// ------------------------------------------------------------
+// TV Rakyat: persetujuan Pimred + video manual anggota
+// ------------------------------------------------------------
+
+/** Pimred menyetujui / menolak sebuah video sebelum tayang. */
+export async function putuskanVideo(
+  kode: string,
+  keputusan: "disetujui" | "ditolak",
+  catatan?: string,
+): Promise<void> {
+  await fetchJson("/api/tv/persetujuan", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ kode, keputusan, catatan }),
+  });
+}
+
+export type KonfigUploadVideo = {
+  cloudName: string;
+  uploadPreset: string;
+  retensi_jam: number;
+};
+
+export async function getKonfigUploadVideo(): Promise<KonfigUploadVideo> {
+  const json = await fetchJson("/api/tv/manual?konfig=1", { headers: headerToken() });
+  return json as KonfigUploadVideo;
+}
+
+export type KirimanManual = {
+  kode: string;
+  judul: string;
+  status: string;
+  persetujuan: string;
+  persetujuan_oleh: string | null;
+  thumbnail_url: string | null;
+  hasil_render_url: string | null;
+  jam_tanggal: string;
+  hapus_media_pada: string | null;
+  media_masih_ada: boolean;
+  platform_terunggah: string[] | null;
+};
+
+export async function getKirimanManual(): Promise<{ data: KirimanManual[]; retensi_jam: number }> {
+  const json = await fetchJson("/api/tv/manual", { headers: headerToken() });
+  return json as { data: KirimanManual[]; retensi_jam: number };
+}
+
+/** Catat hasil upload Cloudinary sebagai antrean menunggu ACC Pimred. */
+export async function daftarkanVideoManual(data: {
+  secure_url: string;
+  public_id: string;
+  judul?: string;
+  caption?: string;
+  tugas_id?: string;
+}): Promise<string> {
+  const json = await fetchJson("/api/tv/manual", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+  return json.kode as string;
+}
+
+// ------------------------------------------------------------
+// Chat internal + pengumuman berjenjang
+// ------------------------------------------------------------
+
+export type ChatKontak = {
+  id: string;
+  lawan_id: string;
+  lawan_nama: string;
+  lawan_avatar: string;
+  status: "menunggu" | "diterima";
+  diminta_oleh: string;
+  cuplikan: string;
+  waktu_terakhir: string;
+  belum_dibaca: number;
+};
+
+export type ChatPesan = {
+  id: string;
+  pengirim_id: string;
+  isi: string;
+  dibaca: boolean;
+  dibuat_pada: string;
+};
+
+export async function getDaftarChat(): Promise<{
+  chat_aktif: boolean;
+  pengawas: boolean;
+  data: ChatKontak[];
+}> {
+  const json = await fetchJson("/api/chat", { headers: headerToken() });
+  return {
+    chat_aktif: json.chat_aktif !== false,
+    pengawas: Boolean(json.pengawas),
+    data: (json.data ?? []) as ChatKontak[],
+  };
+}
+
+export type KandidatChat = {
+  id: string;
+  nama: string;
+  jabatan: string;
+  avatar_url: string;
+  /** Hanya terisi untuk super admin; null bagi anggota biasa */
+  nomor_wa: string | null;
+};
+
+export async function getKandidatChat(): Promise<KandidatChat[]> {
+  const json = await fetchJson("/api/chat?kandidat=1", { headers: headerToken() });
+  return json.data as KandidatChat[];
+}
+
+export async function getPesanChat(
+  kontakId: string,
+  sejak?: string,
+): Promise<{ status: string; diminta_oleh: string; data: ChatPesan[] }> {
+  const params = new URLSearchParams({ kontak: kontakId });
+  if (sejak) params.set("sejak", sejak);
+  const json = await fetchJson(`/api/chat?${params.toString()}`, { headers: headerToken() });
+  return json as { status: string; diminta_oleh: string; data: ChatPesan[] };
+}
+
+export async function mulaiChat(targetId: string, isi?: string): Promise<string> {
+  const json = await fetchJson("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "mulai", target_id: targetId, isi }),
+  });
+  return json.kontak_id as string;
+}
+
+export async function jawabChat(kontakId: string, terima: boolean): Promise<void> {
+  await fetchJson("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: terima ? "terima" : "tolak", kontak_id: kontakId }),
+  });
+}
+
+export async function kirimPesanChat(kontakId: string, isi: string): Promise<void> {
+  await fetchJson("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "kirim", kontak_id: kontakId, isi }),
+  });
+}
+
+export async function tandaiChatDibaca(kontakId: string): Promise<void> {
+  await fetchJson("/api/chat", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ kontak_id: kontakId }),
+  }).catch(() => undefined);
+}
+
+export type Pengumuman = {
+  id: string;
+  pengirim_nama: string;
+  judul: string;
+  isi: string;
+  cakupan: "semua" | "jabatan" | "tim";
+  jabatan_target: string | null;
+  jumlah_penerima: number;
+  dibuat_pada: string;
+  dari_saya: boolean;
+};
+
+export async function getPengumuman(): Promise<{
+  cakupan_boleh: ("semua" | "jabatan" | "tim")[];
+  jabatan_pilihan: readonly string[];
+  data: Pengumuman[];
+}> {
+  const json = await fetchJson("/api/pengumuman", { headers: headerToken() });
+  return json as {
+    cakupan_boleh: ("semua" | "jabatan" | "tim")[];
+    jabatan_pilihan: readonly string[];
+    data: Pengumuman[];
+  };
+}
+
+export async function kirimPengumuman(data: {
+  judul: string;
+  isi: string;
+  cakupan: "semua" | "jabatan" | "tim";
+  jabatan_target?: string;
+}): Promise<number> {
+  const json = await fetchJson("/api/pengumuman", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+  return json.jumlah_penerima as number;
+}
+
+// ------------------------------------------------------------
+// ACC keanggotaan tim (super admin / admin HR)
+// ------------------------------------------------------------
+
+export type PengajuanTim = {
+  id: string;
+  atasan_nama: string;
+  atasan_jabatan: string;
+  anggota_nama: string;
+  dibuat_pada: string;
+};
+
+export async function getPengajuanTim(): Promise<PengajuanTim[]> {
+  const json = await fetchJson("/api/tim?acc=1", { headers: headerToken() });
+  return json.data as PengajuanTim[];
+}
+
+export async function putuskanPengajuanTim(id: string, setuju: boolean): Promise<void> {
+  await fetchJson("/api/tim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: setuju ? "acc" : "tolak_acc", anggota_id: id }),
+  });
+}
+
+/** Perbaiki laporan video sendiri (hanya hari ini). */
+export async function ubahLaporanVideo(
+  id: string,
+  platform: string,
+  url: string,
+): Promise<LaporanVideo> {
+  const json = await fetchJson("/api/tvr/laporan", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id, platform, url }),
+  });
+  return json.data as LaporanVideo;
+}
+
+/** Perbaiki akun TV Rakyat sendiri (platform / username salah ketik). */
+export async function ubahAkunTvr(
+  id: string,
+  platform: string,
+  username: string,
+): Promise<void> {
+  await fetchJson("/api/tvr/akun", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id, platform, username }),
+  });
+}
+
+// ------------------------------------------------------------
+// Masukan pengembang (bug / kritik / saran → super admin)
+// ------------------------------------------------------------
+
+export type Masukan = {
+  id: string;
+  nama: string;
+  jenis: "bug" | "kritik" | "saran";
+  isi: string;
+  dibuat_pada: string;
+};
+
+export async function kirimMasukan(jenis: string, isi: string): Promise<void> {
+  await fetchJson("/api/masukan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ jenis, isi }),
+  });
+}
+
+export async function getMasukan(): Promise<Masukan[]> {
+  const json = await fetchJson("/api/masukan", { headers: headerToken() });
+  return json.data as Masukan[];
+}
+
+// ------------------------------------------------------------
+// Kewenangan pengawas chat (super admin / master)
+// ------------------------------------------------------------
+
+export type ChatPantau = {
+  id: string;
+  nama_a: string;
+  nama_b: string;
+  status: string;
+  dibuat_pada: string;
+};
+
+/** Seluruh percakapan di sistem + status sakelar fitur chat. */
+export async function getPantauChat(): Promise<{
+  chat_aktif: boolean;
+  data: ChatPantau[];
+}> {
+  const json = await fetchJson("/api/chat?pantau=1", { headers: headerToken() });
+  return { chat_aktif: json.chat_aktif !== false, data: (json.data ?? []) as ChatPantau[] };
+}
+
+/** Isi satu percakapan milik orang lain (pemantauan). */
+export async function getPesanPantau(kontakId: string): Promise<ChatPesan[]> {
+  const json = await fetchJson(`/api/chat?pantau=1&kontak=${encodeURIComponent(kontakId)}`, {
+    headers: headerToken(),
+  });
+  return (json.data ?? []) as ChatPesan[];
+}
+
+/** Nyalakan / matikan fitur chat untuk semua orang. */
+export async function setSakelarChat(nyala: boolean): Promise<void> {
+  await fetchJson("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "sakelar", nyala }),
+  });
+}
+
+/** Hapus percakapan (peserta sendiri, atau siapa pun bila super admin). */
+export async function hapusChat(kontakId: string): Promise<void> {
+  await fetchJson("/api/chat", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ kontak_id: kontakId }),
+  });
+}
+
+// ------------------------------------------------------------
+// Insight rinci per postingan (TV Rakyat)
+// ------------------------------------------------------------
+
+export type PostinganInsight = {
+  id: string;
+  teks: string;
+  url: string;
+  thumbnail: string;
+  jenis: string;
+  waktu: string | null;
+  metrik: { label: string; nilai: number }[];
+};
+
+export async function getInsightDetail(
+  platform: string,
+  paksa = false,
+): Promise<{ siap: boolean; pesan?: string; dariCache?: boolean; data: PostinganInsight[] }> {
+  const params = new URLSearchParams({ platform });
+  if (paksa) params.set("paksa", "1");
+  const json = await fetchJson(`/api/tv/insight/detail?${params.toString()}`, {
+    headers: headerToken(),
+  });
+  return json as {
+    siap: boolean;
+    pesan?: string;
+    dariCache?: boolean;
+    data: PostinganInsight[];
+  };
+}
+
+/** Hapus video dari antrian TV Rakyat (belum tayang saja). */
+export async function hapusVideoAntrian(kode: string): Promise<void> {
+  await fetchJson(`/api/video-antrian/${encodeURIComponent(kode)}`, {
+    method: "DELETE",
+    headers: headerToken(),
+  });
+}
+
+// ------------------------------------------------------------
+// Panel Master (khusus peran master)
+// ------------------------------------------------------------
+
+export type DataMaster = {
+  ringkasan: { pengguna_aktif: number; percakapan: number; video: number; galat: number };
+  log: {
+    id: string;
+    waktu: string;
+    jenis: string;
+    pesan: string;
+    versi: string;
+    perangkat: string;
+  }[];
+  akun_wajib: {
+    id: string;
+    username: string;
+    platform: string;
+    nama_tampilan: string;
+    aktif: boolean;
+  }[];
+  pengaturan: Record<string, string>;
+};
+
+export async function getDataMaster(): Promise<DataMaster> {
+  const json = await fetchJson("/api/master", { headers: headerToken() });
+  return json as DataMaster;
+}
+
+export async function aksiMaster(
+  aksi: string,
+  data: Record<string, string | boolean> = {},
+): Promise<void> {
+  await fetchJson("/api/master", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi, ...data }),
+  });
+}
+
+// ------------------------------------------------------------
+// Izin fitur per peran (diatur super admin)
+// ------------------------------------------------------------
+
+import type { DefinisiFitur, PetaIzin } from "@/lib/fitur";
+
+/** Izin fitur untuk peran saya. Kunci yang tidak ada = fitur nyala. */
+export async function getIzinFitur(): Promise<PetaIzin> {
+  try {
+    const json = await fetchJson("/api/fitur", { headers: headerToken() });
+    return (json?.izin ?? {}) as PetaIzin;
+  } catch {
+    // Gagal memuat matriks tidak boleh mengunci aplikasi.
+    return {};
+  }
+}
+
+export type MatriksFitur = {
+  katalog: DefinisiFitur[];
+  peran: { id: string; label: string }[];
+  /** peran → daftar fitur yang DIMATIKAN */
+  mati: Record<string, string[]>;
+};
+
+export async function getMatriksFitur(): Promise<MatriksFitur> {
+  const json = await fetchJson("/api/fitur?matriks=1", { headers: headerToken() });
+  return json as MatriksFitur;
+}
+
+export async function setIzinFitur(
+  peran: string,
+  fitur: string,
+  aktif: boolean,
+): Promise<void> {
+  await fetchJson("/api/fitur", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ peran, fitur, aktif }),
+  });
+}
+
+// ------------------------------------------------------------
+// v1.12 — lupa sandi, ulang tahun, tugas link Pimred, interaksi,
+// profil lanjutan, mode perbaikan
+// ------------------------------------------------------------
+
+/** Minta kode OTP lupa sandi (tanpa sesi). */
+export async function lupaSandiKirim(identitas: string): Promise<string> {
+  const json = await fetchJson("/api/sandi/lupa", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ identitas }),
+  });
+  return (json.pesan as string) ?? "Kode dikirim.";
+}
+
+export async function lupaSandiSetel(data: {
+  identitas: string;
+  kode: string;
+  sandi_baru: string;
+}): Promise<void> {
+  await fetchJson("/api/sandi/lupa", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export type OrangUltah = {
+  id: string;
+  nama: string;
+  nama_panggilan: string;
+  avatar_url: string;
+};
+
+export async function getUltahHariIni(): Promise<OrangUltah[]> {
+  const json = await fetchJson("/api/ultah", { headers: headerToken() });
+  return (json.data ?? []) as OrangUltah[];
+}
+
+/** Perbarui data profil sendiri (panggilan/tgl lahir/divisi/foto). */
+export async function ubahProfilSaya(data: {
+  foto?: string;
+  nama_panggilan?: string;
+  tanggal_lahir?: string;
+  divisi?: string;
+  sub_divisi?: string;
+}): Promise<UserLengkap> {
+  const json = await fetchJson("/api/profil", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+  return json.user as UserLengkap;
+}
+
+export type TugasLink = {
+  id: string;
+  judul: string;
+  url: string;
+  catatan: string;
+  untuk_user_id: string;
+  nama_penerima: string;
+  nama_pemberi: string;
+  status: "baru" | "dikerjakan" | "selesai" | "batal";
+  video_kode: string | null;
+  dibuat_pada: string;
+  selesai_pada: string | null;
+};
+
+export async function getTugasLink(): Promise<TugasLink[]> {
+  const json = await fetchJson("/api/tv/tugas", { headers: headerToken() });
+  return (json.data ?? []) as TugasLink[];
+}
+
+export async function beriTugasLink(data: {
+  url: string;
+  judul?: string;
+  catatan?: string;
+  untuk_user_id: string;
+}): Promise<void> {
+  await fetchJson("/api/tv/tugas", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function batalkanTugasLink(id: string): Promise<void> {
+  await fetchJson("/api/tv/tugas", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id, aksi: "batal" }),
+  });
+}
+
+export type VideoInteraksi = {
+  kode: string;
+  judul: string;
+  link: string;
+  thumbnail_url: string;
+  diunggah_pada: string;
+  sudah_komen: boolean;
+  sudah_share: boolean;
+};
+
+export async function getInteraksiVideo(): Promise<VideoInteraksi[]> {
+  const json = await fetchJson("/api/tv/interaksi", { headers: headerToken() });
+  return (json.data ?? []) as VideoInteraksi[];
+}
+
+export async function tandaiInteraksiVideo(
+  kode: string,
+  jenis: "komen" | "share",
+): Promise<void> {
+  await fetchJson("/api/tv/interaksi", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ kode, jenis }),
+  });
+}
+
+/** Sakelar mode perbaikan — khusus master (lihat /api/master). */
+export async function setModePerbaikan(nyala: boolean): Promise<void> {
+  await fetchJson("/api/master", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "mode_perbaikan", nilai: nyala }),
+  });
+}
+
+/** Analisis ulang QC berbasis data Ayrshare (tanpa n8n/TikHub). */
+export type HasilAnalisisAyrshare = {
+  periode: string;
+  akun_tercakup: string[];
+  akun_terlewat: string[];
+  postingan: number;
+  komentar: number;
+  comply: number;
+};
+
+export async function analisisUlangAyrshare(): Promise<HasilAnalisisAyrshare> {
+  const json = await fetchJson("/api/analisis/ayrshare", {
+    method: "POST",
+    headers: headerToken(),
+  });
+  return json as HasilAnalisisAyrshare;
+}
+
+// ------------------------------------------------------------
+// Database anggota (detail aktivitas per pengguna)
+// ------------------------------------------------------------
+
+export type DbRingkasPengguna = {
+  id: string;
+  nama: string;
+  avatar_url: string;
+  struktur: string;
+  masuk: boolean;
+  video: number;
+  komentar_sudah: number;
+  komentar_total: number;
+};
+
+export type DbDetailPengguna = {
+  pengguna: { id: string; nama: string; avatar_url: string; struktur: string; nomor_wa: string };
+  hari_ini: string;
+  komentar: {
+    periode: string;
+    total: number;
+    sudah: number;
+    per_akun: { akun: string; total: number; sudah: number }[];
+  };
+  kerja: { tanggal: string; total: number; selesai: number; persen: number }[];
+  absensi: { tanggal_wib: string; jenis: string; waktu: string; alamat: string | null }[];
+  video: {
+    total: number;
+    hari_ini: number;
+    daftar: { tanggal_wib: string; platform: string; url_video: string }[];
+  };
+};
+
+export async function getDatabasePengguna(): Promise<DbRingkasPengguna[]> {
+  const json = await fetchJson("/api/database", { headers: headerToken() });
+  return (json.data ?? []) as DbRingkasPengguna[];
+}
+
+export async function getDatabaseDetail(id: string): Promise<DbDetailPengguna> {
+  const json = await fetchJson(`/api/database?user=${encodeURIComponent(id)}`, {
+    headers: headerToken(),
+  });
+  return json as DbDetailPengguna;
+}
+
+// ------------------------------------------------------------
+// Verifikasi WhatsApp untuk akun yang sudah masuk
+// ------------------------------------------------------------
+
+export async function kirimKodeVerifikasiWa(): Promise<void> {
+  await fetchJson("/api/otp/ulang", { method: "PUT", headers: headerToken() });
+}
+
+export async function verifikasiWaSaya(kode: string): Promise<UserLengkap> {
+  const json = await fetchJson("/api/otp/ulang", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ kode }),
+  });
+  return json.user as UserLengkap;
+}
+
+/**
+ * Rekap kepatuhan komentar satu periode. Dipakai kartu KPI beranda.
+ * Lewat fetchJson supaya token perangkat ikut terkirim — endpoint
+ * /api/rekap kini menolak permintaan tanpa login.
+ */
+export async function getRekapPeriode(
+  periode: string,
+): Promise<{ nama_kader: string; sudah_komentar: boolean }[]> {
+  try {
+    const json = await fetchJson(`/api/rekap?periode=${encodeURIComponent(periode)}`);
+    return (json.data ?? []) as { nama_kader: string; sudah_komentar: boolean }[];
+  } catch {
+    // Kartu KPI bersifat pelengkap — kegagalannya tidak boleh
+    // menggagalkan seluruh beranda.
+    return [];
+  }
 }
