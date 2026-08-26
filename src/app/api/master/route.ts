@@ -16,7 +16,7 @@
 // yang jelas terlihat di kode maupun di layar.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
-import { userDariToken, cabutSemuaSesi } from "@/lib/sesi";
+import { hapusCacheUser, userDariToken, cabutSemuaSesi } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
 
 export const dynamic = "force-dynamic";
@@ -149,6 +149,9 @@ export async function POST(request: Request) {
 
       // Hak akses berubah → sesi lama harus dicabut, kalau tidak
       // perangkat yang sudah masuk tetap memegang hak yang lama.
+      // (cabutSemuaSesi sudah membuang cache; hapusCacheUser di sini
+      // menjaga bila urutannya berubah kelak.)
+      await hapusCacheUser(id);
       await cabutSemuaSesi(id);
       await kirimKabar({
         judul: "Peran akun Anda diperbarui",

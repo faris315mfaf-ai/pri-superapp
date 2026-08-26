@@ -12,7 +12,7 @@ import { bungkus } from "@/lib/api-helper";
 import { buatHashSandi } from "@/lib/sandi";
 import { normalkanNomorWa, FonnteBelumDiaturError } from "@/lib/fonnte";
 import { kirimOtp, verifikasiOtp } from "@/lib/otp";
-import { cabutSemuaSesi, userDariToken } from "@/lib/sesi";
+import { hapusCacheUser, cabutSemuaSesi, userDariToken } from "@/lib/sesi";
 
 export const dynamic = "force-dynamic";
 
@@ -132,6 +132,9 @@ export async function POST(request: Request) {
       console.error("[sandi] ganti:", error.message);
       throw new Error("Gagal menyimpan kata sandi baru.");
     }
+    // Baris app_user berubah → buang cache sesinya supaya perubahan
+    // (termasuk pencabutan akses) berlaku seketika, bukan menunggu TTL.
+    await hapusCacheUser(user.id);
 
     // Sandi berganti = semua perangkat lain harus keluar. Kalau tidak,
     // perangkat yang mungkin sudah disusupi tetap memegang akses meski

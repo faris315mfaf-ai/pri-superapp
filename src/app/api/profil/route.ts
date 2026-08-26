@@ -9,7 +9,7 @@
 // pengguna tinggal menunggu persetujuan super admin.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
-import { KOLOM_USER, keUserPublik, type BarisUser } from "@/lib/sesi";
+import { hapusCacheUser, KOLOM_USER, keUserPublik, type BarisUser } from "@/lib/sesi";
 import { pastikanStrukturSah } from "@/lib/struktur";
 
 export const dynamic = "force-dynamic";
@@ -123,6 +123,9 @@ export async function PATCH(request: Request) {
       .from("app_user")
       .update(perubahan)
       .eq("id", Number(user.id));
+    // Baris app_user berubah → buang cache sesinya supaya perubahan
+    // (termasuk pencabutan akses) berlaku seketika, bukan menunggu TTL.
+    await hapusCacheUser(user.id);
     if (error) throw new Error("Gagal menyimpan profil.");
 
     const { data: segar } = await db
@@ -210,6 +213,9 @@ export async function POST(request: Request) {
     }
 
     const { error } = await db.from("app_user").update(perubahan).eq("id", Number(user.id));
+    // Baris app_user berubah → buang cache sesinya supaya perubahan
+    // (termasuk pencabutan akses) berlaku seketika, bukan menunggu TTL.
+    await hapusCacheUser(user.id);
     if (error) {
       console.error("[profil] simpan:", error.message);
       throw new Error("Gagal menyimpan profil.");

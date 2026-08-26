@@ -10,6 +10,7 @@
 // (a) OTP terverifikasi, dan (b) super admin menyetujui.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { hapusCacheUser } from "@/lib/cache-sesi";
 import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import { buatHashSandi } from "@/lib/sandi";
 import { normalkanNomorWa, nomorWaSah, FonnteBelumDiaturError } from "@/lib/fonnte";
@@ -77,6 +78,9 @@ export async function POST(request: Request) {
           { status: 409 },
         );
       }
+      // Baris app_user berubah → buang cache sesinya supaya perubahan
+      // (termasuk pencabutan akses) berlaku seketika, bukan menunggu TTL.
+      await hapusCacheUser(bentrok.id);
       await db
         .from("app_user")
         .update({

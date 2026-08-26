@@ -9,7 +9,13 @@ import { bungkus } from "@/lib/api-helper";
 import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import { normalkanNomorWa, FonnteBelumDiaturError } from "@/lib/fonnte";
 import { kirimOtp, verifikasiOtp } from "@/lib/otp";
-import { buatSesi, keUserPublik, KOLOM_USER, type BarisUser } from "@/lib/sesi";
+import {
+  hapusCacheUser,
+  buatSesi,
+  keUserPublik,
+  KOLOM_USER,
+  type BarisUser,
+} from "@/lib/sesi";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +67,9 @@ export async function POST(request: Request) {
       .from("app_user")
       .update({ wa_terverifikasi: true })
       .eq("id", user.id);
+    // Baris app_user berubah → buang cache sesinya supaya perubahan
+    // (termasuk pencabutan akses) berlaku seketika, bukan menunggu TTL.
+    await hapusCacheUser(user.id);
 
     // Token diberikan meski status masih 'menunggu' — pengguna perlu
     // bisa melengkapi profil dan melihat layar "menunggu persetujuan".

@@ -6,7 +6,7 @@
 // berdasarkan token; menyembunyikan tombol di layar saja tidak cukup.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
-import { userDariToken, cabutSemuaSesi } from "@/lib/sesi";
+import { hapusCacheUser, userDariToken, cabutSemuaSesi } from "@/lib/sesi";
 import { JABATAN_PARTAI, KUOTA_JABATAN } from "@/lib/jabatan";
 import { pastikanStrukturSah } from "@/lib/struktur";
 
@@ -227,6 +227,7 @@ export async function PATCH(request: Request) {
         // Hapus keanggotaan sepenuhnya. Sesi dan akun sosmednya ikut
         // terhapus lewat ON DELETE CASCADE, sehingga username yang
         // dilepas bisa langsung diklaim ulang orang lain.
+        await hapusCacheUser(id);
         const { error: eHapus } = await db.from("app_user").delete().eq("id", id);
         if (eHapus) {
           console.error("[pengguna] hapus:", eHapus.message);
@@ -239,6 +240,9 @@ export async function PATCH(request: Request) {
     }
 
     const { error } = await db.from("app_user").update(perubahan).eq("id", id);
+    // Baris app_user berubah → buang cache sesinya supaya perubahan
+    // (termasuk pencabutan akses) berlaku seketika, bukan menunggu TTL.
+    await hapusCacheUser(id);
     if (error) {
       console.error("[pengguna] ubah:", error.message);
       throw new Error("Gagal menyimpan perubahan");
