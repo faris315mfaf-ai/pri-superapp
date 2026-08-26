@@ -309,6 +309,8 @@ export function ProfilScreen({
   // Hasil aksi pengguna menimpa bacaan peramban sampai render berikutnya,
   // supaya sakelarnya langsung bergerak begitu ditekan.
   const [statusManual, setStatusManual] = useState<StatusPush | null>(null);
+  // Pengaturan 2 tab (spek 1.2): Display vs Profil & Keamanan
+  const [tabPengaturan, setTabPengaturan] = useState<"display" | "keamanan">("display");
   // Profil ala ML (spek 4.3): galeri momen + skor suka + streak
   const [momen, setMomen] = useState<ProfilMomen | null>(null);
   const [streakku, setStreakku] = useState(0);
@@ -549,7 +551,36 @@ export function ProfilScreen({
       {/* Daftar pengaturan */}
       <FadeInUp delay={0.08}>
         <SectionTitle judul="Pengaturan" className="mt-6" />
+        {/* Dua tab (spek 1.2): Display / Profil & Keamanan */}
+        <div className="glass mb-2 flex rounded-xl p-1">
+          {(
+            [
+              { id: "display", label: "Display" },
+              { id: "keamanan", label: "Profil & Keamanan" },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTabPengaturan(t.id)}
+              aria-pressed={tabPengaturan === t.id}
+              className={cn(
+                "btn-tekan flex-1 rounded-lg py-2 text-[12.5px] font-bold transition-colors",
+                tabPengaturan === t.id ? "text-white" : "text-teks-sekunder",
+              )}
+              style={
+                tabPengaturan === t.id
+                  ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" }
+                  : undefined
+              }
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:items-start">
+          {tabPengaturan === "display" && (
+          <>
           {/* 1. Mode Tema — sinkron dengan store global */}
           <BarisPengaturan
             ikon={IkonTema}
@@ -575,31 +606,8 @@ export function ProfilScreen({
             }
           />
 
-          {/* Pengaturan fitur per peran — super admin & master */}
-          {(user.role === "super_admin" || user.role === "master") &&
-            onBukaPengaturanFitur && (
-              <BarisPengaturan
-                ikon={SlidersHorizontal}
-                warnaIkon="#8B5CF6"
-                label="Pengaturan Fitur"
-                onClick={onBukaPengaturanFitur}
-                kanan={
-                  <span className="text-xs font-medium text-teks-sekunder">Per peran</span>
-                }
-              />
-            )}
-
           {/* Ukuran teks aplikasi (kecil / normal / besar) */}
           <BarisUkuranTeks />
-
-          {/* Bug / kritik / saran → pengembang; SA juga punya kotak masuk */}
-          <SeksiMasukan user={user} />
-
-          {/* Akun sosmed — tombol pembuka pop-up kelola */}
-          <TombolAkunSosmed
-            onBuka={() => setModalSosmed(true)}
-            versiData={versiSosmed}
-          />
 
           {/* 3. Notifikasi WhatsApp */}
           <BarisPengaturan
@@ -613,29 +621,6 @@ export function ProfilScreen({
                 labelAria="Notifikasi WhatsApp"
               />
             }
-          />
-
-          {/* Verifikasi nomor WhatsApp akun */}
-          <BarisPengaturan
-            ikon={ShieldCheck}
-            warnaIkon="#10B981"
-            label="Verifikasi WhatsApp"
-            onClick={user.wa_terverifikasi ? undefined : () => setModalVerifWa(true)}
-            kanan={
-              user.wa_terverifikasi ? (
-                <StatusBadge label="terverifikasi" warna="hijau" />
-              ) : (
-                <StatusBadge label="belum" warna="kuning" />
-              )
-            }
-          />
-
-          {/* Ganti kata sandi lewat OTP WhatsApp */}
-          <BarisPengaturan
-            ikon={KeyRound}
-            warnaIkon="#3B82F6"
-            label="Ganti Kata Sandi"
-            onClick={() => setModalSandi(true)}
           />
 
           {/* 4. Bahasa — belum bisa diubah */}
@@ -652,7 +637,60 @@ export function ProfilScreen({
               </span>
             }
           />
+          </>
+          )}
 
+          {tabPengaturan === "keamanan" && (
+          <>
+          {/* Ganti kata sandi lewat OTP WhatsApp */}
+          <BarisPengaturan
+            ikon={KeyRound}
+            warnaIkon="#3B82F6"
+            label="Ganti Kata Sandi"
+            onClick={() => setModalSandi(true)}
+          />
+
+          {/* Verifikasi nomor WhatsApp akun (≈ "tautkan WhatsApp") */}
+          <BarisPengaturan
+            ikon={ShieldCheck}
+            warnaIkon="#10B981"
+            label="Verifikasi WhatsApp"
+            onClick={user.wa_terverifikasi ? undefined : () => setModalVerifWa(true)}
+            kanan={
+              user.wa_terverifikasi ? (
+                <StatusBadge label="terverifikasi" warna="hijau" />
+              ) : (
+                <StatusBadge label="belum" warna="kuning" />
+              )
+            }
+          />
+
+          {/* Akun sosmed — tombol pembuka pop-up kelola */}
+          <TombolAkunSosmed
+            onBuka={() => setModalSosmed(true)}
+            versiData={versiSosmed}
+          />
+
+          {/* Bug / kritik / saran → pengembang; SA juga punya kotak masuk */}
+          <SeksiMasukan user={user} />
+
+          {/* Pengaturan fitur per peran — super admin & master */}
+          {(user.role === "super_admin" || user.role === "master") &&
+            onBukaPengaturanFitur && (
+              <BarisPengaturan
+                ikon={SlidersHorizontal}
+                warnaIkon="#8B5CF6"
+                label="Pengaturan Fitur"
+                onClick={onBukaPengaturanFitur}
+                kanan={
+                  <span className="text-xs font-medium text-teks-sekunder">Per peran</span>
+                }
+              />
+            )}
+          </>
+          )}
+
+          {/* Baris umum — tampil di kedua tab */}
           {/* Changelog "Apa yang Baru" (spek 1.4) */}
           <BarisPengaturan
             ikon={Sparkles}
