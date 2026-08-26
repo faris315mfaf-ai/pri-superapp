@@ -95,7 +95,9 @@ function Carousel({
 
   React.useEffect(() => {
     if (!api) return
-    onSelect(api)
+    // Keadaan awal disetel lewat microtask supaya tidak setState
+    // sinkron di badan effect (aturan set-state-in-effect).
+    void Promise.resolve().then(() => onSelect(api))
     api.on("reInit", onSelect)
     api.on("select", onSelect)
 
