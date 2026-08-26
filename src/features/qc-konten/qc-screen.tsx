@@ -20,6 +20,7 @@ import {
   ScanSearch,
   Clock,
   History,
+  Check,
   X,
 } from "lucide-react";
 import {
@@ -35,6 +36,7 @@ import { ProgressRing } from "@/components/progress-ring";
 import { PlatformIcon } from "@/components/platform-icon";
 import {
   getAkunWajib,
+  getCakupanAyrshare,
   getAntrianQc,
   getPeriodeList,
   lanjutkanPemeriksaanQc,
@@ -42,11 +44,12 @@ import {
   pantauAnalisisQc,
   type AkunWajibWithStats,
   type AntrianQc,
+  analisisUlangAyrshare,
+  type CakupanAyrshare,
 } from "@/services";
 import { toast } from "@/hooks/use-app-store";
 import { RiwayatAnalisisModal } from "./riwayat-analisis-modal";
 import { RingkasanQc } from "./ringkasan-qc";
-import { analisisUlangAyrshare } from "@/services";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { cn } from "@/lib/utils";
 
@@ -296,21 +299,66 @@ export function QcScreen({
     }
   }
 
-  // Analisis ulang berbasis Ayrshare — sinkron (tanpa n8n), hasilnya
-  // langsung tertulis ke database saat permintaan selesai.
+  // Analisis berbasis Ayrshare — JALUR UTAMA sejak 1.14. Sinkron
+  // (tanpa n8n), hasilnya langsung tertulis ke database saat
+  // permintaan selesai.
   const [sedangAyrshare, setSedangAyrshare] = useState(false);
+  /** Sisa postingan yang masih menunggu diperiksa (untuk pesan tombol) */
+  const [sisaAnalisis, setSisaAnalisis] = useState(0);
+
+  /**
+   * Cakupan akun: mana yang bisa dibaca Ayrshare, mana yang belum.
+   * Dibaca dari server supaya layar mengikuti akun yang BENAR-BENAR
+   * tertaut — begitu dpp.pri atau akun Ketua Umum ditautkan, panel ini
+   * berubah sendiri tanpa menyentuh kode.
+   */
+  const [cakupan, setCakupan] = useState<CakupanAyrshare | null>(null);
+  useEffect(() => {
+    let hidup = true;
+    void (async () => {
+      const hasil = await getCakupanAyrshare();
+      if (hidup) setCakupan(hasil);
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, []);
   async function jalankanAyrshare() {
     if (sedangAyrshare) return;
     setSedangAyrshare(true);
     try {
-      const hasil = await analisisUlangAyrshare();
+      // Analisis dipotong per anggaran waktu di server supaya tidak
+      // pernah kena batas waktu fungsi. Di sini putarannya diulang
+      // otomatis sampai tuntas — bagi pengurus tetap SATU kali tekan.
+      let hasil = await analisisUlangAyrshare();
+      let putaran = 1;
+      const MAKS_PUTARAN = 12;
+      while (hasil.selesai === false && putaran < MAKS_PUTARAN) {
+        setSisaAnalisis(hasil.sisa ?? 0);
+        const lanjut = await analisisUlangAyrshare();
+        // Gabungkan angkanya supaya yang dilaporkan adalah TOTAL
+        // seluruh putaran, bukan hanya putaran terakhir.
+        hasil = {
+          ...lanjut,
+          komentar: hasil.komentar + lanjut.komentar,
+          comply: hasil.comply + lanjut.comply,
+          peringatan: [...(hasil.peringatan ?? []), ...(lanjut.peringatan ?? [])],
+        };
+        putaran += 1;
+      }
+      setSisaAnalisis(0);
+      // Peringatan pemotongan (bila postingan hari ini melebihi yang
+      // bisa dibaca sekali jalan) ditampilkan APA ADANYA — angka yang
+      // terpotong diam-diam lebih berbahaya daripada angka yang jujur.
+      const adaPeringatan = (hasil.peringatan ?? []).length > 0;
       toast(
-        "sukses",
-        "Analisis Ayrshare selesai",
+        adaPeringatan ? "peringatan" : "sukses",
+        adaPeringatan ? "Analisis selesai sebagian" : "Analisis selesai",
         `${hasil.postingan} postingan, ${hasil.komentar} komentar dibaca. Tercakup: ${hasil.akun_tercakup.join(", ")}.` +
           (hasil.akun_terlewat.length > 0
-            ? ` Akun di luar Ayrshare (${hasil.akun_terlewat.join(", ")}) tetap lewat analisis biasa.`
-            : ""),
+            ? ` Belum tertaut Ayrshare: ${hasil.akun_terlewat.join(", ")}.`
+            : "") +
+          (adaPeringatan ? ` ${(hasil.peringatan ?? []).join(" ")}` : ""),
       );
       setTerakhirAnalisis(Date.now());
       await muatUlangData();
@@ -708,10 +756,13 @@ export function QcScreen({
                 </button>
               )}
             </GlassCard>
+            {/* TOMBOL UTAMA — sejak 1.14 memakai data Ayrshare, bukan
+                scraping n8n. Alur kepatuhannya sama persis (tetap
+                berbasis KOMENTAR); yang berganti hanya sumber datanya. */}
             <button
               type="button"
-              onClick={() => void mulaiAnalisis()}
-              disabled={sedangAnalisis}
+              onClick={() => void jalankanAyrshare()}
+              disabled={sedangAyrshare || sedangAnalisis}
               className="btn-tekan flex h-13 w-full items-center justify-center gap-2.5 rounded-2xl font-heading text-[15px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
               style={{
                 background: "linear-gradient(135deg, #DC2626, #B91C1C)",
@@ -719,13 +770,46 @@ export function QcScreen({
                 height: "3.25rem",
               }}
             >
-              {sudahAnalisis ? (
+              {sedangAyrshare ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : sudahAnalisis ? (
                 <RefreshCw className="h-5 w-5" />
               ) : (
                 <Zap className="h-5 w-5" />
               )}
-              {sudahAnalisis ? "Analisis Ulang" : "Mulai Analisis"}
+              {sedangAyrshare
+                ? sisaAnalisis > 0
+                  ? `Memeriksa… sisa ${sisaAnalisis} postingan`
+                  : "Membaca data Ayrshare…"
+                : sudahAnalisis
+                  ? "Analisis Ulang"
+                  : "Mulai Analisis"}
             </button>
+
+            {/* Cakupan akun — tampil apa adanya mengikuti akun yang
+                tertaut di Ayrshare saat ini. */}
+            {cakupan && (cakupan.tercakup.length > 0 || cakupan.terlewat.length > 0) && (
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                {cakupan.tercakup.map((a) => (
+                  <span
+                    key={`ada-${a.platform}-${a.username}`}
+                    className="inline-flex items-center gap-1 rounded-full bg-sukses/12 px-2 py-0.5 text-[10.5px] font-semibold text-emerald-600 dark:text-emerald-400"
+                    title={`Dibaca lewat Ayrshare (${a.platform})`}
+                  >
+                    <Check className="h-3 w-3" aria-hidden="true" />@{a.username}
+                  </span>
+                ))}
+                {cakupan.terlewat.map((a) => (
+                  <span
+                    key={`belum-${a.platform}-${a.username}`}
+                    className="glass-soft inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-semibold text-teks-sekunder"
+                    title={`Belum tertaut di Ayrshare (${a.platform}) — masih lewat analisis lama`}
+                  >
+                    @{a.username}
+                  </span>
+                ))}
+              </div>
+            )}
             {/* Jujur: run yang belum terbukti selesai tidak boleh
                 ditampilkan seolah sudah menghasilkan angka final. */}
             {fase === "latar" && (
@@ -745,25 +829,27 @@ export function QcScreen({
         )}
       </FadeInUp>
 
-      {/* Analisis ulang cepat: baca komentar akun resmi TV Rakyat
-          langsung dari Ayrshare — tanpa scraping, tanpa antre n8n. */}
-      <FadeInUp delay={0.11} className="mt-2">
-        <button
-          type="button"
-          onClick={() => void jalankanAyrshare()}
-          disabled={sedangAyrshare || fase === "berjalan"}
-          className="glass btn-tekan flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[13px] font-bold text-teks-utama disabled:opacity-50"
-        >
-          {sedangAyrshare ? (
-            <Loader2 className="h-4 w-4 animate-spin text-pri" aria-hidden="true" />
-          ) : (
+      {/* Jalur LAMA (scraping n8n) — kini cadangan, hanya berguna untuk
+          akun yang belum tertaut di Ayrshare. Disembunyikan bila semua
+          akun wajib sudah tercakup, supaya tidak ada dua tombol yang
+          membingungkan. */}
+      {(cakupan?.terlewat.length ?? 0) > 0 && (
+        <FadeInUp delay={0.11} className="mt-2">
+          <button
+            type="button"
+            onClick={() => void mulaiAnalisis()}
+            disabled={sedangAnalisis || sedangAyrshare}
+            className="glass btn-tekan flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-[13px] font-bold text-teks-utama disabled:opacity-50"
+          >
             <RefreshCw className="h-4 w-4 text-pri" aria-hidden="true" />
-          )}
-          {sedangAyrshare
-            ? "Membaca data Ayrshare…"
-            : "Analisis Ulang (data Ayrshare)"}
-        </button>
-      </FadeInUp>
+            Analisis akun yang belum tertaut
+          </button>
+          <p className="mt-1.5 text-center text-[10.5px] leading-snug text-teks-sekunder">
+            Untuk {cakupan?.terlewat.map((a) => `@${a.username}`).join(", ")} yang
+            belum tertaut di Ayrshare — memakai pemindaian lama.
+          </p>
+        </FadeInUp>
+      )}
 
       {/* Ringkasan kepatuhan (pindahan dari dashboard): KPI, tren,
           kepatuhan per akun wajib — kini tinggal di rumah datanya. */}

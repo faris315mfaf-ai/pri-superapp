@@ -38,6 +38,22 @@ const BOLEH = new Set(["master", "super_admin", "admin_hr"]);
  */
 const AMBIL_RIWAYAT = 120;
 
+/**
+ * Anggaran waktu satu panggilan, dalam milidetik.
+ *
+ * KENAPA ADA: membaca komentar satu per satu memakan ~2,4 detik per
+ * postingan. Saat diuji, satu hari berisi 75 postingan butuh hampir
+ * TIGA MENIT — jauh melewati batas fungsi Vercel, sehingga analisisnya
+ * akan mati di tengah jalan dan pengurus tidak pernah tahu angkanya
+ * tidak lengkap.
+ *
+ * Maka pekerjaannya dipotong: begitu anggaran habis, sisanya
+ * dilaporkan dan panggilan berikutnya melanjutkan dari postingan yang
+ * belum diperiksa. Angkanya tidak pernah salah, hanya butuh beberapa
+ * putaran bila postingannya banyak.
+ */
+const ANGGARAN_MS = 40_000;
+
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
   return h.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : "";
@@ -80,6 +96,54 @@ function dedup<T>(baris: T[], kunci: (b: T) => string): T[] {
   const peta = new Map<string, T>();
   for (const b of baris) peta.set(kunci(b), b);
   return [...peta.values()];
+}
+
+/**
+ * GET /api/analisis/ayrshare — CAKUPAN saja, tanpa menjalankan apa pun.
+ *
+ * Dipakai layar QC untuk menampilkan secara DINAMIS akun wajib mana yang
+ * sudah bisa dibaca lewat Ayrshare dan mana yang belum. Daftarnya
+ * mengikuti akun yang benar-benar tertaut di profil Ayrshare, jadi
+ * begitu dpp.pri atau akun Ketua Umum ditautkan, layarnya ikut berubah
+ * tanpa perlu menyentuh kode.
+ */
+export async function GET(request: Request) {
+  return bungkus(async () => {
+    const user = await userDariToken(tokenDari(request));
+    if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
+    if (!BOLEH.has(user.role)) {
+      throw Object.assign(new Error("Hanya pengurus QC yang boleh melihat cakupan."), {
+        status: 403,
+      });
+    }
+    if (!ayrshareSiap()) return { siap: false, tercakup: [], terlewat: [] };
+
+    const { data: akunWajib } = await supabase()
+      .from("akun_wajib")
+      .select("username, platform")
+      .eq("aktif", true);
+
+    let tertautPer = new Map<string, string>();
+    try {
+      const tertaut = await ambilAkunTertaut();
+      tertautPer = new Map(
+        tertaut.akun.map((a) => [a.platform, a.username.toLowerCase().replace(/^@/, "")]),
+      );
+    } catch {
+      // Ayrshare sedang tidak bisa dihubungi — laporkan sebagai belum
+      // siap, jangan menebak cakupan yang belum tentu benar.
+      return { siap: false, tercakup: [], terlewat: [] };
+    }
+
+    const cocok = (a: { username: string; platform: string }) =>
+      tertautPer.get(a.platform) === a.username.toLowerCase();
+
+    return {
+      siap: true,
+      tercakup: (akunWajib ?? []).filter(cocok),
+      terlewat: (akunWajib ?? []).filter((a) => !cocok(a)),
+    };
+  });
 }
 
 export async function POST(request: Request) {
@@ -149,7 +213,22 @@ export async function POST(request: Request) {
       }
     }
 
+    const mulaiPada = Date.now();
     const peringatan: string[] = [];
+
+    // Postingan yang komentarnya SUDAH diperiksa pada periode ini —
+    // dipakai agar panggilan lanjutan tidak mengulang pekerjaan yang
+    // sudah selesai.
+    const { data: sudahDiperiksa } = await db
+      .from("postingan")
+      .select("id_postingan")
+      .eq("periode", periode)
+      .eq("komentar_status", "ayrshare");
+    const selesaiSebelumnya = new Set(
+      (sudahDiperiksa ?? []).map((p) => String(p.id_postingan)),
+    );
+
+    let sisaBelumDiperiksa = 0;
     let totalPost = 0;
     let totalKomentar = 0;
     let totalComply = 0;
@@ -190,8 +269,11 @@ export async function POST(request: Request) {
             waktu_posting: p.waktu,
             caption_asli: p.teks,
             thumbnail_url: p.thumbnail,
-            komentar_status: "ayrshare",
-            komentar_diperiksa_pada: new Date().toISOString(),
+            // Sengaja BELUM ditandai selesai di sini: baris ini baru
+            // mencatat bahwa postingannya ada. Penanda "ayrshare"
+            // dipasang setelah komentarnya benar-benar terbaca (lihat
+            // di bawah), supaya panggilan lanjutan tidak melewati
+            // postingan yang sebenarnya belum diperiksa.
             updated_at: new Date().toISOString(),
           })),
           (b) => b.id_postingan,
@@ -201,9 +283,19 @@ export async function POST(request: Request) {
 
       // 2. Komentar per postingan → cocokkan ke anggota
       for (const post of postPeriode) {
+        const idKanonik = idPostinganKanonik(akun.platform, post.id, post.url);
+
+        // Sudah diperiksa di panggilan sebelumnya → lewati.
+        if (selesaiSebelumnya.has(idKanonik)) continue;
+
+        // Anggaran habis → sisanya diserahkan ke panggilan berikutnya.
+        if (Date.now() - mulaiPada > ANGGARAN_MS) {
+          sisaBelumDiperiksa += 1;
+          continue;
+        }
         // Komentar DIAMBIL pakai id Ayrshare, tapi DISIMPAN pakai id
         // kanonik — dua hal berbeda yang tidak boleh tertukar.
-        const idPost = idPostinganKanonik(akun.platform, post.id, post.url);
+        const idPost = idKanonik;
         const komentar = await ambilKomentarPostingan(akun.platform, post.id);
         totalKomentar += komentar.length;
 
@@ -263,6 +355,28 @@ export async function POST(request: Request) {
         await db
           .from("rekap")
           .upsert(dedup(barisRekap, (b) => b.id_unik), { onConflict: "id_unik" });
+
+        // Barulah postingan ini dinyatakan selesai diperiksa. Urutannya
+        // penting: bila proses terputus di tengah, postingan yang belum
+        // sempat dibaca tetap tampak "belum diperiksa" dan akan
+        // dikerjakan panggilan berikutnya.
+        const { error: eTandai } = await db
+          .from("postingan")
+          .update({
+            komentar_status: "ayrshare",
+            komentar_diperiksa_pada: new Date().toISOString(),
+          })
+          .eq("id_postingan", idPost);
+        if (eTandai) {
+          // JANGAN pernah diamkan kegagalan penanda. Persis inilah yang
+          // sempat terjadi: CHECK constraint menolak nilai 'ayrshare',
+          // penandanya tidak tersimpan, dan analisis mengulang postingan
+          // yang sama berkali-kali tanpa pernah tuntas.
+          console.error("[analisis/ayrshare] tandai selesai:", eTandai.message);
+          peringatan.push(
+            `Postingan ${idPost} sudah diperiksa tetapi penandanya gagal disimpan (${eTandai.message}).`,
+          );
+        }
       }
     }
 
@@ -275,6 +389,10 @@ export async function POST(request: Request) {
       komentar: totalKomentar,
       comply: totalComply,
       peringatan,
+      /** Postingan yang belum sempat diperiksa pada panggilan ini */
+      sisa: sisaBelumDiperiksa,
+      /** false = perlu dipanggil lagi untuk menuntaskan sisanya */
+      selesai: sisaBelumDiperiksa === 0,
     };
   });
 }

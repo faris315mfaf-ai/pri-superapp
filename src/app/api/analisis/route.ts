@@ -13,7 +13,12 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { pastikanMasuk } from "@/lib/sesi";
+import { pastikanFiturAktif } from "@/lib/fitur-server";
+
 import { panggilWebhookN8n, N8nBelumDiaturError, webhookSiap } from "@/lib/n8n";
+
+/** Peran yang boleh memicu analisis QC. */
+const BOLEH_ANALISIS = new Set(["master", "super_admin", "admin_hr"]);
 
 export const dynamic = "force-dynamic";
 
@@ -187,6 +192,18 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   return bungkus(async () => {
+    // WAJIB LOGIN + peran pengurus QC. Sebelumnya endpoint ini terbuka
+    // sepenuhnya: siapa pun yang tahu alamatnya bisa memicu scraping dan
+    // membakar kuota TikHub/Ayrshare tanpa jejak siapa pemicunya.
+    const user = await pastikanMasuk(request);
+    if (!BOLEH_ANALISIS.has(user.role)) {
+      throw Object.assign(
+        new Error("Hanya pengurus QC yang boleh menjalankan analisis."),
+        { status: 403 },
+      );
+    }
+    await pastikanFiturAktif(user, "qc.analisis", "Fitur analisis sedang dimatikan untuk peran Anda.");
+
     // Tanggal yang mau dianalisis (aturan baru: scraping PER HARI).
     // Divalidasi SEBELUM menyentuh apa pun - permintaan tak sah tidak boleh
     // membakar kuota scraping.

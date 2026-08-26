@@ -5,12 +5,29 @@
 // setiap akun wajib (biaya tetap ~6 request) padahal daftar postingannya
 // sudah ada. Tombol "Lanjutkan" hanya membangunkan pekerja antrian.
 import { bungkus } from "@/lib/api-helper";
+import { pastikanMasuk } from "@/lib/sesi";
+import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { panggilWebhookN8n, N8nBelumDiaturError } from "@/lib/n8n";
+
+/** Peran yang boleh memicu analisis QC. */
+const BOLEH_ANALISIS = new Set(["master", "super_admin", "admin_hr"]);
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   return bungkus(async () => {
+    // WAJIB LOGIN + peran pengurus QC. Sebelumnya endpoint ini terbuka
+    // sepenuhnya: siapa pun yang tahu alamatnya bisa memicu scraping dan
+    // membakar kuota TikHub/Ayrshare tanpa jejak siapa pemicunya.
+    const user = await pastikanMasuk(request);
+    if (!BOLEH_ANALISIS.has(user.role)) {
+      throw Object.assign(
+        new Error("Hanya pengurus QC yang boleh menjalankan analisis."),
+        { status: 403 },
+      );
+    }
+    await pastikanFiturAktif(user, "qc.analisis", "Fitur analisis sedang dimatikan untuk peran Anda.");
+
     let periode = "";
     try {
       const body = await request.json();

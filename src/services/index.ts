@@ -2076,6 +2076,12 @@ export type HasilAnalisisAyrshare = {
   postingan: number;
   komentar: number;
   comply: number;
+  /** Catatan jujur bila ada postingan yang tidak terbaca sekali jalan */
+  peringatan?: string[];
+  /** Postingan yang belum sempat diperiksa pada panggilan ini */
+  sisa?: number;
+  /** false = perlu dipanggil lagi untuk menuntaskan sisanya */
+  selesai?: boolean;
 };
 
 export async function analisisUlangAyrshare(): Promise<HasilAnalisisAyrshare> {
@@ -2163,5 +2169,23 @@ export async function getRekapPeriode(
     // Kartu KPI bersifat pelengkap — kegagalannya tidak boleh
     // menggagalkan seluruh beranda.
     return [];
+  }
+}
+
+/** Cakupan analisis Ayrshare: akun wajib mana yang sudah bisa dibaca. */
+export type CakupanAyrshare = {
+  siap: boolean;
+  tercakup: { username: string; platform: string }[];
+  terlewat: { username: string; platform: string }[];
+};
+
+export async function getCakupanAyrshare(): Promise<CakupanAyrshare> {
+  try {
+    const json = await fetchJson("/api/analisis/ayrshare", { headers: headerToken() });
+    return json as CakupanAyrshare;
+  } catch {
+    // Cakupan hanya penjelas di layar — kegagalannya tidak boleh
+    // menggagalkan seluruh layar QC.
+    return { siap: false, tercakup: [], terlewat: [] };
   }
 }

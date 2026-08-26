@@ -10,6 +10,25 @@ import { pastikanMasuk } from "@/lib/sesi";
 
 export const dynamic = "force-dynamic";
 
+/** Satu baris view v_app_ringkasan_periode */
+type BarisRingkasan = {
+  periode: string;
+  total_unit: number;
+  sudah_komentar: number;
+  belum_komentar: number;
+  jumlah_postingan: number;
+  jumlah_kader: number;
+  persen_patuh: number;
+};
+
+/** Satu baris view v_app_ringkasan_akun_periode */
+type BarisRingkasanAkun = {
+  periode: string;
+  platform: string;
+  akun_wajib: string;
+  persen_patuh: number;
+};
+
 type BarisRekap = {
   periode: string;
   nama_kader: string;
@@ -82,22 +101,40 @@ export async function GET(request: Request) {
     const periodeAktif = daftarPeriode[0] ?? "";
     const periodeSebelum = daftarPeriode[1] ?? "";
 
-    // --- Rekap 7 periode terakhir sekaligus (1 query, bukan 7) ---
-    const rekap =
+    // --- Ringkasan 7 periode terakhir, DIHITUNG DI DATABASE ---
+    //
+    // Dulu seluruh baris v_app_rekap ditarik lalu dihitung di sini.
+    // Dengan 104 anggota x ~113 postingan, satu hari saja sudah 11.901
+    // baris — sementara PostgREST diam-diam memotong di 1.000. Seluruh
+    // angka kepatuhan jadi dihitung dari 8% data: tingkat kepatuhan
+    // tampil 0% padahal ada 52 kepatuhan, dan "postingan dipantau"
+    // tampil 22 padahal 113. View agregat mengembalikan HITUNGAN, jadi
+    // banyaknya data tidak lagi memengaruhi kebenaran angkanya.
+    const ringkasanPeriode =
       daftarPeriode.length > 0
         ? (pastikanSukses(
             await db
-              .from("v_app_rekap")
+              .from("v_app_ringkasan_periode")
               .select(
-                "periode, nama_kader, akun_wajib, id_postingan, sudah_komentar, jumlah_komentar",
+                "periode, total_unit, sudah_komentar, belum_komentar, jumlah_postingan, jumlah_kader, persen_patuh",
               )
               .in("periode", daftarPeriode),
-            "rekap kepatuhan",
-          ) as BarisRekap[])
+            "ringkasan kepatuhan",
+          ) as BarisRingkasan[])
         : [];
 
-    const rekapAktif = rekap.filter((r) => r.periode === periodeAktif);
-    const rekapSebelum = rekap.filter((r) => r.periode === periodeSebelum);
+    const perPeriode = new Map(ringkasanPeriode.map((r) => [r.periode, r]));
+    const kosong: BarisRingkasan = {
+      periode: "",
+      total_unit: 0,
+      sudah_komentar: 0,
+      belum_komentar: 0,
+      jumlah_postingan: 0,
+      jumlah_kader: 0,
+      persen_patuh: 0,
+    };
+    const aktif = perPeriode.get(periodeAktif) ?? kosong;
+    const sebelum = perPeriode.get(periodeSebelum) ?? kosong;
 
     // --- Video (untuk KPI & kartu pipeline) — diambil di Promise.all atas ---
     const video = pastikanSukses(hasilVideo, "antrian video") as Video[];
@@ -119,13 +156,13 @@ export async function GET(request: Request) {
           .slice(0, 10) === hariIniWib,
     ).length;
 
-    // --- KPI ---
-    const persenAktif = persen(rekapAktif);
-    const persenSebelum = persen(rekapSebelum);
-    const postAktif = new Set(rekapAktif.map((r) => r.id_postingan)).size;
-    const postSebelum = new Set(rekapSebelum.map((r) => r.id_postingan)).size;
-    const belumAktif = rekapAktif.filter((r) => !r.sudah_komentar).length;
-    const belumSebelum = rekapSebelum.filter((r) => !r.sudah_komentar).length;
+    // --- KPI (seluruhnya dari agregat database) ---
+    const persenAktif = Number(aktif.persen_patuh) || 0;
+    const persenSebelum = Number(sebelum.persen_patuh) || 0;
+    const postAktif = Number(aktif.jumlah_postingan) || 0;
+    const postSebelum = Number(sebelum.jumlah_postingan) || 0;
+    const belumAktif = Number(aktif.belum_komentar) || 0;
+    const belumSebelum = Number(sebelum.belum_komentar) || 0;
 
     const kpi = [
       {
@@ -168,7 +205,7 @@ export async function GET(request: Request) {
         const tanggal = new Date(`${p.slice(0, 10)}T00:00:00Z`);
         return {
           hari: NAMA_HARI[tanggal.getUTCDay()] ?? p.slice(5, 10),
-          nilai: persen(rekap.filter((r) => r.periode === p)),
+          nilai: Number(perPeriode.get(p)?.persen_patuh ?? 0),
         };
       });
 
@@ -177,24 +214,29 @@ export async function GET(request: Request) {
       akun_wajib: string;
     }[];
 
+    // Kepatuhan per akun juga dari agregat database, sebab menyaring
+    // baris mentah di sini terkena batas 1.000 baris yang sama.
+    const ringkasanAkun = (pastikanSukses(
+      await db
+        .from("v_app_ringkasan_akun_periode")
+        .select("periode, platform, akun_wajib, persen_patuh")
+        .eq("periode", periodeAktif),
+      "ringkasan per akun",
+    ) as BarisRingkasanAkun[]) ?? [];
+    const persenPerAkun = new Map(
+      ringkasanAkun.map((r) => [r.akun_wajib, Number(r.persen_patuh) || 0]),
+    );
+
     const kepatuhanAkun = akun.map((a) => ({
       akun_wajib: a.akun_wajib,
-      persen: persen(rekapAktif.filter((r) => r.akun_wajib === a.akun_wajib)),
+      persen: persenPerAkun.get(a.akun_wajib) ?? 0,
     }));
 
-    // --- Peringkat kader (5 teratas berdasarkan jumlah komentar) ---
-    const perKader = new Map<string, number>();
-    for (const r of rekapAktif) {
-      perKader.set(r.nama_kader, (perKader.get(r.nama_kader) ?? 0) + r.jumlah_komentar);
-    }
-    const peringkat = [...perKader.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([nama_kader, jumlah_komentar], i) => ({
-        id: `k-${String(i + 1).padStart(2, "0")}`,
-        nama_kader,
-        jumlah_komentar,
-      }));
+    // Peringkat kader sudah tidak ditampilkan sejak 1.13 (kartunya
+    // dihapus dari beranda). Field-nya dipertahankan sebagai daftar
+    // kosong demi pemanggil lama, TANPA menarik belasan ribu baris
+    // hanya untuk lima nama yang tidak dipakai siapa pun.
+    const peringkat: { id: string; nama_kader: string; jumlah_komentar: number }[] = [];
 
     // --- Aktivitas terbaru: notifikasi, diambil di Promise.all atas ---
     const notif = pastikanSukses(hasilNotif, "aktivitas terbaru") as Notif[];
@@ -211,18 +253,11 @@ export async function GET(request: Request) {
     // --- Ringkasan global ---
     // "Patuh penuh" = kader yang komentar di SEMUA postingan sebuah akun.
     // Satu pasangan = 1 kader x 1 akun wajib.
-    const pasangan = new Map<string, { total: number; sudah: number }>();
-    for (const r of rekapAktif) {
-      const kunci = `${r.nama_kader}|||${r.akun_wajib}`;
-      const p = pasangan.get(kunci) ?? { total: 0, sudah: 0 };
-      p.total += 1;
-      if (r.sudah_komentar) p.sudah += 1;
-      pasangan.set(kunci, p);
-    }
-    const totalPasangan = pasangan.size;
-    const patuhPenuh = [...pasangan.values()].filter(
-      (p) => p.total > 0 && p.sudah === p.total,
-    ).length;
+    // "Patuh penuh" dulu dihitung per pasangan kader x akun dari baris
+    // mentah — mustahil benar di bawah batas 1.000 baris. Kini memakai
+    // angka agregat: berapa unit kewajiban yang terpenuhi dari total.
+    const totalPasangan = Number(aktif.total_unit) || 0;
+    const patuhPenuh = Number(aktif.sudah_komentar) || 0;
 
     return {
       kpi,

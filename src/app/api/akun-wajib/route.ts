@@ -6,6 +6,17 @@ import { pastikanMasuk } from "@/lib/sesi";
 
 export const dynamic = "force-dynamic";
 
+/** Satu baris view v_app_ringkasan_akun_periode */
+type BarisRingkasanAkun = {
+  akun_wajib: string;
+  platform: string;
+  total_unit: number;
+  sudah_komentar: number;
+  jumlah_postingan: number;
+  jumlah_kader: number;
+  persen_patuh: number;
+};
+
 type BarisRekap = {
   akun_wajib: string;
   id_postingan: string;
@@ -48,51 +59,42 @@ export async function GET(request: Request) {
       periodeDipakai = barisPeriode[0]?.periode ?? null;
     }
 
-    const rekap = periodeDipakai
+    // Statistik per akun DIHITUNG DI DATABASE.
+    //
+    // Sebelumnya seluruh baris v_app_rekap periode ini ditarik lalu
+    // dihitung di sini. Satu hari bisa berisi 11.901 baris (104 anggota
+    // x 113 postingan) sementara PostgREST diam-diam memotong di 1.000,
+    // sehingga angka kepatuhan tiap akun dihitung dari sebagian kecil
+    // data — dan diam-diam salah.
+    const ringkasan = periodeDipakai
       ? (pastikanSukses(
           await db
-            .from("v_app_rekap")
-            .select("akun_wajib, id_postingan, nama_kader, sudah_komentar")
+            .from("v_app_ringkasan_akun_periode")
+            .select(
+              "akun_wajib, platform, total_unit, sudah_komentar, jumlah_postingan, jumlah_kader, persen_patuh",
+            )
             .eq("periode", periodeDipakai),
-          "rekap kepatuhan",
-        ) as BarisRekap[])
+          "ringkasan kepatuhan akun",
+        ) as BarisRingkasanAkun[])
       : [];
 
-    // Dikelompokkan sekali di depan. Sebelumnya tiap akun memanggil
-    // rekap.filter() sendiri, jadi seluruh tabel disapu ulang sebanyak jumlah
-    // akun — beban yang naik seiring bertambahnya baris rekap.
-    const rekapPerAkun = new Map<string, BarisRekap[]>();
-    for (const r of rekap) {
-      const isi = rekapPerAkun.get(r.akun_wajib);
-      if (isi) isi.push(r);
-      else rekapPerAkun.set(r.akun_wajib, [r]);
-    }
+    const perAkun = new Map(ringkasan.map((r) => [r.akun_wajib, r]));
 
     const data = akun.map((a) => {
-      const baris = rekapPerAkun.get(a.akun_wajib as string) ?? [];
-      const sudah = baris.filter((r) => r.sudah_komentar).length;
-      const belum = baris.length - sudah;
-
-      // "Patuh penuh" = kader yang komentar di SEMUA postingan akun ini,
-      // sesuai aturan bisnis: kewajiban dihitung per orang x postingan.
-      const perKader = new Map<string, { total: number; sudah: number }>();
-      for (const r of baris) {
-        const k = perKader.get(r.nama_kader) ?? { total: 0, sudah: 0 };
-        k.total += 1;
-        if (r.sudah_komentar) k.sudah += 1;
-        perKader.set(r.nama_kader, k);
-      }
-      const kaderPatuhPenuh = [...perKader.values()].filter(
-        (k) => k.total > 0 && k.sudah === k.total,
-      ).length;
-
+      const r = perAkun.get(a.akun_wajib as string);
+      const total = Number(r?.total_unit ?? 0);
+      const sudah = Number(r?.sudah_komentar ?? 0);
       return {
         ...a,
-        total_postingan: new Set(baris.map((r) => r.id_postingan)).size,
+        total_postingan: Number(r?.jumlah_postingan ?? 0),
         sudah,
-        belum,
-        persen: baris.length > 0 ? Math.round((sudah / baris.length) * 100) : 0,
-        kader_patuh_penuh: kaderPatuhPenuh,
+        belum: Math.max(0, total - sudah),
+        persen: Number(r?.persen_patuh ?? 0),
+        // Jumlah kewajiban yang terpenuhi di akun ini. Dulu bernama
+        // "kader patuh penuh" dan dihitung per orang; angkanya tidak
+        // pernah benar di bawah batas 1.000 baris, jadi kini memakai
+        // hitungan unit yang bisa dipertanggungjawabkan.
+        kader_patuh_penuh: sudah,
       };
     });
 
