@@ -22,6 +22,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
+import { bacaStreakChat, catatPesanStreak } from "@/lib/streak";
 import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -353,6 +354,7 @@ export async function GET(request: Request) {
 
     // Cuplikan terakhir + jumlah belum dibaca, sekali kueri per kolom.
     const ids = daftarKontak.map((k) => k.id);
+    const streakPer = await bacaStreakChat(ids);
     const cuplikanPer = new Map<number, { isi: string; dibuat_pada: string; pengirim_id: number }>();
     const belumPer = new Map<number, number>();
     if (ids.length > 0) {
@@ -397,6 +399,7 @@ export async function GET(request: Request) {
           cuplikan: cuplikan?.isi ?? "",
           waktu_terakhir: cuplikan?.dibuat_pada ?? k.dibuat_pada,
           belum_dibaca: belumPer.get(k.id) ?? 0,
+          streak_hari: streakPer.get(k.id) ?? 0,
         };
       }),
     };
@@ -640,6 +643,17 @@ export async function POST(request: Request) {
         target: "chat",
         untukUserIds: [lawanId],
         hanyaPush: true,
+      });
+
+      // Streak chat (spek 4.1): dicatat setelah balasan terkirim;
+      // streak hanyalah hiasan — gagal mencatat tidak menggagalkan pesan.
+      const dariKecil = Number(kontak.user_kecil) === idKu;
+      after(async () => {
+        try {
+          await catatPesanStreak(kontakId, dariKecil);
+        } catch (e) {
+          console.error("[chat] streak:", e);
+        }
       });
 
       after(bersihkanPesanLama);

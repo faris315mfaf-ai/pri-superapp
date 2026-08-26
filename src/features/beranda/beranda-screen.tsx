@@ -28,6 +28,7 @@ import { GlassCard } from "@/components/glass-card";
 import { FadeInUp, StatusBadge, ThemeToggle } from "@/components/pri-ui";
 import { ProgressRing } from "@/components/progress-ring";
 import { TombolLonceng } from "@/components/tombol-lonceng";
+import { IkonStreak } from "@/components/ikon-streak";
 import { useAppStore } from "@/hooks/use-app-store";
 import { KartuPengumumanTerbaru } from "@/features/konten/beranda-anggota";
 import { KartuUltah } from "@/components/ultah";
@@ -38,6 +39,7 @@ import {
   getLaporanVideo,
   getRekapPeriode,
   type KerjaKpi,
+  getStreakSaya,
 } from "@/services";
 import { bolehFitur } from "@/lib/fitur";
 import { jamWIB, sapaanHari, tanggalIndonesia } from "@/lib/format";
@@ -102,6 +104,8 @@ export function BerandaScreen({
   const [absen, setAbsen] = useState<{ masuk: string | null; pulang: string | null } | null>(
     null,
   );
+  // Task streak (spek 4.1) — api di pojok header
+  const [streak, setStreak] = useState(0);
 
   // Hanya mengambil data untuk kartu yang MENYALA. Kartu yang
   // dimatikan tidak boleh diam-diam tetap memanggil server.
@@ -120,10 +124,14 @@ export function BerandaScreen({
         mauKomentar
           ? getRekapPeriode(`${tanggalWibPerangkat()} 00:00-23:59`)
           : Promise.resolve(null),
+        getStreakSaya(),
       ]);
       if (!hidup) return;
 
-      const [kerja, vid, abs, rekap] = tugas;
+      const [kerja, vid, abs, rekap, streakku] = tugas;
+      if (streakku.status === "fulfilled" && streakku.value) {
+        setStreak(streakku.value.hari);
+      }
       if (kerja.status === "fulfilled" && kerja.value) setKpiKerja(kerja.value.kpi);
       if (vid.status === "fulfilled" && vid.value) {
         setVideo({ jumlah: vid.value.data.length, target: vid.value.kpi_target });
@@ -173,6 +181,12 @@ export function BerandaScreen({
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {/* Api task streak (spek 4.1): absensi harian berturut-turut */}
+          {streak > 0 && (
+            <span className="glass flex h-10 items-center rounded-xl px-2.5">
+              <IkonStreak hari={streak} />
+            </span>
+          )}
           <TombolLonceng onBuka={onBukaNotifikasi} />
           <ThemeToggle />
         </div>

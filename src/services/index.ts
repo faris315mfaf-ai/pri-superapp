@@ -1578,6 +1578,8 @@ export type ChatKontak = {
   cuplikan: string;
   waktu_terakhir: string;
   belum_dibaca: number;
+  /** Streak chat berpasangan (0 = belum ada / putus) */
+  streak_hari?: number;
 };
 
 export type ChatPesan = {
@@ -2364,4 +2366,17 @@ export async function setujuiSemuaPendaftar(): Promise<number> {
     headers: { "Content-Type": "application/json", ...headerToken() },
   });
   return Number(json?.jumlah ?? 0);
+}
+
+/** Task streak (ala Duolingo) milikku — utk Beranda & Profil. */
+export async function getStreakSaya(): Promise<{ hari: number; restore_tersedia: boolean }> {
+  try {
+    const json = await fetchJson("/api/streak", { headers: headerToken() });
+    return {
+      hari: Number(json?.hari ?? 0),
+      restore_tersedia: json?.restore_tersedia === true,
+    };
+  } catch {
+    return { hari: 0, restore_tersedia: false };
+  }
 }

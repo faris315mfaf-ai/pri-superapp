@@ -17,6 +17,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
+import { catatTugasStreak } from "@/lib/streak";
 
 export const dynamic = "force-dynamic";
 
@@ -262,6 +263,20 @@ export async function POST(request: Request) {
       }
       console.error("[absensi] simpan:", eSimpan.message);
       throw new Error("Gagal menyimpan absen. Coba lagi.");
+    }
+
+    // Absen MASUK = "tugas harian" task streak (spek 4.1). Dijalankan
+    // setelah balasan terkirim; gagal mencatat streak tidak boleh
+    // menggagalkan absen itu sendiri.
+    if (jenis === "masuk") {
+      const idUser = Number(user.id);
+      after(async () => {
+        try {
+          await catatTugasStreak(idUser);
+        } catch (e) {
+          console.error("[absensi] streak:", e);
+        }
+      });
     }
 
     after(bersihkanUsang);

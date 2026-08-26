@@ -45,6 +45,7 @@ import {
 } from "@/components/pri-ui";
 import { toast } from "@/hooks/use-app-store";
 import { kompresGambar } from "@/lib/gambar-kompres";
+import { IkonStreak } from "@/components/ikon-streak";
 import {
   getDaftarChat,
   getKandidatChat,
@@ -950,8 +951,10 @@ export function ChatScreen({
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-bold text-teks-utama">
-                          {k.lawan_nama}
+                        <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-bold text-teks-utama">
+                          <span className="truncate">{k.lawan_nama}</span>
+                          {/* Api streak chat (spek 4.1) */}
+                          <IkonStreak hari={k.streak_hari ?? 0} />
                         </p>
                         <span className="shrink-0 text-[10px] text-teks-sekunder">
                           {jamWIB(k.waktu_terakhir)}
