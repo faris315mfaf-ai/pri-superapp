@@ -5,7 +5,7 @@
 // Facebook, Threads, YouTube) dengan aksen warna brand.
 // ============================================================
 
-import { Instagram, Facebook, Youtube, AtSign } from "lucide-react";
+import { Instagram, Facebook, Youtube, AtSign, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const WARNA_PLATFORM: Record<string, string> = {
@@ -80,6 +80,8 @@ export function PlatformIcon({
         return <AtSign size={ukuranIkon} className="text-teks-utama" />;
       case "youtube":
         return <Youtube size={ukuranIkon} color={warna} />;
+      case "website":
+        return <Globe size={ukuranIkon} className="text-teks-utama" />;
       default:
         return <Instagram size={ukuranIkon} color={warna} />;
     }

@@ -1299,15 +1299,24 @@ export type RekapVideoBaris = {
   dibebaskan: string | null;
 };
 
-export async function getRekapVideoSemua(
-  tanggal?: string,
-): Promise<{ tanggal: string; kpi_target: number; data: RekapVideoBaris[] }> {
+export async function getRekapVideoSemua(tanggal?: string): Promise<{
+  tanggal: string;
+  kpi_target: number;
+  data: RekapVideoBaris[];
+  /** Target khusus per akun yang disetel HR/QC (spek 3.1) */
+  target_khusus: { user_id: string; kpi: number }[];
+}> {
   const params = new URLSearchParams({ semua: "1" });
   if (tanggal) params.set("tanggal", tanggal);
   const json = await fetchJson(`/api/tvr/laporan?${params.toString()}`, {
     headers: headerToken(),
   });
-  return json as { tanggal: string; kpi_target: number; data: RekapVideoBaris[] };
+  return {
+    tanggal: json.tanggal as string,
+    kpi_target: Number(json.kpi_target ?? 5),
+    data: (json.data ?? []) as RekapVideoBaris[],
+    target_khusus: (json.target_khusus ?? []) as { user_id: string; kpi: number }[],
+  };
 }
 
 export async function tambahLaporanVideo(platform: string, url: string): Promise<LaporanVideo> {
@@ -2456,4 +2465,32 @@ export async function tandaiGrupDibaca(): Promise<void> {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headerToken() },
   }).catch(() => undefined);
+}
+
+/**
+ * Simpan BANYAK link laporan video sekali klik (spek 3.3).
+ * Platform tiap link ditebak server dari alamatnya.
+ */
+export async function kirimLaporanBatch(
+  links: string[],
+): Promise<{ tersimpan: number; gagal: { url: string; alasan: string }[] }> {
+  const json = await fetchJson("/api/tvr/laporan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ banyak: links.map((url) => ({ url })) }),
+  });
+  return {
+    tersimpan: Array.isArray(json.tersimpan) ? json.tersimpan.length : 0,
+    gagal: (json.gagal ?? []) as { url: string; alasan: string }[],
+  };
+}
+
+/** HR/QC/Pengawas menyetel target KPI video per akun (null = bawaan 5). */
+export async function setKpiVideo(userId: string, kpi: number | null): Promise<number> {
+  const json = await fetchJson("/api/tvr/laporan", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ user_id: userId, kpi }),
+  });
+  return Number(json.kpi_target ?? 5);
 }

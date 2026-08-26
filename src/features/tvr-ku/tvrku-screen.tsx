@@ -23,8 +23,7 @@ import {
   Pencil,
   Plus,
   Trash2,
-  Video,
-} from "lucide-react";
+  Video, Globe, X } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import {
   EmptyState,
@@ -51,6 +50,7 @@ import {
   type AkunTvr,
   type KerjaKpi,
   type LaporanVideo,
+  kirimLaporanBatch,
 } from "@/services";
 import { jamWIB, urlProfilSosmed } from "@/lib/format";
 import type { KomponenIkon, User } from "@/types";
@@ -190,6 +190,245 @@ function ModalTambah({
 }
 
 // ------------------------------------------------------------
+// ModalWebsite — form KECIL khusus domain situs (spek 3.2).
+// Terpisah dari form akun sosmed: hanya satu kolom esensial.
+// ------------------------------------------------------------
+
+function ModalWebsite({
+  onTutup,
+  onKirim,
+}: {
+  onTutup: () => void;
+  onKirim: (domain: string) => Promise<void>;
+}) {
+  const [nilai, setNilai] = useState("");
+  const [sedangKirim, setSedangKirim] = useState(false);
+
+  async function kirim() {
+    if (nilai.trim().length < 4 || sedangKirim) return;
+    setSedangKirim(true);
+    try {
+      await onKirim(nilai.trim());
+    } finally {
+      setSedangKirim(false);
+    }
+  }
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-6 backdrop-blur-md"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onTutup}
+    >
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Daftarkan Website TV Rakyat"
+        className="glass-strong w-full max-w-[340px] rounded-2xl p-5"
+        initial={{ scale: 0.92, opacity: 0, y: 14 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.94, opacity: 0, y: 10 }}
+        transition={{ type: "spring", stiffness: 360, damping: 30 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-heading text-base font-bold text-teks-utama">
+          Daftarkan Website TV Rakyat
+        </h3>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-teks-sekunder">
+          Cukup nama domainnya saja — boleh juga menempel alamat lengkap.
+        </p>
+        <input
+          value={nilai}
+          onChange={(e) => setNilai(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void kirim();
+          }}
+          placeholder="mis. tvrakyat.id"
+          className="glass mt-3.5 w-full rounded-xl px-3.5 py-2.5 text-sm text-teks-utama placeholder:text-teks-sekunder/60 focus:outline-none"
+        />
+        <div className="mt-4 flex gap-2.5">
+          <button
+            type="button"
+            onClick={onTutup}
+            className="glass btn-tekan flex-1 rounded-xl py-2.5 text-sm font-semibold text-teks-utama"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            onClick={() => void kirim()}
+            disabled={nilai.trim().length < 4 || sedangKirim}
+            className="btn-tekan flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 font-heading text-sm font-bold text-white disabled:opacity-50"
+            style={{
+              background: "linear-gradient(135deg, #DC2626, #B91C1C)",
+              boxShadow: "0 8px 20px rgba(220, 38, 38, 0.35)",
+            }}
+          >
+            {sedangKirim ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Globe className="h-4 w-4" aria-hidden="true" />
+            )}
+            Simpan
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ------------------------------------------------------------
+// ModalLaporanBatch — laporkan video: satu link ATAU banyak sekaligus
+// (spek 3.3). "Add" menumpuk link ke daftar; "Simpan" mengirim semua.
+// Platform tiap link ditebak server dari alamatnya.
+// ------------------------------------------------------------
+
+function ModalLaporanBatch({
+  onTutup,
+  onSelesai,
+}: {
+  onTutup: () => void;
+  /** Dipanggil setelah tersimpan (jumlah sukses, daftar gagal) */
+  onSelesai: (tersimpan: number, gagal: { url: string; alasan: string }[]) => void;
+}) {
+  const [tulisan, setTulisan] = useState("");
+  const [antrean, setAntrean] = useState<string[]>([]);
+  const [sedangKirim, setSedangKirim] = useState(false);
+
+  function tambahKeDaftar() {
+    const url = tulisan.trim();
+    if (url.length < 8) return;
+    if (antrean.includes(url)) {
+      toast("info", "Link ini sudah ada di daftar");
+      return;
+    }
+    setAntrean((a) => [...a, url]);
+    setTulisan("");
+  }
+
+  async function simpan() {
+    // Link yang masih di kolom ketik ikut terhitung — pengguna tidak
+    // wajib menekan Add dulu untuk mode satu-link.
+    const semua = [...antrean];
+    const sisa = tulisan.trim();
+    if (sisa.length >= 8 && !semua.includes(sisa)) semua.push(sisa);
+    if (semua.length === 0 || sedangKirim) return;
+    setSedangKirim(true);
+    try {
+      const hasil = await kirimLaporanBatch(semua);
+      onSelesai(hasil.tersimpan, hasil.gagal);
+    } catch (e) {
+      toast("error", "Gagal menyimpan laporan", e instanceof Error ? e.message : "");
+    } finally {
+      setSedangKirim(false);
+    }
+  }
+
+  const totalSiap = antrean.length + (tulisan.trim().length >= 8 ? 1 : 0);
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-6 backdrop-blur-md"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onTutup}
+    >
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Laporkan Video"
+        className="glass-strong w-full max-w-[360px] rounded-2xl p-5"
+        initial={{ scale: 0.92, opacity: 0, y: 14 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.94, opacity: 0, y: 10 }}
+        transition={{ type: "spring", stiffness: 360, damping: 30 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-heading text-base font-bold text-teks-utama">Laporkan Video</h3>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-teks-sekunder">
+          Tempel satu link lalu Simpan, atau tekan Add untuk menumpuk
+          beberapa link dan menyimpannya sekaligus.
+        </p>
+
+        <div className="mt-3.5 flex gap-2">
+          <input
+            value={tulisan}
+            onChange={(e) => setTulisan(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                tambahKeDaftar();
+              }
+            }}
+            placeholder="Tempel link video…"
+            className="glass min-w-0 flex-1 rounded-xl px-3.5 py-2.5 text-sm text-teks-utama placeholder:text-teks-sekunder/60 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={tambahKeDaftar}
+            disabled={tulisan.trim().length < 8}
+            aria-label="Tambahkan link ke daftar"
+            className="glass btn-tekan flex items-center gap-1 rounded-xl px-3 text-xs font-bold text-teks-utama disabled:opacity-50"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            Add
+          </button>
+        </div>
+
+        {antrean.length > 0 && (
+          <div className="scrollbar-tipis mt-2.5 flex max-h-40 flex-col gap-1.5 overflow-y-auto">
+            {antrean.map((url) => (
+              <div key={url} className="glass-soft flex items-center gap-2 rounded-lg px-2.5 py-1.5">
+                <Link2 className="h-3.5 w-3.5 shrink-0 text-teks-sekunder" aria-hidden="true" />
+                <p className="min-w-0 flex-1 truncate text-[11.5px] text-teks-utama">{url}</p>
+                <button
+                  type="button"
+                  onClick={() => setAntrean((a) => a.filter((x) => x !== url))}
+                  aria-label="Buang link ini"
+                  className="btn-tekan p-1 text-teks-sekunder"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-4 flex gap-2.5">
+          <button
+            type="button"
+            onClick={onTutup}
+            className="glass btn-tekan flex-1 rounded-xl py-2.5 text-sm font-semibold text-teks-utama"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            onClick={() => void simpan()}
+            disabled={totalSiap === 0 || sedangKirim}
+            className="btn-tekan flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 font-heading text-sm font-bold text-white disabled:opacity-50"
+            style={{
+              background: "linear-gradient(135deg, #10B981, #059669)",
+              boxShadow: "0 8px 20px rgba(16, 185, 129, 0.35)",
+            }}
+          >
+            {sedangKirim ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Link2 className="h-4 w-4" aria-hidden="true" />
+            )}
+            Simpan{totalSiap > 1 ? ` (${totalSiap})` : ""}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ------------------------------------------------------------
 // TvrKuScreen
 // ------------------------------------------------------------
 
@@ -209,6 +448,7 @@ export function TvrKuScreen({
   const [memuat, setMemuat] = useState(true);
   const [muatUlang, setMuatUlang] = useState(0);
   const [modalAkun, setModalAkun] = useState(false);
+  const [modalWebsite, setModalWebsite] = useState(false);
   const [modalLaporan, setModalLaporan] = useState(false);
   const [editAkun, setEditAkun] = useState<AkunTvr | null>(null);
   const [editLaporan, setEditLaporan] = useState<LaporanVideo | null>(null);
@@ -260,15 +500,30 @@ export function TvrKuScreen({
     }
   }
 
-  async function tambahLaporan(platform: string, url: string) {
+  async function tambahWebsite(domain: string) {
     try {
-      await tambahLaporanVideo(platform, url);
-      toast("sukses", "Laporan tersimpan");
-      setModalLaporan(false);
+      await tambahAkunTvr("website", domain);
+      toast("sukses", "Website terdaftar", domain);
+      setModalWebsite(false);
       setMuatUlang((n) => n + 1);
     } catch (e) {
-      toast("error", "Gagal menyimpan laporan", e instanceof Error ? e.message : "");
+      toast("error", "Gagal mendaftarkan website", e instanceof Error ? e.message : "");
     }
+  }
+
+  function selesaiBatch(tersimpan: number, gagal: { url: string; alasan: string }[]) {
+    if (tersimpan > 0) {
+      toast(
+        "sukses",
+        tersimpan === 1 ? "Laporan tersimpan" : `${tersimpan} laporan tersimpan`,
+        gagal.length > 0 ? `${gagal.length} link gagal — lihat rinciannya.` : "",
+      );
+    }
+    for (const gl of gagal.slice(0, 3)) {
+      toast("error", "Link gagal", `${gl.url.slice(0, 40)}… — ${gl.alasan}`);
+    }
+    if (tersimpan > 0 || gagal.length === 0) setModalLaporan(false);
+    setMuatUlang((n) => n + 1);
   }
 
   return (
@@ -393,7 +648,7 @@ export function TvrKuScreen({
           </GlassCard>
         ) : (
           <div className="mt-2 flex flex-col gap-2">
-            {(akun ?? []).map((a) => (
+            {(akun ?? []).filter((a) => a.platform !== "website").map((a) => (
               <GlassCard key={a.id} className="flex items-center gap-3 p-3">
                 <PlatformIcon platform={a.platform} size={18} denganWadah />
                 {/* Username diketik polos; sistem yang merangkai URL-nya
@@ -437,6 +692,67 @@ export function TvrKuScreen({
                 </button>
               </GlassCard>
             ))}
+          </div>
+        )}
+      </FadeInUp>
+
+      {/* Website TV Rakyat — didaftarkan lewat form kecil terpisah
+          dari akun sosmed (spek 3.2) */}
+      <FadeInUp delay={0.12}>
+        <div className="mt-5 flex items-center justify-between">
+          <SectionTitle judul="Website TV Rakyat" className="!mt-0" />
+          <button
+            type="button"
+            onClick={() => setModalWebsite(true)}
+            className="btn-tekan flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold text-white"
+            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            Tambah
+          </button>
+        </div>
+        {(akun ?? []).filter((a) => a.platform === "website").length === 0 ? (
+          <p className="mt-2 text-[11.5px] text-teks-sekunder">
+            Belum ada website terdaftar.
+          </p>
+        ) : (
+          <div className="mt-2 flex flex-col gap-2">
+            {(akun ?? [])
+              .filter((a) => a.platform === "website")
+              .map((a) => (
+                <GlassCard key={a.id} className="flex items-center gap-3 p-3">
+                  <PlatformIcon platform="website" size={18} denganWadah />
+                  <a
+                    href={urlProfilSosmed("website", a.username)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-tekan min-w-0 flex-1"
+                  >
+                    <p className="truncate text-sm font-bold text-teks-utama">
+                      {a.username}
+                      <ExternalLink
+                        className="ml-1 inline h-3 w-3 text-teks-sekunder"
+                        aria-hidden="true"
+                      />
+                    </p>
+                    <p className="text-[11px] text-teks-sekunder">Website</p>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void hapusAkunTvr(a.id)
+                        .then(() => setMuatUlang((n) => n + 1))
+                        .catch((e) =>
+                          toast("error", "Gagal menghapus", e instanceof Error ? e.message : ""),
+                        );
+                    }}
+                    aria-label={`Hapus ${a.username}`}
+                    className="btn-tekan p-1.5 text-teks-sekunder/70"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </GlassCard>
+              ))}
           </div>
         )}
       </FadeInUp>
@@ -536,14 +852,11 @@ export function TvrKuScreen({
             onKirim={tambahAkun}
           />
         )}
+        {modalWebsite && (
+          <ModalWebsite onTutup={() => setModalWebsite(false)} onKirim={tambahWebsite} />
+        )}
         {modalLaporan && (
-          <ModalTambah
-            judul="Laporkan Video"
-            placeholder="Tempel link video yang sudah diunggah"
-            ikonKirim={Link2}
-            onTutup={() => setModalLaporan(false)}
-            onKirim={tambahLaporan}
-          />
+          <ModalLaporanBatch onTutup={() => setModalLaporan(false)} onSelesai={selesaiBatch} />
         )}
         {editAkun && (
           <ModalTambah

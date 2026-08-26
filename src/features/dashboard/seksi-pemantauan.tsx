@@ -10,6 +10,7 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
+import { toast } from "@/hooks/use-app-store";
 import { BarChart3, Eye, Heart, Radar, Users } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { FotoBulat } from "@/components/foto-bulat";
@@ -28,6 +29,7 @@ import {
   type BalasanInsight,
   type KerjaKpiBaris,
   type RencanaBesarBaris,
+  setKpiVideo,
 } from "@/services";
 import { formatAngkaRingkas, jamWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -170,6 +172,8 @@ export function SeksiAbsensiHarian() {
   // Ringkas: angka rekap tampil dulu; daftar orangnya dilipat dan
   // berhalaman supaya dashboard tidak memanjang puluhan baris.
   const [terbuka, setTerbuka] = useState(false);
+  const [targetPer, setTargetPer] = useState<Map<string, number>>(new Map());
+  const [kpiUntuk, setKpiUntuk] = useState<{ id: string; nama: string } | null>(null);
   const [halamanAbsen, setHalamanAbsen] = useState(1);
 
   useEffect(() => {
@@ -195,6 +199,11 @@ export function SeksiAbsensiHarian() {
           izin.filter((i) => i.tanggal_wib === hariIni).map((i) => [i.user_id, i]),
         );
         const videoPer = new Map((video?.data ?? []).map((v) => [v.user_id, v.jumlah]));
+        // Target KPI khusus per akun (spek 3.1); tanpa entri = bawaan 5.
+        const targetPeta = new Map(
+          (video?.target_khusus ?? []).map((t) => [t.user_id, t.kpi]),
+        );
+        setTargetPer(targetPeta);
 
         setDaftar(
           pengguna.data
@@ -276,8 +285,16 @@ export function SeksiAbsensiHarian() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[12.5px] font-semibold text-teks-utama">{d.nama}</p>
                   <p className="text-[10px] text-teks-sekunder">
-                    {d.jamMasuk ? `masuk ${jamWIB(d.jamMasuk)}` : "belum absen"} · video{" "}
-                    {d.videoHariIni}/5
+                    {d.jamMasuk ? `masuk ${jamWIB(d.jamMasuk)}` : "belum absen"} ·{" "}
+                    {/* KPI per akun bisa disetel HR/QC (spek 3.1) — ketuk
+                        untuk mengubah target orang ini. */}
+                    <button
+                      type="button"
+                      onClick={() => setKpiUntuk({ id: d.id, nama: d.nama })}
+                      className="btn-tekan font-semibold text-pri underline-offset-2 hover:underline"
+                    >
+                      video {d.videoHariIni}/{targetPer.get(d.id) ?? 5}
+                    </button>
                   </p>
                 </div>
                 <StatusBadge
@@ -306,7 +323,120 @@ export function SeksiAbsensiHarian() {
           )}
         </GlassCard>
       )}
+
+      {/* Modal setel KPI video per akun (spek 3.1) */}
+      {kpiUntuk && (
+        <ModalKpiVideo
+          target={kpiUntuk}
+          nilaiAwal={targetPer.get(kpiUntuk.id) ?? 5}
+          onTutup={() => setKpiUntuk(null)}
+          onTersimpan={(kpiBaru) => {
+            setTargetPer((peta) => {
+              const b = new Map(peta);
+              if (kpiBaru === null) b.delete(kpiUntuk.id);
+              else b.set(kpiUntuk.id, kpiBaru);
+              return b;
+            });
+            setKpiUntuk(null);
+          }}
+        />
+      )}
     </FadeInUp>
+  );
+}
+
+// ------------------------------------------------------------
+// ModalKpiVideo — HR/QC/Pengawas menyetel target video harian satu
+// akun (spek 3.1). Bawaan 5; bisa diturunkan (mis. akun suspend).
+// ------------------------------------------------------------
+
+function ModalKpiVideo({
+  target,
+  nilaiAwal,
+  onTutup,
+  onTersimpan,
+}: {
+  target: { id: string; nama: string };
+  nilaiAwal: number;
+  onTutup: () => void;
+  onTersimpan: (kpi: number | null) => void;
+}) {
+  const [nilai, setNilai] = useState(nilaiAwal);
+  const [sibuk, setSibuk] = useState(false);
+
+  async function simpan(kpi: number | null) {
+    if (sibuk) return;
+    setSibuk(true);
+    try {
+      await setKpiVideo(target.id, kpi);
+      toast(
+        "sukses",
+        `KPI ${target.nama.split(" ")[0]} disetel`,
+        kpi === null ? "Kembali ke bawaan 5 video/hari." : `${kpi} video per hari.`,
+      );
+      onTersimpan(kpi);
+    } catch (e) {
+      toast("error", "Gagal menyimpan KPI", e instanceof Error ? e.message : "");
+    } finally {
+      setSibuk(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[95] flex items-center justify-center px-8"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Setel KPI video"
+    >
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={onTutup} />
+      <div className="glass-strong relative w-full max-w-[300px] rounded-2xl p-5 text-center">
+        <p className="text-sm font-bold text-teks-utama">Target video {target.nama}</p>
+        <p className="mt-0.5 text-[11px] text-teks-sekunder">
+          Bawaan 5/hari — turunkan mis. untuk akun yang kena suspend.
+        </p>
+        <div className="mt-4 flex items-center justify-center gap-4">
+          <button
+            type="button"
+            onClick={() => setNilai((n) => Math.max(0, n - 1))}
+            aria-label="Kurangi target"
+            className="glass btn-tekan flex h-10 w-10 items-center justify-center rounded-full text-lg font-bold text-teks-utama"
+          >
+            −
+          </button>
+          <span className="angka-tab font-heading w-12 text-3xl font-extrabold text-teks-utama">
+            {nilai}
+          </span>
+          <button
+            type="button"
+            onClick={() => setNilai((n) => Math.min(30, n + 1))}
+            aria-label="Tambah target"
+            className="glass btn-tekan flex h-10 w-10 items-center justify-center rounded-full text-lg font-bold text-teks-utama"
+          >
+            +
+          </button>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            disabled={sibuk}
+            onClick={() => void simpan(null)}
+            className="glass btn-tekan flex-1 rounded-xl py-2.5 text-[12px] font-semibold text-teks-utama disabled:opacity-60"
+          >
+            Bawaan (5)
+          </button>
+          <button
+            type="button"
+            disabled={sibuk}
+            onClick={() => void simpan(nilai)}
+            className="btn-tekan flex-1 rounded-xl py-2.5 text-[12px] font-bold text-white disabled:opacity-60"
+            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+          >
+            Simpan
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

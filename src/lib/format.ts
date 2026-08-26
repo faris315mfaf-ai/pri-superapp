@@ -158,6 +158,8 @@ export function pesanBagikanVideo(
  * sistem yang merangkai tautannya supaya bisa diklik langsung.
  */
 export function urlProfilSosmed(platform: string, username: string): string {
+  // Situs web: username-nya adalah domain itu sendiri.
+  if (platform === "website") return `https://${username}`;
   const u = username.replace(/^@+/, "").trim();
   switch (platform.toLowerCase()) {
     case "instagram":

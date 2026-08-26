@@ -11,6 +11,8 @@ import { userDariToken } from "@/lib/sesi";
 
 export const dynamic = "force-dynamic";
 
+// "website" (spek 3.2): domain situs TV Rakyat, didaftarkan lewat form
+// kecil terpisah dari akun sosmed; username-nya = nama domain.
 const PLATFORM_SAH = [
   "instagram",
   "tiktok",
@@ -18,6 +20,7 @@ const PLATFORM_SAH = [
   "facebook",
   "threads",
   "twitter",
+  "website",
 ] as const;
 
 function tokenDari(request: Request): string {
@@ -48,6 +51,19 @@ function periksaMasukan(platformMentah: string, usernameMentah: string) {
     throw Object.assign(new Error("Platform tidak dikenali."), { status: 400 });
   }
   const username = rapikanUsername(usernameMentah);
+  if (platform === "website") {
+    // Terima juga tempelan URL lengkap — ambil host-nya saja.
+    const tanpaProtokol = username.replace(/^https?:\/\//, "").split("/")[0];
+    const domain = tanpaProtokol.toLowerCase();
+    // Domain situs: wajib berbentuk host yang sah (mis. tvrakyat.id).
+    if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(domain)) {
+      throw Object.assign(
+        new Error("Tulis nama domain yang benar, contoh: tvrakyat.id"),
+        { status: 400 },
+      );
+    }
+    return { platform, username: domain };
+  }
   if (!/^[a-z0-9._-]{2,60}$/.test(username)) {
     throw Object.assign(
       new Error("Username hanya boleh huruf, angka, titik, strip, dan garis bawah."),

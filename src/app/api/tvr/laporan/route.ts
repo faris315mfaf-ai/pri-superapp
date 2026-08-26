@@ -13,7 +13,24 @@ import { pastikanFiturAktif } from "@/lib/fitur-server";
 
 export const dynamic = "force-dynamic";
 
+// Bawaan 5 video/hari; per akun bisa disetel HR/QC/Pengawas lewat
+// kolom app_user.kpi_video (spek 3.1) — mis. diturunkan saat suspend.
 const KPI_VIDEO_HARIAN = 5;
+
+/** Target KPI seorang user: kolom kpi_video, NULL = bawaan. */
+async function targetKpiUser(userId: number): Promise<number> {
+  try {
+    const { data } = await supabase()
+      .from("app_user")
+      .select("kpi_video")
+      .eq("id", userId)
+      .maybeSingle();
+    const n = Number(data?.kpi_video);
+    return Number.isFinite(n) && data?.kpi_video != null ? n : KPI_VIDEO_HARIAN;
+  } catch {
+    return KPI_VIDEO_HARIAN;
+  }
+}
 
 const PLATFORM_SAH = new Set([
   "instagram",
@@ -71,7 +88,7 @@ export async function GET(request: Request) {
           status: 403,
         });
       }
-      const [{ data: baris }, { data: bebas }] = await Promise.all([
+      const [{ data: baris }, { data: bebas }, { data: targetRows }] = await Promise.all([
         db
           .from("laporan_video")
           .select("user_id, platform, app_user(nama)")
@@ -81,7 +98,12 @@ export async function GET(request: Request) {
           .select("user_id, jenis")
           .eq("tanggal_wib", tanggal)
           .eq("status", "disetujui"),
+        // Target khusus per akun (spek 3.1) — hanya yang disetel.
+        db.from("app_user").select("id, kpi_video").not("kpi_video", "is", null),
       ]);
+      const targetPer = new Map(
+        (targetRows ?? []).map((t) => [Number(t.id), Number(t.kpi_video)]),
+      );
 
       const bebasPer = new Map((bebas ?? []).map((b) => [Number(b.user_id), b.jenis as string]));
       const rekap = new Map<number, { nama: string; jumlah: number }>();
@@ -98,16 +120,26 @@ export async function GET(request: Request) {
       return {
         tanggal,
         kpi_target: KPI_VIDEO_HARIAN,
-        data: Array.from(rekap.entries()).map(([user_id, r]) => ({
-          user_id: String(user_id),
-          nama: r.nama,
-          jumlah: r.jumlah,
-          tercapai: r.jumlah >= KPI_VIDEO_HARIAN,
-          dibebaskan: bebasPer.get(user_id) ?? null,
-        })),
+        data: Array.from(rekap.entries()).map(([user_id, r]) => {
+          const target = targetPer.get(user_id) ?? KPI_VIDEO_HARIAN;
+          return {
+            user_id: String(user_id),
+            nama: r.nama,
+            jumlah: r.jumlah,
+            kpi_target: target,
+            tercapai: r.jumlah >= target,
+            dibebaskan: bebasPer.get(user_id) ?? null,
+          };
+        }),
         dibebaskan: Array.from(bebasPer.entries()).map(([user_id, jenis]) => ({
           user_id: String(user_id),
           jenis,
+        })),
+        // Target khusus SEMUA akun yang disetel (termasuk yang belum
+        // melapor hari ini) — dipakai UI untuk menampilkan x/target.
+        target_khusus: Array.from(targetPer.entries()).map(([user_id, kpi]) => ({
+          user_id: String(user_id),
+          kpi,
         })),
       };
     }
@@ -136,11 +168,11 @@ export async function GET(request: Request) {
         const t = d.toISOString().slice(0, 10);
         riwayat.push({ tanggal: t, jumlah: per.get(t) ?? 0 });
       }
-      return { data: riwayat, kpi_target: KPI_VIDEO_HARIAN };
+      return { data: riwayat, kpi_target: await targetKpiUser(Number(user.id)) };
     }
 
     // --- Laporan milik sendiri ---
-    const [{ data, error }, jenisBebas] = await Promise.all([
+    const [{ data, error }, jenisBebas, targetKu] = await Promise.all([
       db
         .from("laporan_video")
         .select("id, platform, url_video, tanggal_wib, dibuat_pada")
@@ -148,6 +180,7 @@ export async function GET(request: Request) {
         .eq("tanggal_wib", tanggal)
         .order("id"),
       kpiDibebaskan(Number(user.id), tanggal),
+      targetKpiUser(Number(user.id)),
     ]);
     if (error) {
       console.error("[tvr/laporan] baca:", error.message);
@@ -158,11 +191,64 @@ export async function GET(request: Request) {
       tanggal,
       hari_ini: tanggalWibSekarang(),
       data: daftar,
-      kpi_target: KPI_VIDEO_HARIAN,
-      kpi_tercapai: daftar.length >= KPI_VIDEO_HARIAN,
+      kpi_target: targetKu,
+      kpi_tercapai: daftar.length >= targetKu,
       dibebaskan: jenisBebas,
     };
   });
+}
+
+/**
+ * Validasi satu link laporan. Mengembalikan URL bersih + platform yang
+ * DITEBAK dari host bila pemanggil tidak menyebutkannya (untuk mode
+ * tempel-banyak-link). Melempar dengan pesan jelas bila tidak sah.
+ */
+function validasiLink(platformMentah: string, urlMentah: string): {
+  platform: string;
+  urlBersih: string;
+} {
+  const url = (urlMentah ?? "").trim();
+  let host = "";
+  try {
+    host = new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).hostname;
+  } catch {
+    throw Object.assign(new Error("Link video tidak valid."), { status: 400 });
+  }
+  // Link harus menuju platform video yang dikenal — laporan berisi
+  // tautan sembarang hanya mengotori rekap yang dipantau atasan.
+  const hostSah =
+    /(instagram|tiktok|youtube|youtu\.be|facebook|fb\.watch|threads|twitter|x)\.(com|net|be)$/i.test(
+      host,
+    ) || /^(youtu\.be|fb\.watch|x\.com)$/i.test(host);
+  if (!hostSah) {
+    throw Object.assign(
+      new Error("Link harus menuju Instagram, TikTok, YouTube, Facebook, Threads, atau X."),
+      { status: 400 },
+    );
+  }
+
+  let platform = (platformMentah ?? "").toLowerCase();
+  if (!PLATFORM_SAH.has(platform)) {
+    // Tebak dari host — dipakai mode tempel banyak link (spek 3.3),
+    // di mana meminta pengguna memilih platform per link merepotkan.
+    const h = host.toLowerCase();
+    platform = h.includes("instagram")
+      ? "instagram"
+      : h.includes("tiktok")
+        ? "tiktok"
+        : h.includes("youtu")
+          ? "youtube"
+          : h.includes("facebook") || h.includes("fb.watch")
+            ? "facebook"
+            : h.includes("threads")
+              ? "threads"
+              : "twitter";
+  }
+
+  return {
+    platform,
+    urlBersih: (/^https?:\/\//i.test(url) ? url : `https://${url}`).slice(0, 500),
+  };
 }
 
 export async function POST(request: Request) {
@@ -171,43 +257,68 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as {
       platform?: string;
       url?: string;
+      /** Mode batch (spek 3.3): banyak link sekaligus */
+      banyak?: { platform?: string; url?: string }[];
     };
 
     await pastikanFiturAktif(user, "tvrku", "TV Rakyat Saya sedang dimatikan untuk peran Anda.");
+    const db = supabase();
+    const tanggal = tanggalWibSekarang();
 
-    const platform = (body.platform ?? "").toLowerCase();
-    if (!PLATFORM_SAH.has(platform)) {
+    // --- Mode BATCH: simpan banyak link sekali klik (spek 3.3). ---
+    // Tiap link diproses sendiri-sendiri supaya satu link jelek tidak
+    // membatalkan seluruh kiriman; hasil per link dilaporkan balik.
+    if (Array.isArray(body.banyak)) {
+      const daftar = body.banyak.slice(0, 30); // pagar wajar per kiriman
+      if (daftar.length === 0) {
+        throw Object.assign(new Error("Tidak ada link untuk disimpan."), { status: 400 });
+      }
+      const tersimpan: { id: string; platform: string; url_video: string }[] = [];
+      const gagal: { url: string; alasan: string }[] = [];
+      for (const item of daftar) {
+        try {
+          const { platform, urlBersih } = validasiLink(item.platform ?? "", item.url ?? "");
+          const { data, error } = await db
+            .from("laporan_video")
+            .insert({
+              user_id: Number(user.id),
+              platform,
+              url_video: urlBersih,
+              tanggal_wib: tanggal,
+            })
+            .select("id, platform, url_video")
+            .single();
+          if (error) {
+            gagal.push({
+              url: (item.url ?? "").slice(0, 120),
+              alasan: error.code === "23505" ? "sudah pernah dilaporkan" : "gagal tersimpan",
+            });
+          } else {
+            tersimpan.push({ ...data, id: String(data.id) });
+          }
+        } catch (e) {
+          gagal.push({
+            url: (item.url ?? "").slice(0, 120),
+            alasan: e instanceof Error ? e.message : "tidak valid",
+          });
+        }
+      }
+      return { sukses: true, tersimpan, gagal };
+    }
+
+    // --- Mode satu link (cara lama tetap ada). ---
+    const platformDiminta = (body.platform ?? "").toLowerCase();
+    if (!PLATFORM_SAH.has(platformDiminta)) {
       throw Object.assign(new Error("Pilih platform tempat video diunggah."), { status: 400 });
     }
-
-    const url = (body.url ?? "").trim();
-    let host = "";
-    try {
-      host = new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).hostname;
-    } catch {
-      throw Object.assign(new Error("Link video tidak valid."), { status: 400 });
-    }
-    // Link harus menuju platform video yang dikenal — laporan berisi
-    // tautan sembarang hanya mengotori rekap yang dipantau atasan.
-    const hostSah =
-      /(instagram|tiktok|youtube|youtu\.be|facebook|fb\.watch|threads|twitter|x)\.(com|net|be)$/i.test(
-        host,
-      ) || /^(youtu\.be|fb\.watch|x\.com)$/i.test(host);
-    if (!hostSah) {
-      throw Object.assign(
-        new Error("Link harus menuju Instagram, TikTok, YouTube, Facebook, Threads, atau X."),
-        { status: 400 },
-      );
-    }
-
-    const urlBersih = (/^https?:\/\//i.test(url) ? url : `https://${url}`).slice(0, 500);
-    const { data, error } = await supabase()
+    const { platform, urlBersih } = validasiLink(platformDiminta, body.url ?? "");
+    const { data, error } = await db
       .from("laporan_video")
       .insert({
         user_id: Number(user.id),
         platform,
         url_video: urlBersih,
-        tanggal_wib: tanggalWibSekarang(),
+        tanggal_wib: tanggal,
       })
       .select("id, platform, url_video, tanggal_wib, dibuat_pada")
       .single();
@@ -263,7 +374,42 @@ export async function PATCH(request: Request) {
       id?: string;
       platform?: string;
       url?: string;
+      /** Cabang KPI (spek 3.1): {user_id, kpi} tanpa id laporan */
+      user_id?: string;
+      kpi?: number | null;
     };
+
+    // --- Cabang 1: HR/QC/Pengawas menyetel target KPI per akun
+    //     (spek 3.1). Dibedakan dari edit laporan lewat adanya user_id
+    //     tanpa id laporan. kpi null = kembali ke bawaan 5. ---
+    if (body.user_id != null && body.id == null) {
+      if (!BOLEH_LIHAT_SEMUA.has(user.role) && user.role !== "admin_tv") {
+        throw Object.assign(new Error("Anda tidak berwenang mengatur KPI."), { status: 403 });
+      }
+      const targetId = Number(body.user_id);
+      if (!targetId) throw Object.assign(new Error("Akun tidak disebutkan."), { status: 400 });
+
+      let kpi: number | null = null;
+      if (body.kpi != null) {
+        const n = Number(body.kpi);
+        if (!Number.isInteger(n) || n < 0 || n > 30) {
+          throw Object.assign(new Error("KPI harus bilangan bulat 0-30."), { status: 400 });
+        }
+        kpi = n;
+      }
+
+      const { error } = await supabase()
+        .from("app_user")
+        .update({ kpi_video: kpi })
+        .eq("id", targetId);
+      if (error) {
+        console.error("[tvr/laporan] setel kpi:", error.message);
+        throw new Error("Gagal menyimpan KPI.");
+      }
+      return { sukses: true, kpi_target: kpi ?? KPI_VIDEO_HARIAN };
+    }
+
+    // --- Cabang 2: edit laporan sendiri (perilaku lama). ---
     const id = Number(body.id);
     if (!id) throw Object.assign(new Error("Laporan tidak disebutkan."), { status: 400 });
 
