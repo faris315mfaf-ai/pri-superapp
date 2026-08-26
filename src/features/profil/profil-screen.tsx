@@ -47,7 +47,7 @@ import {
   statusPush,
   type StatusPush,
 } from "@/lib/push";
-import type { Role, User } from "@/types";
+import type { KomponenIkon, Role, User } from "@/types";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { cn } from "@/lib/utils";
 import { SwitchKaca } from "./switch-kaca";
@@ -80,7 +80,7 @@ const KONFIG_ROLE: Record<
   Role,
   {
     label: string;
-    ikon: React.ElementType;
+    ikon: KomponenIkon;
     latar: string;
     tepi: string;
     kelasTeks: string;
@@ -207,7 +207,7 @@ function ModalKaca({ terbuka, onTutup, labelAria, children }: ModalKacaProps) {
 // ------------------------------------------------------------
 
 type BarisPengaturanProps = {
-  ikon: React.ElementType;
+  ikon: KomponenIkon;
   warnaIkon: string;
   label: string;
   kanan?: React.ReactNode;

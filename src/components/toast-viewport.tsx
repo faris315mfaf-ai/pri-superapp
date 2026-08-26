@@ -1,5 +1,6 @@
 "use client";
 
+import type { KomponenIkon } from "@/types";
 // ============================================================
 // ToastViewport — toast kaca dari atas layar, bertumpuk rapi.
 // Jenis: sukses (hijau), error (merah), info (biru), peringatan (kuning).
@@ -12,7 +13,7 @@ import { cn } from "@/lib/utils";
 
 const KONFIG_JENIS: Record<
   JenisToast,
-  { ikon: React.ElementType; warna: string; kelasIkon: string }
+  { ikon: KomponenIkon; warna: string; kelasIkon: string }
 > = {
   sukses: { ikon: CheckCircle2, warna: "#10B981", kelasIkon: "text-sukses" },
   error: { ikon: XCircle, warna: "#EF4444", kelasIkon: "text-gagal" },

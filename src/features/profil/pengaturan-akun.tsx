@@ -9,6 +9,7 @@
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
+import type { KomponenIkon } from "@/types";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AtSign,
@@ -53,7 +54,7 @@ import { cn } from "@/lib/utils";
 const PLATFORM: {
   id: "instagram" | "tiktok";
   label: string;
-  ikon: React.ElementType;
+  ikon: KomponenIkon;
   warna: string;
 }[] = [
   { id: "instagram", label: "Instagram", ikon: Instagram, warna: "#E1306C" },

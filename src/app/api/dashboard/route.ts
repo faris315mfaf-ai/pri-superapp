@@ -181,7 +181,10 @@ export async function GET(request: Request) {
       },
       {
         id: "kpi-3",
-        label: "Kader Belum Komentar",
+        // Satuannya UNIT KEWAJIBAN (orang x postingan), bukan jumlah
+        // orang. Label lama "Kader Belum Komentar" terbaca seolah
+        // 11.849 ORANG belum berkomentar padahal anggotanya 107.
+        label: "Kewajiban Belum Dipenuhi",
         nilai: String(belumAktif),
         satuan_delta: "" as const,
         // Turunnya angka "belum komentar" itu KABAR BAIK, tapi arah panah

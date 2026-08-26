@@ -1,5 +1,6 @@
 "use client";
 
+import type { KomponenIkon } from "@/types";
 // ============================================================
 // Kumpulan komponen kecil design system PRI SuperApp:
 // GlassSkeleton, EmptyState, AvatarInisial, ScreenHeader,
@@ -23,7 +24,7 @@ export function GlassSkeleton({ className }: { className?: string }) {
 // EmptyState — keadaan kosong: ikon besar + judul + keterangan + aksi
 // ------------------------------------------------------------
 type EmptyStateProps = {
-  ikon: React.ElementType;
+  ikon: KomponenIkon;
   judul: string;
   keterangan: string;
   labelAksi?: string;

@@ -1,5 +1,6 @@
 "use client";
 
+import type { KomponenIkon } from "@/types";
 // ============================================================
 // AksesCepatPanel — dua tombol kaca besar berdampingan:
 // Modul QC Konten (aksen merah) & Otomatisasi TV (aksen emas).
@@ -16,7 +17,7 @@ type AksesCepatPanelProps = {
 
 type TombolModul = {
   label: string;
-  Ikon: React.ElementType;
+  Ikon: KomponenIkon;
   gradien: string;
   bayangan: string;
   onBuka: () => void;

@@ -12,6 +12,7 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
+import type { KomponenIkon } from "@/types";
 import { motion } from "framer-motion";
 import {
   BarChart3,
@@ -42,7 +43,7 @@ type Metrik = {
     "pengikut" | "jumlahMedia" | "suka" | "komentar" | "jangkauan" | "tayangan"
   >;
   label: string;
-  ikon: React.ElementType;
+  ikon: KomponenIkon;
   warna: string;
 };
 

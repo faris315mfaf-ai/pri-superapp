@@ -11,9 +11,9 @@ import { History, Settings2, ShieldCheck, Users, Video } from "lucide-react";
 import { NavHalaman } from "@/components/nav-halaman";
 import { EmptyState } from "@/components/pri-ui";
 import { GlassCard } from "@/components/glass-card";
-import type { Aktivitas } from "@/types";
+import type { KomponenIkon, Aktivitas } from "@/types";
 
-const KONFIG_JENIS: Record<Aktivitas["jenis"], { warna: string; Ikon: React.ElementType }> = {
+const KONFIG_JENIS: Record<Aktivitas["jenis"], { warna: string; Ikon: KomponenIkon }> = {
   QC: { warna: "#DC2626", Ikon: ShieldCheck },
   VIDEO: { warna: "#F59E0B", Ikon: Video },
   ROSTER: { warna: "#10B981", Ikon: Users },

@@ -32,7 +32,7 @@ import {
   ThemeToggle,
 } from "@/components/pri-ui";
 import { toast, useAppStore } from "@/hooks/use-app-store";
-import type { NotifikasiItem } from "@/types";
+import type { KomponenIkon, NotifikasiItem } from "@/types";
 
 // ------------------------------------------------------------
 // Tipe & konstanta
@@ -46,7 +46,7 @@ type NotifikasiScreenProps = {
   onKembali?: () => void;
 };
 
-const KONFIG_KATEGORI: Record<string, { ikon: React.ElementType; warna: string }> = {
+const KONFIG_KATEGORI: Record<string, { ikon: KomponenIkon; warna: string }> = {
   QC: { ikon: ShieldCheck, warna: "#DC2626" },
   VIDEO: { ikon: Video, warna: "#F59E0B" },
   SISTEM: { ikon: Settings2, warna: "#10B981" },

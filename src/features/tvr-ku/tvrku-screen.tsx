@@ -53,7 +53,7 @@ import {
   type LaporanVideo,
 } from "@/services";
 import { jamWIB, urlProfilSosmed } from "@/lib/format";
-import type { User } from "@/types";
+import type { KomponenIkon, User } from "@/types";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { PanelTugasSaya } from "./tugas-saya";
 import { KirimVideoManual } from "./kirim-video-manual";
@@ -85,7 +85,7 @@ function ModalTambah({
 }: {
   judul: string;
   placeholder: string;
-  ikonKirim: React.ElementType;
+  ikonKirim: KomponenIkon;
   /** Terisi = mode edit: kolom dibuka dengan nilai lamanya */
   awalPlatform?: string;
   awalNilai?: string;

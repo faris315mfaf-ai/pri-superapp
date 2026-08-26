@@ -17,7 +17,7 @@ import {
   Video,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
-import type { KpiItem } from "@/types";
+import type { KomponenIkon, KpiItem } from "@/types";
 import { cn } from "@/lib/utils";
 
 /** Aksen warna ikon yang tersedia (satu per kartu, semuanya berbeda) */
@@ -31,7 +31,7 @@ const AKSEN: Record<Aksen, { kelasIkon: string; hex: string }> = {
 };
 
 /** Pilih ikon + warna aksen berdasarkan label KPI */
-function gayaKpi(label: string): { Ikon: React.ElementType; aksen: Aksen } {
+function gayaKpi(label: string): { Ikon: KomponenIkon; aksen: Aksen } {
   const l = label.toLowerCase();
   if (l.includes("kepatuhan")) return { Ikon: Target, aksen: "pri" };
   if (l.includes("postingan")) return { Ikon: Eye, aksen: "emas" };

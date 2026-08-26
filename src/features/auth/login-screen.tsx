@@ -12,7 +12,7 @@ import { GlassCard } from "@/components/glass-card";
 import { ThemeToggle } from "@/components/pri-ui";
 import { login as loginService } from "@/services";
 import { useAppStore } from "@/hooks/use-app-store";
-import type { User } from "@/types";
+import type { KomponenIkon, User } from "@/types";
 import { cn } from "@/lib/utils";
 
 type LoginScreenProps = {
@@ -22,7 +22,7 @@ type LoginScreenProps = {
 type AkunDemo = {
   label: string;
   email: string;
-  ikon: React.ElementType;
+  ikon: KomponenIkon;
   kelasIkon: string;
 };
 

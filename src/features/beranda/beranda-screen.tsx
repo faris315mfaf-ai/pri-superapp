@@ -41,7 +41,7 @@ import {
 } from "@/services";
 import { bolehFitur } from "@/lib/fitur";
 import { jamWIB, sapaanHari, tanggalIndonesia } from "@/lib/format";
-import type { User } from "@/types";
+import type { KomponenIkon, User } from "@/types";
 
 function tanggalWibPerangkat(): string {
   return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -52,7 +52,7 @@ type KartuAngkaProps = {
   nilai: string;
   keterangan: string;
   persen: number;
-  Ikon: React.ElementType;
+  Ikon: KomponenIkon;
   onKlik?: () => void;
 };
 

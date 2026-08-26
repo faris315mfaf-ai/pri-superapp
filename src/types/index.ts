@@ -266,3 +266,21 @@ export const PERIODE_AKTIF = "2026-08-23 00:00-23:59";
 
 /** Tanggal jangkar data dummy (aplikasi demo mengacu tanggal ini) */
 export const APP_TODAY_ISO = "2026-08-23T15:30:00+07:00";
+
+/**
+ * Tipe komponen IKON (lucide-react) yang dipakai di seluruh aplikasi.
+ *
+ * KENAPA TIDAK KomponenIkon: sejak @react-three/fiber dipasang
+ * (untuk maskot 3D), pustaka itu memperluas namespace JSX global
+ * sehingga props KomponenIkon tidak lagi bisa dipecahkan dan
+ * seluruh pemakaian `<Ikon className=… />` ditolak dengan galat
+ * "not assignable to type 'never'". Menyebutkan propsnya secara
+ * eksplisit menghilangkan ketergantungan itu — dan sekaligus membuat
+ * salah ketik nama prop ikon ketahuan lebih awal.
+ */
+export type KomponenIkon = React.ComponentType<{
+  className?: string;
+  strokeWidth?: number;
+  style?: React.CSSProperties;
+  "aria-hidden"?: boolean | "true" | "false";
+}>;

@@ -7,7 +7,7 @@
 
 import { motion } from "framer-motion";
 import { Home, Newspaper, ShieldCheck, Tv, Clapperboard, MessagesSquare, Bell, User } from "lucide-react";
-import type { Role } from "@/types";
+import type { KomponenIkon, Role } from "@/types";
 import { cn } from "@/lib/utils";
 
 export type KunciTab =
@@ -22,7 +22,7 @@ export type KunciTab =
 
 export const KONFIG_TAB: Record<
   KunciTab,
-  { label: string; ikon: React.ElementType }
+  { label: string; ikon: KomponenIkon }
 > = {
   beranda: { label: "Beranda", ikon: Home },
   konten: { label: "Konten", ikon: Newspaper },

@@ -54,7 +54,7 @@ import {
 } from "@/services";
 import { bacaBerkas } from "@/lib/gambar";
 import { jamWIB, tanggalIndonesia } from "@/lib/format";
-import type { User } from "@/types";
+import type { KomponenIkon, User } from "@/types";
 import { cn } from "@/lib/utils";
 
 const PERAN_HR = new Set(["admin_hr", "super_admin", "master"]);
@@ -63,7 +63,7 @@ type Jenis = "masuk" | "pulang";
 
 const KONFIG_JENIS: Record<
   Jenis,
-  { label: string; ikon: React.ElementType; warna: string }
+  { label: string; ikon: KomponenIkon; warna: string }
 > = {
   masuk: { label: "Masuk", ikon: Sunrise, warna: "#10B981" },
   pulang: { label: "Pulang", ikon: Sunset, warna: "#F59E0B" },
