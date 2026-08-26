@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     // yang sedang crash beruntun tidak menganggap pengirimannya galat
     // (dan supaya endpoint tanpa auth ini tidak bisa dipakai
     // membanjiri tabel log).
-    const { boleh } = cekBatas(`log-klien|${ipDari(request)}`, 30, 60);
+    const { boleh } = await cekBatas(`log-klien|${ipDari(request)}`, 30, 60);
     if (!boleh) return { sukses: true };
 
     const body = (await request.json().catch(() => ({}))) as {

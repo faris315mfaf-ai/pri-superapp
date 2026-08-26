@@ -53,7 +53,7 @@ const PESAN_NETRAL =
 
 export async function PUT(request: Request) {
   // Rate limit SEBELUM query database: 3 permintaan kode / jam / IP.
-  const tolak = pastikanTidakMelebihiBatas(request, "sandi-lupa", 3, 60 * 60);
+  const tolak = await pastikanTidakMelebihiBatas(request, "sandi-lupa", 3, 60 * 60);
   if (tolak) return tolak;
 
   return bungkus(async () => {
@@ -80,7 +80,7 @@ export async function PUT(request: Request) {
 
 export async function POST(request: Request) {
   // Penyetelan sandi ikut jendela yang sama dengan permintaan kodenya.
-  const tolak = pastikanTidakMelebihiBatas(request, "sandi-lupa-setel", 3, 60 * 60);
+  const tolak = await pastikanTidakMelebihiBatas(request, "sandi-lupa-setel", 3, 60 * 60);
   if (tolak) return tolak;
 
   return bungkus(async () => {

@@ -1,40 +1,115 @@
 // ============================================================
-// Rate limiter in-memory (KHUSUS SISI SERVER).
+// Pembatas laju permintaan (KHUSUS SISI SERVER).
 //
-// Jendela geser sederhana berbasis Map: tiap kunci menyimpan daftar
-// stempel waktu percobaan; percobaan yang lebih tua dari jendela
-// dibuang, sisanya dihitung. Kunci gabungan `endpoint + IP` (boleh
-// ditambah pembeda lain, mis. nomor WA).
+// DUA LAPIS, dipilih otomatis:
 //
-// BATASAN YANG DISENGAJA — baca sebelum mengandalkannya:
-// - Hanya berlaku untuk SATU instance proses. Penghitungnya hidup di
-//   memori proses Node; bila aplikasi berjalan lebih dari satu
-//   instance (serverless multi-region, PM2 cluster, dsb.), tiap
-//   instance menghitung sendiri-sendiri sehingga batas efektifnya
-//   berlipat. Untuk deployment satu VPS di balik Caddy (kondisi
-//   sekarang) ini memadai.
-// - Hilang saat proses restart — dianggap wajar untuk pembatasan
-//   percobaan login/OTP.
-// TODO: migrasi ke Upstash Redis (@upstash/ratelimit) begitu aplikasi
-//       berjalan multi-instance, supaya penghitungnya terpusat.
+// 1. UPSTASH REDIS — dipakai bila UPSTASH_REDIS_REST_URL dan
+//    UPSTASH_REDIS_REST_TOKEN terpasang. Hitungannya TERPUSAT, jadi
+//    tetap benar walau Vercel menjalankan aplikasi di banyak instance
+//    sekaligus. Inilah lapisan yang sebenarnya melindungi.
+//
+// 2. MEMORI PROSES — cadangan bila Redis belum diatur (mis. saat
+//    pengembangan di laptop). JUJUR SOAL BATASNYA: di Vercel lapisan
+//    ini nyaris tidak berguna — sudah dibuktikan dengan 10 percobaan
+//    login salah berturut-turut yang semuanya lolos, karena tiap
+//    permintaan bisa mendarat di instance berbeda dengan penghitung
+//    yang kosong. Di satu VPS satu proses, lapisan ini memadai.
+//
+// Kunci hitungan: `endpoint + IP` (+ pembeda lain bila perlu).
 // ============================================================
 
-type CatatanJendela = number[];
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 
-const gudang = new Map<string, CatatanJendela>();
+// ------------------------------------------------------------
+// Lapisan 1 — Upstash Redis
+// ------------------------------------------------------------
 
-/** Jaga Map tidak membengkak: bersihkan kunci basi tiap ~5 menit. */
+/**
+ * Alamat + token Redis, menerima DUA penamaan variabel:
+ * - UPSTASH_REDIS_REST_URL / _TOKEN  → bila didaftarkan manual
+ * - KV_REST_API_URL / KV_REST_API_TOKEN → nama yang dipakai integrasi
+ *   Upstash lewat Vercel Marketplace
+ * Menerima keduanya menghapus satu penyebab gagal yang membingungkan:
+ * Redis sudah dibuat, tetapi aplikasi diam-diam tetap memakai memori.
+ */
+function konfigRedis(): { url: string; token: string } | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+  const token =
+    process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
+  return url && token ? { url, token } : null;
+}
+
+function redisSiap(): boolean {
+  return konfigRedis() !== null;
+}
+
+// Satu Ratelimit per kombinasi batas+jendela, dibuat sekali lalu
+// dipakai ulang. Membuatnya berulang kali di tiap permintaan akan
+// memboroskan koneksi tanpa manfaat.
+const gudangRedis = new Map<string, Ratelimit>();
+
+function pembatasRedis(maks: number, jendelaDetik: number): Ratelimit | null {
+  const konfig = konfigRedis();
+  if (!konfig) return null;
+  const kunci = `${maks}|${jendelaDetik}`;
+  let ada = gudangRedis.get(kunci);
+  if (!ada) {
+    ada = new Ratelimit({
+      redis: new Redis({ url: konfig.url, token: konfig.token }),
+      // Jendela geser: lebih adil daripada jendela tetap, karena
+      // tidak bisa diakali dengan menembak tepat di pergantian menit.
+      limiter: Ratelimit.slidingWindow(maks, `${jendelaDetik} s`),
+      analytics: true,
+      prefix: "pri-batas",
+    });
+    gudangRedis.set(kunci, ada);
+  }
+  return ada;
+}
+
+// ------------------------------------------------------------
+// Lapisan 2 — memori proses (cadangan)
+// ------------------------------------------------------------
+
+const gudangMemori = new Map<string, number[]>();
 let pembersihanTerakhir = 0;
+
 function bersihkanBasi(sekarang: number): void {
   if (sekarang - pembersihanTerakhir < 5 * 60_000) return;
   pembersihanTerakhir = sekarang;
-  for (const [kunci, daftar] of gudang) {
-    // 1 jam adalah jendela terpanjang yang dipakai aplikasi.
+  for (const [kunci, daftar] of gudangMemori) {
     const hidup = daftar.filter((t) => sekarang - t < 60 * 60_000);
-    if (hidup.length === 0) gudang.delete(kunci);
-    else gudang.set(kunci, hidup);
+    if (hidup.length === 0) gudangMemori.delete(kunci);
+    else gudangMemori.set(kunci, hidup);
   }
 }
+
+function cekMemori(kunci: string, maks: number, jendelaDetik: number): HasilBatas {
+  const sekarang = Date.now();
+  bersihkanBasi(sekarang);
+
+  const jendelaMs = jendelaDetik * 1000;
+  const daftar = (gudangMemori.get(kunci) ?? []).filter(
+    (t) => sekarang - t < jendelaMs,
+  );
+
+  if (daftar.length >= maks) {
+    gudangMemori.set(kunci, daftar);
+    return {
+      boleh: false,
+      cobaLagiDetik: Math.max(1, Math.ceil((daftar[0] + jendelaMs - sekarang) / 1000)),
+    };
+  }
+
+  daftar.push(sekarang);
+  gudangMemori.set(kunci, daftar);
+  return { boleh: true, cobaLagiDetik: 0 };
+}
+
+// ------------------------------------------------------------
+// Antarmuka umum
+// ------------------------------------------------------------
 
 /**
  * Ambil IP klien dari header proxy, urutan kepercayaan:
@@ -60,52 +135,54 @@ export type HasilBatas = {
 
 /**
  * Catat satu percobaan dan putuskan boleh/tidaknya.
- *
- * @param kunci  gabungan endpoint + IP (+ pembeda lain bila perlu)
- * @param maks   jumlah percobaan maksimal dalam jendela
- * @param jendelaDetik panjang jendela geser, dalam detik
+ * Memakai Redis bila tersedia; kalau tidak, jatuh ke memori proses.
  */
-export function cekBatas(kunci: string, maks: number, jendelaDetik: number): HasilBatas {
-  const sekarang = Date.now();
-  bersihkanBasi(sekarang);
-
-  const jendelaMs = jendelaDetik * 1000;
-  const daftar = (gudang.get(kunci) ?? []).filter((t) => sekarang - t < jendelaMs);
-
-  if (daftar.length >= maks) {
-    gudang.set(kunci, daftar);
-    const tertua = daftar[0];
-    return {
-      boleh: false,
-      cobaLagiDetik: Math.max(1, Math.ceil((tertua + jendelaMs - sekarang) / 1000)),
-    };
+export async function cekBatas(
+  kunci: string,
+  maks: number,
+  jendelaDetik: number,
+): Promise<HasilBatas> {
+  const redis = pembatasRedis(maks, jendelaDetik);
+  if (redis) {
+    try {
+      const hasil = await redis.limit(kunci);
+      return {
+        boleh: hasil.success,
+        cobaLagiDetik: Math.max(1, Math.ceil((hasil.reset - Date.now()) / 1000)),
+      };
+    } catch (e) {
+      // Redis tumbang tidak boleh mengunci seluruh aplikasi; turun ke
+      // lapisan memori supaya masih ada perlindungan seadanya.
+      console.error("[batas] Redis gagal, memakai memori proses:", e);
+    }
   }
-
-  daftar.push(sekarang);
-  gudang.set(kunci, daftar);
-  return { boleh: true, cobaLagiDetik: 0 };
+  return cekMemori(kunci, maks, jendelaDetik);
 }
 
 /**
- * Penjaga siap pakai untuk route API: lempar Response 429 (dengan
- * Retry-After) bila lewat batas. Panggil SEBELUM query database.
+ * Penjaga siap pakai untuk route API: kembalikan Response 429 (dengan
+ * Retry-After) bila lewat batas, atau null bila boleh lanjut.
+ * Panggil SEBELUM query database.
  */
-export function pastikanTidakMelebihiBatas(
+export async function pastikanTidakMelebihiBatas(
   request: Request,
   endpoint: string,
   maks: number,
   jendelaDetik: number,
   pembeda = "",
-): Response | null {
+): Promise<Response | null> {
   const kunci = `${endpoint}|${ipDari(request)}${pembeda ? `|${pembeda}` : ""}`;
-  const hasil = cekBatas(kunci, maks, jendelaDetik);
+  const hasil = await cekBatas(kunci, maks, jendelaDetik);
   if (hasil.boleh) return null;
 
   const menit = Math.ceil(hasil.cobaLagiDetik / 60);
   return Response.json(
-    {
-      error: `Terlalu banyak percobaan. Coba lagi dalam ${menit} menit.`,
-    },
+    { error: `Terlalu banyak percobaan. Coba lagi dalam ${menit} menit.` },
     { status: 429, headers: { "Retry-After": String(hasil.cobaLagiDetik) } },
   );
+}
+
+/** true bila pembatas terpusat (Redis) sedang aktif — dipakai /api/sehat. */
+export function batasTerpusatAktif(): boolean {
+  return redisSiap();
 }

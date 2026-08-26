@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   // Rate limit SEBELUM query database: 5 pendaftaran / jam / IP.
-  const tolak = pastikanTidakMelebihiBatas(request, "daftar", 5, 60 * 60);
+  const tolak = await pastikanTidakMelebihiBatas(request, "daftar", 5, 60 * 60);
   if (tolak) return tolak;
 
   return bungkus(async () => {

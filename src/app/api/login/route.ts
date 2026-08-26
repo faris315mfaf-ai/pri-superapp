@@ -22,7 +22,7 @@ function errorStatus(pesan: string, status: number): Error {
 
 export async function POST(request: Request) {
   // Rate limit SEBELUM menyentuh database: 8 percobaan / 10 menit / IP.
-  const tolak = pastikanTidakMelebihiBatas(request, "login", 8, 10 * 60);
+  const tolak = await pastikanTidakMelebihiBatas(request, "login", 8, 10 * 60);
   if (tolak) return tolak;
 
   return bungkus(async () => {

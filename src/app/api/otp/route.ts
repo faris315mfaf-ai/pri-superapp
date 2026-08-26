@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   // Rate limit SEBELUM query database: 5 verifikasi / 15 menit / IP.
-  const tolak = pastikanTidakMelebihiBatas(request, "otp-verifikasi", 5, 15 * 60);
+  const tolak = await pastikanTidakMelebihiBatas(request, "otp-verifikasi", 5, 15 * 60);
   if (tolak) return tolak;
 
   return bungkus(async () => {
@@ -79,7 +79,7 @@ export async function PUT(request: Request) {
   // Kirim ulang kode: 3 / 15 menit per PASANGAN nomor+IP — badan
   // permintaan dibaca dulu (sekali) karena nomornya bagian dari kunci.
   const body = (await request.json().catch(() => ({}))) as { nomor_wa?: string };
-  const tolak = pastikanTidakMelebihiBatas(
+  const tolak = await pastikanTidakMelebihiBatas(
     request,
     "otp-kirim-ulang",
     3,
