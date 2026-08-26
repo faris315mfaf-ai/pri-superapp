@@ -9,6 +9,7 @@
 import webpush from "web-push";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { kirimBerkelompok } from "@/lib/notifikasi";
 
 export const dynamic = "force-dynamic";
 
@@ -106,26 +107,25 @@ export async function POST(request: Request) {
     let terkirim = 0;
     const perluDicabut: number[] = [];
 
-    await Promise.all(
-      daftar.map(async (baris) => {
-        try {
-          await webpush.sendNotification(
-            {
-              endpoint: baris.endpoint,
-              keys: { p256dh: baris.p256dh, auth: baris.auth },
-            },
-            muatan,
-          );
-          terkirim += 1;
-        } catch (e: unknown) {
-          // 404/410 = perangkat mencabut izin atau aplikasi dicopot.
-          // Baris seperti ini harus dibuang, kalau tidak daftar akan
-          // terus menumpuk endpoint mati dan pengiriman makin lambat.
-          const kode = (e as { statusCode?: number })?.statusCode;
-          if (kode === 404 || kode === 410) perluDicabut.push(baris.id);
-        }
-      }),
-    );
+    // Dikirim berkelompok 50 dengan jeda — lihat kirimBerkelompok().
+    await kirimBerkelompok(daftar, async (baris) => {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: baris.endpoint,
+            keys: { p256dh: baris.p256dh, auth: baris.auth },
+          },
+          muatan,
+        );
+        terkirim += 1;
+      } catch (e: unknown) {
+        // 404/410 = perangkat mencabut izin atau aplikasi dicopot.
+        // Baris seperti ini harus dibuang, kalau tidak daftar akan
+        // terus menumpuk endpoint mati dan pengiriman makin lambat.
+        const kode = (e as { statusCode?: number })?.statusCode;
+        if (kode === 404 || kode === 410) perluDicabut.push(baris.id);
+      }
+    });
 
     if (perluDicabut.length > 0) {
       await db.from("langganan_push").delete().in("id", perluDicabut);
