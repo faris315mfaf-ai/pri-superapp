@@ -236,13 +236,18 @@ export async function daftar(data: {
   password: string;
   nomor_wa: string;
   nama?: string;
-}): Promise<{ nomor_wa: string }> {
+}): Promise<{ nomor_wa: string; otp_terkirim: boolean }> {
   const json = await fetchJson("/api/daftar", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  return { nomor_wa: json.nomor_wa as string };
+  return {
+    nomor_wa: json.nomor_wa as string,
+    // false = OTP gagal terkirim; pengguna lanjut ke layar menunggu
+    // persetujuan tanpa verifikasi WA (lihat /api/daftar).
+    otp_terkirim: json.otp_terkirim !== false,
+  };
 }
 
 /** Langkah 2 — verifikasi kode; berhasil = token tersimpan */
@@ -2290,4 +2295,13 @@ export async function setModePerbaikan(opsi: {
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify(opsi),
   });
+}
+
+/** Setujui SEMUA pendaftar yang menunggu sekaligus (sebagai anggota). */
+export async function setujuiSemuaPendaftar(): Promise<number> {
+  const json = await fetchJson("/api/pengguna", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+  });
+  return Number(json?.jumlah ?? 0);
 }

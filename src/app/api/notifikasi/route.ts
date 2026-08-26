@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
     let kueri = supabase()
       .from("v_app_notifikasi")
-      .select("id, judul, isi, kategori, waktu_relatif, kelompok, dibaca, target, untuk_role")
+      .select("id, judul, isi, kategori, waktu_relatif, kelompok, dibaca, target, untuk_role, jenis_peristiwa")
       .order("dibuat_pada", { ascending: false })
       .limit(100);
 

@@ -35,6 +35,7 @@ import { BerandaScreen } from "@/features/beranda/beranda-screen";
 import { DatabaseScreen } from "@/features/database/database-screen";
 import { ModalVerifikasiWa } from "@/features/profil/pengaturan-akun";
 import { LayarPerbaikan } from "@/features/perbaikan/layar-perbaikan";
+import { PilihUcapanUltah } from "@/features/notifikasi/pilih-ucapan-ultah";
 import { bolehFitur } from "@/lib/fitur";
 import { toast, useAppStore } from "@/hooks/use-app-store";
 import { adalahPimred } from "@/lib/jabatan";
@@ -363,6 +364,7 @@ export default function Page() {
   // ------------------------------------------------------------
   const izinFitur = useAppStore((s) => s.izinFitur);
   const [nagVerifWa, setNagVerifWa] = useState(false);
+  const [ultahBuka, setUltahBuka] = useState(false);
   useEffect(() => {
     if (!aplikasiAktif || !user || user.wa_terverifikasi !== false) return;
     const JEDA_MS = 3 * 60 * 60 * 1000;
@@ -621,6 +623,18 @@ export default function Page() {
         </motion.div>
       )}
 
+      {/* Pemilih ucapan ulang tahun (dari notifikasi ultah yang diklik) */}
+      {siap && user && !menyambut && ultahBuka && (
+        <PilihUcapanUltah
+          onTutup={() => setUltahBuka(false)}
+          onBukaChat={() => {
+            setUltahBuka(false);
+            setSubLayar(null);
+            pilihTab("chat");
+          }}
+        />
+      )}
+
       {/* Tagihan verifikasi WA (tiap 3 jam bagi yang belum) */}
       {siap && user && !menyambut && nagVerifWa && (
         <ModalVerifikasiWa onTutup={tutupNagVerifWa} />
@@ -692,6 +706,7 @@ export default function Page() {
                 ) : subLayar.nama === "notifikasi" ? (
                   <NotifikasiScreen
                     onTarget={handleTarget}
+                    onUltah={() => setUltahBuka(true)}
                     onKembali={() => setSubLayar(null)}
                   />
                 ) : subLayar.nama === "absensi" ? (

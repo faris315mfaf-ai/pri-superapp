@@ -176,9 +176,11 @@ export function AuthScreen({ onMasukBerhasil }: AuthScreenProps) {
             )}
             {langkah === "daftar" && (
               <FormDaftar
-                onTerkirim={(nomor) => {
+                onTerkirim={(nomor, otpTerkirim) => {
                   setNomorOtp(nomor);
-                  setLangkah("otp");
+                  // OTP gagal terkirim → lewati verifikasi, langsung ke
+                  // layar menunggu persetujuan (HR/master sudah dikabari).
+                  setLangkah(otpTerkirim ? "otp" : "menunggu");
                 }}
                 keMasuk={() => setLangkah("masuk")}
               />
@@ -437,7 +439,7 @@ function FormDaftar({
   onTerkirim,
   keMasuk,
 }: {
-  onTerkirim: (nomor: string) => void;
+  onTerkirim: (nomor: string, otpTerkirim: boolean) => void;
   keMasuk: () => void;
 }) {
   const [nama, setNama] = useState("");
@@ -459,14 +461,22 @@ function FormDaftar({
     setError(null);
     setMemuat(true);
     try {
-      const { nomor_wa } = await daftarService({
+      const { nomor_wa, otp_terkirim } = await daftarService({
         nama: nama.trim(),
         username: username.trim(),
         password: sandi,
         nomor_wa: nomor,
       });
-      toast("sukses", "Kode terkirim", "Cek WhatsApp Anda untuk kode 6 angka.");
-      onTerkirim(nomor_wa);
+      if (otp_terkirim) {
+        toast("sukses", "Kode terkirim", "Cek WhatsApp Anda untuk kode 6 angka.");
+      } else {
+        toast(
+          "info",
+          "Pendaftaran diterima",
+          "Kode WhatsApp gagal terkirim — akun Anda menunggu persetujuan pengurus.",
+        );
+      }
+      onTerkirim(nomor_wa, otp_terkirim);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal mendaftar. Coba lagi.");
     } finally {

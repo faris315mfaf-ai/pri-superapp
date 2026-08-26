@@ -15,6 +15,7 @@ import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import { buatHashSandi } from "@/lib/sandi";
 import { normalkanNomorWa, nomorWaSah, FonnteBelumDiaturError } from "@/lib/fonnte";
 import { kirimOtp } from "@/lib/otp";
+import { kirimKabar } from "@/lib/notifikasi";
 
 export const dynamic = "force-dynamic";
 
@@ -114,15 +115,39 @@ export async function POST(request: Request) {
       }
     }
 
+    // Coba kirim OTP. BILA GAGAL, pendaftaran TIDAK dibatalkan:
+    // akunnya sudah dibuat berstatus 'menunggu', jadi pengguna tetap
+    // bisa lanjut — hanya saja WA-nya belum terverifikasi dan HR/master
+    // WAJIB menyetujuinya manual. Verifikasi WhatsApp menutup akun dari
+    // penyalahgunaan; tanpa itu, persetujuan manusia yang menggantikan.
+    let otpTerkirim = true;
     try {
       await kirimOtp(nomor, "daftar");
     } catch (e) {
-      if (e instanceof FonnteBelumDiaturError) {
-        throw Object.assign(new Error(e.message), { status: 503 });
+      // Jeda 60 detik (kode belum kedaluwarsa) BUKAN kegagalan kirim —
+      // teruskan apa adanya supaya pengguna tahu harus menunggu, bukan
+      // dianggap pendaftaran tanpa WA.
+      const status = (e as { status?: number })?.status;
+      if (status === 429) {
+        return { sukses: true, nomor_wa: nomor, otp_terkirim: true };
       }
-      throw e;
+      otpTerkirim = false;
+      console.error(
+        "[daftar] OTP gagal terkirim, lanjut tanpa verifikasi WA:",
+        e instanceof Error ? e.message : e,
+      );
+      // HR/master WAJIB diberi tahu — pendaftar tanpa WA terverifikasi
+      // tidak boleh terlewat. Gagal mengabari tidak menggagalkan
+      // pendaftaran (kirimKabar sudah menelan errornya sendiri).
+      await kirimKabar({
+        judul: "Pendaftar baru tanpa verifikasi WhatsApp",
+        isi: `${nama || username} mendaftar, tetapi OTP WhatsApp gagal terkirim. Periksa dan setujui manual di Kelola Pengguna bila memang sah.`,
+        kategori: "peringatan",
+        jenis_peristiwa: "pendaftar_tanpa_wa",
+        untukRole: ["admin_hr", "super_admin", "master"],
+      });
     }
 
-    return { sukses: true, nomor_wa: nomor };
+    return { sukses: true, nomor_wa: nomor, otp_terkirim: otpTerkirim };
   });
 }

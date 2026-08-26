@@ -84,6 +84,46 @@ export async function GET(request: Request) {
   });
 }
 
+/**
+ * POST /api/pengguna — SETUJUI SEMUA pendaftar yang masih menunggu,
+ * sekaligus, sebagai peran "anggota".
+ *
+ * Untuk situasi banyak pendaftaran masuk bersamaan. Sengaja hanya
+ * memberi peran anggota (bukan peran istimewa apa pun), jadi tidak ada
+ * kuota jabatan yang bisa dilanggar dan tidak ada risiko menaikkan
+ * banyak orang ke peran berbahaya dalam sekali klik. Peran/jabatan
+ * lanjutan tetap diberikan satu per satu seperti biasa.
+ */
+export async function POST(request: Request) {
+  return bungkus(async () => {
+    const admin = await pastikanSuperAdmin(request);
+    const db = supabase();
+
+    const { data, error } = await db
+      .from("app_user")
+      .update({
+        status: "aktif",
+        aktif: true,
+        role: "anggota",
+        disetujui_oleh: admin.nama,
+        disetujui_pada: new Date().toISOString(),
+      })
+      .eq("status", "menunggu")
+      .select("id");
+    if (error) {
+      console.error("[pengguna] setujui semua:", error.message);
+      throw new Error("Gagal menyetujui pendaftar.");
+    }
+
+    // Buang cache sesi tiap akun yang berubah supaya statusnya berlaku
+    // seketika bila mereka sudah memegang token (mis. sedang di layar
+    // "menunggu persetujuan").
+    for (const u of data ?? []) await hapusCacheUser(u.id);
+
+    return { sukses: true, jumlah: (data ?? []).length };
+  });
+}
+
 export async function PATCH(request: Request) {
   return bungkus(async () => {
     const admin = await pastikanSuperAdmin(request);

@@ -31,11 +31,29 @@ export function ulangTahunHariIni(u: { tanggal_lahir?: string | null }): boolean
 const KEPING = ["🎉", "🎊", "✨", "🎈", "⭐"];
 
 export function ConfettiUltah() {
+  // KENAPA skala tinggi: confetti jatuh sejauh 110vh dalam durasi TETAP,
+  // jadi di layar tinggi (desktop) jaraknya lebih panjang sehingga
+  // TERLIHAT jatuh lebih cepat, dan di layar pendek lebih lambat —
+  // itulah "kecepatan tidak konsisten" yang dilaporkan. Dengan
+  // menskalakan durasi sebanding tinggi layar, KECEPATAN (px/detik)
+  // jadi seragam di semua ukuran. Nilai awal 1 supaya render server &
+  // klien cocok; disetel setelah mount tanpa memicu render beruntun.
+  const [skala, setSkala] = useState(1);
+  useEffect(() => {
+    const TINGGI_ACUAN = 800; // acuan ~layar HP
+    const sesuaikan = () => setSkala(window.innerHeight / TINGGI_ACUAN);
+    void Promise.resolve().then(sesuaikan);
+    window.addEventListener("resize", sesuaikan);
+    return () => window.removeEventListener("resize", sesuaikan);
+  }, []);
+
   return (
     <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden" aria-hidden="true">
       {Array.from({ length: 24 }, (_, i) => {
         const kiri = (i * 37) % 100; // sebaran horizontal deterministik
-        const durasi = 4 + ((i * 13) % 40) / 10; // 4–8 detik
+        // Durasi dasar 4–8 detik, diskalakan tinggi layar agar kecepatan
+        // jatuhnya seragam di HP maupun desktop.
+        const durasi = (4 + ((i * 13) % 40) / 10) * skala;
         const tunda = ((i * 7) % 30) / 10; // 0–3 detik
         return (
           <span

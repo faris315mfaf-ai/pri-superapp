@@ -42,6 +42,8 @@ type TargetLayar = "qc" | "tv" | "dashboard" | null;
 
 type NotifikasiScreenProps = {
   onTarget: (target: TargetLayar) => void;
+  /** Notifikasi ulang tahun diklik → buka pemilih ucapan */
+  onUltah?: () => void;
   /** Kembali ke layar sebelumnya (notifikasi kini sub-layar) */
   onKembali?: () => void;
 };
@@ -93,9 +95,10 @@ function targetLayar(target: NotifikasiItem["target"]): TargetLayar {
 type BarisNotifikasiProps = {
   item: NotifikasiItem;
   onTarget: (target: TargetLayar) => void;
+  onUltah?: () => void;
 };
 
-function BarisNotifikasi({ item, onTarget }: BarisNotifikasiProps) {
+function BarisNotifikasi({ item, onTarget, onUltah }: BarisNotifikasiProps) {
   const tandaiDibaca = useAppStore((s) => s.tandaiDibaca);
   const hapusNotifikasi = useAppStore((s) => s.hapusNotifikasi);
 
@@ -168,7 +171,10 @@ function BarisNotifikasi({ item, onTarget }: BarisNotifikasiProps) {
             // Bedakan tap vs drag: offset kecil berarti tap biasa
             if (Math.abs(x.get()) > 6) return;
             tandaiDibaca(item.id);
-            onTarget(targetLayar(item.target));
+            // Notifikasi ulang tahun membuka pemilih ucapan, bukan
+            // berpindah layar seperti notifikasi lain.
+            if (item.jenis_peristiwa === "ultah" && onUltah) onUltah();
+            else onTarget(targetLayar(item.target));
           }}
           aria-label={`Notifikasi: ${item.judul}, ${item.waktu_relatif}${
             item.dibaca ? "" : ", belum dibaca"
@@ -225,7 +231,7 @@ function BarisNotifikasi({ item, onTarget }: BarisNotifikasiProps) {
 // NotifikasiScreen
 // ------------------------------------------------------------
 
-export function NotifikasiScreen({ onTarget, onKembali }: NotifikasiScreenProps) {
+export function NotifikasiScreen({ onTarget, onUltah, onKembali }: NotifikasiScreenProps) {
   const notifikasi = useAppStore((s) => s.notifikasi);
   const tandaiSemuaDibaca = useAppStore((s) => s.tandaiSemuaDibaca);
   // Penanda dari page.tsx: pemuatan pertama sudah selesai (sukses ATAU
@@ -304,7 +310,7 @@ export function NotifikasiScreen({ onTarget, onKembali }: NotifikasiScreenProps)
               <SectionTitle judul={judul} />
               <AnimatePresence>
                 {isiSeksi.map((item) => (
-                  <BarisNotifikasi key={item.id} item={item} onTarget={onTarget} />
+                  <BarisNotifikasi key={item.id} item={item} onTarget={onTarget} onUltah={onUltah} />
                 ))}
               </AnimatePresence>
             </FadeInUp>

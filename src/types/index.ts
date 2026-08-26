@@ -180,6 +180,8 @@ export type NotifikasiItem = {
   kelompok: "HARI_INI" | "KEMARIN" | "LEBIH_LAMA";
   dibaca: boolean;
   target: "qc" | "tv" | "dashboard" | "notifikasi" | null;
+  /** Jenis peristiwa (mis. "ultah") — untuk aksi klik khusus */
+  jenis_peristiwa?: string;
 };
 
 // Aktivitas terbaru di dashboard

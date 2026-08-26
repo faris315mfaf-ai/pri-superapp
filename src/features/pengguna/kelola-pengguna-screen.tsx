@@ -29,12 +29,15 @@ import {
   Users,
   X,
   Search,
+  CheckCheck,
 } from "lucide-react";
 import { EmptyState, FadeInUp, GlassSkeleton, StatusBadge } from "@/components/pri-ui";
 import { GlassCard } from "@/components/glass-card";
 import { FotoBulat } from "@/components/foto-bulat";
 import { toast } from "@/hooks/use-app-store";
-import { getPengguna, ubahPengguna, type PenggunaAdmin } from "@/services";
+import { getPengguna, ubahPengguna, type PenggunaAdmin,
+  setujuiSemuaPendaftar,
+} from "@/services";
 import { butuhSubDivisi, DIVISI, pilihanSubDivisi } from "@/lib/struktur";
 import { JABATAN_PARTAI, KUOTA_JABATAN, jabatanLengkap } from "@/lib/jabatan";
 import { cn } from "@/lib/utils";
@@ -82,6 +85,7 @@ export function KelolaPenggunaScreen({ onKembali }: { onKembali: () => void }) {
   const [memilihJabatan, setMemilihJabatan] = useState<PenggunaAdmin | null>(null);
   const [sedangProses, setSedangProses] = useState<string | null>(null);
   const [muatUlang, setMuatUlang] = useState(0);
+  const [sedangSemua, setSedangSemua] = useState(false);
   // Penghapusan tidak bisa dibatalkan, jadi selalu lewat konfirmasi
   const [konfirmasiHapus, setKonfirmasiHapus] = useState<PenggunaAdmin | null>(null);
 
@@ -146,6 +150,20 @@ export function KelolaPenggunaScreen({ onKembali }: { onKembali: () => void }) {
 
   // Pencarian nama/username & saringan divisi. Dengan 100+ anggota,
   // menggulir daftar untuk mencari satu orang sudah tidak masuk akal.
+  async function setujuiSemua() {
+    if (sedangSemua) return;
+    setSedangSemua(true);
+    try {
+      const jml = await setujuiSemuaPendaftar();
+      toast("sukses", `${jml} pendaftar disetujui`, "Semua kini berperan Anggota.");
+      setMuatUlang((n) => n + 1);
+    } catch (e) {
+      toast("error", "Gagal menyetujui semua", e instanceof Error ? e.message : "");
+    } finally {
+      setSedangSemua(false);
+    }
+  }
+
   const kunci = cari.trim().toLowerCase();
   const terfilter = (daftar ?? []).filter((u) => {
     if (saringan !== "semua" && u.status !== saringan) return false;
@@ -271,6 +289,26 @@ export function KelolaPenggunaScreen({ onKembali }: { onKembali: () => void }) {
           </button>
         ))}
       </div>
+
+      {/* Setujui semua — hanya saat menyaring "Menunggu" & ada isinya.
+          Semua yang disetujui menjadi anggota; peran istimewa tetap
+          ditetapkan satu per satu. */}
+      {saringan === "menunggu" && ringkasan.menunggu > 0 && (
+        <button
+          type="button"
+          disabled={sedangSemua}
+          onClick={() => void setujuiSemua()}
+          className="btn-tekan mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-[13px] font-bold text-white disabled:opacity-60"
+          style={{ background: "linear-gradient(135deg, #10B981, #059669)" }}
+        >
+          {sedangSemua ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <CheckCheck className="h-4 w-4" aria-hidden="true" />
+          )}
+          Setujui semua {ringkasan.menunggu} pendaftar sebagai Anggota
+        </button>
+      )}
 
       <GlassCard className="mt-3 p-3">
         {daftar === null ? (
