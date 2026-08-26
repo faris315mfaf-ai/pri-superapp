@@ -31,6 +31,7 @@ import {
   ShieldCheck,
   Smile,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
@@ -46,6 +47,8 @@ import {
 import { toast } from "@/hooks/use-app-store";
 import { kompresGambar } from "@/lib/gambar-kompres";
 import { IkonStreak } from "@/components/ikon-streak";
+import { PanelGrup } from "./panel-grup";
+import { getGrupDivisiku, type InfoGrupDivisi } from "@/services";
 import {
   getDaftarChat,
   getKandidatChat,
@@ -799,6 +802,9 @@ export function ChatScreen({
   const [pengawas, setPengawas] = useState(false);
   const [chatAktif, setChatAktif] = useState(true);
   const [modeChat, setModeChat] = useState<"terbuka" | "persetujuan">("terbuka");
+  // Grup divisi (spek 4.2) — null bila belum berdivisi
+  const [grup, setGrup] = useState<InfoGrupDivisi | null>(null);
+  const [grupBuka, setGrupBuka] = useState(false);
   const [modalPantau, setModalPantau] = useState(false);
 
   // Daftar chat dimuat + disegarkan tiap 10 dtk (badge unread hidup).
@@ -812,6 +818,8 @@ export function ChatScreen({
         setPengawas(hasil.pengawas);
         setChatAktif(hasil.chat_aktif);
         setModeChat(hasil.chat_mode);
+        // Grup divisi ikut disegarkan bersama daftar (badge unread hidup).
+        setGrup(await getGrupDivisiku());
       } catch {
         if (hidup && daftar === null) setDaftar([]);
       }
@@ -910,6 +918,49 @@ export function ChatScreen({
         </div>
       )}
 
+      {/* Grup divisi — tersemat di atas daftar (spek 4.2) */}
+      {grup && (
+        <FadeInUp>
+          <button
+            type="button"
+            onClick={() => setGrupBuka(true)}
+            className="btn-tekan mt-4 w-full text-left"
+          >
+            <GlassCard className="flex items-center gap-3 border border-pri/25 p-3">
+              <span
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+                aria-hidden="true"
+              >
+                <Users className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-bold text-teks-utama">
+                    Grup {grup.divisi}
+                  </p>
+                  {grup.waktu_terakhir && (
+                    <span className="shrink-0 text-[10px] text-teks-sekunder">
+                      {jamWIB(grup.waktu_terakhir)}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-0.5 flex items-center justify-between gap-2">
+                  <p className="truncate text-xs text-teks-sekunder">
+                    {grup.cuplikan || `${grup.anggota} anggota — koordinasi divisi`}
+                  </p>
+                  {grup.belum_dibaca > 0 && (
+                    <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-pri px-1.5 text-[10px] font-bold text-white">
+                      {grup.belum_dibaca > 99 ? "99+" : grup.belum_dibaca}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </GlassCard>
+          </button>
+        </FadeInUp>
+      )}
+
       {/* Daftar percakapan */}
       <FadeInUp>
         <div className="mt-4 flex flex-col gap-2">
@@ -1006,6 +1057,29 @@ export function ChatScreen({
 
       {/* Panel percakapan penuh */}
       <AnimatePresence>
+        {/* Grup divisi meluncur masuk dengan animasi yang sama */}
+        {grupBuka && grup && (
+          <motion.div
+            key={`grup-${grup.divisi}`}
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", stiffness: 340, damping: 34 }}
+            className="fixed inset-0 z-[60]"
+          >
+            <div className="absolute inset-0 bg-[var(--app-bg)]" />
+            <PanelGrup
+              user={user}
+              divisi={grup.divisi}
+              anggota={grup.anggota}
+              onKembali={() => {
+                setGrupBuka(false);
+                setMuatUlang((n) => n + 1);
+              }}
+              onSegarkanDaftar={() => setMuatUlang((n) => n + 1)}
+            />
+          </motion.div>
+        )}
         {kontakAktif && (
           <motion.div
             key={`chat-${kontakAktif.id}`}

@@ -2380,3 +2380,80 @@ export async function getStreakSaya(): Promise<{ hari: number; restore_tersedia:
     return { hari: 0, restore_tersedia: false };
   }
 }
+
+// ------------------------------------------------------------
+// Grup chat divisi (spek 4.2)
+// ------------------------------------------------------------
+
+export type InfoGrupDivisi = {
+  divisi: string;
+  anggota: number;
+  cuplikan: string;
+  waktu_terakhir: string;
+  belum_dibaca: number;
+};
+
+export type PesanGrup = {
+  id: string;
+  pengirim_id: string;
+  pengirim_nama: string;
+  pengirim_avatar: string;
+  isi: string;
+  gambar_url: string;
+  dibuat_pada: string;
+  dihapus?: boolean;
+};
+
+/** Info grup divisiku untuk daftar chat (null bila belum berdivisi). */
+export async function getGrupDivisiku(): Promise<InfoGrupDivisi | null> {
+  try {
+    const json = await fetchJson("/api/chat/grup", { headers: headerToken() });
+    if (!json?.divisi) return null;
+    return {
+      divisi: json.divisi as string,
+      anggota: Number(json.anggota ?? 0),
+      cuplikan: (json.cuplikan as string) ?? "",
+      waktu_terakhir: (json.waktu_terakhir as string) ?? "",
+      belum_dibaca: Number(json.belum_dibaca ?? 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Pesan grup divisiku (sejak = polling tambahan saja). */
+export async function getPesanGrup(sejak?: string): Promise<PesanGrup[]> {
+  const params = new URLSearchParams({ pesan: "1" });
+  if (sejak) params.set("sejak", sejak);
+  const json = await fetchJson(`/api/chat/grup?${params.toString()}`, {
+    headers: headerToken(),
+  });
+  return (json.data ?? []) as PesanGrup[];
+}
+
+export async function kirimPesanGrup(
+  isi: string,
+  gambar?: string,
+): Promise<{ gambar_url: string }> {
+  const json = await fetchJson("/api/chat/grup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "kirim", isi, gambar }),
+  });
+  return { gambar_url: (json.gambar_url as string) ?? "" };
+}
+
+export async function hapusPesanGrup(pesanId: string): Promise<void> {
+  await fetchJson("/api/chat/grup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "hapus_pesan", pesan_id: pesanId }),
+  });
+}
+
+export async function tandaiGrupDibaca(): Promise<void> {
+  await fetchJson("/api/chat/grup", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+  }).catch(() => undefined);
+}
