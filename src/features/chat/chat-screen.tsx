@@ -48,6 +48,7 @@ import { toast } from "@/hooks/use-app-store";
 import { kompresGambar } from "@/lib/gambar-kompres";
 import { IkonStreak } from "@/components/ikon-streak";
 import { PanelGrup } from "./panel-grup";
+import { ProfilPublikModal } from "@/features/profil/profil-publik";
 import { getGrupDivisiku, type InfoGrupDivisi } from "@/services";
 import {
   getDaftarChat,
@@ -111,6 +112,7 @@ function PanelPercakapan({
   const [pesanDipilih, setPesanDipilih] = useState<ChatPesan | null>(null);
   // Gambar yang sedang dibuka ukuran penuh
   const [gambarPenuh, setGambarPenuh] = useState<string | null>(null);
+  const [profilBuka, setProfilBuka] = useState(false);
   const inputGambarRef = useRef<HTMLInputElement | null>(null);
   const timerTekanRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ujungRef = useRef<HTMLDivElement | null>(null);
@@ -255,17 +257,27 @@ function PanelPercakapan({
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        {kontak.lawan_avatar ? (
-          <FotoBulat src={kontak.lawan_avatar} ukuran={36} />
-        ) : (
-          <AvatarInisial nama={kontak.lawan_nama} ukuran={36} />
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-teks-utama">{kontak.lawan_nama}</p>
-          <p className="text-[10px] text-teks-sekunder">
-            {statusKontak === "diterima" ? "Percakapan terbuka" : "Menunggu persetujuan"}
-          </p>
-        </div>
+        {/* Ketuk nama/avatar -> profil publik ala ML (spek 4.3) */}
+        <button
+          type="button"
+          onClick={() => setProfilBuka(true)}
+          aria-label={`Lihat profil ${kontak.lawan_nama}`}
+          className="btn-tekan flex min-w-0 flex-1 items-center gap-3 text-left"
+        >
+          {kontak.lawan_avatar ? (
+            <FotoBulat src={kontak.lawan_avatar} ukuran={36} />
+          ) : (
+            <AvatarInisial nama={kontak.lawan_nama} ukuran={36} />
+          )}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-bold text-teks-utama">
+              {kontak.lawan_nama}
+            </span>
+            <span className="block text-[10px] text-teks-sekunder">
+              {statusKontak === "diterima" ? "Percakapan terbuka · ketuk untuk profil" : "Menunggu persetujuan"}
+            </span>
+          </span>
+        </button>
       </header>
 
       {/* Isi percakapan */}
@@ -523,6 +535,15 @@ function PanelPercakapan({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Profil publik lawan bicara (spek 4.3) */}
+      {profilBuka && (
+        <ProfilPublikModal
+          userId={kontak.lawan_id}
+          namaAwal={kontak.lawan_nama}
+          onTutup={() => setProfilBuka(false)}
+        />
       )}
 
       {/* Lightbox gambar ukuran penuh */}

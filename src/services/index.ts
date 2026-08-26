@@ -2535,3 +2535,77 @@ export async function hapusAcara(id: string): Promise<void> {
     body: JSON.stringify({ id }),
   });
 }
+
+// ------------------------------------------------------------
+// Profil ala ML: Momen Terbaik + like (spek 4.3)
+// ------------------------------------------------------------
+
+export type FotoMomen = {
+  id: string;
+  url: string;
+  suka: number;
+  ku_suka: boolean;
+};
+
+export type ProfilMomen = {
+  milik_sendiri: boolean;
+  pemilik: {
+    id: string;
+    nama: string;
+    nama_panggilan: string;
+    jabatan: string;
+    divisi: string;
+    avatar_url: string;
+  } | null;
+  suka_profil: number;
+  ku_suka_profil: boolean;
+  foto: FotoMomen[];
+};
+
+/** Profil momen + like — tanpa userId = milik sendiri. */
+export async function getProfilMomen(userId?: string): Promise<ProfilMomen> {
+  const params = userId ? `?user=${encodeURIComponent(userId)}` : "";
+  const json = await fetchJson(`/api/profil/momen${params}`, { headers: headerToken() });
+  return json as ProfilMomen;
+}
+
+/** Unggah foto momen (data URL <=300KB); gantiId wajib saat galeri penuh. */
+export async function unggahFotoMomen(
+  foto: string,
+  gantiId?: string,
+): Promise<{ id: string; url: string }> {
+  const json = await fetchJson("/api/profil/momen", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "unggah", foto, ganti_id: gantiId }),
+  });
+  return { id: json.id as string, url: json.url as string };
+}
+
+export async function hapusFotoMomen(fotoId: string): Promise<void> {
+  await fetchJson("/api/profil/momen", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ foto_id: fotoId }),
+  });
+}
+
+/** Toggle like satu foto; mengembalikan keadaan baru. */
+export async function sukaFoto(fotoId: string): Promise<boolean> {
+  const json = await fetchJson("/api/profil/momen", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "suka_foto", foto_id: fotoId }),
+  });
+  return json.suka === true;
+}
+
+/** Toggle like profil seseorang; mengembalikan keadaan baru. */
+export async function sukaProfil(userId: string): Promise<boolean> {
+  const json = await fetchJson("/api/profil/momen", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "suka_profil", user_id: userId }),
+  });
+  return json.suka === true;
+}

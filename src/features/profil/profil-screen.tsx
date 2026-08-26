@@ -27,6 +27,7 @@ import {
   User as UserIcon,
   Zap,
   Sparkles,
+  Heart,
 } from "lucide-react";
 import { LogoPri } from "@/components/logo-pri";
 import {
@@ -35,11 +36,15 @@ import {
   SectionTitle,
   StatusBadge,
   ThemeToggle,
+  GlassSkeleton,
 } from "@/components/pri-ui";
 import { toast, useAppStore } from "@/hooks/use-app-store";
 import { FotoBulat } from "@/components/foto-bulat";
 import { ConfettiUltah, TopiUltah, ulangTahunHariIni } from "@/components/ultah";
 import { KartuLengkapiData } from "./lengkapi-data";
+import { GaleriMomen } from "./galeri-momen";
+import { getProfilMomen, getStreakSaya, type ProfilMomen } from "@/services";
+import { IkonStreak } from "@/components/ikon-streak";
 import { deskripsiStruktur } from "@/lib/struktur";
 import {
   aktifkanPush,
@@ -304,6 +309,10 @@ export function ProfilScreen({
   // Hasil aksi pengguna menimpa bacaan peramban sampai render berikutnya,
   // supaya sakelarnya langsung bergerak begitu ditekan.
   const [statusManual, setStatusManual] = useState<StatusPush | null>(null);
+  // Profil ala ML (spek 4.3): galeri momen + skor suka + streak
+  const [momen, setMomen] = useState<ProfilMomen | null>(null);
+  const [streakku, setStreakku] = useState(0);
+  const [muatMomen, setMuatMomen] = useState(0);
   const statusNotifikasi = statusManual ?? izinPeramban;
   const [sedangUbahPush, setSedangUbahPush] = useState(false);
   const pushAktif = statusNotifikasi === "aktif";
@@ -367,6 +376,19 @@ export function ProfilScreen({
   const IkonTema = gelap ? Moon : Sun;
   const warnaIkonTema = gelap ? "#94A3B8" : "#F59E0B";
 
+  useEffect(() => {
+    let hidup = true;
+    void (async () => {
+      const [mm, st] = await Promise.allSettled([getProfilMomen(), getStreakSaya()]);
+      if (!hidup) return;
+      if (mm.status === "fulfilled") setMomen(mm.value);
+      if (st.status === "fulfilled") setStreakku(st.value.hari);
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, [muatMomen]);
+
   return (
     <div className="kolom-aplikasi px-4 pt-5 pb-32">
       {ultah && <ConfettiUltah />}
@@ -421,6 +443,23 @@ export function ProfilScreen({
             <p className="mt-2.5 text-[11px] font-medium text-teks-sekunder">
               {deskripsiStruktur(user) || user.jabatan}
             </p>
+            {/* Skor ala ML (spek 4.3): suka profil + api streak */}
+            <div className="mt-3 flex items-center gap-2">
+              <span className="glass-soft flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-bold text-teks-utama">
+                <Heart
+                  className="h-3.5 w-3.5 text-red-500"
+                  style={{ fill: "#ef4444" }}
+                  aria-hidden="true"
+                />
+                <span className="angka-tab">{momen?.suka_profil ?? 0}</span>
+                <span className="font-medium text-teks-sekunder">suka</span>
+              </span>
+              {streakku > 0 && (
+                <span className="glass-soft flex items-center rounded-full px-3 py-1.5">
+                  <IkonStreak hari={streakku} />
+                </span>
+              )}
+            </div>
             {ultah && (
               <p className="mt-1 text-[12px] font-bold text-amber-600 dark:text-amber-400">
                 🎂 Selamat ulang tahun{user.nama_panggilan ? `, ${user.nama_panggilan}` : ""}!
@@ -432,6 +471,20 @@ export function ProfilScreen({
 
       {/* Ajakan melengkapi data baru (panggilan/tgl lahir/divisi) */}
       <KartuLengkapiData user={user} />
+
+      {/* Momen Terbaik PRI (spek 4.3) */}
+      <FadeInUp delay={0.06}>
+        <SectionTitle judul="Momen Terbaik PRI" className="mt-6" />
+        {momen === null ? (
+          <GlassSkeleton className="h-24 rounded-2xl" />
+        ) : (
+          <GaleriMomen
+            foto={momen.foto}
+            milikSendiri
+            onBerubah={() => setMuatMomen((n) => n + 1)}
+          />
+        )}
+      </FadeInUp>
 
       {/* Panel Master — hanya untuk peran master, tidak untuk yang lain */}
       {user.role === "master" && onBukaPanelMaster && (
