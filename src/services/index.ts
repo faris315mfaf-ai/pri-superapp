@@ -1586,16 +1586,22 @@ export type ChatPesan = {
   isi: string;
   dibaca: boolean;
   dibuat_pada: string;
+  /** URL gambar bila ini pesan gambar */
+  gambar_url?: string;
+  /** Hanya di jalur pantau pengawas: pesan sudah ditarik pengguna */
+  dihapus?: boolean;
 };
 
 export async function getDaftarChat(): Promise<{
   chat_aktif: boolean;
+  chat_mode: "terbuka" | "persetujuan";
   pengawas: boolean;
   data: ChatKontak[];
 }> {
   const json = await fetchJson("/api/chat", { headers: headerToken() });
   return {
     chat_aktif: json.chat_aktif !== false,
+    chat_mode: json.chat_mode === "persetujuan" ? "persetujuan" : "terbuka",
     pengawas: Boolean(json.pengawas),
     data: (json.data ?? []) as ChatKontak[],
   };
@@ -1618,11 +1624,22 @@ export async function getKandidatChat(): Promise<KandidatChat[]> {
 export async function getPesanChat(
   kontakId: string,
   sejak?: string,
-): Promise<{ status: string; diminta_oleh: string; data: ChatPesan[] }> {
+): Promise<{
+  status: string;
+  diminta_oleh: string;
+  /** Pesan-ID milikku yang terakhir dibaca lawan (utk ceklis biru) */
+  terbaca_sampai: string;
+  data: ChatPesan[];
+}> {
   const params = new URLSearchParams({ kontak: kontakId });
   if (sejak) params.set("sejak", sejak);
   const json = await fetchJson(`/api/chat?${params.toString()}`, { headers: headerToken() });
-  return json as { status: string; diminta_oleh: string; data: ChatPesan[] };
+  return {
+    status: json.status as string,
+    diminta_oleh: json.diminta_oleh as string,
+    terbaca_sampai: (json.terbaca_sampai as string) ?? "0",
+    data: (json.data ?? []) as ChatPesan[],
+  };
 }
 
 export async function mulaiChat(targetId: string, isi?: string): Promise<string> {
@@ -1634,6 +1651,21 @@ export async function mulaiChat(targetId: string, isi?: string): Promise<string>
   return json.kontak_id as string;
 }
 
+/** Seperti mulaiChat, tapi ikut mengembalikan status kontaknya. */
+export async function mulaiChatLengkap(
+  targetId: string,
+): Promise<{ kontak_id: string; status: string }> {
+  const json = await fetchJson("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "mulai", target_id: targetId }),
+  });
+  return {
+    kontak_id: json.kontak_id as string,
+    status: (json.status as string) ?? "menunggu",
+  };
+}
+
 export async function jawabChat(kontakId: string, terima: boolean): Promise<void> {
   await fetchJson("/api/chat", {
     method: "POST",
@@ -1642,11 +1674,34 @@ export async function jawabChat(kontakId: string, terima: boolean): Promise<void
   });
 }
 
-export async function kirimPesanChat(kontakId: string, isi: string): Promise<void> {
+export async function kirimPesanChat(
+  kontakId: string,
+  isi: string,
+  gambar?: string,
+): Promise<{ gambar_url: string }> {
+  const json = await fetchJson("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "kirim", kontak_id: kontakId, isi, gambar }),
+  });
+  return { gambar_url: (json.gambar_url as string) ?? "" };
+}
+
+/** Tarik satu pesan — hilang dari tampilan kedua pihak (spek 1.14). */
+export async function hapusPesanChat(pesanId: string): Promise<void> {
   await fetchJson("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ aksi: "kirim", kontak_id: kontakId, isi }),
+    body: JSON.stringify({ aksi: "hapus_pesan", pesan_id: pesanId }),
+  });
+}
+
+/** Master mengubah mode chat: terbuka (bebas) vs persetujuan (lama). */
+export async function setModeChat(mode: "terbuka" | "persetujuan"): Promise<void> {
+  await fetchJson("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "mode", mode }),
   });
 }
 
@@ -1789,10 +1844,15 @@ export type ChatPantau = {
 /** Seluruh percakapan di sistem + status sakelar fitur chat. */
 export async function getPantauChat(): Promise<{
   chat_aktif: boolean;
+  chat_mode: "terbuka" | "persetujuan";
   data: ChatPantau[];
 }> {
   const json = await fetchJson("/api/chat?pantau=1", { headers: headerToken() });
-  return { chat_aktif: json.chat_aktif !== false, data: (json.data ?? []) as ChatPantau[] };
+  return {
+    chat_aktif: json.chat_aktif !== false,
+    chat_mode: json.chat_mode === "persetujuan" ? "persetujuan" : "terbuka",
+    data: (json.data ?? []) as ChatPantau[],
+  };
 }
 
 /** Isi satu percakapan milik orang lain (pemantauan). */

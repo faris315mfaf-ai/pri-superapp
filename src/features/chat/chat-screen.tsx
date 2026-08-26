@@ -21,6 +21,7 @@ import {
   Check,
   CheckCheck,
   Eye,
+  ImagePlus,
   Loader2,
   Megaphone,
   MessagesSquare,
@@ -43,6 +44,7 @@ import {
   ThemeToggle,
 } from "@/components/pri-ui";
 import { toast } from "@/hooks/use-app-store";
+import { kompresGambar } from "@/lib/gambar-kompres";
 import {
   getDaftarChat,
   getKandidatChat,
@@ -52,9 +54,11 @@ import {
   getPesanPantau,
   hapusChat,
   jawabChat,
+  hapusPesanChat,
   kirimPengumuman,
   kirimPesanChat,
-  mulaiChat,
+  mulaiChatLengkap,
+  setModeChat as setModeChatService,
   setSakelarChat,
   tandaiChatDibaca,
   type ChatKontak,
@@ -96,6 +100,15 @@ function PanelPercakapan({
   const [tulisan, setTulisan] = useState("");
   const [emojiBuka, setEmojiBuka] = useState(false);
   const [sedangKirim, setSedangKirim] = useState(false);
+  // Gambar yang siap dikirim (data URL hasil kompresi <=100KB)
+  const [gambarSiap, setGambarSiap] = useState<string | null>(null);
+  const [sedangKompres, setSedangKompres] = useState(false);
+  // Pesan yang dipilih untuk ditarik (long-press / klik-kanan)
+  const [pesanDipilih, setPesanDipilih] = useState<ChatPesan | null>(null);
+  // Gambar yang sedang dibuka ukuran penuh
+  const [gambarPenuh, setGambarPenuh] = useState<string | null>(null);
+  const inputGambarRef = useRef<HTMLInputElement | null>(null);
+  const timerTekanRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ujungRef = useRef<HTMLDivElement | null>(null);
   const idTerakhirRef = useRef<string>("0");
 
@@ -110,12 +123,33 @@ function PanelPercakapan({
         if (!hidup) return;
         setStatusKontak(hasil.status as ChatKontak["status"]);
         setDimintaOleh(hasil.diminta_oleh);
+        // Ceklis biru hidup: tandai biru semua pesan milikku sampai id
+        // yang server laporkan sudah dibaca lawan — polling inkremental
+        // tidak pernah mengunduh ulang pesan lama, jadi tanpa ini ceklis
+        // baru berubah setelah panel dibuka ulang.
+        const terbaca = Number(hasil.terbaca_sampai);
         if (hasil.data.length > 0) {
           idTerakhirRef.current = hasil.data[hasil.data.length - 1].id;
-          setPesan((lama) => (awal ? hasil.data : [...lama, ...hasil.data]));
+          setPesan((lama) => {
+            const gabung = awal ? hasil.data : [...lama, ...hasil.data];
+            return gabung.map((m) =>
+              m.pengirim_id === idKu && !m.dibaca && Number(m.id) <= terbaca
+                ? { ...m, dibaca: true }
+                : m,
+            );
+          });
           void tandaiChatDibaca(kontak.id);
-        } else if (awal) {
-          setPesan([]);
+        } else {
+          if (awal) setPesan([]);
+          else if (terbaca > 0) {
+            setPesan((lama) =>
+              lama.map((m) =>
+                m.pengirim_id === idKu && !m.dibaca && Number(m.id) <= terbaca
+                  ? { ...m, dibaca: true }
+                  : m,
+              ),
+            );
+          }
         }
       } catch {
         // Polling gagal sesaat — coba lagi putaran berikutnya.
@@ -141,23 +175,65 @@ function PanelPercakapan({
 
   async function kirim() {
     const isi = tulisan.trim();
-    if (!isi || sedangKirim) return;
+    if ((!isi && !gambarSiap) || sedangKirim) return;
     setSedangKirim(true);
     try {
-      await kirimPesanChat(kontak.id, isi);
+      const hasil = await kirimPesanChat(kontak.id, isi, gambarSiap ?? undefined);
       setTulisan("");
+      setGambarSiap(null);
       setEmojiBuka(false);
       // Tampilkan langsung tanpa menunggu polling
       const kini = new Date().toISOString();
       setPesan((lama) => [
         ...lama,
-        { id: `lokal-${Date.now()}`, pengirim_id: idKu, isi, dibaca: false, dibuat_pada: kini },
+        {
+          id: `lokal-${Date.now()}`,
+          pengirim_id: idKu,
+          isi,
+          dibaca: false,
+          dibuat_pada: kini,
+          gambar_url: hasil.gambar_url || undefined,
+        },
       ]);
     } catch (e) {
       toast("error", "Pesan gagal terkirim", e instanceof Error ? e.message : "");
     } finally {
       setSedangKirim(false);
     }
+  }
+
+  async function pilihGambar(file: File | null) {
+    if (!file || sedangKompres) return;
+    setSedangKompres(true);
+    try {
+      // Batas chat 100KB (spek 1.14) — kompresi otomatis di peramban.
+      setGambarSiap(await kompresGambar(file, 100));
+    } catch (e) {
+      toast("error", "Gambar tidak bisa dipakai", e instanceof Error ? e.message : "");
+    } finally {
+      setSedangKompres(false);
+    }
+  }
+
+  async function tarikPesan(p: ChatPesan) {
+    setPesanDipilih(null);
+    // Pesan lokal (belum punya id server) tidak bisa ditarik lewat API.
+    if (p.id.startsWith("lokal-")) return;
+    try {
+      await hapusPesanChat(p.id);
+      setPesan((lama) => lama.filter((x) => x.id !== p.id));
+      toast("sukses", "Pesan dihapus", "Hilang dari kedua pihak.");
+    } catch (e) {
+      toast("error", "Gagal menghapus pesan", e instanceof Error ? e.message : "");
+    }
+  }
+
+  // Long-press (sentuh) / klik kanan (desktop) memilih pesan untuk ditarik.
+  function mulaiTekan(p: ChatPesan) {
+    timerTekanRef.current = setTimeout(() => setPesanDipilih(p), 550);
+  }
+  function batalTekan() {
+    if (timerTekanRef.current) clearTimeout(timerTekanRef.current);
   }
 
   const menungguSaya = statusKontak === "menunggu" && dimintaOleh !== idKu;
@@ -197,7 +273,7 @@ function PanelPercakapan({
               <div key={p.id} className={cn("flex", milikku ? "justify-end" : "justify-start")}>
                 <div
                   className={cn(
-                    "max-w-[80%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed break-words",
+                    "max-w-[80%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed break-words select-none",
                     milikku
                       ? "rounded-br-md text-white"
                       : "glass rounded-bl-md text-teks-utama",
@@ -207,7 +283,30 @@ function PanelPercakapan({
                       ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" }
                       : undefined
                   }
+                  // Long-press (HP) / klik kanan (desktop) -> tarik pesan
+                  onPointerDown={() => mulaiTekan(p)}
+                  onPointerUp={batalTekan}
+                  onPointerLeave={batalTekan}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setPesanDipilih(p);
+                  }}
                 >
+                  {p.gambar_url && (
+                    <button
+                      type="button"
+                      onClick={() => setGambarPenuh(p.gambar_url ?? null)}
+                      aria-label="Buka gambar ukuran penuh"
+                      className="mb-1 block overflow-hidden rounded-xl"
+                    >
+                      <img
+                        src={p.gambar_url}
+                        alt="Gambar chat"
+                        loading="lazy"
+                        className="max-h-56 w-auto max-w-full rounded-xl object-contain"
+                      />
+                    </button>
+                  )}
                   {p.isi}
                   <span
                     className={cn(
@@ -216,12 +315,14 @@ function PanelPercakapan({
                     )}
                   >
                     {jamWIB(p.dibuat_pada)}
-                    {milikku &&
-                      (p.dibaca ? (
-                        <CheckCheck className="h-3 w-3" aria-hidden="true" />
-                      ) : (
-                        <Check className="h-3 w-3" aria-hidden="true" />
-                      ))}
+                    {/* Ceklis ala WA (spek 1.14): dua ceklis putih pudar =
+                        terkirim belum dibaca; dua ceklis BIRU = sudah dibaca. */}
+                    {milikku && (
+                      <CheckCheck
+                        className={cn("h-3.5 w-3.5", p.dibaca && "text-sky-300")}
+                        aria-label={p.dibaca ? "Sudah dibaca" : "Terkirim"}
+                      />
+                    )}
                   </span>
                 </div>
               </div>
@@ -292,7 +393,52 @@ function PanelPercakapan({
                 {300 - tulisan.length} karakter tersisa
               </p>
             )}
+            {/* Pratinjau gambar yang siap dikirim */}
+            {gambarSiap && (
+              <div className="glass mb-2 flex items-center gap-2 rounded-xl p-2">
+                <img
+                  src={gambarSiap}
+                  alt="Pratinjau gambar"
+                  className="h-14 w-14 rounded-lg object-cover"
+                />
+                <p className="min-w-0 flex-1 text-[11px] text-teks-sekunder">
+                  Gambar siap dikirim (terkompresi otomatis).
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setGambarSiap(null)}
+                  aria-label="Batalkan gambar"
+                  className="btn-tekan p-1.5 text-teks-sekunder"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
             <div className="flex items-end gap-2 pb-1">
+              <input
+                ref={inputGambarRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                aria-label="Pilih gambar"
+                onChange={(e) => {
+                  void pilihGambar(e.target.files?.[0] ?? null);
+                  e.target.value = ""; // supaya file sama bisa dipilih lagi
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => inputGambarRef.current?.click()}
+                disabled={sedangKompres}
+                aria-label="Kirim gambar"
+                className="glass btn-tekan flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-teks-sekunder disabled:opacity-60"
+              >
+                {sedangKompres ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <ImagePlus className="h-5 w-5" />
+                )}
+              </button>
               <button
                 type="button"
                 onClick={() => setEmojiBuka((v) => !v)}
@@ -321,7 +467,7 @@ function PanelPercakapan({
               <button
                 type="button"
                 onClick={() => void kirim()}
-                disabled={!tulisan.trim() || sedangKirim}
+                disabled={(!tulisan.trim() && !gambarSiap) || sedangKirim}
                 aria-label="Kirim pesan"
                 className="btn-tekan flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50"
                 style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
@@ -336,6 +482,69 @@ function PanelPercakapan({
           </div>
         )}
       </div>
+
+      {/* Konfirmasi tarik pesan (spek 1.14: hilang dari kedua pihak) */}
+      {pesanDipilih && (
+        <div
+          className="fixed inset-0 z-[95] flex items-center justify-center px-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Hapus pesan"
+        >
+          <div
+            className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+            onClick={() => setPesanDipilih(null)}
+          />
+          <div className="glass-strong relative w-full max-w-[320px] rounded-2xl p-5 text-center">
+            <p className="text-sm font-bold text-teks-utama">Hapus pesan ini?</p>
+            <p className="mt-1 text-[12px] leading-relaxed text-teks-sekunder">
+              Pesan akan hilang dari tampilan Anda DAN lawan bicara.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPesanDipilih(null)}
+                className="glass btn-tekan flex-1 rounded-xl py-2.5 text-sm font-semibold text-teks-utama"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => void tarikPesan(pesanDipilih)}
+                className="btn-tekan flex-1 rounded-xl py-2.5 text-sm font-bold text-white"
+                style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+              >
+                Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox gambar ukuran penuh */}
+      {gambarPenuh && (
+        <div
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-black/85 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Gambar ukuran penuh"
+          onClick={() => setGambarPenuh(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setGambarPenuh(null)}
+            aria-label="Tutup gambar"
+            className="btn-tekan absolute top-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <img
+            src={gambarPenuh}
+            alt="Gambar chat ukuran penuh"
+            className="max-h-full max-w-full rounded-xl object-contain"
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -588,6 +797,7 @@ export function ChatScreen({
   // Kewenangan pengawas (super admin/master) + sakelar fitur chat
   const [pengawas, setPengawas] = useState(false);
   const [chatAktif, setChatAktif] = useState(true);
+  const [modeChat, setModeChat] = useState<"terbuka" | "persetujuan">("terbuka");
   const [modalPantau, setModalPantau] = useState(false);
 
   // Daftar chat dimuat + disegarkan tiap 10 dtk (badge unread hidup).
@@ -600,6 +810,7 @@ export function ChatScreen({
         setDaftar(hasil.data);
         setPengawas(hasil.pengawas);
         setChatAktif(hasil.chat_aktif);
+        setModeChat(hasil.chat_mode);
       } catch {
         if (hidup && daftar === null) setDaftar([]);
       }
@@ -629,16 +840,21 @@ export function ChatScreen({
 
   async function mulai(id: string, nama: string) {
     try {
-      const kontakId = await mulaiChat(id);
-      toast("sukses", `Ajakan chat terkirim ke ${nama.split(" ")[0]}`);
+      const hasil = await mulaiChatLengkap(id);
+      toast(
+        "sukses",
+        hasil.status === "diterima"
+          ? `Chat dengan ${nama.split(" ")[0]} terbuka`
+          : `Ajakan chat terkirim ke ${nama.split(" ")[0]}`,
+      );
       setModalBaru(false);
       setMuatUlang((n) => n + 1);
       setKontakAktif({
-        id: kontakId,
+        id: hasil.kontak_id,
         lawan_id: id,
         lawan_nama: nama,
         lawan_avatar: "",
-        status: "menunggu",
+        status: hasil.status as ChatKontak["status"],
         diminta_oleh: user.id,
         cuplikan: "",
         waktu_terakhir: new Date().toISOString(),
@@ -693,10 +909,6 @@ export function ChatScreen({
         </div>
       )}
 
-      <p className="mt-2 text-[10.5px] text-teks-sekunder/80">
-        Pesan otomatis terhapus setelah 3 hari.
-      </p>
-
       {/* Daftar percakapan */}
       <FadeInUp>
         <div className="mt-4 flex flex-col gap-2">
@@ -710,7 +922,11 @@ export function ChatScreen({
               <EmptyState
                 ikon={MessagesSquare}
                 judul="Belum Ada Percakapan"
-                keterangan="Mulai chat dengan sesama anggota. Lawan bicara harus menerima ajakan dulu sebelum percakapan terbuka."
+                keterangan={
+                  modeChat === "terbuka"
+                    ? "Mulai chat dengan sesama anggota — percakapan langsung terbuka."
+                    : "Mulai chat dengan sesama anggota. Lawan bicara harus menerima ajakan dulu sebelum percakapan terbuka."
+                }
                 labelAksi="Mulai Chat Baru"
                 onAksi={() => void bukaModalBaru()}
                 className="py-8"
@@ -922,6 +1138,7 @@ function ModalPengawasChat({
 }) {
   const [daftar, setDaftar] = useState<ChatPantau[] | null>(null);
   const [aktif, setAktif] = useState(true);
+  const [mode, setMode] = useState<"terbuka" | "persetujuan">("terbuka");
   const [muatUlang, setMuatUlang] = useState(0);
   const [dibuka, setDibuka] = useState<ChatPantau | null>(null);
   const [isiPesan, setIsiPesan] = useState<ChatPesan[] | null>(null);
@@ -935,6 +1152,7 @@ function ModalPengawasChat({
         if (!hidup) return;
         setDaftar(hasil.data);
         setAktif(hasil.chat_aktif);
+        setMode(hasil.chat_mode);
       } catch {
         if (hidup) setDaftar([]);
       }
@@ -968,6 +1186,28 @@ function ModalPengawasChat({
       onBerubah();
     } catch (e) {
       toast("error", "Gagal mengubah", e instanceof Error ? e.message : "");
+    } finally {
+      setSedangProses(false);
+    }
+  }
+
+  async function ubahMode() {
+    if (sedangProses) return;
+    setSedangProses(true);
+    const modeBaru = mode === "terbuka" ? "persetujuan" : "terbuka";
+    try {
+      await setModeChatService(modeBaru);
+      setMode(modeBaru);
+      toast(
+        "sukses",
+        modeBaru === "terbuka" ? "Chat bebas dinyalakan" : "Mode persetujuan dinyalakan",
+        modeBaru === "terbuka"
+          ? "Semua orang bisa chat siapa saja tanpa persetujuan."
+          : "Chat baru harus diterima lawan bicara dulu.",
+      );
+      onBerubah();
+    } catch (e) {
+      toast("error", "Gagal mengubah mode", e instanceof Error ? e.message : "");
     } finally {
       setSedangProses(false);
     }
@@ -1037,6 +1277,32 @@ function ModalPengawasChat({
           </button>
         </div>
 
+        {/* Mode chat: bebas (tanpa persetujuan) vs persetujuan lama */}
+        <div className="glass mt-2 flex shrink-0 items-center gap-3 rounded-2xl px-3.5 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-teks-utama">Chat Bebas</p>
+            <p className="text-[11px] text-teks-sekunder">
+              {mode === "terbuka"
+                ? "Semua orang bisa chat siapa saja tanpa persetujuan"
+                : "Chat baru harus diterima lawan bicara dulu"}
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={sedangProses}
+            onClick={() => void ubahMode()}
+            className="btn-tekan rounded-xl px-3.5 py-2 text-xs font-bold text-white disabled:opacity-60"
+            style={{
+              background:
+                mode === "terbuka"
+                  ? "linear-gradient(135deg, #DC2626, #B91C1C)"
+                  : "linear-gradient(135deg, #10B981, #059669)",
+            }}
+          >
+            {mode === "terbuka" ? "Ke Persetujuan" : "Bebaskan"}
+          </button>
+        </div>
+
         <div className="scrollbar-tipis mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
           {dibuka ? (
             <>
@@ -1056,10 +1322,31 @@ function ModalPengawasChat({
                 </p>
               ) : (
                 isiPesan.map((m) => (
-                  <div key={m.id} className="glass-soft rounded-xl px-3 py-2">
+                  <div
+                    key={m.id}
+                    className={cn(
+                      "glass-soft rounded-xl px-3 py-2",
+                      m.dihapus && "border border-gagal/40",
+                    )}
+                  >
+                    {m.gambar_url && (
+                      <img
+                        src={m.gambar_url}
+                        alt="Gambar chat"
+                        loading="lazy"
+                        className="mb-1 max-h-32 rounded-lg object-contain"
+                      />
+                    )}
                     <p className="text-xs leading-relaxed text-teks-utama">{m.isi}</p>
                     <p className="mt-0.5 text-[10px] text-teks-sekunder">
                       {jamWIB(m.dibuat_pada)}
+                      {/* Pengawas tetap melihat pesan yang ditarik pengguna
+                          selama retensi 7 hari (spek 1.14). */}
+                      {m.dihapus && (
+                        <span className="ml-1.5 font-semibold text-gagal">
+                          ditarik pengguna
+                        </span>
+                      )}
                     </p>
                   </div>
                 ))
