@@ -126,7 +126,11 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   return bungkus(async () => {
-    const admin = await pastikanSuperAdmin(request);
+    // Auth dua lapis: semua tindakan butuh super admin/master, KECUALI
+    // ubah_divisi yang juga boleh dilakukan admin HR dan KETUA DIVISI
+    // (posisi kepala — spek 1.2; dibatasi lebih ketat di bawah).
+    const pemanggil = await userDariToken(tokenDari(request));
+    if (!pemanggil) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
 
     const body = (await request.json().catch(() => ({}))) as {
       id?: string;
@@ -146,6 +150,36 @@ export async function PATCH(request: Request) {
       sub_divisi?: string;
       posisi_divisi?: string;
     };
+
+    const adminPenuh = pemanggil.role === "super_admin" || pemanggil.role === "master";
+    const kepalaDivisi = pemanggil.posisi_divisi === "kepala" && Boolean(pemanggil.divisi);
+    if (!adminPenuh) {
+      const bolehTerbatas =
+        body.tindakan === "ubah_divisi" &&
+        (pemanggil.role === "admin_hr" || kepalaDivisi);
+      if (!bolehTerbatas) {
+        throw Object.assign(new Error("Hanya super admin yang boleh mengatur akun"), {
+          status: 403,
+        });
+      }
+      // Ketua divisi hanya boleh menarik orang KE DIVISINYA SENDIRI,
+      // dan tidak boleh mengangkat kepala (spek 1.2). HR bebas divisi.
+      if (kepalaDivisi && pemanggil.role !== "admin_hr") {
+        if ((body.divisi ?? "") !== pemanggil.divisi) {
+          throw Object.assign(
+            new Error("Ketua divisi hanya bisa menempatkan anggota ke divisinya sendiri."),
+            { status: 403 },
+          );
+        }
+        if (body.posisi_divisi === "kepala") {
+          throw Object.assign(
+            new Error("Hanya HR/master yang boleh mengangkat kepala divisi."),
+            { status: 403 },
+          );
+        }
+      }
+    }
+    const admin = pemanggil;
 
     const id = Number(body.id);
     if (!id) throw Object.assign(new Error("Akun tidak disebutkan"), { status: 400 });

@@ -95,24 +95,85 @@ export async function PATCH(request: Request) {
 
     // Anggota lama melengkapi data barunya dari layar Profil.
     // Jabatan & posisi kepala/anggota sengaja TIDAK bisa lewat sini.
+    //
+    // Aturan 1.14 (spek 1.2): tiga kolom di bawah punya pagar berbeda —
+    // baris app_user pemanggil dibaca dulu sebagai acuan.
+    const { data: sayaKini } = await db
+      .from("app_user")
+      .select("nama_panggilan, tanggal_lahir, panggilan_diubah_pada")
+      .eq("id", Number(user.id))
+      .maybeSingle();
+
     if (typeof body.nama_panggilan === "string") {
       const p = body.nama_panggilan.trim();
       if (p.length < 2 || p.length > 30) {
         throw Object.assign(new Error("Nama panggilan 2–30 karakter."), { status: 400 });
       }
-      perubahan.nama_panggilan = p;
+      // 1x per 7 hari BERJALAN (dihitung dari perubahan terakhir,
+      // bukan reset tiap Senin). Mengirim nilai yang sama tidak
+      // dihitung ganti — jatahnya tidak hangus sia-sia.
+      if (p !== (sayaKini?.nama_panggilan ?? "")) {
+        const terakhir = sayaKini?.panggilan_diubah_pada
+          ? Date.parse(String(sayaKini.panggilan_diubah_pada))
+          : 0;
+        const sisaMs = terakhir + 7 * 24 * 3600_000 - Date.now();
+        if (sisaMs > 0) {
+          const sisaHari = Math.ceil(sisaMs / (24 * 3600_000));
+          throw Object.assign(
+            new Error(
+              `Nama panggilan hanya bisa diganti 1x per minggu — coba lagi ${sisaHari} hari lagi.`,
+            ),
+            { status: 400 },
+          );
+        }
+        perubahan.nama_panggilan = p;
+        perubahan.panggilan_diubah_pada = new Date().toISOString();
+      }
     }
+
     if (typeof body.tanggal_lahir === "string" && body.tanggal_lahir) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(body.tanggal_lahir)) {
         throw Object.assign(new Error("Format tanggal lahir salah."), { status: 400 });
       }
-      perubahan.tanggal_lahir = body.tanggal_lahir;
+      // SATU KALI SEUMUR AKUN (harus sama dengan KTP). Setelah terisi,
+      // perubahan hanya lewat permintaan manual ke HR/master.
+      if (sayaKini?.tanggal_lahir) {
+        if (body.tanggal_lahir !== String(sayaKini.tanggal_lahir)) {
+          throw Object.assign(
+            new Error(
+              "Tanggal lahir sudah terkunci. Hubungi HR/master bila ada kesalahan data.",
+            ),
+            { status: 400 },
+          );
+        }
+        // Nilai sama = tidak dianggap perubahan.
+      } else {
+        // Usia minimal 16 tahun SAAT INPUT (dihitung dari tanggalnya,
+        // bukan tanggal-lahir-minimum yang dipatok mati).
+        const lahir = new Date(`${body.tanggal_lahir}T00:00:00+07:00`);
+        const kini = new Date();
+        let usia = kini.getFullYear() - lahir.getFullYear();
+        const belumUlangTahun =
+          kini.getMonth() < lahir.getMonth() ||
+          (kini.getMonth() === lahir.getMonth() && kini.getDate() < lahir.getDate());
+        if (belumUlangTahun) usia -= 1;
+        if (!Number.isFinite(usia) || usia < 16 || usia > 100) {
+          throw Object.assign(
+            new Error("Usia minimal 16 tahun, sesuai KTP."),
+            { status: 400 },
+          );
+        }
+        perubahan.tanggal_lahir = body.tanggal_lahir;
+      }
     }
+
+    // Divisi TIDAK bisa diubah sendiri (spek 1.2): hanya ketua
+    // divisinya, HR, atau master — lewat panel Kelola Pengguna.
     if (typeof body.divisi === "string" && body.divisi) {
-      const sub = (body.sub_divisi ?? "").trim();
-      pastikanStrukturSah(body.divisi, sub);
-      perubahan.divisi = body.divisi;
-      perubahan.sub_divisi = sub;
+      throw Object.assign(
+        new Error("Divisi hanya bisa diubah oleh ketua divisi atau HR/master."),
+        { status: 403 },
+      );
     }
 
     if (Object.keys(perubahan).length === 0) {

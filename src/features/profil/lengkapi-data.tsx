@@ -2,9 +2,15 @@
 
 // ============================================================
 // KartuLengkapiData — ajakan bagi ANGGOTA LAMA (terdaftar sebelum
-// v1.12) untuk melengkapi data barunya: nama panggilan, tanggal
-// lahir, dan divisi. Pendaftar baru mengisinya saat registrasi,
-// jadi kartu ini hilang sendiri begitu datanya lengkap.
+// v1.12) untuk melengkapi data barunya: nama panggilan & tanggal
+// lahir. Pendaftar baru mengisinya saat registrasi, jadi kartu ini
+// hilang sendiri begitu datanya lengkap.
+//
+// Aturan 1.14 (spek 1.2):
+// - Tanggal lahir hanya bisa diisi SEKALI (wajib sesuai KTP, usia
+//   minimal 16) — setelahnya terkunci, koreksi lewat HR/master.
+// - DIVISI tidak lagi diisi sendiri: ketua divisi/HR/master yang
+//   menetapkan lewat Kelola Pengguna, jadi kolomnya dihapus dari sini.
 // ============================================================
 
 import { useState } from "react";
@@ -12,41 +18,34 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Sparkles, X } from "lucide-react";
 import { toast, useAppStore } from "@/hooks/use-app-store";
 import { ubahProfilSaya } from "@/services";
-import { butuhSubDivisi, DIVISI, pilihanSubDivisi } from "@/lib/struktur";
 import type { User } from "@/types";
 
 export function KartuLengkapiData({ user }: { user: User }) {
   const kurangPanggilan = !(user.nama_panggilan ?? "").trim();
   const kurangLahir = !user.tanggal_lahir;
-  const kurangDivisi = !(user.divisi ?? "").trim();
-  const perlu = kurangPanggilan || kurangLahir || kurangDivisi;
+  const perlu = kurangPanggilan || kurangLahir;
 
   const [buka, setBuka] = useState(false);
   const [panggilan, setPanggilan] = useState(user.nama_panggilan ?? "");
   const [tanggalLahir, setTanggalLahir] = useState(user.tanggal_lahir ?? "");
-  const [divisi, setDivisi] = useState(user.divisi ?? "");
-  const [subDivisi, setSubDivisi] = useState(user.sub_divisi ?? "");
   const [memuat, setMemuat] = useState(false);
   const setUser = useAppStore((s) => s.setUser);
 
   if (!perlu) return null;
 
-  const daftarSub = pilihanSubDivisi(divisi);
   const sah =
-    panggilan.trim().length >= 2 &&
-    Boolean(tanggalLahir) &&
-    Boolean(divisi) &&
-    (!butuhSubDivisi(divisi) || Boolean(subDivisi));
+    (!kurangPanggilan || panggilan.trim().length >= 2) &&
+    (!kurangLahir || Boolean(tanggalLahir));
 
   async function simpan() {
     if (memuat || !sah) return;
     setMemuat(true);
     try {
+      // Hanya kirim kolom yang memang boleh diisi sendiri — divisi
+      // ditetapkan ketua divisi/HR (server menolak bila dikirim).
       const segar = await ubahProfilSaya({
-        nama_panggilan: panggilan.trim(),
-        tanggal_lahir: tanggalLahir,
-        divisi,
-        sub_divisi: subDivisi,
+        ...(panggilan.trim() ? { nama_panggilan: panggilan.trim() } : {}),
+        ...(kurangLahir && tanggalLahir ? { tanggal_lahir: tanggalLahir } : {}),
       });
       setUser(segar);
       toast("sukses", "Data profil lengkap", "Terima kasih sudah melengkapi!");
@@ -76,13 +75,9 @@ export function KartuLengkapiData({ user }: { user: User }) {
           <span className="block text-sm font-bold text-teks-utama">Lengkapi Data Profil</span>
           <span className="mt-0.5 block text-[11px] leading-snug text-teks-sekunder">
             Isi{" "}
-            {[
-              kurangPanggilan ? "nama panggilan" : "",
-              kurangLahir ? "tanggal lahir" : "",
-              kurangDivisi ? "divisi" : "",
-            ]
+            {[kurangPanggilan ? "nama panggilan" : "", kurangLahir ? "tanggal lahir" : ""]
               .filter(Boolean)
-              .join(", ")}{" "}
+              .join(" dan ")}{" "}
             — sekali saja, untuk struktur baru & fitur ulang tahun.
           </span>
         </span>
@@ -135,60 +130,32 @@ export function KartuLengkapiData({ user }: { user: User }) {
                     placeholder="mis. Budi"
                     className="glass-soft h-11 w-full rounded-xl px-3.5 text-sm text-teks-utama outline-none focus:ring-2 focus:ring-pri/50"
                   />
+                  <p className="mt-1 text-[10.5px] text-teks-sekunder/80">
+                    Bisa diganti lagi nanti, maksimal 1x per minggu.
+                  </p>
                 </div>
-                <div>
-                  <label htmlFor="ld-lahir" className="mb-1 block text-[12px] font-semibold text-teks-sekunder">
-                    Tanggal Lahir
-                  </label>
-                  <input
-                    id="ld-lahir"
-                    type="date"
-                    value={tanggalLahir}
-                    onChange={(e) => setTanggalLahir(e.target.value)}
-                    className="glass-soft h-11 w-full rounded-xl px-3.5 text-sm text-teks-utama outline-none focus:ring-2 focus:ring-pri/50"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="ld-divisi" className="mb-1 block text-[12px] font-semibold text-teks-sekunder">
-                    Divisi
-                  </label>
-                  <select
-                    id="ld-divisi"
-                    value={divisi}
-                    onChange={(e) => {
-                      setDivisi(e.target.value);
-                      setSubDivisi("");
-                    }}
-                    className="glass-soft h-11 w-full rounded-xl px-3 text-sm text-teks-utama outline-none focus:ring-2 focus:ring-pri/50"
-                  >
-                    <option value="">— Pilih divisi —</option>
-                    {DIVISI.map((d) => (
-                      <option key={d} value={d}>
-                        {d}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {daftarSub.length > 0 && (
+                {kurangLahir && (
                   <div>
-                    <label htmlFor="ld-sub" className="mb-1 block text-[12px] font-semibold text-teks-sekunder">
-                      {divisi === "Divisi Zona" ? "Zona" : "Sayap Partai"}
+                    <label htmlFor="ld-lahir" className="mb-1 block text-[12px] font-semibold text-teks-sekunder">
+                      Tanggal Lahir
                     </label>
-                    <select
-                      id="ld-sub"
-                      value={subDivisi}
-                      onChange={(e) => setSubDivisi(e.target.value)}
-                      className="glass-soft h-11 w-full rounded-xl px-3 text-sm text-teks-utama outline-none focus:ring-2 focus:ring-pri/50"
-                    >
-                      <option value="">— Pilih —</option>
-                      {daftarSub.map((sub) => (
-                        <option key={sub.nilai} value={sub.nilai}>
-                          {sub.label}
-                        </option>
-                      ))}
-                    </select>
+                    <input
+                      id="ld-lahir"
+                      type="date"
+                      value={tanggalLahir}
+                      onChange={(e) => setTanggalLahir(e.target.value)}
+                      className="glass-soft h-11 w-full rounded-xl px-3.5 text-sm text-teks-utama outline-none focus:ring-2 focus:ring-pri/50"
+                    />
+                    <p className="mt-1 text-[10.5px] text-teks-sekunder/80">
+                      Wajib sesuai KTP (usia minimal 16). Hanya bisa diisi
+                      SEKALI — setelahnya terkunci.
+                    </p>
                   </div>
                 )}
+                <p className="rounded-xl bg-pri/5 px-3 py-2 text-[11px] leading-relaxed text-teks-sekunder">
+                  Divisi Anda ditetapkan oleh ketua divisi atau HR — tidak
+                  perlu diisi di sini.
+                </p>
 
                 <button
                   type="button"
