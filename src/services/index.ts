@@ -2606,6 +2606,12 @@ export type ProfilMomen = {
   suka_profil: number;
   ku_suka_profil: boolean;
   foto: FotoMomen[];
+  /** Akun TV Rakyat yang dipegang orang ini (spek 1.15) */
+  akun_tvr: { platform: string; username: string }[];
+  /** Video laporan yang diupload HARI INI (utk popup profil) */
+  video_hari_ini: { id: string; platform: string; url: string }[];
+  /** Maks 6 video terbaru (utk seksi embed di profil) */
+  video_terbaru: { id: string; platform: string; url: string }[];
 };
 
 /** Profil momen + like — tanpa userId = milik sendiri. */

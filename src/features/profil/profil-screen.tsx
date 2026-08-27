@@ -43,6 +43,8 @@ import { FotoBulat } from "@/components/foto-bulat";
 import { ConfettiUltah, TopiUltah, ulangTahunHariIni } from "@/components/ultah";
 import { KartuLengkapiData } from "./lengkapi-data";
 import { GaleriMomen } from "./galeri-momen";
+import { PlatformIcon } from "@/components/platform-icon";
+import { VideoEmbedMini } from "@/components/video-embed-mini";
 import { getProfilMomen, getStreakSaya, type ProfilMomen } from "@/services";
 import { IkonStreak } from "@/components/ikon-streak";
 import { deskripsiStruktur } from "@/lib/struktur";
@@ -414,13 +416,13 @@ export function ProfilScreen({
               aria-label="Ganti foto profil"
             >
               {avatarBaru || user.avatar_url ? (
-                <FotoBulat src={avatarBaru || user.avatar_url} ukuran={72} />
+                <FotoBulat src={avatarBaru || user.avatar_url} ukuran={108} />
               ) : (
-                <AvatarInisial nama={user.nama} ukuran={72} />
+                <AvatarInisial nama={user.nama} ukuran={108} />
               )}
               {ultah && <TopiUltah />}
               <span
-                className="absolute right-0 bottom-0 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white/80 text-white dark:border-slate-900/80"
+                className="absolute right-1 bottom-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white/80 text-white dark:border-slate-900/80"
                 style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
                 aria-hidden="true"
               >
@@ -473,6 +475,36 @@ export function ProfilScreen({
 
       {/* Ajakan melengkapi data baru (panggilan/tgl lahir/divisi) */}
       <KartuLengkapiData user={user} />
+
+      {/* TV Rakyat Saya di profil (spek 1.15): username + video embed */}
+      {momen && (momen.akun_tvr.length > 0 || momen.video_terbaru.length > 0) && (
+        <FadeInUp delay={0.05}>
+          {momen.akun_tvr.length > 0 && (
+            <>
+              <SectionTitle judul="Akun TV Rakyat Saya" className="mt-6" />
+              <div className="flex flex-wrap gap-1.5">
+                {momen.akun_tvr.map((a) => (
+                  <span
+                    key={`${a.platform}-${a.username}`}
+                    className="glass-soft flex items-center gap-1.5 rounded-full px-3 py-1.5"
+                  >
+                    <PlatformIcon platform={a.platform} size={14} />
+                    <span className="text-[11.5px] font-bold text-teks-utama">
+                      @{a.username}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+          {momen.video_terbaru.length > 0 && (
+            <>
+              <SectionTitle judul="Video Saya" className="mt-5" />
+              <VideoEmbedMini video={momen.video_terbaru} />
+            </>
+          )}
+        </FadeInUp>
+      )}
 
       {/* Momen Terbaik PRI (spek 4.3) */}
       <FadeInUp delay={0.06}>

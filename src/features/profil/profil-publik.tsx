@@ -16,6 +16,8 @@ import { FotoBulat } from "@/components/foto-bulat";
 import { toast } from "@/hooks/use-app-store";
 import { getProfilMomen, sukaProfil, type ProfilMomen } from "@/services";
 import { GaleriMomen } from "./galeri-momen";
+import { PlatformIcon } from "@/components/platform-icon";
+import { VideoEmbedMini } from "@/components/video-embed-mini";
 import { cn } from "@/lib/utils";
 
 export function ProfilPublikModal({
@@ -80,7 +82,7 @@ export function ProfilPublikModal({
           animate={{ y: 0 }}
           exit={{ y: "102%" }}
           transition={{ type: "spring", stiffness: 320, damping: 34 }}
-          className="glass-strong relative mx-auto flex max-h-[88dvh] w-full max-w-[440px] flex-col rounded-t-[2rem] px-5 pt-3 pb-8"
+          className="glass-strong relative mx-auto flex max-h-[92dvh] w-full max-w-[520px] flex-col rounded-t-[2rem] px-5 pt-3 pb-8"
         >
           <div className="mb-3 flex shrink-0 justify-center">
             <span className="h-1.5 w-12 rounded-full bg-teks-sekunder/40" aria-hidden="true" />
@@ -98,9 +100,9 @@ export function ProfilPublikModal({
             {/* Hero ala ML: foto besar + badge + skor suka */}
             <div className="flex flex-col items-center pt-2 text-center">
               {pemilik?.avatar_url ? (
-                <FotoBulat src={pemilik.avatar_url} ukuran={88} />
+                <FotoBulat src={pemilik.avatar_url} ukuran={120} />
               ) : (
-                <AvatarInisial nama={pemilik?.nama ?? namaAwal} ukuran={88} />
+                <AvatarInisial nama={pemilik?.nama ?? namaAwal} ukuran={120} />
               )}
               <h2 className="mt-3 font-heading text-xl font-extrabold tracking-tight text-teks-utama">
                 {pemilik?.nama ?? namaAwal}
@@ -138,6 +140,37 @@ export function ProfilPublikModal({
                 {data?.ku_suka_profil ? "Disukai" : "Sukai Profil"}
               </button>
             </div>
+
+            {/* Akun TV Rakyat yang dipegang (spek 1.15) */}
+            {data && data.akun_tvr.length > 0 && (
+              <>
+                <SectionTitle judul="Akun TV Rakyat" className="mt-6" />
+                <div className="flex flex-wrap gap-1.5">
+                  {data.akun_tvr.map((a) => (
+                    <span
+                      key={`${a.platform}-${a.username}`}
+                      className="glass-soft flex items-center gap-1.5 rounded-full px-3 py-1.5"
+                    >
+                      <PlatformIcon platform={a.platform} size={14} />
+                      <span className="text-[11.5px] font-bold text-teks-utama">
+                        @{a.username}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Video yang diupload HARI INI (spek 1.15) */}
+            {data && data.video_hari_ini.length > 0 && (
+              <>
+                <SectionTitle
+                  judul={`Video Hari Ini (${data.video_hari_ini.length})`}
+                  className="mt-6"
+                />
+                <VideoEmbedMini video={data.video_hari_ini} />
+              </>
+            )}
 
             {/* Momen Terbaik miliknya */}
             <SectionTitle judul="Momen Terbaik PRI" className="mt-6" />

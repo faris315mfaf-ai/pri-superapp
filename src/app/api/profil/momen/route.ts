@@ -99,8 +99,17 @@ export async function GET(request: Request) {
     const targetId = Number(url.searchParams.get("user") ?? 0) || idKu;
     const db = supabase();
 
-    const [{ data: foto }, { count: sukaProfil }, { data: sukaKu }, { data: pemilik }] =
-      await Promise.all([
+    // Batas tanggal WIB hari ini utk "video yang diupload hari ini".
+    const hariIniWib = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+
+    const [
+      { data: foto },
+      { count: sukaProfil },
+      { data: sukaKu },
+      { data: pemilik },
+      { data: akunTvr },
+      { data: videoTerbaru },
+    ] = await Promise.all([
         db
           .from("profil_foto")
           .select("id, url, dibuat_pada")
@@ -124,6 +133,19 @@ export async function GET(request: Request) {
               .eq("id", targetId)
               .eq("aktif", true)
               .maybeSingle(),
+        // Akun TV Rakyat yang dipegang (spek 1.15 profil)
+        db
+          .from("akun_tvr_user")
+          .select("platform, username")
+          .eq("user_id", targetId)
+          .order("platform"),
+        // Video laporan terbaru (utk embed profil + saringan hari ini)
+        db
+          .from("laporan_video")
+          .select("id, platform, url_video, tanggal_wib, dibuat_pada")
+          .eq("user_id", targetId)
+          .order("id", { ascending: false })
+          .limit(30),
       ]);
 
     // Like per foto + apakah AKU sudah like, sekali kueri per tabel.
@@ -156,6 +178,17 @@ export async function GET(request: Request) {
         : null,
       suka_profil: sukaProfil ?? 0,
       ku_suka_profil: Boolean(sukaKu),
+      // Akun TVR + video (spek 1.15: profil & popup)
+      akun_tvr: (akunTvr ?? []).map((a) => ({
+        platform: a.platform as string,
+        username: a.username as string,
+      })),
+      video_hari_ini: (videoTerbaru ?? [])
+        .filter((v) => v.tanggal_wib === hariIniWib)
+        .map((v) => ({ id: String(v.id), platform: v.platform as string, url: v.url_video as string })),
+      video_terbaru: (videoTerbaru ?? [])
+        .slice(0, 6)
+        .map((v) => ({ id: String(v.id), platform: v.platform as string, url: v.url_video as string })),
       foto: (foto ?? []).map((f) => ({
         id: String(f.id),
         url: f.url,
