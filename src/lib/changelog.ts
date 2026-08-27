@@ -18,6 +18,24 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "1.15.0",
+    tanggal: "28 Agustus 2026",
+    judul: "Update besar: HR Center, embed sosmed, & kamera baru",
+    poin: [
+      "FIX: pesan chat tidak lagi terkirim dobel",
+      "Cari nama di daftar chat + api streak lebih besar ala TikTok",
+      "Grup divisi bisa ganti nama & foto, plus daftar anggota",
+      "HR Center: lihat siapa sudah & belum komen + rincian per kader",
+      "Absensi: filter status, foto bukti, dan penanda Tepat Waktu/Telat",
+      "Rekap absensi jadi PDF dan bisa dikirim langsung ke WhatsApp",
+      "Galeri 30 konten terbaru seluruh sosmed dengan angka & embed",
+      "Profil baru: foto lebih besar, akun & video TV Rakyat-mu tampil",
+      "Kamera absensi kini mirror + pilihan filter ala B612",
+      "Jam digital berjalan di Beranda",
+      "Master: reset sandi anggota & jelajah database foto",
+    ],
+  },
+  {
     versi: "1.14.0",
     tanggal: "27 Agustus 2026",
     judul: "Update besar: chat, streak, & grup divisi",
