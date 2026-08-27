@@ -2725,3 +2725,22 @@ export async function getDetailKepatuhanKader(
   );
   return (json.data ?? []) as BarisKepatuhan[];
 }
+
+export type FotoMaster = { path: string; dibuat: string; url: string };
+
+/** Master menjelajah database foto unggahan per bucket (spek 1.15). */
+export async function getFotoMaster(
+  bucket: string,
+  halaman: number,
+): Promise<{ total: number; halaman: number; per_halaman: number; data: FotoMaster[] }> {
+  const json = await fetchJson(
+    `/api/master?foto=${encodeURIComponent(bucket)}&halaman=${halaman}`,
+    { headers: headerToken() },
+  );
+  return {
+    total: Number(json.total ?? 0),
+    halaman: Number(json.halaman ?? 1),
+    per_halaman: Number(json.per_halaman ?? 24),
+    data: (json.data ?? []) as FotoMaster[],
+  };
+}

@@ -29,6 +29,7 @@ import {
   ShieldCheck,
   Trash2,
   UserCog,
+  KeyRound,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { FotoBulat } from "@/components/foto-bulat";
@@ -49,6 +50,8 @@ import {
   getPengguna,
   type DataMaster,
   type PenggunaAdmin,
+  getFotoMaster,
+  type FotoMaster,
 } from "@/services";
 import { jamWIB, tanggalIndonesia } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -69,6 +72,8 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
   const [pilihPeranUntuk, setPilihPeranUntuk] = useState<PenggunaAdmin | null>(null);
   const [akunBaru, setAkunBaru] = useState("");
   const [platformBaru, setPlatformBaru] = useState<"instagram" | "tiktok">("instagram");
+  // Akun yang sedang di-reset sandinya (spek 1.15)
+  const [resetUntuk, setResetUntuk] = useState<PenggunaAdmin | null>(null);
 
   useEffect(() => {
     let hidup = true;
@@ -188,6 +193,15 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                     </button>
                     <button
                       type="button"
+                      disabled={sedangProses || u.role === "master"}
+                      onClick={() => setResetUntuk(u)}
+                      aria-label={`Reset sandi ${u.nama}`}
+                      className="btn-tekan p-1.5 text-teks-sekunder disabled:opacity-40"
+                    >
+                      <KeyRound className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
                       disabled={sedangProses}
                       onClick={() =>
                         void jalankan(
@@ -204,6 +218,11 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                   </GlassCard>
                 ))}
             </div>
+          </FadeInUp>
+
+          {/* Database foto unggahan (spek 1.15) */}
+          <FadeInUp delay={0.07}>
+            <GaleriFotoMaster />
           </FadeInUp>
 
           {/* 2. Akun wajib QC */}
@@ -387,6 +406,264 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Modal reset sandi (spek 1.15): sandi TIDAK BISA dibaca siapa
+          pun (hash satu-arah) — master hanya bisa MENGGANTINYA. */}
+      {resetUntuk && (
+        <ModalResetSandi
+          target={resetUntuk}
+          sedang={sedangProses}
+          onTutup={() => setResetUntuk(null)}
+          onKirim={(sandiBaru) =>
+            void jalankan(
+              "reset_sandi",
+              { user_id: resetUntuk.id, nilai: sandiBaru },
+              `Sandi ${resetUntuk.nama.split(" ")[0]} diganti — semua sesinya dicabut`,
+            ).then(() => setResetUntuk(null))
+          }
+        />
+      )}
     </div>
+  );
+}
+
+// ------------------------------------------------------------
+// ModalResetSandi — master mengganti sandi satu akun. Sandi lama
+// mustahil ditampilkan (hash satu-arah); yang ada hanya penggantian.
+// ------------------------------------------------------------
+
+function ModalResetSandi({
+  target,
+  sedang,
+  onTutup,
+  onKirim,
+}: {
+  target: PenggunaAdmin;
+  sedang: boolean;
+  onTutup: () => void;
+  onKirim: (sandiBaru: string) => void;
+}) {
+  const [sandi, setSandi] = useState("");
+
+  function acakSandi() {
+    // 10 karakter mudah dibacakan lewat WA/telepon (tanpa 0/O, 1/l).
+    const HURUF = "abcdefghjkmnpqrstuvwxyz23456789";
+    let hasil = "";
+    const acak = new Uint32Array(10);
+    crypto.getRandomValues(acak);
+    for (const n of acak) hasil += HURUF[n % HURUF.length];
+    setSandi(hasil);
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[95] flex items-center justify-center px-8"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Reset sandi ${target.nama}`}
+    >
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={onTutup} />
+      <div className="glass-strong relative w-full max-w-[320px] rounded-2xl p-5">
+        <p className="text-sm font-bold text-teks-utama">Reset sandi {target.nama}</p>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-teks-sekunder">
+          Sandi lama tidak bisa dilihat (tersimpan terenkripsi satu arah).
+          Buat sandi baru lalu sampaikan ke orangnya — semua sesi lamanya
+          otomatis keluar.
+        </p>
+        <div className="mt-3 flex gap-2">
+          <input
+            value={sandi}
+            onChange={(e) => setSandi(e.target.value)}
+            placeholder="Sandi baru (min 8)…"
+            aria-label="Sandi baru"
+            className="glass h-10 min-w-0 flex-1 rounded-xl px-3.5 font-mono text-sm text-teks-utama placeholder:font-sans placeholder:text-teks-sekunder/60 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={acakSandi}
+            aria-label="Buat sandi acak"
+            className="glass btn-tekan rounded-xl px-3 text-[11px] font-bold text-teks-utama"
+          >
+            Acak
+          </button>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={onTutup}
+            className="glass btn-tekan flex-1 rounded-xl py-2.5 text-sm font-semibold text-teks-utama"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            disabled={sandi.length < 8 || sedang}
+            onClick={() => onKirim(sandi)}
+            className="btn-tekan flex-1 rounded-xl py-2.5 text-sm font-bold text-white disabled:opacity-50"
+            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+          >
+            Ganti Sandi
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------
+// GaleriFotoMaster — master menjelajah SEMUA foto unggahan per
+// bucket (avatar / absensi / chat / momen), berhalaman, lewat
+// signed URL 1 jam (spek 1.15).
+// ------------------------------------------------------------
+
+const BUCKET_GALERI = [
+  { id: "avatar", label: "Avatar" },
+  { id: "absensi", label: "Absensi" },
+  { id: "chat", label: "Chat" },
+  { id: "momen", label: "Momen" },
+] as const;
+
+function GaleriFotoMaster() {
+  const [bucket, setBucket] = useState<string>("avatar");
+  const [halaman, setHalaman] = useState(1);
+  const [hasil, setHasil] = useState<{ total: number; data: FotoMaster[] } | null>(null);
+  const [dibuka, setDibuka] = useState<FotoMaster | null>(null);
+  const [terbuka, setTerbuka] = useState(false);
+
+  useEffect(() => {
+    if (!terbuka) return;
+    let hidup = true;
+    void (async () => {
+      try {
+        const r = await getFotoMaster(bucket, halaman);
+        if (hidup) setHasil({ total: r.total, data: r.data });
+      } catch {
+        if (hidup) setHasil({ total: 0, data: [] });
+      }
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, [bucket, halaman, terbuka]);
+
+  return (
+    <>
+      <SectionTitle judul="Database Foto" className="mt-6" />
+      <GlassCard className="p-3">
+        {!terbuka ? (
+          <button
+            type="button"
+            onClick={() => setTerbuka(true)}
+            className="btn-tekan w-full py-2 text-center text-[12px] font-semibold text-pri"
+          >
+            Buka penjelajah foto unggahan (avatar, absensi, chat, momen)
+          </button>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-1.5">
+              {BUCKET_GALERI.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => {
+                    setHasil(null); // kosongkan — galeri dimuat ulang
+                    setBucket(b.id);
+                    setHalaman(1);
+                  }}
+                  aria-pressed={bucket === b.id}
+                  className={cn(
+                    "btn-tekan rounded-full px-3 py-1.5 text-[11.5px] font-semibold",
+                    bucket === b.id ? "text-white" : "glass-soft text-teks-sekunder",
+                  )}
+                  style={
+                    bucket === b.id
+                      ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" }
+                      : undefined
+                  }
+                >
+                  {b.label}
+                </button>
+              ))}
+            </div>
+
+            {hasil === null ? (
+              <GlassSkeleton className="mt-2 h-24 rounded-xl" />
+            ) : hasil.data.length === 0 ? (
+              <p className="py-5 text-center text-xs text-teks-sekunder">
+                Tidak ada foto di bucket ini.
+              </p>
+            ) : (
+              <>
+                <div className="mt-2 grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+                  {hasil.data.map((f) => (
+                    <button
+                      key={f.path}
+                      type="button"
+                      onClick={() => setDibuka(f)}
+                      aria-label={`Buka ${f.path}`}
+                      className="btn-tekan aspect-square overflow-hidden rounded-lg"
+                    >
+                      <img
+                        src={f.url}
+                        alt={f.path}
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-2 flex items-center justify-between">
+                  <p className="text-[10.5px] text-teks-sekunder">
+                    {hasil.total} file · hal {halaman}
+                  </p>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      disabled={halaman <= 1}
+                      onClick={() => {
+                        setHasil(null);
+                        setHalaman((h) => h - 1);
+                      }}
+                      className="glass btn-tekan rounded-lg px-2.5 py-1 text-[11px] font-bold text-teks-utama disabled:opacity-40"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      disabled={halaman * 24 >= hasil.total}
+                      onClick={() => {
+                        setHasil(null);
+                        setHalaman((h) => h + 1);
+                      }}
+                      className="glass btn-tekan rounded-lg px-2.5 py-1 text-[11px] font-bold text-teks-utama disabled:opacity-40"
+                    >
+                      ›
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </GlassCard>
+
+      {/* Lightbox foto + jalurnya */}
+      {dibuka && (
+        <div
+          className="fixed inset-0 z-[95] flex flex-col items-center justify-center bg-black/85 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Foto ukuran penuh"
+          onClick={() => setDibuka(null)}
+        >
+          <img
+            src={dibuka.url}
+            alt={dibuka.path}
+            className="max-h-[80dvh] max-w-full rounded-xl object-contain"
+          />
+          <p className="mt-2 max-w-full truncate text-[11px] text-white/80">{dibuka.path}</p>
+        </div>
+      )}
+    </>
   );
 }

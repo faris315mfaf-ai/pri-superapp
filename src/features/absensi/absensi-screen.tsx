@@ -57,6 +57,21 @@ import { jamWIB, tanggalIndonesia } from "@/lib/format";
 import type { KomponenIkon, User } from "@/types";
 import { cn } from "@/lib/utils";
 
+/**
+ * Filter kamera ala B612 (spek 1.15). CSS filter murni supaya efek
+ * yang terlihat di pratinjau PERSIS sama dengan yang terpanggang ke
+ * foto (ctx.filter memakai sintaks yang sama). Tanpa blur — foto
+ * absensi tetap harus bisa dipakai verifikasi wajah.
+ */
+const FILTER_KAMERA: { id: string; label: string; css: string }[] = [
+  { id: "normal", label: "Normal", css: "none" },
+  { id: "cerah", label: "Cerah", css: "brightness(1.15) contrast(1.05)" },
+  { id: "halus", label: "Halus", css: "brightness(1.1) saturate(0.9) contrast(0.95)" },
+  { id: "hangat", label: "Hangat", css: "sepia(0.25) saturate(1.2) brightness(1.05)" },
+  { id: "sejuk", label: "Sejuk", css: "hue-rotate(15deg) saturate(1.1) brightness(1.02)" },
+  { id: "mono", label: "Mono", css: "grayscale(1) contrast(1.1)" },
+];
+
 const PERAN_HR = new Set(["admin_hr", "super_admin", "master"]);
 
 type Jenis = "masuk" | "pulang";
@@ -86,6 +101,9 @@ type ModalAbsenProps = {
 
 function ModalAbsen({ jenis, onTutup, onSukses }: ModalAbsenProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  // Filter kamera ala B612 (spek 1.15) — indeks ke FILTER_KAMERA;
+  // CSS-nya dipakai di pratinjau DAN dipanggang ke hasil jepretan.
+  const [filterKamera, setFilterKamera] = useState(0);
   const streamRef = useRef<MediaStream | null>(null);
   const [kameraGagal, setKameraGagal] = useState("");
   const [gps, setGps] = useState<StatusGps>({ tahap: "meminta" });
@@ -178,6 +196,12 @@ function ModalAbsen({ jenis, onTutup, onSukses }: ModalAbsenProps) {
       kanvas.height = Math.round(v.videoHeight * skala);
       const ctx = kanvas.getContext("2d");
       if (!ctx) return null;
+      // MIRROR (spek 1.15): hasil jepretan dibalik horizontal sama
+      // seperti pratinjau — yang tersimpan persis yang dilihat pengguna.
+      ctx.translate(kanvas.width, 0);
+      ctx.scale(-1, 1);
+      // Filter pilihan ikut terpanggang ke foto.
+      ctx.filter = FILTER_KAMERA[filterKamera]?.css ?? "none";
       ctx.drawImage(v, 0, 0, kanvas.width, kanvas.height);
       for (const mutu of [0.7, 0.6, 0.5, 0.4, 0.35, 0.3]) {
         const hasil = kanvas.toDataURL("image/jpeg", mutu);
@@ -258,7 +282,9 @@ function ModalAbsen({ jenis, onTutup, onSukses }: ModalAbsenProps) {
               ref={videoRef}
               playsInline
               muted
-              className="h-full w-full object-cover"
+              // Mirror ala cermin (spek 1.15) + filter live
+              className="h-full w-full -scale-x-100 object-cover"
+              style={{ filter: FILTER_KAMERA[filterKamera]?.css ?? "none" }}
             />
           )}
 
@@ -297,6 +323,31 @@ function ModalAbsen({ jenis, onTutup, onSukses }: ModalAbsenProps) {
           Waktu dan tanggal dicatat oleh server, lengkap dengan titik lokasi.
           Foto terhapus otomatis setelah 7 hari.
         </p>
+
+        {/* Pilihan filter ala B612 (spek 1.15) — hanya saat kamera hidup */}
+        {!foto && !kameraGagal && (
+          <div className="scrollbar-tipis mt-3 flex gap-1.5 overflow-x-auto pb-1">
+            {FILTER_KAMERA.map((f, i) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilterKamera(i)}
+                aria-pressed={filterKamera === i}
+                className={
+                  "btn-tekan shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold " +
+                  (filterKamera === i ? "text-white" : "glass-soft text-teks-sekunder")
+                }
+                style={
+                  filterKamera === i
+                    ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" }
+                    : undefined
+                }
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Tombol aksi */}
         <div className="mt-3.5 flex gap-2.5">

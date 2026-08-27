@@ -18,6 +18,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { hapusCacheUser, userDariToken, cabutSemuaSesi } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
+import { buatHashSandi } from "@/lib/sandi";
 
 export const dynamic = "force-dynamic";
 
@@ -41,10 +42,68 @@ async function pastikanMaster(request: Request) {
   return user;
 }
 
+/** Bucket foto yang boleh dijelajahi master (spek 1.15). */
+const BUCKET_FOTO = ["avatar", "absensi", "chat", "momen"] as const;
+
 export async function GET(request: Request) {
   return bungkus(async () => {
     await pastikanMaster(request);
     const db = supabase();
+    const url = new URL(request.url);
+
+    // --- Database foto (spek 1.15): master menjelajah unggahan ---
+    // Semua bucket diakses lewat signed URL 1 jam (termasuk yang
+    // publik — satu jalur, satu perilaku), berhalaman 24 file.
+    const bucketFoto = url.searchParams.get("foto");
+    if (bucketFoto) {
+      if (!(BUCKET_FOTO as readonly string[]).includes(bucketFoto)) {
+        throw Object.assign(new Error("Bucket tidak dikenal."), { status: 400 });
+      }
+      const halaman = Math.max(1, Number(url.searchParams.get("halaman") ?? 1));
+      const PER_HALAMAN = 24;
+
+      // Storage Supabase menata file per folder — daftar folder level
+      // atas dulu, lalu isi tiap folder, supaya file di dalam folder
+      // (mis. avatar/<user_id>/x.jpg) ikut terlihat.
+      const { data: level1 } = await db.storage
+        .from(bucketFoto)
+        .list("", { limit: 200, sortBy: { column: "created_at", order: "desc" } });
+      const jalurSemua: { path: string; dibuat: string }[] = [];
+      const folder: string[] = [];
+      for (const o of level1 ?? []) {
+        if (o.id) jalurSemua.push({ path: o.name, dibuat: o.created_at ?? "" });
+        else folder.push(o.name);
+      }
+      // Isi folder (maks 40 folder terbaru — cukup untuk penelusuran;
+      // bucket sangat besar tetap terlayani lewat halaman berikutnya).
+      for (const f of folder.slice(0, 40)) {
+        const { data: isi } = await db.storage
+          .from(bucketFoto)
+          .list(f, { limit: 100, sortBy: { column: "created_at", order: "desc" } });
+        for (const o of isi ?? []) {
+          if (o.id) jalurSemua.push({ path: `${f}/${o.name}`, dibuat: o.created_at ?? "" });
+        }
+      }
+      jalurSemua.sort((a, b) => b.dibuat.localeCompare(a.dibuat));
+
+      const potongan = jalurSemua.slice((halaman - 1) * PER_HALAMAN, halaman * PER_HALAMAN);
+      const { data: tanda } = await db.storage
+        .from(bucketFoto)
+        .createSignedUrls(potongan.map((p) => p.path), 3600);
+      const urlPer = new Map((tanda ?? []).map((t) => [t.path, t.signedUrl]));
+
+      return {
+        bucket: bucketFoto,
+        total: jalurSemua.length,
+        halaman,
+        per_halaman: PER_HALAMAN,
+        data: potongan.map((p) => ({
+          path: p.path,
+          dibuat: p.dibuat,
+          url: urlPer.get(p.path) ?? "",
+        })),
+      };
+    }
 
     const [
       { data: log },
@@ -106,7 +165,7 @@ export async function POST(request: Request) {
     const master = await pastikanMaster(request);
     const body = (await request.json().catch(() => ({}))) as {
       aksi?: string;
-      nilai?: boolean;
+      nilai?: boolean | string;
       user_id?: string;
       role?: string;
       username?: string;
@@ -216,6 +275,49 @@ export async function POST(request: Request) {
       );
       if (error) throw new Error("Gagal menyimpan mode perbaikan.");
       return { sukses: true, mode_perbaikan: nyala };
+    }
+
+    // --- Reset sandi (spek 1.15 akses master) ---
+    // Sandi TIDAK PERNAH bisa DIBACA siapa pun (tersimpan sebagai hash
+    // satu-arah) — kemampuan master adalah MENGGANTINYA untuk membantu
+    // pengguna yang lupa. Semua sesi lama dicabut demi keamanan, dan
+    // pemiliknya diberi tahu lewat notifikasi.
+    if (body.aksi === "reset_sandi") {
+      const id = Number(body.user_id);
+      const sandiBaru = String(body.nilai ?? "");
+      if (!id) throw Object.assign(new Error("Akun tidak disebutkan."), { status: 400 });
+      if (sandiBaru.length < 8) {
+        throw Object.assign(new Error("Sandi baru minimal 8 karakter."), { status: 400 });
+      }
+      const { data: target } = await db
+        .from("app_user")
+        .select("id, nama, role")
+        .eq("id", id)
+        .maybeSingle();
+      if (!target) throw Object.assign(new Error("Akun tidak ditemukan."), { status: 404 });
+      // Master tidak bisa me-reset master lain lewat jalur ini —
+      // mencegah pengambilalihan akun tertinggi secara diam-diam.
+      if (target.role === "master" && String(id) !== String(master.id)) {
+        throw Object.assign(new Error("Sandi sesama master tidak bisa di-reset."), {
+          status: 403,
+        });
+      }
+
+      const { error } = await db
+        .from("app_user")
+        .update({ password_hash: await buatHashSandi(sandiBaru) })
+        .eq("id", id);
+      if (error) throw new Error("Gagal mengganti sandi.");
+      await cabutSemuaSesi(id);
+      await hapusCacheUser(id);
+      await kirimKabar({
+        judul: "Sandi akun Anda di-reset",
+        isi: "Master mengganti sandi akun Anda. Masuk lagi dengan sandi baru dari pengurus.",
+        kategori: "peringatan",
+        jenis_peristiwa: "keamanan",
+        untukUserIds: [id],
+      });
+      return { sukses: true };
     }
 
     // --- Bersihkan log galat ---
