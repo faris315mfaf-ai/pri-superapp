@@ -46,6 +46,7 @@ export function proxy(request: NextRequest) {
     object-src 'none';
     base-uri 'self';
     form-action 'self';
+    frame-src 'self' https://www.instagram.com https://www.tiktok.com https://www.youtube.com https://www.youtube-nocookie.com https://www.facebook.com;
     frame-ancestors 'none';
     upgrade-insecure-requests;
   `

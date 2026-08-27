@@ -46,7 +46,10 @@ export async function GET(request: Request) {
     const mentah = (url.searchParams.get("platform") ?? "instagram").toLowerCase();
     const platform = PLATFORM_SAH.has(mentah) ? mentah : "instagram";
     const paksa = url.searchParams.get("paksa") === "1";
-    const kunci = `ayrshare_detail_${platform}`;
+    // semua=1 (spek 1.15): gabungan 30 postingan terbaru dari SELURUH
+    // platform, untuk galeri embed di modul TV Rakyat.
+    const gabungSemua = url.searchParams.get("semua") === "1";
+    const kunci = gabungSemua ? "ayrshare_detail_semua" : `ayrshare_detail_${platform}`;
     const db = supabase();
 
     if (!paksa) {
@@ -67,8 +70,24 @@ export async function GET(request: Request) {
       }
     }
 
-    const data = await ambilRiwayatPostingan(platform, 15);
-    const isi = { platform, data };
+    let isi: Record<string, unknown>;
+    if (gabungSemua) {
+      // Tarik tiap platform sendiri-sendiri; platform yang gagal
+      // dilewati saja supaya satu gangguan tidak mengosongkan galeri.
+      const hasil = await Promise.allSettled(
+        Array.from(PLATFORM_SAH).map(async (pf) => ({
+          platform: pf,
+          data: await ambilRiwayatPostingan(pf, 15),
+        })),
+      );
+      const semua = hasil
+        .filter((h): h is PromiseFulfilledResult<{ platform: string; data: Awaited<ReturnType<typeof ambilRiwayatPostingan>> }> => h.status === "fulfilled")
+        .flatMap((h) => h.value.data.map((d) => ({ ...d, platform: h.value.platform })));
+      semua.sort((a, b) => String(b.waktu ?? "").localeCompare(String(a.waktu ?? "")));
+      isi = { platform: "semua", data: semua.slice(0, 30) };
+    } else {
+      isi = { platform, data: await ambilRiwayatPostingan(platform, 15) };
+    }
 
     try {
       await db.from("pengaturan_sistem").upsert(

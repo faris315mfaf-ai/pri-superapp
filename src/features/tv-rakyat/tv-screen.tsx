@@ -24,6 +24,7 @@ import { ProgressPanel } from "./progress-panel";
 import { PreviewModal } from "./preview-modal";
 import { RiwayatVideo } from "./riwayat-video";
 import { KelolaTimPanel } from "./kelola-tim-panel";
+import { EmbedTerbaru } from "./embed-terbaru";
 import { SectionTitle } from "@/components/pri-ui";
 import type { Berita, HasilProsesVideo, User, VideoAntrian } from "@/types";
 import { adalahPimred } from "@/lib/jabatan";
@@ -265,6 +266,9 @@ export function TvScreen({
           </div>
         </section>
       </div>
+
+      {/* Galeri 30 konten terbaru seluruh sosmed + metrik (spek 1.15) */}
+      <EmbedTerbaru />
 
       {/* Layar insight rinci — menutupi layar TV Rakyat */}
       <AnimatePresence>

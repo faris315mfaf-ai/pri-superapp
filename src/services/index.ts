@@ -2744,3 +2744,21 @@ export async function getFotoMaster(
     data: (json.data ?? []) as FotoMaster[],
   };
 }
+
+export type PostinganEmbed = {
+  id: string;
+  platform: string;
+  teks: string;
+  url: string;
+  thumbnail: string;
+  waktu: string | null;
+  metrik: { label: string; nilai: number }[];
+};
+
+/** 30 postingan terbaru seluruh sosmed TV Rakyat + metriknya (spek 1.15). */
+export async function getEmbedTerbaru(): Promise<PostinganEmbed[]> {
+  const json = await fetchJson("/api/tv/insight/detail?semua=1", {
+    headers: headerToken(),
+  });
+  return (json.data ?? []) as PostinganEmbed[];
+}
