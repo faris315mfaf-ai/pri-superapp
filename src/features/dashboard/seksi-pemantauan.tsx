@@ -11,7 +11,8 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "@/hooks/use-app-store";
-import { BarChart3, Eye, Heart, Radar, Users } from "lucide-react";
+import { statusTelat, tepatWaktu } from "@/lib/absensi-status";
+import { BarChart3, Eye, Heart, Radar, Users, FileDown, X, Loader2 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { FotoBulat } from "@/components/foto-bulat";
 import { NavHalaman } from "@/components/nav-halaman";
@@ -30,6 +31,7 @@ import {
   type KerjaKpiBaris,
   type RencanaBesarBaris,
   setKpiVideo,
+  buatRekapAbsensiPdf,
 } from "@/services";
 import { formatAngkaRingkas, jamWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -165,6 +167,9 @@ type StatusHarian = {
   status: "masuk" | "izin" | "sakit" | "alfa" | "menunggu izin";
   jamMasuk: string | null;
   videoHariIni: number;
+  /** Bukti absen masuk hari ini (signed URL 1 jam) — utk modal detail */
+  fotoMasuk: string;
+  alamatMasuk: string;
 };
 
 export function SeksiAbsensiHarian() {
@@ -174,6 +179,11 @@ export function SeksiAbsensiHarian() {
   const [terbuka, setTerbuka] = useState(false);
   const [targetPer, setTargetPer] = useState<Map<string, number>>(new Map());
   const [kpiUntuk, setKpiUntuk] = useState<{ id: string; nama: string } | null>(null);
+  // Filter status absensi (spek 1.15): klik chip untuk menyaring
+  const [saringStatus, setSaringStatus] = useState<StatusHarian["status"] | "semua">("semua");
+  // Baris yang dibuka detailnya (foto bukti + KPI)
+  const [detailAbsen, setDetailAbsen] = useState<StatusHarian | null>(null);
+  const [modalRekap, setModalRekap] = useState(false);
   const [halamanAbsen, setHalamanAbsen] = useState(1);
 
   useEffect(() => {
@@ -192,8 +202,12 @@ export function SeksiAbsensiHarian() {
 
         const hariIni = absensi.tanggal_hari_ini;
         const masukPer = new Map<string, string>();
+        const buktiPer = new Map<string, { foto: string; alamat: string }>();
         for (const a of absensi.data) {
-          if (a.tanggal_wib === hariIni && a.jenis === "masuk") masukPer.set(a.user_id, a.waktu);
+          if (a.tanggal_wib === hariIni && a.jenis === "masuk") {
+            masukPer.set(a.user_id, a.waktu);
+            buktiPer.set(a.user_id, { foto: a.foto_url ?? "", alamat: a.alamat ?? "" });
+          }
         }
         const izinPer = new Map(
           izin.filter((i) => i.tanggal_wib === hariIni).map((i) => [i.user_id, i]),
@@ -225,6 +239,8 @@ export function SeksiAbsensiHarian() {
                 status,
                 jamMasuk,
                 videoHariIni: videoPer.get(u.id) ?? 0,
+                fotoMasuk: buktiPer.get(u.id)?.foto ?? "",
+                alamatMasuk: buktiPer.get(u.id)?.alamat ?? "",
               };
             }),
         );
@@ -249,7 +265,8 @@ export function SeksiAbsensiHarian() {
       ) : (
         <GlassCard className="p-3">
           {/* Rekap ringkas per status */}
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {/* Chip = FILTER (spek 1.15): klik untuk menyaring daftar */}
             {(
               [
                 ["masuk", "hijau"],
@@ -261,12 +278,37 @@ export function SeksiAbsensiHarian() {
             ).map(([st, warna]) => {
               const n = daftar.filter((d) => d.status === st).length;
               if (n === 0) return null;
-              return <StatusBadge key={st} label={`${st} ${n}`} warna={warna} />;
+              return (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => {
+                    setSaringStatus((v) => (v === st ? "semua" : st));
+                    setTerbuka(true);
+                    setHalamanAbsen(1);
+                  }}
+                  aria-pressed={saringStatus === st}
+                  className={cn(
+                    "btn-tekan rounded-full transition-opacity",
+                    saringStatus !== "semua" && saringStatus !== st && "opacity-40",
+                  )}
+                >
+                  <StatusBadge label={`${st} ${n}`} warna={warna} />
+                </button>
+              );
             })}
             <button
               type="button"
+              onClick={() => setModalRekap(true)}
+              className="ml-auto flex items-center gap-1 text-[11px] font-semibold text-pri underline-offset-4 hover:underline"
+            >
+              <FileDown className="h-3.5 w-3.5" aria-hidden="true" />
+              Rekap PDF
+            </button>
+            <button
+              type="button"
               onClick={() => setTerbuka((v) => !v)}
-              className="ml-auto text-[11px] font-semibold text-pri underline-offset-4 hover:underline"
+              className="text-[11px] font-semibold text-pri underline-offset-4 hover:underline"
             >
               {terbuka ? "Sembunyikan daftar" : `Lihat daftar (${daftar.length})`}
             </button>
@@ -274,9 +316,16 @@ export function SeksiAbsensiHarian() {
           {terbuka && (
           <div className="mt-2 flex flex-col">
             {daftar
+              .filter((d) => saringStatus === "semua" || d.status === saringStatus)
               .slice((halamanAbsen - 1) * 10, halamanAbsen * 10)
               .map((d) => (
-              <div key={d.id} className="flex items-center gap-2.5 rounded-xl px-2 py-2">
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => setDetailAbsen(d)}
+                aria-label={`Detail absen ${d.nama}`}
+                className="btn-tekan flex items-center gap-2.5 rounded-xl px-2 py-2 text-left"
+              >
                 {d.avatar_url ? (
                   <FotoBulat src={d.avatar_url} ukuran={32} />
                 ) : (
@@ -284,17 +333,25 @@ export function SeksiAbsensiHarian() {
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[12.5px] font-semibold text-teks-utama">{d.nama}</p>
+                  {/* Status Absensi menggantikan KPI video (spek 1.15):
+                      <=09:15 tepat waktu, lewat = telat terhitung.
+                      Setel KPI video pindah ke modal detail. */}
                   <p className="text-[10px] text-teks-sekunder">
-                    {d.jamMasuk ? `masuk ${jamWIB(d.jamMasuk)}` : "belum absen"} ·{" "}
-                    {/* KPI per akun bisa disetel HR/QC (spek 3.1) — ketuk
-                        untuk mengubah target orang ini. */}
-                    <button
-                      type="button"
-                      onClick={() => setKpiUntuk({ id: d.id, nama: d.nama })}
-                      className="btn-tekan font-semibold text-pri underline-offset-2 hover:underline"
-                    >
-                      video {d.videoHariIni}/{targetPer.get(d.id) ?? 5}
-                    </button>
+                    {d.jamMasuk ? (
+                      <>
+                        masuk {jamWIB(d.jamMasuk)} ·{" "}
+                        <span
+                          className={cn(
+                            "font-bold",
+                            tepatWaktu(d.jamMasuk) ? "text-sukses" : "text-gagal",
+                          )}
+                        >
+                          {statusTelat(d.jamMasuk)}
+                        </span>
+                      </>
+                    ) : (
+                      "belum absen"
+                    )}
                   </p>
                 </div>
                 <StatusBadge
@@ -309,13 +366,13 @@ export function SeksiAbsensiHarian() {
                           : "biru"
                   }
                 />
-              </div>
+              </button>
             ))}
           </div>
           )}
           {terbuka && (
             <NavHalaman
-              total={daftar.length}
+              total={daftar.filter((d) => saringStatus === "semua" || d.status === saringStatus).length}
               perHalaman={10}
               halaman={halamanAbsen}
               onGanti={setHalamanAbsen}
@@ -323,6 +380,22 @@ export function SeksiAbsensiHarian() {
           )}
         </GlassCard>
       )}
+
+      {/* Modal detail absen: foto bukti + alamat + setel KPI (spek 1.15) */}
+      {detailAbsen && (
+        <ModalDetailAbsen
+          data={detailAbsen}
+          targetKpi={targetPer.get(detailAbsen.id) ?? 5}
+          onSetelKpi={() => {
+            setKpiUntuk({ id: detailAbsen.id, nama: detailAbsen.nama });
+            setDetailAbsen(null);
+          }}
+          onTutup={() => setDetailAbsen(null)}
+        />
+      )}
+
+      {/* Modal rekap absensi -> PDF -> WA (spek 1.15) */}
+      {modalRekap && <ModalRekapPdf onTutup={() => setModalRekap(false)} />}
 
       {/* Modal setel KPI video per akun (spek 3.1) */}
       {kpiUntuk && (
@@ -342,6 +415,223 @@ export function SeksiAbsensiHarian() {
         />
       )}
     </FadeInUp>
+  );
+}
+
+// ------------------------------------------------------------
+// ModalDetailAbsen — klik profil di daftar absensi (spek 1.15):
+// foto bukti absen, alamat, status telat, dan pintu setel KPI video.
+// ------------------------------------------------------------
+
+function ModalDetailAbsen({
+  data,
+  targetKpi,
+  onSetelKpi,
+  onTutup,
+}: {
+  data: StatusHarian;
+  targetKpi: number;
+  onSetelKpi: () => void;
+  onTutup: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[95] flex items-center justify-center px-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Detail absen ${data.nama}`}
+    >
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={onTutup} />
+      <div className="glass-strong relative max-h-[85dvh] w-full max-w-[360px] overflow-y-auto rounded-2xl p-5">
+        <div className="flex items-center gap-3">
+          {data.avatar_url ? (
+            <FotoBulat src={data.avatar_url} ukuran={44} />
+          ) : (
+            <AvatarInisial nama={data.nama} ukuran={44} />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-bold text-teks-utama">{data.nama}</p>
+            <p className="text-[11px] text-teks-sekunder">
+              {data.jamMasuk ? `Masuk ${jamWIB(data.jamMasuk)}` : "Belum absen hari ini"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onTutup}
+            aria-label="Tutup"
+            className="btn-tekan p-1.5 text-teks-sekunder"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {data.jamMasuk && (
+          <p
+            className={cn(
+              "mt-2 rounded-xl px-3 py-2 text-center text-[12.5px] font-bold",
+              tepatWaktu(data.jamMasuk)
+                ? "bg-sukses/10 text-sukses"
+                : "bg-gagal/10 text-gagal",
+            )}
+          >
+            {statusTelat(data.jamMasuk)}
+          </p>
+        )}
+
+        {/* Foto bukti absen (spek 1.15: klik profil -> lihat bukti) */}
+        {data.fotoMasuk ? (
+          <img
+            src={data.fotoMasuk}
+            alt={`Foto bukti absen ${data.nama}`}
+            className="mt-3 max-h-72 w-full rounded-xl object-contain"
+          />
+        ) : (
+          <p className="mt-3 rounded-xl bg-teks-sekunder/10 px-3 py-4 text-center text-[11.5px] text-teks-sekunder">
+            {data.jamMasuk ? "Foto bukti tidak tersedia." : "Belum ada foto — orang ini belum absen."}
+          </p>
+        )}
+        {data.alamatMasuk && (
+          <p className="mt-2 text-[11px] leading-relaxed text-teks-sekunder">
+            📍 {data.alamatMasuk}
+          </p>
+        )}
+
+        {/* KPI video pindah ke sini (dulu di baris daftar) */}
+        <button
+          type="button"
+          onClick={onSetelKpi}
+          className="glass btn-tekan mt-3 flex w-full items-center justify-between rounded-xl px-3.5 py-2.5"
+        >
+          <span className="text-[12px] font-semibold text-teks-utama">
+            Video hari ini: {data.videoHariIni}/{targetKpi}
+          </span>
+          <span className="text-[11px] font-bold text-pri">Setel KPI</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------
+// ModalRekapPdf — pengurus memilih rentang tanggal; server membuat
+// PDF rekap absensi, memberi tautan unduh, dan (opsional) langsung
+// mengirimkannya ke nomor WhatsApp tujuan (spek 1.15).
+// ------------------------------------------------------------
+
+function ModalRekapPdf({ onTutup }: { onTutup: () => void }) {
+  const hariIni = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+  const awalBulan = hariIni.slice(0, 8) + "01";
+  const [dari, setDari] = useState(awalBulan);
+  const [sampai, setSampai] = useState(hariIni);
+  const [nomorWa, setNomorWa] = useState("");
+  const [sedang, setSedang] = useState(false);
+  const [hasilUrl, setHasilUrl] = useState("");
+
+  async function buat() {
+    if (sedang) return;
+    setSedang(true);
+    try {
+      const hasil = await buatRekapAbsensiPdf({
+        dari,
+        sampai,
+        nomorWa: nomorWa.trim() || undefined,
+      });
+      setHasilUrl(hasil.url);
+      toast(
+        "sukses",
+        `Rekap ${hasil.baris} baris siap`,
+        hasil.terkirim_wa ? "PDF sudah dikirim ke WhatsApp tujuan." : "Ketuk untuk mengunduh.",
+      );
+    } catch (e) {
+      toast("error", "Gagal membuat rekap", e instanceof Error ? e.message : "");
+    } finally {
+      setSedang(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[95] flex items-center justify-center px-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Rekap absensi PDF"
+    >
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={onTutup} />
+      <div className="glass-strong relative w-full max-w-[340px] rounded-2xl p-5">
+        <div className="flex items-center justify-between">
+          <h3 className="font-heading text-base font-bold text-teks-utama">Rekap Absensi</h3>
+          <button
+            type="button"
+            onClick={onTutup}
+            aria-label="Tutup"
+            className="btn-tekan p-1 text-teks-sekunder"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-teks-sekunder">
+          PDF berisi jam masuk/pulang & status telat tiap orang. Isi nomor
+          WhatsApp untuk langsung mengirimkannya.
+        </p>
+
+        <div className="mt-3 flex gap-2">
+          <label className="min-w-0 flex-1 text-[10.5px] font-semibold text-teks-sekunder">
+            Dari
+            <input
+              type="date"
+              value={dari}
+              onChange={(e) => setDari(e.target.value)}
+              className="glass mt-1 h-10 w-full rounded-xl px-3 text-sm text-teks-utama focus:outline-none"
+            />
+          </label>
+          <label className="min-w-0 flex-1 text-[10.5px] font-semibold text-teks-sekunder">
+            Sampai
+            <input
+              type="date"
+              value={sampai}
+              onChange={(e) => setSampai(e.target.value)}
+              className="glass mt-1 h-10 w-full rounded-xl px-3 text-sm text-teks-utama focus:outline-none"
+            />
+          </label>
+        </div>
+        <input
+          value={nomorWa}
+          onChange={(e) => setNomorWa(e.target.value)}
+          placeholder="Nomor WA tujuan (opsional)…"
+          aria-label="Nomor WhatsApp tujuan"
+          inputMode="tel"
+          className="glass mt-2 h-10 w-full rounded-xl px-3.5 text-sm text-teks-utama placeholder:text-teks-sekunder/60 focus:outline-none"
+        />
+
+        {hasilUrl ? (
+          <a
+            href={hasilUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-tekan mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 font-heading text-sm font-bold text-white"
+            style={{ background: "linear-gradient(135deg, #10B981, #059669)" }}
+          >
+            <FileDown className="h-4 w-4" aria-hidden="true" />
+            Unduh PDF
+          </a>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void buat()}
+            disabled={sedang}
+            className="btn-tekan mt-4 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 font-heading text-sm font-bold text-white disabled:opacity-60"
+            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+          >
+            {sedang ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <FileDown className="h-4 w-4" aria-hidden="true" />
+            )}
+            {nomorWa.trim() ? "Buat & Kirim ke WA" : "Buat PDF"}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

@@ -2655,3 +2655,73 @@ export async function sukaProfil(userId: string): Promise<boolean> {
   });
   return json.suka === true;
 }
+
+/**
+ * Rekap absensi rentang tanggal → PDF; bila nomorWa diisi, PDF ikut
+ * dikirim ke WhatsApp itu via Fonnte (spek 1.15).
+ */
+export async function buatRekapAbsensiPdf(opsi: {
+  dari: string;
+  sampai: string;
+  nomorWa?: string;
+}): Promise<{ url: string; baris: number; terkirim_wa: boolean }> {
+  const json = await fetchJson("/api/absensi/rekap", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ dari: opsi.dari, sampai: opsi.sampai, nomor_wa: opsi.nomorWa }),
+  });
+  return {
+    url: (json.url as string) ?? "",
+    baris: Number(json.baris ?? 0),
+    terkirim_wa: json.terkirim_wa === true,
+  };
+}
+
+export type BarisKepatuhan = {
+  id_unik: string;
+  periode: string;
+  nama_kader: string;
+  platform: string;
+  akun_wajib: string;
+  id_postingan: string;
+  sudah_komentar: boolean;
+  jumlah_komentar: number;
+  /** Hanya terisi untuk pengurus (fitur ingatkan) */
+  nomor_wa: string | null;
+};
+
+/** Rekap kepatuhan LENGKAP per baris (kader x postingan) satu periode. */
+export async function getRekapKepatuhan(periode: string): Promise<BarisKepatuhan[]> {
+  const json = await fetchJson(`/api/rekap?periode=${encodeURIComponent(periode)}`, {
+    headers: headerToken(),
+  });
+  return (json.data ?? []) as BarisKepatuhan[];
+}
+
+export type RingkasKepatuhanKader = {
+  nama_kader: string;
+  total: number;
+  sudah: number;
+  nomor_wa: string | null;
+};
+
+/** Ringkas kepatuhan PER KADER (agregat database — bebas cap 1000). */
+export async function getRingkasKepatuhan(periode: string): Promise<RingkasKepatuhanKader[]> {
+  const json = await fetchJson(
+    `/api/rekap?ringkas_kader=1&periode=${encodeURIComponent(periode)}`,
+    { headers: headerToken() },
+  );
+  return (json.data ?? []) as RingkasKepatuhanKader[];
+}
+
+/** Rincian kepatuhan SATU kader (baris per postingan) satu periode. */
+export async function getDetailKepatuhanKader(
+  periode: string,
+  namaKader: string,
+): Promise<BarisKepatuhan[]> {
+  const json = await fetchJson(
+    `/api/rekap?periode=${encodeURIComponent(periode)}&nama_kader=${encodeURIComponent(namaKader)}`,
+    { headers: headerToken() },
+  );
+  return (json.data ?? []) as BarisKepatuhan[];
+}

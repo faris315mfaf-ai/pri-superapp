@@ -87,3 +87,56 @@ export async function kirimWa(nomor: string, pesan: string): Promise<void> {
     if (e instanceof Error && e.message.startsWith("WhatsApp menolak")) throw e;
   }
 }
+
+/**
+ * Kirim pesan WhatsApp DENGAN LAMPIRAN berkas (mis. PDF rekap).
+ * urlBerkas harus bisa diunduh Fonnte (signed URL storage cukup).
+ */
+export async function kirimWaDenganLampiran(
+  nomor: string,
+  pesan: string,
+  urlBerkas: string,
+  namaBerkas: string,
+): Promise<void> {
+  const token = process.env.FONNTE_TOKEN;
+  if (!token) throw new FonnteBelumDiaturError();
+
+  const body = new URLSearchParams({
+    target: normalkanNomorWa(nomor),
+    message: pesan,
+    url: urlBerkas,
+    filename: namaBerkas,
+    countryCode: "62",
+  });
+
+  const res = await fetch(URL_FONNTE, {
+    method: "POST",
+    headers: {
+      Authorization: token,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+    signal: AbortSignal.timeout(20_000),
+  });
+
+  const teks = await res.text().catch(() => "");
+  if (!res.ok) {
+    console.error("[fonnte] lampiran HTTP", res.status, teks.slice(0, 300));
+    throw new Error("Gagal mengirim berkas ke WhatsApp.");
+  }
+  try {
+    const json = JSON.parse(teks) as { status?: boolean; reason?: string };
+    if (json.status === false) {
+      console.error("[fonnte] lampiran ditolak:", json.reason);
+      throw new Error(
+        json.reason
+          ? `WhatsApp menolak: ${json.reason}`
+          : "Nomor WhatsApp tidak dapat dihubungi.",
+      );
+    }
+  } catch (e) {
+    // Bukan JSON — anggap berhasil selama HTTP-nya 200 (pola sama
+    // dengan kirimWa di atas).
+    if (e instanceof Error && e.message.startsWith("WhatsApp menolak")) throw e;
+  }
+}

@@ -50,6 +50,7 @@ import {
 import { toast } from "@/hooks/use-app-store";
 import { RiwayatAnalisisModal } from "./riwayat-analisis-modal";
 import { RingkasanQc } from "./ringkasan-qc";
+import { KepatuhanKaderPanel } from "./kepatuhan-kader-panel";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { cn } from "@/lib/utils";
 
@@ -854,6 +855,9 @@ export function QcScreen({
       {/* Ringkasan kepatuhan (pindahan dari dashboard): KPI, tren,
           kepatuhan per akun wajib — kini tinggal di rumah datanya. */}
       <RingkasanQc muatUlang={terakhirAnalisis ?? 0} />
+
+      {/* Siapa sudah & belum komen + popup besar per kader (spek 1.15) */}
+      <KepatuhanKaderPanel muatUlang={terakhirAnalisis ?? 0} />
 
       {/* Kemajuan pemeriksaan — angkanya dari DATABASE, jadi tetap benar
           walau aplikasi ditutup lalu dibuka lagi. */}
