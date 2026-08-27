@@ -18,6 +18,19 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "1.16.0",
+    tanggal: "28 Agustus 2026",
+    judul: "Koin hadir! Plus analisis komentar yang selalu segar",
+    poin: [
+      "KOIN 🪙 — kumpulkan dari absen, chat teman baru, laporan video, & tambah akun sosmed; saldo tampil di profilmu",
+      "FIX: komentar yang dikirim setelah analisis kini ikut terhitung saat analisis berikutnya",
+      "Analisis menampilkan batas jam data: \"Komentar terbaca hingga pukul …\"",
+      "Rekap PDF: bila WhatsApp gagal, tautan unduhan tetap terkirim/tersedia",
+      "Username akun TV Rakyat di profil bisa diklik menuju akunnya",
+      "Master bisa mematikan fitur per DIVISI (bukan hanya per peran) & mengatur bonus koin",
+    ],
+  },
+  {
     versi: "1.15.0",
     tanggal: "28 Agustus 2026",
     judul: "Update besar: HR Center, embed sosmed, & kamera baru",
