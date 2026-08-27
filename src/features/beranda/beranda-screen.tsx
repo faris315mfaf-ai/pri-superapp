@@ -32,6 +32,7 @@ import { IkonStreak } from "@/components/ikon-streak";
 import { useAppStore } from "@/hooks/use-app-store";
 import { KartuPengumumanTerbaru } from "@/features/konten/beranda-anggota";
 import { KartuUltah } from "@/components/ultah";
+import { JamDigital } from "@/components/jam-digital";
 import { KartuVideoBaru } from "./kartu-video-baru";
 import {
   getAbsensi,
@@ -179,6 +180,8 @@ export function BerandaScreen({
           <p className="mt-1 text-[11px] text-teks-sekunder">
             {tanggalIndonesia(`${tanggalWibPerangkat()}T00:00:00+07:00`)}
           </p>
+          {/* Jam WIB berjalan tiap detik (spek 1.15) */}
+          <JamDigital className="mt-0.5 block font-heading text-lg font-extrabold tracking-tight text-teks-utama" />
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {/* Api task streak (spek 4.1): absensi harian berturut-turut */}

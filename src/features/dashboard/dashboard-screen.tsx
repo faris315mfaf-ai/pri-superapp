@@ -9,6 +9,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from "react";
+import { JamDigital } from "@/components/jam-digital";
 import { AlertTriangle, Bell } from "lucide-react";
 import {
   AvatarInisial,
@@ -127,6 +128,7 @@ export function DashboardScreen({
           <p className="mt-1 text-[11px] text-teks-sekunder">
             {tanggalIndonesia(APP_TODAY_ISO)}
           </p>
+          <JamDigital className="mt-0.5 block font-heading text-lg font-extrabold tracking-tight text-teks-utama" />
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
