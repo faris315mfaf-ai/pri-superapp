@@ -19,6 +19,7 @@ import { bungkus } from "@/lib/api-helper";
 import { hapusCacheUser, userDariToken, cabutSemuaSesi } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
 import { buatHashSandi } from "@/lib/sandi";
+import { AKTIVITAS_KOIN } from "@/lib/koin";
 
 export const dynamic = "force-dynamic";
 
@@ -317,6 +318,23 @@ export async function POST(request: Request) {
         jenis_peristiwa: "keamanan",
         untukUserIds: [id],
       });
+      return { sukses: true };
+    }
+
+    // --- Bonus koin per aktivitas (spek 1.16) ---
+    // body.username = id aktivitas, body.nilai = angka (string).
+    if (body.aksi === "koin_bonus") {
+      const akt = AKTIVITAS_KOIN.find((a) => a.id === String(body.username ?? ""));
+      if (!akt) throw Object.assign(new Error("Aktivitas tidak dikenal."), { status: 400 });
+      const n = Math.floor(Number(body.nilai));
+      if (!Number.isFinite(n) || n < 0 || n > 1000) {
+        throw Object.assign(new Error("Bonus koin harus 0-1000."), { status: 400 });
+      }
+      const { error } = await db.from("pengaturan_sistem").upsert(
+        { kunci: akt.kunci, nilai: String(n), diubah_pada: new Date().toISOString() },
+        { onConflict: "kunci" },
+      );
+      if (error) throw new Error("Gagal menyimpan bonus koin.");
       return { sukses: true };
     }
 

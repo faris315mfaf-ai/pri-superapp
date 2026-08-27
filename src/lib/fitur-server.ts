@@ -32,15 +32,33 @@ export async function izinPeran(peran: string): Promise<PetaIzin> {
  * endpoint-nya masih bisa dipanggil langsung.
  */
 export async function pastikanFiturAktif(
-  user: { role: string },
+  user: { role: string; divisi?: string | null },
   kunci: KunciFitur,
   pesan?: string,
 ): Promise<void> {
-  const izin = await izinPeran(user.role);
+  // Spek 1.16: fitur bisa dimatikan per PERAN dan per DIVISI — yang
+  // paling ketat menang (mati di salah satunya = mati).
+  const izin = await izinGabungan(user.role, user.divisi ?? null);
   if (!bolehFitur(izin, kunci, user.role)) {
     throw Object.assign(
       new Error(pesan ?? "Fitur ini sedang dimatikan untuk peran Anda."),
       { status: 403 },
     );
   }
+}
+
+/**
+ * Izin efektif seseorang: pengecualian PERAN digabung pengecualian
+ * DIVISI-nya (baris divisi disimpan dengan kunci "divisi:<nama>" di
+ * kolom yang sama — spek 1.16, tanpa mengubah skema).
+ */
+export async function izinGabungan(
+  peran: string,
+  divisi: string | null,
+): Promise<PetaIzin> {
+  const [dariPeran, dariDivisi] = await Promise.all([
+    izinPeran(peran),
+    divisi ? izinPeran(`divisi:${divisi}`) : Promise.resolve({} as PetaIzin),
+  ]);
+  return { ...dariPeran, ...dariDivisi };
 }

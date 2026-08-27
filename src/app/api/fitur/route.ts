@@ -10,7 +10,8 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { KATALOG_FITUR, PERAN_DIATUR } from "@/lib/fitur";
-import { izinPeran } from "@/lib/fitur-server";
+import { izinGabungan } from "@/lib/fitur-server";
+import { DIVISI } from "@/lib/struktur";
 
 export const dynamic = "force-dynamic";
 
@@ -44,10 +45,14 @@ export async function GET(request: Request) {
           (mati[p] ??= []).push(b.fitur as string);
         }
       }
-      return { katalog: KATALOG_FITUR, peran: PERAN_DIATUR, mati };
+      return { katalog: KATALOG_FITUR, peran: PERAN_DIATUR, divisi: DIVISI, mati };
     }
 
-    return { peran: user.role, izin: await izinPeran(user.role) };
+    // Izin efektif = pengecualian peran + pengecualian divisi (1.16).
+    return {
+      peran: user.role,
+      izin: await izinGabungan(user.role, user.divisi ?? null),
+    };
   });
 }
 
@@ -68,7 +73,13 @@ export async function POST(request: Request) {
     };
     const peran = String(body.peran ?? "");
     const fitur = String(body.fitur ?? "");
-    if (!PERAN_SAH.has(peran)) {
+    // Target sah: nama peran, ATAU "divisi:<nama divisi>" (spek 1.16).
+    const targetDivisi = peran.startsWith("divisi:") ? peran.slice(7) : null;
+    if (targetDivisi !== null) {
+      if (!(DIVISI as readonly string[]).includes(targetDivisi)) {
+        throw Object.assign(new Error("Divisi tidak dikenal."), { status: 400 });
+      }
+    } else if (!PERAN_SAH.has(peran)) {
       throw Object.assign(new Error("Peran tidak dikenal."), { status: 400 });
     }
     if (!KUNCI_SAH.has(fitur)) {

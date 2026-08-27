@@ -537,11 +537,16 @@ function ModalRekapPdf({ onTutup }: { onTutup: () => void }) {
         nomorWa: nomorWa.trim() || undefined,
       });
       setHasilUrl(hasil.url);
-      toast(
-        "sukses",
-        `Rekap ${hasil.baris} baris siap`,
-        hasil.terkirim_wa ? "PDF sudah dikirim ke WhatsApp tujuan." : "Ketuk untuk mengunduh.",
-      );
+      if (nomorWa.trim() && !hasil.terkirim_wa) {
+        // WA gagal — PDF tetap ada; katakan apa adanya (fix 1.16).
+        toast("peringatan", `Rekap ${hasil.baris} baris siap`, hasil.pesan_wa || "WhatsApp tidak bisa dihubungi — unduh lewat tombol di bawah.");
+      } else {
+        toast(
+          "sukses",
+          `Rekap ${hasil.baris} baris siap`,
+          hasil.terkirim_wa ? "PDF sudah dikirim ke WhatsApp tujuan." : "Ketuk untuk mengunduh.",
+        );
+      }
     } catch (e) {
       toast("error", "Gagal membuat rekap", e instanceof Error ? e.message : "");
     } finally {

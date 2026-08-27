@@ -8,6 +8,7 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
+import { beriKoin } from "@/lib/koin";
 
 export const dynamic = "force-dynamic";
 
@@ -138,6 +139,8 @@ export async function POST(request: Request) {
       console.error("[tvr/akun] tambah:", error.message);
       throw new Error("Gagal menambahkan akun.");
     }
+    // Koin tambah akun sosmed (spek 1.16) — sekali per akun.
+    await beriKoin(Number(user.id), "akun_sosmed", `tvr-${data.id}`);
     return { sukses: true, data: { ...data, id: String(data.id) } };
   });
 }

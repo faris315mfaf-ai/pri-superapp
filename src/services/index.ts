@@ -1998,7 +1998,9 @@ export async function getIzinFitur(): Promise<PetaIzin> {
 export type MatriksFitur = {
   katalog: DefinisiFitur[];
   peran: { id: string; label: string }[];
-  /** peran → daftar fitur yang DIMATIKAN */
+  /** Daftar divisi — target "divisi:<nama>" (spek 1.16) */
+  divisi: string[];
+  /** target (peran / "divisi:<nama>") → fitur yang DIMATIKAN */
   mati: Record<string, string[]>;
 };
 
@@ -2157,6 +2159,8 @@ export type HasilAnalisisAyrshare = {
   sisa?: number;
   /** false = perlu dipanggil lagi untuk menuntaskan sisanya */
   selesai?: boolean;
+  /** Komentar terbaca hingga jam ini (spek 1.16) */
+  data_sampai?: string;
 };
 
 export async function analisisUlangAyrshare(): Promise<HasilAnalisisAyrshare> {
@@ -2606,6 +2610,8 @@ export type ProfilMomen = {
   suka_profil: number;
   ku_suka_profil: boolean;
   foto: FotoMomen[];
+  /** Saldo koin gamifikasi (spek 1.16) */
+  koin: number;
   /** Akun TV Rakyat yang dipegang orang ini (spek 1.15) */
   akun_tvr: { platform: string; username: string }[];
   /** Video laporan yang diupload HARI INI (utk popup profil) */
@@ -2670,7 +2676,7 @@ export async function buatRekapAbsensiPdf(opsi: {
   dari: string;
   sampai: string;
   nomorWa?: string;
-}): Promise<{ url: string; baris: number; terkirim_wa: boolean }> {
+}): Promise<{ url: string; baris: number; terkirim_wa: boolean; pesan_wa: string }> {
   const json = await fetchJson("/api/absensi/rekap", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -2680,6 +2686,7 @@ export async function buatRekapAbsensiPdf(opsi: {
     url: (json.url as string) ?? "",
     baris: Number(json.baris ?? 0),
     terkirim_wa: json.terkirim_wa === true,
+    pesan_wa: (json.pesan_wa as string) ?? "",
   };
 }
 
@@ -2767,4 +2774,19 @@ export async function getEmbedTerbaru(): Promise<PostinganEmbed[]> {
     headers: headerToken(),
   });
   return (json.data ?? []) as PostinganEmbed[];
+}
+
+/** Besaran bonus koin per aktivitas (utk Pengaturan Fitur master). */
+export async function getBonusKoin(): Promise<Record<string, number>> {
+  const json = await fetchJson("/api/koin", { headers: headerToken() });
+  return (json.bonus ?? {}) as Record<string, number>;
+}
+
+/** Master mengubah bonus koin satu aktivitas. */
+export async function setBonusKoin(aktivitas: string, nilai: number): Promise<void> {
+  await fetchJson("/api/master", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "koin_bonus", username: aktivitas, nilai: String(nilai) }),
+  });
 }

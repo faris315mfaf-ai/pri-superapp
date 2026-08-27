@@ -216,16 +216,32 @@ export async function POST(request: Request) {
     const mulaiPada = Date.now();
     const peringatan: string[] = [];
 
-    // Postingan yang komentarnya SUDAH diperiksa pada periode ini —
-    // dipakai agar panggilan lanjutan tidak mengulang pekerjaan yang
-    // sudah selesai.
+    // Postingan yang komentarnya BARU SAJA diperiksa (fix 1.16).
+    //
+    // Dulu penanda 'ayrshare' membuat postingan dilewati SELAMANYA
+    // dalam periode itu — komentar anggota yang masuk SETELAH analisis
+    // pertama tidak pernah terbaca lagi walau analisis dijalankan
+    // ulang. Kini yang dilewati hanya postingan yang dibaca dalam
+    // SEGAR_MS terakhir: rantai panggilan lanjutan (berjarak detik)
+    // tetap hemat, tetapi klik "Mulai Analisis" berikutnya membaca
+    // ULANG semua postingan periode — komentar baru ikut terhitung,
+    // dan pencocokan memakai daftar akun sosmed TERKINI (akun yang
+    // didaftarkan belakangan langsung dikreditkan).
+    const SEGAR_MS = 10 * 60 * 1000;
     const { data: sudahDiperiksa } = await db
       .from("postingan")
-      .select("id_postingan")
+      .select("id_postingan, komentar_diperiksa_pada")
       .eq("periode", periode)
       .eq("komentar_status", "ayrshare");
+    const kini = Date.now();
     const selesaiSebelumnya = new Set(
-      (sudahDiperiksa ?? []).map((p) => String(p.id_postingan)),
+      (sudahDiperiksa ?? [])
+        .filter(
+          (p) =>
+            p.komentar_diperiksa_pada &&
+            kini - new Date(p.komentar_diperiksa_pada as string).getTime() < SEGAR_MS,
+        )
+        .map((p) => String(p.id_postingan)),
     );
 
     let sisaBelumDiperiksa = 0;
@@ -285,7 +301,8 @@ export async function POST(request: Request) {
       for (const post of postPeriode) {
         const idKanonik = idPostinganKanonik(akun.platform, post.id, post.url);
 
-        // Sudah diperiksa di panggilan sebelumnya → lewati.
+        // Baru diperiksa <10 menit lalu (rantai panggilan lanjutan
+        // analisis yang sama) → lewati; selain itu dibaca ulang.
         if (selesaiSebelumnya.has(idKanonik)) continue;
 
         // Anggaran habis → sisanya diserahkan ke panggilan berikutnya.
@@ -389,6 +406,8 @@ export async function POST(request: Request) {
       komentar: totalKomentar,
       comply: totalComply,
       peringatan,
+      /** Komentar terbaca hingga jam ini (jam mulai run — spek 1.16) */
+      data_sampai: new Date(mulaiPada).toISOString(),
       /** Postingan yang belum sempat diperiksa pada panggilan ini */
       sisa: sisaBelumDiperiksa,
       /** false = perlu dipanggil lagi untuk menuntaskan sisanya */

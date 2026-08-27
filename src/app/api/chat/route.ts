@@ -23,6 +23,7 @@ import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
 import { bacaStreakChat, catatPesanStreak } from "@/lib/streak";
+import { beriKoin } from "@/lib/koin";
 import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -525,6 +526,10 @@ export async function POST(request: Request) {
       } else {
         kontakId = Number(kontak.id);
         statusKontak = String(kontak.status);
+        // Koin "chat teman baru" (spek 1.16): HANYA saat kontak BARU
+        // benar-benar tercipta (insert sukses, bukan memakai kontak
+        // lama) — referensi id kontak membuatnya sekali seumur pasangan.
+        after(() => beriKoin(idKu, "chat_baru", `kontak-${kontakId}`));
       }
 
       // Pesan perkenalan opsional ikut terkirim bersama ajakan.

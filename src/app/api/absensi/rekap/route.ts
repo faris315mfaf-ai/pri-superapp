@@ -12,7 +12,7 @@ import autoTable from "jspdf-autotable";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
-import { kirimWaDenganLampiran, nomorWaSah, normalkanNomorWa } from "@/lib/fonnte";
+import { kirimWa, kirimWaDenganLampiran, nomorWaSah, normalkanNomorWa } from "@/lib/fonnte";
 import { statusTelat } from "@/lib/absensi-status";
 
 export const dynamic = "force-dynamic";
@@ -174,16 +174,35 @@ export async function POST(request: Request) {
       throw new Error("Gagal membuat tautan unduhan rekap.");
     }
 
-    // --- Kirim ke WhatsApp bila diminta ---
+    // --- Kirim ke WhatsApp bila diminta (fix 1.16) ---
+    // BERLAPIS supaya PDF-nya selalu bisa diperoleh:
+    // 1) coba kirim sebagai LAMPIRAN;
+    // 2) gagal? kirim TAUTAN unduhannya sebagai pesan teks;
+    // 3) itu pun gagal? permintaan TETAP sukses — tombol unduh di
+    //    aplikasi memakai URL yang sama. Kegagalan WA tidak boleh
+    //    menelan PDF yang sudah jadi.
     let terkirimWa = false;
+    let caraKirim = "";
     if (nomorTujuan) {
-      await kirimWaDenganLampiran(
-        nomorTujuan,
-        `Rekap absensi PRI ${dari} s.d. ${sampai} (${isi.length} baris). Tautan berlaku 24 jam.`,
-        tanda.signedUrl,
-        `rekap-absensi-${dari}-sd-${sampai}.pdf`,
-      );
-      terkirimWa = true;
+      const pesan = `Rekap absensi PRI ${dari} s.d. ${sampai} (${isi.length} baris). Tautan berlaku 24 jam.`;
+      const namaBerkas = `rekap-absensi-${dari}-sd-${sampai}.pdf`;
+      try {
+        await kirimWaDenganLampiran(nomorTujuan, pesan, tanda.signedUrl, namaBerkas);
+        terkirimWa = true;
+        caraKirim = "lampiran";
+      } catch (eLampiran) {
+        console.error("[rekap] lampiran WA gagal, coba tautan:", eLampiran);
+        try {
+          await kirimWa(nomorTujuan, `${pesan}
+
+Unduh PDF:
+${tanda.signedUrl}`);
+          terkirimWa = true;
+          caraKirim = "tautan";
+        } catch (eTautan) {
+          console.error("[rekap] tautan WA juga gagal:", eTautan);
+        }
+      }
     }
 
     return {
@@ -191,6 +210,10 @@ export async function POST(request: Request) {
       url: tanda.signedUrl,
       baris: isi.length,
       terkirim_wa: terkirimWa,
+      cara_kirim: caraKirim,
+      ...(nomorTujuan && !terkirimWa
+        ? { pesan_wa: "WhatsApp tidak bisa dihubungi — unduh PDF-nya lewat tombol di bawah." }
+        : {}),
     };
   });
 }

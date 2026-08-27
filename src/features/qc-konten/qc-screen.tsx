@@ -7,6 +7,7 @@
 // ============================================================
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { jamWIB } from "@/lib/format";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Zap,
@@ -306,6 +307,8 @@ export function QcScreen({
   const [sedangAyrshare, setSedangAyrshare] = useState(false);
   /** Sisa postingan yang masih menunggu diperiksa (untuk pesan tombol) */
   const [sisaAnalisis, setSisaAnalisis] = useState(0);
+  // Komentar terbaca hingga jam ini (spek 1.16) — dari run terakhir
+  const [dataSampai, setDataSampai] = useState<string | null>(null);
 
   /**
    * Cakupan akun: mana yang bisa dibaca Ayrshare, mana yang belum.
@@ -348,6 +351,7 @@ export function QcScreen({
         putaran += 1;
       }
       setSisaAnalisis(0);
+      if (hasil.data_sampai) setDataSampai(hasil.data_sampai);
       // Peringatan pemotongan (bila postingan hari ini melebihi yang
       // bisa dibaca sekali jalan) ditampilkan APA ADANYA — angka yang
       // terpotong diam-diam lebih berbahaya daripada angka yang jujur.
@@ -355,7 +359,7 @@ export function QcScreen({
       toast(
         adaPeringatan ? "peringatan" : "sukses",
         adaPeringatan ? "Analisis selesai sebagian" : "Analisis selesai",
-        `${hasil.postingan} postingan, ${hasil.komentar} komentar dibaca. Tercakup: ${hasil.akun_tercakup.join(", ")}.` +
+        `${hasil.postingan} postingan, ${hasil.komentar} komentar dibaca (hingga ${hasil.data_sampai ? jamWIB(hasil.data_sampai) : "kini"}). Tercakup: ${hasil.akun_tercakup.join(", ")}.` +
           (hasil.akun_terlewat.length > 0
             ? ` Belum tertaut Ayrshare: ${hasil.akun_terlewat.join(", ")}.`
             : "") +
@@ -786,7 +790,13 @@ export function QcScreen({
                   ? "Analisis Ulang"
                   : "Mulai Analisis"}
             </button>
-
+            {/* Batas jam data komentar (spek 1.16): jujur soal kesegaran */}
+            {dataSampai && (
+              <p className="mt-1.5 text-center text-[10.5px] text-teks-sekunder">
+                Komentar terbaca hingga pukul {jamWIB(dataSampai)} WIB — komentar
+                setelah itu terhitung saat analisis berikutnya.
+              </p>
+            )}
             {/* Cakupan akun — tampil apa adanya mengikuti akun yang
                 tertaut di Ayrshare saat ini. */}
             {cakupan && (cakupan.tercakup.length > 0 || cakupan.terlewat.length > 0) && (

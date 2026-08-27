@@ -9,6 +9,7 @@
 // dikreditkan ke dua anggota sekaligus saat QC berjalan.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { beriKoin } from "@/lib/koin";
 import { userDariToken } from "@/lib/sesi";
 
 export const dynamic = "force-dynamic";
@@ -137,6 +138,7 @@ export async function POST(request: Request) {
       console.error("[akun-sosmed] tambah:", error.message);
       throw new Error("Gagal menambahkan akun.");
     }
+    await beriKoin(Number(user.id), "akun_sosmed", `qc-${data.id}`);
     return { sukses: true, data: { ...data, id: String(data.id) } };
   });
 }

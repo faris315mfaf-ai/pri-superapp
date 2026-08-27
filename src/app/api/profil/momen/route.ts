@@ -10,6 +10,7 @@
 // POST {aksi:"suka_profil", user_id}     → toggle like profil.
 // DELETE {foto_id}                        → hapus foto sendiri.
 import { supabase } from "@/lib/supabase";
+import { saldoKoin } from "@/lib/koin";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
@@ -178,6 +179,8 @@ export async function GET(request: Request) {
         : null,
       suka_profil: sukaProfil ?? 0,
       ku_suka_profil: Boolean(sukaKu),
+      // Saldo koin (spek 1.16) — tampil di bawah nama di profil
+      koin: await saldoKoin(targetId),
       // Akun TVR + video (spek 1.15: profil & popup)
       akun_tvr: (akunTvr ?? []).map((a) => ({
         platform: a.platform as string,

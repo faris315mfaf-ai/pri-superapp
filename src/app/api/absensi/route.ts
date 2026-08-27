@@ -18,6 +18,7 @@ import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { catatTugasStreak } from "@/lib/streak";
+import { beriKoin } from "@/lib/koin";
 
 export const dynamic = "force-dynamic";
 
@@ -276,6 +277,8 @@ export async function POST(request: Request) {
         } catch (e) {
           console.error("[absensi] streak:", e);
         }
+        // Koin absen (spek 1.16) — referensi tanggal = 1x per hari.
+        await beriKoin(idUser, "absen", tanggal);
       });
     }
 

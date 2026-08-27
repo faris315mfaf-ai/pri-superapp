@@ -27,8 +27,7 @@ import {
   User as UserIcon,
   Zap,
   Sparkles,
-  Heart,
-} from "lucide-react";
+  Heart, ExternalLink } from "lucide-react";
 import { LogoPri } from "@/components/logo-pri";
 import {
   AvatarInisial,
@@ -45,6 +44,8 @@ import { KartuLengkapiData } from "./lengkapi-data";
 import { GaleriMomen } from "./galeri-momen";
 import { PlatformIcon } from "@/components/platform-icon";
 import { VideoEmbedMini } from "@/components/video-embed-mini";
+import { KoinChip } from "@/components/koin-chip";
+import { urlProfilSosmed } from "@/lib/format";
 import { getProfilMomen, getStreakSaya, type ProfilMomen } from "@/services";
 import { IkonStreak } from "@/components/ikon-streak";
 import { deskripsiStruktur } from "@/lib/struktur";
@@ -433,6 +434,8 @@ export function ProfilScreen({
               {user.nama}
             </h2>
             <p className="mt-1 text-xs text-teks-sekunder">{user.email}</p>
+            {/* Saldo koin gamifikasi (spek 1.16) — di bawah nama anggota */}
+            {momen && <KoinChip saldo={momen.koin} className="mt-2.5" />}
             <span
               className="mt-3 inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-bold"
               style={{ background: peran.latar, borderColor: peran.tepi }}
@@ -484,15 +487,20 @@ export function ProfilScreen({
               <SectionTitle judul="Akun TV Rakyat Saya" className="mt-6" />
               <div className="flex flex-wrap gap-1.5">
                 {momen.akun_tvr.map((a) => (
-                  <span
+                  /* Bisa DIKLIK menuju profil akunnya (spek 1.16) */
+                  <a
                     key={`${a.platform}-${a.username}`}
-                    className="glass-soft flex items-center gap-1.5 rounded-full px-3 py-1.5"
+                    href={urlProfilSosmed(a.platform, a.username)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="glass-soft btn-tekan flex items-center gap-1.5 rounded-full px-3 py-1.5"
                   >
                     <PlatformIcon platform={a.platform} size={14} />
                     <span className="text-[11.5px] font-bold text-teks-utama">
                       @{a.username}
                     </span>
-                  </span>
+                    <ExternalLink className="h-3 w-3 text-teks-sekunder" aria-hidden="true" />
+                  </a>
                 ))}
               </div>
             </>

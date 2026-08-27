@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
+import { beriKoin } from "@/lib/koin";
 
 export const dynamic = "force-dynamic";
 
@@ -295,6 +296,8 @@ export async function POST(request: Request) {
             });
           } else {
             tersimpan.push({ ...data, id: String(data.id) });
+            // Koin laporan video (spek 1.16) — referensi id laporan.
+            await beriKoin(Number(user.id), "laporan_video", `laporan-${data.id}`);
           }
         } catch (e) {
           gagal.push({
@@ -330,6 +333,7 @@ export async function POST(request: Request) {
       console.error("[tvr/laporan] tambah:", error.message);
       throw new Error("Gagal menyimpan laporan.");
     }
+    await beriKoin(Number(user.id), "laporan_video", `laporan-${data.id}`);
     return { sukses: true, data: { ...data, id: String(data.id) } };
   });
 }
