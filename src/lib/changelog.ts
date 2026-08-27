@@ -18,6 +18,17 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "1.17.0",
+    tanggal: "28 Agustus 2026",
+    judul: "Tambah sosmed dianalisis & tautkan akunmu sendiri",
+    poin: [
+      "HR Center: tombol tambah profil untuk menganalisis sosmed lain (mis. dpp.pri) — tautkan akunnya langsung dari aplikasi",
+      "Analisis otomatis membaca SEMUA profil sekaligus",
+      "TVR Saya: Hubungkan Sosmed (Login) — tautkan akun sungguhanmu, akun tertaut berlencana Terhubung",
+      "Fondasi migrasi penyedia: siap beralih ke upload-post tanpa rombak",
+    ],
+  },
+  {
     versi: "1.16.0",
     tanggal: "28 Agustus 2026",
     judul: "Koin hadir! Plus analisis komentar yang selalu segar",

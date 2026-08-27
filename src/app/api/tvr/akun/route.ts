@@ -104,7 +104,7 @@ export async function GET(request: Request) {
     const user = await pastikanMasuk(request);
     const { data, error } = await supabase()
       .from("akun_tvr_user")
-      .select("id, platform, username, aktif")
+      .select("id, platform, username, aktif, terhubung")
       .eq("user_id", Number(user.id))
       .order("platform")
       .order("id");
@@ -126,7 +126,7 @@ export async function POST(request: Request) {
     const { data, error } = await supabase()
       .from("akun_tvr_user")
       .insert({ user_id: Number(user.id), platform, username, aktif: true })
-      .select("id, platform, username, aktif")
+      .select("id, platform, username, aktif, terhubung")
       .single();
     if (error) {
       // Constraint unik menjaga balapan dua permintaan bersamaan.

@@ -1241,6 +1241,8 @@ export type AkunTvr = {
   platform: string;
   username: string;
   aktif: boolean;
+  /** true = hasil penautan login sungguhan (spek 1.17) */
+  terhubung?: boolean;
 };
 
 export async function getAkunTvr(): Promise<AkunTvr[]> {
@@ -2789,4 +2791,77 @@ export async function setBonusKoin(aktivitas: string, nilai: number): Promise<vo
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ aksi: "koin_bonus", username: aktivitas, nilai: String(nilai) }),
   });
+}
+
+// ------------------------------------------------------------
+// Profil sosmed penyedia (spek 1.17)
+// ------------------------------------------------------------
+
+export type ProfilAnalisis = {
+  id: string;
+  judul: string;
+  akun: { platform: string; username: string }[];
+  gagal: boolean;
+};
+
+/** Daftar profil QC + akun tertautnya (pengurus). */
+export async function getProfilAnalisis(): Promise<{
+  penyedia: string;
+  penautan_siap: boolean;
+  data: ProfilAnalisis[];
+}> {
+  const json = await fetchJson("/api/analisis/profil", { headers: headerToken() });
+  return {
+    penyedia: (json.penyedia as string) ?? "ayrshare",
+    penautan_siap: json.penautan_siap === true,
+    data: (json.data ?? []) as ProfilAnalisis[],
+  };
+}
+
+export async function tambahProfilAnalisis(judul: string): Promise<void> {
+  await fetchJson("/api/analisis/profil", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ judul }),
+  });
+}
+
+export async function tautanProfilAnalisis(id: string): Promise<string> {
+  const json = await fetchJson("/api/analisis/profil", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "tautan", id }),
+  });
+  return json.url as string;
+}
+
+export async function hapusProfilAnalisis(id: string): Promise<void> {
+  await fetchJson("/api/analisis/profil", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id }),
+  });
+}
+
+/** TVR Saya: siapkan profilku + URL halaman penautan sosmed. */
+export async function hubungkanSosmedTvr(): Promise<string> {
+  const json = await fetchJson("/api/tvr/hubungkan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+  });
+  return json.url as string;
+}
+
+/** TVR Saya: baca akun tertaut + sinkron ke daftar akunku. */
+export async function sinkronSosmedTvr(): Promise<{
+  terhubung: { platform: string; username: string }[];
+  tersinkron: number;
+  konflik: string[];
+}> {
+  const json = await fetchJson("/api/tvr/hubungkan", { headers: headerToken() });
+  return {
+    terhubung: (json.terhubung ?? []) as { platform: string; username: string }[],
+    tersinkron: Number(json.tersinkron ?? 0),
+    konflik: (json.konflik ?? []) as string[],
+  };
 }

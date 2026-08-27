@@ -48,9 +48,9 @@ export function ayrshareSiap(): boolean {
  */
 async function panggil<T>(
   jalur: string,
-  init: RequestInit & { timeoutMs?: number } = {},
+  init: RequestInit & { timeoutMs?: number; kunciProfil?: string | null } = {},
 ): Promise<T> {
-  const { timeoutMs = 60000, ...sisa } = init;
+  const { timeoutMs = 60000, kunciProfil, ...sisa } = init;
   const kendali = new AbortController();
   const timer = setTimeout(() => kendali.abort(), timeoutMs);
 
@@ -60,7 +60,15 @@ async function panggil<T>(
       headers: {
         Authorization: `Bearer ${kunci()}`,
         "Content-Type": "application/json",
-        ...(profileKey() ? { "Profile-Key": profileKey()! } : {}),
+        // kunciProfil menimpa profil bawaan env (multi-profile 1.17);
+        // string kosong = sengaja TANPA Profile-Key (profil utama akun).
+        ...(kunciProfil !== undefined
+          ? kunciProfil
+            ? { "Profile-Key": kunciProfil }
+            : {}
+          : profileKey()
+            ? { "Profile-Key": profileKey()! }
+            : {}),
         ...(sisa.headers ?? {}),
       },
       signal: kendali.signal,
@@ -118,12 +126,16 @@ type BalasanUser = {
   monthlyApiCalls?: number;
 };
 
-export async function ambilAkunTertaut(): Promise<{
+export async function ambilAkunTertaut(kunciProfil?: string): Promise<{
   platformAktif: string[];
   akun: AkunTertaut[];
   postBulanIni: number;
 }> {
-  const d = await panggil<BalasanUser>("/user", { method: "GET", timeoutMs: 20000 });
+  const d = await panggil<BalasanUser>("/user", {
+    method: "GET",
+    timeoutMs: 20000,
+    ...(kunciProfil !== undefined ? { kunciProfil } : {}),
+  });
   return {
     platformAktif: d.activeSocialAccounts ?? [],
     akun: (d.displayNames ?? []).map((a) => ({
@@ -388,6 +400,7 @@ const METRIK_PER_PLATFORM: Record<string, [string, string][]> = {
 export async function ambilRiwayatPostingan(
   platform: string,
   jumlah = 15,
+  kunciProfil?: string,
 ): Promise<PostinganInsight[]> {
   // PENTING — parameter yang benar adalah `limit`, BUKAN `lastRecords`.
   //
@@ -400,7 +413,7 @@ export async function ambilRiwayatPostingan(
   const batas = Math.min(Math.max(jumlah, 1), 200);
   const d = await panggil<{ posts?: BarisRiwayat[]; history?: BarisRiwayat[] }>(
     `/history/${encodeURIComponent(platform)}?limit=${batas}`,
-    { method: "GET", timeoutMs: 45000 },
+    { method: "GET", timeoutMs: 45000, ...(kunciProfil !== undefined ? { kunciProfil } : {}) },
   );
 
   const daftar = d.posts ?? d.history ?? [];
@@ -440,10 +453,11 @@ export type KomentarPostingan = {
 export async function ambilKomentarPostingan(
   platform: string,
   idPost: string,
+  kunciProfil?: string,
 ): Promise<KomentarPostingan[]> {
   const d = await panggil<Record<string, unknown>>(
     `/comments/${encodeURIComponent(idPost)}?searchPlatformId=true&platform=${encodeURIComponent(platform)}`,
-    { method: "GET", timeoutMs: 45000 },
+    { method: "GET", timeoutMs: 45000, ...(kunciProfil !== undefined ? { kunciProfil } : {}) },
   );
 
   const mentah = d[platform];
@@ -466,4 +480,64 @@ export async function ambilKomentarPostingan(
         null,
     };
   });
+}
+
+// ------------------------------------------------------------
+// Profiles API (1.17): buat/hapus profil & halaman penautan sosmed
+// white-label — pengguna menautkan akunnya TANPA membuka Ayrshare.
+// ------------------------------------------------------------
+
+/** Buat profil Ayrshare baru. profileKey HANYA keluar di sini — simpan! */
+export async function buatProfilAyrshare(
+  judul: string,
+): Promise<{ profileKey: string; refId: string }> {
+  const d = await panggil<{ profileKey?: string; refId?: string; status?: string }>(
+    "/profiles",
+    {
+      method: "POST",
+      body: JSON.stringify({ title: judul }),
+      timeoutMs: 30000,
+      kunciProfil: "", // Profiles API selalu memakai kunci UTAMA akun
+    },
+  );
+  if (!d.profileKey) throw new Error("Ayrshare tidak mengembalikan profileKey.");
+  return { profileKey: d.profileKey, refId: d.refId ?? "" };
+}
+
+/** Hapus profil Ayrshare (akun tertautnya ikut lepas). */
+export async function hapusProfilAyrshare(profileKey: string): Promise<void> {
+  await panggil("/profiles", {
+    method: "DELETE",
+    body: JSON.stringify({ profileKey }),
+    timeoutMs: 30000,
+    kunciProfil: "",
+  });
+}
+
+/**
+ * URL halaman penautan sosmed untuk SATU profil (generateJWT).
+ * Butuh dua rahasia dari dashboard Ayrshare (paket Business):
+ * AYRSHARE_PRIVATE_KEY (isi berkas .key) dan AYRSHARE_DOMAIN (id-xxxx).
+ */
+export async function buatTautanHubungkan(profileKey: string): Promise<string> {
+  // Env sering menyimpan kunci RSA dengan "\n" literal — kembalikan
+  // jadi baris nyata supaya diterima Ayrshare.
+  const privateKey = (process.env.AYRSHARE_PRIVATE_KEY ?? "").replace(/\\n/g, "\n");
+  const domain = process.env.AYRSHARE_DOMAIN ?? "";
+  if (!privateKey || !domain) {
+    throw Object.assign(
+      new Error(
+        "Penautan butuh AYRSHARE_PRIVATE_KEY dan AYRSHARE_DOMAIN. Unduh Private Key di dashboard Ayrshare (Account → API Key) lalu isi keduanya di pengaturan lingkungan.",
+      ),
+      { status: 503, pesanAman: true },
+    );
+  }
+  const d = await panggil<{ url?: string; token?: string }>("/profiles/generateJWT", {
+    method: "POST",
+    body: JSON.stringify({ profileKey, domain, privateKey, expiresIn: 30 }),
+    timeoutMs: 30000,
+    kunciProfil: "",
+  });
+  if (!d.url) throw new Error("Ayrshare tidak mengembalikan URL penautan.");
+  return d.url;
 }

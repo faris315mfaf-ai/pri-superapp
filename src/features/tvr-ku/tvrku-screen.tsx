@@ -23,7 +23,7 @@ import {
   Pencil,
   Plus,
   Trash2,
-  Video, Globe, X } from "lucide-react";
+  Video, Globe, X, RefreshCw } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import {
   EmptyState,
@@ -51,6 +51,8 @@ import {
   type KerjaKpi,
   type LaporanVideo,
   kirimLaporanBatch,
+  hubungkanSosmedTvr,
+  sinkronSosmedTvr,
 } from "@/services";
 import { jamWIB, urlProfilSosmed } from "@/lib/format";
 import type { KomponenIkon, User } from "@/types";
@@ -500,6 +502,49 @@ export function TvrKuScreen({
     }
   }
 
+  // Penautan sosmed sungguhan (spek 1.17): 1 pengguna = 1 profil penyedia.
+  const [sedangHubung, setSedangHubung] = useState(false);
+  async function hubungkanSosmed() {
+    if (sedangHubung) return;
+    setSedangHubung(true);
+    try {
+      const url = await hubungkanSosmedTvr();
+      window.open(url, "_blank", "noopener,noreferrer");
+      toast(
+        "info",
+        "Halaman login sosmed dibuka",
+        "Tautkan akunmu di tab baru, lalu kembali & tekan Segarkan.",
+      );
+    } catch (e) {
+      toast("error", "Gagal membuka penautan", e instanceof Error ? e.message : "");
+    } finally {
+      setSedangHubung(false);
+    }
+  }
+
+  async function segarkanTautan() {
+    if (sedangHubung) return;
+    setSedangHubung(true);
+    try {
+      const hasil = await sinkronSosmedTvr();
+      if (hasil.terhubung.length === 0) {
+        toast("info", "Belum ada akun tertaut", "Tekan Hubungkan lalu login sosmedmu dulu.");
+      } else {
+        toast(
+          "sukses",
+          `${hasil.terhubung.length} akun terhubung`,
+          `${hasil.tersinkron} baru ditambahkan ke daftarmu.` +
+            (hasil.konflik.length > 0 ? ` Konflik: ${hasil.konflik.join("; ")}` : ""),
+        );
+      }
+      setMuatUlang((n) => n + 1);
+    } catch (e) {
+      toast("error", "Gagal menyegarkan", e instanceof Error ? e.message : "");
+    } finally {
+      setSedangHubung(false);
+    }
+  }
+
   async function tambahWebsite(domain: string) {
     try {
       await tambahAkunTvr("website", domain);
@@ -633,6 +678,34 @@ export function TvrKuScreen({
             Tambah
           </button>
         </div>
+
+        {/* Penautan sosmed sungguhan (spek 1.17): login akunmu lewat
+            halaman penyedia — 1 pengguna = 1 profil. */}
+        <div className="mt-2 flex gap-2">
+          <button
+            type="button"
+            disabled={sedangHubung}
+            onClick={() => void hubungkanSosmed()}
+            className="btn-tekan flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-[12px] font-bold text-white disabled:opacity-60"
+            style={{ background: "linear-gradient(135deg, #10B981, #059669)" }}
+          >
+            {sedangHubung ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            Hubungkan Sosmed (Login)
+          </button>
+          <button
+            type="button"
+            disabled={sedangHubung}
+            onClick={() => void segarkanTautan()}
+            aria-label="Segarkan akun terhubung"
+            className="glass btn-tekan flex items-center justify-center rounded-xl px-3.5 disabled:opacity-60"
+          >
+            <RefreshCw className="h-4 w-4 text-teks-utama" aria-hidden="true" />
+          </button>
+        </div>
         {memuat ? (
           <GlassSkeleton className="mt-2 h-16 rounded-2xl" />
         ) : (akun ?? []).length === 0 ? (
@@ -666,7 +739,15 @@ export function TvrKuScreen({
                       aria-hidden="true"
                     />
                   </p>
-                  <p className="text-[11px] text-teks-sekunder">{labelPlatform(a.platform)}</p>
+                  <p className="text-[11px] text-teks-sekunder">
+                    {labelPlatform(a.platform)}
+                    {/* Lencana hasil penautan login sungguhan (1.17) */}
+                    {a.terhubung && (
+                      <span className="ml-1.5 rounded-full bg-sukses/15 px-1.5 py-0.5 text-[9px] font-bold text-sukses">
+                        Terhubung
+                      </span>
+                    )}
+                  </p>
                 </a>
                 <button
                   type="button"

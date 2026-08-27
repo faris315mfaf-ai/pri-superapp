@@ -107,6 +107,42 @@ function dedup<T>(baris: T[], kunci: (b: T) => string): T[] {
  * begitu dpp.pri atau akun Ketua Umum ditautkan, layarnya ikut berubah
  * tanpa perlu menyentuh kode.
  */
+/**
+ * Semua SUMBER pembacaan (1.17): profil utama (kunci env) + tiap
+ * profil QC tambahan di sosmed_profile. Tiap sumber menyumbang akun
+ * tertautnya sendiri; akun wajib dicocokkan per (platform, username)
+ * ke sumber mana pun — dua akun Instagram di profil berbeda sah.
+ */
+async function kumpulkanAkunTertaut(): Promise<
+  { platform: string; username: string; kunci: string | undefined }[]
+> {
+  const sumber: { kunci: string | undefined }[] = [{ kunci: undefined }]; // profil utama
+  const { data: profilQc } = await supabase()
+    .from("sosmed_profile")
+    .select("profile_key")
+    .eq("jenis", "qc")
+    .eq("penyedia", "ayrshare");
+  for (const p of profilQc ?? []) sumber.push({ kunci: p.profile_key as string });
+
+  const hasil: { platform: string; username: string; kunci: string | undefined }[] = [];
+  for (const src of sumber) {
+    try {
+      const t = await ambilAkunTertaut(src.kunci);
+      for (const a of t.akun) {
+        hasil.push({
+          platform: a.platform,
+          username: a.username.toLowerCase().replace(/^@/, ""),
+          kunci: src.kunci,
+        });
+      }
+    } catch (e) {
+      // Satu profil gagal dibaca tidak boleh mengosongkan yang lain.
+      console.error("[analisis/ayrshare] profil gagal dibaca:", e);
+    }
+  }
+  return hasil;
+}
+
 export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await userDariToken(tokenDari(request));
@@ -123,20 +159,17 @@ export async function GET(request: Request) {
       .select("username, platform")
       .eq("aktif", true);
 
-    let tertautPer = new Map<string, string>();
-    try {
-      const tertaut = await ambilAkunTertaut();
-      tertautPer = new Map(
-        tertaut.akun.map((a) => [a.platform, a.username.toLowerCase().replace(/^@/, "")]),
-      );
-    } catch {
-      // Ayrshare sedang tidak bisa dihubungi — laporkan sebagai belum
-      // siap, jangan menebak cakupan yang belum tentu benar.
+    const semuaTertaut = await kumpulkanAkunTertaut();
+    if (semuaTertaut.length === 0) {
+      // Tidak satu pun profil bisa dibaca — laporkan belum siap,
+      // jangan menebak cakupan yang belum tentu benar.
       return { siap: false, tercakup: [], terlewat: [] };
     }
 
     const cocok = (a: { username: string; platform: string }) =>
-      tertautPer.get(a.platform) === a.username.toLowerCase();
+      semuaTertaut.some(
+        (t) => t.platform === a.platform && t.username === a.username.toLowerCase(),
+      );
 
     return {
       siap: true,
@@ -167,10 +200,9 @@ export async function POST(request: Request) {
     const batasMs = awalPeriodeMs();
 
     // --- Data dasar: akun wajib, akun tertaut Ayrshare, roster, akun sosmed anggota ---
-    const [{ data: akunWajib }, tertaut, { data: roster }, { data: akunAnggota }] =
+    const [{ data: akunWajib }, { data: roster }, { data: akunAnggota }] =
       await Promise.all([
         db.from("akun_wajib").select("username, platform").eq("aktif", true),
-        ambilAkunTertaut(),
         db
           .from("app_user")
           .select("id, nama, nomor_wa")
@@ -182,15 +214,22 @@ export async function POST(request: Request) {
           .eq("aktif", true),
       ]);
 
-    const tertautPer = new Map(
-      tertaut.akun.map((a) => [a.platform, a.username.toLowerCase().replace(/^@/, "")]),
-    );
-    const cocokTertaut = (akunWajib ?? []).filter(
-      (a) => tertautPer.get(a.platform) === a.username.toLowerCase(),
-    );
-    const terlewat = (akunWajib ?? []).filter(
-      (a) => tertautPer.get(a.platform) !== a.username.toLowerCase(),
-    );
+    // 1.17: akun tertaut dikumpulkan dari SEMUA profil; tiap akun
+    // wajib yang cocok membawa kunci profil sumbernya utk scraping.
+    const semuaTertaut = await kumpulkanAkunTertaut();
+    const sumberDari = (a: { username: string; platform: string }) =>
+      semuaTertaut.find(
+        (t) => t.platform === a.platform && t.username === a.username.toLowerCase(),
+      );
+    const cocokTertaut = (akunWajib ?? [])
+      .map((a) => {
+        const src = sumberDari(a);
+        return src ? { ...a, kunci: src.kunci } : null;
+      })
+      .filter((a): a is { username: string; platform: string; kunci: string | undefined } =>
+        a !== null,
+      );
+    const terlewat = (akunWajib ?? []).filter((a) => !sumberDari(a));
     if (cocokTertaut.length === 0) {
       throw Object.assign(
         new Error(
@@ -255,7 +294,7 @@ export async function POST(request: Request) {
       // AMBIL BANYAK, LALU SARING. TV Rakyat bisa memposting puluhan kali
       // sehari (terukur 39 kali di Instagram dalam satu hari), jadi
       // meminta sedikit berarti diam-diam kehilangan sebagian kepatuhan.
-      const riwayat = await ambilRiwayatPostingan(akun.platform, AMBIL_RIWAYAT);
+      const riwayat = await ambilRiwayatPostingan(akun.platform, AMBIL_RIWAYAT, akun.kunci);
       const postPeriode = riwayat.filter(
         (p) => p.id && p.waktu && new Date(p.waktu).getTime() >= batasMs,
       );
@@ -313,7 +352,7 @@ export async function POST(request: Request) {
         // Komentar DIAMBIL pakai id Ayrshare, tapi DISIMPAN pakai id
         // kanonik — dua hal berbeda yang tidak boleh tertukar.
         const idPost = idKanonik;
-        const komentar = await ambilKomentarPostingan(akun.platform, post.id);
+        const komentar = await ambilKomentarPostingan(akun.platform, post.id, akun.kunci);
         totalKomentar += komentar.length;
 
         const awalanId = akun.platform === "instagram" ? "ig" : "tt";
