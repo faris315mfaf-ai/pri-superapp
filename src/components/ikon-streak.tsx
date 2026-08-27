@@ -25,14 +25,25 @@ export function IkonStreak({
   hari,
   className,
   tanpaAngka = false,
+  skala = "normal",
 }: {
   hari: number;
   className?: string;
   /** true = api saja tanpa angka hari */
   tanpaAngka?: boolean;
+  /** "besar" = api mencolok ala streak TikTok (daftar & room chat) */
+  skala?: "normal" | "besar";
 }) {
   if (hari <= 0) return null;
   const { warna, besar } = tampilan(hari);
+  const kelasApi =
+    skala === "besar"
+      ? besar
+        ? "h-6 w-6"
+        : "h-5 w-5"
+      : besar
+        ? "h-4.5 w-4.5"
+        : "h-3.5 w-3.5";
   return (
     <span
       className={cn("inline-flex shrink-0 items-center gap-0.5", className)}
@@ -40,12 +51,24 @@ export function IkonStreak({
       aria-label={`Streak ${hari} hari`}
     >
       <Flame
-        className={besar ? "h-4.5 w-4.5" : "h-3.5 w-3.5"}
-        style={{ color: warna, fill: warna }}
+        className={kelasApi}
+        style={{
+          color: warna,
+          fill: warna,
+          // Nyala lembut supaya apinya "hidup" ala TikTok, tanpa
+          // animasi berat — cukup bayangan warna apinya sendiri.
+          filter: skala === "besar" ? `drop-shadow(0 0 5px ${warna}88)` : undefined,
+        }}
         aria-hidden="true"
       />
       {!tanpaAngka && (
-        <span className="angka-tab text-[11px] font-extrabold" style={{ color: warna }}>
+        <span
+          className={cn(
+            "angka-tab font-extrabold",
+            skala === "besar" ? "text-[13px]" : "text-[11px]",
+          )}
+          style={{ color: warna }}
+        >
           {hari}
         </span>
       )}

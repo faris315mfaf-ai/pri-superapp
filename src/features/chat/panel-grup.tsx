@@ -23,6 +23,9 @@ import {
   kirimPesanGrup,
   tandaiGrupDibaca,
   type PesanGrup,
+  getAnggotaGrup,
+  ubahInfoGrup,
+  type AnggotaGrup,
 } from "@/services";
 import { jamWIB } from "@/lib/format";
 import type { User } from "@/types";
@@ -36,12 +39,17 @@ const EMOJI = [
 export function PanelGrup({
   user,
   divisi,
+  namaGrup,
+  fotoGrup,
   anggota,
   onKembali,
   onSegarkanDaftar,
 }: {
   user: User;
   divisi: string;
+  /** Nama tampilan grup (kustom kepala divisi, atau nama divisi) */
+  namaGrup: string;
+  fotoGrup: string;
   anggota: number;
   onKembali: () => void;
   onSegarkanDaftar: () => void;
@@ -56,6 +64,10 @@ export function PanelGrup({
   const [gambarPenuh, setGambarPenuh] = useState<string | null>(null);
   const inputGambarRef = useRef<HTMLInputElement | null>(null);
   const timerTekanRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Info grup (spek 1.15): sheet anggota + kustomisasi nama/foto
+  const [infoBuka, setInfoBuka] = useState(false);
+  const [namaTampil, setNamaTampil] = useState(namaGrup);
+  const [fotoTampil, setFotoTampil] = useState(fotoGrup);
   const ujungRef = useRef<HTMLDivElement | null>(null);
   const idTerakhirRef = useRef<string>("0");
 
@@ -70,7 +82,13 @@ export function PanelGrup({
         if (!hidup) return;
         if (data.length > 0) {
           idTerakhirRef.current = data[data.length - 1].id;
-          setPesan((lama) => (awal ? data : [...lama, ...data]));
+          setPesan((lama) => {
+            // Tameng dedup (bug "pesan dobel" 1.15) — pesan yang sudah
+            // dirender langsung tidak boleh ditambah lagi oleh polling.
+            if (awal) return data;
+            const sudahAda = new Set(lama.map((m) => m.id));
+            return [...lama, ...data.filter((m) => !sudahAda.has(m.id))];
+          });
           void tandaiGrupDibaca();
         } else if (awal) {
           setPesan([]);
@@ -104,18 +122,27 @@ export function PanelGrup({
       setTulisan("");
       setGambarSiap(null);
       setEmojiBuka(false);
-      setPesan((lama) => [
-        ...lama,
-        {
-          id: `lokal-${Date.now()}`,
-          pengirim_id: user.id,
-          pengirim_nama: user.nama,
-          pengirim_avatar: user.avatar_url ?? "",
-          isi,
-          gambar_url: hasil.gambar_url,
-          dibuat_pada: new Date().toISOString(),
-        },
-      ]);
+      // ID ASLI server + majukan kursor polling — dulu id lokal
+      // membuat polling menarik ulang pesan yang sama (pesan dobel).
+      if (hasil.id && Number(hasil.id) > Number(idTerakhirRef.current)) {
+        idTerakhirRef.current = hasil.id;
+      }
+      setPesan((lama) =>
+        lama.some((m) => m.id === hasil.id)
+          ? lama
+          : [
+              ...lama,
+              {
+                id: hasil.id || `lokal-${Date.now()}`,
+                pengirim_id: user.id,
+                pengirim_nama: user.nama,
+                pengirim_avatar: user.avatar_url ?? "",
+                isi,
+                gambar_url: hasil.gambar_url,
+                dibuat_pada: hasil.dibuat_pada,
+              },
+            ],
+      );
       onSegarkanDaftar();
     } catch (e) {
       toast("error", "Pesan gagal terkirim", e instanceof Error ? e.message : "");
@@ -173,19 +200,33 @@ export function PanelGrup({
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
-          style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
-          aria-hidden="true"
+        {/* Ketuk header -> info grup: anggota + kustomisasi (spek 1.15) */}
+        <button
+          type="button"
+          onClick={() => setInfoBuka(true)}
+          aria-label="Info grup"
+          className="btn-tekan flex min-w-0 flex-1 items-center gap-3 text-left"
         >
-          <Users className="h-4.5 w-4.5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-bold text-teks-utama">Grup {divisi}</p>
-          <p className="text-[10px] text-teks-sekunder">
-            {anggota} anggota · koordinasi resmi divisi
-          </p>
-        </div>
+          {fotoTampil ? (
+            <FotoBulat src={fotoTampil} ukuran={36} />
+          ) : (
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
+              style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+              aria-hidden="true"
+            >
+              <Users className="h-4.5 w-4.5" />
+            </span>
+          )}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-bold text-teks-utama">
+              {namaTampil}
+            </span>
+            <span className="block text-[10px] text-teks-sekunder">
+              {anggota} anggota · ketuk untuk info grup
+            </span>
+          </span>
+        </button>
       </header>
 
       {/* Isi grup */}
@@ -434,6 +475,217 @@ export function PanelGrup({
           />
         </div>
       )}
+
+      {/* Sheet info grup (spek 1.15): anggota + kustomisasi kepala */}
+      {infoBuka && (
+        <InfoGrupSheet
+          divisi={divisi}
+          namaTampil={namaTampil}
+          fotoTampil={fotoTampil}
+          bolehUbah={kepala}
+          onTutup={() => setInfoBuka(false)}
+          onBerubah={(nama, foto) => {
+            setNamaTampil(nama);
+            if (foto) setFotoTampil(foto);
+            onSegarkanDaftar();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------
+// InfoGrupSheet — daftar anggota grup + (kepala divisi) ganti
+// nama & foto grup. Keanggotaan otomatis dari divisi, jadi tidak
+// ada tombol keluar/tambah anggota di sini.
+// ------------------------------------------------------------
+
+function InfoGrupSheet({
+  divisi,
+  namaTampil,
+  fotoTampil,
+  bolehUbah,
+  onTutup,
+  onBerubah,
+}: {
+  divisi: string;
+  namaTampil: string;
+  fotoTampil: string;
+  bolehUbah: boolean;
+  onTutup: () => void;
+  onBerubah: (nama: string, foto: string) => void;
+}) {
+  const [anggota, setAnggota] = useState<AnggotaGrup[] | null>(null);
+  const [namaBaru, setNamaBaru] = useState(namaTampil);
+  const [sedangSimpan, setSedangSimpan] = useState(false);
+  const [sedangFoto, setSedangFoto] = useState(false);
+  const inputFotoRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    let hidup = true;
+    void (async () => {
+      try {
+        const hasil = await getAnggotaGrup();
+        if (hidup) setAnggota(hasil);
+      } catch {
+        if (hidup) setAnggota([]);
+      }
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, []);
+
+  async function simpanNama() {
+    const nama = namaBaru.trim();
+    if (sedangSimpan || nama === namaTampil) return;
+    setSedangSimpan(true);
+    try {
+      const hasil = await ubahInfoGrup({ nama });
+      toast("sukses", "Nama grup diganti", hasil.nama_grup);
+      onBerubah(hasil.nama_grup, "");
+    } catch (e) {
+      toast("error", "Gagal mengganti nama", e instanceof Error ? e.message : "");
+    } finally {
+      setSedangSimpan(false);
+    }
+  }
+
+  async function gantiFoto(file: File | null) {
+    if (!file || sedangFoto) return;
+    setSedangFoto(true);
+    try {
+      const foto = await kompresGambar(file, 100);
+      const hasil = await ubahInfoGrup({ foto });
+      toast("sukses", "Foto grup diganti");
+      onBerubah(hasil.nama_grup, hasil.foto_grup);
+    } catch (e) {
+      toast("error", "Gagal mengganti foto", e instanceof Error ? e.message : "");
+    } finally {
+      setSedangFoto(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] flex flex-col justify-end"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Info grup ${namaTampil}`}
+    >
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-md" onClick={onTutup} />
+      <div className="glass-strong relative mx-auto flex max-h-[85dvh] w-full max-w-[440px] flex-col rounded-t-[2rem] px-5 pt-3 pb-8">
+        <div className="mb-3 flex shrink-0 justify-center">
+          <span className="h-1.5 w-12 rounded-full bg-teks-sekunder/40" aria-hidden="true" />
+        </div>
+
+        {/* Identitas grup */}
+        <div className="flex shrink-0 flex-col items-center">
+          <div className="relative">
+            {fotoTampil ? (
+              <FotoBulat src={fotoTampil} ukuran={76} />
+            ) : (
+              <span
+                className="flex h-[76px] w-[76px] items-center justify-center rounded-full text-white"
+                style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+                aria-hidden="true"
+              >
+                <Users className="h-8 w-8" />
+              </span>
+            )}
+            {bolehUbah && (
+              <>
+                <input
+                  ref={inputFotoRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  aria-label="Pilih foto grup"
+                  onChange={(e) => {
+                    void gantiFoto(e.target.files?.[0] ?? null);
+                    e.target.value = "";
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => inputFotoRef.current?.click()}
+                  disabled={sedangFoto}
+                  aria-label="Ganti foto grup"
+                  className="btn-tekan absolute -right-1 -bottom-1 flex h-8 w-8 items-center justify-center rounded-full text-white disabled:opacity-60"
+                  style={{ background: "linear-gradient(135deg, #10B981, #059669)" }}
+                >
+                  {sedangFoto ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ImagePlus className="h-4 w-4" />
+                  )}
+                </button>
+              </>
+            )}
+          </div>
+          <p className="mt-2 font-heading text-base font-bold text-teks-utama">{namaTampil}</p>
+          <p className="text-[11px] text-teks-sekunder">Grup resmi {divisi}</p>
+        </div>
+
+        {/* Kustom nama (kepala divisi) */}
+        {bolehUbah && (
+          <div className="mt-3 flex shrink-0 gap-2">
+            <input
+              value={namaBaru}
+              onChange={(e) => setNamaBaru(e.target.value.slice(0, 60))}
+              placeholder="Nama grup…"
+              aria-label="Nama grup"
+              className="glass h-10 min-w-0 flex-1 rounded-xl px-3.5 text-sm text-teks-utama placeholder:text-teks-sekunder/60 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => void simpanNama()}
+              disabled={sedangSimpan || namaBaru.trim() === namaTampil}
+              className="btn-tekan rounded-xl px-3.5 text-xs font-bold text-white disabled:opacity-50"
+              style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+            >
+              {sedangSimpan ? <Loader2 className="h-4 w-4 animate-spin" /> : "Simpan"}
+            </button>
+          </div>
+        )}
+
+        {/* Daftar anggota */}
+        <p className="mt-4 mb-1.5 shrink-0 text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">
+          Anggota {anggota ? `(${anggota.length})` : ""}
+        </p>
+        <div className="scrollbar-tipis flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
+          {anggota === null ? (
+            <p className="py-4 text-center text-xs text-teks-sekunder">Memuat…</p>
+          ) : anggota.length === 0 ? (
+            <p className="py-4 text-center text-xs text-teks-sekunder">Belum ada anggota.</p>
+          ) : (
+            anggota.map((a) => (
+              <div key={a.id} className="glass-soft flex items-center gap-2.5 rounded-xl px-2.5 py-2">
+                {a.avatar_url ? (
+                  <FotoBulat src={a.avatar_url} ukuran={32} />
+                ) : (
+                  <AvatarInisial nama={a.nama} ukuran={32} />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12.5px] font-semibold text-teks-utama">{a.nama}</p>
+                  {a.jabatan && (
+                    <p className="truncate text-[10px] text-teks-sekunder">{a.jabatan}</p>
+                  )}
+                </div>
+                {a.kepala && (
+                  <span
+                    className="shrink-0 rounded-full px-2 py-0.5 text-[9.5px] font-bold text-white"
+                    style={{ background: "linear-gradient(135deg, #F59E0B, #D97706)" }}
+                  >
+                    Kepala Divisi
+                  </span>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }

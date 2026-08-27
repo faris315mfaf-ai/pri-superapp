@@ -1689,13 +1689,20 @@ export async function kirimPesanChat(
   kontakId: string,
   isi: string,
   gambar?: string,
-): Promise<{ gambar_url: string }> {
+): Promise<{ id: string; dibuat_pada: string; gambar_url: string }> {
   const json = await fetchJson("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ aksi: "kirim", kontak_id: kontakId, isi, gambar }),
   });
-  return { gambar_url: (json.gambar_url as string) ?? "" };
+  // id & dibuat_pada ASLI dari server — dipakai penampil supaya pesan
+  // yang baru dikirim tidak ikut tertarik lagi oleh polling (bug
+  // "pesan dobel" 1.15).
+  return {
+    id: (json.id as string) ?? "",
+    dibuat_pada: (json.dibuat_pada as string) ?? new Date().toISOString(),
+    gambar_url: (json.gambar_url as string) ?? "",
+  };
 }
 
 /** Tarik satu pesan — hilang dari tampilan kedua pihak (spek 1.14). */
@@ -2396,10 +2403,21 @@ export async function getStreakSaya(): Promise<{ hari: number; restore_tersedia:
 
 export type InfoGrupDivisi = {
   divisi: string;
+  /** Nama tampilan grup (kustom bila disetel; selain itu nama divisi) */
+  nama_grup: string;
+  foto_grup: string;
   anggota: number;
   cuplikan: string;
   waktu_terakhir: string;
   belum_dibaca: number;
+};
+
+export type AnggotaGrup = {
+  id: string;
+  nama: string;
+  avatar_url: string;
+  kepala: boolean;
+  jabatan: string;
 };
 
 export type PesanGrup = {
@@ -2420,6 +2438,8 @@ export async function getGrupDivisiku(): Promise<InfoGrupDivisi | null> {
     if (!json?.divisi) return null;
     return {
       divisi: json.divisi as string,
+      nama_grup: (json.nama_grup as string) || (json.divisi as string),
+      foto_grup: (json.foto_grup as string) ?? "",
       anggota: Number(json.anggota ?? 0),
       cuplikan: (json.cuplikan as string) ?? "",
       waktu_terakhir: (json.waktu_terakhir as string) ?? "",
@@ -2428,6 +2448,28 @@ export async function getGrupDivisiku(): Promise<InfoGrupDivisi | null> {
   } catch {
     return null;
   }
+}
+
+/** Daftar anggota grup divisiku (kepala duluan). */
+export async function getAnggotaGrup(): Promise<AnggotaGrup[]> {
+  const json = await fetchJson("/api/chat/grup?anggota=1", { headers: headerToken() });
+  return (json.data ?? []) as AnggotaGrup[];
+}
+
+/** Kepala divisi/pengurus mengubah nama & foto grup (spek 1.15). */
+export async function ubahInfoGrup(opsi: {
+  nama?: string;
+  foto?: string;
+}): Promise<{ nama_grup: string; foto_grup: string }> {
+  const json = await fetchJson("/api/chat/grup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "info", ...opsi }),
+  });
+  return {
+    nama_grup: (json.nama_grup as string) ?? "",
+    foto_grup: (json.foto_grup as string) ?? "",
+  };
 }
 
 /** Pesan grup divisiku (sejak = polling tambahan saja). */
@@ -2443,13 +2485,17 @@ export async function getPesanGrup(sejak?: string): Promise<PesanGrup[]> {
 export async function kirimPesanGrup(
   isi: string,
   gambar?: string,
-): Promise<{ gambar_url: string }> {
+): Promise<{ id: string; dibuat_pada: string; gambar_url: string }> {
   const json = await fetchJson("/api/chat/grup", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ aksi: "kirim", isi, gambar }),
   });
-  return { gambar_url: (json.gambar_url as string) ?? "" };
+  return {
+    id: (json.id as string) ?? "",
+    dibuat_pada: (json.dibuat_pada as string) ?? new Date().toISOString(),
+    gambar_url: (json.gambar_url as string) ?? "",
+  };
 }
 
 export async function hapusPesanGrup(pesanId: string): Promise<void> {

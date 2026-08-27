@@ -32,8 +32,7 @@ import {
   Smile,
   Trash2,
   Users,
-  X,
-} from "lucide-react";
+  X, Search } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { FotoBulat } from "@/components/foto-bulat";
 import {
@@ -137,7 +136,12 @@ function PanelPercakapan({
         if (hasil.data.length > 0) {
           idTerakhirRef.current = hasil.data[hasil.data.length - 1].id;
           setPesan((lama) => {
-            const gabung = awal ? hasil.data : [...lama, ...hasil.data];
+            // TAMENG DEDUP (bug "pesan dobel" 1.15): pesan yang sudah
+            // ada di layar (mis. baru saja dikirim & dirender langsung)
+            // tidak boleh ditambahkan lagi oleh polling.
+            const sudahAda = new Set(lama.map((m) => m.id));
+            const baru = awal ? hasil.data : hasil.data.filter((m) => !sudahAda.has(m.id));
+            const gabung = awal ? hasil.data : [...lama, ...baru];
             return gabung.map((m) =>
               m.pengirim_id === idKu && !m.dibaca && Number(m.id) <= terbaca
                 ? { ...m, dibaca: true }
@@ -188,19 +192,28 @@ function PanelPercakapan({
       setTulisan("");
       setGambarSiap(null);
       setEmojiBuka(false);
-      // Tampilkan langsung tanpa menunggu polling
-      const kini = new Date().toISOString();
-      setPesan((lama) => [
-        ...lama,
-        {
-          id: `lokal-${Date.now()}`,
-          pengirim_id: idKu,
-          isi,
-          dibaca: false,
-          dibuat_pada: kini,
-          gambar_url: hasil.gambar_url || undefined,
-        },
-      ]);
+      // Tampilkan langsung dengan ID ASLI dari server, dan majukan
+      // kursor polling ke id itu — dulu dipakai id lokal sementara
+      // sehingga polling berikutnya menarik pesan yang sama lagi
+      // (bug "pesan terkirim 2x", diperbaiki 1.15).
+      if (hasil.id && Number(hasil.id) > Number(idTerakhirRef.current)) {
+        idTerakhirRef.current = hasil.id;
+      }
+      setPesan((lama) =>
+        lama.some((m) => m.id === hasil.id)
+          ? lama
+          : [
+              ...lama,
+              {
+                id: hasil.id || `lokal-${Date.now()}`,
+                pengirim_id: idKu,
+                isi,
+                dibaca: false,
+                dibuat_pada: hasil.dibuat_pada,
+                gambar_url: hasil.gambar_url || undefined,
+              },
+            ],
+      );
     } catch (e) {
       toast("error", "Pesan gagal terkirim", e instanceof Error ? e.message : "");
     } finally {
@@ -270,8 +283,10 @@ function PanelPercakapan({
             <AvatarInisial nama={kontak.lawan_nama} ukuran={36} />
           )}
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-bold text-teks-utama">
-              {kontak.lawan_nama}
+            <span className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-teks-utama">
+              <span className="truncate">{kontak.lawan_nama}</span>
+              {/* Api streak juga tampil DI DALAM room (spek 1.15) */}
+              <IkonStreak hari={kontak.streak_hari ?? 0} skala="besar" />
             </span>
             <span className="block text-[10px] text-teks-sekunder">
               {statusKontak === "diterima" ? "Percakapan terbuka · ketuk untuk profil" : "Menunggu persetujuan"}
@@ -819,6 +834,9 @@ export function ChatScreen({
   const [modalPengumuman, setModalPengumuman] = useState(false);
   const [kandidat, setKandidat] = useState<KandidatChat[] | null>(null);
   const [cari, setCari] = useState("");
+  // Pencarian nama di DAFTAR chat (spek 1.15) — terpisah dari
+  // pencarian di modal "chat baru".
+  const [cariDaftar, setCariDaftar] = useState("");
   // Kewenangan pengawas (super admin/master) + sakelar fitur chat
   const [pengawas, setPengawas] = useState(false);
   const [chatAktif, setChatAktif] = useState(true);
@@ -958,7 +976,7 @@ export function ChatScreen({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <p className="truncate text-sm font-bold text-teks-utama">
-                    Grup {grup.divisi}
+                    {grup.nama_grup}
                   </p>
                   {grup.waktu_terakhir && (
                     <span className="shrink-0 text-[10px] text-teks-sekunder">
@@ -982,9 +1000,24 @@ export function ChatScreen({
         </FadeInUp>
       )}
 
+      {/* Cari nama di daftar chat (spek 1.15) */}
+      <div className="relative mt-4">
+        <Search
+          className="pointer-events-none absolute top-1/2 left-3.5 h-4 w-4 -translate-y-1/2 text-teks-sekunder"
+          aria-hidden="true"
+        />
+        <input
+          value={cariDaftar}
+          onChange={(e) => setCariDaftar(e.target.value)}
+          placeholder="Cari nama…"
+          aria-label="Cari nama di daftar chat"
+          className="glass h-11 w-full rounded-xl pr-3 pl-10 text-sm text-teks-utama placeholder:text-teks-sekunder/60 focus:outline-none"
+        />
+      </div>
+
       {/* Daftar percakapan */}
       <FadeInUp>
-        <div className="mt-4 flex flex-col gap-2">
+        <div className="mt-2 flex flex-col gap-2">
           {daftar === null ? (
             <>
               <GlassSkeleton className="h-[68px] rounded-2xl" />
@@ -1006,7 +1039,13 @@ export function ChatScreen({
               />
             </GlassCard>
           ) : (
-            daftar.map((k) => {
+            daftar
+              .filter(
+                (k) =>
+                  !cariDaftar.trim() ||
+                  k.lawan_nama.toLowerCase().includes(cariDaftar.trim().toLowerCase()),
+              )
+              .map((k) => {
               const ajakanUntukku = k.status === "menunggu" && k.diminta_oleh !== user.id;
               return (
                 <button
@@ -1026,7 +1065,7 @@ export function ChatScreen({
                         <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-bold text-teks-utama">
                           <span className="truncate">{k.lawan_nama}</span>
                           {/* Api streak chat (spek 4.1) */}
-                          <IkonStreak hari={k.streak_hari ?? 0} />
+                          <IkonStreak hari={k.streak_hari ?? 0} skala="besar" />
                         </p>
                         <span className="shrink-0 text-[10px] text-teks-sekunder">
                           {jamWIB(k.waktu_terakhir)}
@@ -1092,6 +1131,8 @@ export function ChatScreen({
             <PanelGrup
               user={user}
               divisi={grup.divisi}
+              namaGrup={grup.nama_grup}
+              fotoGrup={grup.foto_grup}
               anggota={grup.anggota}
               onKembali={() => {
                 setGrupBuka(false);

@@ -11,8 +11,11 @@
 // GET              → info grup saya (cuplikan + belum dibaca)
 // GET ?pesan=1     → pesan grup saya (?sejak=ID utk polling tambahan)
 // GET ?pantau=<divisi> → pengawas membaca grup divisi mana pun
+// GET ?anggota=1   → daftar anggota grup saya (nama, foto, kepala)
 // POST {aksi:"kirim", isi, gambar?}     → kirim ke grup saya
 // POST {aksi:"hapus_pesan", pesan_id}   → tarik pesan
+// POST {aksi:"info", nama?, foto?}      → kustomisasi nama/foto grup
+//                                          (kepala divisi / pengurus)
 // PATCH            → tandai semua pesan grup saya terbaca
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
@@ -161,6 +164,29 @@ export async function GET(request: Request) {
     const divisi = (user.divisi ?? "").trim();
     if (!divisi) return { divisi: "", anggota: 0, data: [] };
 
+    // --- Daftar anggota grup saya (spek 1.15) ---
+    if (url.searchParams.get("anggota") === "1") {
+      const { data: para } = await db
+        .from("app_user")
+        .select("id, nama, avatar_url, posisi_divisi, jabatan")
+        .eq("divisi", divisi)
+        .eq("aktif", true)
+        .eq("status", "aktif")
+        .order("posisi_divisi", { ascending: false }) // kepala duluan
+        .order("nama")
+        .limit(300);
+      return {
+        divisi,
+        data: (para ?? []).map((a) => ({
+          id: String(a.id),
+          nama: a.nama,
+          avatar_url: a.avatar_url ?? "",
+          kepala: a.posisi_divisi === "kepala",
+          jabatan: a.jabatan ?? "",
+        })),
+      };
+    }
+
     // --- Pesan grup saya ---
     if (url.searchParams.get("pesan") === "1") {
       const sejak = Number(url.searchParams.get("sejak") ?? 0);
@@ -168,7 +194,7 @@ export async function GET(request: Request) {
     }
 
     // --- Info grup untuk daftar chat: cuplikan + belum dibaca ---
-    const [{ count: anggota }, { data: terakhir }, { data: baca }] = await Promise.all([
+    const [{ count: anggota }, { data: terakhir }, { data: baca }, { data: rias }] = await Promise.all([
       db
         .from("app_user")
         .select("id", { count: "exact", head: true })
@@ -188,6 +214,11 @@ export async function GET(request: Request) {
         .eq("divisi", divisi)
         .eq("user_id", idKu)
         .maybeSingle(),
+      db
+        .from("grup_divisi_info")
+        .select("nama_kustom, foto_url")
+        .eq("divisi", divisi)
+        .maybeSingle(),
     ]);
 
     const cuplikan = terakhir?.[0] ?? null;
@@ -206,6 +237,10 @@ export async function GET(request: Request) {
 
     return {
       divisi,
+      // Nama tampilan grup: kustom bila disetel kepala divisi,
+      // selain itu nama divisinya sendiri.
+      nama_grup: (rias?.nama_kustom ?? "").trim() || divisi,
+      foto_grup: rias?.foto_url ?? "",
       anggota: anggota ?? 0,
       cuplikan: cuplikan ? cuplikan.isi || (cuplikan.gambar_url ? "📷 Gambar" : "") : "",
       waktu_terakhir: cuplikan?.dibuat_pada ?? "",
@@ -220,6 +255,8 @@ export async function POST(request: Request) {
     const idKu = Number(user.id);
     const body = (await request.json().catch(() => ({}))) as {
       aksi?: string;
+      nama?: string;
+      foto?: string;
       isi?: string;
       gambar?: string;
       pesan_id?: string;
@@ -268,6 +305,59 @@ export async function POST(request: Request) {
 
     // --- Tarik pesan grup: pengirimnya sendiri, atau kepala divisi
     //     (admin grup, ASUMSI spek), atau pengawas. ---
+    // --- Kustomisasi grup (spek 1.15): nama & foto ---
+    // Hanya KEPALA divisi (admin grup bawaan) atau pengurus; anggota
+    // biasa tidak bisa mengganti identitas grup koordinasi resmi.
+    if (body.aksi === "info") {
+      const divisiKu = (user.divisi ?? "").trim();
+      if (!divisiKu) {
+        throw Object.assign(new Error("Anda belum tergabung di divisi mana pun."), {
+          status: 400,
+        });
+      }
+      const kepala = user.posisi_divisi === "kepala";
+      if (!kepala && !PENGAWAS.has(user.role)) {
+        throw Object.assign(
+          new Error("Hanya kepala divisi yang boleh mengubah nama/foto grup."),
+          { status: 403 },
+        );
+      }
+
+      const perubahan: Record<string, unknown> = {
+        divisi: divisiKu,
+        diubah_oleh: idKu,
+        diubah_pada: new Date().toISOString(),
+      };
+      if (typeof body.nama === "string") {
+        const nama = body.nama.trim().slice(0, 60);
+        perubahan.nama_kustom = nama; // kosong = kembali ke nama divisi
+      }
+      if ((body.foto ?? "").trim()) {
+        // Foto grup memakai jalur unggah yang sama dengan gambar chat
+        // (batas & jenis diperiksa di helper).
+        perubahan.foto_url = await unggahGambarGrup(body.foto ?? "", divisiKu);
+      }
+
+      const { error } = await db
+        .from("grup_divisi_info")
+        .upsert(perubahan, { onConflict: "divisi" });
+      if (error) {
+        console.error("[grup] info:", error.message);
+        throw new Error("Gagal menyimpan pengaturan grup.");
+      }
+
+      const { data: rias } = await db
+        .from("grup_divisi_info")
+        .select("nama_kustom, foto_url")
+        .eq("divisi", divisiKu)
+        .maybeSingle();
+      return {
+        sukses: true,
+        nama_grup: (rias?.nama_kustom ?? "").trim() || divisiKu,
+        foto_grup: rias?.foto_url ?? "",
+      };
+    }
+
     if (body.aksi === "hapus_pesan") {
       const pesanId = Number(body.pesan_id);
       if (!pesanId) throw Object.assign(new Error("Pesan tidak disebutkan."), { status: 400 });
