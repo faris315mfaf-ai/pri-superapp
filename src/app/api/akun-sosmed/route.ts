@@ -125,6 +125,15 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
+      // Jaring pengaman balapan (bug #8 1.15): dua permintaan bisa lolos
+      // pemeriksaan pra-insert bersamaan — unique index database yang
+      // menahannya, dan di sini pesannya dibuat sama ramahnya.
+      if (error.code === "23505") {
+        throw Object.assign(
+          new Error(`@${username} sudah didaftarkan. Periksa daftar akun Anda.`),
+          { status: 409 },
+        );
+      }
       console.error("[akun-sosmed] tambah:", error.message);
       throw new Error("Gagal menambahkan akun.");
     }
@@ -169,7 +178,15 @@ export async function PATCH(request: Request) {
       })
       .eq("id", id);
 
-    if (error) throw new Error("Gagal menyimpan perubahan.");
+    if (error) {
+      if (error.code === "23505") {
+        throw Object.assign(
+          new Error(`@${username} sudah didaftarkan. Periksa daftar akun Anda.`),
+          { status: 409 },
+        );
+      }
+      throw new Error("Gagal menyimpan perubahan.");
+    }
     return { sukses: true };
   });
 }
