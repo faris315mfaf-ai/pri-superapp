@@ -503,9 +503,25 @@
   }
 }
 
-/* PC: navigasi pindah ke rel kiri (SideNav), konten boleh lebih lebar */
+/* PC: navigasi pindah ke rel kiri (SideNav), konten boleh lebih lebar.
+   1200px (≈max-w-7xl dikurangi rel kiri) — 960px terasa sempit untuk
+   modul dua kolom seperti TV Rakyat (fix 1.19/4.1). */
 @media (min-width: 1024px) {
   .kolom-aplikasi {
-    max-width: 960px;
+    max-width: 1200px;
+  }
+}
+
+/* Hover kartu interaktif di perangkat berpointer (fix 1.19/4.1):
+   naik halus + bayangan — tidak berlaku di layar sentuh. */
+@media (hover: hover) {
+  .kartu-hover {
+    transition:
+      transform 200ms var(--ease-keluar),
+      box-shadow 200ms var(--ease-keluar);
+  }
+  .kartu-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
   }
 }

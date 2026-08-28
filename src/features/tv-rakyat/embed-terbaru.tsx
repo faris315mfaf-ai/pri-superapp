@@ -69,13 +69,13 @@ export function EmbedTerbaru() {
           />
         </GlassCard>
       ) : (
-        <div className="mt-2 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <div className="mt-2 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {daftar.map((p) => {
             const kunci = `${p.platform}-${p.id}`;
             const embed = urlEmbedDari(p.platform, p.url);
             const sedangEmbed = dimuat.has(kunci);
             return (
-              <GlassCard key={kunci} className="overflow-hidden p-0">
+              <GlassCard key={kunci} className="kartu-hover overflow-hidden p-0">
                 {/* Media: thumbnail -> ketuk -> iframe embed resmi */}
                 {sedangEmbed && embed ? (
                   <iframe

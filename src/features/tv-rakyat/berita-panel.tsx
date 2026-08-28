@@ -436,7 +436,7 @@ export function BeritaPanel({
         : "Cek Berita Terbaru";
 
   return (
-    <GlassCard className="p-4 sm:p-5">
+    <GlassCard className="kartu-hover p-4 sm:p-5">
       {/* Kepala panel */}
       <div className="flex items-center gap-3">
         <span

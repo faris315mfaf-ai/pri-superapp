@@ -179,7 +179,9 @@ export function TvScreen({
           riwayat. Di HP keduanya menumpuk satu kolom secara wajar.
         Tiap bagian diberi judul supaya alurnya terbaca.
       */}
-      <div className="mt-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6">
+      {/* Desktop (fix 4.1): Sumber lebih ramping, Produksi lebih lega,
+          jarak antar kolom proporsional. */}
+      <div className="mt-6 lg:grid lg:grid-cols-[5fr_7fr] lg:items-start lg:gap-8">
         {/* ── Bagian KIRI: Sumber ── */}
         <section className="flex flex-col gap-4">
           <SeksiLipat
