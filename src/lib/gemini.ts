@@ -11,6 +11,8 @@
 //    bukan di layar.
 // ============================================================
 import { supabase } from "@/lib/supabase";
+import { kirimKabar } from "@/lib/notifikasi";
+import { DIVISI } from "@/lib/struktur";
 
 // Bawaan DIVERIFIKASI terhadap kunci user 28 Agu 2026: generasi 2.5
 // sudah ditutup untuk pengguna baru; 3.6-flash teruji menjawab, dan
@@ -31,6 +33,44 @@ export async function bolehChatbotRole(role: string): Promise<boolean> {
     .eq("role", role)
     .maybeSingle();
   return data?.aktif === true;
+}
+
+/** Identitas pemanggil — menentukan alat mana yang terbuka untuknya. */
+export type PemanggilAsisten = { id: string; nama: string; role: string };
+
+// ------------------------------------------------------------
+// Pelatihan (fitur 1.20.2): instruksi tambahan yang ditulis MASTER
+// di Panel Master. Disuntikkan ke system instruction setiap
+// percakapan (teks & suara) — cara "melatih" perilaku asisten yang
+// langsung berlaku tanpa menunggu apa pun.
+// ------------------------------------------------------------
+
+export const MAKS_INSTRUKSI_LATIH = 6000;
+
+export async function instruksiLatihan(): Promise<string> {
+  try {
+    const { data } = await supabase()
+      .from("pengaturan_sistem")
+      .select("nilai")
+      .eq("kunci", "asisten_instruksi")
+      .maybeSingle();
+    return String(data?.nilai ?? "").slice(0, MAKS_INSTRUKSI_LATIH);
+  } catch {
+    return "";
+  }
+}
+
+/** System instruction lengkap untuk pemanggil ini (dasar + latihan + aksi). */
+export async function instruksiUntuk(pemanggil: PemanggilAsisten): Promise<string> {
+  const latihan = await instruksiLatihan();
+  let instruksi = INSTRUKSI_ASISTEN;
+  if (latihan.trim()) {
+    instruksi += `\n\n=== PELATIHAN DARI MASTER (patuh selama tidak melanggar aturan keamanan di atas) ===\n${latihan.trim()}`;
+  }
+  if (pemanggil.role === "master") {
+    instruksi += `\n\n=== MODE MASTER ===\nLawan bicaramu adalah MASTER (${pemanggil.nama}), pemegang kendali tertinggi aplikasi.\nKamu juga punya alat AKSI: kirim_notifikasi, kirim_pengumuman, kirim_chat_grup, dan detail_anggota (data personal lengkap).\nJalankan alat aksi HANYA bila master memintanya secara eksplisit. Sebelum mengirim sesuatu ke banyak orang, bacakan dulu ringkasan isinya lalu minta konfirmasi satu kali; kirim setelah master mengiyakan.\nSetiap aksi tercatat di jejak audit.`;
+  }
+  return instruksi;
 }
 
 // ------------------------------------------------------------
@@ -100,17 +140,276 @@ export const DEKLARASI_ALAT = [
   },
 ] as const;
 
+// Alat KHUSUS MASTER (fitur 1.20.2): data personal penuh + aksi
+// sistem. Tidak pernah masuk daftar alat peran lain, dan tiap
+// eksekusinya diperiksa ulang di jalankanAlat (pertahanan berlapis).
+export const DEKLARASI_ALAT_MASTER = [
+  {
+    name: "detail_anggota",
+    description:
+      "KHUSUS MASTER. Profil LENGKAP satu anggota: email, nomor WhatsApp, tanggal lahir, divisi, jabatan, peran, status akun, absensi hari ini, dan jumlah video hari ini.",
+    parameters: {
+      type: "object",
+      properties: {
+        nama: { type: "string", description: "Nama anggota (boleh sebagian)" },
+      },
+      required: ["nama"],
+    },
+  },
+  {
+    name: "kirim_notifikasi",
+    description:
+      "KHUSUS MASTER. Kirim notifikasi aplikasi (+push). target: 'semua', nama peran (super_admin/admin_hr/admin_tv/ketua/anggota), atau nama orang tertentu.",
+    parameters: {
+      type: "object",
+      properties: {
+        judul: { type: "string" },
+        isi: { type: "string" },
+        target: { type: "string", description: "'semua' | nama peran | nama orang" },
+      },
+      required: ["judul", "isi", "target"],
+    },
+  },
+  {
+    name: "kirim_pengumuman",
+    description:
+      "KHUSUS MASTER. Terbitkan PENGUMUMAN resmi ke SELURUH anggota atas nama master (tampil di Beranda + notifikasi tertarget).",
+    parameters: {
+      type: "object",
+      properties: {
+        judul: { type: "string" },
+        isi: { type: "string" },
+      },
+      required: ["judul", "isi"],
+    },
+  },
+  {
+    name: "kirim_chat_grup",
+    description:
+      "KHUSUS MASTER. Kirim pesan ke ruang chat sebuah grup divisi atas nama master. Parameter divisi harus nama divisi yang sah.",
+    parameters: {
+      type: "object",
+      properties: {
+        divisi: { type: "string", description: "Nama divisi tujuan, mis. 'Divisi TV Rakyat'" },
+        isi: { type: "string" },
+      },
+      required: ["divisi", "isi"],
+    },
+  },
+] as const;
+
+/** Daftar alat yang terbuka untuk sebuah peran. */
+export function deklarasiAlatUntuk(role: string) {
+  return role === "master"
+    ? [...DEKLARASI_ALAT, ...DEKLARASI_ALAT_MASTER]
+    : [...DEKLARASI_ALAT];
+}
+
+/** Jejak audit satu aksi AI — keamanan: setiap aksi tertelusur. */
+async function catatAksiAi(
+  pemanggil: PemanggilAsisten,
+  aksi: string,
+  detail: string,
+): Promise<void> {
+  try {
+    await supabase().from("log_audit").insert({
+      aktor_id: Number(pemanggil.id),
+      aktor_nama: `${pemanggil.nama} (via Asisten AI)`,
+      aksi,
+      target_id: null,
+      target_nama: "-",
+      detail: detail.slice(0, 500),
+    });
+  } catch (e) {
+    console.error("[gemini] audit:", e);
+  }
+}
+
 /**
  * Jalankan SATU alat dari daftar putih. Nama di luar daftar ditolak
  * keras — bukan dijawab kosong — supaya penyimpangan ketahuan.
+ * Alat master diperiksa ULANG terhadap peran pemanggil di sini
+ * (pertahanan berlapis: daftar alat per peran saja tidak cukup).
  */
 export async function jalankanAlat(
   nama: string,
   args: Record<string, unknown>,
+  pemanggil: PemanggilAsisten,
 ): Promise<Record<string, unknown>> {
   const db = supabase();
 
+  const ALAT_MASTER = new Set(DEKLARASI_ALAT_MASTER.map((a) => a.name as string));
+  if (ALAT_MASTER.has(nama) && pemanggil.role !== "master") {
+    throw new Error(`Alat "${nama}" khusus master.`);
+  }
+
   switch (nama) {
+    // ---------- ALAT KHUSUS MASTER (fitur 1.20.2) ----------
+    case "detail_anggota": {
+      const q = String(args.nama ?? "").trim().slice(0, 60);
+      if (q.length < 2) return { galat: "Nama pencarian terlalu pendek." };
+      const { data: u } = await db
+        .from("app_user")
+        .select(
+          "id, nama, email, nomor_wa, wa_terverifikasi, tanggal_lahir, divisi, sub_divisi, posisi_divisi, jabatan, role, status, aktif, google_linked, last_login_at, created_at",
+        )
+        .ilike("nama", `%${q.replace(/[%_]/g, "")}%`)
+        .neq("role", "master")
+        .limit(1)
+        .maybeSingle();
+      if (!u) return { galat: `Anggota "${q}" tidak ditemukan.` };
+      const tanggal = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+      const [{ data: absen }, { data: video }] = await Promise.all([
+        db
+          .from("absensi")
+          .select("jenis, waktu")
+          .eq("user_id", Number(u.id))
+          .eq("tanggal_wib", tanggal),
+        db
+          .from("v_app_video_harian_user")
+          .select("jumlah")
+          .eq("user_id", Number(u.id))
+          .eq("tanggal_wib", tanggal)
+          .maybeSingle(),
+      ]);
+      await catatAksiAi(
+        pemanggil,
+        "ai_baca_personal",
+        `Membaca profil lengkap "${u.nama}" lewat Asisten AI.`,
+      );
+      return {
+        nama: u.nama,
+        email: u.email,
+        nomor_wa: u.nomor_wa ?? "-",
+        wa_terverifikasi: u.wa_terverifikasi === true,
+        tanggal_lahir: u.tanggal_lahir ?? "-",
+        divisi: u.divisi || "-",
+        sub_divisi: u.sub_divisi || "-",
+        posisi_divisi: u.posisi_divisi || "-",
+        jabatan: u.jabatan || "-",
+        peran: u.role,
+        status_akun: u.aktif ? u.status : "nonaktif",
+        google_tertaut: u.google_linked === true,
+        login_terakhir: u.last_login_at ?? "belum pernah (tercatat sejak 1.19)",
+        terdaftar_pada: u.created_at,
+        absen_hari_ini:
+          (absen ?? []).map((a) => `${a.jenis} ${String(a.waktu).slice(11, 19)}`).join(", ") ||
+          "belum absen",
+        video_hari_ini: Number(video?.jumlah ?? 0),
+      };
+    }
+
+    case "kirim_notifikasi": {
+      const judul = String(args.judul ?? "").trim().slice(0, 100);
+      const isi = String(args.isi ?? "").trim().slice(0, 500);
+      const target = String(args.target ?? "").trim();
+      if (!judul || !isi || !target) return { galat: "judul/isi/target wajib diisi." };
+
+      const PERAN = new Set(["super_admin", "admin_hr", "admin_tv", "ketua", "anggota"]);
+      let kepada: { untukRole?: string[]; untukUserIds?: number[] } = {};
+      let deskripsi = "";
+      if (target.toLowerCase() === "semua") {
+        kepada = {};
+        deskripsi = "SEMUA anggota";
+      } else if (PERAN.has(target.toLowerCase())) {
+        kepada = { untukRole: [target.toLowerCase()] };
+        deskripsi = `peran ${target}`;
+      } else {
+        const { data: orang } = await db
+          .from("app_user")
+          .select("id, nama")
+          .ilike("nama", `%${target.replace(/[%_]/g, "")}%`)
+          .eq("aktif", true)
+          .limit(1)
+          .maybeSingle();
+        if (!orang) return { galat: `Target "${target}" tidak dikenal (bukan peran/nama anggota).` };
+        kepada = { untukUserIds: [Number(orang.id)] };
+        deskripsi = orang.nama as string;
+      }
+
+      await kirimKabar({
+        judul: `🤖 ${judul}`,
+        isi,
+        kategori: "info",
+        jenis_peristiwa: "asisten",
+        ...kepada,
+      });
+      await catatAksiAi(
+        pemanggil,
+        "ai_kirim_notifikasi",
+        `Notifikasi "${judul}" ke ${deskripsi}: ${isi.slice(0, 120)}`,
+      );
+      return { sukses: true, terkirim_ke: deskripsi };
+    }
+
+    case "kirim_pengumuman": {
+      const judul = String(args.judul ?? "").trim().slice(0, 120);
+      const isi = String(args.isi ?? "").trim().slice(0, 2000);
+      if (judul.length < 3 || isi.length < 3) return { galat: "Judul & isi wajib diisi." };
+
+      const { data: semua } = await db
+        .from("app_user")
+        .select("id")
+        .eq("aktif", true)
+        .eq("status", "aktif")
+        .neq("id", Number(pemanggil.id));
+      const penerima = (semua ?? []).map((x) => Number(x.id));
+      if (penerima.length === 0) return { galat: "Tidak ada penerima." };
+
+      const { data: baris, error } = await db
+        .from("pengumuman")
+        .insert({
+          pengirim_id: Number(pemanggil.id),
+          pengirim_nama: `${pemanggil.nama} 🤖`,
+          judul,
+          isi,
+          cakupan: "semua",
+          jabatan_target: null,
+          jumlah_penerima: penerima.length,
+        })
+        .select("id")
+        .single();
+      if (error || !baris) return { galat: "Gagal menyimpan pengumuman." };
+      await db
+        .from("pengumuman_penerima")
+        .insert(penerima.map((uid) => ({ pengumuman_id: baris.id, user_id: uid })));
+      await kirimKabar({
+        judul: `📢 ${judul.slice(0, 100)}`,
+        isi: `${pemanggil.nama}: ${isi.slice(0, 200)}`,
+        kategori: "info",
+        jenis_peristiwa: "pengumuman",
+        untukUserIds: penerima,
+      });
+      await catatAksiAi(
+        pemanggil,
+        "ai_kirim_pengumuman",
+        `Pengumuman "${judul}" ke ${penerima.length} anggota: ${isi.slice(0, 120)}`,
+      );
+      return { sukses: true, jumlah_penerima: penerima.length };
+    }
+
+    case "kirim_chat_grup": {
+      const divisi = String(args.divisi ?? "").trim();
+      const isi = String(args.isi ?? "").trim().slice(0, 1000);
+      if (!isi) return { galat: "Isi pesan kosong." };
+      if (!(DIVISI as readonly string[]).includes(divisi)) {
+        return {
+          galat: `Divisi "${divisi}" tidak dikenal. Pilihan: ${DIVISI.join(", ")}.`,
+        };
+      }
+      const { error } = await db.from("chat_pesan_grup").insert({
+        divisi,
+        pengirim_id: Number(pemanggil.id),
+        isi,
+      });
+      if (error) return { galat: "Gagal mengirim pesan grup." };
+      await catatAksiAi(
+        pemanggil,
+        "ai_kirim_chat",
+        `Chat ke grup ${divisi}: ${isi.slice(0, 120)}`,
+      );
+      return { sukses: true, grup: divisi };
+    }
     case "ringkasan_absensi": {
       const tanggal = tanggalSah(args.tanggal);
       const [{ data: roster }, { data: absen }, { data: izin }] = await Promise.all([
@@ -278,9 +577,15 @@ type IsiGemini = { role: string; parts: BagianGemini[] };
 export async function tanyaGemini(
   riwayat: { peran: "pengguna" | "asisten"; teks: string }[],
   pesan: string,
+  pemanggil: PemanggilAsisten,
 ): Promise<string> {
   const kunci = process.env.GEMINI_API_KEY;
   if (!kunci) throw Object.assign(new Error("GEMINI_API_KEY belum diatur."), { status: 503 });
+
+  // Instruksi & daftar alat MENGIKUTI PEMANGGIL: master mendapat alat
+  // data personal + aksi, peran lain hanya alat ringkasan.
+  const instruksi = await instruksiUntuk(pemanggil);
+  const alat = deklarasiAlatUntuk(pemanggil.role);
 
   const isi: IsiGemini[] = [
     ...riwayat.slice(-12).map((r) => ({
@@ -300,9 +605,9 @@ export async function tanyaGemini(
           "x-goog-api-key": kunci,
         },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: INSTRUKSI_ASISTEN }] },
+          systemInstruction: { parts: [{ text: instruksi }] },
           contents: isi,
-          tools: [{ functionDeclarations: DEKLARASI_ALAT }],
+          tools: [{ functionDeclarations: alat }],
         }),
       },
     );
@@ -340,7 +645,7 @@ export async function tanyaGemini(
       const namaAlat = String(p.functionCall!.name);
       let hasil: Record<string, unknown>;
       try {
-        hasil = await jalankanAlat(namaAlat, p.functionCall!.args ?? {});
+        hasil = await jalankanAlat(namaAlat, p.functionCall!.args ?? {}, pemanggil);
       } catch (e) {
         hasil = { galat: e instanceof Error ? e.message : "Alat gagal dijalankan." };
       }

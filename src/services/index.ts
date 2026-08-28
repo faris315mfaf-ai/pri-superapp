@@ -2223,6 +2223,21 @@ export async function setAksesAsisten(role: string, aktif: boolean): Promise<voi
   });
 }
 
+/** Instruksi pelatihan Asisten AI saat ini (master). */
+export async function getLatihAsisten(): Promise<{ instruksi: string; maks: number }> {
+  const json = await fetchJson("/api/asisten/latih", { headers: headerToken() });
+  return { instruksi: (json?.instruksi ?? "") as string, maks: Number(json?.maks ?? 6000) };
+}
+
+/** Simpan instruksi pelatihan Asisten AI (master) — berlaku seketika. */
+export async function simpanLatihAsisten(instruksi: string): Promise<void> {
+  await fetchJson("/api/asisten/latih", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ instruksi }),
+  });
+}
+
 /** Token sementara untuk sesi suara Gemini Live. */
 export async function mintaTokenSuara(): Promise<{ token: string; model: string }> {
   const json = await fetchJson("/api/asisten/suara", {

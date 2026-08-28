@@ -21,6 +21,7 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
+  Bot,
   Bug,
   Crown,
   Loader2,
@@ -47,7 +48,9 @@ import { toast } from "@/hooks/use-app-store";
 import {
   aksiMaster,
   getDataMaster,
+  getLatihAsisten,
   getPengguna,
+  simpanLatihAsisten,
   type DataMaster,
   type PenggunaAdmin,
   getFotoMaster,
@@ -342,6 +345,11 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                 ))}
               </div>
             )}
+          </FadeInUp>
+
+          {/* 4. Latih Asisten AI (fitur 1.20.2) — khusus master */}
+          <FadeInUp delay={0.16}>
+            <SeksiLatihAsisten />
           </FadeInUp>
         </>
       )}
@@ -664,6 +672,109 @@ function GaleriFotoMaster() {
           <p className="mt-2 max-w-full truncate text-[11px] text-white/80">{dibuka.path}</p>
         </div>
       )}
+    </>
+  );
+}
+
+// ------------------------------------------------------------
+// SeksiLatihAsisten (fitur 1.20.2) — master menulis instruksi/
+// pengetahuan yang disuntikkan ke SETIAP percakapan Asisten AI
+// (teks & suara). Berlaku seketika; setiap simpan tercatat di
+// jejak audit.
+// ------------------------------------------------------------
+
+function SeksiLatihAsisten() {
+  const [instruksi, setInstruksi] = useState("");
+  const [maks, setMaks] = useState(6000);
+  const [memuat, setMemuat] = useState(true);
+  const [menyimpan, setMenyimpan] = useState(false);
+
+  useEffect(() => {
+    let hidup = true;
+    void (async () => {
+      try {
+        const hasil = await getLatihAsisten();
+        if (!hidup) return;
+        setInstruksi(hasil.instruksi);
+        setMaks(hasil.maks);
+      } catch (e) {
+        if (hidup) toast("error", "Gagal memuat pelatihan", e instanceof Error ? e.message : "");
+      } finally {
+        if (hidup) setMemuat(false);
+      }
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, []);
+
+  async function simpan() {
+    if (menyimpan) return;
+    setMenyimpan(true);
+    try {
+      await simpanLatihAsisten(instruksi);
+      toast("sukses", "Pelatihan tersimpan", "Berlaku seketika di semua percakapan berikutnya.");
+    } catch (e) {
+      toast("error", "Gagal menyimpan", e instanceof Error ? e.message : "");
+    } finally {
+      setMenyimpan(false);
+    }
+  }
+
+  return (
+    <>
+      <SectionTitle judul="Latih Asisten AI" className="mt-6" />
+      <GlassCard className="p-4">
+        <div className="flex items-start gap-2.5">
+          <span
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
+            style={{ background: "linear-gradient(135deg, #8B5CF6, #6D28D9)" }}
+            aria-hidden="true"
+          >
+            <Bot className="h-4.5 w-4.5" />
+          </span>
+          <p className="text-[11.5px] leading-relaxed text-teks-sekunder">
+            Tulis pengetahuan & aturan tambahan untuk asisten — istilah internal
+            partai, gaya menjawab, kebijakan, jadwal penting. Berlaku SEKETIKA
+            di mode teks & suara untuk semua pengguna. Khusus untuk Anda,
+            asisten juga membuka data personal lengkap dan bisa MENGIRIM
+            notifikasi, pengumuman, serta chat grup atas perintah Anda — setiap
+            aksinya tercatat di jejak audit.
+          </p>
+        </div>
+
+        {memuat ? (
+          <GlassSkeleton className="mt-3 h-32 rounded-xl" />
+        ) : (
+          <>
+            <textarea
+              value={instruksi}
+              onChange={(e) => setInstruksi(e.target.value.slice(0, maks))}
+              rows={7}
+              placeholder={
+                "Contoh:\n- Panggil pengguna dengan sebutan 'Kader'.\n- KPI video harian standar adalah 5 video.\n- Rapat pleno tiap Senin 09:00 WIB.\n- Jawab selalu ringkas, maksimal 5 kalimat."
+              }
+              aria-label="Instruksi pelatihan Asisten AI"
+              className="glass-input mt-3 w-full rounded-xl px-3 py-2.5 text-[12.5px] leading-relaxed text-teks-utama placeholder:text-teks-sekunder/60"
+            />
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <span className="angka-tab text-[10.5px] text-teks-sekunder">
+                {instruksi.length}/{maks}
+              </span>
+              <button
+                type="button"
+                onClick={() => void simpan()}
+                disabled={menyimpan}
+                className="btn-tekan flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold text-white disabled:opacity-60"
+                style={{ background: "linear-gradient(135deg, #8B5CF6, #6D28D9)" }}
+              >
+                {menyimpan && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                Simpan Pelatihan
+              </button>
+            </div>
+          </>
+        )}
+      </GlassCard>
     </>
   );
 }

@@ -14,8 +14,8 @@ import {
   bolehChatbotRole,
   geminiSiap,
   jalankanAlat,
-  DEKLARASI_ALAT,
-  INSTRUKSI_ASISTEN,
+  deklarasiAlatUntuk,
+  instruksiUntuk,
   MODEL_SUARA,
 } from "@/lib/gemini";
 
@@ -48,6 +48,8 @@ export async function POST(request: Request) {
 
     const url = new URL(request.url);
 
+    const pemanggil = { id: user.id, nama: user.nama, role: user.role };
+
     // --- Jembatan alat: sesi suara meneruskan functionCall ke sini ---
     if (url.searchParams.get("alat") === "1") {
       const body = (await request.json().catch(() => ({}))) as {
@@ -55,7 +57,7 @@ export async function POST(request: Request) {
         args?: Record<string, unknown>;
       };
       const nama = String(body.nama ?? "");
-      const hasil = await jalankanAlat(nama, body.args ?? {});
+      const hasil = await jalankanAlat(nama, body.args ?? {}, pemanggil);
       return { hasil };
     }
 
@@ -85,8 +87,10 @@ export async function POST(request: Request) {
           bidiGenerateContentSetup: {
             model: `models/${MODEL_SUARA}`,
             generationConfig: { responseModalities: ["AUDIO"] },
-            systemInstruction: { parts: [{ text: INSTRUKSI_ASISTEN }] },
-            tools: [{ functionDeclarations: DEKLARASI_ALAT }],
+            // Instruksi (termasuk pelatihan master) & alat MENGIKUTI
+            // pemanggil — master bersuara pun punya alat aksinya.
+            systemInstruction: { parts: [{ text: await instruksiUntuk(pemanggil) }] },
+            tools: [{ functionDeclarations: deklarasiAlatUntuk(pemanggil.role) }],
           },
         }),
       },

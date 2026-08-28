@@ -73,7 +73,11 @@ export async function POST(request: Request) {
       .slice(-12)
       .map((r) => ({ peran: r.peran as "pengguna" | "asisten", teks: r.teks }));
 
-    const jawaban = await tanyaGemini(riwayat, pesan);
+    const jawaban = await tanyaGemini(riwayat, pesan, {
+      id: user.id,
+      nama: user.nama,
+      role: user.role,
+    });
     return { jawaban };
   });
 }

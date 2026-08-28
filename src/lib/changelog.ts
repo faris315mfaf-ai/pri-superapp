@@ -18,6 +18,16 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "1.20.2",
+    tanggal: "28 Agustus 2026",
+    judul: "Master kini bisa melatih Asisten AI",
+    poin: [
+      "Panel Master → LATIH ASISTEN AI: tulis pengetahuan & aturan menjawab — berlaku seketika di mode teks & suara",
+      "Khusus master, asisten membuka data personal lengkap anggota dan bisa MENGIRIM notifikasi, pengumuman, & chat grup atas perintah",
+      "Setiap aksi asisten tercatat di jejak audit; peran lain tetap hanya melihat ringkasan",
+    ],
+  },
+  {
     versi: "1.20.1",
     tanggal: "28 Agustus 2026",
     judul: "Mode suara ala Gemini + izin mikrofon beres",
