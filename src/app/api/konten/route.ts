@@ -15,8 +15,10 @@ import { pastikanMasuk } from "@/lib/sesi";
 
 export const dynamic = "force-dynamic";
 
-/** Berapa postingan terbaru yang dikirim per akun */
-const PER_AKUN = 8;
+/** Berapa postingan terbaru per akun untuk slideshow (fitur 1.22/bug 5) */
+const PER_AKUN = 30;
+/** Batas keras saat satu akun di-"expand" (fitur 1.22/bug 5) */
+const PER_AKUN_PENUH = 1000;
 
 type BarisAkun = { username: string; nama_akun: string; platform: string };
 
@@ -59,6 +61,12 @@ export async function GET(request: Request) {
     await pastikanMasuk(request);
     const db = supabase();
 
+    // Mode "expand" (fitur 1.22/bug 5): ?akun=<username> mengembalikan
+    // HANYA akun itu, tapi hingga 1000 postingan (bukan 30). Dipakai saat
+    // pengguna membuka satu akun untuk melihat seluruh arsipnya.
+    const akunPenuh = new URL(request.url).searchParams.get("akun")?.trim().toLowerCase() || "";
+    const batasPerAkun = akunPenuh ? PER_AKUN_PENUH : PER_AKUN;
+
     // Filter platform WAJIB ada: di produksi `akun_wajib` sudah berisi
     // baris TikTok juga, dan username tidak lagi unik — 'dpp.pri' muncul
     // dua kali (sekali instagram, sekali tiktok). Tanpa filter ini kartu
@@ -83,6 +91,8 @@ export async function GET(request: Request) {
     for (const baris of (akunData ?? []) as BarisAkun[]) {
       const kunci = (baris.username ?? "").trim().toLowerCase();
       if (!kunci || terlihat.has(kunci)) continue;
+      // Mode expand: hanya akun yang diminta.
+      if (akunPenuh && kunci !== akunPenuh) continue;
       terlihat.add(kunci);
       akun.push({ ...baris, username: baris.username.trim() });
     }
@@ -105,7 +115,7 @@ export async function GET(request: Request) {
         akun.map((a) => a.username.toLowerCase()),
       )
       .order("waktu_posting", { ascending: false, nullsFirst: false })
-      .limit(PER_AKUN * akun.length * 3);
+      .limit(akunPenuh ? PER_AKUN_PENUH : PER_AKUN * akun.length * 3);
 
     if (eFeed) {
       console.warn("[/api/konten] feed belum tersedia:", eFeed.message);
@@ -132,7 +142,7 @@ export async function GET(request: Request) {
       // `akun_wajib` ('tv rakyat') berbeda dari yang dipakai scraper.
       const miliknya = semua
         .filter((f) => f.akun_username === username)
-        .slice(0, PER_AKUN)
+        .slice(0, batasPerAkun)
         .map((f) => ({
           id: f.id_postingan,
           caption: (f.caption ?? "").trim(),

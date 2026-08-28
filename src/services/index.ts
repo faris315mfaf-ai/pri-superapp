@@ -340,6 +340,16 @@ export async function getKonten(): Promise<FeedKonten> {
   };
 }
 
+/**
+ * Feed SATU akun hingga 1000 postingan (fitur 1.22/bug 5) — dipakai
+ * tampilan "expand" saat pengguna membuka arsip penuh sebuah akun.
+ */
+export async function getKontenAkun(username: string): Promise<AkunKonten | null> {
+  const json = await fetchJson(`/api/konten?akun=${encodeURIComponent(username)}`);
+  const daftar = (json?.data ?? []) as AkunKonten[];
+  return daftar[0] ?? null;
+}
+
 // ------------------------------------------------------------
 // Akun media sosial milik pengguna (acuan QC)
 // ------------------------------------------------------------

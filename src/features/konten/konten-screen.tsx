@@ -21,17 +21,27 @@
 // ============================================================
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ExternalLink,
   Heart,
   Instagram,
+  LayoutGrid,
+  Loader2,
   MessageCircle,
   Newspaper,
   RefreshCw,
+  X,
 } from "lucide-react";
 import { EmptyState, FadeInUp, GlassSkeleton, ThemeToggle } from "@/components/pri-ui";
 import { GlassCard } from "@/components/glass-card";
-import { getKonten, type AkunKonten, type FeedKonten, type PostinganKonten } from "@/services";
+import {
+  getKonten,
+  getKontenAkun,
+  type AkunKonten,
+  type FeedKonten,
+  type PostinganKonten,
+} from "@/services";
 import { toast } from "@/hooks/use-app-store";
 import { KartuVideoBaru } from "@/features/beranda/kartu-video-baru";
 import { BerandaAnggotaPanel } from "./beranda-anggota";
@@ -181,6 +191,9 @@ export function KontenScreen({
     };
   }, [muat]);
 
+  // Akun yang sedang dibuka arsip penuhnya (fitur 1.22/bug 5)
+  const [akunExpand, setAkunExpand] = useState<AkunKonten | null>(null);
+
   const sapaan = user.nama.split(" ")[0];
   const daftar = feed?.akun ?? null;
   const totalPostingan =
@@ -258,11 +271,18 @@ export function KontenScreen({
             // dari dua profil Ayrshare) — kunci digabung indeks supaya
             // React tidak menjatuhkan salah satunya.
             <FadeInUp key={`${akun.username}-${i}`} delay={Math.min(i * 0.08, 0.3)}>
-              <BarisAkun akun={akun} idBaru={idBaru} />
+              <BarisAkun akun={akun} idBaru={idBaru} onExpand={() => setAkunExpand(akun)} />
             </FadeInUp>
           ))}
         </div>
       )}
+
+      {/* Arsip penuh satu akun (fitur 1.22/bug 5) */}
+      <AnimatePresence>
+        {akunExpand && (
+          <GaleriAkunModal akun={akunExpand} onTutup={() => setAkunExpand(null)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -287,7 +307,15 @@ function labelDiperbarui(iso: string | null, sekarang: number): string {
 
 // ------------------------------------------------------------
 
-function BarisAkun({ akun, idBaru }: { akun: AkunKonten; idBaru: Set<string> }) {
+function BarisAkun({
+  akun,
+  idBaru,
+  onExpand,
+}: {
+  akun: AkunKonten;
+  idBaru: Set<string>;
+  onExpand: () => void;
+}) {
   const jumlahBaru = akun.postingan.filter((p) => idBaru.has(p.id)).length;
 
   return (
@@ -318,6 +346,16 @@ function BarisAkun({ akun, idBaru }: { akun: AkunKonten; idBaru: Set<string> }) 
             {akun.postingan.length} postingan terbaru
           </p>
         </div>
+        {/* Buka arsip penuh akun ini (fitur 1.22/bug 5) */}
+        <button
+          type="button"
+          onClick={onExpand}
+          className="glass btn-tekan inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2.5 text-[11px] font-semibold text-teks-utama"
+          aria-label={`Lihat semua postingan @${akun.username}`}
+        >
+          <LayoutGrid className="h-3.5 w-3.5" />
+          Semua
+        </button>
         <button
           type="button"
           onClick={() => window.open(akun.link_profil, "_blank", "noopener,noreferrer")}
@@ -357,7 +395,16 @@ function BarisAkun({ akun, idBaru }: { akun: AkunKonten; idBaru: Set<string> }) 
 
 // ------------------------------------------------------------
 
-function KartuKonten({ post, baru }: { post: PostinganKonten; baru: boolean }) {
+function KartuKonten({
+  post,
+  baru,
+  grid = false,
+}: {
+  post: PostinganKonten;
+  baru: boolean;
+  /** true = kartu mengisi sel grid (arsip penuh); false = lebar tetap slideshow */
+  grid?: boolean;
+}) {
   const [gagalGambar, setGagalGambar] = useState(false);
 
   // Caption dipotong pendek — kartu ini pengantar, bukan tempat membaca
@@ -367,7 +414,12 @@ function KartuKonten({ post, baru }: { post: PostinganKonten; baru: boolean }) {
     : post.caption;
 
   return (
-    <article className="glass-soft flex w-[248px] shrink-0 snap-start flex-col overflow-hidden rounded-2xl">
+    <article
+      className={cn(
+        "glass-soft flex flex-col overflow-hidden rounded-2xl",
+        grid ? "w-full" : "w-[248px] shrink-0 snap-start",
+      )}
+    >
       <div className="relative aspect-square w-full shrink-0 bg-black/10 dark:bg-white/10">
         {/* Thumbnail Instagram adalah URL CDN bertanda tangan yang
             kedaluwarsa dalam hitungan jam. Karena itu kegagalan gambar
@@ -438,5 +490,91 @@ function KartuKonten({ post, baru }: { post: PostinganKonten; baru: boolean }) {
         </button>
       </div>
     </article>
+  );
+}
+
+// ------------------------------------------------------------
+// GaleriAkunModal — arsip PENUH satu akun (fitur 1.22/bug 5).
+// Membuka layar penuh berisi grid hingga 1000 postingan terbaru akun
+// itu (bukan cuma 30 yang di slideshow). Diambil sekali saat dibuka.
+// ------------------------------------------------------------
+
+function GaleriAkunModal({ akun, onTutup }: { akun: AkunKonten; onTutup: () => void }) {
+  // Awali dengan postingan yang SUDAH ada di slideshow supaya galeri
+  // langsung terisi, lalu ganti dengan arsip penuh begitu tiba.
+  const [postingan, setPostingan] = useState<PostinganKonten[]>(akun.postingan);
+  const [memuat, setMemuat] = useState(true);
+
+  useEffect(() => {
+    let hidup = true;
+    void (async () => {
+      try {
+        const penuh = await getKontenAkun(akun.username);
+        if (hidup && penuh) setPostingan(penuh.postingan);
+      } catch (e) {
+        if (hidup) toast("error", "Gagal memuat arsip", e instanceof Error ? e.message : "");
+      } finally {
+        if (hidup) setMemuat(false);
+      }
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, [akun.username]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-[60] overflow-y-auto overscroll-contain bg-[var(--app-bg)] lg:left-60"
+    >
+      {/* Kepala lengket */}
+      <div className="glass-strong sticky top-0 z-10 flex items-center gap-3 px-4 py-3">
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white"
+          style={{ background: "linear-gradient(135deg, #E1306C, #C13584)" }}
+          aria-hidden="true"
+        >
+          <Instagram className="h-4.5 w-4.5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-teks-utama">@{akun.username}</p>
+          <p className="text-[11px] text-teks-sekunder">
+            {memuat ? "Memuat arsip…" : `${postingan.length} postingan`}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onTutup}
+          aria-label="Tutup arsip"
+          className="glass btn-tekan flex h-9 w-9 items-center justify-center rounded-full text-teks-utama"
+        >
+          <X className="h-4.5 w-4.5" />
+        </button>
+      </div>
+
+      <div className="px-4 py-4">
+        {memuat && postingan.length === 0 ? (
+          <div className="flex items-center justify-center py-16 text-teks-sekunder">
+            <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+          </div>
+        ) : postingan.length === 0 ? (
+          <EmptyState
+            ikon={Newspaper}
+            judul="Belum ada postingan"
+            keterangan="Arsip akun ini belum terisi. Coba lagi nanti."
+            className="py-12"
+          />
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {postingan.map((p) => (
+              <KartuKonten key={p.id} post={p} baru={false} grid />
+            ))}
+          </div>
+        )}
+      </div>
+    </motion.div>
   );
 }
