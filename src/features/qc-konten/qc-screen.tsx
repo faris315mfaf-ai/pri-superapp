@@ -53,6 +53,8 @@ import { RiwayatAnalisisModal } from "./riwayat-analisis-modal";
 import { RingkasanQc } from "./ringkasan-qc";
 import { KepatuhanKaderPanel } from "./kepatuhan-kader-panel";
 import { ProfilAnalisisPanel } from "./profil-analisis-panel";
+import { AnggotaTanpaAkunPanel } from "./anggota-tanpa-akun-panel";
+import { SeksiLipat } from "@/components/seksi-lipat";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { cn } from "@/lib/utils";
 
@@ -576,8 +578,10 @@ export function QcScreen({
         {riwayatBuka && <RiwayatAnalisisModal onTutup={() => setRiwayatBuka(false)} />}
       </AnimatePresence>
 
-      {/* Header periode */}
-      <FadeInUp delay={0.05} className="mt-4">
+      {/* 1 · Periode Berjalan (spek 2.1a — bawaan terbuka) */}
+      <div className="mt-4 flex flex-col gap-2.5">
+      <SeksiLipat id="hr-periode" judul="1 · Periode Berjalan" ikon={CalendarDays} bawaanTerbuka>
+      <FadeInUp delay={0.05}>
         <GlassCard className="relative p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -653,8 +657,11 @@ export function QcScreen({
         </GlassCard>
       </FadeInUp>
 
-      {/* Tombol Mulai Analisis / Panel proses */}
-      <FadeInUp delay={0.1} className="mt-4">
+      </SeksiLipat>
+
+      {/* 2 · Mulai Analisis (spek 2.1b) */}
+      <SeksiLipat id="hr-mulai" judul="2 · Mulai Analisis" ikon={Zap} keterangan="Jalankan analisis kepatuhan hari ini">
+      <FadeInUp delay={0.1}>
         {sedangAnalisis ? (
           <GlassCard className="p-4">
             <div className="flex items-start gap-4">
@@ -863,15 +870,59 @@ export function QcScreen({
         </FadeInUp>
       )}
 
-      {/* Ringkasan kepatuhan (pindahan dari dashboard): KPI, tren,
-          kepatuhan per akun wajib — kini tinggal di rumah datanya. */}
-      <RingkasanQc muatUlang={terakhirAnalisis ?? 0} />
 
-      {/* Kelola profil sosmed yang dianalisis (spek 1.17) */}
-      <ProfilAnalisisPanel />
+      </SeksiLipat>
 
-      {/* Siapa sudah & belum komen + popup besar per kader (spek 1.15) */}
-      <KepatuhanKaderPanel muatUlang={terakhirAnalisis ?? 0} />
+      {/* 3 · Analisis Akun yang Belum Tertaut (spek 2.1c) */}
+      <SeksiLipat
+        id="hr-belum-tertaut"
+        judul="3 · Analisis Akun yang Belum Tertaut"
+        ikon={ScanSearch}
+        keterangan="Profil sosmed dianalisis + anggota tanpa akun"
+      >
+        <ProfilAnalisisPanel />
+        <AnggotaTanpaAkunPanel />
+      </SeksiLipat>
+
+      {/* 4-6 · Tingkat, Tren, & Kepatuhan Per Akun (spek 2.1d-f) */}
+      <SeksiLipat id="hr-tingkat" judul="4 · Tingkat Kepatuhan Kader" ikon={CheckCircle2}>
+        <RingkasanQc muatUlang={terakhirAnalisis ?? 0} bagian="kpi" />
+      </SeksiLipat>
+      <SeksiLipat id="hr-tren" judul="5 · Tren Kepatuhan Kader" ikon={History}>
+        <RingkasanQc muatUlang={terakhirAnalisis ?? 0} bagian="tren" />
+      </SeksiLipat>
+      <SeksiLipat id="hr-per-akun" judul="6 · Kepatuhan Per Akun Wajib" ikon={Circle}>
+        <RingkasanQc muatUlang={terakhirAnalisis ?? 0} bagian="akun" />
+      </SeksiLipat>
+
+      {/* 7 · Siapa Sudah & Belum Komen (spek 2.1g — satu grup) */}
+      <SeksiLipat
+        id="hr-siapa"
+        judul="7 · Siapa Sudah & Belum Komen"
+        ikon={Check}
+        keterangan="Filter sudah/belum, platform, & cari nama"
+      >
+        <KepatuhanKaderPanel muatUlang={terakhirAnalisis ?? 0} />
+      </SeksiLipat>
+
+      {/* 8 · Hasil Analisis (spek 2.1h) */}
+      <SeksiLipat id="hr-hasil" judul="8 · Hasil Analisis" ikon={ScanSearch}>
+        <p className="text-[12px] leading-relaxed text-teks-sekunder">
+          {dataSampai
+            ? `Analisis terakhir membaca komentar hingga pukul ${jamWIB(dataSampai)} WIB.`
+            : "Belum ada analisis pada sesi ini — riwayat lengkap tersedia di bawah."}
+        </p>
+        <button
+          type="button"
+          onClick={() => setRiwayatBuka(true)}
+          className="btn-tekan mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-bold text-white"
+          style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+        >
+          <History className="h-4 w-4" aria-hidden="true" />
+          Buka Riwayat Analisis
+        </button>
+      </SeksiLipat>
+      </div>
 
       {/* Kemajuan pemeriksaan — angkanya dari DATABASE, jadi tetap benar
           walau aplikasi ditutup lalu dibuka lagi. */}

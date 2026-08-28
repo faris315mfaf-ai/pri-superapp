@@ -87,6 +87,39 @@ async function pastikanBelumDiklaim(
 
 export async function GET(request: Request) {
   return bungkus(async () => {
+    // --- Anggota yang BELUM menautkan akun sosmed (spek 1.18/2.1c) ---
+    // Khusus pengurus HR: dipakai seksi "Analisis Akun yang Belum
+    // Tertaut" supaya tahu siapa yang komentarnya tidak akan pernah
+    // terhitung karena akunnya belum terdaftar.
+    {
+      const url = new URL(request.url);
+      if (url.searchParams.get("tanpa") === "1") {
+        const user = await pastikanMasuk(request);
+        if (!["master", "super_admin", "admin_hr"].includes(user.role)) {
+          throw Object.assign(new Error("Hanya pengurus yang boleh melihat daftar ini."), {
+            status: 403,
+          });
+        }
+        const db = supabase();
+        const [{ data: semua }, { data: punya }] = await Promise.all([
+          db
+            .from("app_user")
+            .select("id, nama, divisi")
+            .eq("aktif", true)
+            .eq("status", "aktif")
+            .order("nama")
+            .limit(1000),
+          db.from("akun_sosmed_user").select("user_id").limit(2000),
+        ]);
+        const adaAkun = new Set((punya ?? []).map((r) => Number(r.user_id)));
+        return {
+          data: (semua ?? [])
+            .filter((u) => !adaAkun.has(Number(u.id)))
+            .map((u) => ({ id: String(u.id), nama: u.nama, divisi: u.divisi ?? "" })),
+        };
+      }
+    }
+
     const user = await pastikanMasuk(request);
 
     const { data, error } = await supabase()

@@ -27,7 +27,14 @@ const TrendChart = dynamic(
   { ssr: false, loading: () => <GlassSkeleton className="h-[252px] rounded-2xl" /> },
 );
 
-export function RingkasanQc({ muatUlang = 0 }: { muatUlang?: number }) {
+export function RingkasanQc({
+  muatUlang = 0,
+  bagian,
+}: {
+  muatUlang?: number;
+  /** Render sebagian saja (spek 1.18/2.1): kpi | tren | akun; kosong = semua */
+  bagian?: "kpi" | "tren" | "akun";
+}) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [gagal, setGagal] = useState(false);
 
@@ -57,20 +64,26 @@ export function RingkasanQc({ muatUlang = 0 }: { muatUlang?: number }) {
   const kpiQc = data.kpi.filter((k) => k.id !== "kpi-4");
 
   return (
-    <div className="mt-4 flex flex-col gap-4">
-      <FadeInUp>
-        <div className="grid grid-cols-3 gap-2.5">
-          {kpiQc.map((kpi, i) => (
-            <KpiCard key={kpi.id} kpi={kpi} delay={0.04 + i * 0.04} />
-          ))}
-        </div>
-      </FadeInUp>
-      <FadeInUp delay={0.06}>
-        <TrendChart data={data.tren} />
-      </FadeInUp>
-      <FadeInUp delay={0.1}>
-        <KepatuhanAkunCard data={data.kepatuhanAkun} />
-      </FadeInUp>
+    <div className={bagian ? "flex flex-col gap-4" : "mt-4 flex flex-col gap-4"}>
+      {(!bagian || bagian === "kpi") && (
+        <FadeInUp>
+          <div className="grid grid-cols-3 gap-2.5">
+            {kpiQc.map((kpi, i) => (
+              <KpiCard key={kpi.id} kpi={kpi} delay={0.04 + i * 0.04} />
+            ))}
+          </div>
+        </FadeInUp>
+      )}
+      {(!bagian || bagian === "tren") && (
+        <FadeInUp delay={0.06}>
+          <TrendChart data={data.tren} />
+        </FadeInUp>
+      )}
+      {(!bagian || bagian === "akun") && (
+        <FadeInUp delay={0.1}>
+          <KepatuhanAkunCard data={data.kepatuhanAkun} />
+        </FadeInUp>
+      )}
     </div>
   );
 }

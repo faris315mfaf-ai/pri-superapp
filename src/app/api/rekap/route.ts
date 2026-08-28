@@ -25,12 +25,16 @@ export async function GET(request: Request) {
     // mungkin kena cap 1000 baris PostgREST yang membuat agregasi
     // JavaScript diam-diam salah saat postingan banyak.
     if (searchParams.get("ringkas_kader") === "1" && periode) {
-      const { data } = await supabase()
-        .from("v_app_kepatuhan_kader")
+      // Saringan platform (spek 1.18/2.1g): pakai view per-platform.
+      const platformSaring = searchParams.get("platform");
+      let qRingkas = supabase()
+        .from(platformSaring ? "v_app_kepatuhan_kader_platform" : "v_app_kepatuhan_kader")
         .select("nama_kader, total, sudah, nomor_wa")
         .eq("periode", periode)
         .order("nama_kader")
         .limit(1000);
+      if (platformSaring) qRingkas = qRingkas.eq("platform", platformSaring);
+      const { data } = await qRingkas;
       const ringkas = (data ?? []).map((r) => ({
         nama_kader: r.nama_kader as string,
         total: Number(r.total ?? 0),

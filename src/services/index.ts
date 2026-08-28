@@ -2738,12 +2738,24 @@ export type RingkasKepatuhanKader = {
 };
 
 /** Ringkas kepatuhan PER KADER (agregat database — bebas cap 1000). */
-export async function getRingkasKepatuhan(periode: string): Promise<RingkasKepatuhanKader[]> {
+export async function getRingkasKepatuhan(
+  periode: string,
+  platform?: string,
+): Promise<RingkasKepatuhanKader[]> {
+  const p = platform ? `&platform=${encodeURIComponent(platform)}` : "";
   const json = await fetchJson(
-    `/api/rekap?ringkas_kader=1&periode=${encodeURIComponent(periode)}`,
+    `/api/rekap?ringkas_kader=1&periode=${encodeURIComponent(periode)}${p}`,
     { headers: headerToken() },
   );
   return (json.data ?? []) as RingkasKepatuhanKader[];
+}
+
+export type AnggotaTanpaAkun = { id: string; nama: string; divisi: string };
+
+/** Anggota yang BELUM menautkan akun sosmed (pengurus, spek 1.18). */
+export async function getAnggotaTanpaAkun(): Promise<AnggotaTanpaAkun[]> {
+  const json = await fetchJson("/api/akun-sosmed?tanpa=1", { headers: headerToken() });
+  return (json.data ?? []) as AnggotaTanpaAkun[];
 }
 
 /** Rincian kepatuhan SATU kader (baris per postingan) satu periode. */

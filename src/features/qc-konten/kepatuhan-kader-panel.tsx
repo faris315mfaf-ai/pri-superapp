@@ -34,6 +34,8 @@ type RingkasKader = RingkasKepatuhanKader;
 export function KepatuhanKaderPanel({ muatUlang = 0 }: { muatUlang?: number }) {
   const [perKaderMentah, setPerKaderMentah] = useState<RingkasKader[] | null>(null);
   const [saring, setSaring] = useState<"semua" | "sudah" | "belum">("belum");
+  // Saringan platform (spek 1.18/2.1g)
+  const [platformSaring, setPlatformSaring] = useState<string>("");
   const [cari, setCari] = useState("");
   const [dibuka, setDibuka] = useState<RingkasKader | null>(null);
   // Rincian per kader diambil LAZY saat popup dibuka — daftar utama
@@ -45,7 +47,7 @@ export function KepatuhanKaderPanel({ muatUlang = 0 }: { muatUlang?: number }) {
     let hidup = true;
     void (async () => {
       try {
-        const hasil = await getRingkasKepatuhan(periode);
+        const hasil = await getRingkasKepatuhan(periode, platformSaring || undefined);
         if (hidup) setPerKaderMentah(hasil);
       } catch {
         if (hidup) setPerKaderMentah([]);
@@ -54,7 +56,7 @@ export function KepatuhanKaderPanel({ muatUlang = 0 }: { muatUlang?: number }) {
     return () => {
       hidup = false;
     };
-  }, [muatUlang]);
+  }, [muatUlang, platformSaring]);
 
   useEffect(() => {
     if (!dibuka) return;
@@ -124,6 +126,35 @@ export function KepatuhanKaderPanel({ muatUlang = 0 }: { muatUlang?: number }) {
                   )}
                 >
                   <StatusBadge label={label} warna={warna} />
+                </button>
+              ))}
+            </div>
+            {/* Saringan platform */}
+            <div className="mt-1.5 flex gap-1.5">
+              {[
+                ["", "Semua Platform"],
+                ["instagram", "Instagram"],
+                ["tiktok", "TikTok"],
+              ].map(([id, label]) => (
+                <button
+                  key={id || "semua"}
+                  type="button"
+                  onClick={() => {
+                    setPerKaderMentah(null);
+                    setPlatformSaring(id);
+                  }}
+                  aria-pressed={platformSaring === id}
+                  className={cn(
+                    "btn-tekan rounded-full px-3 py-1.5 text-[11px] font-semibold",
+                    platformSaring === id ? "text-white" : "glass-soft text-teks-sekunder",
+                  )}
+                  style={
+                    platformSaring === id
+                      ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" }
+                      : undefined
+                  }
+                >
+                  {label}
                 </button>
               ))}
             </div>
