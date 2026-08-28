@@ -48,7 +48,12 @@ export async function POST(request: Request) {
 
     const url = new URL(request.url);
 
-    const pemanggil = { id: user.id, nama: user.nama, role: user.role };
+    const pemanggil = {
+      id: user.id,
+      nama: user.nama,
+      role: user.role,
+      jabatan: user.jabatan,
+    };
 
     // --- Jembatan alat: sesi suara meneruskan functionCall ke sini ---
     if (url.searchParams.get("alat") === "1") {
@@ -87,7 +92,13 @@ export async function POST(request: Request) {
           bidiGenerateContentSetup: {
             model: `models/${MODEL_SUARA}`,
             generationConfig: { responseModalities: ["AUDIO"] },
-            // Instruksi (termasuk pelatihan master) & alat MENGIKUTI
+            // Transkrip suara masuk & keluar (fitur 1.20.3): dipakai
+            // layar suara untuk menampilkan percakapan sebagai teks
+            // berjalan — persis rasa aplikasi Gemini, dan bukti nyata
+            // bagi pengguna bahwa asisten mendengar & menjawab.
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
+            // Instruksi (identitas + pelatihan master) & alat MENGIKUTI
             // pemanggil — master bersuara pun punya alat aksinya.
             systemInstruction: { parts: [{ text: await instruksiUntuk(pemanggil) }] },
             tools: [{ functionDeclarations: deklarasiAlatUntuk(pemanggil.role) }],

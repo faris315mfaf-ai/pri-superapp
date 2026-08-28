@@ -35,8 +35,31 @@ export async function bolehChatbotRole(role: string): Promise<boolean> {
   return data?.aktif === true;
 }
 
-/** Identitas pemanggil — menentukan alat mana yang terbuka untuknya. */
-export type PemanggilAsisten = { id: string; nama: string; role: string };
+/** Identitas pemanggil — menentukan sapaan & alat yang terbuka. */
+export type PemanggilAsisten = {
+  id: string;
+  nama: string;
+  role: string;
+  jabatan?: string | null;
+};
+
+/**
+ * Sapaan hormat berdasarkan JABATAN struktur partai (fitur 1.20.3).
+ * Ini yang membuat Ketua Umum disambut "Pak Ketum". Master bisa
+ * menimpanya lewat instruksi pelatihan.
+ */
+function sapaanJabatan(jabatan: string): string {
+  const j = jabatan.trim().toLowerCase();
+  if (!j) return "";
+  if (j === "ketua umum") return 'Panggil beliau "Pak Ketum" dan awali jawaban pertama dengan "Siap, Pak Ketum!".';
+  if (j.includes("sekretaris jenderal") || j === "sekjen")
+    return 'Panggil beliau "Pak Sekjen" dengan hormat.';
+  if (j.includes("bendahara")) return 'Panggil beliau "Pak/Bu Bendahara" dengan hormat.';
+  if (j.includes("direktur")) return `Panggil beliau "Direktur" dengan hormat.`;
+  if (j.includes("wakil")) return `Sapa beliau dengan jabatannya ("${jabatan}") secara hormat.`;
+  if (j.includes("ketua")) return `Sapa beliau "Ketua" dengan hormat.`;
+  return `Sapa beliau dengan hormat sesuai jabatannya ("${jabatan}").`;
+}
 
 // ------------------------------------------------------------
 // Pelatihan (fitur 1.20.2): instruksi tambahan yang ditulis MASTER
@@ -60,12 +83,26 @@ export async function instruksiLatihan(): Promise<string> {
   }
 }
 
-/** System instruction lengkap untuk pemanggil ini (dasar + latihan + aksi). */
+/** System instruction lengkap untuk pemanggil ini (dasar + identitas + latihan + aksi). */
 export async function instruksiUntuk(pemanggil: PemanggilAsisten): Promise<string> {
   const latihan = await instruksiLatihan();
   let instruksi = INSTRUKSI_ASISTEN;
+
+  // --- Identitas lawan bicara (fitur 1.20.3) — untuk SEMUA pengguna,
+  // supaya asisten menyapa dengan nama & jabatan yang tepat. Inilah
+  // yang membuat Ketua Umum disambut "Pak Ketum".
+  const namaPendek = pemanggil.nama.split(" ").slice(0, 2).join(" ") || pemanggil.nama;
+  const jabatan = (pemanggil.jabatan ?? "").trim();
+  instruksi += `\n\n=== LAWAN BICARA SAAT INI ===\nKamu sedang melayani ${pemanggil.nama}${jabatan ? ` — jabatan: ${jabatan}` : ""}.`;
+  if (jabatan) {
+    instruksi += ` ${sapaanJabatan(jabatan)}`;
+  } else {
+    instruksi += ` Sapa dengan sopan, mis. "Kak ${namaPendek}".`;
+  }
+  instruksi += `\nDi awal percakapan (terutama mode suara), sapa beliau lebih dulu dengan sapaan hormat itu SEBELUM menjawab.`;
+
   if (latihan.trim()) {
-    instruksi += `\n\n=== PELATIHAN DARI MASTER (patuh selama tidak melanggar aturan keamanan di atas) ===\n${latihan.trim()}`;
+    instruksi += `\n\n=== PELATIHAN DARI MASTER (patuh selama tidak melanggar aturan keamanan di atas; boleh menimpa aturan sapaan) ===\n${latihan.trim()}`;
   }
   if (pemanggil.role === "master") {
     instruksi += `\n\n=== MODE MASTER ===\nLawan bicaramu adalah MASTER (${pemanggil.nama}), pemegang kendali tertinggi aplikasi.\nKamu juga punya alat AKSI: kirim_notifikasi, kirim_pengumuman, kirim_chat_grup, dan detail_anggota (data personal lengkap).\nJalankan alat aksi HANYA bila master memintanya secara eksplisit. Sebelum mengirim sesuatu ke banyak orang, bacakan dulu ringkasan isinya lalu minta konfirmasi satu kali; kirim setelah master mengiyakan.\nSetiap aksi tercatat di jejak audit.`;

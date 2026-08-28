@@ -36,6 +36,12 @@ type Callback = {
    * "masuk" = suara pengguna dari mik, "keluar" = suara asisten.
    */
   onTingkat?: (arah: "masuk" | "keluar", level: number) => void;
+  /**
+   * Potongan transkrip (fitur 1.20.3): "masuk" = ucapan pengguna,
+   * "keluar" = ucapan asisten. `selesai` menandai akhir satu giliran
+   * (UI memulai gelembung baru setelahnya).
+   */
+  onTranskrip?: (arah: "masuk" | "keluar", teks: string, selesai: boolean) => void;
 };
 
 /**
@@ -190,6 +196,8 @@ export class AsistenSuara {
         serverContent?: {
           interrupted?: boolean;
           turnComplete?: boolean;
+          inputTranscription?: { text?: string };
+          outputTranscription?: { text?: string };
           modelTurn?: {
             parts?: { inlineData?: { data?: string; mimeType?: string } }[];
           };
@@ -204,6 +212,12 @@ export class AsistenSuara {
         return;
       }
 
+      // Transkrip (fitur 1.20.3): tampilkan apa yang didengar & diucapkan.
+      const trIn = pesan.serverContent?.inputTranscription?.text;
+      if (trIn) this.cb.onTranskrip?.("masuk", trIn, false);
+      const trOut = pesan.serverContent?.outputTranscription?.text;
+      if (trOut) this.cb.onTranskrip?.("keluar", trOut, false);
+
       // Pengguna menyela → buang antrean suara yang belum diputar.
       if (pesan.serverContent?.interrupted) {
         this.hentikanSpeaker();
@@ -215,7 +229,11 @@ export class AsistenSuara {
         const b64 = p.inlineData?.data;
         if (b64) this.putar(dariBase64Pcm(b64));
       }
-      if (pesan.serverContent?.turnComplete) this.cb.onStatus("mendengarkan");
+      if (pesan.serverContent?.turnComplete) {
+        // Tutup gelembung transkrip giliran ini.
+        this.cb.onTranskrip?.("keluar", "", true);
+        this.cb.onStatus("mendengarkan");
+      }
 
       // functionCall → server (daftar putih) → toolResponse.
       const panggilan = pesan.toolCall?.functionCalls ?? [];

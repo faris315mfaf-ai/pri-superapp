@@ -77,6 +77,7 @@ export async function POST(request: Request) {
       id: user.id,
       nama: user.nama,
       role: user.role,
+      jabatan: user.jabatan,
     });
     return { jawaban };
   });

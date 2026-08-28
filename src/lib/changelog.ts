@@ -18,6 +18,16 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "1.20.3",
+    tanggal: "28 Agustus 2026",
+    judul: "Asisten mengenali jabatan Anda + teks percakapan suara",
+    poin: [
+      "Asisten kini menyapa sesuai jabatan — Ketua Umum disambut \"Siap, Pak Ketum!\"",
+      "Mode suara menampilkan TEKS percakapan berjalan (apa yang Anda ucapkan & jawaban asisten)",
+      "Perbaikan: akses data & pelatihan kini bekerja penuh di mode suara, bukan hanya teks",
+    ],
+  },
+  {
     versi: "1.20.2",
     tanggal: "28 Agustus 2026",
     judul: "Master kini bisa melatih Asisten AI",

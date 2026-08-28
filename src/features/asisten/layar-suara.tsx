@@ -37,11 +37,47 @@ export function LayarSuara({ onTutup }: { onTutup: () => void }) {
   const [izin, setIzin] = useState<Izin>("memeriksa");
   const [status, setStatus] = useState<StatusSuara>("siap");
   const [pesanGalat, setPesanGalat] = useState<string | null>(null);
+  // Transkrip percakapan (fitur 1.20.3) — teks berjalan seperti Gemini.
+  const [transkrip, setTranskrip] = useState<{ arah: "masuk" | "keluar"; teks: string }[]>([]);
+  // Penanda gelembung yang sedang dibangun tiap arah (indeks di array).
+  const aktifRef = useRef<{ masuk: number | null; keluar: number | null }>({
+    masuk: null,
+    keluar: null,
+  });
   // Level audio untuk animasi orb — disimpan di ref dan dituang ke
   // CSS var langsung (tanpa setState per buffer ≈ 12x/detik).
   const orbRef = useRef<HTMLDivElement | null>(null);
+  const ujungRef = useRef<HTMLDivElement | null>(null);
   const mesinRef = useRef<AsistenSuara | null>(null);
   const mulaiRef = useRef(false);
+
+  // Gulir ke transkrip terbaru.
+  useEffect(() => {
+    ujungRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [transkrip]);
+
+  /** Akumulasi potongan transkrip ke gelembung yang tepat. */
+  function tambahTranskrip(arah: "masuk" | "keluar", teks: string, selesai: boolean) {
+    if (selesai) {
+      // Akhir giliran asisten → semua gelembung ditutup.
+      aktifRef.current = { masuk: null, keluar: null };
+      return;
+    }
+    if (!teks) return;
+    // Arah berganti = giliran lawan; tutup gelembung arah lain.
+    const lawan = arah === "masuk" ? "keluar" : "masuk";
+    aktifRef.current[lawan] = null;
+    setTranskrip((lama) => {
+      const idx = aktifRef.current[arah];
+      if (idx !== null && lama[idx]?.arah === arah) {
+        const salin = lama.slice();
+        salin[idx] = { arah, teks: salin[idx].teks + teks };
+        return salin;
+      }
+      aktifRef.current[arah] = lama.length;
+      return [...lama, { arah, teks }];
+    });
+  }
 
   // Periksa keadaan izin dulu; kalau sudah granted langsung mulai.
   useEffect(() => {
@@ -84,6 +120,7 @@ export function LayarSuara({ onTutup }: { onTutup: () => void }) {
           const kuat = arah === "keluar" ? level : level * 0.5;
           el.style.setProperty("--tingkat", String(1 + kuat * 0.35));
         },
+        onTranskrip: tambahTranskrip,
       });
       mesinRef.current = mesin;
       await mesin.mulai(token, model);
@@ -174,12 +211,32 @@ export function LayarSuara({ onTutup }: { onTutup: () => void }) {
           <p className="font-heading text-lg font-bold text-white" aria-live="polite">
             {LABEL[status]}
           </p>
-          {status === "mendengarkan" && (
+          {status === "mendengarkan" && transkrip.length === 0 && (
             <p className="mt-1 text-[12.5px] text-white/60">
               Contoh: “Berapa yang sudah absen hari ini?”
             </p>
           )}
         </div>
+
+        {/* Transkrip percakapan berjalan (fitur 1.20.3) */}
+        {transkrip.length > 0 && (
+          <div className="scrollbar-tipis flex max-h-[26vh] w-full max-w-[440px] flex-col gap-2 overflow-y-auto px-1">
+            {transkrip.map((t, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "max-w-[85%] rounded-2xl px-3.5 py-2 text-[13px] leading-relaxed",
+                  t.arah === "masuk"
+                    ? "self-end rounded-br-md bg-white/15 text-white"
+                    : "self-start rounded-bl-md bg-violet-500/25 text-white",
+                )}
+              >
+                {t.teks}
+              </div>
+            ))}
+            <div ref={ujungRef} />
+          </div>
+        )}
       </div>
 
       {/* ===== Panel bawah: izin / galat / tombol akhiri ===== */}
