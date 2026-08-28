@@ -11,6 +11,9 @@
 // Sumber daya eksternal DIPETAKAN dari kode nyata (bukan template):
 // - connect-src https://api.cloudinary.com : unggah video manual
 //   langsung dari peramban (XHR di kirim-video-manual.tsx).
+// - connect-src (https+wss) generativelanguage.googleapis.com : mode
+//   suara Asisten AI (Gemini Live, fitur 1.20/3) — peramban menyambung
+//   WebSocket memakai token sementara dari server, bukan kunci asli.
 // - img-src/media-src https: : avatar & surat dari Supabase Storage,
 //   thumbnail berita hasil pindaian (CDN Instagram/TikTok yang
 //   host-nya berubah-ubah), thumbnail Ayrshare, video Cloudinary,
@@ -41,7 +44,7 @@ export function proxy(request: NextRequest) {
     img-src 'self' https: data: blob:;
     media-src 'self' https: blob:;
     font-src 'self' data:;
-    connect-src 'self' https://api.cloudinary.com${dev ? " ws:" : ""};
+    connect-src 'self' https://api.cloudinary.com https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com${dev ? " ws:" : ""};
     worker-src 'self' blob:;
     object-src 'none';
     base-uri 'self';

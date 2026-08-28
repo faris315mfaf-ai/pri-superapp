@@ -14,13 +14,15 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, LayoutDashboard } from "lucide-react";
+import { ArrowLeft, Bot, LayoutDashboard } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
 import { SwitchKaca } from "@/features/profil/switch-kaca";
 import { toast } from "@/hooks/use-app-store";
 import {
+  getAksesAsisten,
   getMatriksDashboard,
+  setAksesAsisten,
   setAksesDashboard,
   type MatriksDashboard,
 } from "@/services";
@@ -31,13 +33,21 @@ export function KelolaAksesDashboardScreen({ onKembali }: { onKembali: () => voi
   const [data, setData] = useState<MatriksDashboard | null>(null);
   const [peranAktif, setPeranAktif] = useState<string>("ketua");
   const [sedangUbah, setSedangUbah] = useState<string | null>(null);
+  // Akses Asisten AI per jabatan (fitur 1.20/3) — dikelola di layar
+  // yang sama supaya master punya SATU pintu pengaturan akses.
+  const [asistenNyala, setAsistenNyala] = useState<string[] | null>(null);
 
   useEffect(() => {
     let hidup = true;
     void (async () => {
       try {
-        const hasil = await getMatriksDashboard();
-        if (hidup) setData(hasil);
+        const [hasil, asisten] = await Promise.all([
+          getMatriksDashboard(),
+          getAksesAsisten().catch(() => null),
+        ]);
+        if (!hidup) return;
+        setData(hasil);
+        if (asisten) setAsistenNyala(asisten.nyala);
       } catch (e) {
         if (hidup) {
           setData(null);
@@ -49,6 +59,24 @@ export function KelolaAksesDashboardScreen({ onKembali }: { onKembali: () => voi
       hidup = false;
     };
   }, []);
+
+  async function ubahAsisten(role: string, nyala: boolean) {
+    if (sedangUbah) return;
+    setSedangUbah(`asisten:${role}`);
+    try {
+      await setAksesAsisten(role, nyala);
+      setAsistenNyala((lama) => {
+        const set = new Set(lama ?? []);
+        if (nyala) set.add(role);
+        else set.delete(role);
+        return Array.from(set);
+      });
+    } catch (e) {
+      toast("error", "Gagal menyimpan", e instanceof Error ? e.message : "");
+    } finally {
+      setSedangUbah(null);
+    }
+  }
 
   async function ubah(kunci: string, nyala: boolean) {
     if (sedangUbah) return;
@@ -168,6 +196,38 @@ export function KelolaAksesDashboardScreen({ onKembali }: { onKembali: () => voi
               </div>
             ))}
           </GlassCard>
+
+          {/* Akses Asisten AI per jabatan (fitur 1.20/3) */}
+          {asistenNyala !== null && (
+            <GlassCard className="mt-4 p-4">
+              <div className="flex items-center gap-2">
+                <Bot className="h-4 w-4 text-pri" aria-hidden="true" />
+                <p className="text-sm font-bold text-teks-utama">Asisten AI (Chatbot)</p>
+              </div>
+              <p className="mt-1 text-[11px] leading-snug text-teks-sekunder">
+                Chatbot data internal (teks + suara). Nyalakan hanya untuk
+                jabatan yang memang boleh membaca data lintas anggota.
+              </p>
+              <div className="mt-2.5 flex flex-col gap-1.5">
+                {data.peran.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-3 rounded-xl bg-black/5 px-3 py-2 dark:bg-white/5"
+                  >
+                    <span className="min-w-0 flex-1 text-[12.5px] font-semibold text-teks-utama">
+                      {p.label}
+                    </span>
+                    <SwitchKaca
+                      aktif={asistenNyala.includes(p.id)}
+                      disabled={sedangUbah === `asisten:${p.id}`}
+                      onUbah={() => void ubahAsisten(p.id, !asistenNyala.includes(p.id))}
+                      labelAria={`Asisten AI untuk ${p.label}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            </GlassCard>
+          )}
 
           <p className="mt-3 text-center text-[11px] leading-relaxed text-teks-sekunder">
             Sakelar hijau = jabatan itu bisa membuka dashboard-nya. Perubahan

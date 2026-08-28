@@ -15,6 +15,9 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "pichnkyjepsirpclofhs.supabase.co" },
       { protocol: "https", hostname: "res.cloudinary.com" },
+      // Avatar akun Google (fitur 1.19/3.1): pengguna yang masuk lewat
+      // Google membawa foto profil dari CDN googleusercontent.
+      { protocol: "https", hostname: "*.googleusercontent.com" },
     ],
   },
   // Jangan mengiklankan teknologi server ke setiap pengunjung.
