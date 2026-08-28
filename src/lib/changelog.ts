@@ -18,6 +18,20 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "1.22.0",
+    tanggal: "29 Agustus 2026",
+    judul: "TV Rakyat lebih rapi, konten sosmed, & bahan belajar AI",
+    poin: [
+      "TV Rakyat: Riwayat & Status Pipeline kini bisa dilipat; video yang sudah tayang bisa dihapus catatannya dengan geser ke kanan",
+      "Konten Terbaru Sosmed: pilah per platform (Instagram, TikTok, YT Short, Facebook, Threads, X)",
+      "Konten akun resmi: 30 postingan terbaru di slideshow, ketuk \"Semua\" untuk buka arsip penuh",
+      "Bagi Tugas (Pimred): hanya anggota Divisi TV Rakyat yang bisa ditugaskan; pilih tugas dari berita hasil scraping atau link sendiri",
+      "Kelola Sumber Berita (Pimred): tambah/stop akun IG & TikTok yang di-scrape",
+      "Master: unggah berkas .txt sebagai bahan belajar tambahan untuk AI",
+      "Perbaikan: unggahan video yang sebenarnya berhasil tak lagi salah tampil \"gagal\"; pesan login sidik jari lebih jelas",
+    ],
+  },
+  {
     versi: "1.21.0",
     tanggal: "28 Agustus 2026",
     judul: "Masuk dengan Sidik Jari",
