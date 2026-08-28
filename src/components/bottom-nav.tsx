@@ -6,7 +6,7 @@
 // ============================================================
 
 import { motion } from "framer-motion";
-import { Home, Newspaper, ShieldCheck, Tv, Clapperboard, MessagesSquare, Bell, User, CalendarDays } from "lucide-react";
+import { Home, Newspaper, ShieldCheck, Tv, Clapperboard, MessagesSquare, Bell, User, CalendarDays, LayoutDashboard } from "lucide-react";
 import type { KomponenIkon, Role } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +17,7 @@ export type KunciTab =
   | "acara"
   | "tv"
   | "tvrku"
+  | "dashboard"
   | "chat"
   | "notifikasi"
   | "profil";
@@ -31,6 +32,9 @@ export const KONFIG_TAB: Record<
   tv: { label: "TV Rakyat Ofc", ikon: Tv },
   acara: { label: "Acara", ikon: CalendarDays },
   tvrku: { label: "TVR Saya", ikon: Clapperboard },
+  // Modul Dashboard (fitur 1.19/3.3): tampil hanya bila jabatannya
+  // diberi akses master — daftar tab dinamis dihitung di page.tsx.
+  dashboard: { label: "Dashboard", ikon: LayoutDashboard },
   chat: { label: "Chat", ikon: MessagesSquare },
   notifikasi: { label: "Notifikasi", ikon: Bell },
   profil: { label: "Profil", ikon: User },

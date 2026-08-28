@@ -17,6 +17,8 @@ import { SideNav } from "@/components/side-nav";
 import { AuthScreen } from "@/features/auth/auth-screen";
 import { SplashScreen } from "@/features/auth/splash-screen";
 import { DashboardScreen } from "@/features/dashboard/dashboard-screen";
+import { ModulDashboardScreen } from "@/features/dashboard/modul-dashboard-screen";
+import { KelolaAksesDashboardScreen } from "@/features/dashboard/kelola-akses-screen";
 import { QcScreen } from "@/features/qc-konten/qc-screen";
 import { AccountDetailScreen } from "@/features/qc-konten/account-detail-screen";
 import { PostDetailScreen } from "@/features/qc-konten/post-detail-screen";
@@ -52,6 +54,7 @@ import {
   getWewenangTv,
   getStatusPerbaikan,
   getNotifikasi,
+  getAksesDashboard,
   keluar as keluarService,
   masukOtomatis,
   simpanToken,
@@ -81,6 +84,8 @@ type SubLayar =
   | { nama: "panel-master" }
   // Matriks izin fitur per peran (super admin)
   | { nama: "pengaturan-fitur" }
+  // Matriks akses dashboard per jabatan (fitur 1.19/3.3, master/super)
+  | { nama: "kelola-dashboard" }
   // Database anggota (detail per pengguna, untuk pengurus)
   | { nama: "database" };
 
@@ -129,6 +134,9 @@ export default function Page() {
     return tersimpan ? TAB_AWAL[tersimpan.role] : "beranda";
   });
   const [subLayar, setSubLayar] = useState<SubLayar | null>(null);
+  // Kunci sub-dashboard yang boleh dibuka jabatan ini (fitur 1.19/3.3).
+  // Diisi effect di bawah; dipakai tabBoleh, jadi dideklarasikan di sini.
+  const [aksesDashboard, setAksesDashboard] = useState<string[]>([]);
   // Id notifikasi yang sudah pernah terlihat di sesi ini. Dipakai untuk
   // membedakan notifikasi yang benar-benar BARU datang (layak dimunculkan
   // sebagai banner) dari yang memang sudah ada sejak awal.
@@ -248,8 +256,13 @@ export default function Page() {
     if (modul && !dasar.includes(modul)) {
       dasar.splice(dasar.indexOf("chat") >= 0 ? dasar.indexOf("chat") : dasar.length - 1, 0, modul);
     }
+    // Modul Dashboard (fitur 1.19/3.3): tampil hanya bila jabatan ini
+    // diberi akses minimal satu sub-dashboard oleh master.
+    if (aksesDashboard.length > 0 && !dasar.includes("dashboard")) {
+      dasar.splice(dasar.indexOf("chat") >= 0 ? dasar.indexOf("chat") : dasar.length - 1, 0, "dashboard");
+    }
     return dasar;
-  }, [user, tvAnggota]);
+  }, [user, tvAnggota, aksesDashboard]);
 
   // Pengaman tanpa effect: tab efektif selalu valid untuk role aktif
   const tabEfektif = useMemo(() => {
@@ -277,6 +290,24 @@ export default function Page() {
     }
     void muatIzin();
     const detak = setInterval(() => void muatIzin(), 5 * 60_000);
+    return () => {
+      hidup = false;
+      clearInterval(detak);
+    };
+  }, [aplikasiAktif]);
+
+  // Akses modul Dashboard per jabatan (fitur 1.19/3.3). Ritme sama
+  // dengan izin fitur: dimuat saat masuk + disegarkan tiap 5 menit,
+  // supaya akses yang baru dinyalakan/dimatikan master ikut terasa.
+  useEffect(() => {
+    if (!aplikasiAktif) return;
+    let hidup = true;
+    async function muatAkses() {
+      const boleh = await getAksesDashboard();
+      if (hidup) setAksesDashboard(boleh);
+    }
+    void muatAkses();
+    const detak = setInterval(() => void muatAkses(), 5 * 60_000);
     return () => {
       hidup = false;
       clearInterval(detak);
@@ -618,6 +649,18 @@ export default function Page() {
         ),
       });
     }
+    if (tabBoleh.includes("dashboard")) {
+      layarTab.push({
+        kunci: "dashboard",
+        isi: (
+          <ModulDashboardScreen
+            user={user}
+            boleh={aksesDashboard}
+            onBukaKelola={() => setSubLayar({ nama: "kelola-dashboard" })}
+          />
+        ),
+      });
+    }
     if (tabBoleh.includes("tvrku")) {
       layarTab.push({
         kunci: "tvrku",
@@ -798,6 +841,8 @@ export default function Page() {
                   <DatabaseScreen onKembali={() => setSubLayar(null)} />
                 ) : subLayar.nama === "pengaturan-fitur" ? (
                   <PengaturanFiturScreen onKembali={() => setSubLayar(null)} />
+                ) : subLayar.nama === "kelola-dashboard" ? (
+                  <KelolaAksesDashboardScreen onKembali={() => setSubLayar(null)} />
                 ) : subLayar.nama === "panel-master" ? (
                   <PanelMasterScreen onKembali={() => setSubLayar(null)} />
                 ) : subLayar.nama === "tabel-anggota" ? (

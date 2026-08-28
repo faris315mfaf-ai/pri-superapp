@@ -2030,6 +2030,47 @@ export async function setIzinFitur(
 }
 
 // ------------------------------------------------------------
+// v1.19 — modul Dashboard per jabatan (fitur 3.3)
+// ------------------------------------------------------------
+
+/** Kunci sub-dashboard yang boleh dibuka jabatan saya. */
+export async function getAksesDashboard(): Promise<string[]> {
+  try {
+    const json = await fetchJson("/api/dashboard/akses", { headers: headerToken() });
+    return (json?.boleh ?? []) as string[];
+  } catch {
+    // Gagal memuat akses tidak boleh merusak boot aplikasi.
+    return [];
+  }
+}
+
+export type MatriksDashboard = {
+  katalog: { kunci: string; label: string }[];
+  peran: { id: string; label: string }[];
+  /** jabatan → kunci dashboard yang NYALA (baris tak ada = mati) */
+  nyala: Record<string, string[]>;
+};
+
+export async function getMatriksDashboard(): Promise<MatriksDashboard> {
+  const json = await fetchJson("/api/dashboard/akses?matriks=1", {
+    headers: headerToken(),
+  });
+  return json as MatriksDashboard;
+}
+
+export async function setAksesDashboard(
+  role: string,
+  dashboardKey: string,
+  aktif: boolean,
+): Promise<void> {
+  await fetchJson("/api/dashboard/akses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ role, dashboard_key: dashboardKey, aktif }),
+  });
+}
+
+// ------------------------------------------------------------
 // v1.12 — lupa sandi, ulang tahun, tugas link Pimred, interaksi,
 // profil lanjutan, mode perbaikan
 // ------------------------------------------------------------
