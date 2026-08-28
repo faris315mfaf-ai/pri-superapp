@@ -20,6 +20,7 @@ import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { bolehDashboard } from "@/lib/dashboard-akses";
 import { catatTugasStreak } from "@/lib/streak";
 import { beriKoin } from "@/lib/koin";
+import { verifikasiWajahPenyedia, wajahSiap } from "@/lib/wajah";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,16 @@ async function pastikanMasuk(request: Request) {
 function tanggalWibSekarang(): string {
   const wib = new Date(Date.now() + 7 * 60 * 60 * 1000);
   return wib.toISOString().slice(0, 10);
+}
+
+/** Apakah master mewajibkan absen berbasis wajah untuk semua (fitur 1.22/3). */
+async function absenWajibWajah(): Promise<boolean> {
+  const { data } = await supabase()
+    .from("pengaturan_sistem")
+    .select("nilai")
+    .eq("kunci", "wajah_absen_wajib")
+    .maybeSingle();
+  return data?.nilai === "true";
 }
 
 /**
@@ -219,6 +230,46 @@ export async function POST(request: Request) {
 
     const db = supabase();
     const tanggal = tanggalWibSekarang();
+
+    // ---- Gerbang wajah (fitur 1.22/3) ----
+    // Bila verifikasi wajah AKTIF (penyedia tersambung), absen harus
+    // membuktikan wajah. Foto absen (swafoto) langsung dipakai — tak ada
+    // langkah kamera tambahan. Gerbang ini gagal-TERTUTUP saat penyedia
+    // error (keamanan), dan MATI total bila penyedia belum diset sama
+    // sekali — sehingga absen berjalan seperti biasa sebelum fitur nyala.
+    if (wajahSiap()) {
+      const { data: tpl } = await db
+        .from("wajah_template")
+        .select("face_id")
+        .eq("user_id", Number(user.id))
+        .maybeSingle();
+      if (tpl?.face_id) {
+        let hasil;
+        try {
+          hasil = await verifikasiWajahPenyedia(user.id, foto, String(tpl.face_id));
+        } catch {
+          throw Object.assign(
+            new Error("Verifikasi wajah gagal dijalankan. Coba lagi sebentar."),
+            { status: 503 },
+          );
+        }
+        if (!hasil.lolos) {
+          throw Object.assign(
+            new Error(
+              hasil.cocok
+                ? "Keaslian wajah tak terbukti (anti-foto). Ambil ulang langsung dari kamera."
+                : "Wajah tidak cocok dengan yang terdaftar. Pastikan Anda sendiri yang absen.",
+            ),
+            { status: 403 },
+          );
+        }
+      } else if (await absenWajibWajah()) {
+        throw Object.assign(
+          new Error("Absen kini wajib verifikasi wajah. Daftarkan wajah dulu di Profil → Keamanan."),
+          { status: 403 },
+        );
+      }
+    }
 
     // Tolak lebih awal dengan pesan ramah; constraint unik di database
     // tetap menjadi penjaga terakhir bila dua permintaan datang bersamaan.

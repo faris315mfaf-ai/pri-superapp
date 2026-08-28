@@ -79,6 +79,7 @@ import {
   ModalVerifikasiWa,
   TombolAkunSosmed,
 } from "./pengaturan-akun";
+import { BarisWajah } from "./wajah-panel";
 import { VERSI_APLIKASI, VERSI_TAMPIL } from "@/lib/versi";
 import { ModalChangelog } from "./modal-changelog";
 import { AntreanAccTim, KartuTim, MenuUpdateAplikasi } from "./keanggotaan-tim";
@@ -881,6 +882,9 @@ export function ProfilScreen({
 
           {/* Masuk dengan Sidik Jari (fitur 1.21) — toggle aktif/nonaktif */}
           <BarisSidikJari />
+
+          {/* Verifikasi Wajah (fitur 1.22/3) — daftar wajah untuk absen & login */}
+          <BarisWajah />
 
           {/* Akun sosmed — tombol pembuka pop-up kelola */}
           <TombolAkunSosmed

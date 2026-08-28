@@ -2340,6 +2340,65 @@ export async function masukDeveloper(data: {
   return json.user as UserLengkap;
 }
 
+// ------------------------------------------------------------
+// Verifikasi wajah (fitur 1.22/3) — absen & login berbasis wajah
+// ------------------------------------------------------------
+
+export type StatusWajah = {
+  siap: boolean;
+  provider: string;
+  terdaftar: boolean;
+  didaftarkan_pada: string | null;
+  absen_wajib_wajah: boolean;
+};
+
+export async function getStatusWajah(): Promise<StatusWajah> {
+  const json = await fetchJson("/api/wajah", { headers: headerToken() });
+  return {
+    siap: json?.siap === true,
+    provider: String(json?.provider ?? ""),
+    terdaftar: json?.terdaftar === true,
+    didaftarkan_pada: (json?.didaftarkan_pada ?? null) as string | null,
+    absen_wajib_wajah: json?.absen_wajib_wajah === true,
+  };
+}
+
+/** Daftarkan/perbarui wajah saya (kirim foto data URL). */
+export async function daftarkanWajah(image: string): Promise<void> {
+  await fetchJson("/api/wajah/daftar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ image }),
+  });
+}
+
+export async function hapusWajah(): Promise<void> {
+  await fetchJson("/api/wajah", { method: "DELETE", headers: headerToken() });
+}
+
+/** Apakah login-wajah aktif (dipakai layar Masuk, pra-login). */
+export async function wajahLoginTersedia(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/wajah/tersedia");
+    if (!res.ok) return false;
+    const json = await res.json();
+    return json?.siap === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Masuk dengan wajah: identitas + foto → sesi (fitur 1.22/3). */
+export async function masukWajah(identitas: string, image: string): Promise<UserLengkap> {
+  const json = await fetchJson("/api/wajah/masuk", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ identitas, image, nama_perangkat: namaPerangkat() }),
+  });
+  if (json.token) simpanToken(json.token as string);
+  return json.user as UserLengkap;
+}
+
 /** Status sidik jari akun saya (untuk toggle di Profil). */
 export async function getStatusSidikJari(): Promise<{ aktif: boolean; jumlah_perangkat: number }> {
   try {

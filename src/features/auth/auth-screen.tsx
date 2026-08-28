@@ -25,6 +25,7 @@ import {
   Lock,
   Mail,
   Phone,
+  ScanFace,
   ShieldCheck,
   TerminalSquare,
   User as IkonUser,
@@ -35,6 +36,7 @@ import { LogoPri } from "@/components/logo-pri";
 import { ThemeToggle } from "@/components/pri-ui";
 import { TombolGoogle } from "@/components/tombol-google";
 import { DevMode } from "@/features/auth/dev-mode";
+import { KameraWajah } from "@/features/profil/wajah-panel";
 import { toast } from "@/hooks/use-app-store";
 import { useEffect } from "react";
 import {
@@ -48,8 +50,10 @@ import {
   lupaSandiSetel,
   masukOtomatis,
   masukSidikJari,
+  masukWajah,
   perangkatDukungSidikJari,
   verifikasiOtp,
+  wajahLoginTersedia,
   type UserLengkap,
 } from "@/services";
 import { butuhSubDivisi, DIVISI, pilihanSubDivisi } from "@/lib/struktur";
@@ -378,11 +382,18 @@ function FormMasuk({
   // yang punya biometrik.
   const [dukungSidik, setDukungSidik] = useState(false);
   const [sidikJalan, setSidikJalan] = useState(false);
+  // Login wajah (fitur 1.22/3) — hanya muncul bila penyedia aktif.
+  const [wajahAda, setWajahAda] = useState(false);
+  const [kameraWajah, setKameraWajah] = useState(false);
+  const [wajahJalan, setWajahJalan] = useState(false);
 
   useEffect(() => {
     let hidup = true;
     void perangkatDukungSidikJari().then((d) => {
       if (hidup) setDukungSidik(d);
+    });
+    void wajahLoginTersedia().then((a) => {
+      if (hidup) setWajahAda(a);
     });
     return () => {
       hidup = false;
@@ -420,6 +431,29 @@ function FormMasuk({
       if (dibatalkan) toast("info", "Sidik jari", pesan);
     } finally {
       setSidikJalan(false);
+    }
+  }
+
+  function bukaKameraWajah() {
+    if (identitas.trim().length < 3) {
+      setError("Ketik dulu username atau nomor WhatsApp Anda, lalu pindai wajah.");
+      return;
+    }
+    setError(null);
+    setKameraWajah(true);
+  }
+
+  async function masukDenganWajah(image: string) {
+    setKameraWajah(false);
+    if (wajahJalan) return;
+    setWajahJalan(true);
+    try {
+      const user = await masukWajah(identitas.trim(), image);
+      onBerhasil(user);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Wajah tidak dikenali. Coba lagi.");
+    } finally {
+      setWajahJalan(false);
     }
   }
 
@@ -504,6 +538,30 @@ function FormMasuk({
           Masuk dengan Sidik Jari
         </button>
       )}
+
+      {/* Masuk dengan Wajah (fitur 1.22/3) — muncul hanya bila penyedia
+          wajah aktif. Butuh identitas (username/nomor) lalu pindai wajah. */}
+      {wajahAda && (
+        <button
+          type="button"
+          onClick={bukaKameraWajah}
+          disabled={wajahJalan || memuat}
+          className="btn-tekan flex h-12 w-full items-center justify-center gap-2.5 rounded-xl border border-glass-border text-sm font-bold text-teks-utama disabled:opacity-60"
+        >
+          {wajahJalan ? (
+            <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+          ) : (
+            <ScanFace className="h-5 w-5 text-sky-500" aria-hidden="true" />
+          )}
+          Masuk dengan Wajah
+        </button>
+      )}
+
+      <AnimatePresence>
+        {kameraWajah && (
+          <KameraWajah onFoto={(img) => void masukDenganWajah(img)} onTutup={() => setKameraWajah(false)} />
+        )}
+      </AnimatePresence>
 
       {/* Pintu masuk Google (fitur 1.19/3.1): divider "atau" + tombol
           branding Google. Belum terdaftar pun bisa — akunnya dibuat

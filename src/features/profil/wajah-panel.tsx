@@ -1,0 +1,291 @@
+"use client";
+
+// ============================================================
+// BarisWajah (fitur 1.22/3) — daftar/hapus WAJAH untuk absen & login.
+//
+// Aplikasi hanya menangkap foto lewat kamera depan langsung (bukan
+// galeri), mengirimnya ke penyedia untuk di-enroll, dan menyimpan
+// HANYA face_id-nya. Ketika penyedia belum diaktifkan pengurus,
+// barisnya menjelaskan itu, bukan menghilang diam-diam.
+// ============================================================
+
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Camera, Loader2, ScanFace, ShieldCheck, Trash2, X } from "lucide-react";
+import { toast } from "@/hooks/use-app-store";
+import { daftarkanWajah, getStatusWajah, hapusWajah, type StatusWajah } from "@/services";
+
+/** Baris kaca ala menu Keamanan: ikon bulat + label + keterangan + aksi kanan. */
+function Baris({
+  label,
+  keterangan,
+  kanan,
+}: {
+  label: string;
+  keterangan: string;
+  kanan: React.ReactNode;
+}) {
+  return (
+    <div className="glass flex min-h-[54px] w-full items-center gap-3 rounded-2xl px-4 py-2.5">
+      <span
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border"
+        style={{ backgroundColor: "#0EA5E91a", borderColor: "#0EA5E938", color: "#0EA5E9" }}
+        aria-hidden="true"
+      >
+        <ScanFace className="h-4.5 w-4.5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-teks-utama">{label}</span>
+        <span className="block text-[11px] leading-snug text-teks-sekunder">{keterangan}</span>
+      </span>
+      {kanan}
+    </div>
+  );
+}
+
+export function BarisWajah() {
+  const [status, setStatus] = useState<StatusWajah | null>(null);
+  const [kamera, setKamera] = useState(false);
+  const [sibuk, setSibuk] = useState(false);
+
+  async function muat() {
+    try {
+      setStatus(await getStatusWajah());
+    } catch {
+      setStatus(null);
+    }
+  }
+
+  useEffect(() => {
+    // setTimeout(0) supaya setState tidak terjadi serentak di dalam efek
+    // (aturan react-hooks/set-state-in-effect) — muat() memanggil setStatus.
+    const id = setTimeout(() => void muat(), 0);
+    return () => clearTimeout(id);
+  }, []);
+
+  // Sedang mengecek → jangan tampilkan apa pun dulu.
+  if (status === null) return null;
+
+  async function hapus() {
+    if (sibuk) return;
+    setSibuk(true);
+    try {
+      await hapusWajah();
+      toast("sukses", "Data wajah dihapus");
+      await muat();
+    } catch (e) {
+      toast("error", "Gagal menghapus", e instanceof Error ? e.message : "");
+    } finally {
+      setSibuk(false);
+    }
+  }
+
+  async function selesaiFoto(image: string) {
+    setKamera(false);
+    setSibuk(true);
+    try {
+      await daftarkanWajah(image);
+      toast("sukses", "Wajah terdaftar", "Kini absen & login bisa memakai wajah Anda.");
+      await muat();
+    } catch (e) {
+      toast("error", "Gagal mendaftarkan wajah", e instanceof Error ? e.message : "");
+    } finally {
+      setSibuk(false);
+    }
+  }
+
+  // Belum diaktifkan penyedia: tampilkan info, tanpa aksi.
+  if (!status.siap) {
+    return (
+      <Baris
+        label="Verifikasi Wajah"
+        keterangan="Belum diaktifkan pengurus (perlu penyedia wajah)."
+        kanan={<span className="text-[11px] font-semibold text-teks-sekunder">Nonaktif</span>}
+      />
+    );
+  }
+
+  return (
+    <>
+      <Baris
+        label="Verifikasi Wajah"
+        keterangan={
+          status.terdaftar
+            ? "Wajah terdaftar — dipakai untuk absen & login."
+            : "Daftarkan wajah untuk absen & login lebih aman."
+        }
+        kanan={
+          <span className="flex items-center gap-2">
+            {sibuk && <Loader2 className="h-3.5 w-3.5 animate-spin text-teks-sekunder" aria-hidden="true" />}
+            {status.terdaftar ? (
+              <button
+                type="button"
+                onClick={() => void hapus()}
+                disabled={sibuk}
+                aria-label="Hapus data wajah"
+                className="btn-tekan flex items-center gap-1 rounded-lg border border-gagal/40 bg-gagal/5 px-2.5 py-1 text-[11px] font-semibold text-gagal disabled:opacity-60"
+              >
+                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                Hapus
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setKamera(true)}
+                disabled={sibuk}
+                className="btn-tekan flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold text-white disabled:opacity-60"
+                style={{ background: "linear-gradient(135deg, #0EA5E9, #0369A1)" }}
+              >
+                <Camera className="h-3.5 w-3.5" aria-hidden="true" />
+                Daftarkan
+              </button>
+            )}
+          </span>
+        }
+      />
+      {status.terdaftar && (
+        <button
+          type="button"
+          onClick={() => setKamera(true)}
+          disabled={sibuk}
+          className="btn-tekan -mt-1 ml-12 text-[11px] font-semibold text-pri disabled:opacity-60"
+        >
+          Ambil ulang foto wajah
+        </button>
+      )}
+
+      <AnimatePresence>
+        {kamera && <KameraWajah onFoto={selesaiFoto} onTutup={() => setKamera(false)} />}
+      </AnimatePresence>
+    </>
+  );
+}
+
+// ------------------------------------------------------------
+// KameraWajah — ambil satu foto dari kamera DEPAN langsung.
+// ------------------------------------------------------------
+
+export function KameraWajah({
+  onFoto,
+  onTutup,
+}: {
+  onFoto: (image: string) => void;
+  onTutup: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [siap, setSiap] = useState(false);
+  const [galat, setGalat] = useState<string | null>(null);
+
+  useEffect(() => {
+    let batal = false;
+    void (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 640 } },
+          audio: false,
+        });
+        if (batal) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play().catch(() => {});
+        }
+        setSiap(true);
+      } catch {
+        setGalat("Tidak bisa mengakses kamera. Izinkan kamera lalu coba lagi.");
+      }
+    })();
+    return () => {
+      batal = true;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  function ambil() {
+    const v = videoRef.current;
+    if (!v || !siap) return;
+    const sisi = Math.min(v.videoWidth, v.videoHeight) || 480;
+    const kanvas = document.createElement("canvas");
+    kanvas.width = 480;
+    kanvas.height = 480;
+    const ctx = kanvas.getContext("2d");
+    if (!ctx) return;
+    // Potong tengah jadi bujur sangkar lalu skala ke 480.
+    const sx = (v.videoWidth - sisi) / 2;
+    const sy = (v.videoHeight - sisi) / 2;
+    ctx.drawImage(v, sx, sy, sisi, sisi, 0, 0, 480, 480);
+    const dataUrl = kanvas.toDataURL("image/jpeg", 0.85);
+    onFoto(dataUrl);
+  }
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-black/70 p-6 backdrop-blur-md"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Ambil foto wajah"
+        className="glass-strong w-full max-w-[360px] rounded-2xl p-5"
+        initial={{ scale: 0.92, opacity: 0, y: 14 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.94, opacity: 0, y: 10 }}
+        transition={{ type: "spring", stiffness: 360, damping: 30 }}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="font-heading text-base font-bold text-teks-utama">Ambil Foto Wajah</h3>
+          <button
+            type="button"
+            onClick={onTutup}
+            aria-label="Tutup"
+            className="glass btn-tekan flex h-8 w-8 items-center justify-center rounded-full text-teks-utama"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <p className="mt-1 text-[11.5px] leading-relaxed text-teks-sekunder">
+          Posisikan wajah di tengah, pencahayaan cukup, tanpa masker. Foto ini
+          hanya dipakai untuk mengenali Anda — tidak disimpan sebagai gambar.
+        </p>
+
+        <div className="relative mx-auto mt-3 aspect-square w-full max-w-[260px] overflow-hidden rounded-2xl bg-black/40">
+          {galat ? (
+            <div className="flex h-full w-full items-center justify-center p-4 text-center text-[12px] text-white/80">
+              {galat}
+            </div>
+          ) : (
+            <>
+              {/* Cermin supaya terasa alami */}
+              <video
+                ref={videoRef}
+                playsInline
+                muted
+                className="h-full w-full -scale-x-100 object-cover"
+              />
+              <span className="pointer-events-none absolute inset-6 rounded-full border-2 border-white/60" />
+            </>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={ambil}
+          disabled={!siap || Boolean(galat)}
+          className="btn-tekan mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-xl font-heading text-sm font-bold text-white disabled:opacity-50"
+          style={{ background: "linear-gradient(135deg, #0EA5E9, #0369A1)" }}
+        >
+          {siap ? <ShieldCheck className="h-5 w-5" /> : <Loader2 className="h-5 w-5 animate-spin" />}
+          {siap ? "Ambil & Daftarkan" : "Menyalakan kamera…"}
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+}
