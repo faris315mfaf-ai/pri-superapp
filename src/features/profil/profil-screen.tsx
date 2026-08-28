@@ -57,7 +57,7 @@ import {
   type StatusPush,
 } from "@/lib/push";
 import type { KomponenIkon, Role, User } from "@/types";
-import { TombolLonceng } from "@/components/tombol-lonceng";
+import { LoncengDropdown } from "@/components/lonceng-dropdown";
 import { cn } from "@/lib/utils";
 import { SwitchKaca } from "./switch-kaca";
 import {
@@ -397,43 +397,72 @@ export function ProfilScreen({
   return (
     <div className="kolom-aplikasi px-4 pt-5 pb-32">
       {ultah && <ConfettiUltah />}
-      {/* Header tab utama — tanpa tombol kembali */}
-      <header className="sticky top-0 z-30 -mx-4 mb-4 flex items-center justify-between gap-3 bg-gradient-to-b from-[var(--app-bg)] via-[var(--app-bg)] to-transparent px-4 pb-3 pt-1">
-        <h1 className="font-heading text-2xl font-extrabold tracking-tight text-teks-utama">
-          Profil
-        </h1>
-        <TombolLonceng onBuka={onBukaNotifikasi} />
-        <ThemeToggle />
-      </header>
+      {/* HERO GRADIENT (fix 1.19/4.3a): lonceng dropdown di kanan
+          atas DALAM area gradient, avatar menumpuk setengah keluar. */}
+      <section
+        className="relative -mx-4 overflow-visible rounded-b-[2rem] px-4 pt-4 pb-16 text-center md:pb-20"
+        style={{
+          background:
+            "linear-gradient(150deg, #DC2626 0%, #B91C1C 55%, #7F1D1D 100%)",
+          minHeight: 200,
+        }}
+      >
+        {/* Hiasan lembut di dalam gradient */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-10 -right-10 h-44 w-44 rounded-full bg-white/10 blur-2xl"
+        />
+        <div className="relative flex items-center justify-between">
+          <h1 className="font-heading text-xl font-extrabold tracking-tight text-white">
+            Profil
+          </h1>
+          <div className="flex items-center gap-2">
+            {/* Lonceng DROPDOWN (fix 4.3b) — panel di tempat */}
+            <LoncengDropdown
+              varianTerang
+              onBukaTarget={() => onBukaNotifikasi?.()}
+            />
+            <ThemeToggle />
+          </div>
+        </div>
 
-      {/* Kartu profil kaca */}
-      <FadeInUp>
-        <div className="glass rounded-[1.25rem] px-5 py-6">
-          <div className="flex flex-col items-center text-center">
-            <button
-              type="button"
-              onClick={() => setModalFoto(true)}
-              className="btn-tekan relative rounded-full"
-              aria-label="Ganti foto profil"
+        <div className="relative mt-4 flex flex-col items-center">
+          <button
+            type="button"
+            onClick={() => setModalFoto(true)}
+            className="btn-tekan avatar-denyut relative rounded-full border-4 border-white/90 shadow-2xl"
+            aria-label="Ganti foto profil"
+          >
+            {avatarBaru || user.avatar_url ? (
+              <FotoBulat src={avatarBaru || user.avatar_url} ukuran={112} />
+            ) : (
+              <AvatarInisial nama={user.nama} ukuran={112} />
+            )}
+            {ultah && <TopiUltah />}
+            <span
+              className="absolute right-1 bottom-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white/90 text-white"
+              style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+              aria-hidden="true"
             >
-              {avatarBaru || user.avatar_url ? (
-                <FotoBulat src={avatarBaru || user.avatar_url} ukuran={108} />
-              ) : (
-                <AvatarInisial nama={user.nama} ukuran={108} />
-              )}
-              {ultah && <TopiUltah />}
-              <span
-                className="absolute right-1 bottom-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white/80 text-white dark:border-slate-900/80"
-                style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
-                aria-hidden="true"
-              >
-                <Camera className="h-3 w-3" />
-              </span>
-            </button>
-            <h2 className="mt-3.5 font-heading text-xl font-extrabold tracking-tight text-teks-utama">
-              {user.nama}
-            </h2>
-            <p className="mt-1 text-xs text-teks-sekunder">{user.email}</p>
+              <Camera className="h-3 w-3" />
+            </span>
+          </button>
+          <h2 className="mt-3 font-heading text-2xl font-extrabold tracking-tight text-white drop-shadow-sm">
+            {user.nama}
+          </h2>
+          <p className="mt-0.5 text-[12px] font-medium text-white/80">
+            @{user.email.split("@")[0]}
+            {(user.jabatan || user.divisi) &&
+              ` · ${user.jabatan || user.divisi}`}
+          </p>
+        </div>
+      </section>
+
+      {/* Kartu profil kaca — MENUMPUK ke gradient (avatar overlap) */}
+      <FadeInUp>
+        <div className="glass kartu-hover -mt-10 rounded-[1.25rem] px-5 py-6">
+          <div className="flex flex-col items-center text-center">
+            <p className="text-xs text-teks-sekunder">{user.email}</p>
             {/* Saldo koin gamifikasi (spek 1.16) — di bawah nama anggota */}
             {momen && <KoinChip saldo={momen.koin} className="mt-2.5" />}
             <span

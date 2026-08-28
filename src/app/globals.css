@@ -525,3 +525,22 @@
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
   }
 }
+
+/* Denyut halus avatar profil saat pertama tampil (fix 1.19/4.3e) */
+@keyframes denyut-avatar {
+  0% {
+    transform: scale(0.92);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.5);
+  }
+  60% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 12px rgba(255, 255, 255, 0);
+  }
+}
+.avatar-denyut {
+  border-radius: 9999px;
+  animation: denyut-avatar 700ms var(--ease-keluar) 1;
+}
