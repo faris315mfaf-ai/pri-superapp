@@ -22,8 +22,7 @@ import {
   Clock,
   History,
   Check,
-  X,
-} from "lucide-react";
+  X, UsersRound, TrendingUp } from "lucide-react";
 import {
   EmptyState,
   FadeInUp,
@@ -153,9 +152,12 @@ type FaseAnalisis = "diam" | "berjalan" | "selesai" | "latar";
 export function QcScreen({
   onBukaAkun,
   onBukaNotifikasi,
+  onBukaHalaman,
 }: {
   onBukaAkun: (akunWajib: string) => void;
   onBukaNotifikasi?: () => void;
+  /** Buka halaman HR Center (tabel-anggota / absensi-hari-ini / setel-kpi) */
+  onBukaHalaman?: (nama: string) => void;
 }) {
   // Periode
   const [periodeList, setPeriodeList] = useState<string[]>([]);
@@ -577,6 +579,31 @@ export function QcScreen({
       <AnimatePresence>
         {riwayatBuka && <RiwayatAnalisisModal onTutup={() => setRiwayatBuka(false)} />}
       </AnimatePresence>
+
+      {/* Menu halaman HR Center (spek 1.18: 2.2 / 2.4 / 2.5) */}
+      {onBukaHalaman && (
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          {(
+            [
+              ["tabel-anggota", "Database Anggota", UsersRound],
+              ["absensi-hari-ini", "Absensi Hari Ini", CalendarDays],
+              ["setel-kpi", "Setel KPI", TrendingUp],
+            ] as const
+          ).map(([id, label, Ikon]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onBukaHalaman(id)}
+              className="glass btn-tekan flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3"
+            >
+              <Ikon className="h-5 w-5 text-pri" aria-hidden="true" />
+              <span className="text-center text-[10.5px] leading-tight font-bold text-teks-utama">
+                {label}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* 1 · Periode Berjalan (spek 2.1a — bawaan terbuka) */}
       <div className="mt-4 flex flex-col gap-2.5">

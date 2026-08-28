@@ -38,6 +38,9 @@ import { LayarPerbaikan } from "@/features/perbaikan/layar-perbaikan";
 import { PilihUcapanUltah } from "@/features/notifikasi/pilih-ucapan-ultah";
 import { ModalChangelog } from "@/features/profil/modal-changelog";
 import { AcaraScreen } from "@/features/acara/acara-screen";
+import { TabelAnggotaScreen } from "@/features/pengguna/tabel-anggota-screen";
+import { AbsensiHariIniScreen } from "@/features/pengguna/absensi-hari-ini-screen";
+import { SetelKpiScreen } from "@/features/pengguna/setel-kpi-screen";
 import { modulUntukDivisi } from "@/lib/modul-divisi";
 import { KUNCI_CHANGELOG_DILIHAT } from "@/lib/changelog";
 import { VERSI_APLIKASI } from "@/lib/versi";
@@ -67,6 +70,10 @@ type SubLayar =
   // Kehadiran & kinerja (dibuka dari tab Profil)
   | { nama: "absensi" }
   | { nama: "laporan-kerja" }
+  // Halaman HR Center 1.18: tabel anggota, absensi harian, setel KPI
+  | { nama: "tabel-anggota" }
+  | { nama: "absensi-hari-ini" }
+  | { nama: "setel-kpi" }
   // Notifikasi: kini dibuka dari lonceng kanan atas, bukan tab bawah
   | { nama: "notifikasi" }
   // Panel Master — kewenangan tertinggi, hanya peran master
@@ -557,6 +564,9 @@ export default function Page() {
         kunci: "qc",
         isi: (
           <QcScreen
+            onBukaHalaman={(nama) =>
+              setSubLayar({ nama: nama as "tabel-anggota" | "absensi-hari-ini" | "setel-kpi" })
+            }
             onBukaAkun={(akunWajib) => setSubLayar({ nama: "qc-akun", akunWajib })}
             onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           />
@@ -756,6 +766,12 @@ export default function Page() {
                   <PengaturanFiturScreen onKembali={() => setSubLayar(null)} />
                 ) : subLayar.nama === "panel-master" ? (
                   <PanelMasterScreen onKembali={() => setSubLayar(null)} />
+                ) : subLayar.nama === "tabel-anggota" ? (
+                  <TabelAnggotaScreen onKembali={() => setSubLayar(null)} />
+                ) : subLayar.nama === "absensi-hari-ini" ? (
+                  <AbsensiHariIniScreen onKembali={() => setSubLayar(null)} />
+                ) : subLayar.nama === "setel-kpi" ? (
+                  <SetelKpiScreen user={user} onKembali={() => setSubLayar(null)} />
                 ) : subLayar.nama === "notifikasi" ? (
                   <NotifikasiScreen
                     onTarget={handleTarget}

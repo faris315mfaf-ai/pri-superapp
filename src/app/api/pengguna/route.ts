@@ -7,6 +7,8 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { hapusCacheUser, userDariToken, cabutSemuaSesi } from "@/lib/sesi";
+import { buatHashSandi } from "@/lib/sandi";
+import { kirimKabar } from "@/lib/notifikasi";
 import { JABATAN_PARTAI, KUOTA_JABATAN } from "@/lib/jabatan";
 import { pastikanStrukturSah } from "@/lib/struktur";
 
@@ -44,12 +46,20 @@ async function pastikanSuperAdmin(request: Request) {
 
 export async function GET(request: Request) {
   return bungkus(async () => {
-    await pastikanSuperAdmin(request);
+    // Admin HR boleh MEMBACA daftar (Database Anggota, spek 1.18/2.2);
+    // tindakan pengubah tetap dijaga per-tindakan di PATCH.
+    const pembaca = await userDariToken(tokenDari(request));
+    if (!pembaca) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
+    if (!["super_admin", "master", "admin_hr"].includes(pembaca.role)) {
+      throw Object.assign(new Error("Hanya pengurus yang boleh membuka daftar akun"), {
+        status: 403,
+      });
+    }
 
     const { data, error } = await supabase()
       .from("app_user")
       .select(
-        "id, nama, email, username, nomor_wa, role, jabatan, bidang_jabatan, divisi, sub_divisi, posisi_divisi, avatar_url, status, aktif, wa_terverifikasi, profil_lengkap, created_at, disetujui_oleh, disetujui_pada",
+        "id, nama, nama_panggilan, email, username, nomor_wa, role, jabatan, bidang_jabatan, divisi, sub_divisi, posisi_divisi, zona_id, zona:zona(nama), avatar_url, status, aktif, wa_terverifikasi, profil_lengkap, created_at, disetujui_oleh, disetujui_pada",
       )
       // Yang menunggu persetujuan ditaruh paling atas — itu yang
       // butuh tindakan, bukan sekadar daftar.
@@ -142,7 +152,8 @@ export async function PATCH(request: Request) {
         | "aktifkan"
         | "hapus"
         | "ubah_jabatan"
-        | "ubah_divisi";
+        | "ubah_divisi"
+        | "ganti_sandi";
       role?: string;
       jabatan?: string;
       bidang?: string;
@@ -155,8 +166,10 @@ export async function PATCH(request: Request) {
     const kepalaDivisi = pemanggil.posisi_divisi === "kepala" && Boolean(pemanggil.divisi);
     if (!adminPenuh) {
       const bolehTerbatas =
-        body.tindakan === "ubah_divisi" &&
-        (pemanggil.role === "admin_hr" || kepalaDivisi);
+        (body.tindakan === "ubah_divisi" &&
+          (pemanggil.role === "admin_hr" || kepalaDivisi)) ||
+        // Ganti sandi (spek 1.18/2.2): HR juga boleh — dgn jejak audit.
+        (body.tindakan === "ganti_sandi" && pemanggil.role === "admin_hr");
       if (!bolehTerbatas) {
         throw Object.assign(new Error("Hanya super admin yang boleh mengatur akun"), {
           status: 403,
@@ -218,6 +231,49 @@ export async function PATCH(request: Request) {
     const perubahan: Record<string, unknown> = {};
 
     switch (body.tindakan) {
+      // --- Ganti sandi anggota (spek 1.18/2.2: HR/super/master) ---
+      case "ganti_sandi": {
+        const sandiBaru = String(body.role ?? ""); // dititipkan di kolom role
+        if (sandiBaru.length < 8) {
+          throw Object.assign(new Error("Sandi baru minimal 8 karakter."), { status: 400 });
+        }
+        const { data: target } = await db
+          .from("app_user")
+          .select("id, nama, role")
+          .eq("id", id)
+          .maybeSingle();
+        if (!target) throw Object.assign(new Error("Akun tidak ditemukan."), { status: 404 });
+        if (target.role === "master") {
+          throw Object.assign(new Error("Sandi master tidak bisa diganti dari sini."), {
+            status: 403,
+          });
+        }
+        const { error: eSandi } = await db
+          .from("app_user")
+          .update({ password_hash: await buatHashSandi(sandiBaru) })
+          .eq("id", id);
+        if (eSandi) throw new Error("Gagal mengganti sandi.");
+        await cabutSemuaSesi(id);
+        await hapusCacheUser(id);
+        // JEJAK AUDIT (spek): siapa mengganti sandi siapa.
+        await db.from("log_audit").insert({
+          aktor_id: Number(pemanggil.id),
+          aktor_nama: pemanggil.nama,
+          aksi: "ganti_sandi",
+          target_id: id,
+          target_nama: target.nama,
+          detail: "Sandi diganti lewat Database Anggota; semua sesi target dicabut.",
+        });
+        await kirimKabar({
+          judul: "Sandi akun Anda diganti pengurus",
+          isi: "Masuk lagi dengan sandi baru dari pengurus.",
+          kategori: "peringatan",
+          jenis_peristiwa: "keamanan",
+          untukUserIds: [id],
+        });
+        return { sukses: true };
+      }
+
       case "setujui": {
         const peran = (body.role ?? "anggota") as Peran;
         if (!PERAN_SAH.includes(peran)) {

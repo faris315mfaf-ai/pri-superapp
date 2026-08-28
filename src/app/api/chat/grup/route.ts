@@ -21,6 +21,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { after } from "next/server";
+import { anggotaGrupDivisi, bolehIkutGrupDivisi } from "@/lib/zona";
 
 export const dynamic = "force-dynamic";
 
@@ -163,6 +164,11 @@ export async function GET(request: Request) {
 
     const divisi = (user.divisi ?? "").trim();
     if (!divisi) return { divisi: "", anggota: 0, data: [] };
+    // Aturan zona (spek 1.18/2.6): anggota di luar cakupan zona ketua
+    // divisinya tidak tergabung di grup — layarnya seperti tanpa grup.
+    if (!(await bolehIkutGrupDivisi(idKu, divisi))) {
+      return { divisi: "", anggota: 0, data: [] };
+    }
 
     // --- Daftar anggota grup saya (spek 1.15) ---
     if (url.searchParams.get("anggota") === "1") {
@@ -175,9 +181,14 @@ export async function GET(request: Request) {
         .order("posisi_divisi", { ascending: false }) // kepala duluan
         .order("nama")
         .limit(300);
+      // Saring per cakupan zona ketua (spek 2.6); null = tanpa saringan.
+      const zonaAnggota = await anggotaGrupDivisi(divisi);
+      const tersaring = (para ?? []).filter(
+        (a) => zonaAnggota === null || zonaAnggota.has(Number(a.id)),
+      );
       return {
         divisi,
-        data: (para ?? []).map((a) => ({
+        data: tersaring.map((a) => ({
           id: String(a.id),
           nama: a.nama,
           avatar_url: a.avatar_url ?? "",
@@ -268,6 +279,13 @@ export async function POST(request: Request) {
       if (!divisi) {
         throw Object.assign(
           new Error("Anda belum terdaftar di divisi mana pun."),
+          { status: 403 },
+        );
+      }
+      // Aturan zona (spek 1.18/2.6): di luar cakupan = tidak bisa kirim.
+      if (!(await bolehIkutGrupDivisi(idKu, divisi))) {
+        throw Object.assign(
+          new Error("Anda berada di luar cakupan zona grup divisi ini."),
           { status: 403 },
         );
       }

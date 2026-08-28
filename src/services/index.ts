@@ -437,6 +437,11 @@ export async function gantiFotoProfil(foto: string): Promise<UserLengkap> {
 export type PenggunaAdmin = {
   id: string;
   nama: string;
+  /** Nama panggilan (spek 1.18/2.2 tabel Database Anggota) */
+  nama_panggilan?: string | null;
+  /** Zona anggota (embed dari tabel zona) */
+  zona_id?: string | number | null;
+  zona?: { nama?: string } | { nama?: string }[] | null;
   email: string;
   username: string | null;
   nomor_wa: string | null;
@@ -480,6 +485,7 @@ export async function ubahPengguna(
     | "nonaktifkan"
     | "aktifkan"
     | "hapus"
+    | "ganti_sandi"
     | "ubah_jabatan"
     | "ubah_divisi",
   role?: string,
@@ -2893,4 +2899,107 @@ export async function sinkronSosmedTvr(): Promise<{
     tersinkron: Number(json.tersinkron ?? 0),
     konflik: (json.konflik ?? []) as string[],
   };
+}
+
+// ------------------------------------------------------------
+// Zona (spek 1.18/2.6) & Setel KPI (spek 1.18/2.5)
+// ------------------------------------------------------------
+
+export type Zona = { id: string; nama: string; parent_id: string | null };
+
+export async function getZona(): Promise<Zona[]> {
+  const json = await fetchJson("/api/zona", { headers: headerToken() });
+  return (json.data ?? []) as Zona[];
+}
+
+export async function tambahZona(nama: string, parentId?: string): Promise<void> {
+  await fetchJson("/api/zona", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ nama, parent_id: parentId ?? null }),
+  });
+}
+
+export async function tetapkanZonaAnggota(userId: string, zonaId: string | null): Promise<void> {
+  await fetchJson("/api/zona", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ user_id: userId, zona_id: zonaId }),
+  });
+}
+
+export type KpiTugas = {
+  id: string;
+  judul: string;
+  deskripsi: string;
+  divisi: string;
+  tanggal_mulai: string;
+  tenggat: string;
+  prioritas: "rendah" | "sedang" | "tinggi" | "kritis";
+  target_indikator: string;
+  untuk_semua: boolean;
+  status: "aktif" | "selesai" | "expired";
+  progress: number;
+  catatan_progress: string;
+  target_ids: string[];
+};
+
+export async function getKpiTugas(status = "semua"): Promise<{
+  boleh_kelola: boolean;
+  kelola_semua: boolean;
+  data: KpiTugas[];
+}> {
+  const json = await fetchJson(`/api/kpi?status=${encodeURIComponent(status)}`, {
+    headers: headerToken(),
+  });
+  return {
+    boleh_kelola: json.boleh_kelola === true,
+    kelola_semua: json.kelola_semua === true,
+    data: (json.data ?? []) as KpiTugas[],
+  };
+}
+
+export async function tambahKpiTugas(isi: {
+  judul: string;
+  deskripsi: string;
+  divisi?: string;
+  tanggal_mulai?: string;
+  tenggat: string;
+  prioritas: string;
+  target_indikator?: string;
+  untuk_semua: boolean;
+  target_ids?: string[];
+}): Promise<void> {
+  await fetchJson("/api/kpi", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(isi),
+  });
+}
+
+export async function ubahKpiTugas(
+  id: string,
+  perubahan: Partial<{
+    judul: string;
+    deskripsi: string;
+    tenggat: string;
+    prioritas: string;
+    progress: number;
+    catatan: string;
+    status: string;
+  }>,
+): Promise<void> {
+  await fetchJson("/api/kpi", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id, ...perubahan }),
+  });
+}
+
+export async function hapusKpiTugas(id: string): Promise<void> {
+  await fetchJson("/api/kpi", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id }),
+  });
 }
