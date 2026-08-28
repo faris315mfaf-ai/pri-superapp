@@ -18,6 +18,11 @@ import { kirimKabar } from "@/lib/notifikasi";
 
 export const dynamic = "force-dynamic";
 
+// Tugas video TV Rakyat hanya boleh diberikan ke anggota Divisi TV
+// Rakyat (fitur 1.22/bug 7). Nama divisinya harus sama persis dengan
+// yang ada di lib/struktur.DIVISI.
+const DIVISI_TV = "Divisi TV Rakyat";
+
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
   return h.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : "";
@@ -72,6 +77,39 @@ export async function GET(request: Request) {
     const user = await pastikanMasuk(request);
     const db = supabase();
 
+    // Daftar KANDIDAT penerima (fitur 1.22/bug 7): khusus Pimred, hanya
+    // anggota aktif yang divisinya Divisi TV Rakyat. Ini yang mengisi
+    // dropdown "Bagi Tugas" — anggota divisi lain tak akan muncul.
+    if (new URL(request.url).searchParams.get("kandidat") === "1") {
+      if (!adalahPimred(user)) {
+        throw Object.assign(
+          new Error("Hanya Pimpinan Redaksi yang boleh melihat kandidat tugas."),
+          { status: 403 },
+        );
+      }
+      const { data, error } = await db
+        .from("app_user")
+        .select("id, nama, nama_panggilan, jabatan")
+        .eq("divisi", DIVISI_TV)
+        .eq("aktif", true)
+        .eq("status", "aktif")
+        .neq("role", "master")
+        .order("nama");
+      if (error) {
+        console.error("[tv/tugas] kandidat:", error.message);
+        throw new Error("Gagal memuat kandidat anggota.");
+      }
+      return {
+        data: (data ?? [])
+          .filter((a) => Number(a.id) !== Number(user.id))
+          .map((a) => ({
+            id: String(a.id),
+            nama: a.nama_panggilan || a.nama || "",
+            jabatan: a.jabatan ?? "",
+          })),
+      };
+    }
+
     let q = db
       .from("tugas_link")
       .select(KOLOM)
@@ -120,13 +158,22 @@ export async function POST(request: Request) {
     const db = supabase();
     const { data: target } = await db
       .from("app_user")
-      .select("id, nama, aktif, status")
+      .select("id, nama, aktif, status, divisi")
       .eq("id", targetId)
       .maybeSingle();
     if (!target || !target.aktif || target.status !== "aktif") {
       throw Object.assign(new Error("Anggota penerima tidak ditemukan/nonaktif."), {
         status: 404,
       });
+    }
+    // Anti-cheat (fitur 1.22/bug 7): tolak di server bila target bukan
+    // anggota Divisi TV Rakyat — walau dropdown sudah menyaring, klien
+    // tak boleh jadi satu-satunya penjaga.
+    if (String(target.divisi ?? "").trim() !== DIVISI_TV) {
+      throw Object.assign(
+        new Error("Tugas hanya boleh diberikan ke anggota Divisi TV Rakyat."),
+        { status: 400 },
+      );
     }
 
     const { data: baris, error } = await db

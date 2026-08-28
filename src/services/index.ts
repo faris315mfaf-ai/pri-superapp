@@ -2553,6 +2553,18 @@ export async function beriTugasLink(data: {
   });
 }
 
+export type KandidatTugasTv = { id: string; nama: string; jabatan: string };
+
+/**
+ * Kandidat penerima tugas TV Rakyat (fitur 1.22/bug 7): HANYA anggota
+ * aktif berdivisi "Divisi TV Rakyat". Dipakai dropdown Bagi Tugas —
+ * server juga menolak target di luar divisi ini.
+ */
+export async function getKandidatTugasTv(): Promise<KandidatTugasTv[]> {
+  const json = await fetchJson("/api/tv/tugas?kandidat=1", { headers: headerToken() });
+  return (json.data ?? []) as KandidatTugasTv[];
+}
+
 export async function batalkanTugasLink(id: string): Promise<void> {
   await fetchJson("/api/tv/tugas", {
     method: "PATCH",
