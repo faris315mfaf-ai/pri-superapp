@@ -99,8 +99,10 @@ const TAB_ROLE: Record<Role, KunciTab[]> = {
   super_admin: ["beranda", "qc", "chat", "profil"],
   admin_hr: ["qc", "chat", "profil"],
   admin_tv: ["tv", "chat", "profil"],
-  ketua: ["beranda", "konten", "tvrku", "chat", "profil"],
-  anggota: ["beranda", "konten", "tvrku", "chat", "profil"],
+  // Tab Konten DIHAPUS dari navigasi (fix 1.19/4.2) — kontennya
+  // pindah ke seksi lipat di Beranda.
+  ketua: ["beranda", "tvrku", "chat", "profil"],
+  anggota: ["beranda", "tvrku", "chat", "profil"],
 };
 
 const berlanggananKosong = () => () => {};

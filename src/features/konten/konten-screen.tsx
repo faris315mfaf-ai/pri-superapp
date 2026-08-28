@@ -48,10 +48,13 @@ const JEDA_SEGARKAN_MS = 5 * 60_000;
 const JEDA_MINIMUM_MS = 30_000;
 
 export function KontenScreen({
+  terbenam = false,
   user,
   onBukaLaporanKerja,
   onBukaNotifikasi,
 }: {
+  /** true = tampil sebagai seksi di Beranda (tanpa header sendiri) */
+  terbenam?: boolean;
   user: User;
   onBukaLaporanKerja?: () => void;
   onBukaNotifikasi?: () => void;
@@ -183,7 +186,8 @@ export function KontenScreen({
     daftar?.reduce((jumlah, a) => jumlah + a.postingan.length, 0) ?? 0;
 
   return (
-    <div className="kolom-aplikasi px-4 pb-32">
+    <div className={terbenam ? "" : "kolom-aplikasi px-4 pb-32"}>
+      {!terbenam && (
       <header className="flex items-start justify-between gap-3 pt-5">
         <div className="min-w-0">
           <p className="text-xs text-teks-sekunder">Selamat datang,</p>
@@ -215,6 +219,7 @@ export function KontenScreen({
         <ThemeToggle />
         </div>
       </header>
+      )}
 
       {/* Beranda anggota: pengumuman terbaru + KPI kerja + wajib komentar */}
       <BerandaAnggotaPanel user={user} onBukaLaporanKerja={onBukaLaporanKerja} />

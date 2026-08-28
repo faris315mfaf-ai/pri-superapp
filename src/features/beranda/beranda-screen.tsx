@@ -22,8 +22,7 @@ import {
   CalendarCheck,
   ClipboardList,
   MessageCircle,
-  Video,
-} from "lucide-react";
+  Video, Megaphone, Newspaper } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { FadeInUp, StatusBadge, ThemeToggle } from "@/components/pri-ui";
 import { ProgressRing } from "@/components/progress-ring";
@@ -31,6 +30,8 @@ import { TombolLonceng } from "@/components/tombol-lonceng";
 import { IkonStreak } from "@/components/ikon-streak";
 import { useAppStore } from "@/hooks/use-app-store";
 import { KartuPengumumanTerbaru } from "@/features/konten/beranda-anggota";
+import { KontenScreen } from "@/features/konten/konten-screen";
+import { SeksiLipat } from "@/components/seksi-lipat";
 import { KartuUltah } from "@/components/ultah";
 import { JamDigital } from "@/components/jam-digital";
 import { KartuVideoBaru } from "./kartu-video-baru";
@@ -198,8 +199,14 @@ export function BerandaScreen({
       {/* Ulang tahun hari ini */}
       <KartuUltah idKu={user.id} />
 
-      {/* Pengumuman */}
-      {boleh("beranda.pengumuman") && <KartuPengumumanTerbaru />}
+      {/* 1 · Pengumuman — seksi lipat, bawaan TERBUKA (fix 4.2) */}
+      {boleh("beranda.pengumuman") && (
+        <div className="mt-4">
+          <SeksiLipat id="beranda-pengumuman" judul="Pengumuman" ikon={Megaphone} bawaanTerbuka>
+            <KartuPengumumanTerbaru />
+          </SeksiLipat>
+        </div>
+      )}
 
       {/* Status kehadiran */}
       {mauAbsen && (
@@ -280,6 +287,15 @@ export function BerandaScreen({
           )}
         </div>
       </FadeInUp>
+
+      {/* 2-4 · Kerja Hari Ini / Wajib Komentar tetap sebagai kartu KPI
+          ringkas di atas; seksi KONTEN penuh (pindahan tab Konten —
+          fix 4.2) tampil terlipat di bawah ini. */}
+      <div className="mt-4">
+        <SeksiLipat id="beranda-konten" judul="Konten" ikon={Newspaper} keterangan="Konten terbaru akun resmi partai">
+          <KontenScreen user={user} terbenam onBukaLaporanKerja={onBukaLaporanKerja} />
+        </SeksiLipat>
+      </div>
 
       {/* Kewajiban komen & share video TV Rakyat terbaru */}
       <KartuVideoBaru />
