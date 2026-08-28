@@ -24,9 +24,11 @@ import {
   Bot,
   Bug,
   Crown,
+  Database,
   Loader2,
   LogOut,
   Plus,
+  RefreshCw,
   ShieldCheck,
   Trash2,
   UserCog,
@@ -47,12 +49,16 @@ import { PlatformIcon } from "@/components/platform-icon";
 import { toast } from "@/hooks/use-app-store";
 import {
   aksiMaster,
+  getBasisAI,
   getDataMaster,
   getLatihAsisten,
   getPengguna,
+  refreshBasisAI,
+  simpanCatatanBasisAI,
   simpanLatihAsisten,
   type DataMaster,
   type PenggunaAdmin,
+  type StatusBasisAI,
   getFotoMaster,
   type FotoMaster,
 } from "@/services";
@@ -350,6 +356,11 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
           {/* 4. Latih Asisten AI (fitur 1.20.2) — khusus master */}
           <FadeInUp delay={0.16}>
             <SeksiLatihAsisten />
+          </FadeInUp>
+
+          {/* 5. Basis Pengetahuan AI (fitur 1.20.4) — khusus master */}
+          <FadeInUp delay={0.18}>
+            <SeksiBasisPengetahuan />
           </FadeInUp>
         </>
       )}
@@ -770,6 +781,171 @@ function SeksiLatihAsisten() {
               >
                 {menyimpan && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 Simpan Pelatihan
+              </button>
+            </div>
+          </>
+        )}
+      </GlassCard>
+    </>
+  );
+}
+
+// ------------------------------------------------------------
+// SeksiBasisPengetahuan (fitur 1.20.4) — "database besar khusus"
+// yang dilihat AI: snapshot terstruktur SELURUH data, disegarkan
+// otomatis tiap jam (saat AI membacanya). Master bisa memaksa
+// refresh, melihat ringkasan cakupan, dan menulis CATATAN MANUAL
+// (fakta tambahan) yang selalu digabung segar.
+// ------------------------------------------------------------
+
+function SeksiBasisPengetahuan() {
+  const [basis, setBasis] = useState<StatusBasisAI | null>(null);
+  const [catatan, setCatatan] = useState("");
+  const [memuat, setMemuat] = useState(true);
+  const [menyegarkan, setMenyegarkan] = useState(false);
+  const [menyimpan, setMenyimpan] = useState(false);
+
+  async function muat() {
+    try {
+      const hasil = await getBasisAI();
+      setBasis(hasil);
+      setCatatan(hasil.catatan);
+    } catch (e) {
+      toast("error", "Gagal memuat basis", e instanceof Error ? e.message : "");
+    } finally {
+      setMemuat(false);
+    }
+  }
+
+  useEffect(() => {
+    let hidup = true;
+    void (async () => {
+      const hasil = await getBasisAI().catch(() => null);
+      if (!hidup) return;
+      if (hasil) {
+        setBasis(hasil);
+        setCatatan(hasil.catatan);
+      }
+      setMemuat(false);
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, []);
+
+  async function segarkan() {
+    if (menyegarkan) return;
+    setMenyegarkan(true);
+    try {
+      await refreshBasisAI();
+      await muat();
+      toast("sukses", "Basis pengetahuan disegarkan", "AI kini melihat data terbaru.");
+    } catch (e) {
+      toast("error", "Gagal menyegarkan", e instanceof Error ? e.message : "");
+    } finally {
+      setMenyegarkan(false);
+    }
+  }
+
+  async function simpanCatatan() {
+    if (menyimpan) return;
+    setMenyimpan(true);
+    try {
+      await simpanCatatanBasisAI(catatan);
+      toast("sukses", "Catatan tersimpan", "Fakta ini kini dilihat AI di setiap percakapan.");
+    } catch (e) {
+      toast("error", "Gagal menyimpan catatan", e instanceof Error ? e.message : "");
+    } finally {
+      setMenyimpan(false);
+    }
+  }
+
+  const cakupan = basis ? Object.keys(basis.konten).filter((k) => k !== "dibuat_pada" && k !== "tanggal") : [];
+  const umur = basis?.umur_menit;
+  const umurTeks =
+    umur == null ? "belum pernah" : umur < 1 ? "baru saja" : umur < 60 ? `${umur} menit lalu` : `${Math.floor(umur / 60)} jam lalu`;
+
+  return (
+    <>
+      <SectionTitle judul="Basis Pengetahuan AI" className="mt-6" />
+      <GlassCard className="p-4">
+        <div className="flex items-start gap-2.5">
+          <span
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
+            style={{ background: "linear-gradient(135deg, #0EA5E9, #0369A1)" }}
+            aria-hidden="true"
+          >
+            <Database className="h-4.5 w-4.5" />
+          </span>
+          <p className="text-[11.5px] leading-relaxed text-teks-sekunder">
+            Satu ringkasan TERSTRUKTUR seluruh data partai (keanggotaan, absensi,
+            KPI, kepatuhan, TV Rakyat, koin, rencana, acara, dll) yang dilihat AI
+            secara utuh. Disegarkan otomatis tiap jam saat AI membacanya.
+          </p>
+        </div>
+
+        {memuat ? (
+          <GlassSkeleton className="mt-3 h-24 rounded-xl" />
+        ) : (
+          <>
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-black/5 px-3 py-2.5 dark:bg-white/5">
+              <div className="min-w-0">
+                <p className="text-[12px] font-bold text-teks-utama">
+                  {cakupan.length} kategori data
+                </p>
+                <p className="text-[10.5px] text-teks-sekunder">Diperbarui {umurTeks}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void segarkan()}
+                disabled={menyegarkan}
+                className="btn-tekan flex h-9 items-center gap-1.5 rounded-xl px-3 text-[11.5px] font-bold text-white disabled:opacity-60"
+                style={{ background: "linear-gradient(135deg, #0EA5E9, #0369A1)" }}
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", menyegarkan && "animate-spin")} aria-hidden="true" />
+                Perbarui
+              </button>
+            </div>
+
+            {cakupan.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {cakupan.map((k) => (
+                  <span
+                    key={k}
+                    className="rounded-full bg-sky-500/12 px-2 py-0.5 text-[9.5px] font-semibold text-sky-600 dark:text-sky-400"
+                  >
+                    {k}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <p className="mt-4 mb-1.5 text-[11px] font-bold text-teks-utama">
+              Catatan / Fakta Tambahan
+            </p>
+            <textarea
+              value={catatan}
+              onChange={(e) => setCatatan(e.target.value.slice(0, basis?.maks_catatan ?? 8000))}
+              rows={5}
+              placeholder={
+                "Tulis fakta/pengetahuan yang tidak ada di database, mis:\n- Sekretariat DPP: Jl. Merdeka No. 1, Jakarta.\n- Target rekrutmen kuartal ini: 500 kader.\n- Narahubung media: 0812-xxxx."
+              }
+              aria-label="Catatan tambahan Basis Pengetahuan"
+              className="glass-input w-full rounded-xl px-3 py-2.5 text-[12.5px] leading-relaxed text-teks-utama placeholder:text-teks-sekunder/60"
+            />
+            <div className="mt-2 flex items-center justify-between">
+              <span className="angka-tab text-[10.5px] text-teks-sekunder">
+                {catatan.length}/{basis?.maks_catatan ?? 8000}
+              </span>
+              <button
+                type="button"
+                onClick={() => void simpanCatatan()}
+                disabled={menyimpan}
+                className="btn-tekan flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold text-white disabled:opacity-60"
+                style={{ background: "linear-gradient(135deg, #0EA5E9, #0369A1)" }}
+              >
+                {menyimpan && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                Simpan Catatan
               </button>
             </div>
           </>

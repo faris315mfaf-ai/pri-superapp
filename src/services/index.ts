@@ -2223,6 +2223,40 @@ export async function setAksesAsisten(role: string, aktif: boolean): Promise<voi
   });
 }
 
+export type StatusBasisAI = {
+  ada: boolean;
+  diperbarui_pada: string | null;
+  umur_menit: number | null;
+  konten: Record<string, unknown>;
+  catatan: string;
+  maks_catatan: number;
+};
+
+/** Status + isi Basis Pengetahuan AI (master). */
+export async function getBasisAI(): Promise<StatusBasisAI> {
+  const json = await fetchJson("/api/asisten/basis", { headers: headerToken() });
+  return json as StatusBasisAI;
+}
+
+/** Paksa refresh snapshot Basis Pengetahuan sekarang (master). */
+export async function refreshBasisAI(): Promise<string> {
+  const json = await fetchJson("/api/asisten/basis", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "refresh" }),
+  });
+  return (json?.disegarkan ?? "") as string;
+}
+
+/** Simpan catatan manual (fakta tambahan) ke Basis Pengetahuan (master). */
+export async function simpanCatatanBasisAI(teks: string): Promise<void> {
+  await fetchJson("/api/asisten/basis", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "catatan", teks }),
+  });
+}
+
 /** Instruksi pelatihan Asisten AI saat ini (master). */
 export async function getLatihAsisten(): Promise<{ instruksi: string; maks: number }> {
   const json = await fetchJson("/api/asisten/latih", { headers: headerToken() });

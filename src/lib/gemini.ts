@@ -13,6 +13,7 @@
 import { supabase } from "@/lib/supabase";
 import { kirimKabar } from "@/lib/notifikasi";
 import { DIVISI } from "@/lib/struktur";
+import { bacaBasis } from "@/lib/asisten-basis";
 
 // Bawaan DIVERIFIKASI terhadap kunci user 28 Agu 2026: generasi 2.5
 // sudah ditutup untuk pengguna baru; 3.6-flash teruji menjawab, dan
@@ -124,6 +125,12 @@ function tanggalSah(t: unknown): string {
 }
 
 export const DEKLARASI_ALAT = [
+  {
+    name: "baca_basis_pengetahuan",
+    description:
+      "Ambil GAMBARAN MENYELURUH seluruh sistem partai dalam satu objek terstruktur: keanggotaan (total, per peran, per divisi, kelengkapan data), absensi hari ini, KPI video, kepatuhan komentar, statistik TV Rakyat 7 hari, koin, rencana KPI aktif, acara mendatang, akun wajib QC, struktur divisi, serta CATATAN internal dari pengurus. Panggil ini untuk pertanyaan LUAS/umum atau saat butuh konteks lengkap; data disegarkan otomatis tiap jam.",
+    parameters: { type: "object", properties: {} },
+  },
   {
     name: "ringkasan_absensi",
     description:
@@ -281,6 +288,18 @@ export async function jalankanAlat(
   }
 
   switch (nama) {
+    case "baca_basis_pengetahuan": {
+      // Gambaran menyeluruh (fitur 1.20.4) — disegarkan otomatis tiap
+      // jam di dalam bacaBasis(). Catatan pengurus digabung segar.
+      const b = await bacaBasis();
+      return {
+        data: b.konten,
+        catatan_internal: b.catatan || "(belum ada catatan)",
+        disegarkan: b.diperbarui_pada,
+        umur_menit: b.umur_menit,
+      };
+    }
+
     // ---------- ALAT KHUSUS MASTER (fitur 1.20.2) ----------
     case "detail_anggota": {
       const q = String(args.nama ?? "").trim().slice(0, 60);

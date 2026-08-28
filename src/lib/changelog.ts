@@ -18,6 +18,16 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "1.20.4",
+    tanggal: "28 Agustus 2026",
+    judul: "Basis Pengetahuan AI — data lengkap & terstruktur",
+    poin: [
+      "AI kini melihat SATU ringkasan menyeluruh seluruh data partai (keanggotaan, absensi, KPI, kepatuhan, TV Rakyat, koin, rencana, acara) — disegarkan otomatis tiap jam",
+      "Panel Master → Basis Pengetahuan AI: pantau kesegaran, tombol Perbarui, & tulis CATATAN/fakta tambahan yang langsung dilihat AI",
+      "Jawaban asisten jadi jauh lebih lengkap & akurat untuk pertanyaan luas",
+    ],
+  },
+  {
     versi: "1.20.3",
     tanggal: "28 Agustus 2026",
     judul: "Asisten mengenali jabatan Anda + teks percakapan suara",
