@@ -19,7 +19,7 @@ export async function GET(request: Request) {
         .select(
           // hasil_render_url ikut diambil supaya baris riwayat bisa langsung
           // diklik untuk memutar videonya tanpa permintaan tambahan.
-          "id, judul, link, jenis, video_asli, caption_asli, caption_platform, judul_overlay, highlight, status, link_instagram, thumbnail_url, jam_tanggal, platform_terunggah, hasil_render_url, digenerate_oleh, persetujuan, persetujuan_oleh, sumber_upload, diupload_oleh",
+          "id, judul, link, jenis, video_asli, caption_asli, caption_platform, judul_overlay, highlight, status, link_instagram, thumbnail_url, jam_tanggal, platform_terunggah, hasil_render_url, digenerate_oleh, persetujuan, persetujuan_oleh, sumber_upload, diupload_oleh, ayrshare_hasil",
         )
         .order("jam_tanggal", { ascending: false })
         .limit(100),

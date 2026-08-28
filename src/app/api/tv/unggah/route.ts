@@ -10,6 +10,7 @@
 // sehingga caption khusus tiap platform yang disunting admin terpakai
 // dalam SATU permintaan, bukan mengunggah videonya berkali-kali.
 import { supabase } from "@/lib/supabase";
+import { pesanBagikanVideo } from "@/lib/format";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { bolehProsesVideo } from "@/types";
@@ -20,6 +21,40 @@ import { kirimKabar } from "@/lib/notifikasi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Siarkan video yang baru tayang ke RUANG CHAT grup Divisi TV Rakyat
+ * (spek 1.18/1.3) — format pesan sama dgn tombol Bagikan (semua
+ * platform + "Belum diupload"), atas nama TV Rakyat Official.
+ *
+ * - Dilewati bila toggle tvr_auto_broadcast dimatikan Pimred.
+ * - TIDAK melempar: kegagalan siaran tidak boleh menggagalkan unggah
+ *   yang sudah sukses. Tidak ada loop: menulis chat_pesan_grup tidak
+ *   memicu apa pun (tidak ada trigger di tabel itu).
+ */
+async function siarkanKeRuangChat(
+  pengirimId: number,
+  judul: string,
+  tautan: { platform: string; url: string }[],
+): Promise<void> {
+  try {
+    const db = supabase();
+    const { data: setelan } = await db
+      .from("pengaturan_sistem")
+      .select("nilai")
+      .eq("kunci", "tvr_auto_broadcast")
+      .maybeSingle();
+    if (setelan?.nilai === "false") return; // dimatikan Pimred
+
+    await db.from("chat_pesan_grup").insert({
+      divisi: "Divisi TV Rakyat",
+      pengirim_id: pengirimId,
+      isi: pesanBagikanVideo(judul, tautan),
+    });
+  } catch (e) {
+    console.error("[tv/unggah] siaran ruang chat:", e);
+  }
+}
 // Mengunggah video ke Instagram/YouTube lewat Ayrshare bisa memakan
 // puluhan detik. Bawaan Vercel (10 detik) akan memutusnya di tengah
 // jalan — video telanjur terkirim tapi aplikasi melaporkan gagal.
@@ -210,6 +245,13 @@ export async function POST(request: Request) {
     // ---- Pasca-posting (hanya bila ADA yang benar-benar tayang) ----
     if (berhasil.length > 0) {
       const judulTampil = video.judul_overlay || video.judul || kode;
+
+      // 0. Siaran ke ruang chat grup TV Rakyat (spek 1.18/1.3).
+      await siarkanKeRuangChat(
+        Number(pengguna.id),
+        judulTampil,
+        berhasil.map((h) => ({ platform: h.platform, url: h.postUrl })),
+      );
 
       // 1. Kewajiban gugur: tugas link yang tertaut jadi SELESAI.
       if (video.tugas_id) {

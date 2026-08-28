@@ -26,18 +26,23 @@ import {
   tambahAnggotaTv,
   type AnggotaTv,
   type KandidatTv,
+  setAutoBroadcastTv,
 } from "@/services";
 
 export function KelolaTimPanel() {
   const [tim, setTim] = useState<AnggotaTv[] | null>(null);
   const [kandidat, setKandidat] = useState<KandidatTv[]>([]);
   const [cari, setCari] = useState("");
+  // Siaran otomatis upload -> ruang chat (spek 1.18/1.3)
+  const [siaran, setSiaran] = useState(true);
+  const [sedangSiaran, setSedangSiaran] = useState(false);
   const [tambahBuka, setTambahBuka] = useState(false);
   const [sibuk, setSibuk] = useState<string | null>(null);
 
   async function muat() {
     try {
       const hasil = await getKelolaTimTv();
+      setSiaran(hasil.auto_broadcast);
       setTim(hasil.tim);
       setKandidat(hasil.kandidat);
     } catch (e) {
@@ -103,6 +108,41 @@ export function KelolaTimPanel() {
   return (
     <FadeInUp delay={0.06} className="mt-4">
       <SectionTitle judul="Tim TV Rakyat" />
+
+      {/* Toggle siaran otomatis (spek 1.18/1.3) — khusus Pimred */}
+      <GlassCard className="mb-3 flex items-center gap-3 p-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-teks-utama">
+            Kirim notifikasi upload video ke ruangan chat
+          </p>
+          <p className="mt-0.5 text-[11px] leading-snug text-teks-sekunder">
+            Setiap video tayang, tautannya otomatis disiarkan ke grup chat
+            Divisi TV Rakyat atas nama TV Rakyat Official.
+          </p>
+        </div>
+        <SwitchKaca
+          aktif={siaran}
+          onUbah={() => {
+            if (sedangSiaran) return;
+            setSedangSiaran(true);
+            const baru = !siaran;
+            void setAutoBroadcastTv(baru)
+              .then(() => {
+                setSiaran(baru);
+                toast(
+                  "sukses",
+                  baru ? "Siaran otomatis MENYALA" : "Siaran otomatis DIMATIKAN",
+                );
+              })
+              .catch((e) =>
+                toast("error", "Gagal menyimpan", e instanceof Error ? e.message : ""),
+              )
+              .finally(() => setSedangSiaran(false));
+          }}
+          labelAria="Siaran otomatis upload ke ruang chat"
+        />
+      </GlassCard>
+
       <GlassCard className="p-4">
         <div className="flex items-center gap-2">
           <Users2 className="h-4 w-4 text-pri" aria-hidden="true" />

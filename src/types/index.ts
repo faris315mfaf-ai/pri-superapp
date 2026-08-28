@@ -131,6 +131,8 @@ export type VideoAntrian = {
   highlight: string;
   status: string; // "MENUNGGU DOKSLI" | "SEDANG DIPROSES" | "SUDAH DIPROSES" | "GAGAL"
   link_instagram: string;
+  /** Hasil unggah Ayrshare per platform — sumber tautan bagikan (1.18) */
+  ayrshare_hasil?: { platform?: string; postUrl?: string }[] | null;
   thumbnail_url: string;
   jam_tanggal: string; // ISO 8601
   platform_terunggah: string[];

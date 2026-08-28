@@ -140,17 +140,23 @@ export function labelPlatformBesar(platform: string): string {
  * padahal satu video tayang di banyak platform sekaligus — penerima
  * jadi tidak tahu ada versi lainnya.
  */
+/** Urutan platform tetap pada pesan bagikan (spek 1.18/1.3). */
+const URUTAN_BAGIKAN = ["instagram", "tiktok", "facebook", "youtube", "threads"] as const;
+
 export function pesanBagikanVideo(
   judul: string,
   tautan: { platform: string; url: string }[],
 ): string {
-  const bagian = tautan
-    .filter((t) => t.url)
-    .map((t) => `${labelPlatformBesar(t.platform)}\n${t.url}`)
-    .join("\n\n");
-  const kepala = `🎬 Video baru TV Rakyat: "${judul}"`;
-  const ekor = "\n\nYuk ditonton, dikomentari, dan dibagikan 🙏";
-  return bagian ? `${kepala}\n\n${bagian}${ekor}` : `${kepala}${ekor}`;
+  // SEMUA platform selalu ditulis dalam urutan tetap; yang belum ada
+  // tautannya ditandai "Belum diupload" — bukan dihilangkan (spek).
+  const per = new Map(tautan.map((t) => [t.platform.toLowerCase(), t.url]));
+  const bagian = URUTAN_BAGIKAN.map(
+    (p) => `${labelPlatformBesar(p)}:\n${per.get(p) || "Belum diupload"}`,
+  ).join("\n\n");
+  // Pengirim ditampilkan sebagai TV Rakyat Official, bukan nama user.
+  const kepala = `📺 *TV RAKYAT OFFICIAL*\n🎬 Video baru: "${judul}"`;
+  const ekor = "\n\nYuk ditonton, dikomentari, dan dibagikan! 🙏";
+  return `${kepala}\n\n${bagian}${ekor}`;
 }
 
 /**

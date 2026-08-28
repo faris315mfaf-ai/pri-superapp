@@ -31,8 +31,16 @@ export async function wewenangTv(user: {
   id: string | number;
   role?: string;
   jabatan?: string | null;
+  divisi?: string | null;
+  posisi_divisi?: string | null;
 }): Promise<WewenangTv> {
-  const penuh = adalahPimred(user) || bolehProsesVideo((user.role ?? "") as never);
+  // Hierarki OTOMATIS (spek 1.18/1.1): Pimpinan Redaksi (jabatan) dan
+  // KETUA DIVISI TV RAKYAT (posisi kepala di Divisi TV Rakyat) langsung
+  // berwenang penuh — tanpa penunjukan manual di tv_tim.
+  const ketuaDivisiTv =
+    user.posisi_divisi === "kepala" && (user.divisi ?? "") === "Divisi TV Rakyat";
+  const penuh =
+    adalahPimred(user) || ketuaDivisiTv || bolehProsesVideo((user.role ?? "") as never);
   if (penuh) {
     return { anggota: true, acc: true, upload: true, proses: true };
   }

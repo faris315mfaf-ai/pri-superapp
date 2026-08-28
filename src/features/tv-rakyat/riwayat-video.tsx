@@ -14,14 +14,13 @@ import {
   Play,
   RotateCcw,
   Trash2,
-  VideoOff,
-} from "lucide-react";
+  VideoOff, Share2 } from "lucide-react";
 import { EmptyState, FadeInUp, GlassSkeleton, StatusBadge } from "@/components/pri-ui";
 import { GlassCard } from "@/components/glass-card";
 import { PlatformIcon } from "@/components/platform-icon";
 import { getVideoAntrian, hapusVideoAntrian } from "@/services";
 import { toast } from "@/hooks/use-app-store";
-import { jamWIB } from "@/lib/format";
+import { jamWIB, pesanBagikanVideo } from "@/lib/format";
 import type { VideoAntrian } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -345,6 +344,41 @@ function ItemVideo({
                     Lihat Postingan
                   </button>
                 )}
+                {/* Bagikan semua tautan platform ke WhatsApp (spek 1.18) */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const tautan = ((video.ayrshare_hasil ?? []) as {
+                      platform?: string;
+                      postUrl?: string;
+                    }[])
+                      .filter((h) => h.platform && h.postUrl)
+                      .map((h) => ({
+                        platform: String(h.platform),
+                        url: String(h.postUrl),
+                      }));
+                    // Fallback: minimal tautan Instagram lama bila
+                    // ayrshare_hasil kosong (video era sebelum 1.15).
+                    if (tautan.length === 0 && video.link_instagram) {
+                      tautan.push({ platform: "instagram", url: video.link_instagram });
+                    }
+                    const teks = pesanBagikanVideo(
+                      video.judul_overlay || video.judul,
+                      tautan,
+                    );
+                    window.open(
+                      `https://wa.me/?text=${encodeURIComponent(teks)}`,
+                      "_blank",
+                      "noopener,noreferrer",
+                    );
+                  }}
+                  className="btn-tekan inline-flex items-center gap-1 text-[11px] font-semibold"
+                  style={{ color: "#10B981" }}
+                >
+                  <Share2 className="h-3 w-3" />
+                  Bagikan ke WA
+                </button>
               </div>
             )}
 

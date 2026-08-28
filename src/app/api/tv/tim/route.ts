@@ -34,6 +34,14 @@ export async function GET(request: Request) {
     }
 
     const db = supabase();
+    // Toggle siaran otomatis upload -> ruang chat (spek 1.18/1.3)
+    const { data: siaran } = await db
+      .from("pengaturan_sistem")
+      .select("nilai")
+      .eq("kunci", "tvr_auto_broadcast")
+      .maybeSingle();
+    const autoBroadcast = siaran?.nilai !== "false";
+
     const [{ data: tim }, { data: semua }] = await Promise.all([
       db
         .from("tv_tim")
@@ -50,6 +58,7 @@ export async function GET(request: Request) {
 
     const idTim = new Set((tim ?? []).map((t) => Number(t.user_id)));
     return {
+      auto_broadcast: autoBroadcast,
       tim: (tim ?? []).map((t) => {
         const u = Array.isArray(t.app_user) ? t.app_user[0] : t.app_user;
         return {
@@ -91,11 +100,23 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as {
       user_id?: string | number;
       aksi?: string;
+      nyala?: boolean;
     };
+    const db = supabase();
+
+    // --- Toggle siaran otomatis (spek 1.18/1.3, khusus Pimred) ---
+    if (body.aksi === "auto_broadcast") {
+      const nyala = body.nyala !== false;
+      const { error } = await db.from("pengaturan_sistem").upsert(
+        { kunci: "tvr_auto_broadcast", nilai: nyala ? "true" : "false" },
+        { onConflict: "kunci" },
+      );
+      if (error) throw new Error("Gagal menyimpan pengaturan siaran.");
+      return { sukses: true, auto_broadcast: nyala };
+    }
+
     const id = Number(body.user_id ?? 0);
     if (!id) throw Object.assign(new Error("Anggota tidak disebutkan."), { status: 400 });
-
-    const db = supabase();
 
     if (body.aksi === "hapus") {
       const { error } = await db.from("tv_tim").delete().eq("user_id", id);

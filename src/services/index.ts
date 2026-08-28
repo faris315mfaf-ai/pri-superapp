@@ -2310,9 +2310,26 @@ export async function getWewenangTv(): Promise<WewenangTv> {
 }
 
 /** Daftar tim + kandidat, untuk layar kelola Pimred. */
-export async function getKelolaTimTv(): Promise<{ tim: AnggotaTv[]; kandidat: KandidatTv[] }> {
+export async function getKelolaTimTv(): Promise<{
+  tim: AnggotaTv[];
+  kandidat: KandidatTv[];
+  auto_broadcast: boolean;
+}> {
   const json = await fetchJson("/api/tv/tim?kelola=1", { headers: headerToken() });
-  return { tim: (json.tim ?? []) as AnggotaTv[], kandidat: (json.kandidat ?? []) as KandidatTv[] };
+  return {
+    tim: (json.tim ?? []) as AnggotaTv[],
+    kandidat: (json.kandidat ?? []) as KandidatTv[],
+    auto_broadcast: json.auto_broadcast !== false,
+  };
+}
+
+/** Pimred: nyalakan/matikan siaran otomatis upload -> ruang chat. */
+export async function setAutoBroadcastTv(nyala: boolean): Promise<void> {
+  await fetchJson("/api/tv/tim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "auto_broadcast", nyala }),
+  });
 }
 
 export async function tambahAnggotaTv(userId: string): Promise<void> {

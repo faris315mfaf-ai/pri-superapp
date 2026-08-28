@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Tv } from "lucide-react";
+import { Tv, Newspaper, Send, Clapperboard } from "lucide-react";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
 import { BeritaPanel } from "./berita-panel";
@@ -24,6 +24,7 @@ import { ProgressPanel } from "./progress-panel";
 import { PreviewModal } from "./preview-modal";
 import { RiwayatVideo } from "./riwayat-video";
 import { KelolaTimPanel } from "./kelola-tim-panel";
+import { SeksiLipat } from "@/components/seksi-lipat";
 import { EmbedTerbaru } from "./embed-terbaru";
 import { SectionTitle } from "@/components/pri-ui";
 import type { Berita, HasilProsesVideo, User, VideoAntrian } from "@/types";
@@ -181,32 +182,40 @@ export function TvScreen({
       <div className="mt-6 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6">
         {/* ── Bagian KIRI: Sumber ── */}
         <section className="flex flex-col gap-4">
-          <div>
-            <SectionTitle judul="Sumber Berita" />
-            <FadeInUp delay={0.05}>
-              <BeritaPanel
-                onPilihVideo={setVideoSumber}
-                idTerpilih={videoSumber?.id ?? null}
-              />
-            </FadeInUp>
-          </div>
+          <SeksiLipat
+            id="sumber-berita"
+            judul="Sumber Berita"
+            ikon={Newspaper}
+            keterangan="Cek berita terbaru & pilih bahan video"
+          >
+            <BeritaPanel
+              onPilihVideo={setVideoSumber}
+              idTerpilih={videoSumber?.id ?? null}
+            />
+          </SeksiLipat>
 
           {/* Distribusi tugas link ke anggota — khusus Pimred. Link video
               yang dipilih di panel Berita otomatis terisi. */}
           {pimred && (
-            <div>
-              <SectionTitle judul="Bagi Tugas ke Anggota" />
-              <FadeInUp delay={0.06}>
-                <PanelTugasLink linkAwal={videoSumber?.link_video} />
-              </FadeInUp>
-            </div>
+            <SeksiLipat
+              id="bagi-tugas"
+              judul="Bagi Tugas ke Anggota"
+              ikon={Send}
+              keterangan="Kirim link video ke anggota tim"
+            >
+              <PanelTugasLink linkAwal={videoSumber?.link_video} />
+            </SeksiLipat>
           )}
         </section>
 
         {/* ── Bagian KANAN: Produksi ── */}
         <section className="mt-6 flex flex-col gap-4 lg:mt-0">
-          <div>
-            <SectionTitle judul="Buat Video" />
+          <SeksiLipat
+            id="buat-video"
+            judul="Buat Video"
+            ikon={Clapperboard}
+            keterangan="Proses video dari sumber berita"
+          >
             <AnimatePresence mode="wait" initial={false}>
               {fase === "proses" && payload ? (
                 <motion.div
@@ -237,7 +246,7 @@ export function TvScreen({
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+          </SeksiLipat>
 
           {/* Upload video manual (hasil edit sendiri) — antrean ACC Pimred */}
           <div>
