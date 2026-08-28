@@ -2112,6 +2112,54 @@ export async function getDashboardKpi(tanggal?: string): Promise<KpiDashboardDat
   return json as KpiDashboardData;
 }
 
+export type TvDashboardData = {
+  hari: number;
+  ringkasan: {
+    produksi: number;
+    terunggah: number;
+    post_sukses: number;
+    post_gagal: number;
+    interaksi: number;
+    produser: number;
+  };
+  tren: { tanggal: string; produksi: number; unggah: number }[];
+  interaksi_harian: { tanggal: string; jumlah: number }[];
+  per_platform: {
+    platform: string;
+    sukses: number;
+    gagal: number;
+    sparkline: { tanggal: string; jumlah: number }[];
+  }[];
+  status: { nama: string; jumlah: number }[];
+  populer: {
+    kode: string;
+    judul: string;
+    thumbnail_url: string;
+    diunggah_pada: string;
+    platform: number;
+    komen: number;
+    share: number;
+    skor: number;
+  }[];
+  aktivitas: { waktu: string; teks: string; jenis: string }[];
+};
+
+/** Data sub-dashboard TV Rakyat (fitur 3.3.d, baca-saja). */
+export async function getDashboardTv(hari = 7): Promise<TvDashboardData> {
+  const json = await fetchJson(`/api/dashboard/tv?hari=${hari}`, {
+    headers: headerToken(),
+  });
+  return json as TvDashboardData;
+}
+
+/** Umpan aktivitas TV terbaru saja — polling ringan 30 detik. */
+export async function getDashboardTvAktivitas(): Promise<TvDashboardData["aktivitas"]> {
+  const json = await fetchJson("/api/dashboard/tv?aktivitas=1", {
+    headers: headerToken(),
+  });
+  return (json?.aktivitas ?? []) as TvDashboardData["aktivitas"];
+}
+
 /** Riwayat video 7 hari satu anggota (modal detail dashboard KPI). */
 export async function getDashboardKpiAnggota(
   userId: string,

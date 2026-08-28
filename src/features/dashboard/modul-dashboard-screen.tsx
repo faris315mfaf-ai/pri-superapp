@@ -37,6 +37,10 @@ const KpiAnggotaDashboard = dynamic(
   () => import("./kpi-anggota-dashboard").then((m) => m.KpiAnggotaDashboard),
   { ssr: false, loading: () => <GlassSkeleton className="h-64 rounded-2xl" /> },
 );
+const TvAnalitikDashboard = dynamic(
+  () => import("./tv-analitik-dashboard").then((m) => m.TvAnalitikDashboard),
+  { ssr: false, loading: () => <GlassSkeleton className="h-64 rounded-2xl" /> },
+);
 const KepatuhanKaderPanel = dynamic(
   () =>
     import("@/features/qc-konten/kepatuhan-kader-panel").then(
@@ -152,6 +156,8 @@ function IsiSubDashboard({ kunci }: { kunci: string | null }) {
   // 3.3.c: panel kepatuhan yang SAMA dengan HR Center, mode baca-saja
   // (tanpa tombol "Ingatkan via WA").
   if (kunci === "kepatuhan") return <KepatuhanKaderPanel editable={false} />;
+  // 3.3.d: analitik produksi & performa video TV Rakyat.
+  if (kunci === "tv") return <TvAnalitikDashboard />;
 
   const info = KATALOG_DASHBOARD.find((d) => d.kunci === kunci);
   if (!info) return null;
