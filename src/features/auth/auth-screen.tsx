@@ -53,16 +53,21 @@ type Langkah = "tertutup" | "masuk" | "daftar" | "otp" | "profil" | "menunggu" |
 
 type AuthScreenProps = {
   onMasukBerhasil: (user: UserLengkap) => void;
+  /** Akun "menunggu" yang ditemukan saat boot → langsung halaman tunggu */
+  awalMenunggu?: UserLengkap | null;
 };
 
 /** Ukuran maksimal foto profil sebelum dikirim (server juga memeriksa) */
 const MAKS_FOTO_BYTE = 2 * 1024 * 1024;
 
-export function AuthScreen({ onMasukBerhasil }: AuthScreenProps) {
-  const [langkah, setLangkah] = useState<Langkah>("tertutup");
+export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenProps) {
+  // awalMenunggu (fitur 1.19.1): boot aplikasi menemukan token milik
+  // akun berstatus "menunggu" (mis. baru daftar lewat Google) — layar
+  // langsung dibuka di HALAMAN TUNGGU, bukan di menu masuk/daftar.
+  const [langkah, setLangkah] = useState<Langkah>(awalMenunggu ? "menunggu" : "tertutup");
   // Nomor yang sedang diverifikasi, dibawa dari langkah daftar ke OTP.
   const [nomorOtp, setNomorOtp] = useState("");
-  const [userSementara, setUserSementara] = useState<UserLengkap | null>(null);
+  const [userSementara, setUserSementara] = useState<UserLengkap | null>(awalMenunggu);
 
   function tutup() {
     setLangkah("tertutup");
@@ -585,6 +590,10 @@ function FormDaftar({
         Kirim Kode ke WhatsApp
         <ArrowRight className="h-4.5 w-4.5" />
       </TombolUtama>
+
+      {/* Daftar lewat Google (fitur 1.19.1): tanpa isi formulir & OTP —
+          akun dibuat otomatis berstatus menunggu persetujuan. */}
+      <TombolGoogle disabled={memuat} label="Daftar dengan Google" />
 
       <p className="mt-1 text-center text-[12.5px] text-teks-sekunder">
         Sudah punya akun?{" "}

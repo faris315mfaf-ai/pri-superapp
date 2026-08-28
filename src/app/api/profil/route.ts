@@ -9,7 +9,13 @@
 // pengguna tinggal menunggu persetujuan super admin.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
-import { hapusCacheUser, KOLOM_USER, keUserPublik, type BarisUser } from "@/lib/sesi";
+import {
+  hapusCacheUser,
+  KOLOM_USER,
+  keUserPublik,
+  userDariTokenLonggar,
+  type BarisUser,
+} from "@/lib/sesi";
 import { pastikanStrukturSah } from "@/lib/struktur";
 
 export const dynamic = "force-dynamic";
@@ -320,31 +326,5 @@ export async function POST(request: Request) {
   });
 }
 
-/**
- * Sama seperti userDariToken, tetapi TETAP menerima akun berstatus
- * 'menunggu'. Pendaftar baru justru berada di status itu saat mengisi
- * profilnya — kalau ditolak di sini, mereka tidak akan pernah bisa
- * menyelesaikan pendaftaran.
- */
-async function userDariTokenLonggar(token: string) {
-  const { createHash } = await import("node:crypto");
-  const db = supabase();
-  const hash = createHash("sha256").update(token).digest("hex");
-
-  const { data: sesi } = await db
-    .from("sesi_perangkat")
-    .select("user_id")
-    .eq("token_hash", hash)
-    .maybeSingle();
-  if (!sesi) return null;
-
-  const { data } = await db
-    .from("app_user")
-    .select(KOLOM_USER)
-    .eq("id", sesi.user_id)
-    .maybeSingle();
-
-  const u = data as BarisUser | null;
-  if (!u || !u.aktif || u.status === "ditolak") return null;
-  return keUserPublik(u);
-}
+// userDariTokenLonggar kini tinggal di lib/sesi (dipakai juga /api/sesi
+// untuk halaman tunggu 1.19.1) — logikanya persis yang dulu di sini.

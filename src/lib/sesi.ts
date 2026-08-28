@@ -165,6 +165,41 @@ export async function userDariToken(token: string): Promise<UserPublik | null> {
 }
 
 /**
+ * Seperti userDariToken, tetapi TETAP menerima akun berstatus
+ * "menunggu" (pendaftar yang belum disetujui pengurus). Dipakai:
+ * - /api/profil: pendaftar melengkapi profilnya SEBELUM disetujui;
+ * - /api/sesi: halaman tunggu memoles status tiap 5 detik — token
+ *   akun menunggu tidak boleh dianggap tidak sah (fitur 1.19.1).
+ *
+ * SENGAJA TIDAK menulis cache sesi: cache dibaca jalur ketat tanpa
+ * memeriksa ulang status, jadi menyimpan akun menunggu di sana akan
+ * membuatnya lolos ke endpoint yang seharusnya tertutup.
+ */
+export async function userDariTokenLonggar(token: string): Promise<UserPublik | null> {
+  const bersih = (token ?? "").trim();
+  if (!bersih) return null;
+
+  const db = supabase();
+  const hash = hashToken(bersih);
+  const { data: sesi } = await db
+    .from("sesi_perangkat")
+    .select("user_id")
+    .eq("token_hash", hash)
+    .maybeSingle();
+  if (!sesi) return null;
+
+  const { data } = await db
+    .from("app_user")
+    .select(KOLOM_USER)
+    .eq("id", sesi.user_id)
+    .maybeSingle();
+
+  const u = data as BarisUser | null;
+  if (!u || !u.aktif || u.status === "ditolak") return null;
+  return keUserPublik(u);
+}
+
+/**
  * Tandai kapan sesi ini terakhir dipakai, tanpa membuat pengguna menunggu.
  *
  * after() hanya sah di dalam konteks permintaan. Bila fungsi sesi dipanggil

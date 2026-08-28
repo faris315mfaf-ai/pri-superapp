@@ -18,6 +18,17 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "1.19.1",
+    tanggal: "28 Agustus 2026",
+    judul: "Daftar lewat Google + halaman tunggu pintar",
+    poin: [
+      "Daftar dengan Google — tanpa isi formulir & OTP; akun langsung dibuat, tinggal menunggu persetujuan pengurus",
+      "HALAMAN TUNGGU baru: setelah mendaftar, biarkan terbuka — begitu pengurus menyetujui, halaman berpindah SENDIRI ke Beranda",
+      "Buka ulang aplikasi saat masih menunggu? Langsung diantar kembali ke halaman tunggu, bukan halaman masuk",
+      "FIX: status pendaftar tidak lagi bisa salah tampil \"ditolak\" saat pengurus menyetujui di waktu bersamaan",
+    ],
+  },
+  {
     versi: "1.19.0",
     tanggal: "28 Agustus 2026",
     judul: "Masuk dengan Google & modul Dashboard baru",

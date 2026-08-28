@@ -6,7 +6,12 @@
 // dari server. Data selalu segar — peran yang baru diubah super admin
 // langsung berlaku di pembukaan berikutnya.
 import { bungkus } from "@/lib/api-helper";
-import { cabutSemuaSesi, cabutSesi, userDariToken } from "@/lib/sesi";
+import {
+  cabutSemuaSesi,
+  cabutSesi,
+  userDariToken,
+  userDariTokenLonggar,
+} from "@/lib/sesi";
 import { pastikanBukanPerbaikan } from "@/lib/perbaikan";
 import { siaranUltahHarian } from "@/lib/ultah";
 import { after } from "next/server";
@@ -28,6 +33,23 @@ export async function GET(request: Request) {
 
     const user = await userDariToken(token);
     if (!user) {
+      // Jalur ketat menolak akun "menunggu" — tapi bagi halaman tunggu
+      // (fitur 1.19.1) itu BUKAN sesi tidak sah: pendaftar Google/biasa
+      // memoles status di sini tiap 5 detik sampai pengurus menyetujui.
+      // Kembalikan profilnya apa adanya (status "menunggu"); klien yang
+      // menahannya di halaman tunggu, dan endpoint data lain tetap
+      // menolaknya lewat userDariToken masing-masing.
+      const longgar = await userDariTokenLonggar(token);
+      if (longgar) {
+        // Bisa "menunggu" (kasus normal halaman tunggu), tapi bisa juga
+        // "aktif": statusnya BERUBAH di antara dua pembacaan — pengurus
+        // menekan Setujui persis saat permintaan ini berjalan. Keduanya
+        // dikembalikan apa adanya; 401 di sini membuat klien membuang
+        // token dan salah menampilkan "ditolak" (race nyata yang
+        // tertangkap saat pengujian 1.19.1). Akun nonaktif/ditolak
+        // tetap tersaring: userDariTokenLonggar mengembalikan null.
+        return { user: longgar };
+      }
       // Token tidak dikenal, akun dinonaktifkan, atau persetujuannya
       // dicabut. Semuanya berarti hal yang sama bagi aplikasi: kembali
       // ke halaman masuk.

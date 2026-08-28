@@ -58,6 +58,7 @@ import {
   keluar as keluarService,
   masukOtomatis,
   simpanToken,
+  type UserLengkap,
 } from "@/services";
 import type { Role, User } from "@/types";
 import { cn } from "@/lib/utils";
@@ -137,6 +138,10 @@ export default function Page() {
   // Kunci sub-dashboard yang boleh dibuka jabatan ini (fitur 1.19/3.3).
   // Diisi effect di bawah; dipakai tabBoleh, jadi dideklarasikan di sini.
   const [aksesDashboard, setAksesDashboard] = useState<string[]>([]);
+  // Akun berstatus "menunggu" yang ditemukan saat boot (fitur 1.19.1:
+  // daftar lewat Google / daftar biasa yang dibuka ulang) — ditahan di
+  // HALAMAN TUNGGU AuthScreen, bukan dimasukkan ke aplikasi.
+  const [menungguUser, setMenungguUser] = useState<UserLengkap | null>(null);
   // Id notifikasi yang sudah pernah terlihat di sesi ini. Dipakai untuk
   // membedakan notifikasi yang benar-benar BARU datang (layak dimunculkan
   // sebagai banner) dari yang memang sudah ada sejak awal.
@@ -217,6 +222,12 @@ export default function Page() {
           // selesai untuk hitung mundur di layar terkunci.
           const st = await getStatusPerbaikan();
           if (hidup) setInfoPerbaikan({ sampai: st.sampai, pesan: st.pesan });
+        } else if (tersimpan && tersimpan.status === "menunggu") {
+          // Pendaftar (Google/biasa) yang belum disetujui pengurus:
+          // tahan di halaman tunggu — LayarMenunggu memoles status
+          // tiap 5 detik dan berpindah SENDIRI ke Beranda begitu
+          // pengurus menekan Setujui (fitur 1.19.1).
+          setMenungguUser(tersimpan);
         } else if (tersimpan) {
           setUser(tersimpan);
           setTab(TAB_AWAL[tersimpan.role]);
@@ -409,6 +420,8 @@ export default function Page() {
   // ------------------------------------------------------------
 
   function loginBerhasil(userBaru: User) {
+    // Bila datang dari halaman tunggu (baru disetujui), tandanya dibuang.
+    setMenungguUser(null);
     setUser(userBaru);
     setTab(TAB_AWAL[userBaru.role]);
     setSubLayar(null);
@@ -743,7 +756,7 @@ export default function Page() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
         >
-          <AuthScreen onMasukBerhasil={loginBerhasil} />
+          <AuthScreen onMasukBerhasil={loginBerhasil} awalMenunggu={menungguUser} />
         </motion.div>
       )}
 

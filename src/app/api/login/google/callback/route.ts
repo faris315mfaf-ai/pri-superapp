@@ -6,10 +6,10 @@
 // - mode TAUTKAN (state membawa user id): tautkan google_id ke akun
 //   yang sedang masuk;
 // - email SUDAH terdaftar → langsung login (lengkapi kolom google_*);
-// - email BELUM terdaftar → BUAT AKUN OTOMATIS (spek 3.1): role
-//   anggota, status aktif, username dari email (+angka bila bentrok),
-//   email terverifikasi Google. Pengurus diberi tahu — akun lewat
-//   Google tidak melewati meja persetujuan, jadi minimal terlihat.
+// - email BELUM terdaftar → BUAT AKUN OTOMATIS berstatus "menunggu"
+//   (diubah 1.19.1): role anggota, username dari email (+angka bila
+//   bentrok), email terverifikasi Google. Pengurus dikabari; pendaftar
+//   diantar ke HALAMAN TUNGGU yang berpindah sendiri saat disetujui.
 //
 // Token sesi diantarkan lewat redirect /?gtoken=... (dibaca aplikasi
 // lalu dibersihkan dari URL).
@@ -151,7 +151,10 @@ export async function GET(request: Request) {
       // Lengkapi kolom Google bila masuk lewat kecocokan email.
       if (!lewatGoogleId) await db.from("app_user").update(kolomGoogle).eq("id", userId);
     } else {
-      // BUAT AKUN BARU otomatis (spek 3.1: langsung aktif).
+      // DAFTAR BARU lewat Google (diubah 1.19.1 atas permintaan user):
+      // akun dibuat berstatus "MENUNGGU" — sama seperti pendaftaran
+      // biasa, harus disetujui pengurus dulu. Pendaftar diantar ke
+      // halaman tunggu yang berpindah sendiri begitu disetujui.
       // Saat mode perbaikan, pendaftaran baru juga ditahan.
       try {
         await pastikanBukanPerbaikan("anggota");
@@ -171,7 +174,7 @@ export async function GET(request: Request) {
           password_hash: await buatHashSandi(randomBytes(24).toString("base64url")),
           role: "anggota",
           jabatan: "",
-          status: "aktif",
+          status: "menunggu",
           aktif: true,
           profil_lengkap: false,
           wa_terverifikasi: false,
@@ -184,11 +187,10 @@ export async function GET(request: Request) {
         return gagal(request, "Gagal membuat akun dari Google.");
       }
       userId = Number(baru.id);
-      // Akun Google TIDAK melewati meja persetujuan (spek) — pengurus
-      // wajib tahu supaya bisa meninjau/menonaktifkan bila tak dikenal.
+      // Pengurus dikabari supaya pendaftar tidak menunggu terlalu lama.
       await kirimKabar({
-        judul: "Akun baru lewat Google",
-        isi: `${info.name || email} (${email}) mendaftar otomatis via login Google.`,
+        judul: "Pendaftar baru lewat Google",
+        isi: `${info.name || email} (${email}) mendaftar via Google — menunggu persetujuan di Kelola Pengguna.`,
         kategori: "peringatan",
         jenis_peristiwa: "keamanan",
         untukRole: ["admin_hr", "super_admin", "master"],

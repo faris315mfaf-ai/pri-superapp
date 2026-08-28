@@ -14,7 +14,14 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
-export function TombolGoogle({ disabled = false }: { disabled?: boolean }) {
+export function TombolGoogle({
+  disabled = false,
+  label = "Masuk dengan Google",
+}: {
+  disabled?: boolean;
+  /** Teks tombol — form Daftar memakai "Daftar dengan Google". */
+  label?: string;
+}) {
   // Loading tidak pernah di-reset: halaman memang akan pergi ke Google.
   const [menuju, setMenuju] = useState(false);
 
@@ -40,7 +47,7 @@ export function TombolGoogle({ disabled = false }: { disabled?: boolean }) {
         ) : (
           <IkonGoogle className="h-[18px] w-[18px] shrink-0" />
         )}
-        {menuju ? "Menuju Google..." : "Masuk dengan Google"}
+        {menuju ? "Menuju Google..." : label}
       </button>
     </>
   );
