@@ -45,8 +45,9 @@ import { GaleriMomen } from "./galeri-momen";
 import { PlatformIcon } from "@/components/platform-icon";
 import { VideoEmbedMini } from "@/components/video-embed-mini";
 import { KoinChip } from "@/components/koin-chip";
+import { IkonGoogle } from "@/components/tombol-google";
 import { urlProfilSosmed } from "@/lib/format";
-import { getProfilMomen, getStreakSaya, type ProfilMomen } from "@/services";
+import { ambilToken, getProfilMomen, getStreakSaya, type ProfilMomen } from "@/services";
 import { IkonStreak } from "@/components/ikon-streak";
 import { deskripsiStruktur } from "@/lib/struktur";
 import {
@@ -730,6 +731,35 @@ export function ProfilScreen({
                 <StatusBadge label="terverifikasi" warna="hijau" />
               ) : (
                 <StatusBadge label="belum" warna="kuning" />
+              )
+            }
+          />
+
+          {/* Akun Google (fitur 1.19/3.1): terhubung = badge hijau;
+              belum = klik memulai alur tautkan lewat state bertanda
+              tangan (bukan token sesi telanjang di URL Google). */}
+          <BarisPengaturan
+            ikon={IkonGoogle}
+            warnaIkon="#4285F4"
+            label="Akun Google"
+            onClick={
+              user.google_linked
+                ? undefined
+                : () => {
+                    // Navigasi dokumen penuh — route API akan 302 ke
+                    // halaman izin Google (router Next tak bisa).
+                    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- tujuan akhirnya situs Google, bukan halaman Next
+                    window.location.href = `${window.location.origin}/api/login/google?mode=tautkan&t=${encodeURIComponent(ambilToken())}`;
+                  }
+            }
+            kanan={
+              user.google_linked ? (
+                <StatusBadge label="terhubung" warna="hijau" />
+              ) : (
+                <span className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-pri">Hubungkan</span>
+                  <StatusBadge label="belum" warna="kuning" />
+                </span>
               )
             }
           />

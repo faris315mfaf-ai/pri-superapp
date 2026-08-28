@@ -122,6 +122,14 @@ export async function POST(request: Request) {
     // Mode perbaikan: sandi benar pun, selain master ditolak masuk.
     await pastikanBukanPerbaikan(baris.role);
 
+    // Catat waktu login terakhir (dipakai dashboard kelengkapan 1.19);
+    // gagal mencatat tidak boleh menggagalkan login itu sendiri.
+    await db
+      .from("app_user")
+      .update({ last_login_at: new Date().toISOString() })
+      .eq("id", baris.id)
+      .then(() => {}, () => {});
+
     const token = await buatSesi(baris.id, body.nama_perangkat);
 
     return { user: keUserPublik(baris), token };

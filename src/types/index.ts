@@ -60,6 +60,10 @@ export type User = {
   /** false = belum verifikasi WA; aplikasi menagih tiap 3 jam */
   wa_terverifikasi?: boolean;
   nomor_wa?: string | null;
+  /** true = akun Google sudah tertaut (fitur 1.19/3.1) */
+  google_linked?: boolean;
+  /** Foto profil dari Google (bisa beda dgn avatar_url aplikasi) */
+  google_avatar?: string;
 };
 
 // Akun sosmed yang wajib dikomentari

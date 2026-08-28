@@ -54,6 +54,7 @@ import {
   getNotifikasi,
   keluar as keluarService,
   masukOtomatis,
+  simpanToken,
 } from "@/services";
 import type { Role, User } from "@/types";
 import { cn } from "@/lib/utils";
@@ -165,6 +166,37 @@ export default function Page() {
   useEffect(() => {
     if (!siap) return;
     let hidup = true;
+
+    // --- Hasil balik Google OAuth (fitur 1.19/3.1) ---
+    // Callback mengantarkan token lewat ?gtoken=...; simpan sebagai
+    // token perangkat SEBELUM masuk otomatis berjalan, lalu bersihkan
+    // URL supaya token tidak tertinggal di riwayat peramban.
+    try {
+      const q = new URLSearchParams(window.location.search);
+      const gtoken = q.get("gtoken");
+      const gerror = q.get("gerror");
+      if (gtoken || gerror || q.get("gtautkan")) {
+        if (gtoken) simpanToken(gtoken);
+        if (gerror) {
+          useAppStore.getState().pushToast({
+            jenis: "error",
+            judul: "Login Google gagal",
+            isi: gerror,
+          });
+        }
+        if (q.get("gtautkan")) {
+          useAppStore.getState().pushToast({
+            jenis: "sukses",
+            judul: "Akun Google terhubung",
+            isi: "Akun Google Anda berhasil ditautkan.",
+          });
+        }
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    } catch {
+      // URLSearchParams selalu ada di peramban; penjaga bila dirender
+      // di lingkungan tanpa window utuh.
+    }
 
     void (async () => {
       try {

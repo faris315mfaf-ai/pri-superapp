@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { LogoPri } from "@/components/logo-pri";
 import { ThemeToggle } from "@/components/pri-ui";
+import { TombolGoogle } from "@/components/tombol-google";
 import { toast } from "@/hooks/use-app-store";
 import { useEffect } from "react";
 import {
@@ -420,6 +421,11 @@ function FormMasuk({
         Masuk
         <ArrowRight className="h-4.5 w-4.5" />
       </TombolUtama>
+
+      {/* Pintu masuk Google (fitur 1.19/3.1): divider "atau" + tombol
+          branding Google. Belum terdaftar pun bisa — akunnya dibuat
+          otomatis oleh callback. */}
+      <TombolGoogle disabled={memuat} />
 
       <p className="mt-1 text-center text-[12.5px] text-teks-sekunder">
         Belum punya akun?{" "}

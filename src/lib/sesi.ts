@@ -55,6 +55,8 @@ type BarisUser = {
   posisi_divisi: string | null;
   nama_panggilan: string | null;
   tanggal_lahir: string | null;
+  google_linked: boolean | null;
+  google_avatar: string | null;
 };
 
 export type UserPublik = User & {
@@ -82,11 +84,13 @@ export function keUserPublik(b: BarisUser): UserPublik {
     posisi_divisi: b.posisi_divisi === "kepala" ? "kepala" : "anggota",
     nama_panggilan: b.nama_panggilan ?? "",
     tanggal_lahir: b.tanggal_lahir ?? null,
+    google_linked: b.google_linked === true,
+    google_avatar: b.google_avatar ?? "",
   };
 }
 
 const KOLOM_USER =
-  "id, email, nama, role, jabatan, avatar_url, status, profil_lengkap, aktif, username, nomor_wa, wa_terverifikasi, divisi, sub_divisi, posisi_divisi, nama_panggilan, tanggal_lahir";
+  "id, email, nama, role, jabatan, avatar_url, status, profil_lengkap, aktif, username, nomor_wa, wa_terverifikasi, divisi, sub_divisi, posisi_divisi, nama_panggilan, tanggal_lahir, google_linked, google_avatar";
 
 /**
  * Tukar token perangkat dengan data akun.
