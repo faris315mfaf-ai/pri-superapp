@@ -17,7 +17,7 @@
 // menolak dengan 404 bila ada yang mencoba memanggil langsung.
 // ============================================================
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -25,12 +25,14 @@ import {
   Bug,
   Crown,
   Database,
+  FileText,
   Loader2,
   LogOut,
   Plus,
   RefreshCw,
   ShieldCheck,
   Trash2,
+  Upload,
   UserCog,
   KeyRound,
 } from "lucide-react";
@@ -53,9 +55,11 @@ import {
   getDataMaster,
   getLatihAsisten,
   getPengguna,
+  hapusBahanAjarAI,
   refreshBasisAI,
   simpanCatatanBasisAI,
   simpanLatihAsisten,
+  tambahBahanAjarAI,
   type DataMaster,
   type PenggunaAdmin,
   type StatusBasisAI,
@@ -804,6 +808,9 @@ function SeksiBasisPengetahuan() {
   const [memuat, setMemuat] = useState(true);
   const [menyegarkan, setMenyegarkan] = useState(false);
   const [menyimpan, setMenyimpan] = useState(false);
+  // Bahan belajar TXT (fitur 1.22/4)
+  const [mengunggah, setMengunggah] = useState(false);
+  const berkasRef = useRef<HTMLInputElement>(null);
 
   async function muat() {
     try {
@@ -857,6 +864,51 @@ function SeksiBasisPengetahuan() {
       toast("error", "Gagal menyimpan catatan", e instanceof Error ? e.message : "");
     } finally {
       setMenyimpan(false);
+    }
+  }
+
+  // Unggah bahan belajar TXT (fitur 1.22/4): baca berkas jadi teks di
+  // sisi klien, lalu kirim isinya. Hanya .txt agar isinya pasti teks
+  // yang bisa dibaca AI.
+  async function unggahBahan(berkas: File | undefined) {
+    if (!berkas || mengunggah) return;
+    const namaKecil = berkas.name.toLowerCase();
+    const tipeOk =
+      berkas.type.startsWith("text/") || namaKecil.endsWith(".txt") || namaKecil.endsWith(".md");
+    if (!tipeOk) {
+      toast("peringatan", "Harus berkas teks", "Unggah berkas .txt (atau .md).");
+      return;
+    }
+    if (berkas.size > 2 * 1024 * 1024) {
+      toast("peringatan", "Berkas terlalu besar", "Maksimal 2 MB teks.");
+      return;
+    }
+    setMengunggah(true);
+    try {
+      const isi = await berkas.text();
+      const { dipotong } = await tambahBahanAjarAI(berkas.name, isi);
+      toast(
+        "sukses",
+        "Bahan belajar ditambahkan",
+        dipotong
+          ? "Berkas panjang — hanya bagian awalnya yang disimpan untuk AI."
+          : "AI kini menjadikannya rujukan saat menjawab.",
+      );
+      await muat();
+    } catch (e) {
+      toast("error", "Gagal mengunggah", e instanceof Error ? e.message : "");
+    } finally {
+      setMengunggah(false);
+      if (berkasRef.current) berkasRef.current.value = "";
+    }
+  }
+
+  async function hapusBahan(id: string) {
+    try {
+      await hapusBahanAjarAI(id);
+      await muat();
+    } catch (e) {
+      toast("error", "Gagal menghapus", e instanceof Error ? e.message : "");
     }
   }
 
@@ -947,6 +999,73 @@ function SeksiBasisPengetahuan() {
                 {menyimpan && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
                 Simpan Catatan
               </button>
+            </div>
+
+            {/* Bahan belajar TXT (fitur 1.22/4): unggah berkas teks yang
+                dijadikan AI rujukan tambahan saat menjawab. */}
+            <div className="mt-5 border-t border-glass-border pt-4">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-bold text-teks-utama">
+                  Bahan Belajar (TXT)
+                </p>
+                <span className="angka-tab text-[10px] text-teks-sekunder">
+                  {basis?.bahan_ajar.length ?? 0}/{basis?.maks_bahan_jumlah ?? 30}
+                </span>
+              </div>
+              <p className="mt-0.5 mb-2 text-[10.5px] leading-relaxed text-teks-sekunder">
+                Unggah berkas .txt (mis. panduan, FAQ, materi) — AI membacanya
+                sebagai bahan belajar tambahan.
+              </p>
+
+              <input
+                ref={berkasRef}
+                type="file"
+                accept=".txt,.md,text/plain"
+                onChange={(e) => void unggahBahan(e.target.files?.[0])}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => berkasRef.current?.click()}
+                disabled={mengunggah}
+                className="glass btn-tekan flex h-10 w-full items-center justify-center gap-2 rounded-xl text-[12.5px] font-bold text-teks-utama disabled:opacity-60"
+              >
+                {mengunggah ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Upload className="h-4 w-4" aria-hidden="true" />
+                )}
+                Unggah Berkas TXT
+              </button>
+
+              {(basis?.bahan_ajar.length ?? 0) > 0 && (
+                <div className="mt-2 flex flex-col gap-1.5">
+                  {basis!.bahan_ajar.map((b) => (
+                    <div
+                      key={b.id}
+                      className="glass-soft flex items-center gap-2.5 rounded-xl px-3 py-2"
+                    >
+                      <FileText className="h-4 w-4 shrink-0 text-sky-500" aria-hidden="true" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[12px] font-semibold text-teks-utama">
+                          {b.nama}
+                        </p>
+                        <p className="angka-tab text-[10px] text-teks-sekunder">
+                          {(b.ukuran / 1000).toFixed(1)} rb karakter
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void hapusBahan(b.id)}
+                        aria-label={`Hapus ${b.nama}`}
+                        className="btn-tekan p-1.5 text-teks-sekunder/70 hover:text-gagal"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         )}

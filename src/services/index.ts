@@ -2342,6 +2342,13 @@ export async function masukSidikJari(): Promise<UserLengkap> {
   return json.user as UserLengkap;
 }
 
+export type BahanAjarAI = {
+  id: string;
+  nama: string;
+  ukuran: number;
+  dibuat_pada: string;
+};
+
 export type StatusBasisAI = {
   ada: boolean;
   diperbarui_pada: string | null;
@@ -2349,6 +2356,9 @@ export type StatusBasisAI = {
   konten: Record<string, unknown>;
   catatan: string;
   maks_catatan: number;
+  bahan_ajar: BahanAjarAI[];
+  maks_bahan_per_berkas: number;
+  maks_bahan_jumlah: number;
 };
 
 /** Status + isi Basis Pengetahuan AI (master). */
@@ -2373,6 +2383,28 @@ export async function simpanCatatanBasisAI(teks: string): Promise<void> {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ aksi: "catatan", teks }),
+  });
+}
+
+/** Unggah bahan belajar TXT untuk dibaca AI (fitur 1.22/4, master). */
+export async function tambahBahanAjarAI(
+  nama: string,
+  isi: string,
+): Promise<{ dipotong: boolean }> {
+  const json = await fetchJson("/api/asisten/basis", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "bahan_tambah", nama, isi }),
+  });
+  return { dipotong: Boolean(json?.dipotong) };
+}
+
+/** Hapus satu bahan belajar dari Basis Pengetahuan (master). */
+export async function hapusBahanAjarAI(id: string): Promise<void> {
+  await fetchJson("/api/asisten/basis", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "bahan_hapus", id }),
   });
 }
 

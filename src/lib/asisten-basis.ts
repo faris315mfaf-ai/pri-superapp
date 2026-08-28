@@ -21,6 +21,68 @@ import { DIVISI } from "@/lib/struktur";
 export const UMUR_SEGAR_MENIT = 60;
 const TARGET_VIDEO_BAWAAN = 5;
 
+// Bahan belajar TXT (fitur 1.22/4). Batas menjaga biaya token AI:
+// tiap berkas dipotong, dan total yang disuntikkan ke AI dibatasi.
+export const MAKS_BAHAN_PER_BERKAS = 40_000;
+export const MAKS_BAHAN_TOTAL_AI = 80_000;
+export const MAKS_BAHAN_JUMLAH = 30;
+
+export type BahanAjar = {
+  id: string;
+  nama: string;
+  ukuran: number;
+  dibuat_pada: string;
+};
+
+/**
+ * Daftar bahan belajar (fitur 1.22/4). `denganIsi` untuk pemakaian AI
+ * (butuh teksnya); tanpa isi untuk daftar di UI (hemat payload).
+ */
+export async function bahanAjar(
+  denganIsi = false,
+): Promise<(BahanAjar & { isi?: string })[]> {
+  try {
+    const kolom = denganIsi
+      ? "id, nama, ukuran, dibuat_pada, isi"
+      : "id, nama, ukuran, dibuat_pada";
+    const { data } = await supabase()
+      .from("asisten_bahan_ajar")
+      .select(kolom)
+      .order("dibuat_pada", { ascending: false })
+      .limit(MAKS_BAHAN_JUMLAH);
+    return ((data ?? []) as unknown as Record<string, unknown>[]).map((b) => ({
+      id: String(b.id),
+      nama: String(b.nama ?? ""),
+      ukuran: Number(b.ukuran ?? 0),
+      dibuat_pada: String(b.dibuat_pada ?? ""),
+      ...(denganIsi ? { isi: String(b.isi ?? "") } : {}),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Gabungan teks bahan ajar untuk disuntikkan ke AI, dibatasi total
+ * MAKS_BAHAN_TOTAL_AI karakter. Tiap berkas diberi kepala nama agar AI
+ * tahu asal materinya.
+ */
+export async function bahanAjarUntukAI(): Promise<string> {
+  const daftar = await bahanAjar(true);
+  if (daftar.length === 0) return "";
+  const bagian: string[] = [];
+  let total = 0;
+  for (const b of daftar) {
+    const isi = (b.isi ?? "").slice(0, MAKS_BAHAN_PER_BERKAS);
+    if (!isi.trim()) continue;
+    const blok = `### Bahan belajar: ${b.nama}\n${isi}`;
+    if (total + blok.length > MAKS_BAHAN_TOTAL_AI) break;
+    bagian.push(blok);
+    total += blok.length;
+  }
+  return bagian.join("\n\n");
+}
+
 function tanggalWibSekarang(): string {
   return new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
 }
@@ -289,9 +351,13 @@ async function simpanSnapshot(konten: Record<string, unknown>): Promise<void> {
  * bangun ulang & simpan (inilah "refresh tiap 1 jam"). Catatan manual
  * master selalu digabung SEGAR (tak menunggu refresh snapshot).
  */
-export async function bacaBasis(
-  paksa = false,
-): Promise<{ konten: Record<string, unknown>; diperbarui_pada: string; umur_menit: number; catatan: string }> {
+export async function bacaBasis(paksa = false): Promise<{
+  konten: Record<string, unknown>;
+  diperbarui_pada: string;
+  umur_menit: number;
+  catatan: string;
+  bahan_ajar: string;
+}> {
   const db = supabase();
   const { data } = await db
     .from("asisten_basis")
@@ -314,5 +380,8 @@ export async function bacaBasis(
     umur = 0;
   }
 
-  return { konten, diperbarui_pada: diperbarui, umur_menit: umur, catatan: await catatanBasis() };
+  // Catatan manual & bahan belajar (fitur 1.22/4) selalu digabung SEGAR
+  // — keduanya tak menunggu refresh snapshot yang tiap jam.
+  const [catatan, bahan] = await Promise.all([catatanBasis(), bahanAjarUntukAI()]);
+  return { konten, diperbarui_pada: diperbarui, umur_menit: umur, catatan, bahan_ajar: bahan };
 }

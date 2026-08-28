@@ -128,7 +128,7 @@ export const DEKLARASI_ALAT = [
   {
     name: "baca_basis_pengetahuan",
     description:
-      "Ambil GAMBARAN MENYELURUH seluruh sistem partai dalam satu objek terstruktur: keanggotaan (total, per peran, per divisi, kelengkapan data), absensi hari ini, KPI video, kepatuhan komentar, statistik TV Rakyat 7 hari, koin, rencana KPI aktif, acara mendatang, akun wajib QC, struktur divisi, serta CATATAN internal dari pengurus. Panggil ini untuk pertanyaan LUAS/umum atau saat butuh konteks lengkap; data disegarkan otomatis tiap jam.",
+      "Ambil GAMBARAN MENYELURUH seluruh sistem partai dalam satu objek terstruktur: keanggotaan (total, per peran, per divisi, kelengkapan data), absensi hari ini, KPI video, kepatuhan komentar, statistik TV Rakyat 7 hari, koin, rencana KPI aktif, acara mendatang, akun wajib QC, struktur divisi, CATATAN internal dari pengurus, serta BAHAN BELAJAR (materi teks yang diunggah pengurus sebagai rujukan). Panggil ini untuk pertanyaan LUAS/umum, saat butuh konteks lengkap, ATAU saat pertanyaan mungkin terjawab oleh bahan belajar yang diunggah; data disegarkan otomatis tiap jam.",
     parameters: { type: "object", properties: {} },
   },
   {
@@ -295,6 +295,9 @@ export async function jalankanAlat(
       return {
         data: b.konten,
         catatan_internal: b.catatan || "(belum ada catatan)",
+        // Bahan belajar TXT unggahan master (fitur 1.22/4) — materi
+        // tambahan yang dijadikan rujukan AI saat menjawab.
+        bahan_belajar: b.bahan_ajar || "(belum ada bahan belajar)",
         disegarkan: b.diperbarui_pada,
         umur_menit: b.umur_menit,
       };
