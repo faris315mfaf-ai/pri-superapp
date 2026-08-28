@@ -25,6 +25,7 @@ import { bolehUploadVideo } from "@/lib/tv-tim";
 import { kirimKabar } from "@/lib/notifikasi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { retensiJamTv } from "@/lib/pengaturan-tv";
+import { tayangAtauDiproses } from "@/lib/ayrshare-status";
 
 export const dynamic = "force-dynamic";
 
@@ -176,11 +177,12 @@ export async function POST(request: Request) {
       platform?: string;
       status?: string;
       id?: string;
+      postUrl?: string;
     }[];
     const sudahTayang = new Set([
       ...((video.platform_terunggah ?? []) as string[]).map((p) => p.toLowerCase()),
       ...hasilLama
-        .filter((h) => h.status === "success" && h.id)
+        .filter((h) => tayangAtauDiproses(h.status, h.id, h.postUrl))
         .map((h) => String(h.platform ?? "").toLowerCase()),
     ]);
     const dobel = diminta.filter((p) => sudahTayang.has(p));
@@ -278,7 +280,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const berhasil = hasil.filter((h) => h.status !== "error" && h.id);
+    const berhasil = hasil.filter((h) => tayangAtauDiproses(h.status, h.id, h.postUrl));
     const tautanUtama =
       berhasil.find((h) => h.platform === "instagram")?.postUrl ??
       berhasil.find((h) => h.postUrl)?.postUrl ??
