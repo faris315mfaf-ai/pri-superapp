@@ -2070,6 +2070,60 @@ export async function setAksesDashboard(
   });
 }
 
+export type KpiDashboardAnggota = {
+  id: string;
+  nama: string;
+  avatar_url: string;
+  divisi: string;
+  jumlah: number;
+  target: number;
+  tercapai: boolean;
+  /** "izin" | "sakit" bila hari itu dibebaskan; null bila tidak */
+  dibebaskan: string | null;
+};
+
+export type RencanaDashboard = {
+  id: string;
+  judul: string;
+  deskripsi: string;
+  divisi: string;
+  tanggal_mulai: string;
+  tenggat: string;
+  prioritas: "rendah" | "sedang" | "tinggi" | "kritis";
+  target_indikator: string;
+  untuk_semua: boolean;
+  status: "aktif" | "selesai" | "expired";
+  progress: number;
+  catatan_progress: string;
+};
+
+export type KpiDashboardData = {
+  tanggal: string;
+  target_bawaan: number;
+  anggota: KpiDashboardAnggota[];
+  tren: { tanggal: string; jumlah: number }[];
+  rencana: RencanaDashboard[];
+};
+
+/** Data sub-dashboard KPI Anggota (fitur 3.3.b, baca-saja). */
+export async function getDashboardKpi(tanggal?: string): Promise<KpiDashboardData> {
+  const q = tanggal ? `?tanggal=${encodeURIComponent(tanggal)}` : "";
+  const json = await fetchJson(`/api/dashboard/kpi${q}`, { headers: headerToken() });
+  return json as KpiDashboardData;
+}
+
+/** Riwayat video 7 hari satu anggota (modal detail dashboard KPI). */
+export async function getDashboardKpiAnggota(
+  userId: string,
+  tanggal?: string,
+): Promise<{ tanggal: string; jumlah: number }[]> {
+  const t = tanggal ? `&tanggal=${encodeURIComponent(tanggal)}` : "";
+  const json = await fetchJson(`/api/dashboard/kpi?user=${encodeURIComponent(userId)}${t}`, {
+    headers: headerToken(),
+  });
+  return (json?.riwayat ?? []) as { tanggal: string; jumlah: number }[];
+}
+
 // ------------------------------------------------------------
 // v1.12 — lupa sandi, ulang tahun, tugas link Pimred, interaksi,
 // profil lanjutan, mode perbaikan

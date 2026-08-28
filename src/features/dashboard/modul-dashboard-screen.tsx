@@ -33,6 +33,10 @@ const AbsensiHariIniScreen = dynamic(
     ),
   { ssr: false, loading: () => <GlassSkeleton className="h-64 rounded-2xl" /> },
 );
+const KpiAnggotaDashboard = dynamic(
+  () => import("./kpi-anggota-dashboard").then((m) => m.KpiAnggotaDashboard),
+  { ssr: false, loading: () => <GlassSkeleton className="h-64 rounded-2xl" /> },
+);
 
 type ModulDashboardScreenProps = {
   user: User;
@@ -136,6 +140,8 @@ function IsiSubDashboard({ kunci }: { kunci: string | null }) {
   // 3.3.a: komponen yang SAMA dengan halaman HR Center — mode
   // terbenam (tanpa header/tombol kembali). Memang baca-saja.
   if (kunci === "absensi") return <AbsensiHariIniScreen terbenam />;
+  // 3.3.b: KPI harian per anggota + rencana besar divisi.
+  if (kunci === "kpi") return <KpiAnggotaDashboard />;
 
   const info = KATALOG_DASHBOARD.find((d) => d.kunci === kunci);
   if (!info) return null;
