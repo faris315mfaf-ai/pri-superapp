@@ -18,6 +18,20 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "1.20.0",
+    tanggal: "28 Agustus 2026",
+    judul: "Atur tampilanmu sendiri + Asisten AI",
+    poin: [
+      "ATUR TATA LETAK di Beranda: geser urutan seksi, sembunyikan yang tak dipakai — semua seksi kini bisa dilipat/dibuka",
+      "Atur Menu Bawah: pilih sendiri modul yang tampil di footer (Konten & Profil selalu ada)",
+      "Modul KONTEN kini untuk semua: video TV Rakyat terbaru tampil sebagai EMBED dengan jam upload presisi + tugas komen & share",
+      "ASISTEN AI baru (khusus jabatan terpilih): tanya data partai lewat teks ATAU suara 2 arah realtime",
+      "Pimred kini mengatur ukuran video maksimal (1–200 MB) & umur tayang video di aplikasi (1–24 jam)",
+      "Riwayat video menunjukkan persis platform mana yang gagal + tombol ULANGI — video dijamin tidak terunggah dua kali",
+      "Notifikasi otomatis saat sebagian platform gagal menerima video",
+    ],
+  },
+  {
     versi: "1.19.1",
     tanggal: "28 Agustus 2026",
     judul: "Daftar lewat Google + halaman tunggu pintar",
