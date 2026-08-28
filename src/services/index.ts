@@ -2160,6 +2160,22 @@ export async function getDashboardTvAktivitas(): Promise<TvDashboardData["aktivi
   return (json?.aktivitas ?? []) as TvDashboardData["aktivitas"];
 }
 
+export type KelengkapanAnggota = {
+  id: string;
+  nama: string;
+  avatar_url: string;
+  divisi: string;
+  dimensi: { login: boolean; sosmed: boolean; google: boolean; email: boolean; wa: boolean };
+  terpenuhi: number;
+  persen: number;
+};
+
+/** Kelengkapan data anggota (fitur 3.3.e, baca-saja). */
+export async function getDashboardAnggota(): Promise<KelengkapanAnggota[]> {
+  const json = await fetchJson("/api/dashboard/anggota", { headers: headerToken() });
+  return (json?.anggota ?? []) as KelengkapanAnggota[];
+}
+
 /** Riwayat video 7 hari satu anggota (modal detail dashboard KPI). */
 export async function getDashboardKpiAnggota(
   userId: string,

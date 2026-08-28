@@ -37,6 +37,13 @@ const KpiAnggotaDashboard = dynamic(
   () => import("./kpi-anggota-dashboard").then((m) => m.KpiAnggotaDashboard),
   { ssr: false, loading: () => <GlassSkeleton className="h-64 rounded-2xl" /> },
 );
+const AnggotaKelengkapanDashboard = dynamic(
+  () =>
+    import("./anggota-kelengkapan-dashboard").then(
+      (m) => m.AnggotaKelengkapanDashboard,
+    ),
+  { ssr: false, loading: () => <GlassSkeleton className="h-64 rounded-2xl" /> },
+);
 const TvAnalitikDashboard = dynamic(
   () => import("./tv-analitik-dashboard").then((m) => m.TvAnalitikDashboard),
   { ssr: false, loading: () => <GlassSkeleton className="h-64 rounded-2xl" /> },
@@ -158,6 +165,8 @@ function IsiSubDashboard({ kunci }: { kunci: string | null }) {
   if (kunci === "kepatuhan") return <KepatuhanKaderPanel editable={false} />;
   // 3.3.d: analitik produksi & performa video TV Rakyat.
   if (kunci === "tv") return <TvAnalitikDashboard />;
+  // 3.3.e: kelengkapan data anggota (5 dimensi centang).
+  if (kunci === "anggota") return <AnggotaKelengkapanDashboard />;
 
   const info = KATALOG_DASHBOARD.find((d) => d.kunci === kunci);
   if (!info) return null;
