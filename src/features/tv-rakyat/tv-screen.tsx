@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Tv, Newspaper, Send, Clapperboard } from "lucide-react";
+import { Tv, Newspaper, Send, Clapperboard, Activity, History } from "lucide-react";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
 import { BeritaPanel } from "./berita-panel";
@@ -256,25 +256,38 @@ export function TvScreen({
             <KirimVideoManual />
           </div>
 
-          {/* Status pipeline (pindahan dari dashboard super admin) */}
-          <div>
-            <SectionTitle judul="Status Pipeline" />
-            <FadeInUp delay={0.08}>
+          {/* Status pipeline (pindahan dari dashboard super admin) —
+              bisa dilipat (fitur 1.22/2). */}
+          <FadeInUp delay={0.08}>
+            <SeksiLipat
+              id="status-pipeline"
+              judul="Status Pipeline"
+              ikon={Activity}
+              keterangan="Ringkasan tahap semua video"
+              bawaanTerbuka
+            >
               <PipelinePanel muatUlang={refreshKey} />
-            </FadeInUp>
-          </div>
+            </SeksiLipat>
+          </FadeInUp>
 
-          {/* Riwayat pemrosesan */}
-          <div>
-            <SectionTitle judul="Riwayat" />
-            <FadeInUp delay={0.1}>
+          {/* Riwayat pemrosesan — bisa di-expand/minimize (fitur 1.22/2);
+              thumbnail kecil tiap baris diambil dari thumbnail video asli. */}
+          <FadeInUp delay={0.1}>
+            <SeksiLipat
+              id="riwayat-pemrosesan"
+              judul="Riwayat Pemrosesan"
+              ikon={History}
+              keterangan="Daftar video beserta statusnya"
+              bawaanTerbuka
+            >
               <RiwayatVideo
+                polos
                 refreshKey={refreshKey}
                 onBukaVideo={bukaDariRiwayat}
                 onDataBerubah={() => setRefreshKey((k) => k + 1)}
               />
-            </FadeInUp>
-          </div>
+            </SeksiLipat>
+          </FadeInUp>
         </section>
       </div>
 

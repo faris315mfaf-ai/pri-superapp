@@ -6,7 +6,8 @@
 // dengan badge status, platform terunggah, dan aksi.
 // ============================================================
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { animate, motion, useMotionValue, useTransform } from "framer-motion";
 import {
   ExternalLink,
   History,
@@ -77,12 +78,19 @@ export function RiwayatVideo({
   refreshKey,
   onBukaVideo,
   onDataBerubah,
+  polos = false,
 }: {
   refreshKey: number;
   /** Dipanggil setelah video dihapus supaya daftar dimuat ulang */
   onDataBerubah?: () => void;
   /** Dipanggil saat satu baris riwayat diklik — membuka pratinjau */
   onBukaVideo: (video: VideoAntrian) => void;
+  /**
+   * Mode "polos" (fitur 1.22/2): tanpa kartu & kepala sendiri — dipakai
+   * ketika komponen dibungkus SeksiLipat yang sudah menyediakan wadah &
+   * judul, supaya tidak ada dua lapis kartu/judul yang menumpuk.
+   */
+  polos?: boolean;
 }) {
   const [cache, setCache] = useState<CacheRiwayat | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("SEMUA");
@@ -123,25 +131,28 @@ export function RiwayatVideo({
     return jumlahPerStatus[id] ?? 0;
   }
 
-  return (
-    <GlassCard className="kartu-hover p-4 sm:p-5">
-      {/* Kepala panel */}
-      <div className="flex items-center gap-3">
-        <span
-          className="glass-soft flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-pri"
-          aria-hidden="true"
-        >
-          <History className="h-4.5 w-4.5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="font-heading text-[15px] font-bold text-teks-utama">
-            Riwayat Pemrosesan
-          </h2>
-          <p className="text-[11px] text-teks-sekunder">
-            {video === null ? "Memuat riwayat…" : `${video.length} video tercatat`}
-          </p>
+  const konten = (
+    <>
+      {/* Kepala panel — disembunyikan saat "polos": SeksiLipat pembungkus
+          sudah memberi wadah & judul, jadi kepala ini akan menumpuk. */}
+      {!polos && (
+        <div className="flex items-center gap-3">
+          <span
+            className="glass-soft flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-pri"
+            aria-hidden="true"
+          >
+            <History className="h-4.5 w-4.5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-heading text-[15px] font-bold text-teks-utama">
+              Riwayat Pemrosesan
+            </h2>
+            <p className="text-[11px] text-teks-sekunder">
+              {video === null ? "Memuat riwayat…" : `${video.length} video tercatat`}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Filter chip status */}
       <div className="tanpa-scrollbar -mx-1 mt-4 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -212,7 +223,76 @@ export function RiwayatVideo({
           ))
         )}
       </div>
-    </GlassCard>
+    </>
+  );
+
+  // Mode polos: tanpa GlassCard sendiri (wadah dari SeksiLipat).
+  if (polos) return <div>{konten}</div>;
+  return <GlassCard className="kartu-hover p-4 sm:p-5">{konten}</GlassCard>;
+}
+
+// ------------------------------------------------------------
+// SwipeHapusKanan — bungkus geser-ke-kanan untuk menghapus (fitur
+// 1.22/bug 3). Meniru pola swipe di layar Notifikasi, tapi ke arah
+// kanan: aksi merah "Hapus" tersingkap di sisi KIRI, dan lepas melewati
+// ambang (>80px atau lemparan cepat) menjalankan penghapusan.
+// ------------------------------------------------------------
+
+function SwipeHapusKanan({
+  onHapus,
+  children,
+}: {
+  onHapus: () => Promise<void> | void;
+  children: ReactNode;
+}) {
+  const x = useMotionValue(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const sedang = useRef(false);
+  // Aksi merah memudar masuk seiring geseran, jadi niat pengguna terbaca
+  // sebelum ia melepas.
+  const opasitasAksi = useTransform(x, [16, 56], [0, 1]);
+
+  async function jalankan() {
+    if (sedang.current) return;
+    sedang.current = true;
+    const lebar = ref.current?.offsetWidth ?? 400;
+    await animate(x, lebar + 60, { duration: 0.24, ease: "easeIn" });
+    await onHapus();
+    // Kalau penghapusan gagal, baris tetap ada — pulihkan posisinya.
+    void animate(x, 0, { type: "spring", stiffness: 400, damping: 35 });
+    sedang.current = false;
+  }
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl">
+      <motion.button
+        type="button"
+        style={{ opacity: opasitasAksi }}
+        onClick={() => void jalankan()}
+        aria-label="Hapus catatan video"
+        tabIndex={-1}
+        className="absolute inset-y-0 left-0 z-0 flex w-[120px] flex-col items-center justify-center gap-0.5 rounded-2xl bg-gagal text-white"
+      >
+        <Trash2 className="h-5 w-5" aria-hidden="true" />
+        <span className="text-[10px] font-semibold">Hapus</span>
+      </motion.button>
+
+      <motion.div
+        ref={ref}
+        drag="x"
+        dragConstraints={{ left: 0, right: 120 }}
+        dragElastic={0.08}
+        dragMomentum={false}
+        style={{ x }}
+        onDragEnd={(_, info) => {
+          if (info.offset.x > 80 || info.velocity.x > 500) void jalankan();
+          else void animate(x, 0, { type: "spring", stiffness: 400, damping: 35 });
+        }}
+        className="relative z-10"
+      >
+        {children}
+      </motion.div>
+    </div>
   );
 }
 
@@ -312,14 +392,31 @@ function ItemVideo({
       setSedangHapus(false);
     }
   }
+
+  // Hapus PAKSA lewat swipe-ke-kanan untuk video yang sudah tayang
+  // (fitur 1.22/bug 3). Hanya catatannya yang hilang — postingan di
+  // sosmed tidak ikut turun, jadi toast menjelaskannya dengan jujur.
+  async function hapusPaksa() {
+    try {
+      await hapusVideoAntrian(video.id, true);
+      toast(
+        "sukses",
+        "Catatan video dihapus",
+        "Postingannya di sosmed tetap tayang — hanya catatan di aplikasi yang dihapus.",
+      );
+      onDataBerubah?.();
+    } catch (e) {
+      toast("error", "Gagal menghapus", e instanceof Error ? e.message : "");
+      throw e;
+    }
+  }
   const badge = BADGE_STATUS[video.status] ?? { label: video.status, warna: "netral" as WarnaBadge };
   const adaVideo = Boolean(video.hasil_render_url);
 
-  return (
-    <FadeInUp delay={Math.min(urutan * 0.04, 0.25)}>
-      {/* Seluruh baris dapat diklik untuk membuka pratinjau. Memakai div
-          ber-role button (bukan <button>) karena di dalamnya masih ada
-          tombol lain — tombol di dalam tombol tidak sah di HTML. */}
+  // Seluruh baris dapat diklik untuk membuka pratinjau. Memakai div
+  // ber-role button (bukan <button>) karena di dalamnya masih ada tombol
+  // lain — tombol di dalam tombol tidak sah di HTML.
+  const kartu = (
       <div
         role="button"
         tabIndex={0}
@@ -334,19 +431,28 @@ function ItemVideo({
         className="glass-soft btn-tekan w-full cursor-pointer rounded-2xl p-3 text-left transition-colors hover:bg-white/50 focus:ring-2 focus:ring-pri/50 focus:outline-none dark:hover:bg-white/10"
       >
         <div className="flex gap-3">
-          <div className="relative h-14 w-14 shrink-0">
-            <img
-              src={video.thumbnail_url}
-              alt=""
-              loading="lazy"
-              onError={(e) => {
-                e.currentTarget.style.opacity = "0";
-              }}
-              className="h-14 w-14 rounded-xl bg-black/10 object-cover dark:bg-white/10"
-            />
+          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-black/10 dark:bg-white/10">
+            {/* Thumbnail asli video (fitur 1.22/2). Hanya dirender bila
+                URL-nya ada — src="" memicu peringatan React & unduh ulang
+                halaman; tanpa thumbnail cukup latar kaca kosong. */}
+            {video.thumbnail_url ? (
+              <img
+                src={video.thumbnail_url}
+                alt=""
+                loading="lazy"
+                onError={(e) => {
+                  e.currentTarget.style.opacity = "0";
+                }}
+                className="h-14 w-14 object-cover"
+              />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center text-teks-sekunder/40">
+                <Play className="h-4.5 w-4.5" aria-hidden="true" />
+              </span>
+            )}
             {/* Penanda bahwa baris ini benar-benar punya video yang bisa
                 diputar — membedakannya dari yang baru menunggu proses. */}
-            {adaVideo && (
+            {adaVideo && video.thumbnail_url && (
               <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/35">
                 <Play className="h-5 w-5 translate-x-px text-white drop-shadow" />
               </span>
@@ -550,6 +656,18 @@ function ItemVideo({
           </div>
         </div>
       </div>
+  );
+
+  return (
+    <FadeInUp delay={Math.min(urutan * 0.04, 0.25)}>
+      {/* Video yang SUDAH tayang: swipe-ke-kanan untuk menghapus
+          CATATAN-nya (fitur 1.22/bug 3). Tahap lain tetap memakai tombol
+          Hapus biasa di dalam kartu. */}
+      {video.status === "SUDAH DIPROSES" ? (
+        <SwipeHapusKanan onHapus={hapusPaksa}>{kartu}</SwipeHapusKanan>
+      ) : (
+        kartu
+      )}
     </FadeInUp>
   );
 }

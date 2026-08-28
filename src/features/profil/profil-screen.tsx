@@ -49,6 +49,7 @@ import { IkonGoogle } from "@/components/tombol-google";
 import { urlProfilSosmed } from "@/lib/format";
 import {
   ambilToken,
+  bacaGalatSidikJari,
   daftarkanSidikJari,
   getProfilMomen,
   getStatusSidikJari,
@@ -1112,10 +1113,9 @@ function BarisSidikJari() {
         toast("sukses", "Sidik jari aktif", "Kini Anda bisa masuk dengan sidik jari.");
       }
     } catch (e) {
-      const nama = e instanceof DOMException ? e.name : "";
-      if (nama !== "NotAllowedError" && nama !== "AbortError") {
-        toast("error", "Gagal", e instanceof Error ? e.message : "");
-      }
+      // Pesan ramah (bug 1.22) — pembatalan tak ditampilkan sebagai galat.
+      const { pesan, dibatalkan } = bacaGalatSidikJari(e);
+      if (!dibatalkan) toast("error", "Sidik jari gagal", pesan);
     } finally {
       setSibuk(false);
     }

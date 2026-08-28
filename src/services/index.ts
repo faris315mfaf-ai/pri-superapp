@@ -1943,8 +1943,12 @@ export async function getInsightDetail(
 }
 
 /** Hapus video dari antrian TV Rakyat (belum tayang saja). */
-export async function hapusVideoAntrian(kode: string): Promise<void> {
-  await fetchJson(`/api/video-antrian/${encodeURIComponent(kode)}`, {
+export async function hapusVideoAntrian(kode: string, paksa = false): Promise<void> {
+  // paksa=true (fitur 1.22/bug 3): hapus juga catatan video yang SUDAH
+  // tayang di sosmed — dipakai gestur swipe-ke-kanan. Postingannya di
+  // sosmed tidak ikut turun; yang dihapus hanya catatan di aplikasi.
+  const kueri = paksa ? "?paksa=1" : "";
+  await fetchJson(`/api/video-antrian/${encodeURIComponent(kode)}${kueri}`, {
     method: "DELETE",
     headers: headerToken(),
   });
@@ -2237,6 +2241,27 @@ export async function perangkatDukungSidikJari(): Promise<boolean> {
   }
 }
 
+// ------------------------------------------------------------
+// v1.22 — Mode Developer (impersonasi sesi)
+// ------------------------------------------------------------
+
+/** Masuk Mode Developer dengan peran/jabatan/divisi pilihan. */
+export async function masukDeveloper(data: {
+  password: string;
+  peran: string;
+  jabatan: string;
+  divisi: string;
+  sub_divisi: string;
+}): Promise<UserLengkap> {
+  const json = await fetchJson("/api/dev/masuk", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (json.token) simpanToken(json.token as string);
+  return json.user as UserLengkap;
+}
+
 /** Status sidik jari akun saya (untuk toggle di Profil). */
 export async function getStatusSidikJari(): Promise<{ aktif: boolean; jumlah_perangkat: number }> {
   try {
@@ -2264,10 +2289,49 @@ export async function matikanSidikJari(): Promise<void> {
   await fetchJson("/api/webauthn", { method: "DELETE", headers: headerToken() });
 }
 
+/**
+ * Ubah galat WebAuthn (yang dibungkus @simplewebauthn jadi WebAuthnError,
+ * BUKAN DOMException) menjadi pesan Indonesia yang jelas + kode.
+ * Mengembalikan { dibatalkan } supaya pemanggil bisa DIAM saat pengguna
+ * sekadar membatalkan prompt.
+ */
+export function bacaGalatSidikJari(err: unknown): { pesan: string; dibatalkan: boolean } {
+  const e = err as { name?: string; code?: string; cause?: { name?: string }; message?: string };
+  const namaAsli = e?.cause?.name ?? e?.name ?? "";
+  const kode = e?.code ?? "";
+  // Pengguna menutup/menolak prompt, atau tak ada passkey yang cocok.
+  if (
+    namaAsli === "NotAllowedError" ||
+    namaAsli === "AbortError" ||
+    kode === "ERROR_CEREMONY_ABORTED"
+  ) {
+    return {
+      dibatalkan: true,
+      pesan:
+        "Sidik jari dibatalkan atau belum diaktifkan di perangkat ini. Masuk dengan sandi lebih dulu, lalu aktifkan di Profil → Keamanan.",
+    };
+  }
+  if (namaAsli === "InvalidStateError") {
+    return { dibatalkan: false, pesan: "Perangkat ini sudah terdaftar untuk akun tersebut." };
+  }
+  if (namaAsli === "SecurityError") {
+    return {
+      dibatalkan: false,
+      pesan: "Sidik jari hanya bisa dipakai lewat koneksi aman (HTTPS) di aplikasi resmi.",
+    };
+  }
+  return {
+    dibatalkan: false,
+    pesan: e?.message?.slice(0, 140) || "Gagal memakai sidik jari. Coba lagi.",
+  };
+}
+
 /** Masuk dengan sidik jari (tanpa perlu login dulu) → user + token. */
 export async function masukSidikJari(): Promise<UserLengkap> {
   const { startAuthentication } = await import("@simplewebauthn/browser");
   const opsi = await fetchJson("/api/webauthn/masuk");
+  // Bila belum ada passkey untuk domain ini, startAuthentication langsung
+  // melempar — ditangani pemanggil lewat bacaGalatSidikJari.
   const respons = await startAuthentication({ optionsJSON: opsi });
   const json = await fetchJson("/api/webauthn/masuk", {
     method: "POST",

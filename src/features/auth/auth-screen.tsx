@@ -26,6 +26,7 @@ import {
   Mail,
   Phone,
   ShieldCheck,
+  TerminalSquare,
   User as IkonUser,
   UserPlus,
   X,
@@ -33,10 +34,12 @@ import {
 import { LogoPri } from "@/components/logo-pri";
 import { ThemeToggle } from "@/components/pri-ui";
 import { TombolGoogle } from "@/components/tombol-google";
+import { DevMode } from "@/features/auth/dev-mode";
 import { toast } from "@/hooks/use-app-store";
 import { useEffect } from "react";
 import {
   ambilToken,
+  bacaGalatSidikJari,
   daftar as daftarService,
   kirimUlangOtp,
   lengkapiProfil,
@@ -52,7 +55,7 @@ import {
 import { butuhSubDivisi, DIVISI, pilihanSubDivisi } from "@/lib/struktur";
 import { cn } from "@/lib/utils";
 
-type Langkah = "tertutup" | "masuk" | "daftar" | "otp" | "profil" | "menunggu" | "lupa";
+type Langkah = "tertutup" | "masuk" | "daftar" | "otp" | "profil" | "menunggu" | "lupa" | "developer";
 
 type AuthScreenProps = {
   onMasukBerhasil: (user: UserLengkap) => void;
@@ -151,13 +154,30 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
         </p>
       </motion.div>
 
+      {/* Tombol kecil "developer mode" (fitur 1.22/1) — di ujung bawah
+          layar, sengaja samar. Membuka mode impersonasi sesi (peran/
+          jabatan/divisi apa pun) yang digerbang password developer. */}
+      <button
+        type="button"
+        onClick={() => setLangkah("developer")}
+        className="mt-8 inline-flex items-center gap-1.5 text-[11px] font-medium text-teks-sekunder/60 transition-opacity hover:opacity-100"
+      >
+        <TerminalSquare className="h-3.5 w-3.5" aria-hidden="true" />
+        developer mode
+      </button>
+
       <AnimatePresence>
         {langkah !== "tertutup" && (
           <ModalAuth
             key={langkah}
             // Langkah OTP dan profil tidak boleh ditinggalkan sembarangan
             // di tengah jalan — pendaftarannya jadi menggantung.
-            bisaTutup={langkah === "masuk" || langkah === "daftar" || langkah === "lupa"}
+            bisaTutup={
+              langkah === "masuk" ||
+              langkah === "daftar" ||
+              langkah === "lupa" ||
+              langkah === "developer"
+            }
             onTutup={tutup}
             judul={
               langkah === "masuk"
@@ -170,7 +190,9 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
                       ? "Lengkapi Profil"
                       : langkah === "lupa"
                         ? "Lupa Kata Sandi"
-                        : "Menunggu Persetujuan"
+                        : langkah === "developer"
+                          ? "Mode Developer"
+                          : "Menunggu Persetujuan"
             }
           >
             {langkah === "masuk" && (
@@ -183,6 +205,7 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
             {langkah === "lupa" && (
               <FormLupaSandi kembali={() => setLangkah("masuk")} />
             )}
+            {langkah === "developer" && <DevMode onBerhasil={lanjutkan} />}
             {langkah === "daftar" && (
               <FormDaftar
                 onTerkirim={(nomor, otpTerkirim) => {
@@ -389,16 +412,12 @@ function FormMasuk({
       const user = await masukSidikJari();
       onBerhasil(user);
     } catch (err) {
-      // Pengguna membatalkan prompt biometrik = bukan galat yang perlu
-      // ditampilkan merah-merah.
-      const nama = err instanceof DOMException ? err.name : "";
-      if (nama === "NotAllowedError" || nama === "AbortError") {
-        setError(null);
-      } else {
-        setError(
-          err instanceof Error ? err.message : "Gagal masuk dengan sidik jari.",
-        );
-      }
+      // Pesan diklasifikasikan (bug 1.22): galat WebAuthn dibungkus jadi
+      // WebAuthnError — dulu teks mentah W3C bocor ke layar. Kini pesan
+      // Indonesia yang jelas, dan pembatalan tak ditampilkan merah.
+      const { pesan, dibatalkan } = bacaGalatSidikJari(err);
+      setError(dibatalkan ? null : pesan);
+      if (dibatalkan) toast("info", "Sidik jari", pesan);
     } finally {
       setSidikJalan(false);
     }

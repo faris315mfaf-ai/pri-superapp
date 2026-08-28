@@ -10,7 +10,7 @@
 // Datanya dari cache server 15 menit (Ayrshare /history).
 // ============================================================
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, Play, RefreshCw } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { EmptyState, FadeInUp, GlassSkeleton, SectionTitle } from "@/components/pri-ui";
@@ -18,12 +18,28 @@ import { PlatformIcon } from "@/components/platform-icon";
 import { getEmbedTerbaru, type PostinganEmbed } from "@/services";
 import { formatAngkaRingkas } from "@/lib/format";
 import { urlEmbedDari } from "@/lib/embed-sosmed";
+import { cn } from "@/lib/utils";
 import { Clapperboard } from "lucide-react";
+
+// Segmentasi per platform (fitur 1.22/bug 4). "cocok" menormalkan
+// nama platform dari Ayrshare (mis. "twitter" untuk X, "youtube" untuk
+// YT Short) supaya satu chip menangkap semua variannya.
+type Segmen = { id: string; label: string; cocok: (p: string) => boolean };
+const SEGMEN: Segmen[] = [
+  { id: "semua", label: "Semua", cocok: () => true },
+  { id: "instagram", label: "Instagram", cocok: (p) => p === "instagram" },
+  { id: "tiktok", label: "TikTok", cocok: (p) => p === "tiktok" },
+  { id: "youtube", label: "YT Short", cocok: (p) => p === "youtube" || p === "youtubeshorts" },
+  { id: "facebook", label: "Facebook", cocok: (p) => p === "facebook" || p === "fb" },
+  { id: "threads", label: "Threads", cocok: (p) => p === "threads" },
+  { id: "twitter", label: "X", cocok: (p) => p === "twitter" || p === "x" },
+];
 
 export function EmbedTerbaru() {
   const [daftar, setDaftar] = useState<PostinganEmbed[] | null>(null);
   const [dimuat, setDimuat] = useState<Set<string>>(new Set());
   const [muatUlang, setMuatUlang] = useState(0);
+  const [segmen, setSegmen] = useState("semua");
 
   useEffect(() => {
     let hidup = true;
@@ -39,6 +55,22 @@ export function EmbedTerbaru() {
       hidup = false;
     };
   }, [muatUlang]);
+
+  // Normalisasi platform sekali, lalu hitung jumlah per segmen untuk
+  // angka di tiap chip. Chip yang kosong (0) tetap ditampilkan supaya
+  // tata letaknya stabil, tapi dinonaktifkan agar tak membingungkan.
+  const jumlahSegmen = useMemo(() => {
+    const hitung: Record<string, number> = {};
+    for (const s of SEGMEN) hitung[s.id] = 0;
+    for (const p of daftar ?? []) {
+      const plat = p.platform.toLowerCase();
+      for (const s of SEGMEN) if (s.cocok(plat)) hitung[s.id] += 1;
+    }
+    return hitung;
+  }, [daftar]);
+
+  const aktif = SEGMEN.find((s) => s.id === segmen) ?? SEGMEN[0];
+  const terfilter = (daftar ?? []).filter((p) => aktif.cocok(p.platform.toLowerCase()));
 
   return (
     <FadeInUp delay={0.06}>
@@ -57,6 +89,44 @@ export function EmbedTerbaru() {
         </button>
       </div>
 
+      {/* Segmentasi per platform (fitur 1.22/bug 4) */}
+      {daftar !== null && daftar.length > 0 && (
+        <div className="tanpa-scrollbar -mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-1">
+          {SEGMEN.map((s) => {
+            const jml = jumlahSegmen[s.id] ?? 0;
+            const aktifChip = segmen === s.id;
+            const kosong = jml === 0 && s.id !== "semua";
+            return (
+              <button
+                key={s.id}
+                type="button"
+                disabled={kosong}
+                onClick={() => setSegmen(s.id)}
+                aria-pressed={aktifChip}
+                className={cn(
+                  "btn-tekan flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold disabled:opacity-40",
+                  aktifChip ? "text-white" : "glass text-teks-sekunder hover:text-teks-utama",
+                )}
+                style={
+                  aktifChip
+                    ? {
+                        background: "linear-gradient(135deg, #DC2626, #B91C1C)",
+                        boxShadow: "0 6px 16px rgba(220, 38, 38, 0.3)",
+                      }
+                    : undefined
+                }
+              >
+                {s.id !== "semua" && <PlatformIcon platform={s.id} size={13} />}
+                {s.label}
+                <span className={cn("angka-tab", aktifChip ? "text-white/80" : "text-teks-sekunder/70")}>
+                  {jml}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {daftar === null ? (
         <GlassSkeleton className="mt-2 h-40 rounded-2xl" />
       ) : daftar.length === 0 ? (
@@ -68,9 +138,18 @@ export function EmbedTerbaru() {
             className="py-8"
           />
         </GlassCard>
+      ) : terfilter.length === 0 ? (
+        <GlassCard className="mt-2 p-1">
+          <EmptyState
+            ikon={Clapperboard}
+            judul={`Belum ada konten ${aktif.label}`}
+            keterangan="Coba pilih platform lain di atas."
+            className="py-8"
+          />
+        </GlassCard>
       ) : (
         <div className="mt-2 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {daftar.map((p) => {
+          {terfilter.map((p) => {
             const kunci = `${p.platform}-${p.id}`;
             const embed = urlEmbedDari(p.platform, p.url);
             const sedangEmbed = dimuat.has(kunci);

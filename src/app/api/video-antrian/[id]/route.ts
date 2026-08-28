@@ -148,6 +148,11 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    // paksa=1 (fitur 1.22/bug 3): izinkan menghapus CATATAN video yang
+    // sudah tayang — dipicu gestur swipe-ke-kanan yang memang disengaja
+    // pengguna. Tanpa flag ini, jalur hapus biasa tetap dilindungi 409
+    // supaya tak ada penghapusan catatan tayang yang tak sengaja.
+    const paksa = new URL(request.url).searchParams.get("paksa") === "1";
     const db = supabase();
     const { data: video } = await db
       .from("video_antrian")
@@ -156,7 +161,7 @@ export async function DELETE(
       .maybeSingle();
     if (!video) throw Object.assign(new Error("Video tidak ditemukan."), { status: 404 });
 
-    if (video.status === "SUDAH DIPROSES") {
+    if (video.status === "SUDAH DIPROSES" && !paksa) {
       throw Object.assign(
         new Error(
           "Video ini sudah tayang di sosmed, jadi catatannya tidak bisa dihapus. Turunkan postingannya langsung di platformnya bila perlu.",

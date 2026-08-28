@@ -37,6 +37,29 @@ export async function buatSesi(
   return token;
 }
 
+/**
+ * Sesi Mode Developer (fitur 1.22/1): sesi pada akun __dev__ yang
+ * membawa override peran/jabatan/divisi. Reversibel — keluar = sesi
+ * dihapus = tak ada jejak permanen.
+ */
+export async function buatSesiDev(
+  userId: number | string,
+  override: { peran: string; jabatan: string; divisi: string; subdivisi: string },
+): Promise<string> {
+  const token = randomBytes(32).toString("base64url");
+  const { error } = await supabase().from("sesi_perangkat").insert({
+    user_id: Number(userId),
+    token_hash: hashToken(token),
+    nama_perangkat: "Mode Developer",
+    dev_peran: override.peran,
+    dev_jabatan: override.jabatan,
+    dev_divisi: override.divisi,
+    dev_subdivisi: override.subdivisi,
+  });
+  if (error) throw new Error("Gagal membuat sesi developer.");
+  return token;
+}
+
 type BarisUser = {
   id: number;
   email: string;
@@ -120,7 +143,7 @@ export async function userDariToken(token: string): Promise<UserPublik | null> {
   const db = supabase();
   const { data: sesi } = await db
     .from("sesi_perangkat")
-    .select("id, user_id, token_hash")
+    .select("id, user_id, token_hash, dev_peran, dev_jabatan, dev_divisi, dev_subdivisi")
     .eq("token_hash", hash)
     .maybeSingle();
 
@@ -140,6 +163,17 @@ export async function userDariToken(token: string): Promise<UserPublik | null> {
 
   const u = user as BarisUser | null;
   if (!u || !u.aktif || u.status !== "aktif") return null;
+
+  // Mode Developer (fitur 1.22/1): sesi membawa override peran/jabatan/
+  // divisi — timpa yang DILIHAT sesi ini TANPA mengubah baris app_user.
+  // Baris aslinya role='master' (akun __dev__), jadi tetap tersaring
+  // dari roster; override hanya mengubah persepsi sesi atas dirinya.
+  if (sesi.dev_peran) {
+    u.role = String(sesi.dev_peran);
+    u.jabatan = String(sesi.dev_jabatan ?? "");
+    u.divisi = String(sesi.dev_divisi ?? "");
+    u.sub_divisi = String(sesi.dev_subdivisi ?? "");
+  }
 
   // Catat pemakaian terakhir (berguna untuk daftar perangkat di profil).
   //
