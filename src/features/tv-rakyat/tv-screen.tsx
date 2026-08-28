@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Tv, Newspaper, Send, Clapperboard, Activity, History } from "lucide-react";
+import { Tv, Newspaper, Send, Clapperboard, Activity, History, Radar } from "lucide-react";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
 import { BeritaPanel } from "./berita-panel";
@@ -24,6 +24,7 @@ import { ProgressPanel } from "./progress-panel";
 import { PreviewModal } from "./preview-modal";
 import { RiwayatVideo } from "./riwayat-video";
 import { KelolaTimPanel } from "./kelola-tim-panel";
+import { KelolaSumberPanel } from "./kelola-sumber-panel";
 import { SeksiLipat } from "@/components/seksi-lipat";
 import { EmbedTerbaru } from "./embed-terbaru";
 import { SectionTitle } from "@/components/pri-ui";
@@ -195,6 +196,18 @@ export function TvScreen({
               idTerpilih={videoSumber?.id ?? null}
             />
           </SeksiLipat>
+
+          {/* Kelola akun sumber scraping (fitur 1.22/bug 6) — khusus Pimred */}
+          {pimred && (
+            <SeksiLipat
+              id="kelola-sumber"
+              judul="Kelola Sumber Berita"
+              ikon={Radar}
+              keterangan="Tambah/stop akun IG & TikTok + interval scraping"
+            >
+              <KelolaSumberPanel />
+            </SeksiLipat>
+          )}
 
           {/* Distribusi tugas link ke anggota — khusus Pimred. Link video
               yang dipilih di panel Berita otomatis terisi. */}

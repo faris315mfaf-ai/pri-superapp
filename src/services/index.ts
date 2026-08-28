@@ -880,6 +880,74 @@ export async function getBeritaTerbaru(): Promise<Berita[]> {
   return ambilData<Berita[]>("/api/berita");
 }
 
+// ------------------------------------------------------------
+// Kelola sumber berita untuk scraping (fitur 1.22/bug 6)
+// ------------------------------------------------------------
+
+export type SumberBerita = {
+  id: string;
+  nama: string;
+  username: string;
+  platform: "instagram" | "tiktok";
+  aktif: boolean;
+};
+
+export type DaftarSumberBerita = {
+  data: SumberBerita[];
+  interval_menit: number;
+  interval_min: number;
+  interval_maks: number;
+};
+
+export async function getSumberBerita(): Promise<DaftarSumberBerita> {
+  const json = await fetchJson("/api/tv/sumber-berita", { headers: headerToken() });
+  return {
+    data: (json?.data ?? []) as SumberBerita[],
+    interval_menit: Number(json?.interval_menit ?? 60),
+    interval_min: Number(json?.interval_min ?? 5),
+    interval_maks: Number(json?.interval_maks ?? 1440),
+  };
+}
+
+export async function tambahSumberBerita(data: {
+  nama: string;
+  username: string;
+  platform: "instagram" | "tiktok";
+}): Promise<void> {
+  await fetchJson("/api/tv/sumber-berita", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "tambah", ...data }),
+  });
+}
+
+/** Aktif/nonaktifkan satu sumber (mis. stop Lambe Turah). */
+export async function toggleSumberBerita(id: string): Promise<boolean> {
+  const json = await fetchJson("/api/tv/sumber-berita", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "toggle", id }),
+  });
+  return Boolean(json?.aktif);
+}
+
+export async function hapusSumberBerita(id: string): Promise<void> {
+  await fetchJson("/api/tv/sumber-berita", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "hapus", id }),
+  });
+}
+
+export async function setIntervalBerita(menit: number): Promise<number> {
+  const json = await fetchJson("/api/tv/sumber-berita", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "interval", menit }),
+  });
+  return Number(json?.interval_menit ?? menit);
+}
+
 /**
  * Mulai pemindaian berita baru lewat n8n (Apify), lalu TUNGGU sampai
  * hasil barunya muncul di database.
