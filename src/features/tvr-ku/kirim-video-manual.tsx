@@ -30,7 +30,9 @@ import {
 } from "@/services";
 import { jamWIB, tanggalIndonesia } from "@/lib/format";
 
-const MAKS_UKURAN_MB = 100;
+// Cadangan bila konfigurasi server belum termuat — batas sebenarnya
+// diatur Pimred (1-200 MB, fitur 1.20/6) dan dibaca saat kartu tampil.
+const MAKS_UKURAN_MB_BAWAAN = 100;
 
 function badgeStatus(k: KirimanManual) {
   if (k.status === "SUDAH DIPROSES") return <StatusBadge label="sudah tayang" warna="hijau" />;
@@ -49,6 +51,9 @@ export function KirimVideoManual({
   const [muatUlang, setMuatUlang] = useState(0);
   const [persen, setPersen] = useState<number | null>(null);
   const [judul, setJudul] = useState("");
+  // Batas ukuran dari Pimred — dimuat sekali supaya label & penolakan
+  // dini memakai angka yang sama dengan server.
+  const [batasMb, setBatasMb] = useState(MAKS_UKURAN_MB_BAWAAN);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const idKu = useAppStore((s) => s.user?.id);
 
@@ -87,6 +92,14 @@ export function KirimVideoManual({
       } catch {
         if (hidup) setDaftar([]);
       }
+      // Ambil batas ukuran terkini (fitur 1.20/6) — gagal = tetap
+      // pakai bawaan, server toh menegakkannya lagi.
+      try {
+        const konfig = await getKonfigUploadVideo();
+        if (hidup && konfig.maks_upload_mb) setBatasMb(konfig.maks_upload_mb);
+      } catch {
+        // Konfigurasi menyusul saat tombol unggah ditekan.
+      }
     })();
     return () => {
       hidup = false;
@@ -94,8 +107,13 @@ export function KirimVideoManual({
   }, [muatUlang]);
 
   async function unggah(berkas: File) {
-    if (berkas.size > MAKS_UKURAN_MB * 1024 * 1024) {
-      toast("peringatan", "Video terlalu besar", `Maksimal ${MAKS_UKURAN_MB} MB.`);
+    if (berkas.size > batasMb * 1024 * 1024) {
+      toast(
+        "peringatan",
+        "Video terlalu besar",
+        `Berkas ${(berkas.size / 1024 / 1024).toFixed(1)} MB — batas dari Pimred ${batasMb} MB.`,
+      );
+      if (inputRef.current) inputRef.current.value = "";
       return;
     }
     if (tugasSaya.length > 0 && !tugasId) {
@@ -110,9 +128,16 @@ export function KirimVideoManual({
     setPersen(0);
     try {
       const konfig = await getKonfigUploadVideo();
+      // Batas terbaru dari server menang atas yang tersimpan di layar.
+      if (konfig.maks_upload_mb && berkas.size > konfig.maks_upload_mb * 1024 * 1024) {
+        setBatasMb(konfig.maks_upload_mb);
+        throw new Error(
+          `Berkas melebihi batas ${konfig.maks_upload_mb} MB yang ditetapkan Pimred.`,
+        );
+      }
 
       // Unggah langsung peramban → Cloudinary dengan progres nyata.
-      const hasilUpload = await new Promise<{ secure_url: string; public_id: string }>(
+      const hasilUpload = await new Promise<{ secure_url: string; public_id: string; bytes?: number }>(
         (selesai, gagal) => {
           const bentuk = new FormData();
           bentuk.append("file", berkas);
@@ -132,10 +157,15 @@ export function KirimVideoManual({
               const json = JSON.parse(xhr.responseText) as {
                 secure_url?: string;
                 public_id?: string;
+                bytes?: number;
                 error?: { message?: string };
               };
               if (xhr.status >= 200 && xhr.status < 300 && json.secure_url && json.public_id) {
-                selesai({ secure_url: json.secure_url, public_id: json.public_id });
+                selesai({
+                  secure_url: json.secure_url,
+                  public_id: json.public_id,
+                  bytes: json.bytes,
+                });
               } else {
                 gagal(new Error(json.error?.message ?? "Penyimpanan menolak video ini."));
               }
@@ -153,6 +183,7 @@ export function KirimVideoManual({
         public_id: hasilUpload.public_id,
         judul: judul.trim() || undefined,
         tugas_id: tugasId || undefined,
+        bytes: hasilUpload.bytes ?? berkas.size,
       });
 
       toast(
@@ -234,7 +265,7 @@ export function KirimVideoManual({
             }}
           >
             <UploadCloud className="h-4.5 w-4.5" aria-hidden="true" />
-            Pilih Video (maks {MAKS_UKURAN_MB} MB)
+            Pilih Video (maks {batasMb} MB)
             <input
               ref={inputRef}
               type="file"

@@ -18,7 +18,7 @@ import {
 import { EmptyState, FadeInUp, GlassSkeleton, StatusBadge } from "@/components/pri-ui";
 import { GlassCard } from "@/components/glass-card";
 import { PlatformIcon } from "@/components/platform-icon";
-import { getVideoAntrian, hapusVideoAntrian } from "@/services";
+import { getVideoAntrian, hapusVideoAntrian, unggahVideoSosmed } from "@/services";
 import { toast } from "@/hooks/use-app-store";
 import { jamWIB, pesanBagikanVideo } from "@/lib/format";
 import type { VideoAntrian } from "@/types";
@@ -233,6 +233,65 @@ function ItemVideo({
 }) {
   const [konfirmasiHapus, setKonfirmasiHapus] = useState(false);
   const [sedangHapus, setSedangHapus] = useState(false);
+  // Sedang mengulang unggahan platform yang gagal (fitur 1.20/9)
+  const [mengulang, setMengulang] = useState(false);
+
+  /**
+   * Platform yang GAGAL pada percobaan terakhir dan belum pernah
+   * sukses — hanya inilah yang dikirim tombol Ulangi. Server punya
+   * pagar anti-dobelnya sendiri; saringan ini untuk kejujuran tombol.
+   */
+  function platformGagal(v: VideoAntrian): { platform: string; pesan: string }[] {
+    const hasil = (v.ayrshare_hasil ?? []) as {
+      platform?: string;
+      status?: string;
+      postUrl?: string;
+      pesan?: string;
+    }[];
+    const sukses = new Set(
+      hasil
+        .filter((h) => h.status !== "error")
+        .map((h) => String(h.platform ?? "").toLowerCase()),
+    );
+    for (const p of v.platform_terunggah ?? []) sukses.add(p.toLowerCase());
+    return hasil
+      .filter(
+        (h) =>
+          h.status === "error" &&
+          h.platform &&
+          !sukses.has(String(h.platform).toLowerCase()),
+      )
+      .map((h) => ({ platform: String(h.platform), pesan: String(h.pesan ?? "") }));
+  }
+
+  async function ulangiGagal(v: VideoAntrian) {
+    const gagal = platformGagal(v);
+    if (gagal.length === 0 || mengulang) return;
+    setMengulang(true);
+    try {
+      // v.id ADALAH kode pipeline — view memetakan kode AS id.
+      const balasan = await unggahVideoSosmed(
+        v.id,
+        gagal.map((g) => g.platform),
+      );
+      if (balasan.berhasil > 0) {
+        toast(
+          "sukses",
+          `Berhasil di ${balasan.berhasil} dari ${balasan.total} platform`,
+          balasan.berhasil < balasan.total
+            ? "Sisanya masih gagal — coba lagi nanti."
+            : undefined,
+        );
+      } else {
+        toast("error", "Masih gagal di semua platform", "Periksa akun Ayrshare lalu coba lagi.");
+      }
+      onDataBerubah?.();
+    } catch (e) {
+      toast("error", "Gagal mengulang unggahan", e instanceof Error ? e.message : "");
+    } finally {
+      setMengulang(false);
+    }
+  }
 
   // Video yang SUDAH tayang tidak bisa dihapus dari sini: barisnya
   // adalah catatan bahwa unggahan itu benar terjadi, dan menghapusnya
@@ -381,6 +440,47 @@ function ItemVideo({
                 </button>
               </div>
             )}
+
+            {/* Status pipeline per platform + Ulangi (fitur 1.20/9):
+                terlihat persis DI MANA video gagal, dan hanya platform
+                gagal itu yang dikirim ulang — anti terunggah dua kali. */}
+            {(() => {
+              const gagal = platformGagal(video);
+              if (gagal.length === 0) return null;
+              return (
+                <div className="mt-2 rounded-xl border border-gagal/30 bg-gagal/[0.05] p-2.5">
+                  {gagal.map((g) => (
+                    <p
+                      key={g.platform}
+                      className="flex items-start gap-1.5 text-[10.5px] leading-snug text-teks-utama"
+                    >
+                      <PlatformIcon platform={g.platform} size={12} />
+                      <span className="min-w-0">
+                        <b className="capitalize">{g.platform}</b> gagal
+                        {g.pesan ? ` — ${g.pesan.slice(0, 90)}` : ""}
+                      </span>
+                    </p>
+                  ))}
+                  <button
+                    type="button"
+                    disabled={mengulang}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void ulangiGagal(video);
+                    }}
+                    className="btn-tekan mt-2 flex h-8 w-full items-center justify-center gap-1.5 rounded-lg text-[11.5px] font-bold text-white disabled:opacity-60"
+                    style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+                  >
+                    {mengulang ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                    Ulangi {gagal.length} platform yang gagal
+                  </button>
+                </div>
+              );
+            })()}
 
             {/* Tombol coba lagi untuk video gagal */}
             {video.status === "GAGAL" && (

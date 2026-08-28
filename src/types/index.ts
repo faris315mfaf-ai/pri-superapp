@@ -125,6 +125,7 @@ export type Rekap = {
 
 // Antrian & riwayat video TV Rakyat
 export type VideoAntrian = {
+  /** = kode pipeline (view memetakan kode AS id) */
   id: string;
   judul: string;
   link: string; // link video di platform sumber

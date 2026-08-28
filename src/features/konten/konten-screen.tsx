@@ -33,6 +33,7 @@ import { EmptyState, FadeInUp, GlassSkeleton, ThemeToggle } from "@/components/p
 import { GlassCard } from "@/components/glass-card";
 import { getKonten, type AkunKonten, type FeedKonten, type PostinganKonten } from "@/services";
 import { toast } from "@/hooks/use-app-store";
+import { KartuVideoBaru } from "@/features/beranda/kartu-video-baru";
 import { BerandaAnggotaPanel } from "./beranda-anggota";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { cn } from "@/lib/utils";
@@ -224,6 +225,12 @@ export function KontenScreen({
       {/* Beranda anggota: pengumuman terbaru + KPI kerja + wajib komentar */}
       <BerandaAnggotaPanel user={user} onBukaLaporanKerja={onBukaLaporanKerja} />
 
+      {/* Video TV Rakyat terbaru hasil tarikan Ayrshare/upload-post
+          (fitur 1.20/5 & 7): bentuk EMBED tanpa judul + jam presisi,
+          lengkap dengan kewajiban komen & share. Umurnya mengikuti
+          pengaturan Pimred (1-24 jam, fitur 1.20/8). */}
+      <KartuVideoBaru />
+
       {daftar === null ? (
         <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2">
           {[0, 1, 2].map((i) => (
@@ -247,7 +254,10 @@ export function KontenScreen({
       ) : (
         <div className="mt-5 grid grid-cols-1 gap-6 md:grid-cols-2 md:items-start">
           {daftar.map((akun, i) => (
-            <FadeInUp key={akun.username} delay={Math.min(i * 0.08, 0.3)}>
+            // Username BISA muncul dua kali (akun yang sama dianalisis
+            // dari dua profil Ayrshare) — kunci digabung indeks supaya
+            // React tidak menjatuhkan salah satunya.
+            <FadeInUp key={`${akun.username}-${i}`} delay={Math.min(i * 0.08, 0.3)}>
               <BarisAkun akun={akun} idBaru={idBaru} />
             </FadeInUp>
           ))}

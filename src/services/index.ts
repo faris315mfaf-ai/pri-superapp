@@ -1539,6 +1539,8 @@ export type KonfigUploadVideo = {
   cloudName: string;
   uploadPreset: string;
   retensi_jam: number;
+  /** Batas ukuran berkas dari Pimred, MB (fitur 1.20/6) */
+  maks_upload_mb: number;
 };
 
 export async function getKonfigUploadVideo(): Promise<KonfigUploadVideo> {
@@ -1572,6 +1574,8 @@ export async function daftarkanVideoManual(data: {
   judul?: string;
   caption?: string;
   tugas_id?: string;
+  /** Ukuran berkas (byte) dari respons Cloudinary — diperiksa server */
+  bytes?: number;
 }): Promise<string> {
   const json = await fetchJson("/api/tv/manual", {
     method: "POST",
@@ -2170,6 +2174,111 @@ export type KelengkapanAnggota = {
   persen: number;
 };
 
+// ------------------------------------------------------------
+// v1.20 — Asisten AI (chatbot Gemini + mode suara)
+// ------------------------------------------------------------
+
+export type PesanAsisten = { peran: "pengguna" | "asisten"; teks: string };
+
+/** Status asisten: boleh dipakai jabatan saya? kuncinya terpasang? */
+export async function getStatusAsisten(): Promise<{ boleh: boolean; siap: boolean }> {
+  try {
+    const json = await fetchJson("/api/asisten", { headers: headerToken() });
+    return { boleh: json?.boleh === true, siap: json?.siap === true };
+  } catch {
+    return { boleh: false, siap: false };
+  }
+}
+
+/** Satu giliran chat teks dengan Asisten AI. */
+export async function tanyaAsisten(
+  pesan: string,
+  riwayat: PesanAsisten[],
+): Promise<string> {
+  const json = await fetchJson("/api/asisten", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ pesan, riwayat }),
+  });
+  return (json?.jawaban ?? "") as string;
+}
+
+/** Matriks akses chatbot per jabatan (master/super). */
+export async function getAksesAsisten(): Promise<{
+  peran: { id: string; label: string }[];
+  nyala: string[];
+}> {
+  const json = await fetchJson("/api/asisten/akses", { headers: headerToken() });
+  return {
+    peran: (json?.peran ?? []) as { id: string; label: string }[],
+    nyala: (json?.nyala ?? []) as string[],
+  };
+}
+
+export async function setAksesAsisten(role: string, aktif: boolean): Promise<void> {
+  await fetchJson("/api/asisten/akses", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ role, aktif }),
+  });
+}
+
+/** Token sementara untuk sesi suara Gemini Live. */
+export async function mintaTokenSuara(): Promise<{ token: string; model: string }> {
+  const json = await fetchJson("/api/asisten/suara", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({}),
+  });
+  return { token: json.token as string, model: json.model as string };
+}
+
+/** Jembatan alat sesi suara: jalankan alat daftar-putih di server. */
+export async function jalankanAlatSuara(
+  nama: string,
+  args: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const json = await fetchJson("/api/asisten/suara?alat=1", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ nama, args }),
+  });
+  return (json?.hasil ?? {}) as Record<string, unknown>;
+}
+
+// ------------------------------------------------------------
+// v1.20 — preferensi tampilan (footer & tata letak modul)
+// ------------------------------------------------------------
+
+// Cache singkat: beberapa modul membaca preferensi saat mount hampir
+// bersamaan — satu permintaan cukup untuk semuanya.
+let cachePref: { pada: number; nilai: Record<string, unknown> } | null = null;
+
+/** Semua preferensi tampilan saya: {"footer": ..., "layout:beranda": ...} */
+export async function getPreferensi(): Promise<Record<string, unknown>> {
+  if (cachePref && Date.now() - cachePref.pada < 60_000) return cachePref.nilai;
+  try {
+    const json = await fetchJson("/api/preferensi", { headers: headerToken() });
+    const nilai = (json?.preferensi ?? {}) as Record<string, unknown>;
+    cachePref = { pada: Date.now(), nilai };
+    return nilai;
+  } catch {
+    // Preferensi gagal termuat = pakai tampilan bawaan, jangan rusak boot.
+    return {};
+  }
+}
+
+/** Simpan satu preferensi tampilan (footer / layout:<modul>). */
+export async function simpanPreferensi(kunci: string, nilai: unknown): Promise<void> {
+  await fetchJson("/api/preferensi", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ kunci, nilai }),
+  });
+  // Cache lokal ikut diperbarui supaya pembaca berikutnya melihat nilai baru.
+  if (cachePref) cachePref.nilai[kunci] = nilai;
+}
+
 /** Kelengkapan data anggota (fitur 3.3.e, baca-saja). */
 export async function getDashboardAnggota(): Promise<KelengkapanAnggota[]> {
   const json = await fetchJson("/api/dashboard/anggota", { headers: headerToken() });
@@ -2480,13 +2589,32 @@ export async function getKelolaTimTv(): Promise<{
   tim: AnggotaTv[];
   kandidat: KandidatTv[];
   auto_broadcast: boolean;
+  maks_upload_mb: number;
+  retensi_jam: number;
 }> {
   const json = await fetchJson("/api/tv/tim?kelola=1", { headers: headerToken() });
   return {
     tim: (json.tim ?? []) as AnggotaTv[],
     kandidat: (json.kandidat ?? []) as KandidatTv[],
     auto_broadcast: json.auto_broadcast !== false,
+    maks_upload_mb: Number(json.maks_upload_mb ?? 100),
+    retensi_jam: Number(json.retensi_jam ?? 24),
   };
+}
+
+/**
+ * Pimred: simpan pengaturan angka TV (fitur 1.20/6 & 8).
+ * aksi "maks_upload" (1-200 MB) atau "retensi" (1-24 jam).
+ */
+export async function setPengaturanTv(
+  aksi: "maks_upload" | "retensi",
+  nilai: number,
+): Promise<void> {
+  await fetchJson("/api/tv/tim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi, nilai }),
+  });
 }
 
 /** Pimred: nyalakan/matikan siaran otomatis upload -> ruang chat. */

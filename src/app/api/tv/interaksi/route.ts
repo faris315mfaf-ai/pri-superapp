@@ -10,10 +10,9 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
+import { retensiJamTv } from "@/lib/pengaturan-tv";
 
 export const dynamic = "force-dynamic";
-
-const UMUR_HARI = 7;
 
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
@@ -30,7 +29,10 @@ export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
     const db = supabase();
-    const batas = new Date(Date.now() - UMUR_HARI * 24 * 60 * 60 * 1000).toISOString();
+    // Jendela tayang mengikuti pengaturan Pimred (fitur 1.20/8,
+    // 1-24 jam): lewat itu embednya hilang dari Konten & Beranda.
+    const retensiJam = await retensiJamTv();
+    const batas = new Date(Date.now() - retensiJam * 60 * 60 * 1000).toISOString();
 
     const [{ data: video }, { data: interaksi }] = await Promise.all([
       db
@@ -48,6 +50,7 @@ export async function GET(request: Request) {
 
     const punya = new Set((interaksi ?? []).map((i) => `${i.video_kode}|${i.jenis}`));
     return {
+      retensi_jam: retensiJam,
       data: (video ?? []).map((v) => ({
         kode: v.kode,
         judul: v.judul_overlay || v.judul || v.kode,

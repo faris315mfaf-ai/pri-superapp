@@ -22,6 +22,7 @@ import { userDariToken } from "@/lib/sesi";
 import { konfigUploadCloudinary, hapusVideoCloudinary, siapHapusCloudinary } from "@/lib/cloudinary";
 import { adalahPimred } from "@/lib/jabatan";
 import { kirimKabar } from "@/lib/notifikasi";
+import { maksUploadMb } from "@/lib/pengaturan-tv";
 
 export const dynamic = "force-dynamic";
 
@@ -78,7 +79,9 @@ export async function GET(request: Request) {
           { status: 503 },
         );
       }
-      return { ...konfig, retensi_jam: RETENSI_JAM };
+      // Batas ukuran diatur Pimred (fitur 1.20/6, 1-200 MB) — dipakai
+      // klien untuk menolak berkas SEBELUM upload dimulai.
+      return { ...konfig, retensi_jam: RETENSI_JAM, maks_upload_mb: await maksUploadMb() };
     }
 
     const { data, error } = await supabase()
@@ -110,7 +113,23 @@ export async function POST(request: Request) {
       judul?: string;
       caption?: string;
       tugas_id?: string | number;
+      /** Ukuran berkas (byte) dari respons Cloudinary — diperiksa ulang */
+      bytes?: number;
     };
+
+    // Pagar ukuran sisi server (fitur 1.20/6): klien sudah menolak
+    // berkas kebesaran sebelum upload, tapi batasnya tetap ditegakkan
+    // di sini juga — batas yang hanya hidup di layar bukan batas.
+    const batasMb = await maksUploadMb();
+    const bytes = Number(body.bytes ?? 0);
+    if (Number.isFinite(bytes) && bytes > batasMb * 1024 * 1024) {
+      throw Object.assign(
+        new Error(
+          `Video ${(bytes / 1024 / 1024).toFixed(1)} MB melebihi batas ${batasMb} MB yang ditetapkan Pimred.`,
+        ),
+        { status: 400 },
+      );
+    }
 
     const konfig = konfigUploadCloudinary();
     const secureUrl = (body.secure_url ?? "").trim();

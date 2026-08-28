@@ -11,7 +11,7 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
-import { Check, MessageCircle, PlaySquare, Share2 } from "lucide-react";
+import { Check, Clock, MessageCircle, PlaySquare, Share2 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { FadeInUp, GlassSkeleton } from "@/components/pri-ui";
 import { toast } from "@/hooks/use-app-store";
@@ -21,7 +21,37 @@ import {
   type VideoInteraksi,
 } from "@/services";
 import { pesanBagikanVideo } from "@/lib/format";
+import { urlEmbedDari } from "@/lib/embed-sosmed";
 import { cn } from "@/lib/utils";
+
+/** Jam upload PRESISI (fitur 1.20/7): "17:03:42 WIB · 28/08". */
+function jamPresisiWib(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const d = new Date(t + 7 * 3600_000);
+  const dua = (n: number) => String(n).padStart(2, "0");
+  return `${dua(d.getUTCHours())}:${dua(d.getUTCMinutes())}:${dua(d.getUTCSeconds())} WIB · ${dua(d.getUTCDate())}/${dua(d.getUTCMonth() + 1)}`;
+}
+
+/**
+ * Tautan pertama yang BISA di-embed, diprioritaskan platform yang
+ * pemutarnya paling andal di dalam aplikasi.
+ */
+function embedTerbaik(v: VideoInteraksi): { src: string; platform: string } | null {
+  const urutan = ["instagram", "tiktok", "youtube", "facebook"];
+  const tautan = [...v.tautan].sort(
+    (a, b) => urutan.indexOf(a.platform) - urutan.indexOf(b.platform),
+  );
+  for (const t of tautan) {
+    const src = urlEmbedDari(t.platform, t.url);
+    if (src) return { src, platform: t.platform };
+  }
+  if (v.link) {
+    const src = urlEmbedDari("instagram", v.link);
+    if (src) return { src, platform: "instagram" };
+  }
+  return null;
+}
 
 export function KartuVideoBaru() {
   const [daftar, setDaftar] = useState<VideoInteraksi[] | null>(null);
@@ -101,28 +131,46 @@ export function KartuVideoBaru() {
           {daftar === null ? (
             <GlassSkeleton className="h-16 rounded-xl" />
           ) : (
-            daftar.map((v) => (
+            daftar.map((v) => {
+              const embed = embedTerbaik(v);
+              return (
               <div key={v.kode} className="glass-soft rounded-xl p-3">
-                <div className="flex items-center gap-3">
-                  {v.thumbnail_url ? (
-                    <img
-                      src={v.thumbnail_url}
-                      alt=""
-                      className="h-12 w-12 shrink-0 rounded-lg object-cover"
-                    />
-                  ) : (
-                    <span
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg text-white"
-                      style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
-                      aria-hidden="true"
-                    >
-                      <PlaySquare className="h-5 w-5" />
-                    </span>
-                  )}
-                  <p className="min-w-0 flex-1 truncate text-[12.5px] font-bold text-teks-utama">
-                    {v.judul}
-                  </p>
-                </div>
+                {/* Bentuk EMBED tanpa judul (fitur 1.20/7): videonya
+                    langsung tampil; identitasnya cukup jam upload
+                    yang presisi sampai detik. */}
+                {embed ? (
+                  <iframe
+                    src={embed.src}
+                    title="Video TV Rakyat"
+                    className="aspect-[4/5] w-full rounded-xl border-0 bg-black/5 dark:bg-white/5"
+                    allow="autoplay; encrypted-media; picture-in-picture"
+                    allowFullScreen
+                    loading="lazy"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => v.link && window.open(v.link, "_blank", "noopener,noreferrer")}
+                    aria-label="Buka video di platformnya"
+                    className="btn-tekan relative block w-full overflow-hidden rounded-xl"
+                  >
+                    {v.thumbnail_url ? (
+                      <img src={v.thumbnail_url} alt="" className="aspect-video w-full object-cover" />
+                    ) : (
+                      <span
+                        className="flex aspect-video w-full items-center justify-center text-white"
+                        style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+                        aria-hidden="true"
+                      >
+                        <PlaySquare className="h-8 w-8" />
+                      </span>
+                    )}
+                  </button>
+                )}
+                <p className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-teks-sekunder">
+                  <Clock className="h-3 w-3" aria-hidden="true" />
+                  <span className="angka-tab">Diunggah {jamPresisiWib(v.diunggah_pada)}</span>
+                </p>
                 <div className="mt-2.5 flex gap-2">
                   {/* Komentar: buka postingan, lalu tandai sudah */}
                   {v.sudah_komen ? (
@@ -171,7 +219,8 @@ export function KartuVideoBaru() {
                   </button>
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       </GlassCard>

@@ -14,11 +14,17 @@ import { pesanBagikanVideo } from "@/lib/format";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { bolehProsesVideo } from "@/types";
-import { ambilAkunTertaut, unggahVideo, ayrshareSiap } from "@/lib/ayrshare";
+import {
+  ambilAkunTertaut,
+  unggahVideo,
+  ayrshareSiap,
+  type HasilUnggahPlatform,
+} from "@/lib/ayrshare";
 import { adalahPimred } from "@/lib/jabatan";
 import { bolehUploadVideo } from "@/lib/tv-tim";
 import { kirimKabar } from "@/lib/notifikasi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
+import { retensiJamTv } from "@/lib/pengaturan-tv";
 
 export const dynamic = "force-dynamic";
 
@@ -127,7 +133,7 @@ export async function POST(request: Request) {
     const { data: video, error: eBaca } = await db
       .from("video_antrian")
       .select(
-        "kode, judul, judul_overlay, caption_asli, caption_platform, hasil_render_url, status, platform_terunggah, persetujuan, tugas_id, diupload_oleh_id",
+        "kode, judul, judul_overlay, caption_asli, caption_platform, hasil_render_url, status, platform_terunggah, persetujuan, tugas_id, diupload_oleh_id, ayrshare_hasil",
       )
       .eq("kode", kode)
       .maybeSingle();
@@ -161,13 +167,40 @@ export async function POST(request: Request) {
       );
     }
 
+    // ---- PAGAR ANTI-DOBEL LAPIS 1 (fitur 1.20/9) ----
+    // Platform yang SUDAH tayang untuk video ini dibuang dari daftar
+    // kirim, apa pun yang diminta klien. Dengan begitu tombol Ulangi
+    // aman: hanya platform yang gagal yang dikirim ulang, dan video
+    // tidak mungkin terposting dua kali di platform yang sama.
+    const hasilLama = (Array.isArray(video.ayrshare_hasil) ? video.ayrshare_hasil : []) as {
+      platform?: string;
+      status?: string;
+      id?: string;
+    }[];
+    const sudahTayang = new Set([
+      ...((video.platform_terunggah ?? []) as string[]).map((p) => p.toLowerCase()),
+      ...hasilLama
+        .filter((h) => h.status === "success" && h.id)
+        .map((h) => String(h.platform ?? "").toLowerCase()),
+    ]);
+    const dobel = diminta.filter((p) => sudahTayang.has(p));
+    const dimintaBersih = diminta.filter((p) => !sudahTayang.has(p));
+    if (dimintaBersih.length === 0) {
+      throw Object.assign(
+        new Error(
+          `Video ini SUDAH tayang di ${dobel.join(", ")} — tidak akan diunggah dua kali.`,
+        ),
+        { status: 409 },
+      );
+    }
+
     // Platform yang belum ditautkan di Ayrshare pasti ditolak. Lebih
     // baik dicegat di sini dengan pesan yang jelas daripada membakar
     // panggilan API untuk kepastian gagal.
     const { platformAktif } = await ambilAkunTertaut();
     const aktifSet = new Set(platformAktif.map((p) => p.toLowerCase()));
-    const belumTertaut = diminta.filter((p) => !aktifSet.has(p));
-    const siapKirim = diminta.filter((p) => aktifSet.has(p));
+    const belumTertaut = dimintaBersih.filter((p) => !aktifSet.has(p));
+    const siapKirim = dimintaBersih.filter((p) => aktifSet.has(p));
 
     if (siapKirim.length === 0) {
       throw Object.assign(
@@ -175,6 +208,24 @@ export async function POST(request: Request) {
           `Belum ada akun yang tertaut untuk ${belumTertaut.join(", ")}. Tautkan dulu di dasbor Ayrshare.`,
         ),
         { status: 400 },
+      );
+    }
+
+    // ---- PAGAR ANTI-DOBEL LAPIS 2: kunci proses (fitur 1.20/9) ----
+    // Dua permintaan bersamaan (klik ganda, dua admin) memperebutkan
+    // satu kunci; yang kalah ditolak. Kunci basi (>2 menit — proses
+    // sebelumnya mati di tengah jalan) boleh direbut.
+    const batasBasi = new Date(Date.now() - 2 * 60_000).toISOString();
+    const { data: kunciDapat } = await db
+      .from("video_antrian")
+      .update({ sedang_unggah_pada: new Date().toISOString() })
+      .eq("kode", kode)
+      .or(`sedang_unggah_pada.is.null,sedang_unggah_pada.lt.${batasBasi}`)
+      .select("kode");
+    if (!kunciDapat || kunciDapat.length === 0) {
+      throw Object.assign(
+        new Error("Video ini sedang diunggah proses lain. Tunggu sebentar lalu periksa hasilnya."),
+        { status: 409 },
       );
     }
 
@@ -191,15 +242,29 @@ export async function POST(request: Request) {
       throw Object.assign(new Error("Caption masih kosong."), { status: 400 });
     }
 
-    const { idAyrshare, hasil } = await unggahVideo({
-      videoUrl,
-      caption,
-      platforms: siapKirim,
-      judulYoutube: video.judul_overlay || video.judul || "TV Rakyat",
-      // Kunci anti-dobel: menekan Unggah dua kali untuk video yang sama
-      // tidak akan memposting dua kali di sisi Ayrshare.
-      idempotencyKey: `pri-${kode}`,
-    });
+    let idAyrshare: string;
+    let hasil: HasilUnggahPlatform[];
+    try {
+      ({ idAyrshare, hasil } = await unggahVideo({
+        videoUrl,
+        caption,
+        platforms: siapKirim,
+        judulYoutube: video.judul_overlay || video.judul || "TV Rakyat",
+        // Lapis 3 anti-dobel (sisi Ayrshare): permintaan identik yang
+        // terkirim dua kali karena gangguan jaringan tidak diposting
+        // dua kali. Kunci memuat daftar platform supaya percobaan
+        // ULANG untuk subset yang gagal tetap dianggap permintaan baru.
+        idempotencyKey: `pri-${kode}-${siapKirim.slice().sort().join("_")}`,
+      }));
+    } catch (e) {
+      // Kunci proses dilepas supaya percobaan berikutnya tidak harus
+      // menunggu kunci basi 2 menit.
+      await db
+        .from("video_antrian")
+        .update({ sedang_unggah_pada: null })
+        .eq("kode", kode);
+      throw e;
+    }
 
     // Gabungkan platform yang belum tertaut sebagai kegagalan yang jujur,
     // supaya admin melihat semua yang dipilihnya.
@@ -219,13 +284,31 @@ export async function POST(request: Request) {
       berhasil.find((h) => h.postUrl)?.postUrl ??
       "";
 
-    // Simpan hasilnya. Status hanya naik ke "SUDAH DIPROSES" bila ADA
-    // yang benar-benar tayang — kalau semuanya ditolak, videonya masih
-    // menunggu tindakan, bukan selesai.
+    // Simpan hasilnya — DIGABUNG dengan hasil lama, bukan menimpa:
+    // pada percobaan ulang, entri sukses sebelumnya harus tetap ada
+    // (fitur 1.20/9). Entri platform yang dikirim ulang digantikan
+    // hasil terbarunya.
+    const platformBaru = new Set(hasil.map((h) => h.platform.toLowerCase()));
+    const hasilGabung = [
+      ...hasilLama.filter(
+        (h) => !platformBaru.has(String(h.platform ?? "").toLowerCase()),
+      ),
+      ...hasil,
+    ];
     const perubahan: Record<string, unknown> = {
-      ayrshare_hasil: hasil,
+      ayrshare_hasil: hasilGabung,
       diunggah_pada: new Date().toISOString(),
+      // Kunci proses dilepas bersama penyimpanan hasil (fitur 1.20/9).
+      sedang_unggah_pada: null,
     };
+    if (berhasil.length > 0) {
+      // Umur tayang di aplikasi (fitur 1.20/8, diatur Pimred 1-24 jam):
+      // lewat ini embed hilang dari Konten/Beranda dan berkas video
+      // dibersihkan penjaga tanpa-cron. Postingan sosmed tidak disentuh.
+      perubahan.hapus_media_pada = new Date(
+        Date.now() + (await retensiJamTv()) * 3600_000,
+      ).toISOString();
+    }
     if (berhasil.length > 0) {
       const sebelumnya = (video.platform_terunggah ?? []) as string[];
       perubahan.platform_terunggah = Array.from(
@@ -280,6 +363,28 @@ export async function POST(request: Request) {
         isi: `"${judulTampil}" baru tayang. Tugas Anda: beri komentar dan bagikan ke grup WhatsApp \u2014 buka Beranda untuk tombolnya.`,
         kategori: "info",
         jenis_peristiwa: "tv_publik",
+      });
+    }
+
+    // ---- Pemberitahuan kegagalan per platform (fitur 1.20/9) ----
+    // Wajib terlihat DI MANA video gagal: notifikasi menyebut platform
+    // dan alasannya, plus arahan ke tombol Ulangi di Riwayat Video.
+    const gagalDaftar = hasil.filter((h) => h.status === "error");
+    if (gagalDaftar.length > 0) {
+      const rincian = gagalDaftar
+        .map((h) => `${h.platform}${h.pesan ? ` (${h.pesan.slice(0, 80)})` : ""}`)
+        .join(", ");
+      const penerima = Array.from(
+        new Set(
+          [Number(pengguna.id), Number(video.diupload_oleh_id ?? 0)].filter(Boolean),
+        ),
+      );
+      await kirimKabar({
+        judul: `⚠ Video gagal tayang di ${gagalDaftar.length} platform`,
+        isi: `"${video.judul_overlay || video.judul || kode}" gagal di: ${rincian}. Buka TV Rakyat → Riwayat Video → tombol Ulangi untuk mencoba lagi.`,
+        kategori: "peringatan",
+        jenis_peristiwa: "tv_gagal",
+        untukUserIds: penerima,
       });
     }
 

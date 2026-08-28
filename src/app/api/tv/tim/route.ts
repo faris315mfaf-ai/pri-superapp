@@ -13,6 +13,7 @@ import { pastikanMasuk } from "@/lib/sesi";
 import { adalahPimred } from "@/lib/jabatan";
 import { wewenangTv } from "@/lib/tv-tim";
 import { kirimKabar } from "@/lib/notifikasi";
+import { maksUploadMb, retensiJamTv } from "@/lib/pengaturan-tv";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,9 @@ export async function GET(request: Request) {
     const idTim = new Set((tim ?? []).map((t) => Number(t.user_id)));
     return {
       auto_broadcast: autoBroadcast,
+      // Pengaturan Pimred (fitur 1.20/6 & 1.20/8)
+      maks_upload_mb: await maksUploadMb(),
+      retensi_jam: await retensiJamTv(),
       tim: (tim ?? []).map((t) => {
         const u = Array.isArray(t.app_user) ? t.app_user[0] : t.app_user;
         return {
@@ -101,6 +105,7 @@ export async function POST(request: Request) {
       user_id?: string | number;
       aksi?: string;
       nyala?: boolean;
+      nilai?: string | number;
     };
     const db = supabase();
 
@@ -113,6 +118,34 @@ export async function POST(request: Request) {
       );
       if (error) throw new Error("Gagal menyimpan pengaturan siaran.");
       return { sukses: true, auto_broadcast: nyala };
+    }
+
+    // --- Batas ukuran video manual, MB (fitur 1.20/6, khusus Pimred) ---
+    if (body.aksi === "maks_upload") {
+      const mb = Math.floor(Number(body.nilai));
+      if (!Number.isFinite(mb) || mb < 1 || mb > 200) {
+        throw Object.assign(new Error("Batas ukuran harus 1-200 MB."), { status: 400 });
+      }
+      const { error } = await db.from("pengaturan_sistem").upsert(
+        { kunci: "tv_maks_upload_mb", nilai: String(mb) },
+        { onConflict: "kunci" },
+      );
+      if (error) throw new Error("Gagal menyimpan batas ukuran.");
+      return { sukses: true, maks_upload_mb: mb };
+    }
+
+    // --- Umur tayang pasca-upload, jam (fitur 1.20/8, khusus Pimred) ---
+    if (body.aksi === "retensi") {
+      const jam = Math.floor(Number(body.nilai));
+      if (!Number.isFinite(jam) || jam < 1 || jam > 24) {
+        throw Object.assign(new Error("Umur tayang harus 1-24 jam."), { status: 400 });
+      }
+      const { error } = await db.from("pengaturan_sistem").upsert(
+        { kunci: "tv_retensi_jam", nilai: String(jam) },
+        { onConflict: "kunci" },
+      );
+      if (error) throw new Error("Gagal menyimpan umur tayang.");
+      return { sukses: true, retensi_jam: jam };
     }
 
     const id = Number(body.user_id ?? 0);

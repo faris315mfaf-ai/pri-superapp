@@ -23,6 +23,7 @@ import {
   aturWewenangTv,
   getKelolaTimTv,
   keluarkanAnggotaTv,
+  setPengaturanTv,
   tambahAnggotaTv,
   type AnggotaTv,
   type KandidatTv,
@@ -36,6 +37,10 @@ export function KelolaTimPanel() {
   // Siaran otomatis upload -> ruang chat (spek 1.18/1.3)
   const [siaran, setSiaran] = useState(true);
   const [sedangSiaran, setSedangSiaran] = useState(false);
+  // Pengaturan angka Pimred (fitur 1.20/6 & 8)
+  const [batasMb, setBatasMb] = useState("100");
+  const [retensiJam, setRetensiJam] = useState("24");
+  const [sedangSimpanAngka, setSedangSimpanAngka] = useState(false);
   const [tambahBuka, setTambahBuka] = useState(false);
   const [sibuk, setSibuk] = useState<string | null>(null);
 
@@ -45,6 +50,8 @@ export function KelolaTimPanel() {
       setSiaran(hasil.auto_broadcast);
       setTim(hasil.tim);
       setKandidat(hasil.kandidat);
+      setBatasMb(String(hasil.maks_upload_mb));
+      setRetensiJam(String(hasil.retensi_jam));
     } catch (e) {
       setTim([]);
       toast("error", "Gagal memuat tim TV", e instanceof Error ? e.message : "");
@@ -141,6 +148,76 @@ export function KelolaTimPanel() {
           }}
           labelAria="Siaran otomatis upload ke ruang chat"
         />
+      </GlassCard>
+
+      {/* Pengaturan unggahan (fitur 1.20/6 & 8) — khusus Pimred */}
+      <GlassCard className="mb-3 p-4">
+        <p className="text-sm font-bold text-teks-utama">Pengaturan Unggahan</p>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-semibold text-teks-sekunder">
+              Ukuran video maksimal (1–200 MB)
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={200}
+              value={batasMb}
+              onChange={(e) => setBatasMb(e.target.value)}
+              onBlur={() => {
+                const n = Math.floor(Number(batasMb));
+                if (!Number.isFinite(n) || n < 1 || n > 200) {
+                  toast("peringatan", "Batas ukuran harus 1–200 MB");
+                  return;
+                }
+                if (sedangSimpanAngka) return;
+                setSedangSimpanAngka(true);
+                void setPengaturanTv("maks_upload", n)
+                  .then(() => toast("sukses", `Batas ukuran video: ${n} MB`))
+                  .catch((e2) =>
+                    toast("error", "Gagal menyimpan", e2 instanceof Error ? e2.message : ""),
+                  )
+                  .finally(() => setSedangSimpanAngka(false));
+              }}
+              aria-label="Ukuran video maksimal dalam MB"
+              className="glass-input h-10 w-full rounded-xl px-3 text-sm text-teks-utama"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-semibold text-teks-sekunder">
+              Video tampil di aplikasi selama (1–24 jam)
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={24}
+              value={retensiJam}
+              onChange={(e) => setRetensiJam(e.target.value)}
+              onBlur={() => {
+                const n = Math.floor(Number(retensiJam));
+                if (!Number.isFinite(n) || n < 1 || n > 24) {
+                  toast("peringatan", "Umur tayang harus 1–24 jam");
+                  return;
+                }
+                if (sedangSimpanAngka) return;
+                setSedangSimpanAngka(true);
+                void setPengaturanTv("retensi", n)
+                  .then(() => toast("sukses", `Umur tayang video: ${n} jam`))
+                  .catch((e2) =>
+                    toast("error", "Gagal menyimpan", e2 instanceof Error ? e2.message : ""),
+                  )
+                  .finally(() => setSedangSimpanAngka(false));
+              }}
+              aria-label="Umur tayang video dalam jam"
+              className="glass-input h-10 w-full rounded-xl px-3 text-sm text-teks-utama"
+            />
+          </label>
+        </div>
+        <p className="mt-2 text-[11px] leading-snug text-teks-sekunder">
+          Lewat umur tayang, video hilang dari Konten & Beranda dan berkasnya
+          dibersihkan dari penyimpanan. Postingan yang sudah naik di sosmed
+          tidak disentuh; riwayat & statistik tetap utuh.
+        </p>
       </GlassCard>
 
       <GlassCard className="p-4">
