@@ -18,6 +18,16 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "1.21.0",
+    tanggal: "28 Agustus 2026",
+    judul: "Masuk dengan Sidik Jari",
+    poin: [
+      "Aktifkan di Profil → Keamanan: sakelar Masuk dengan Sidik Jari",
+      "Setelah aktif, masuk cukup dengan sidik jari / Face ID — tanpa mengetik apa pun",
+      "Aman: data sidik jari tidak pernah keluar dari perangkat Anda; password & Google tetap jadi cadangan",
+    ],
+  },
+  {
     versi: "1.20.4",
     tanggal: "28 Agustus 2026",
     judul: "Basis Pengetahuan AI — data lengkap & terstruktur",

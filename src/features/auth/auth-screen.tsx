@@ -20,6 +20,7 @@ import {
   Camera,
   Eye,
   EyeOff,
+  Fingerprint,
   Loader2,
   Lock,
   Mail,
@@ -43,6 +44,8 @@ import {
   lupaSandiKirim,
   lupaSandiSetel,
   masukOtomatis,
+  masukSidikJari,
+  perangkatDukungSidikJari,
   verifikasiOtp,
   type UserLengkap,
 } from "@/services";
@@ -348,6 +351,20 @@ function FormMasuk({
   const [lihat, setLihat] = useState(false);
   const [memuat, setMemuat] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Login sidik jari (fitur 1.21) — tombolnya hanya muncul di perangkat
+  // yang punya biometrik.
+  const [dukungSidik, setDukungSidik] = useState(false);
+  const [sidikJalan, setSidikJalan] = useState(false);
+
+  useEffect(() => {
+    let hidup = true;
+    void perangkatDukungSidikJari().then((d) => {
+      if (hidup) setDukungSidik(d);
+    });
+    return () => {
+      hidup = false;
+    };
+  }, []);
 
   async function kirim(e: React.FormEvent) {
     e.preventDefault();
@@ -361,6 +378,29 @@ function FormMasuk({
       setError(err instanceof Error ? err.message : "Gagal masuk. Coba lagi.");
     } finally {
       setMemuat(false);
+    }
+  }
+
+  async function masukSidik() {
+    if (sidikJalan) return;
+    setError(null);
+    setSidikJalan(true);
+    try {
+      const user = await masukSidikJari();
+      onBerhasil(user);
+    } catch (err) {
+      // Pengguna membatalkan prompt biometrik = bukan galat yang perlu
+      // ditampilkan merah-merah.
+      const nama = err instanceof DOMException ? err.name : "";
+      if (nama === "NotAllowedError" || nama === "AbortError") {
+        setError(null);
+      } else {
+        setError(
+          err instanceof Error ? err.message : "Gagal masuk dengan sidik jari.",
+        );
+      }
+    } finally {
+      setSidikJalan(false);
     }
   }
 
@@ -426,6 +466,25 @@ function FormMasuk({
         Masuk
         <ArrowRight className="h-4.5 w-4.5" />
       </TombolUtama>
+
+      {/* Masuk dengan sidik jari (fitur 1.21) — muncul hanya di
+          perangkat berbiometrik & untuk akun yang sudah mengaktifkannya
+          di Profil → Keamanan. */}
+      {dukungSidik && (
+        <button
+          type="button"
+          onClick={() => void masukSidik()}
+          disabled={sidikJalan || memuat}
+          className="btn-tekan flex h-12 w-full items-center justify-center gap-2.5 rounded-xl border border-glass-border text-sm font-bold text-teks-utama disabled:opacity-60"
+        >
+          {sidikJalan ? (
+            <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+          ) : (
+            <Fingerprint className="h-5 w-5 text-pri" aria-hidden="true" />
+          )}
+          Masuk dengan Sidik Jari
+        </button>
+      )}
 
       {/* Pintu masuk Google (fitur 1.19/3.1): divider "atau" + tombol
           branding Google. Belum terdaftar pun bisa — akunnya dibuat

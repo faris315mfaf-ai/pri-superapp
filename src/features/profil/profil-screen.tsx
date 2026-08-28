@@ -27,7 +27,7 @@ import {
   User as UserIcon,
   Zap,
   Sparkles,
-  Heart, ExternalLink, Pencil, Check, X, Loader2, PanelBottom } from "lucide-react";
+  Heart, ExternalLink, Pencil, Check, X, Loader2, PanelBottom, Fingerprint } from "lucide-react";
 import { LogoPri } from "@/components/logo-pri";
 import {
   AvatarInisial,
@@ -49,8 +49,12 @@ import { IkonGoogle } from "@/components/tombol-google";
 import { urlProfilSosmed } from "@/lib/format";
 import {
   ambilToken,
+  daftarkanSidikJari,
   getProfilMomen,
+  getStatusSidikJari,
   getStreakSaya,
+  matikanSidikJari,
+  perangkatDukungSidikJari,
   ubahProfilSaya,
   type ProfilMomen,
 } from "@/services";
@@ -874,6 +878,9 @@ export function ProfilScreen({
             }
           />
 
+          {/* Masuk dengan Sidik Jari (fitur 1.21) — toggle aktif/nonaktif */}
+          <BarisSidikJari />
+
           {/* Akun sosmed — tombol pembuka pop-up kelola */}
           <TombolAkunSosmed
             onBuka={() => setModalSosmed(true)}
@@ -1058,5 +1065,78 @@ export function ProfilScreen({
         </div>
       </ModalKaca>
     </div>
+  );
+}
+
+// ------------------------------------------------------------
+// BarisSidikJari (fitur 1.21) — toggle login sidik jari di Keamanan.
+// Aktif = ada kredensial terdaftar. Tombolnya hanya muncul di
+// perangkat yang mendukung biometrik.
+// ------------------------------------------------------------
+
+function BarisSidikJari() {
+  const [dukung, setDukung] = useState<boolean | null>(null);
+  const [aktif, setAktif] = useState(false);
+  const [sibuk, setSibuk] = useState(false);
+
+  useEffect(() => {
+    let hidup = true;
+    void (async () => {
+      const d = await perangkatDukungSidikJari();
+      if (!hidup) return;
+      setDukung(d);
+      if (d) {
+        const s = await getStatusSidikJari();
+        if (hidup) setAktif(s.aktif);
+      }
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, []);
+
+  // Perangkat tak mendukung / masih mengecek → sembunyikan barisnya.
+  if (dukung !== true) return null;
+
+  async function ubah() {
+    if (sibuk) return;
+    setSibuk(true);
+    try {
+      if (aktif) {
+        await matikanSidikJari();
+        setAktif(false);
+        toast("sukses", "Sidik jari dinonaktifkan");
+      } else {
+        await daftarkanSidikJari();
+        setAktif(true);
+        toast("sukses", "Sidik jari aktif", "Kini Anda bisa masuk dengan sidik jari.");
+      }
+    } catch (e) {
+      const nama = e instanceof DOMException ? e.name : "";
+      if (nama !== "NotAllowedError" && nama !== "AbortError") {
+        toast("error", "Gagal", e instanceof Error ? e.message : "");
+      }
+    } finally {
+      setSibuk(false);
+    }
+  }
+
+  return (
+    <BarisPengaturan
+      ikon={Fingerprint}
+      warnaIkon="#8B5CF6"
+      label="Masuk dengan Sidik Jari"
+      kanan={
+        <span className="flex items-center gap-2">
+          {sibuk && <Loader2 className="h-3.5 w-3.5 animate-spin text-teks-sekunder" aria-hidden="true" />}
+          <SwitchKaca
+            aktif={aktif}
+            disabled={sibuk}
+            onUbah={() => void ubah()}
+            labelAria="Aktifkan masuk dengan sidik jari"
+          />
+        </span>
+      }
+    />
   );
 }

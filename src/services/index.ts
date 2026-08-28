@@ -2223,6 +2223,61 @@ export async function setAksesAsisten(role: string, aktif: boolean): Promise<voi
   });
 }
 
+// ------------------------------------------------------------
+// v1.21 — Login sidik jari (WebAuthn / passkey)
+// ------------------------------------------------------------
+
+/** Apakah perangkat ini punya biometrik (sidik jari/Face ID)? */
+export async function perangkatDukungSidikJari(): Promise<boolean> {
+  try {
+    if (typeof window === "undefined" || !window.PublicKeyCredential) return false;
+    return await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  } catch {
+    return false;
+  }
+}
+
+/** Status sidik jari akun saya (untuk toggle di Profil). */
+export async function getStatusSidikJari(): Promise<{ aktif: boolean; jumlah_perangkat: number }> {
+  try {
+    const json = await fetchJson("/api/webauthn", { headers: headerToken() });
+    return { aktif: json?.aktif === true, jumlah_perangkat: Number(json?.jumlah_perangkat ?? 0) };
+  } catch {
+    return { aktif: false, jumlah_perangkat: 0 };
+  }
+}
+
+/** Daftarkan sidik jari perangkat ini (harus sudah login). */
+export async function daftarkanSidikJari(): Promise<void> {
+  const { startRegistration } = await import("@simplewebauthn/browser");
+  const opsi = await fetchJson("/api/webauthn/daftar", { headers: headerToken() });
+  const respons = await startRegistration({ optionsJSON: opsi });
+  await fetchJson("/api/webauthn/daftar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(respons),
+  });
+}
+
+/** Nonaktifkan sidik jari (hapus semua kredensial akun ini). */
+export async function matikanSidikJari(): Promise<void> {
+  await fetchJson("/api/webauthn", { method: "DELETE", headers: headerToken() });
+}
+
+/** Masuk dengan sidik jari (tanpa perlu login dulu) → user + token. */
+export async function masukSidikJari(): Promise<UserLengkap> {
+  const { startAuthentication } = await import("@simplewebauthn/browser");
+  const opsi = await fetchJson("/api/webauthn/masuk");
+  const respons = await startAuthentication({ optionsJSON: opsi });
+  const json = await fetchJson("/api/webauthn/masuk", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(respons),
+  });
+  if (json.token) simpanToken(json.token as string);
+  return json.user as UserLengkap;
+}
+
 export type StatusBasisAI = {
   ada: boolean;
   diperbarui_pada: string | null;

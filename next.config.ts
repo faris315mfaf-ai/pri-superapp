@@ -53,7 +53,10 @@ const nextConfig: NextConfig = {
             // (fitur 1.20/3) dari origin sendiri. Dulu "()" (kosong) —
             // itu MEMBLOKIR mik untuk semua termasuk aplikasi sendiri,
             // sehingga prompt izin tidak pernah muncul (bug 1.20.1).
-            value: "camera=(self), microphone=(self), geolocation=(self)",
+            // publickey-credentials-*: login sidik jari WebAuthn (1.21)
+            // dari origin sendiri (default sudah self, ditulis eksplisit).
+            value:
+              "camera=(self), microphone=(self), geolocation=(self), publickey-credentials-get=(self), publickey-credentials-create=(self)",
           },
         ],
       },
