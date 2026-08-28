@@ -31,7 +31,46 @@ export type StatusSuara =
 type Callback = {
   onStatus: (s: StatusSuara) => void;
   onGalat: (pesan: string) => void;
+  /**
+   * Level audio 0..1 untuk animasi avatar (fitur 1.20.1):
+   * "masuk" = suara pengguna dari mik, "keluar" = suara asisten.
+   */
+  onTingkat?: (arah: "masuk" | "keluar", level: number) => void;
 };
+
+/**
+ * Keadaan izin mikrofon SEBELUM meminta — supaya layar suara bisa
+ * menjelaskan dulu (prompt), atau memandu ke setelan (denied), alih-
+ * alih langsung gagal misterius.
+ */
+export async function cekIzinMik(): Promise<"granted" | "prompt" | "denied" | "unsupported"> {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+    return "unsupported";
+  }
+  try {
+    // Sebagian peramban (Safari lama) tidak mengenal nama "microphone"
+    // di Permissions API — anggap "prompt" dan biarkan getUserMedia
+    // yang menentukan.
+    const izin = await navigator.permissions.query({
+      name: "microphone" as PermissionName,
+    });
+    return izin.state === "granted" ? "granted" : izin.state === "denied" ? "denied" : "prompt";
+  } catch {
+    return "prompt";
+  }
+}
+
+/** RMS sederhana (dilangkahi 8 sampel — cukup halus untuk animasi). */
+function tingkatDari(sampel: Float32Array): number {
+  let jumlah = 0;
+  let n = 0;
+  for (let i = 0; i < sampel.length; i += 8) {
+    jumlah += sampel[i] * sampel[i];
+    n++;
+  }
+  // RMS suara normal ~0.02-0.2 — dikalikan supaya animasinya terasa.
+  return Math.min(1, Math.sqrt(jumlah / Math.max(1, n)) * 6);
+}
 
 /** Float32 [-1..1] → PCM16 little-endian, lalu base64. */
 function keBase64Pcm(masukan: Float32Array): string {
@@ -99,10 +138,18 @@ export class AsistenSuara {
         if (this.hidup) this.berhenti();
       };
     } catch (e) {
+      // Pesan galat dibedakan per penyebab (fitur 1.20.1) — "gagal"
+      // polos membuat orang mengira aplikasinya rusak, padahal yang
+      // dibutuhkan cuma menekan Izinkan di prompt peramban.
+      const nama = e instanceof DOMException ? e.name : "";
       this.gagal(
-        e instanceof DOMException && e.name === "NotAllowedError"
-          ? "Izin mikrofon ditolak — izinkan mik untuk mode suara."
-          : "Gagal memulai mode suara.",
+        nama === "NotAllowedError"
+          ? "Izin mikrofon ditolak. Ketuk ikon gembok/setelan situs di peramban lalu izinkan Mikrofon."
+          : nama === "NotFoundError"
+            ? "Mikrofon tidak ditemukan di perangkat ini."
+            : nama === "NotReadableError"
+              ? "Mikrofon sedang dipakai aplikasi lain — tutup dulu aplikasi itu."
+              : "Gagal memulai mode suara. Coba lagi.",
       );
     }
   }
@@ -120,7 +167,9 @@ export class AsistenSuara {
     this.prosesor = prosesor;
     prosesor.onaudioprocess = (ev) => {
       if (!this.hidup || this.ws?.readyState !== WebSocket.OPEN) return;
-      const data = keBase64Pcm(ev.inputBuffer.getChannelData(0));
+      const sampel = ev.inputBuffer.getChannelData(0);
+      this.cb.onTingkat?.("masuk", tingkatDari(sampel));
+      const data = keBase64Pcm(sampel);
       this.ws.send(
         JSON.stringify({
           realtimeInput: { audio: { data, mimeType: "audio/pcm;rate=16000" } },
@@ -206,6 +255,7 @@ export class AsistenSuara {
     node.start(mulai);
     this.jadwalSpeaker = mulai + buf.duration;
     this.cb.onStatus("berbicara");
+    this.cb.onTingkat?.("keluar", tingkatDari(sampel));
   }
 
   private hentikanSpeaker() {

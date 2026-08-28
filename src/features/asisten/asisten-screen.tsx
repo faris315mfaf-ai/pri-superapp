@@ -15,18 +15,12 @@
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, Loader2, Mic, MicOff, Send, Sparkles } from "lucide-react";
+import { Bot, Loader2, Mic, Send, Sparkles } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton, ThemeToggle } from "@/components/pri-ui";
 import { TombolLonceng } from "@/components/tombol-lonceng";
-import { toast } from "@/hooks/use-app-store";
-import {
-  getStatusAsisten,
-  mintaTokenSuara,
-  tanyaAsisten,
-  type PesanAsisten,
-} from "@/services";
-import { AsistenSuara, type StatusSuara } from "./suara-live";
+import { getStatusAsisten, tanyaAsisten, type PesanAsisten } from "@/services";
+import { LayarSuara } from "./layar-suara";
 import { cn } from "@/lib/utils";
 
 const CONTOH_TANYA = [
@@ -35,16 +29,6 @@ const CONTOH_TANYA = [
   "Berapa kader yang belum penuh komentarnya?",
   "Statistik TV Rakyat seminggu terakhir?",
 ];
-
-const LABEL_SUARA: Record<StatusSuara, string> = {
-  siap: "Mode Suara",
-  "meminta-mik": "Meminta izin mik…",
-  menyambung: "Menyambung…",
-  mendengarkan: "Mendengarkan — silakan bicara",
-  berbicara: "Asisten berbicara…",
-  berhenti: "Mode Suara",
-  galat: "Mode Suara",
-};
 
 export function AsistenScreen({
   onBukaNotifikasi,
@@ -55,9 +39,8 @@ export function AsistenScreen({
   const [riwayat, setRiwayat] = useState<PesanAsisten[]>([]);
   const [pesan, setPesan] = useState("");
   const [berpikir, setBerpikir] = useState(false);
-  // Mode suara (Gemini Live)
-  const [statusSuara, setStatusSuara] = useState<StatusSuara>("siap");
-  const suaraRef = useRef<AsistenSuara | null>(null);
+  // Mode suara ala Gemini (fitur 1.20.1) — layar penuh terpisah.
+  const [suaraBuka, setSuaraBuka] = useState(false);
   const ujungRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -68,8 +51,6 @@ export function AsistenScreen({
     })();
     return () => {
       hidup = false;
-      // Meninggalkan layar = sesi suara ikut berakhir (mik dilepas).
-      suaraRef.current?.berhenti(false);
     };
   }, []);
 
@@ -96,31 +77,6 @@ export function AsistenScreen({
       ]);
     } finally {
       setBerpikir(false);
-    }
-  }
-
-  const suaraAktif =
-    statusSuara === "meminta-mik" ||
-    statusSuara === "menyambung" ||
-    statusSuara === "mendengarkan" ||
-    statusSuara === "berbicara";
-
-  async function toggleSuara() {
-    if (suaraAktif) {
-      suaraRef.current?.berhenti();
-      return;
-    }
-    try {
-      const { token, model } = await mintaTokenSuara();
-      const mesin = new AsistenSuara({
-        onStatus: setStatusSuara,
-        onGalat: (p) => toast("error", "Mode suara", p),
-      });
-      suaraRef.current = mesin;
-      await mesin.mulai(token, model);
-    } catch (e) {
-      toast("error", "Mode suara gagal", e instanceof Error ? e.message : "");
-      setStatusSuara("galat");
     }
   }
 
@@ -228,21 +184,13 @@ export function AsistenScreen({
         <GlassCard className="flex items-center gap-2 p-2">
           <button
             type="button"
-            onClick={() => void toggleSuara()}
+            onClick={() => setSuaraBuka(true)}
             disabled={!status.siap}
-            aria-pressed={suaraAktif}
-            aria-label={suaraAktif ? "Hentikan mode suara" : "Mulai mode suara"}
-            className={cn(
-              "btn-tekan flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white disabled:opacity-50",
-              statusSuara === "mendengarkan" && "animate-pulse",
-            )}
-            style={{
-              background: suaraAktif
-                ? "linear-gradient(135deg, #10B981, #059669)"
-                : "linear-gradient(135deg, #8B5CF6, #6D28D9)",
-            }}
+            aria-label="Mulai mode suara"
+            className="btn-tekan flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white disabled:opacity-50"
+            style={{ background: "linear-gradient(135deg, #8B5CF6, #6D28D9)" }}
           >
-            {suaraAktif ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+            <Mic className="h-5 w-5" />
           </button>
           <input
             value={pesan}
@@ -250,8 +198,8 @@ export function AsistenScreen({
             onKeyDown={(e) => {
               if (e.key === "Enter") void kirim();
             }}
-            placeholder={suaraAktif ? LABEL_SUARA[statusSuara] : "Tanya data partai…"}
-            disabled={!status.siap || berpikir || suaraAktif}
+            placeholder="Tanya data partai…"
+            disabled={!status.siap || berpikir}
             aria-label="Pesan untuk Asisten"
             className="h-11 min-w-0 flex-1 bg-transparent px-2 text-sm text-teks-utama placeholder:text-teks-sekunder/70 focus:outline-none"
           />
@@ -266,12 +214,10 @@ export function AsistenScreen({
             <Send className="h-4.5 w-4.5" />
           </button>
         </GlassCard>
-        {suaraAktif && (
-          <p className="mt-1.5 text-center text-[11px] font-semibold text-sukses">
-            {LABEL_SUARA[statusSuara]}
-          </p>
-        )}
       </div>
+
+      {/* Layar suara penuh ala Gemini (fitur 1.20.1) */}
+      {suaraBuka && <LayarSuara onTutup={() => setSuaraBuka(false)} />}
     </div>
   );
 }

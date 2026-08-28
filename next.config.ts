@@ -49,7 +49,11 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Permissions-Policy",
-            value: "camera=(self), microphone=(), geolocation=(self)",
+            // microphone=(self): mik dipakai mode suara Asisten AI
+            // (fitur 1.20/3) dari origin sendiri. Dulu "()" (kosong) —
+            // itu MEMBLOKIR mik untuk semua termasuk aplikasi sendiri,
+            // sehingga prompt izin tidak pernah muncul (bug 1.20.1).
+            value: "camera=(self), microphone=(self), geolocation=(self)",
           },
         ],
       },

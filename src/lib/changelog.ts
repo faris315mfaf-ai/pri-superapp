@@ -18,6 +18,16 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "1.20.1",
+    tanggal: "28 Agustus 2026",
+    judul: "Mode suara ala Gemini + izin mikrofon beres",
+    poin: [
+      "Mode suara tampil LAYAR PENUH dengan avatar orb yang bernapas saat mendengarkan dan bergelombang saat asisten bicara",
+      "FIX: izin mikrofon dulu terblokir aplikasi sendiri — kini prompt izin muncul dengan benar",
+      "Alur izin yang menuntun: penjelasan sebelum meminta, panduan bila terblokir, tombol Coba Lagi",
+    ],
+  },
+  {
     versi: "1.20.0",
     tanggal: "28 Agustus 2026",
     judul: "Atur tampilanmu sendiri + Asisten AI",

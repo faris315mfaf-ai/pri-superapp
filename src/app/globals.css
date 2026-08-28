@@ -544,3 +544,23 @@
   border-radius: 9999px;
   animation: denyut-avatar 700ms var(--ease-keluar) 1;
 }
+
+/* ===== Avatar orb mode suara Asisten (fitur 1.20.1) ===== */
+@keyframes orb-putar {
+  to { transform: rotate(360deg); }
+}
+@keyframes orb-denyut-anim {
+  0%, 100% { transform: scale(var(--tingkat, 1)); }
+  50% { transform: scale(calc(var(--tingkat, 1) * 1.06)); }
+}
+.orb-denyut {
+  animation: orb-denyut-anim 1.6s var(--ease-keluar, ease-out) infinite;
+}
+@keyframes orb-cincin-anim {
+  from { transform: scale(0.85); opacity: 0.55; }
+  to { transform: scale(1.7); opacity: 0; }
+}
+.orb-cincin {
+  border: 2px solid rgba(196, 181, 253, 0.6);
+  animation: orb-cincin-anim 1.5s ease-out infinite;
+}
