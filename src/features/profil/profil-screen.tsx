@@ -27,7 +27,7 @@ import {
   User as UserIcon,
   Zap,
   Sparkles,
-  Heart, ExternalLink, Pencil, Check, X, Loader2 } from "lucide-react";
+  Heart, ExternalLink, Pencil, Check, X, Loader2, PanelBottom } from "lucide-react";
 import { LogoPri } from "@/components/logo-pri";
 import {
   AvatarInisial,
@@ -91,6 +91,8 @@ type ProfilScreenProps = {
   onBukaNotifikasi?: () => void;
   onBukaPanelMaster?: () => void;
   onBukaPengaturanFitur?: () => void;
+  /** Buka layar Atur Menu Bawah (fitur 1.20/4) */
+  onBukaAturMenu?: () => void;
 };
 
 const KONFIG_ROLE: Record<
@@ -301,6 +303,7 @@ export function ProfilScreen({
   onBukaNotifikasi,
   onBukaPanelMaster,
   onBukaPengaturanFitur,
+  onBukaAturMenu,
 }: ProfilScreenProps) {
   const tema = useAppStore((s) => s.tema);
   const toggleTema = useAppStore((s) => s.toggleTema);
@@ -772,6 +775,19 @@ export function ProfilScreen({
 
           {/* Ukuran teks aplikasi (kecil / normal / besar) */}
           <BarisUkuranTeks />
+
+          {/* Susunan modul footer (fitur 1.20/4) */}
+          {onBukaAturMenu && (
+            <BarisPengaturan
+              ikon={PanelBottom}
+              warnaIkon="#0EA5E9"
+              label="Atur Menu Bawah"
+              onClick={onBukaAturMenu}
+              kanan={
+                <span className="text-xs font-medium text-teks-sekunder">Pilih modul</span>
+              }
+            />
+          )}
 
           {/* 3. Notifikasi WhatsApp */}
           <BarisPengaturan

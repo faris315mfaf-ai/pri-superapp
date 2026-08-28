@@ -6,7 +6,7 @@
 // ============================================================
 
 import { motion } from "framer-motion";
-import { Home, Newspaper, ShieldCheck, Tv, Clapperboard, MessagesSquare, Bell, User, CalendarDays, LayoutDashboard } from "lucide-react";
+import { Home, Newspaper, ShieldCheck, Tv, Clapperboard, MessagesSquare, Bell, User, CalendarDays, LayoutDashboard, Bot } from "lucide-react";
 import type { KomponenIkon, Role } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,7 @@ export type KunciTab =
   | "tv"
   | "tvrku"
   | "dashboard"
+  | "asisten"
   | "chat"
   | "notifikasi"
   | "profil";
@@ -35,6 +36,9 @@ export const KONFIG_TAB: Record<
   // Modul Dashboard (fitur 1.19/3.3): tampil hanya bila jabatannya
   // diberi akses master — daftar tab dinamis dihitung di page.tsx.
   dashboard: { label: "Dashboard", ikon: LayoutDashboard },
+  // Asisten AI (fitur 1.20/3): tampil hanya untuk jabatan yang
+  // dinyalakan master di Kelola Akses.
+  asisten: { label: "Asisten", ikon: Bot },
   chat: { label: "Chat", ikon: MessagesSquare },
   notifikasi: { label: "Notifikasi", ikon: Bell },
   profil: { label: "Profil", ikon: User },
@@ -43,13 +47,14 @@ export const KONFIG_TAB: Record<
 export const TAB_PER_ROLE: Record<Role, KunciTab[]> = {
   // Master melihat semuanya — termasuk modul TV Rakyat, yang justru
   // TIDAK boleh diakses super admin.
-  master: ["beranda", "qc", "tv", "tvrku", "chat", "profil"],
-  super_admin: ["beranda", "qc", "chat", "profil"],
-  admin_hr: ["qc", "chat", "profil"],
-  admin_tv: ["tv", "chat", "profil"],
+  // Modul KONTEN wajib hadir untuk SEMUA peran (fitur 1.20/5): isinya
+  // tarikan konten sosmed TV Rakyat hasil Ayrshare/upload-post.
+  master: ["beranda", "konten", "qc", "tv", "tvrku", "chat", "profil"],
+  super_admin: ["beranda", "konten", "qc", "chat", "profil"],
+  admin_hr: ["konten", "qc", "chat", "profil"],
+  admin_tv: ["konten", "tv", "chat", "profil"],
   // Ketua & anggota: konten + TVR Saya + chat. Ketua tambahannya ada
   // di hak (membentuk tim), bukan di tab.
-  // Ketua & anggota kini punya Beranda sendiri sebagai halaman awal.
   ketua: ["beranda", "konten", "tvrku", "chat", "profil"],
   anggota: ["beranda", "konten", "tvrku", "chat", "profil"],
 };

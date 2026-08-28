@@ -35,6 +35,7 @@ import {
 } from "@/components/pri-ui";
 import { ProgressRing } from "@/components/progress-ring";
 import { PlatformIcon, labelPlatform } from "@/components/platform-icon";
+import { SeksiLipat } from "@/components/seksi-lipat";
 import { toast } from "@/hooks/use-app-store";
 import {
   getAkunTvr,
@@ -632,13 +633,11 @@ export function TvrKuScreen({
       <PanelTugasSaya />
       <KirimVideoManual hanyaBilaAdaTugas />
 
-      {/* Grafik 7 hari */}
+      {/* Grafik 7 hari — bisa dilipat (fitur 1.20/2) */}
       <FadeInUp delay={0.06}>
-        <GlassCard className="mt-4 p-4">
-          <p className="text-[11px] font-semibold tracking-wide text-teks-sekunder uppercase">
-            Laporan 7 Hari Terakhir
-          </p>
-          <div className="mt-3 flex h-24 items-end justify-between gap-1.5">
+        <div className="mt-4">
+        <SeksiLipat id="tvrku-grafik" judul="Laporan 7 Hari Terakhir" ikon={Video} bawaanTerbuka>
+          <div className="flex h-24 items-end justify-between gap-1.5">
             {riwayat7.map((r) => {
               const capai = r.jumlah >= kpiTarget;
               return (
@@ -661,7 +660,8 @@ export function TvrKuScreen({
           <p className="mt-2 text-center text-[10px] text-teks-sekunder/80">
             Hijau = target {kpiTarget} video tercapai
           </p>
-        </GlassCard>
+        </SeksiLipat>
+        </div>
       </FadeInUp>
 
       {/* Akun TV Rakyat saya */}

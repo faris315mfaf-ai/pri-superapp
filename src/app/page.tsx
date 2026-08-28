@@ -19,6 +19,8 @@ import { SplashScreen } from "@/features/auth/splash-screen";
 import { DashboardScreen } from "@/features/dashboard/dashboard-screen";
 import { ModulDashboardScreen } from "@/features/dashboard/modul-dashboard-screen";
 import { KelolaAksesDashboardScreen } from "@/features/dashboard/kelola-akses-screen";
+import { AturMenuScreen } from "@/features/profil/atur-menu-screen";
+import { AsistenScreen } from "@/features/asisten/asisten-screen";
 import { QcScreen } from "@/features/qc-konten/qc-screen";
 import { AccountDetailScreen } from "@/features/qc-konten/account-detail-screen";
 import { PostDetailScreen } from "@/features/qc-konten/post-detail-screen";
@@ -55,6 +57,8 @@ import {
   getStatusPerbaikan,
   getNotifikasi,
   getAksesDashboard,
+  getPreferensi,
+  getStatusAsisten,
   keluar as keluarService,
   masukOtomatis,
   simpanToken,
@@ -87,6 +91,8 @@ type SubLayar =
   | { nama: "pengaturan-fitur" }
   // Matriks akses dashboard per jabatan (fitur 1.19/3.3, master/super)
   | { nama: "kelola-dashboard" }
+  // Susunan modul footer pilihan pengguna (fitur 1.20/4)
+  | { nama: "atur-menu" }
   // Database anggota (detail per pengguna, untuk pengurus)
   | { nama: "database" };
 
@@ -100,16 +106,16 @@ const TAB_AWAL: Record<Role, KunciTab> = {
 };
 
 const TAB_ROLE: Record<Role, KunciTab[]> = {
-  master: ["beranda", "qc", "tv", "tvrku", "chat", "profil"],
+  // Modul KONTEN kembali & WAJIB untuk semua peran (fitur 1.20/5):
+  // menampilkan tarikan konten sosmed TV Rakyat dari Ayrshare.
+  master: ["beranda", "konten", "qc", "tv", "tvrku", "chat", "profil"],
   // Super admin TIDAK punya tab TV Rakyat: otomatisasi video adalah
   // tanggung jawab tim TV Rakyat (lihat bolehProsesVideo di types).
-  super_admin: ["beranda", "qc", "chat", "profil"],
-  admin_hr: ["qc", "chat", "profil"],
-  admin_tv: ["tv", "chat", "profil"],
-  // Tab Konten DIHAPUS dari navigasi (fix 1.19/4.2) — kontennya
-  // pindah ke seksi lipat di Beranda.
-  ketua: ["beranda", "tvrku", "chat", "profil"],
-  anggota: ["beranda", "tvrku", "chat", "profil"],
+  super_admin: ["beranda", "konten", "qc", "chat", "profil"],
+  admin_hr: ["konten", "qc", "chat", "profil"],
+  admin_tv: ["konten", "tv", "chat", "profil"],
+  ketua: ["beranda", "konten", "tvrku", "chat", "profil"],
+  anggota: ["beranda", "konten", "tvrku", "chat", "profil"],
 };
 
 const berlanggananKosong = () => () => {};
@@ -142,6 +148,12 @@ export default function Page() {
   // daftar lewat Google / daftar biasa yang dibuka ulang) — ditahan di
   // HALAMAN TUNGGU AuthScreen, bukan dimasukkan ke aplikasi.
   const [menungguUser, setMenungguUser] = useState<UserLengkap | null>(null);
+  // Modul footer yang DISEMBUNYIKAN pengguna (fitur 1.20/4). Bentuk
+  // "daftar yang disembunyikan" dipilih supaya modul BARU otomatis
+  // tampil tanpa migrasi preferensi.
+  const [sembunyiTab, setSembunyiTab] = useState<string[]>([]);
+  // Jabatan ini boleh memakai Asisten AI? (fitur 1.20/3)
+  const [bolehAsisten, setBolehAsisten] = useState(false);
   // Id notifikasi yang sudah pernah terlihat di sesi ini. Dipakai untuk
   // membedakan notifikasi yang benar-benar BARU datang (layak dimunculkan
   // sebagai banner) dari yang memang sudah ada sejak awal.
@@ -253,7 +265,9 @@ export default function Page() {
   // Daftar tab pengguna ini. Pimpinan Redaksi TV Rakyat mendapat tab
   // TV Rakyat OFFICIAL apa pun peran aplikasinya — hak penuhnya di
   // modul itu berasal dari jabatan, bukan dari role.
-  const tabBoleh = useMemo<KunciTab[]>(() => {
+  // tabPenuh = SEMUA modul yang dia berhak (dipakai layar Atur Menu);
+  // tabBoleh = tabPenuh dikurangi yang disembunyikan pengguna.
+  const tabPenuh = useMemo<KunciTab[]>(() => {
     if (!user) return [];
     const dasar = [...TAB_ROLE[user.role]];
     // Modul TV terbuka untuk Pimred (jabatan) ATAU anggota tim TV yang
@@ -272,8 +286,22 @@ export default function Page() {
     if (aksesDashboard.length > 0 && !dasar.includes("dashboard")) {
       dasar.splice(dasar.indexOf("chat") >= 0 ? dasar.indexOf("chat") : dasar.length - 1, 0, "dashboard");
     }
+    // Asisten AI (fitur 1.20/3): tampil bila jabatannya dinyalakan.
+    if (bolehAsisten && !dasar.includes("asisten")) {
+      dasar.splice(dasar.indexOf("chat") >= 0 ? dasar.indexOf("chat") : dasar.length - 1, 0, "asisten");
+    }
     return dasar;
-  }, [user, tvAnggota, aksesDashboard]);
+  }, [user, tvAnggota, aksesDashboard, bolehAsisten]);
+
+  // Kustomisasi footer (fitur 1.20/4): modul yang disembunyikan
+  // pengguna dibuang — kecuali KONTEN (wajib, fitur 1.20/5) dan
+  // PROFIL (pintu pengaturan; tanpa ini pengguna mengunci dirinya).
+  const tabBoleh = useMemo<KunciTab[]>(() => {
+    const wajib = new Set<KunciTab>(["konten", "profil"]);
+    const tampil = tabPenuh.filter((t) => wajib.has(t) || !sembunyiTab.includes(t));
+    // Pengaman: preferensi rusak tidak boleh mengosongkan navigasi.
+    return tampil.length >= 2 ? tampil : tabPenuh;
+  }, [tabPenuh, sembunyiTab]);
 
   // Pengaman tanpa effect: tab efektif selalu valid untuk role aktif
   const tabEfektif = useMemo(() => {
@@ -314,8 +342,20 @@ export default function Page() {
     if (!aplikasiAktif) return;
     let hidup = true;
     async function muatAkses() {
-      const boleh = await getAksesDashboard();
-      if (hidup) setAksesDashboard(boleh);
+      const [boleh, pref, asisten] = await Promise.all([
+        getAksesDashboard(),
+        getPreferensi(),
+        getStatusAsisten(),
+      ]);
+      if (!hidup) return;
+      setAksesDashboard(boleh);
+      setBolehAsisten(asisten.boleh);
+      // Susunan footer pilihan pengguna (fitur 1.20/4)
+      const footer = pref["footer"] as { sembunyi?: unknown } | undefined;
+      const sembunyi = Array.isArray(footer?.sembunyi)
+        ? footer.sembunyi.map(String)
+        : [];
+      setSembunyiTab(sembunyi);
     }
     void muatAkses();
     const detak = setInterval(() => void muatAkses(), 5 * 60_000);
@@ -674,6 +714,12 @@ export default function Page() {
         ),
       });
     }
+    if (tabBoleh.includes("asisten")) {
+      layarTab.push({
+        kunci: "asisten",
+        isi: <AsistenScreen onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })} />,
+      });
+    }
     if (tabBoleh.includes("tvrku")) {
       layarTab.push({
         kunci: "tvrku",
@@ -719,6 +765,7 @@ export default function Page() {
           onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           onBukaPanelMaster={() => setSubLayar({ nama: "panel-master" })}
           onBukaPengaturanFitur={() => setSubLayar({ nama: "pengaturan-fitur" })}
+          onBukaAturMenu={() => setSubLayar({ nama: "atur-menu" })}
         />
       ),
     });
@@ -856,6 +903,13 @@ export default function Page() {
                   <PengaturanFiturScreen onKembali={() => setSubLayar(null)} />
                 ) : subLayar.nama === "kelola-dashboard" ? (
                   <KelolaAksesDashboardScreen onKembali={() => setSubLayar(null)} />
+                ) : subLayar.nama === "atur-menu" ? (
+                  <AturMenuScreen
+                    tabPenuh={tabPenuh}
+                    sembunyi={sembunyiTab}
+                    onUbah={setSembunyiTab}
+                    onKembali={() => setSubLayar(null)}
+                  />
                 ) : subLayar.nama === "panel-master" ? (
                   <PanelMasterScreen onKembali={() => setSubLayar(null)} />
                 ) : subLayar.nama === "tabel-anggota" ? (

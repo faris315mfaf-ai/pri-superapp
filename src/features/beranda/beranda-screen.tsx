@@ -32,9 +32,9 @@ import { useAppStore } from "@/hooks/use-app-store";
 import { KartuPengumumanTerbaru } from "@/features/konten/beranda-anggota";
 import { KontenScreen } from "@/features/konten/konten-screen";
 import { SeksiLipat } from "@/components/seksi-lipat";
+import { TataLetakModul } from "@/components/tata-letak-modul";
 import { KartuUltah } from "@/components/ultah";
 import { JamDigital } from "@/components/jam-digital";
-import { KartuVideoBaru } from "./kartu-video-baru";
 import {
   getAbsensi,
   getLaporanKerja,
@@ -199,106 +199,132 @@ export function BerandaScreen({
       {/* Ulang tahun hari ini */}
       <KartuUltah idKu={user.id} />
 
-      {/* 1 · Pengumuman — seksi lipat, bawaan TERBUKA (fix 4.2) */}
-      {boleh("beranda.pengumuman") && (
-        <div className="mt-4">
-          <SeksiLipat id="beranda-pengumuman" judul="Pengumuman" ikon={Megaphone} bawaanTerbuka>
-            <KartuPengumumanTerbaru />
-          </SeksiLipat>
-        </div>
-      )}
-
-      {/* Status kehadiran */}
-      {mauAbsen && (
-        <FadeInUp delay={0.04}>
-          <button
-            type="button"
-            onClick={onBukaAbsensi}
-            className="btn-tekan mt-4 w-full text-left"
-            aria-label="Buka Absensi"
-          >
-            <GlassCard className="flex items-center gap-3 p-3.5">
-              <span
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
-                style={{ backgroundColor: "#10B9811a", color: "#10B981" }}
-                aria-hidden="true"
-              >
-                <CalendarCheck className="h-5 w-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold text-teks-utama">Kehadiran Hari Ini</p>
-                <p className="mt-0.5 text-[11px] text-teks-sekunder">
-                  {absen === null
-                    ? "Memuat…"
-                    : absen.masuk
-                      ? `Masuk ${jamWIB(absen.masuk)}${absen.pulang ? ` · Pulang ${jamWIB(absen.pulang)}` : " · belum absen pulang"}`
-                      : "Belum absen masuk — ketuk untuk absen"}
-                </p>
-              </div>
-              {absen?.masuk ? (
-                <StatusBadge label="hadir" warna="hijau" />
-              ) : (
-                <StatusBadge label="belum" warna="kuning" />
-              )}
-            </GlassCard>
-          </button>
-        </FadeInUp>
-      )}
-
-      {/* Kartu-kartu KPI */}
-      <FadeInUp delay={0.08}>
-        <div className="mt-4 grid grid-cols-2 gap-2.5">
-          {mauKerja && (
-            <KartuAngka
-              label="Kerja Hari Ini"
-              nilai={kpiKerja ? `${kpiKerja.rencana_selesai}/${kpiKerja.rencana_total}` : "…"}
-              keterangan={
-                kpiKerja && kpiKerja.rencana_total === 0
-                  ? "Belum ada rencana — ketuk"
-                  : "rencana selesai"
-              }
-              persen={persenKerja}
-              Ikon={ClipboardList}
-              onKlik={onBukaLaporanKerja}
-            />
-          )}
-          {mauKomentar && (
-            <KartuAngka
-              label="Wajib Komentar"
-              nilai={komentar ? `${komentar.sudah}/${komentar.total}` : "…"}
-              keterangan={
-                komentar && komentar.total === 0
-                  ? "Menunggu konten hari ini"
-                  : "postingan dikomentari"
-              }
-              persen={persenKomentar}
-              Ikon={MessageCircle}
-            />
-          )}
-          {mauVideo && (
-            <KartuAngka
-              label="Laporan Video"
-              nilai={video ? `${video.jumlah}/${video.target}` : "…"}
-              keterangan="video dilaporkan"
-              persen={persenVideo}
-              Ikon={Video}
-              onKlik={onBukaTvrKu}
-            />
-          )}
-        </div>
-      </FadeInUp>
-
-      {/* 2-4 · Kerja Hari Ini / Wajib Komentar tetap sebagai kartu KPI
-          ringkas di atas; seksi KONTEN penuh (pindahan tab Konten —
-          fix 4.2) tampil terlipat di bawah ini. */}
+      {/* Seksi-seksi Beranda dalam kerangka TATA LETAK (fitur 1.20/1&2):
+          semua bisa dilipat, diurutkan ulang, dan disembunyikan lewat
+          tombol "Atur Tata Letak" — pilihannya milik tiap pengguna.
+          Id seksi pengumuman & konten SENGAJA sama dengan kunci
+          SeksiLipat lama supaya preferensi lipatan 1.19 tidak hangus. */}
       <div className="mt-4">
-        <SeksiLipat id="beranda-konten" judul="Konten" ikon={Newspaper} keterangan="Konten terbaru akun resmi partai">
-          <KontenScreen user={user} terbenam onBukaLaporanKerja={onBukaLaporanKerja} />
-        </SeksiLipat>
+        <TataLetakModul
+          modul="beranda"
+          seksi={[
+            ...(boleh("beranda.pengumuman")
+              ? [
+                  {
+                    id: "pengumuman",
+                    judul: "Pengumuman",
+                    ikon: Megaphone,
+                    bawaanTerbuka: true,
+                    render: () => <KartuPengumumanTerbaru />,
+                  },
+                ]
+              : []),
+            ...(mauAbsen
+              ? [
+                  {
+                    id: "kehadiran",
+                    judul: "Kehadiran Hari Ini",
+                    ikon: CalendarCheck,
+                    bawaanTerbuka: true,
+                    render: () => (
+                      <button
+                        type="button"
+                        onClick={onBukaAbsensi}
+                        className="btn-tekan w-full text-left"
+                        aria-label="Buka Absensi"
+                      >
+                        <GlassCard className="flex items-center gap-3 p-3.5">
+                          <span
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+                            style={{ backgroundColor: "#10B9811a", color: "#10B981" }}
+                            aria-hidden="true"
+                          >
+                            <CalendarCheck className="h-5 w-5" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold text-teks-utama">Kehadiran Hari Ini</p>
+                            <p className="mt-0.5 text-[11px] text-teks-sekunder">
+                              {absen === null
+                                ? "Memuat…"
+                                : absen.masuk
+                                  ? `Masuk ${jamWIB(absen.masuk)}${absen.pulang ? ` · Pulang ${jamWIB(absen.pulang)}` : " · belum absen pulang"}`
+                                  : "Belum absen masuk — ketuk untuk absen"}
+                            </p>
+                          </div>
+                          {absen?.masuk ? (
+                            <StatusBadge label="hadir" warna="hijau" />
+                          ) : (
+                            <StatusBadge label="belum" warna="kuning" />
+                          )}
+                        </GlassCard>
+                      </button>
+                    ),
+                  },
+                ]
+              : []),
+            ...(mauKerja || mauKomentar || mauVideo
+              ? [
+                  {
+                    id: "kpi",
+                    judul: "Target Harian",
+                    ikon: ClipboardList,
+                    bawaanTerbuka: true,
+                    render: () => (
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {mauKerja && (
+                          <KartuAngka
+                            label="Kerja Hari Ini"
+                            nilai={kpiKerja ? `${kpiKerja.rencana_selesai}/${kpiKerja.rencana_total}` : "…"}
+                            keterangan={
+                              kpiKerja && kpiKerja.rencana_total === 0
+                                ? "Belum ada rencana — ketuk"
+                                : "rencana selesai"
+                            }
+                            persen={persenKerja}
+                            Ikon={ClipboardList}
+                            onKlik={onBukaLaporanKerja}
+                          />
+                        )}
+                        {mauKomentar && (
+                          <KartuAngka
+                            label="Wajib Komentar"
+                            nilai={komentar ? `${komentar.sudah}/${komentar.total}` : "…"}
+                            keterangan={
+                              komentar && komentar.total === 0
+                                ? "Menunggu konten hari ini"
+                                : "postingan dikomentari"
+                            }
+                            persen={persenKomentar}
+                            Ikon={MessageCircle}
+                          />
+                        )}
+                        {mauVideo && (
+                          <KartuAngka
+                            label="Laporan Video"
+                            nilai={video ? `${video.jumlah}/${video.target}` : "…"}
+                            keterangan="video dilaporkan"
+                            persen={persenVideo}
+                            Ikon={Video}
+                            onKlik={onBukaTvrKu}
+                          />
+                        )}
+                      </div>
+                    ),
+                  },
+                ]
+              : []),
+            {
+              id: "konten",
+              judul: "Konten",
+              ikon: Newspaper,
+              keterangan: "Konten terbaru akun resmi partai",
+              render: () => (
+                <KontenScreen user={user} terbenam onBukaLaporanKerja={onBukaLaporanKerja} />
+              ),
+            },
+          ]}
+        />
       </div>
-
-      {/* Kewajiban komen & share video TV Rakyat terbaru */}
-      <KartuVideoBaru />
     </div>
   );
 }
