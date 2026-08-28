@@ -18,6 +18,21 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "1.18.0",
+    tanggal: "28 Agustus 2026",
+    judul: "HR Center lengkap & TV Rakyat makin rapi",
+    poin: [
+      "Ketua Divisi TV Rakyat otomatis bisa ACC & upload (tanpa penunjukan)",
+      "Seksi TV Rakyat bisa diperkecil/diperbesar — preferensimu diingat",
+      "Riwayat video: Bagikan ke WA semua tautan + siaran otomatis ke grup chat",
+      "Analisis HR dikelompokkan 8 seksi rapi yang bisa dilipat",
+      "Database Anggota: tabel lengkap + ganti password + chat WA langsung",
+      "Halaman Absensi Hari Ini: filter lengkap + grafik pie & bar",
+      "Setel KPI: rencana kerja divisi dengan prioritas, progress, & deadline",
+      "Grup chat divisi kini mengikuti cakupan ZONA ketua divisi",
+    ],
+  },
+  {
     versi: "1.17.0",
     tanggal: "28 Agustus 2026",
     judul: "Tambah sosmed dianalisis & tautkan akunmu sendiri",
