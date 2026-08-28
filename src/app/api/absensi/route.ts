@@ -17,6 +17,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
+import { bolehDashboard } from "@/lib/dashboard-akses";
 import { catatTugasStreak } from "@/lib/streak";
 import { beriKoin } from "@/lib/koin";
 
@@ -145,7 +146,13 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const mauSemua = url.searchParams.get("semua") === "1";
-    if (mauSemua && !BOLEH_LIHAT_SEMUA.has(user.role)) {
+    if (
+      mauSemua &&
+      !BOLEH_LIHAT_SEMUA.has(user.role) &&
+      // Fitur 1.19/3.3.a: akses dashboard "absensi" = boleh MEMBACA
+      // absensi semua anggota (baca-saja; POST tetap dijaga).
+      !(await bolehDashboard(user.role, "absensi"))
+    ) {
       throw Object.assign(new Error("Hanya HR yang boleh melihat absensi semua anggota."), {
         status: 403,
       });

@@ -55,7 +55,18 @@ export type BarisAbsenHarian = {
   keterangan: string;
 };
 
-export function AbsensiHariIniScreen({ onKembali }: { onKembali: () => void }) {
+export function AbsensiHariIniScreen({
+  onKembali,
+  terbenam = false,
+}: {
+  onKembali?: () => void;
+  /**
+   * true = dirender DI DALAM layar lain (modul Dashboard 1.19/3.3.a):
+   * tanpa wrapper kolom-aplikasi & tanpa tombol kembali — layar induk
+   * yang memegang header. Datanya tetap sama dan memang baca-saja.
+   */
+  terbenam?: boolean;
+}) {
   const [baris, setBaris] = useState<BarisAbsenHarian[] | null>(null);
   const [zonaList, setZonaList] = useState<Zona[]>([]);
   // Filter gabungan (spek: semua bisa dikombinasikan, logika AND)
@@ -161,16 +172,18 @@ export function AbsensiHariIniScreen({ onKembali }: { onKembali: () => void }) {
   }, [baris]);
 
   return (
-    <div className="kolom-aplikasi px-4 pb-32">
+    <div className={terbenam ? "" : "kolom-aplikasi px-4 pb-32"}>
       <header className="flex items-center gap-3 pt-5">
-        <button
-          type="button"
-          onClick={onKembali}
-          aria-label="Kembali"
-          className="glass btn-tekan flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-teks-utama"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
+        {!terbenam && (
+          <button
+            type="button"
+            onClick={onKembali}
+            aria-label="Kembali"
+            className="glass btn-tekan flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-teks-utama"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+        )}
         <div className="min-w-0">
           <h1 className="font-heading truncate text-xl font-extrabold tracking-tight text-teks-utama">
             Absensi Hari Ini

@@ -11,6 +11,7 @@ import { buatHashSandi } from "@/lib/sandi";
 import { kirimKabar } from "@/lib/notifikasi";
 import { JABATAN_PARTAI, KUOTA_JABATAN } from "@/lib/jabatan";
 import { pastikanStrukturSah } from "@/lib/struktur";
+import { aksesDashboardRole } from "@/lib/dashboard-akses";
 
 export const dynamic = "force-dynamic";
 
@@ -51,9 +52,16 @@ export async function GET(request: Request) {
     const pembaca = await userDariToken(tokenDari(request));
     if (!pembaca) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
     if (!["super_admin", "master", "admin_hr"].includes(pembaca.role)) {
-      throw Object.assign(new Error("Hanya pengurus yang boleh membuka daftar akun"), {
-        status: 403,
-      });
+      // Fitur 1.19/3.3: jabatan yang diberi master akses dashboard
+      // berbasis daftar anggota ikut boleh MEMBACA roster (baca-saja;
+      // semua tindakan pengubah tetap dijaga ketat di PATCH).
+      const akses = await aksesDashboardRole(pembaca.role);
+      const butuhRoster = ["absensi", "kpi", "anggota"];
+      if (!butuhRoster.some((k) => akses.includes(k))) {
+        throw Object.assign(new Error("Hanya pengurus yang boleh membuka daftar akun"), {
+          status: 403,
+        });
+      }
     }
 
     const { data, error } = await supabase()

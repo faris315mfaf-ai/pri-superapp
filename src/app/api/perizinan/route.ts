@@ -12,6 +12,7 @@ import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
+import { bolehDashboard } from "@/lib/dashboard-akses";
 
 export const dynamic = "force-dynamic";
 
@@ -91,8 +92,14 @@ export async function GET(request: Request) {
 
     if (url.searchParams.get("semua") === "1") {
       // Atasan melihat pengajuan bawahannya; HR/super admin semuanya.
+      // Pemegang akses dashboard "absensi" (fitur 1.19/3.3.a) ikut
+      // melihat semuanya — status izin/sakit dibutuhkan supaya orang
+      // yang izin tidak salah tampil sebagai alfa. Baca-saja: PATCH
+      // persetujuan tetap dijaga terpisah.
       let idBawahan: number[] | null = null;
-      if (!PERAN_HR.has(user.role)) {
+      const lihatSemua =
+        PERAN_HR.has(user.role) || (await bolehDashboard(user.role, "absensi"));
+      if (!lihatSemua) {
         const { data: tim } = await db
           .from("tim_anggota")
           .select("anggota_id")

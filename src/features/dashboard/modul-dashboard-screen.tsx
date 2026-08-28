@@ -16,12 +16,23 @@
 // ============================================================
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { Lock, Settings2 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
-import { FadeInUp } from "@/components/pri-ui";
+import { FadeInUp, GlassSkeleton } from "@/components/pri-ui";
 import { KATALOG_DASHBOARD } from "@/lib/dashboard-katalog";
 import type { User } from "@/types";
 import { cn } from "@/lib/utils";
+
+// Sub-dashboard dimuat malas: tiap sub membawa tabel/grafik besar
+// (recharts) yang tidak perlu ikut bundle awal aplikasi.
+const AbsensiHariIniScreen = dynamic(
+  () =>
+    import("@/features/pengguna/absensi-hari-ini-screen").then(
+      (m) => m.AbsensiHariIniScreen,
+    ),
+  { ssr: false, loading: () => <GlassSkeleton className="h-64 rounded-2xl" /> },
+);
 
 type ModulDashboardScreenProps = {
   user: User;
@@ -122,6 +133,10 @@ export function ModulDashboardScreen({ user, boleh, onBukaKelola }: ModulDashboa
 
 /** Isi tiap sub-dashboard — diisi bertahap (3.3.a sampai 3.3.e). */
 function IsiSubDashboard({ kunci }: { kunci: string | null }) {
+  // 3.3.a: komponen yang SAMA dengan halaman HR Center — mode
+  // terbenam (tanpa header/tombol kembali). Memang baca-saja.
+  if (kunci === "absensi") return <AbsensiHariIniScreen terbenam />;
+
   const info = KATALOG_DASHBOARD.find((d) => d.kunci === kunci);
   if (!info) return null;
   return (
