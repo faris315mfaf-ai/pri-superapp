@@ -37,6 +37,13 @@ const KpiAnggotaDashboard = dynamic(
   () => import("./kpi-anggota-dashboard").then((m) => m.KpiAnggotaDashboard),
   { ssr: false, loading: () => <GlassSkeleton className="h-64 rounded-2xl" /> },
 );
+const KepatuhanKaderPanel = dynamic(
+  () =>
+    import("@/features/qc-konten/kepatuhan-kader-panel").then(
+      (m) => m.KepatuhanKaderPanel,
+    ),
+  { ssr: false, loading: () => <GlassSkeleton className="h-64 rounded-2xl" /> },
+);
 
 type ModulDashboardScreenProps = {
   user: User;
@@ -142,6 +149,9 @@ function IsiSubDashboard({ kunci }: { kunci: string | null }) {
   if (kunci === "absensi") return <AbsensiHariIniScreen terbenam />;
   // 3.3.b: KPI harian per anggota + rencana besar divisi.
   if (kunci === "kpi") return <KpiAnggotaDashboard />;
+  // 3.3.c: panel kepatuhan yang SAMA dengan HR Center, mode baca-saja
+  // (tanpa tombol "Ingatkan via WA").
+  if (kunci === "kepatuhan") return <KepatuhanKaderPanel editable={false} />;
 
   const info = KATALOG_DASHBOARD.find((d) => d.kunci === kunci);
   if (!info) return null;

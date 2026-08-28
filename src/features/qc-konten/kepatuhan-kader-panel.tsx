@@ -31,7 +31,18 @@ import { cn } from "@/lib/utils";
 
 type RingkasKader = RingkasKepatuhanKader;
 
-export function KepatuhanKaderPanel({ muatUlang = 0 }: { muatUlang?: number }) {
+export function KepatuhanKaderPanel({
+  muatUlang = 0,
+  editable = true,
+}: {
+  muatUlang?: number;
+  /**
+   * false = mode BACA-SAJA (modul Dashboard 1.19/3.3.c): tombol aksi
+   * "Ingatkan via WhatsApp" disembunyikan — dashboard tempat memantau,
+   * bukan menindak. Data & tampilan lainnya persis sama.
+   */
+  editable?: boolean;
+}) {
   const [perKaderMentah, setPerKaderMentah] = useState<RingkasKader[] | null>(null);
   const [saring, setSaring] = useState<"semua" | "sudah" | "belum">("belum");
   // Saringan platform (spek 1.18/2.1g)
@@ -294,8 +305,9 @@ export function KepatuhanKaderPanel({ muatUlang = 0 }: { muatUlang?: number }) {
                 )}
               </div>
 
-              {/* Ingatkan via WA — hanya bila nomor tersedia (pengurus) */}
-              {dibuka.nomor_wa && dibuka.sudah < dibuka.total && (
+              {/* Ingatkan via WA — hanya bila nomor tersedia (pengurus)
+                  dan panel TIDAK sedang mode baca-saja (3.3.c) */}
+              {editable && dibuka.nomor_wa && dibuka.sudah < dibuka.total && (
                 <a
                   href={`https://wa.me/${dibuka.nomor_wa.replace(/\D/g, "")}?text=${encodeURIComponent(
                     `Halo ${dibuka.nama_kader.split(" ")[0]}, jangan lupa komentar di akun wajib hari ini ya. Masih ${dibuka.total - dibuka.sudah} postingan yang belum. 🙏`,
