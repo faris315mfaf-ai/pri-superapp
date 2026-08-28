@@ -2068,9 +2068,10 @@ export async function getUltahHariIni(): Promise<OrangUltah[]> {
   return (json.data ?? []) as OrangUltah[];
 }
 
-/** Perbarui data profil sendiri (panggilan/tgl lahir/divisi/foto). */
+/** Perbarui data profil sendiri (nama/panggilan/tgl lahir/foto). */
 export async function ubahProfilSaya(data: {
   foto?: string;
+  nama?: string;
   nama_panggilan?: string;
   tanggal_lahir?: string;
   divisi?: string;

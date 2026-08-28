@@ -67,6 +67,7 @@ export async function PATCH(request: Request) {
 
     const body = (await request.json().catch(() => ({}))) as {
       foto?: string;
+      nama?: string;
       nama_panggilan?: string;
       tanggal_lahir?: string;
       divisi?: string;
@@ -100,9 +101,23 @@ export async function PATCH(request: Request) {
     // baris app_user pemanggil dibaca dulu sebagai acuan.
     const { data: sayaKini } = await db
       .from("app_user")
-      .select("nama_panggilan, tanggal_lahir, panggilan_diubah_pada")
+      .select("nama, nama_panggilan, tanggal_lahir, panggilan_diubah_pada")
       .eq("id", Number(user.id))
       .maybeSingle();
+
+    // Edit nama lengkap (fitur 1.19/3.2). Perubahan dicatat di jejak
+    // audit di bawah supaya HR bisa menelusuri "dulu namanya siapa".
+    let namaLamaAudit: string | null = null;
+    if (typeof body.nama === "string") {
+      const n = body.nama.trim();
+      if (n.length < 2 || n.length > 100) {
+        throw Object.assign(new Error("Nama lengkap 2–100 karakter."), { status: 400 });
+      }
+      if (n !== (sayaKini?.nama ?? "")) {
+        namaLamaAudit = String(sayaKini?.nama ?? "");
+        perubahan.nama = n;
+      }
+    }
 
     if (typeof body.nama_panggilan === "string") {
       const p = body.nama_panggilan.trim();
@@ -188,6 +203,19 @@ export async function PATCH(request: Request) {
     // (termasuk pencabutan akses) berlaku seketika, bukan menunggu TTL.
     await hapusCacheUser(user.id);
     if (error) throw new Error("Gagal menyimpan profil.");
+
+    // JEJAK AUDIT nama (spek 3.2) — dicatat setelah update sukses
+    // supaya tidak ada jejak untuk perubahan yang gagal tersimpan.
+    if (namaLamaAudit !== null && typeof perubahan.nama === "string") {
+      await db.from("log_audit").insert({
+        aktor_id: Number(user.id),
+        aktor_nama: namaLamaAudit,
+        aksi: "ubah_nama",
+        target_id: Number(user.id),
+        target_nama: perubahan.nama,
+        detail: `Mengubah nama dari "${namaLamaAudit}" menjadi "${perubahan.nama}".`,
+      });
+    }
 
     const { data: segar } = await db
       .from("app_user")

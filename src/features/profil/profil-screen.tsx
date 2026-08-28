@@ -27,7 +27,7 @@ import {
   User as UserIcon,
   Zap,
   Sparkles,
-  Heart, ExternalLink } from "lucide-react";
+  Heart, ExternalLink, Pencil, Check, X, Loader2 } from "lucide-react";
 import { LogoPri } from "@/components/logo-pri";
 import {
   AvatarInisial,
@@ -47,7 +47,13 @@ import { VideoEmbedMini } from "@/components/video-embed-mini";
 import { KoinChip } from "@/components/koin-chip";
 import { IkonGoogle } from "@/components/tombol-google";
 import { urlProfilSosmed } from "@/lib/format";
-import { ambilToken, getProfilMomen, getStreakSaya, type ProfilMomen } from "@/services";
+import {
+  ambilToken,
+  getProfilMomen,
+  getStreakSaya,
+  ubahProfilSaya,
+  type ProfilMomen,
+} from "@/services";
 import { IkonStreak } from "@/components/ikon-streak";
 import { deskripsiStruktur } from "@/lib/struktur";
 import {
@@ -298,6 +304,38 @@ export function ProfilScreen({
 }: ProfilScreenProps) {
   const tema = useAppStore((s) => s.tema);
   const toggleTema = useAppStore((s) => s.toggleTema);
+  const setUser = useAppStore((s) => s.setUser);
+
+  // Edit nama lengkap inline di hero (fitur 1.19/3.2).
+  const [editNama, setEditNama] = useState(false);
+  const [namaBaru, setNamaBaru] = useState("");
+  const [menyimpanNama, setMenyimpanNama] = useState(false);
+
+  async function simpanNama() {
+    const n = namaBaru.trim();
+    if (menyimpanNama) return;
+    if (n.length < 2 || n.length > 100) {
+      toast("error", "Nama lengkap 2–100 karakter");
+      return;
+    }
+    if (n === user.nama) {
+      setEditNama(false);
+      return;
+    }
+    setMenyimpanNama(true);
+    try {
+      // Server mencatat jejak audit "Mengubah nama dari X menjadi Y";
+      // setUser membuat nama baru langsung tampil di seluruh aplikasi.
+      const segar = await ubahProfilSaya({ nama: n });
+      setUser(segar);
+      setEditNama(false);
+      toast("sukses", "Nama diperbarui", `Sekarang tercatat sebagai ${segar.nama}.`);
+    } catch (e) {
+      toast("error", "Gagal menyimpan nama", e instanceof Error ? e.message : undefined);
+    } finally {
+      setMenyimpanNama(false);
+    }
+  }
 
   // Status notifikasi Android sungguhan (Web Push), bukan sakelar hiasan.
   //
@@ -448,9 +486,65 @@ export function ProfilScreen({
               <Camera className="h-3 w-3" />
             </span>
           </button>
-          <h2 className="mt-3 font-heading text-2xl font-extrabold tracking-tight text-white drop-shadow-sm">
-            {user.nama}
-          </h2>
+          {/* Nama + edit inline (fitur 1.19/3.2): ikon pensil membuka
+              input di tempat; Simpan memanggil PATCH /api/profil dan
+              tercatat di jejak audit. */}
+          {editNama ? (
+            <div className="mt-3 flex w-full max-w-[300px] flex-col items-center gap-2">
+              <input
+                value={namaBaru}
+                onChange={(e) => setNamaBaru(e.target.value)}
+                maxLength={100}
+                autoFocus
+                disabled={menyimpanNama}
+                aria-label="Nama lengkap baru"
+                className="h-11 w-full rounded-xl border border-white/40 bg-white/15 px-3.5 text-center font-heading text-lg font-bold text-white placeholder:text-white/50 backdrop-blur-sm focus:border-white/70 focus:outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void simpanNama();
+                  if (e.key === "Escape") setEditNama(false);
+                }}
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void simpanNama()}
+                  disabled={menyimpanNama || namaBaru.trim().length < 2}
+                  className="btn-tekan flex h-9 items-center gap-1.5 rounded-full bg-white px-4 text-[12px] font-bold text-pri disabled:opacity-60"
+                >
+                  {menyimpanNama ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  Simpan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditNama(false)}
+                  disabled={menyimpanNama}
+                  className="btn-tekan flex h-9 items-center gap-1.5 rounded-full bg-white/20 px-4 text-[12px] font-semibold text-white"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                  Batal
+                </button>
+              </div>
+            </div>
+          ) : (
+            <h2 className="mt-3 flex items-center gap-2 font-heading text-2xl font-extrabold tracking-tight text-white drop-shadow-sm">
+              {user.nama}
+              <button
+                type="button"
+                onClick={() => {
+                  setNamaBaru(user.nama);
+                  setEditNama(true);
+                }}
+                aria-label="Edit nama lengkap"
+                className="btn-tekan flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-sm"
+              >
+                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </h2>
+          )}
           <p className="mt-0.5 text-[12px] font-medium text-white/80">
             @{user.email.split("@")[0]}
             {(user.jabatan || user.divisi) &&
