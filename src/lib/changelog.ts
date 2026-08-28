@@ -18,6 +18,21 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "1.19.0",
+    tanggal: "28 Agustus 2026",
+    judul: "Masuk dengan Google & modul Dashboard baru",
+    poin: [
+      "Masuk dengan Google — sekali klik, tanpa mengetik sandi; belum terdaftar pun akunmu dibuat otomatis",
+      "Profil: hubungkan akun Google-mu dari menu Keamanan",
+      "Profil: nama lengkap kini bisa diedit sendiri (ikon pensil di samping nama)",
+      "Modul DASHBOARD baru — pantauan absensi, KPI anggota (2 tab + 4 grafik + detail per orang), kepatuhan komen, analitik TV Rakyat (video populer 🏆 + aktivitas live), & kelengkapan data anggota",
+      "Master mengatur siapa boleh melihat dashboard apa (Kelola Akses Dashboard)",
+      "Profil tampil baru: hero merah dengan lonceng notifikasi dropdown di tempat",
+      "Konten, Pengumuman, Kerja Hari Ini & Wajib Komentar kini rapi di Beranda sebagai seksi lipat",
+      "Tampilan desktop modul TV Rakyat diperlebar & dirapikan",
+    ],
+  },
+  {
     versi: "1.18.0",
     tanggal: "28 Agustus 2026",
     judul: "HR Center lengkap & TV Rakyat makin rapi",
