@@ -74,14 +74,19 @@ export async function POST(request: Request) {
           // nilainya kedaluwarsa dalam hitungan menit.
           uses: 1,
           expireTime: new Date(Date.now() + 30 * 60_000).toISOString(),
+          // Sambungan HARUS dibuka <2 menit setelah token dicetak —
+          // token yang dicuri cepat basi (diverifikasi: lewat jendela
+          // ini Gemini menutup sesi "deadline exceeded").
           newSessionExpireTime: new Date(Date.now() + 2 * 60_000).toISOString(),
-          liveConnectConstraints: {
-            model: MODEL_SUARA,
-            config: {
-              responseModalities: ["AUDIO"],
-              systemInstruction: { parts: [{ text: INSTRUKSI_ASISTEN }] },
-              tools: [{ functionDeclarations: DEKLARASI_ALAT }],
-            },
+          // Konfigurasi sesi DIKUNCI ke token (bentuk field diverifikasi
+          // langsung ke endpoint v1alpha 28 Agu 2026): model suara,
+          // jawaban audio, instruksi, dan alat daftar-putih — peramban
+          // tidak bisa menukarnya dengan model/alat lain.
+          bidiGenerateContentSetup: {
+            model: `models/${MODEL_SUARA}`,
+            generationConfig: { responseModalities: ["AUDIO"] },
+            systemInstruction: { parts: [{ text: INSTRUKSI_ASISTEN }] },
+            tools: [{ functionDeclarations: DEKLARASI_ALAT }],
           },
         }),
       },

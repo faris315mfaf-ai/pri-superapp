@@ -12,9 +12,12 @@
 // ============================================================
 import { supabase } from "@/lib/supabase";
 
-export const MODEL_TEKS = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+// Bawaan DIVERIFIKASI terhadap kunci user 28 Agu 2026: generasi 2.5
+// sudah ditutup untuk pengguna baru; 3.6-flash teruji menjawab, dan
+// 3.1-flash-live-preview adalah model bidi (suara) generasi terbaru.
+export const MODEL_TEKS = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 export const MODEL_SUARA =
-  process.env.GEMINI_LIVE_MODEL || "gemini-2.5-flash-native-audio-preview-09-2025";
+  process.env.GEMINI_LIVE_MODEL || "gemini-3.1-flash-live-preview";
 
 export function geminiSiap(): boolean {
   return Boolean(process.env.GEMINI_API_KEY);

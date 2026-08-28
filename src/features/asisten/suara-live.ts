@@ -13,8 +13,11 @@
 
 import { jalankanAlatSuara } from "@/services";
 
+// Endpoint KHUSUS token sementara (diverifikasi 28 Agu 2026):
+// BidiGenerateContentConstrained + ?access_token= — endpoint biasa
+// menolak token sementara sebagai "unregistered caller".
 const URL_LIVE =
-  "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent";
+  "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained";
 
 export type StatusSuara =
   | "siap"
