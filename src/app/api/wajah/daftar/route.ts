@@ -5,7 +5,7 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { pastikanMasuk } from "@/lib/sesi";
-import { daftarWajahPenyedia, WajahBelumDiaturError, wajahSiap } from "@/lib/wajah";
+import { daftarWajahPenyedia, hapusWajahPenyedia, WajahBelumDiaturError, wajahSiap } from "@/lib/wajah";
 import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +36,14 @@ export async function POST(request: Request) {
       throw Object.assign(new Error("Foto terlalu besar. Coba lagi."), { status: 400 });
     }
 
+    // Referensi lama (bila daftar ulang) — dihapus di penyedia SETELAH
+    // yang baru sukses tersimpan, supaya tak ada jendela tanpa wajah.
+    const { data: lama } = await supabase()
+      .from("wajah_template")
+      .select("face_id")
+      .eq("user_id", Number(user.id))
+      .maybeSingle();
+
     let faceId: string;
     let provider: string;
     try {
@@ -59,6 +67,11 @@ export async function POST(request: Request) {
         { onConflict: "user_id" },
       );
     if (error) throw new Error("Gagal menyimpan pendaftaran wajah.");
+
+    // Buang subjek lama di penyedia (best-effort) — hanya bila memang beda.
+    if (lama?.face_id && lama.face_id !== faceId) {
+      await hapusWajahPenyedia(String(lama.face_id)).catch(() => {});
+    }
 
     await supabase().from("log_audit").insert({
       aktor_id: Number(user.id),

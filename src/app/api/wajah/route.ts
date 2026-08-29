@@ -7,7 +7,7 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { pastikanMasuk } from "@/lib/sesi";
-import { penyediaWajah, wajahSiap } from "@/lib/wajah";
+import { hapusWajahPenyedia, penyediaWajah, wajahSiap } from "@/lib/wajah";
 
 export const dynamic = "force-dynamic";
 
@@ -41,11 +41,17 @@ export async function GET(request: Request) {
 export async function DELETE(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
-    const { error } = await supabase()
+    const db = supabase();
+    // Ambil referensi dulu supaya subjek di penyedia ikut dibersihkan —
+    // jangan sampai wajah tertinggal di layanan setelah dihapus di sini.
+    const { data } = await db
       .from("wajah_template")
-      .delete()
-      .eq("user_id", Number(user.id));
+      .select("face_id")
+      .eq("user_id", Number(user.id))
+      .maybeSingle();
+    const { error } = await db.from("wajah_template").delete().eq("user_id", Number(user.id));
     if (error) throw new Error("Gagal menghapus data wajah.");
+    if (data?.face_id) await hapusWajahPenyedia(String(data.face_id)).catch(() => {});
     return { sukses: true };
   });
 }

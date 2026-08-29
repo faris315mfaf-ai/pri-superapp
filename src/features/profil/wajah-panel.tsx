@@ -182,7 +182,7 @@ export function KameraWajah({
     void (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 640 } },
+          video: { facingMode: "user", width: { ideal: 960 }, height: { ideal: 960 } },
           audio: false,
         });
         if (batal) {
@@ -208,17 +208,20 @@ export function KameraWajah({
   function ambil() {
     const v = videoRef.current;
     if (!v || !siap) return;
-    const sisi = Math.min(v.videoWidth, v.videoHeight) || 480;
+    const sisi = Math.min(v.videoWidth, v.videoHeight) || 720;
+    // 720px: cukup besar agar liveness (yang menuntut jarak antar-mata
+    // memadai) tidak menolak dengan alasan "wajah terlalu kecil".
+    const KELUAR = 720;
     const kanvas = document.createElement("canvas");
-    kanvas.width = 480;
-    kanvas.height = 480;
+    kanvas.width = KELUAR;
+    kanvas.height = KELUAR;
     const ctx = kanvas.getContext("2d");
     if (!ctx) return;
-    // Potong tengah jadi bujur sangkar lalu skala ke 480.
+    // Potong tengah jadi bujur sangkar lalu skala ke ukuran keluar.
     const sx = (v.videoWidth - sisi) / 2;
     const sy = (v.videoHeight - sisi) / 2;
-    ctx.drawImage(v, sx, sy, sisi, sisi, 0, 0, 480, 480);
-    const dataUrl = kanvas.toDataURL("image/jpeg", 0.85);
+    ctx.drawImage(v, sx, sy, sisi, sisi, 0, 0, KELUAR, KELUAR);
+    const dataUrl = kanvas.toDataURL("image/jpeg", 0.88);
     onFoto(dataUrl);
   }
 
