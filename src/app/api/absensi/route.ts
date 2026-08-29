@@ -20,7 +20,7 @@ import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { bolehDashboard } from "@/lib/dashboard-akses";
 import { catatTugasStreak } from "@/lib/streak";
 import { beriKoin } from "@/lib/koin";
-import { verifikasiWajahPenyedia, wajahSiap } from "@/lib/wajah";
+import { verifikasiWajahPenyedia, WajahLayananError, wajahSiap } from "@/lib/wajah";
 
 export const dynamic = "force-dynamic";
 
@@ -247,9 +247,13 @@ export async function POST(request: Request) {
         let hasil;
         try {
           hasil = await verifikasiWajahPenyedia(user.id, foto, String(tpl.face_id));
-        } catch {
+        } catch (e) {
           throw Object.assign(
-            new Error("Verifikasi wajah gagal dijalankan. Coba lagi sebentar."),
+            new Error(
+              e instanceof WajahLayananError
+                ? e.message
+                : "Verifikasi wajah gagal dijalankan. Coba lagi sebentar.",
+            ),
             { status: 503 },
           );
         }

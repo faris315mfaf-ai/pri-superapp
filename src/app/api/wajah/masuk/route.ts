@@ -10,7 +10,7 @@ import { bungkus } from "@/lib/api-helper";
 import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import { pastikanBukanPerbaikan } from "@/lib/perbaikan";
 import { buatSesi, keUserPublik, KOLOM_USER, type BarisUser } from "@/lib/sesi";
-import { identifikasiWajah, WajahBelumDiaturError, wajahSiap } from "@/lib/wajah";
+import { identifikasiWajah, WajahBelumDiaturError, WajahLayananError, wajahSiap } from "@/lib/wajah";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -35,7 +35,9 @@ export async function POST(request: Request) {
     try {
       hasil = await identifikasiWajah(image);
     } catch (e) {
-      if (e instanceof WajahBelumDiaturError) throw errorStatus(e.message, 503);
+      if (e instanceof WajahBelumDiaturError || e instanceof WajahLayananError) {
+        throw errorStatus(e.message, 503);
+      }
       throw e;
     }
 

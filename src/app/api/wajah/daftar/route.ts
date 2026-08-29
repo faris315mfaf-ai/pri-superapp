@@ -6,7 +6,13 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { pastikanMasuk } from "@/lib/sesi";
-import { daftarWajahPenyedia, hapusWajahPenyedia, WajahBelumDiaturError, wajahSiap } from "@/lib/wajah";
+import {
+  daftarWajahPenyedia,
+  hapusWajahPenyedia,
+  WajahBelumDiaturError,
+  WajahLayananError,
+  wajahSiap,
+} from "@/lib/wajah";
 import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +62,7 @@ export async function POST(request: Request) {
     try {
       ({ faceId, provider } = await daftarWajahPenyedia(user.id, images));
     } catch (e) {
-      if (e instanceof WajahBelumDiaturError) {
+      if (e instanceof WajahBelumDiaturError || e instanceof WajahLayananError) {
         throw Object.assign(new Error(e.message), { status: 503 });
       }
       throw e;

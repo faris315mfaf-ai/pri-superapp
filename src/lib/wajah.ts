@@ -21,6 +21,8 @@
 // ============================================================
 
 export class WajahBelumDiaturError extends Error {}
+/** Layanan wajah menolak karena kuota habis / langganan belum aktif / kunci salah. */
+export class WajahLayananError extends Error {}
 
 const LUX_BASE = "https://api.luxand.cloud";
 
@@ -127,6 +129,19 @@ async function luxKirim<T>(
       json = teks ? JSON.parse(teks) : null;
     } catch {
       json = null;
+    }
+    // Deteksi masalah AKUN Luxand (bukan wajah): kuota bulanan habis,
+    // langganan belum aktif, atau kunci salah → beri pesan jujur, jangan
+    // sampai salah tampil "wajah tidak terdeteksi".
+    const pesan = String((json as { message?: string })?.message ?? "");
+    if (
+      res.status === 401 ||
+      res.status === 402 ||
+      /upgrade your plan|requests number|per month reached|invalid token|token/i.test(pesan)
+    ) {
+      throw new WajahLayananError(
+        "Layanan wajah sedang tidak tersedia (kuota/langganan belum aktif). Hubungi pengurus.",
+      );
     }
     return { ok: res.ok, status: res.status, json: json as T };
   } catch (e) {
