@@ -26,6 +26,7 @@ import { RiwayatVideo } from "./riwayat-video";
 import { KelolaTimPanel } from "./kelola-tim-panel";
 import { KelolaSumberPanel } from "./kelola-sumber-panel";
 import { SeksiLipat } from "@/components/seksi-lipat";
+import { useAppStore } from "@/hooks/use-app-store";
 import { EmbedTerbaru } from "./embed-terbaru";
 import { SectionTitle } from "@/components/pri-ui";
 import type { Berita, HasilProsesVideo, User, VideoAntrian } from "@/types";
@@ -51,6 +52,14 @@ export function TvScreen({
 }) {
   // Pimpinan Redaksi (dan master): berhak menyetujui/menolak video.
   const pimred = adalahPimred(user);
+  // Wewenang TV per-orang (fitur 1.22.x/bug 3): anggota yang DITUNJUK
+  // Pimred dengan boleh_acc/boleh_upload memperoleh hak setara Pimred
+  // untuk aksi itu. Yang BELUM ditunjuk (mis. anggota Divisi TV Rakyat
+  // biasa) hanya melihat Riwayat — form buat/upload video disembunyikan.
+  const wewenang = useAppStore((s) => s.wewenangTv);
+  const bolehProses = pimred || wewenang.proses;
+  const bolehUpload = pimred || wewenang.upload;
+  const bolehAcc = pimred || wewenang.acc;
 
   // Video sumber yang dipilih admin untuk direplikasi (dari panel Berita).
   // Link-nya TIDAK disalin ke form doksli — doksli tetap dicari & diisi
@@ -225,6 +234,9 @@ export function TvScreen({
 
         {/* ── Bagian KANAN: Produksi ── */}
         <section className="mt-6 flex flex-col gap-4 lg:mt-0">
+          {/* Buat Video — hanya untuk yang berhak MEMPROSES (fitur 1.22.x/
+              bug 3): Pimred atau anggota tim TV yang ditunjuk. */}
+          {bolehProses && (
           <SeksiLipat
             id="buat-video"
             judul="Buat Video"
@@ -262,15 +274,21 @@ export function TvScreen({
               )}
             </AnimatePresence>
           </SeksiLipat>
+          )}
 
-          {/* Upload video manual (hasil edit sendiri) — antrean ACC Pimred */}
+          {/* Upload video manual (hasil edit sendiri) — hanya untuk yang
+              berhak UPLOAD (fitur 1.22.x/bug 3). Form per-platform, caption,
+              judul & tombol unggah tak muncul bagi yang belum ditunjuk. */}
+          {bolehUpload && (
           <div>
             <SectionTitle judul="Upload Manual" />
             <KirimVideoManual />
           </div>
+          )}
 
           {/* Status pipeline (pindahan dari dashboard super admin) —
-              bisa dilipat (fitur 1.22/2). */}
+              bisa dilipat (fitur 1.22/2); hanya bagi yang memproses. */}
+          {bolehProses && (
           <FadeInUp delay={0.08}>
             <SeksiLipat
               id="status-pipeline"
@@ -282,6 +300,7 @@ export function TvScreen({
               <PipelinePanel muatUlang={refreshKey} />
             </SeksiLipat>
           </FadeInUp>
+          )}
 
           {/* Riwayat pemrosesan — bisa di-expand/minimize (fitur 1.22/2);
               thumbnail kecil tiap baris diambil dari thumbnail video asli. */}
@@ -329,7 +348,9 @@ export function TvScreen({
           <PreviewModal
             key="preview"
             hasil={hasil}
-            bolehSetujui={pimred}
+            // Kontrol aksi (setujui/unggah) muncul untuk yang ditunjuk acc
+            // ATAU upload; server menegakkan aksi spesifik per endpoint.
+            bolehSetujui={bolehAcc || bolehUpload}
             modeTinjau={dariRiwayat}
             sudahDiunggah={sudahDiunggah}
             linkPostingan={linkPostingan}

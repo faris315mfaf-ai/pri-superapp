@@ -31,9 +31,10 @@ import { sapaanHari, tanggalIndonesia } from "@/lib/format";
 import { APP_TODAY_ISO } from "@/types";
 import type { User } from "@/types";
 import { AksesCepatPanel } from "./akses-cepat-panel";
-import { Database } from "lucide-react";
+import { CalendarDays, ClipboardList, Database, LayoutGrid, Tv, Users } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { KartuKelolaPengguna } from "./kartu-kelola-pengguna";
+import { TataLetakModul, type SeksiModul } from "@/components/tata-letak-modul";
 
 type DashboardScreenProps = {
   user: User;
@@ -192,62 +193,75 @@ export function DashboardScreen({
         )}
 
         {data && (
-          <>
-            {/* Angka kepatuhan & tren kini tinggal di modul QC Konten,
-                pipeline video di modul TV Rakyat — beranda super admin
-                fokus ke pemantauan orang: absensi, rencana, aktivitas. */}
-
-            {/* Database anggota: detail kewajiban/KPI/absen/video per orang.
-                Tampil hanya bila perannya diberi fitur "database.detail". */}
-            {onBukaDatabase && (
-              <FadeInUp delay={0.24}>
-                <button
-                  type="button"
-                  onClick={onBukaDatabase}
-                  className="btn-tekan w-full text-left"
-                  aria-label="Buka Database Anggota"
-                >
-                  <GlassCard className="flex items-center gap-3 p-4">
-                    <span
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
-                      style={{ background: "linear-gradient(135deg, #8B5CF6, #6D28D9)" }}
-                      aria-hidden="true"
+          // Beranda pengurus kini BISA DIKUSTOMISASI seperti beranda anggota
+          // (fitur 1.22.x/bug 1): seret untuk mengurutkan + sembunyikan seksi.
+          // bungkusSeksi=false karena tiap seksi sudah punya kepala/kartunya.
+          <TataLetakModul
+            modul="dashboard"
+            bungkusSeksi={false}
+            seksi={
+              [
+                onBukaDatabase && {
+                  id: "database",
+                  judul: "Database Anggota",
+                  ikon: Database,
+                  render: () => (
+                    <button
+                      type="button"
+                      onClick={onBukaDatabase}
+                      className="btn-tekan w-full text-left"
+                      aria-label="Buka Database Anggota"
                     >
-                      <Database className="h-5 w-5" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-heading text-[15px] font-bold text-teks-utama">
-                        Database Anggota
-                      </span>
-                      <span className="mt-0.5 block text-[11.5px] leading-snug text-teks-sekunder">
-                        Detail per orang: kewajiban komentar, KPI kerja, absensi, laporan video.
-                      </span>
-                    </span>
-                  </GlassCard>
-                </button>
-              </FadeInUp>
-            )}
-
-            {/* f) Akses cepat */}
-            {onBukaKelolaPengguna && (
-              <FadeInUp delay={0.27}>
-                <KartuKelolaPengguna onBuka={onBukaKelolaPengguna} />
-              </FadeInUp>
-            )}
-
-            <FadeInUp delay={0.3}>
-              <AksesCepatPanel onBukaModulQc={onBukaModulQc} onBukaModulTv={onBukaModulTv} />
-            </FadeInUp>
-
-            {/* g) Pemantauan: insight TVR, absensi, rencana anggota */}
-            <SeksiInsightTvr />
-            <SeksiAbsensiHarian />
-            <SeksiRencanaAnggota />
-
-            {/* Aktivitas terbaru DIHAPUS dari beranda (spek 1.7):
-                isinya duplikat layar Notifikasi — daftar yang sama
-                kini hanya hidup di lonceng notifikasi. */}
-          </>
+                      <GlassCard className="flex items-center gap-3 p-4">
+                        <span
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
+                          style={{ background: "linear-gradient(135deg, #8B5CF6, #6D28D9)" }}
+                          aria-hidden="true"
+                        >
+                          <Database className="h-5 w-5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-heading text-[15px] font-bold text-teks-utama">
+                            Database Anggota
+                          </span>
+                          <span className="mt-0.5 block text-[11.5px] leading-snug text-teks-sekunder">
+                            Detail per orang: kewajiban komentar, KPI kerja, absensi, laporan video.
+                          </span>
+                        </span>
+                      </GlassCard>
+                    </button>
+                  ),
+                },
+                onBukaKelolaPengguna && {
+                  id: "kelola",
+                  judul: "Kelola Pengguna",
+                  ikon: Users,
+                  render: () => <KartuKelolaPengguna onBuka={onBukaKelolaPengguna} />,
+                },
+                {
+                  id: "akses-cepat",
+                  judul: "Akses Cepat",
+                  ikon: LayoutGrid,
+                  render: () => (
+                    <AksesCepatPanel onBukaModulQc={onBukaModulQc} onBukaModulTv={onBukaModulTv} />
+                  ),
+                },
+                { id: "insight-tvr", judul: "Insight TV Rakyat", ikon: Tv, render: () => <SeksiInsightTvr /> },
+                {
+                  id: "absensi",
+                  judul: "Absensi Hari Ini",
+                  ikon: CalendarDays,
+                  render: () => <SeksiAbsensiHarian />,
+                },
+                {
+                  id: "rencana",
+                  judul: "Rencana Kerja Anggota",
+                  ikon: ClipboardList,
+                  render: () => <SeksiRencanaAnggota />,
+                },
+              ].filter(Boolean) as SeksiModul[]
+            }
+          />
         )}
       </div>
     </div>

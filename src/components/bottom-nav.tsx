@@ -92,7 +92,11 @@ export function BottomNav({ role, tabAktif, onTab, belumBaca = 0, tabs: tabsProp
           WebkitMaskImage: "linear-gradient(to bottom, transparent 0%, black 45%)",
         }}
       />
-      <div className="glass pointer-events-auto flex items-center justify-around rounded-[1.6rem] px-2 py-2">
+      {/* Bug 1.22.x/2: saat tab banyak (mis. akun HR: 7-8 tab), bar
+          digulir mendatar alih-alih menyempit sampai sesak. Tiap tab
+          punya lebar minimum; kalau muat, flex-1 membiarkannya melebar
+          memenuhi bar. */}
+      <div className="glass tanpa-scrollbar pointer-events-auto flex items-center gap-0.5 overflow-x-auto rounded-[1.6rem] px-2 py-2">
         {tabs.map((kunci) => {
           const { label, ikon: Ikon } = KONFIG_TAB[kunci];
           const aktif = kunci === tabAktif;
@@ -104,7 +108,7 @@ export function BottomNav({ role, tabAktif, onTab, belumBaca = 0, tabs: tabsProp
               aria-label={label}
               aria-current={aktif ? "page" : undefined}
               className={cn(
-                "btn-tekan relative flex min-h-[44px] min-w-[44px] flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5",
+                "btn-tekan relative flex min-h-[44px] grow shrink-0 basis-[58px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5",
                 aktif ? "text-white" : "text-teks-sekunder",
               )}
             >

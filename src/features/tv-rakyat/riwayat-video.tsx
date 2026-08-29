@@ -94,6 +94,10 @@ export function RiwayatVideo({
 }) {
   const [cache, setCache] = useState<CacheRiwayat | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("SEMUA");
+  // Paginasi (fitur 1.22.x/bug 4): maksimal 10 baris per halaman supaya
+  // daftar tidak sumpek; nomor halaman di bawahnya.
+  const [halaman, setHalaman] = useState(1);
+  const PER_HAL = 10;
 
   // Muat ulang data saat mount dan setiap refreshKey naik.
   // Saat kunci cache tidak cocok → tampil skeleton (sedang memuat).
@@ -124,6 +128,11 @@ export function RiwayatVideo({
 
   const terfilter =
     video === null ? [] : video.filter((v) => filter === "SEMUA" || v.status === filter);
+
+  // Potong per halaman; jaga `halaman` tetap valid bila jumlah menyusut.
+  const totalHal = Math.max(1, Math.ceil(terfilter.length / PER_HAL));
+  const halAman = Math.min(halaman, totalHal);
+  const tampil = terfilter.slice((halAman - 1) * PER_HAL, halAman * PER_HAL);
 
   function jumlahChip(id: StatusFilter): number {
     if (video === null) return 0;
@@ -162,7 +171,10 @@ export function RiwayatVideo({
             <button
               key={chip.id}
               type="button"
-              onClick={() => setFilter(chip.id)}
+              onClick={() => {
+                setFilter(chip.id);
+                setHalaman(1);
+              }}
               aria-pressed={aktifChip}
               className={cn(
                 "btn-tekan flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold",
@@ -212,7 +224,7 @@ export function RiwayatVideo({
             className="py-8"
           />
         ) : (
-          terfilter.map((v, i) => (
+          tampil.map((v, i) => (
             <ItemVideo
               key={v.id}
               video={v}
@@ -223,6 +235,36 @@ export function RiwayatVideo({
           ))
         )}
       </div>
+
+      {/* Nomor halaman (fitur 1.22.x/bug 4) — hanya bila lebih dari 1 halaman */}
+      {totalHal > 1 && (
+        <div className="tanpa-scrollbar mt-4 flex flex-wrap items-center justify-center gap-1.5">
+          {Array.from({ length: totalHal }).map((_, i) => {
+            const n = i + 1;
+            const aktifHal = n === halAman;
+            return (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setHalaman(n)}
+                aria-label={`Halaman ${n}`}
+                aria-current={aktifHal ? "page" : undefined}
+                className={cn(
+                  "btn-tekan angka-tab flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-[12.5px] font-bold",
+                  aktifHal ? "text-white" : "glass text-teks-sekunder hover:text-teks-utama",
+                )}
+                style={
+                  aktifHal
+                    ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" }
+                    : undefined
+                }
+              >
+                {n}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 

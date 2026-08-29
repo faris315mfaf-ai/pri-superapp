@@ -334,6 +334,7 @@ export default function Page() {
       if (hidup) {
         useAppStore.getState().setIzinFitur(izin);
         useAppStore.getState().setTvAnggota(wewenang.anggota);
+        useAppStore.getState().setWewenangTv(wewenang);
       }
     }
     void muatIzin();

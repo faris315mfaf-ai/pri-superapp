@@ -17,12 +17,12 @@
 // ============================================================
 
 import { useEffect, useState, type ReactNode } from "react";
+import { Reorder } from "framer-motion";
 import {
-  ArrowDown,
-  ArrowUp,
   Check,
   Eye,
   EyeOff,
+  GripVertical,
   SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
@@ -67,10 +67,17 @@ function susun(seksi: SeksiModul[], urutan: string[] | null): SeksiModul[] {
 export function TataLetakModul({
   modul,
   seksi,
+  bungkusSeksi = true,
 }: {
   /** Nama modul, huruf kecil (mis. "beranda") — jadi kunci preferensi */
   modul: string;
   seksi: SeksiModul[];
+  /**
+   * true (bawaan): tiap seksi dibungkus SeksiLipat (bisa dilipat). Set
+   * FALSE bila seksi sudah punya kepala/kartu sendiri (mis. DashboardScreen)
+   * supaya tak ada kepala dobel — reorder & sembunyikan tetap jalan.
+   */
+  bungkusSeksi?: boolean;
 }) {
   const [urutan, setUrutan] = useState<string[] | null>(null);
   const [sembunyi, setSembunyi] = useState<string[]>([]);
@@ -105,13 +112,9 @@ export function TataLetakModul({
     );
   }
 
-  function geser(id: string, arah: -1 | 1) {
-    const ids = tersusun.map((s) => s.id);
-    const i = ids.indexOf(id);
-    const j = i + arah;
-    if (i < 0 || j < 0 || j >= ids.length) return;
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-    simpan(ids, sembunyi);
+  /** Simpan urutan baru hasil DRAG (fitur 1.22.x/bug 1). */
+  function urutkanUlang(idsBaru: string[]) {
+    simpan(idsBaru, sembunyi);
   }
 
   function toggleSembunyi(id: string) {
@@ -161,54 +164,57 @@ export function TataLetakModul({
         </button>
       </div>
 
-      {tersusun.map((s, i) => {
-        const disembunyikan = sembunyi.includes(s.id);
-        // Di luar mode atur, seksi tersembunyi benar-benar hilang.
-        if (disembunyikan && !modeAtur) return null;
-        return (
-          <div
-            key={s.id}
-            className={cn(
-              modeAtur && "rounded-2xl ring-2 ring-pri/30",
-              modeAtur && disembunyikan && "opacity-45",
-            )}
-          >
-            {modeAtur && (
-              <div className="flex items-center gap-1.5 px-2 py-1.5">
-                <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-teks-sekunder">
+      {modeAtur ? (
+        // Mode atur: daftar ringkas yang bisa DISERET (drag-and-drop) untuk
+        // mengurutkan; ikon mata untuk sembunyikan/tampilkan. Seret dari mana
+        // saja di baris; pegangan grip menandai bahwa ia bisa digeser.
+        <Reorder.Group
+          axis="y"
+          values={tersusun.map((s) => s.id)}
+          onReorder={urutkanUlang}
+          className="flex flex-col gap-2"
+        >
+          {tersusun.map((s) => {
+            const disembunyikan = sembunyi.includes(s.id);
+            return (
+              <Reorder.Item
+                key={s.id}
+                value={s.id}
+                className={cn(
+                  "glass flex cursor-grab items-center gap-2 rounded-2xl px-3 py-2.5 ring-2 ring-pri/30 active:cursor-grabbing",
+                  disembunyikan && "opacity-45",
+                )}
+                whileDrag={{ scale: 1.03, boxShadow: "0 12px 28px rgba(0,0,0,0.18)" }}
+              >
+                <GripVertical className="h-4.5 w-4.5 shrink-0 text-teks-sekunder" aria-hidden="true" />
+                {s.ikon && <s.ikon className="h-4 w-4 shrink-0 text-pri" aria-hidden="true" />}
+                <span className="min-w-0 flex-1 truncate text-[12.5px] font-bold text-teks-utama">
                   {s.judul}
                 </span>
                 <button
                   type="button"
-                  onClick={() => geser(s.id, -1)}
-                  disabled={i === 0}
-                  aria-label={`Naikkan seksi ${s.judul}`}
-                  className="glass btn-tekan flex h-7 w-7 items-center justify-center rounded-lg text-teks-utama disabled:opacity-30"
-                >
-                  <ArrowUp className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => geser(s.id, 1)}
-                  disabled={i === tersusun.length - 1}
-                  aria-label={`Turunkan seksi ${s.judul}`}
-                  className="glass btn-tekan flex h-7 w-7 items-center justify-center rounded-lg text-teks-utama disabled:opacity-30"
-                >
-                  <ArrowDown className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
                   onClick={() => toggleSembunyi(s.id)}
                   aria-label={
                     disembunyikan ? `Tampilkan seksi ${s.judul}` : `Sembunyikan seksi ${s.judul}`
                   }
-                  className="glass btn-tekan flex h-7 w-7 items-center justify-center rounded-lg text-teks-utama"
+                  className="glass btn-tekan flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-teks-utama"
                 >
                   {disembunyikan ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
-              </div>
-            )}
+              </Reorder.Item>
+            );
+          })}
+        </Reorder.Group>
+      ) : (
+        // Mode normal: seksi ditampilkan penuh; yang disembunyikan hilang.
+        tersusun.map((s) => {
+          if (sembunyi.includes(s.id)) return null;
+          // Seksi yang sudah punya kepala/kartu sendiri dirender apa adanya.
+          if (!bungkusSeksi) return <div key={s.id}>{s.render()}</div>;
+          return (
             <SeksiLipat
+              key={s.id}
               id={`${modul}-${s.id}`}
               judul={s.judul}
               ikon={s.ikon}
@@ -217,9 +223,9 @@ export function TataLetakModul({
             >
               {s.render()}
             </SeksiLipat>
-          </div>
-        );
-      })}
+          );
+        })
+      )}
     </div>
   );
 }

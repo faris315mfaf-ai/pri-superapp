@@ -83,6 +83,10 @@ type AppState = {
   /** true bila pengguna anggota tim TV Rakyat (buka modul TV) */
   tvAnggota: boolean;
   setTvAnggota: (v: boolean) => void;
+  /** Wewenang TV lengkap (fitur 1.22.x/bug 3): acc/upload/proses menentukan
+   *  bagian mana dari modul TV yang muncul. anggota = boleh buka modulnya. */
+  wewenangTv: { anggota: boolean; acc: boolean; upload: boolean; proses: boolean };
+  setWewenangTv: (w: { anggota: boolean; acc: boolean; upload: boolean; proses: boolean }) => void;
   toggleTema: () => void;
 
   // Toast
@@ -167,6 +171,8 @@ export const useAppStore = create<AppState>()(
       setIzinFitur: (izinFitur) => set({ izinFitur }),
       tvAnggota: false,
       setTvAnggota: (tvAnggota) => set({ tvAnggota }),
+      wewenangTv: { anggota: false, acc: false, upload: false, proses: false },
+      setWewenangTv: (wewenangTv) => set({ wewenangTv }),
       toggleTema: () => set({ tema: get().tema === "light" ? "dark" : "light" }),
 
       // Toast — otomatis hilang setelah 4 detik
