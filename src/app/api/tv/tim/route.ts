@@ -13,7 +13,7 @@ import { pastikanMasuk } from "@/lib/sesi";
 import { adalahPimred } from "@/lib/jabatan";
 import { wewenangTv } from "@/lib/tv-tim";
 import { kirimKabar } from "@/lib/notifikasi";
-import { maksUploadMb, retensiJamTv } from "@/lib/pengaturan-tv";
+import { maksUploadMb, retensiJamTv, videoBaruTampil } from "@/lib/pengaturan-tv";
 
 export const dynamic = "force-dynamic";
 
@@ -60,9 +60,10 @@ export async function GET(request: Request) {
     const idTim = new Set((tim ?? []).map((t) => Number(t.user_id)));
     return {
       auto_broadcast: autoBroadcast,
-      // Pengaturan Pimred (fitur 1.20/6 & 1.20/8)
+      // Pengaturan Pimred (fitur 1.20/6 & 1.20/8, 1.22.x/2)
       maks_upload_mb: await maksUploadMb(),
       retensi_jam: await retensiJamTv(),
+      video_baru_tampil: await videoBaruTampil(),
       tim: (tim ?? []).map((t) => {
         const u = Array.isArray(t.app_user) ? t.app_user[0] : t.app_user;
         return {
@@ -146,6 +147,18 @@ export async function POST(request: Request) {
       );
       if (error) throw new Error("Gagal menyimpan umur tayang.");
       return { sukses: true, retensi_jam: jam };
+    }
+
+    // --- Tampilkan/sembunyikan kartu "Video Baru TV Rakyat" di modul
+    //     Konten (fitur 1.22.x/2, khusus Pimred). Bawaan tersembunyi. ---
+    if (body.aksi === "video_baru") {
+      const nyala = body.nyala === true;
+      const { error } = await db.from("pengaturan_sistem").upsert(
+        { kunci: "tvr_video_baru_tampil", nilai: nyala ? "true" : "false" },
+        { onConflict: "kunci" },
+      );
+      if (error) throw new Error("Gagal menyimpan pengaturan video baru.");
+      return { sukses: true, video_baru_tampil: nyala };
     }
 
     const id = Number(body.user_id ?? 0);

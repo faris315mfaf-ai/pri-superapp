@@ -12,6 +12,7 @@ import {
   KUNCI_DASHBOARD_SAH,
 } from "@/lib/dashboard-akses";
 import { PERAN_DIATUR } from "@/lib/fitur";
+import { adalahHR } from "@/lib/hr";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,15 @@ export async function GET(request: Request) {
       };
     }
 
-    return { boleh: await aksesDashboardRole(user.role) };
+    const boleh = await aksesDashboardRole(user.role);
+    // Orang HR (peran admin_hr / Divisi HR — fitur 1.22.x/1) mendapat
+    // akses dashboard HR (absensi, kpi, kepatuhan, anggota) di samping
+    // yang mungkin diberi master untuk perannya. Dashboard TV tidak.
+    if (adalahHR(user)) {
+      const hr = ["absensi", "kpi", "anggota"];
+      return { boleh: Array.from(new Set([...boleh, ...hr])) };
+    }
+    return { boleh };
   });
 }
 

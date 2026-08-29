@@ -12,6 +12,7 @@ import { kirimKabar } from "@/lib/notifikasi";
 import { JABATAN_PARTAI, KUOTA_JABATAN } from "@/lib/jabatan";
 import { pastikanStrukturSah } from "@/lib/struktur";
 import { aksesDashboardRole } from "@/lib/dashboard-akses";
+import { adalahHR, diDivisiHR } from "@/lib/hr";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,9 @@ export async function GET(request: Request) {
     // tindakan pengubah tetap dijaga per-tindakan di PATCH.
     const pembaca = await userDariToken(tokenDari(request));
     if (!pembaca) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
-    if (!["super_admin", "master", "admin_hr"].includes(pembaca.role)) {
+    // Orang HR (peran admin_hr ATAU anggota Divisi HR — fitur 1.22.x/1)
+    // boleh membuka Kelola Pengguna.
+    if (!["super_admin", "master"].includes(pembaca.role) && !adalahHR(pembaca)) {
       // Fitur 1.19/3.3: jabatan yang diberi master akses dashboard
       // berbasis daftar anggota ikut boleh MEMBACA roster (baca-saja;
       // semua tindakan pengubah tetap dijaga ketat di PATCH).
@@ -170,7 +173,15 @@ export async function PATCH(request: Request) {
       posisi_divisi?: string;
     };
 
-    const adminPenuh = pemanggil.role === "super_admin" || pemanggil.role === "master";
+    // Otoritas penuh Kelola Pengguna: Super Admin + Master + anggota
+    // Divisi HR (fitur 1.22.x/1 — "Divisi HR + Super Admin + Master",
+    // DITAMBAHKAN ke aturan lama, tidak mencabut). Termasuk hak menetapkan
+    // divisi/jabatan/peran. Admin HR (bukan Divisi HR) tetap terbatas
+    // lewat `bolehTerbatas` di bawah.
+    const adminPenuh =
+      pemanggil.role === "super_admin" ||
+      pemanggil.role === "master" ||
+      diDivisiHR(pemanggil);
     const kepalaDivisi = pemanggil.posisi_divisi === "kepala" && Boolean(pemanggil.divisi);
     if (!adminPenuh) {
       const bolehTerbatas =

@@ -10,7 +10,7 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
-import { retensiJamTv } from "@/lib/pengaturan-tv";
+import { retensiJamTv, videoBaruTampil } from "@/lib/pengaturan-tv";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +29,13 @@ export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
     const db = supabase();
+    // Kartu "Video Baru TV Rakyat" DISEMBUNYIKAN secara bawaan
+    // (fitur 1.22.x/2). Hanya muncul bila Pimpinan Redaksi menyalakannya
+    // dari TV Rakyat Official. Saat mati → daftar kosong → kartu tak
+    // tampil (KartuVideoBaru return null saat daftar kosong).
+    if (!(await videoBaruTampil())) {
+      return { retensi_jam: 0, data: [] };
+    }
     // Jendela tayang mengikuti pengaturan Pimred (fitur 1.20/8,
     // 1-24 jam): lewat itu embednya hilang dari Konten & Beranda.
     const retensiJam = await retensiJamTv();

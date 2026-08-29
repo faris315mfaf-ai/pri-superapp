@@ -21,6 +21,7 @@ import { bolehDashboard } from "@/lib/dashboard-akses";
 import { catatTugasStreak } from "@/lib/streak";
 import { beriKoin } from "@/lib/koin";
 import { verifikasiWajahPenyedia, WajahLayananError, wajahSiap } from "@/lib/wajah";
+import { adalahHR } from "@/lib/hr";
 
 export const dynamic = "force-dynamic";
 
@@ -160,6 +161,8 @@ export async function GET(request: Request) {
     if (
       mauSemua &&
       !BOLEH_LIHAT_SEMUA.has(user.role) &&
+      // Orang HR (peran admin_hr / Divisi HR — fitur 1.22.x/1) boleh baca.
+      !adalahHR(user) &&
       // Fitur 1.19/3.3.a: akses dashboard "absensi" = boleh MEMBACA
       // absensi semua anggota (baca-saja; POST tetap dijaga).
       !(await bolehDashboard(user.role, "absensi"))

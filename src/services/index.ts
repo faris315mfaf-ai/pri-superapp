@@ -1833,14 +1833,16 @@ export type Pengumuman = {
   dari_saya: boolean;
 };
 
+export type CakupanPengumuman = "semua" | "jabatan" | "tim" | "divisi";
+
 export async function getPengumuman(): Promise<{
-  cakupan_boleh: ("semua" | "jabatan" | "tim")[];
+  cakupan_boleh: CakupanPengumuman[];
   jabatan_pilihan: readonly string[];
   data: Pengumuman[];
 }> {
   const json = await fetchJson("/api/pengumuman", { headers: headerToken() });
   return json as {
-    cakupan_boleh: ("semua" | "jabatan" | "tim")[];
+    cakupan_boleh: CakupanPengumuman[];
     jabatan_pilihan: readonly string[];
     data: Pengumuman[];
   };
@@ -1849,8 +1851,11 @@ export async function getPengumuman(): Promise<{
 export async function kirimPengumuman(data: {
   judul: string;
   isi: string;
-  cakupan: "semua" | "jabatan" | "tim";
+  cakupan: CakupanPengumuman;
   jabatan_target?: string;
+  divisi_target?: string;
+  /** id pengguna yang dikecualikan (fitur 1.22.x/1) */
+  kecuali?: string[];
 }): Promise<number> {
   const json = await fetchJson("/api/pengumuman", {
     method: "POST",
@@ -2940,6 +2945,7 @@ export async function getKelolaTimTv(): Promise<{
   auto_broadcast: boolean;
   maks_upload_mb: number;
   retensi_jam: number;
+  video_baru_tampil: boolean;
 }> {
   const json = await fetchJson("/api/tv/tim?kelola=1", { headers: headerToken() });
   return {
@@ -2948,6 +2954,7 @@ export async function getKelolaTimTv(): Promise<{
     auto_broadcast: json.auto_broadcast !== false,
     maks_upload_mb: Number(json.maks_upload_mb ?? 100),
     retensi_jam: Number(json.retensi_jam ?? 24),
+    video_baru_tampil: json.video_baru_tampil === true,
   };
 }
 
@@ -2972,6 +2979,15 @@ export async function setAutoBroadcastTv(nyala: boolean): Promise<void> {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ aksi: "auto_broadcast", nyala }),
+  });
+}
+
+/** Pimred: tampilkan/sembunyikan kartu "Video Baru TV Rakyat" di Konten. */
+export async function setVideoBaruTampilTv(nyala: boolean): Promise<void> {
+  await fetchJson("/api/tv/tim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "video_baru", nyala }),
   });
 }
 

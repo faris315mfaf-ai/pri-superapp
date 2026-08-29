@@ -22,7 +22,7 @@ import {
   Clock,
   History,
   Check,
-  X, UsersRound, TrendingUp } from "lucide-react";
+  X, UsersRound, TrendingUp, UserCog, Megaphone } from "lucide-react";
 import {
   EmptyState,
   FadeInUp,
@@ -153,11 +153,16 @@ export function QcScreen({
   onBukaAkun,
   onBukaNotifikasi,
   onBukaHalaman,
+  bolehHR = false,
 }: {
   onBukaAkun: (akunWajib: string) => void;
   onBukaNotifikasi?: () => void;
-  /** Buka halaman HR Center (tabel-anggota / absensi-hari-ini / setel-kpi) */
+  /** Buka halaman HR Center (tabel-anggota / absensi-hari-ini / setel-kpi
+   *  serta kelola-pengguna / pengumuman untuk orang HR) */
   onBukaHalaman?: (nama: string) => void;
+  /** Orang HR (peran admin_hr / Divisi HR) — memunculkan menu Kelola
+   *  Pengguna & Kirim Pengumuman (fitur 1.22.x/1). */
+  bolehHR?: boolean;
 }) {
   // Periode
   const [periodeList, setPeriodeList] = useState<string[]>([]);
@@ -580,28 +585,33 @@ export function QcScreen({
         {riwayatBuka && <RiwayatAnalisisModal onTutup={() => setRiwayatBuka(false)} />}
       </AnimatePresence>
 
-      {/* Menu halaman HR Center (spek 1.18: 2.2 / 2.4 / 2.5) */}
+      {/* Menu halaman HR Center (spek 1.18: 2.2 / 2.4 / 2.5) + Kelola
+          Pengguna & Kirim Pengumuman untuk orang HR (fitur 1.22.x/1). */}
       {onBukaHalaman && (
         <div className="mt-4 grid grid-cols-3 gap-2">
           {(
             [
-              ["tabel-anggota", "Database Anggota", UsersRound],
-              ["absensi-hari-ini", "Absensi Hari Ini", CalendarDays],
-              ["setel-kpi", "Setel KPI", TrendingUp],
+              ["tabel-anggota", "Database Anggota", UsersRound, true],
+              ["absensi-hari-ini", "Absensi Hari Ini", CalendarDays, true],
+              ["setel-kpi", "Setel KPI", TrendingUp, true],
+              ["kelola-pengguna", "Kelola Pengguna", UserCog, bolehHR],
+              ["pengumuman", "Kirim Pengumuman", Megaphone, bolehHR],
             ] as const
-          ).map(([id, label, Ikon]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => onBukaHalaman(id)}
-              className="glass btn-tekan flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3"
-            >
-              <Ikon className="h-5 w-5 text-pri" aria-hidden="true" />
-              <span className="text-center text-[10.5px] leading-tight font-bold text-teks-utama">
-                {label}
-              </span>
-            </button>
-          ))}
+          )
+            .filter(([, , , tampil]) => tampil)
+            .map(([id, label, Ikon]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onBukaHalaman(id)}
+                className="glass btn-tekan flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3"
+              >
+                <Ikon className="h-5 w-5 text-pri" aria-hidden="true" />
+                <span className="text-center text-[10.5px] leading-tight font-bold text-teks-utama">
+                  {label}
+                </span>
+              </button>
+            ))}
         </div>
       )}
 

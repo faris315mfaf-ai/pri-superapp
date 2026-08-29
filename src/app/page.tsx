@@ -26,6 +26,7 @@ import { AccountDetailScreen } from "@/features/qc-konten/account-detail-screen"
 import { PostDetailScreen } from "@/features/qc-konten/post-detail-screen";
 import { TvScreen } from "@/features/tv-rakyat/tv-screen";
 import { KelolaPenggunaScreen } from "@/features/pengguna/kelola-pengguna-screen";
+import { PengumumanScreen } from "@/features/pengguna/pengumuman-screen";
 import { KontenScreen } from "@/features/konten/konten-screen";
 import { TvrKuScreen } from "@/features/tvr-ku/tvrku-screen";
 import { ChatScreen } from "@/features/chat/chat-screen";
@@ -46,6 +47,7 @@ import { TabelAnggotaScreen } from "@/features/pengguna/tabel-anggota-screen";
 import { AbsensiHariIniScreen } from "@/features/pengguna/absensi-hari-ini-screen";
 import { SetelKpiScreen } from "@/features/pengguna/setel-kpi-screen";
 import { modulUntukDivisi } from "@/lib/modul-divisi";
+import { adalahHR } from "@/lib/hr";
 import { KUNCI_CHANGELOG_DILIHAT } from "@/lib/changelog";
 import { VERSI_APLIKASI } from "@/lib/versi";
 import { bolehFitur } from "@/lib/fitur";
@@ -83,6 +85,8 @@ type SubLayar =
   | { nama: "tabel-anggota" }
   | { nama: "absensi-hari-ini" }
   | { nama: "setel-kpi" }
+  // Kirim pengumuman ke divisi/semua (HR Center, fitur 1.22.x/1)
+  | { nama: "pengumuman" }
   // Notifikasi: kini dibuka dari lonceng kanan atas, bukan tab bawah
   | { nama: "notifikasi" }
   // Panel Master — kewenangan tertinggi, hanya peran master
@@ -280,6 +284,11 @@ export default function Page() {
     const modul = modulUntukDivisi(user.divisi);
     if (modul && !dasar.includes(modul)) {
       dasar.splice(dasar.indexOf("chat") >= 0 ? dasar.indexOf("chat") : dasar.length - 1, 0, modul);
+    }
+    // Orang HR (peran admin_hr ATAU Divisi HR — fitur 1.22.x/1) mendapat
+    // modul HR Center (tab qc): tempat Kelola Pengguna & kirim pengumuman.
+    if (adalahHR(user) && !dasar.includes("qc")) {
+      dasar.splice(dasar.indexOf("chat") >= 0 ? dasar.indexOf("chat") : dasar.length - 1, 0, "qc");
     }
     // Modul Dashboard (fitur 1.19/3.3): tampil hanya bila jabatan ini
     // diberi akses minimal satu sub-dashboard oleh master.
@@ -682,8 +691,16 @@ export default function Page() {
         kunci: "qc",
         isi: (
           <QcScreen
+            bolehHR={adalahHR(user)}
             onBukaHalaman={(nama) =>
-              setSubLayar({ nama: nama as "tabel-anggota" | "absensi-hari-ini" | "setel-kpi" })
+              setSubLayar({
+                nama: nama as
+                  | "tabel-anggota"
+                  | "absensi-hari-ini"
+                  | "setel-kpi"
+                  | "kelola-pengguna"
+                  | "pengumuman",
+              })
             }
             onBukaAkun={(akunWajib) => setSubLayar({ nama: "qc-akun", akunWajib })}
             onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
@@ -918,6 +935,8 @@ export default function Page() {
                   <AbsensiHariIniScreen onKembali={() => setSubLayar(null)} />
                 ) : subLayar.nama === "setel-kpi" ? (
                   <SetelKpiScreen user={user} onKembali={() => setSubLayar(null)} />
+                ) : subLayar.nama === "pengumuman" ? (
+                  <PengumumanScreen user={user} onKembali={() => setSubLayar(null)} />
                 ) : subLayar.nama === "notifikasi" ? (
                   <NotifikasiScreen
                     onTarget={handleTarget}

@@ -13,6 +13,7 @@ import { userDariToken } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { bolehDashboard } from "@/lib/dashboard-akses";
+import { adalahHR } from "@/lib/hr";
 
 export const dynamic = "force-dynamic";
 
@@ -98,7 +99,7 @@ export async function GET(request: Request) {
       // persetujuan tetap dijaga terpisah.
       let idBawahan: number[] | null = null;
       const lihatSemua =
-        PERAN_HR.has(user.role) || (await bolehDashboard(user.role, "absensi"));
+        PERAN_HR.has(user.role) || adalahHR(user) || (await bolehDashboard(user.role, "absensi"));
       if (!lihatSemua) {
         const { data: tim } = await db
           .from("tim_anggota")

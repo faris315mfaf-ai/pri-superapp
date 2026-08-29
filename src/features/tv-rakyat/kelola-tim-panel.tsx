@@ -28,6 +28,7 @@ import {
   type AnggotaTv,
   type KandidatTv,
   setAutoBroadcastTv,
+  setVideoBaruTampilTv,
 } from "@/services";
 
 export function KelolaTimPanel() {
@@ -37,6 +38,9 @@ export function KelolaTimPanel() {
   // Siaran otomatis upload -> ruang chat (spek 1.18/1.3)
   const [siaran, setSiaran] = useState(true);
   const [sedangSiaran, setSedangSiaran] = useState(false);
+  // Tampilkan kartu "Video Baru TV Rakyat" di modul Konten (fitur 1.22.x/2)
+  const [videoBaru, setVideoBaru] = useState(false);
+  const [sedangVideoBaru, setSedangVideoBaru] = useState(false);
   // Pengaturan angka Pimred (fitur 1.20/6 & 8)
   const [batasMb, setBatasMb] = useState("100");
   const [retensiJam, setRetensiJam] = useState("24");
@@ -48,6 +52,7 @@ export function KelolaTimPanel() {
     try {
       const hasil = await getKelolaTimTv();
       setSiaran(hasil.auto_broadcast);
+      setVideoBaru(hasil.video_baru_tampil);
       setTim(hasil.tim);
       setKandidat(hasil.kandidat);
       setBatasMb(String(hasil.maks_upload_mb));
@@ -147,6 +152,44 @@ export function KelolaTimPanel() {
               .finally(() => setSedangSiaran(false));
           }}
           labelAria="Siaran otomatis upload ke ruang chat"
+        />
+      </GlassCard>
+
+      {/* Tampilkan kartu "Video Baru TV Rakyat" di modul Konten
+          (fitur 1.22.x/2) — bawaan tersembunyi; Pimred menyalakannya. */}
+      <GlassCard className="mb-3 flex items-center gap-3 p-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-teks-utama">
+            Tampilkan &ldquo;Video Baru TV Rakyat&rdquo; di modul Konten
+          </p>
+          <p className="mt-0.5 text-[11px] leading-snug text-teks-sekunder">
+            Bila MENYALA, kartu kewajiban komentar &amp; share video baru muncul di
+            modul Konten semua anggota. Bawaan tersembunyi.
+          </p>
+        </div>
+        <SwitchKaca
+          aktif={videoBaru}
+          onUbah={() => {
+            if (sedangVideoBaru) return;
+            setSedangVideoBaru(true);
+            const baru = !videoBaru;
+            void setVideoBaruTampilTv(baru)
+              .then(() => {
+                setVideoBaru(baru);
+                toast(
+                  "sukses",
+                  baru ? "Video Baru DITAMPILKAN" : "Video Baru DISEMBUNYIKAN",
+                  baru
+                    ? "Kartunya kini muncul di modul Konten semua anggota."
+                    : "Kartunya kini tersembunyi dari modul Konten.",
+                );
+              })
+              .catch((e) =>
+                toast("error", "Gagal menyimpan", e instanceof Error ? e.message : ""),
+              )
+              .finally(() => setSedangVideoBaru(false));
+          }}
+          labelAria="Tampilkan video baru TV Rakyat di modul Konten"
         />
       </GlassCard>
 

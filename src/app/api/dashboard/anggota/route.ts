@@ -15,6 +15,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { bolehDashboard } from "@/lib/dashboard-akses";
+import { adalahHR } from "@/lib/hr";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await userDariToken(tokenDari(request));
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
-    if (!HR.has(user.role) && !(await bolehDashboard(user.role, "anggota"))) {
+    if (!HR.has(user.role) && !adalahHR(user) && !(await bolehDashboard(user.role, "anggota"))) {
       throw Object.assign(
         new Error("Jabatan Anda tidak punya akses dashboard Database Anggota."),
         { status: 403 },

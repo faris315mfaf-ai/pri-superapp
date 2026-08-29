@@ -612,9 +612,14 @@ function ModalPengumuman({ onTutup }: { onTutup: () => void }) {
         const hasil = await getPengumuman();
         if (!hidup) return;
         setDaftar(hasil.data);
-        setCakupanBoleh(hasil.cakupan_boleh);
+        // Cakupan "divisi" (fitur 1.22.x/1) ditangani layar HR khusus
+        // (PengumumanScreen), bukan pengumuman cepat di chat ini.
+        const cb = hasil.cakupan_boleh.filter(
+          (c): c is "semua" | "jabatan" | "tim" => c !== "divisi",
+        );
+        setCakupanBoleh(cb);
         setJabatanPilihan(hasil.jabatan_pilihan);
-        if (hasil.cakupan_boleh.length > 0) setCakupan(hasil.cakupan_boleh[0]);
+        if (cb.length > 0) setCakupan(cb[0]);
       } catch {
         if (hidup) setDaftar([]);
       }

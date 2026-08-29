@@ -51,3 +51,21 @@ export async function maksUploadMb(): Promise<number> {
 export async function retensiJamTv(): Promise<number> {
   return bacaAngka("tv_retensi_jam", RETENSI_JAM_BAWAAN, 1, 24);
 }
+
+/**
+ * Apakah kartu "Video Baru TV Rakyat" ditampilkan di modul Konten
+ * (fitur 1.22.x/2). BAWAAN tersembunyi (false) — hanya muncul bila
+ * Pimpinan Redaksi menyalakannya dari TV Rakyat Official.
+ */
+export async function videoBaruTampil(): Promise<boolean> {
+  try {
+    const { data } = await supabase()
+      .from("pengaturan_sistem")
+      .select("nilai")
+      .eq("kunci", "tvr_video_baru_tampil")
+      .maybeSingle();
+    return data?.nilai === "true";
+  } catch {
+    return false;
+  }
+}
