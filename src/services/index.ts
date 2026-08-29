@@ -2363,12 +2363,12 @@ export async function getStatusWajah(): Promise<StatusWajah> {
   };
 }
 
-/** Daftarkan/perbarui wajah saya (kirim foto data URL). */
-export async function daftarkanWajah(image: string): Promise<void> {
+/** Daftarkan/perbarui wajah saya (beberapa foto data URL, mis. 5 sudut). */
+export async function daftarkanWajah(images: string[]): Promise<void> {
   await fetchJson("/api/wajah/daftar", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ image }),
+    body: JSON.stringify({ images }),
   });
 }
 
@@ -2388,12 +2388,12 @@ export async function wajahLoginTersedia(): Promise<boolean> {
   }
 }
 
-/** Masuk dengan wajah: identitas + foto → sesi (fitur 1.22/3). */
-export async function masukWajah(identitas: string, image: string): Promise<UserLengkap> {
+/** Masuk dengan wajah TANPA username: foto → identifikasi 1:N → sesi. */
+export async function masukWajah(image: string): Promise<UserLengkap> {
   const json = await fetchJson("/api/wajah/masuk", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ identitas, image, nama_perangkat: namaPerangkat() }),
+    body: JSON.stringify({ image }),
   });
   if (json.token) simpanToken(json.token as string);
   return json.user as UserLengkap;

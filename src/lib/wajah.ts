@@ -1,21 +1,23 @@
 // ============================================================
 // PRI SuperApp — Verifikasi Wajah (KHUSUS SISI SERVER)
 //
-// Fitur 1.22/3: absen & login berbasis wajah, "tanpa celah pembobol".
+// Fitur 1.22/3 (revisi 1.22.1): absen & login berbasis wajah.
 //
-// Dua jalur penyedia:
-//  (A) LUXAND (bawaan produksi) — env: WAJAH_PROVIDER=luxand, LUXAND_TOKEN.
-//      Aplikasi memanggil api.luxand.cloud langsung. Enroll & cocokkan
-//      wajah + LIVENESS (anti-foto) v2. Kontrak diverifikasi empiris,
-//      bukan ditebak.
-//  (B) ENDPOINT GENERIK — env: WAJAH_ENDPOINT + WAJAH_API_KEY. Untuk
-//      penyedia lain lewat perantara (mis. n8n). Dipertahankan sebagai
-//      cadangan/fleksibilitas.
+// Penyedia: LUXAND (env WAJAH_PROVIDER=luxand + LUXAND_TOKEN) — aplikasi
+// memanggil api.luxand.cloud langsung. Cadangan: endpoint generik
+// (WAJAH_ENDPOINT + WAJAH_API_KEY).
 //
-// Prinsip keamanan: verifikasi LOLOS hanya bila wajah COCOK dengan yang
-// terdaftar DAN LIVE (asli, bukan foto/rekaman). Tanpa penyedia = fitur
-// mati total (bukan "selalu lolos"). Aplikasi menyimpan HANYA referensi
-// (uuid subjek Luxand) — tidak ada biometrik mentah di database kita.
+// Perubahan revisi ini (dari umpan balik uji nyata):
+//  - PENDAFTARAN pakai BANYAK foto (mis. 5 sudut) → subjek lebih mudah
+//    dikenali. TIDAK ada gerbang liveness saat mendaftar (dulu menolak
+//    wajah asli); cukup wajah terdeteksi.
+//  - LOGIN tanpa username: identifikasi 1:N — pindai wajah, sistem cari
+//    siapa pemiliknya (nama subjek deterministik pri_<userId>).
+//  - LIVENESS (anti-foto) untuk absen/login BISA DISETEL via env
+//    WAJAH_LIVENESS = "off" | "v1" | "v2" (bawaan "v2"). Dipisah dari
+//    pendaftaran supaya bisa dilonggarkan tanpa merusak apa pun.
+//
+// Aplikasi menyimpan HANYA uuid subjek — tak ada biometrik mentah di DB.
 // ============================================================
 
 export class WajahBelumDiaturError extends Error {}
@@ -26,6 +28,12 @@ const LUX_BASE = "https://api.luxand.cloud";
 function ambangCocok(): number {
   const n = Number(process.env.WAJAH_AMBANG);
   return Number.isFinite(n) && n > 0 && n <= 1 ? n : 0.7;
+}
+
+/** Mode anti-foto untuk verifikasi (BUKAN pendaftaran). */
+function modeLiveness(): "off" | "v1" | "v2" {
+  const m = (process.env.WAJAH_LIVENESS || "v2").toLowerCase();
+  return m === "off" || m === "v1" ? m : "v2";
 }
 
 function pakaiLuxand(): boolean {
@@ -48,13 +56,18 @@ export function penyediaWajah(): string {
   return process.env.WAJAH_PROVIDER || (pakaiGenerik() ? "generik" : "");
 }
 
-/** Nama subjek deterministik per pengguna — dipakai mencocokkan hasil search. */
+/** Nama subjek deterministik per pengguna — kunci pencocokan & identifikasi. */
 function namaSubjek(userId: number | string): string {
   return `pri_${userId}`;
 }
+/** Balik nama subjek → userId (untuk login 1:N). */
+function userIdDariNama(nama: string): string | null {
+  const m = /^pri_(.+)$/.exec(nama || "");
+  return m ? m[1] : null;
+}
 
 // ------------------------------------------------------------
-// Util: dataURL → multipart (Node global FormData/Blob/fetch)
+// Util: dataURL → Blob (Node global FormData/Blob/fetch)
 // ------------------------------------------------------------
 
 function dataUrlKeBlob(dataUrl: string): Blob {
@@ -62,7 +75,7 @@ function dataUrlKeBlob(dataUrl: string): Blob {
   if (!dataUrl.startsWith("data:") || koma < 0) {
     throw Object.assign(new Error("Foto wajah tidak sah."), { status: 400 });
   }
-  const meta = dataUrl.slice(5, koma); // "image/jpeg;base64"
+  const meta = dataUrl.slice(5, koma);
   const tipe = meta.split(";")[0] || "image/jpeg";
   const buf = Buffer.from(dataUrl.slice(koma + 1), "base64");
   return new Blob([buf], { type: tipe });
@@ -72,17 +85,25 @@ function dataUrlKeBlob(dataUrl: string): Blob {
 // LUXAND
 // ------------------------------------------------------------
 
-async function luxPost<T>(path: string, foto: Blob, extra?: Record<string, string>): Promise<T> {
-  const fd = new FormData();
-  fd.append("photo", foto, "wajah.jpg");
-  for (const [k, v] of Object.entries(extra ?? {})) fd.append(k, v);
+async function luxKirim<T>(
+  path: string,
+  metode: "POST" | "DELETE",
+  foto?: Blob,
+  extra?: Record<string, string>,
+): Promise<{ ok: boolean; status: number; json: T }> {
   const kendali = new AbortController();
   const timer = setTimeout(() => kendali.abort(), 30000);
   try {
+    let body: FormData | undefined;
+    if (foto) {
+      body = new FormData();
+      body.append("photo", foto, "wajah.jpg");
+      for (const [k, v] of Object.entries(extra ?? {})) body.append(k, v);
+    }
     const res = await fetch(`${LUX_BASE}${path}`, {
-      method: "POST",
+      method: metode,
       headers: { token: String(process.env.LUXAND_TOKEN) },
-      body: fd,
+      body,
       signal: kendali.signal,
       cache: "no-store",
     });
@@ -93,10 +114,7 @@ async function luxPost<T>(path: string, foto: Blob, extra?: Record<string, strin
     } catch {
       json = null;
     }
-    if (!res.ok) {
-      throw new Error(`Layanan wajah menolak permintaan (${res.status}).`);
-    }
-    return json as T;
+    return { ok: res.ok, status: res.status, json: json as T };
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
       throw new Error("Layanan wajah tidak menjawab tepat waktu. Coba lagi.");
@@ -107,21 +125,6 @@ async function luxPost<T>(path: string, foto: Blob, extra?: Record<string, strin
   }
 }
 
-/** Liveness v2 Luxand: {result:"real"|"fake", score} atau failure (kualitas). */
-async function luxLiveness(foto: Blob): Promise<{ live: boolean; skor: number; alasan?: string }> {
-  const d = await luxPost<{ status?: string; result?: string; score?: number; message?: string }>(
-    "/photo/liveness/v2",
-    foto,
-  );
-  if (d.status !== "success") {
-    // Kualitas foto kurang (mis. wajah terlalu kecil/jauh). Gagal-TERTUTUP:
-    // keaslian tak terbukti → anggap tidak live, sertakan alasan agar UI
-    // bisa meminta ambil ulang.
-    return { live: false, skor: 0, alasan: bersihkanPesan(d.message) };
-  }
-  return { live: d.result === "real", skor: Number(d.score ?? 0) };
-}
-
 function bersihkanPesan(m?: string): string {
   const t = String(m ?? "").replace(/^Error checking liveness:\s*/i, "").trim();
   if (/interpupillary|too small|too far|no face/i.test(t)) {
@@ -130,54 +133,60 @@ function bersihkanPesan(m?: string): string {
   return t || "Keaslian wajah tak terbukti. Ambil ulang langsung dari kamera.";
 }
 
-async function luxDaftar(userId: number | string, foto: Blob): Promise<string> {
-  const d = await luxPost<{
-    status?: string;
-    uuid?: string;
-    face_uuid?: string;
-    message?: string;
-  }>("/subject/v2", foto, { name: namaSubjek(userId), store: "1" });
-  if (d.status !== "success" || !d.uuid) {
-    throw new Error(bersihkanPesan(d.message) || "Gagal mendaftarkan wajah.");
+/** Cek anti-foto sesuai mode env. "off" = lewati (selalu live). */
+async function cekLiveness(foto: Blob): Promise<{ live: boolean; skor: number; alasan?: string }> {
+  const mode = modeLiveness();
+  if (mode === "off") return { live: true, skor: 1 };
+  const path = mode === "v1" ? "/photo/liveness" : "/photo/liveness/v2";
+  const { json } = await luxKirim<{ status?: string; result?: string; score?: number; message?: string }>(
+    path,
+    "POST",
+    foto,
+  );
+  if (json?.status !== "success") {
+    // Kualitas kurang → keaslian tak terbukti (gagal-tertutup), sertakan alasan.
+    return { live: false, skor: 0, alasan: bersihkanPesan(json?.message) };
   }
-  // Tanpa face_uuid = tak ada wajah terdeteksi di foto → buang subjek kosong.
-  if (!d.face_uuid) {
-    await luxHapus(d.uuid).catch(() => {});
-    throw Object.assign(
-      new Error("Wajah tidak terdeteksi di foto. Pastikan wajah terlihat jelas."),
-      { status: 400 },
-    );
-  }
-  return d.uuid;
+  return { live: json.result === "real", skor: Number(json.score ?? 0) };
 }
 
-async function luxCocok(userId: number | string, foto: Blob): Promise<{ cocok: boolean; skor: number }> {
-  const hasil = await luxPost<
-    { id?: number; name?: string; probability?: number }[] | { status?: string }
-  >("/photo/search", foto);
-  const daftar = Array.isArray(hasil) ? hasil : [];
-  const target = namaSubjek(userId);
-  const ambang = ambangCocok();
-  let terbaik = 0;
+/** Buat subjek dengan foto pertama yang wajahnya terdeteksi. */
+async function luxBuatSubjek(userId: number | string, foto: Blob): Promise<string | null> {
+  const { json } = await luxKirim<{ status?: string; uuid?: string; face_uuid?: string }>(
+    "/subject/v2",
+    "POST",
+    foto,
+    { name: namaSubjek(userId), store: "1" },
+  );
+  // Sukses + face_uuid = wajah benar-benar terdeteksi & tersimpan.
+  if (json?.status === "success" && json.uuid && json.face_uuid) return json.uuid;
+  return null;
+}
+
+/** Tambah satu foto wajah ke subjek yang sudah ada; true bila wajah terdeteksi. */
+async function luxTambahFoto(uuid: string, foto: Blob): Promise<boolean> {
+  const { json } = await luxKirim<{ status?: string }>(`/subject/${encodeURIComponent(uuid)}`, "POST", foto);
+  return json?.status === "success";
+}
+
+/** Cari subjek paling cocok untuk sebuah foto. */
+async function luxSearch(foto: Blob): Promise<{ nama: string; skor: number } | null> {
+  const { json } = await luxKirim<{ id?: number; name?: string; probability?: number }[]>(
+    "/photo/search",
+    "POST",
+    foto,
+  );
+  const daftar = Array.isArray(json) ? json : [];
+  let terbaik: { nama: string; skor: number } | null = null;
   for (const h of daftar) {
-    if (h.name === target) terbaik = Math.max(terbaik, Number(h.probability ?? 0));
+    const skor = Number(h.probability ?? 0);
+    if (!terbaik || skor > terbaik.skor) terbaik = { nama: String(h.name ?? ""), skor };
   }
-  return { cocok: terbaik >= ambang, skor: terbaik };
+  return terbaik;
 }
 
 async function luxHapus(uuid: string): Promise<void> {
-  const kendali = new AbortController();
-  const timer = setTimeout(() => kendali.abort(), 20000);
-  try {
-    await fetch(`${LUX_BASE}/subject/${encodeURIComponent(uuid)}`, {
-      method: "DELETE",
-      headers: { token: String(process.env.LUXAND_TOKEN) },
-      signal: kendali.signal,
-      cache: "no-store",
-    });
-  } finally {
-    clearTimeout(timer);
-  }
+  await luxKirim(`/subject/${encodeURIComponent(uuid)}`, "DELETE").catch(() => {});
 }
 
 // ------------------------------------------------------------
@@ -219,7 +228,7 @@ async function generikPanggil<T>(badan: Record<string, unknown>): Promise<T> {
 }
 
 // ------------------------------------------------------------
-// API publik lib (dipakai endpoint /api/wajah/* & gerbang absen)
+// API publik lib
 // ------------------------------------------------------------
 
 function pastikanSiap() {
@@ -231,32 +240,48 @@ function pastikanSiap() {
 }
 
 /**
- * Daftarkan/enroll wajah pengguna; kembalikan referensi (face_id) yang
- * disimpan aplikasi. Foto WAJIB lolos liveness (tak bisa mendaftar pakai
- * foto orang lain).
+ * Daftarkan/enroll wajah pengguna dari BEBERAPA foto. Tanpa gerbang
+ * liveness (pendaftaran cukup wajah terdeteksi). Kembalikan face_id
+ * (uuid subjek). Melempar bila tak satu pun foto memuat wajah.
  */
 export async function daftarWajahPenyedia(
   userId: number | string,
-  image: string,
+  images: string[],
 ): Promise<{ faceId: string; provider: string }> {
   pastikanSiap();
+  const fotos = images.filter((s) => typeof s === "string" && s.startsWith("data:image/"));
+  if (fotos.length === 0) throw Object.assign(new Error("Tidak ada foto yang sah."), { status: 400 });
+
   if (pakaiLuxand()) {
-    const foto = dataUrlKeBlob(image);
-    const live = await luxLiveness(foto);
-    if (!live.live) {
+    let uuid: string | null = null;
+    let terpasang = 0;
+    for (const img of fotos) {
+      const blob = dataUrlKeBlob(img);
+      if (!uuid) {
+        uuid = await luxBuatSubjek(userId, blob);
+        if (uuid) terpasang = 1;
+      } else {
+        if (await luxTambahFoto(uuid, blob)) terpasang += 1;
+      }
+    }
+    if (!uuid) {
       throw Object.assign(
-        new Error(live.alasan ?? "Keaslian wajah tak terbukti. Ambil ulang langsung dari kamera."),
+        new Error("Wajah tidak terdeteksi di foto mana pun. Pastikan wajah terlihat jelas & terang."),
         { status: 400 },
       );
     }
-    const uuid = await luxDaftar(userId, foto);
+    if (terpasang < 2) {
+      // Hanya 1 sudut terpasang — tetap boleh, tapi kabari agar lebih akurat.
+      // (tidak melempar; cukup jadi catatan di log endpoint).
+    }
     return { faceId: uuid, provider: "luxand" };
   }
-  // Generik
+
+  // Generik: kirim foto pertama.
   const d = await generikPanggil<{ face_id?: string; faceId?: string }>({
     aksi: "daftar",
     user_id: String(userId),
-    image,
+    image: fotos[0],
   });
   const faceId = String(d.face_id ?? d.faceId ?? "");
   if (!faceId) throw new Error("Penyedia tidak mengembalikan face_id.");
@@ -264,7 +289,8 @@ export async function daftarWajahPenyedia(
 }
 
 /**
- * Verifikasi wajah pengguna. LOLOS hanya bila cocok DAN live (anti-foto).
+ * Verifikasi 1:1 (untuk gerbang absen): wajah pada foto = pemilik userId?
+ * LOLOS bila cocok DAN live (sesuai mode liveness).
  */
 export async function verifikasiWajahPenyedia(
   userId: number | string,
@@ -274,13 +300,12 @@ export async function verifikasiWajahPenyedia(
   pastikanSiap();
   if (pakaiLuxand()) {
     const foto = dataUrlKeBlob(image);
-    // Liveness dulu (murah untuk gagalkan foto), lalu cocokkan identitas.
-    const live = await luxLiveness(foto);
+    const live = await cekLiveness(foto);
     if (!live.live) return { lolos: false, cocok: false, live: false, skor: live.skor };
-    const m = await luxCocok(userId, foto);
-    return { lolos: m.cocok, cocok: m.cocok, live: true, skor: m.skor };
+    const m = await luxSearch(foto);
+    const cocok = Boolean(m && m.nama === namaSubjek(userId) && m.skor >= ambangCocok());
+    return { lolos: cocok, cocok, live: true, skor: m?.skor ?? 0 };
   }
-  // Generik
   const d = await generikPanggil<{ cocok?: boolean; live?: boolean; skor?: number }>({
     aksi: "verifikasi",
     user_id: String(userId),
@@ -292,12 +317,38 @@ export async function verifikasiWajahPenyedia(
   return { lolos: cocok && live, cocok, live, skor: Number(d.skor ?? 0) };
 }
 
-/** Hapus referensi wajah di penyedia (dipanggil saat pengguna hapus/daftar ulang). */
+/**
+ * Identifikasi 1:N (untuk LOGIN wajah tanpa username): siapa pemilik
+ * wajah ini? Kembalikan userId bila cocok kuat DAN live. Null bila tak
+ * dikenali / bukan wajah asli.
+ */
+export async function identifikasiWajah(
+  image: string,
+): Promise<{ userId: string | null; live: boolean; skor: number; alasan?: string }> {
+  pastikanSiap();
+  if (pakaiLuxand()) {
+    const foto = dataUrlKeBlob(image);
+    const live = await cekLiveness(foto);
+    if (!live.live) return { userId: null, live: false, skor: live.skor, alasan: live.alasan };
+    const m = await luxSearch(foto);
+    if (!m || m.skor < ambangCocok()) return { userId: null, live: true, skor: m?.skor ?? 0 };
+    return { userId: userIdDariNama(m.nama), live: true, skor: m.skor };
+  }
+  // Generik: minta penyedia mengidentifikasi.
+  const d = await generikPanggil<{ user_id?: string; live?: boolean; skor?: number }>({
+    aksi: "identifikasi",
+    image,
+  });
+  const live = d.live === true;
+  return { userId: live ? (d.user_id ?? null) : null, live, skor: Number(d.skor ?? 0) };
+}
+
+/** Hapus referensi wajah di penyedia (saat pengguna hapus/daftar ulang). */
 export async function hapusWajahPenyedia(faceId: string): Promise<void> {
   if (!faceId) return;
   if (pakaiLuxand()) {
-    await luxHapus(faceId).catch(() => {});
+    await luxHapus(faceId);
     return;
   }
-  // Generik: penghapusan opsional — abaikan bila tak didukung.
+  // Generik: penghapusan opsional.
 }

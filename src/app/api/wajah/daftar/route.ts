@@ -1,7 +1,8 @@
 // POST /api/wajah/daftar — daftarkan/perbarui wajah saya (fitur 1.22/3).
 //
-// Menerima satu foto (data URL), meneruskannya ke penyedia untuk
-// di-enroll, lalu MENYIMPAN HANYA face_id-nya. Foto tidak disimpan.
+// Menerima BEBERAPA foto (data URL) untuk beberapa sudut, meneruskannya
+// ke penyedia untuk di-enroll, lalu MENYIMPAN HANYA face_id-nya. Foto
+// tidak disimpan aplikasi. Menerima {images:[...]} atau {image:"..."}.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { pastikanMasuk } from "@/lib/sesi";
@@ -11,8 +12,10 @@ import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-/** Batas foto (base64 ~4 MB → ±3 MB biner) supaya payload wajar */
+/** Batas per-foto (base64 ~4 MB → ±3 MB biner) supaya payload wajar */
 const MAKS_IMAGE = 4 * 1024 * 1024;
+/** Maksimal foto per pendaftaran */
+const MAKS_FOTO = 6;
 
 export async function POST(request: Request) {
   const tolak = await pastikanTidakMelebihiBatas(request, "wajah-daftar", 8, 10 * 60);
@@ -27,12 +30,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = (await request.json().catch(() => ({}))) as { image?: string };
-    const image = String(body.image ?? "");
-    if (!image.startsWith("data:image/") || image.length < 100) {
+    const body = (await request.json().catch(() => ({}))) as { image?: string; images?: string[] };
+    // Terima array {images} maupun tunggal {image} (kompatibel mundur).
+    const mentah = Array.isArray(body.images) ? body.images : body.image ? [body.image] : [];
+    const images = mentah
+      .filter((s): s is string => typeof s === "string" && s.startsWith("data:image/") && s.length >= 100)
+      .slice(0, MAKS_FOTO);
+    if (images.length === 0) {
       throw Object.assign(new Error("Foto wajah tidak sah."), { status: 400 });
     }
-    if (image.length > MAKS_IMAGE) {
+    if (images.some((s) => s.length > MAKS_IMAGE)) {
       throw Object.assign(new Error("Foto terlalu besar. Coba lagi."), { status: 400 });
     }
 
@@ -47,7 +54,7 @@ export async function POST(request: Request) {
     let faceId: string;
     let provider: string;
     try {
-      ({ faceId, provider } = await daftarWajahPenyedia(user.id, image));
+      ({ faceId, provider } = await daftarWajahPenyedia(user.id, images));
     } catch (e) {
       if (e instanceof WajahBelumDiaturError) {
         throw Object.assign(new Error(e.message), { status: 503 });
@@ -79,7 +86,7 @@ export async function POST(request: Request) {
       aksi: "wajah_daftar",
       target_id: Number(user.id),
       target_nama: user.nama,
-      detail: `Wajah didaftarkan (penyedia ${provider || "?"}).`,
+      detail: `Wajah didaftarkan dari ${images.length} foto (penyedia ${provider || "?"}).`,
     });
 
     return { sukses: true, terdaftar: true };

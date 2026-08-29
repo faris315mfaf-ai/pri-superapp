@@ -435,10 +435,7 @@ function FormMasuk({
   }
 
   function bukaKameraWajah() {
-    if (identitas.trim().length < 3) {
-      setError("Ketik dulu username atau nomor WhatsApp Anda, lalu pindai wajah.");
-      return;
-    }
+    // Tanpa username: cukup pindai wajah, sistem mengenali sendiri (1:N).
     setError(null);
     setKameraWajah(true);
   }
@@ -448,7 +445,7 @@ function FormMasuk({
     if (wajahJalan) return;
     setWajahJalan(true);
     try {
-      const user = await masukWajah(identitas.trim(), image);
+      const user = await masukWajah(image);
       onBerhasil(user);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Wajah tidak dikenali. Coba lagi.");
@@ -559,7 +556,11 @@ function FormMasuk({
 
       <AnimatePresence>
         {kameraWajah && (
-          <KameraWajah onFoto={(img) => void masukDenganWajah(img)} onTutup={() => setKameraWajah(false)} />
+          <KameraWajah
+            jumlah={1}
+            onSelesai={(imgs) => void masukDenganWajah(imgs[0])}
+            onTutup={() => setKameraWajah(false)}
+          />
         )}
       </AnimatePresence>
 

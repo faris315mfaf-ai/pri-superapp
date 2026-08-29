@@ -80,11 +80,11 @@ export function BarisWajah() {
     }
   }
 
-  async function selesaiFoto(image: string) {
+  async function selesaiFoto(images: string[]) {
     setKamera(false);
     setSibuk(true);
     try {
-      await daftarkanWajah(image);
+      await daftarkanWajah(images);
       toast("sukses", "Wajah terdaftar", "Kini absen & login bisa memakai wajah Anda.");
       await muat();
     } catch (e) {
@@ -155,7 +155,9 @@ export function BarisWajah() {
       )}
 
       <AnimatePresence>
-        {kamera && <KameraWajah onFoto={selesaiFoto} onTutup={() => setKamera(false)} />}
+        {kamera && (
+          <KameraWajah jumlah={5} onSelesai={selesaiFoto} onTutup={() => setKamera(false)} />
+        )}
       </AnimatePresence>
     </>
   );
@@ -166,16 +168,22 @@ export function BarisWajah() {
 // ------------------------------------------------------------
 
 export function KameraWajah({
-  onFoto,
+  jumlah = 1,
+  onSelesai,
   onTutup,
 }: {
-  onFoto: (image: string) => void;
+  /** Berapa foto ditangkap sebelum selesai (5 untuk daftar, 1 untuk login) */
+  jumlah?: number;
+  onSelesai: (images: string[]) => void;
   onTutup: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [siap, setSiap] = useState(false);
   const [galat, setGalat] = useState<string | null>(null);
+  const [terkumpul, setTerkumpul] = useState<string[]>([]);
+  const total = Math.max(1, jumlah);
+  const nomor = terkumpul.length + 1; // foto yang sedang diambil
 
   useEffect(() => {
     let batal = false;
@@ -222,7 +230,14 @@ export function KameraWajah({
     const sy = (v.videoHeight - sisi) / 2;
     ctx.drawImage(v, sx, sy, sisi, sisi, 0, 0, KELUAR, KELUAR);
     const dataUrl = kanvas.toDataURL("image/jpeg", 0.88);
-    onFoto(dataUrl);
+    const kumpul = [...terkumpul, dataUrl];
+    if (kumpul.length >= total) {
+      // Matikan kamera lalu serahkan semua foto sekaligus.
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      onSelesai(kumpul);
+    } else {
+      setTerkumpul(kumpul);
+    }
   }
 
   return (
@@ -243,7 +258,9 @@ export function KameraWajah({
         transition={{ type: "spring", stiffness: 360, damping: 30 }}
       >
         <div className="flex items-center justify-between">
-          <h3 className="font-heading text-base font-bold text-teks-utama">Ambil Foto Wajah</h3>
+          <h3 className="font-heading text-base font-bold text-teks-utama">
+            {total > 1 ? `Ambil ${total} Foto Wajah` : "Ambil Foto Wajah"}
+          </h3>
           <button
             type="button"
             onClick={onTutup}
@@ -255,9 +272,25 @@ export function KameraWajah({
         </div>
 
         <p className="mt-1 text-[11.5px] leading-relaxed text-teks-sekunder">
-          Posisikan wajah di tengah, pencahayaan cukup, tanpa masker. Foto ini
-          hanya dipakai untuk mengenali Anda — tidak disimpan sebagai gambar.
+          {total > 1
+            ? "Posisikan wajah di tengah, cahaya cukup, tanpa masker. Setiap foto, ubah sedikit sudut/ekspresi (hadap depan, sedikit ke kiri/kanan, senyum) agar makin mudah dikenali."
+            : "Posisikan wajah di tengah, cahaya cukup, tanpa masker. Foto hanya dipakai untuk mengenali Anda — tidak disimpan sebagai gambar."}
         </p>
+
+        {total > 1 && (
+          <div className="mt-2 flex items-center justify-center gap-1.5" aria-hidden="true">
+            {Array.from({ length: total }).map((_, i) => (
+              <span
+                key={i}
+                className="h-1.5 rounded-full transition-all"
+                style={{
+                  width: i < terkumpul.length ? 22 : 10,
+                  background: i < terkumpul.length ? "#0EA5E9" : "rgba(148,163,184,0.4)",
+                }}
+              />
+            ))}
+          </div>
+        )}
 
         <div className="relative mx-auto mt-3 aspect-square w-full max-w-[260px] overflow-hidden rounded-2xl bg-black/40">
           {galat ? (
@@ -286,7 +319,13 @@ export function KameraWajah({
           style={{ background: "linear-gradient(135deg, #0EA5E9, #0369A1)" }}
         >
           {siap ? <ShieldCheck className="h-5 w-5" /> : <Loader2 className="h-5 w-5 animate-spin" />}
-          {siap ? "Ambil & Daftarkan" : "Menyalakan kamera…"}
+          {!siap
+            ? "Menyalakan kamera…"
+            : total > 1
+              ? nomor >= total
+                ? `Ambil Foto ${nomor} & Selesai`
+                : `Ambil Foto ${nomor} dari ${total}`
+              : "Ambil & Lanjut"}
         </button>
       </motion.div>
     </motion.div>
