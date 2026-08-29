@@ -8,6 +8,7 @@
 //                  ke null oleh ON DELETE SET NULL)
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { adalahHR } from "@/lib/hr";
 import { userDariToken, hapusCacheUser } from "@/lib/sesi";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ async function pastikanMasuk(request: Request) {
 
 async function pastikanPengurus(request: Request) {
   const user = await pastikanMasuk(request);
-  if (!PENGURUS.has(user.role)) {
+  if (!PENGURUS.has(user.role) && !adalahHR(user)) {
     throw Object.assign(new Error("Hanya pengurus yang boleh mengelola zona."), {
       status: 403,
     });

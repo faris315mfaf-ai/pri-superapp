@@ -18,6 +18,7 @@ import {
   instruksiUntuk,
   MODEL_SUARA,
 } from "@/lib/gemini";
+import { jabatanBolehAsisten } from "@/lib/jabatan";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
   return bungkus(async () => {
     const user = await userDariToken(tokenDari(request));
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
-    if (!(await bolehChatbotRole(user.role))) {
+    if (!(await bolehChatbotRole(user.role)) && !jabatanBolehAsisten(user.jabatan)) {
       throw Object.assign(
         new Error("Jabatan Anda belum diberi akses Asisten AI."),
         { status: 403 },

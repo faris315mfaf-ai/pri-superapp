@@ -11,6 +11,7 @@
 // DELETE {id} → hapus
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
 
@@ -32,7 +33,7 @@ function divisiKelola(user: {
   divisi?: string | null;
   posisi_divisi?: string | null;
 }): string | null | false {
-  if (HR.has(user.role)) return null; // semua divisi
+  if (HR.has(user.role) || adalahHR(user)) return null; // semua divisi
   if (user.posisi_divisi === "kepala" && user.divisi) return user.divisi;
   return false; // tidak berwenang mengelola
 }

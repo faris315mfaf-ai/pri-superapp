@@ -12,6 +12,7 @@
 // — bukan dua daftar yang bisa saling berbeda.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
 import { bolehBentukTim } from "@/lib/jabatan";
@@ -49,7 +50,7 @@ export async function GET(request: Request) {
 
     // --- Antrean ACC keanggotaan tim (super admin / admin HR) ---
     if (url.searchParams.get("acc") === "1") {
-      if (!PERAN_PENGACC.has(user.role)) {
+      if (!PERAN_PENGACC.has(user.role) && !adalahHR(user)) {
         throw Object.assign(new Error("Hanya super admin / admin HR yang meng-ACC tim."), {
           status: 403,
         });
@@ -275,7 +276,7 @@ export async function POST(request: Request) {
 
     if (body.aksi === "acc" || body.aksi === "tolak_acc") {
       // Keputusan pengajuan tim — khusus super admin / admin HR.
-      if (!PERAN_PENGACC.has(user.role)) {
+      if (!PERAN_PENGACC.has(user.role) && !adalahHR(user)) {
         throw Object.assign(new Error("Hanya super admin / admin HR yang meng-ACC tim."), {
           status: 403,
         });

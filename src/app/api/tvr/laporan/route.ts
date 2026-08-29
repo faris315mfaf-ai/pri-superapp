@@ -8,6 +8,7 @@
 // orang sakit tidak ditagih video.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { beriKoin } from "@/lib/koin";
@@ -84,7 +85,7 @@ export async function GET(request: Request) {
 
     // --- Rekap semua anggota (untuk dashboard admin / pemantauan) ---
     if (url.searchParams.get("semua") === "1") {
-      if (!BOLEH_LIHAT_SEMUA.has(user.role)) {
+      if (!BOLEH_LIHAT_SEMUA.has(user.role) && !adalahHR(user)) {
         throw Object.assign(new Error("Hanya admin yang boleh melihat rekap semua anggota."), {
           status: 403,
         });
@@ -387,7 +388,7 @@ export async function PATCH(request: Request) {
     //     (spek 3.1). Dibedakan dari edit laporan lewat adanya user_id
     //     tanpa id laporan. kpi null = kembali ke bawaan 5. ---
     if (body.user_id != null && body.id == null) {
-      if (!BOLEH_LIHAT_SEMUA.has(user.role) && user.role !== "admin_tv") {
+      if (!BOLEH_LIHAT_SEMUA.has(user.role) && user.role !== "admin_tv" && !adalahHR(user)) {
         throw Object.assign(new Error("Anda tidak berwenang mengatur KPI."), { status: 403 });
       }
       const targetId = Number(body.user_id);

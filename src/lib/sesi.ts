@@ -175,6 +175,14 @@ export async function userDariToken(token: string): Promise<UserPublik | null> {
     u.sub_divisi = String(sesi.dev_subdivisi ?? "");
   }
 
+  // Fitur 1.22.x/6: peran SUPER ADMIN otomatis MELEKAT pada jabatan
+  // "Ketua Umum" — tidak lagi ditetapkan manual. Peran DB boleh apa saja
+  // (anggota/ketua); yang berubah hanya peran EFEKTIF yang dilihat sistem.
+  // Master tak diutak-atik (kuasa tertinggi, tersembunyi).
+  if (u.role !== "master" && (u.jabatan ?? "").trim() === "Ketua Umum") {
+    u.role = "super_admin";
+  }
+
   // Catat pemakaian terakhir (berguna untuk daftar perangkat di profil).
   //
   // KENAPA TIDAK `void db...` SEPERTI SEBELUMNYA: query builder supabase-js

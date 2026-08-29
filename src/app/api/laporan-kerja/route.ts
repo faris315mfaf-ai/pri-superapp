@@ -15,6 +15,7 @@
 // ditulis sore hari.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 
@@ -98,7 +99,7 @@ export async function GET(request: Request) {
 
     // --- Mode HR: ringkasan KPI semua anggota utk satu tanggal ---
     if (url.searchParams.get("semua") === "1") {
-      if (!BOLEH_LIHAT_SEMUA.has(user.role)) {
+      if (!BOLEH_LIHAT_SEMUA.has(user.role) && !adalahHR(user)) {
         throw Object.assign(new Error("Hanya HR yang boleh melihat laporan semua anggota."), {
           status: 403,
         });
@@ -148,7 +149,7 @@ export async function GET(request: Request) {
     const userDiminta = url.searchParams.get("user");
     let idTarget = Number(user.id);
     if (userDiminta && Number(userDiminta) !== Number(user.id)) {
-      if (!BOLEH_LIHAT_SEMUA.has(user.role)) {
+      if (!BOLEH_LIHAT_SEMUA.has(user.role) && !adalahHR(user)) {
         throw Object.assign(new Error("Hanya HR yang boleh melihat laporan anggota lain."), {
           status: 403,
         });

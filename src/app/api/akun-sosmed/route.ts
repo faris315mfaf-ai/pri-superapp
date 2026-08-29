@@ -9,6 +9,7 @@
 // dikreditkan ke dua anggota sekaligus saat QC berjalan.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { adalahHR } from "@/lib/hr";
 import { beriKoin } from "@/lib/koin";
 import { userDariToken } from "@/lib/sesi";
 
@@ -95,7 +96,7 @@ export async function GET(request: Request) {
       const url = new URL(request.url);
       if (url.searchParams.get("tanpa") === "1") {
         const user = await pastikanMasuk(request);
-        if (!["master", "super_admin", "admin_hr"].includes(user.role)) {
+        if (!["master", "super_admin", "admin_hr"].includes(user.role) && !adalahHR(user)) {
           throw Object.assign(new Error("Hanya pengurus yang boleh melihat daftar ini."), {
             status: 403,
           });

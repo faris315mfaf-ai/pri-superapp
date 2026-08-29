@@ -4,6 +4,7 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus, pastikanSukses } from "@/lib/api-helper";
 import { pastikanMasuk, userDariToken } from "@/lib/sesi";
+import { adalahHR } from "@/lib/hr";
 
 export const dynamic = "force-dynamic";
 
@@ -40,11 +41,15 @@ export async function GET(request: Request) {
         "jenis_peristiwa.eq.tv_publik",
       ];
       if (r === "master" || r === "admin_tv") umumRelevan.push("kategori.eq.VIDEO");
-      if (r === "master" || r === "super_admin" || r === "admin_hr") {
+      if (r === "master" || r === "super_admin" || r === "admin_hr" || adalahHR(pengguna)) {
         umumRelevan.push("kategori.eq.QC");
       }
+      // Anggota Divisi HR (fitur 1.22.x/6) ikut menerima notifikasi yang
+      // bertarget peran admin_hr (mis. pendaftar baru) — kuasa HR kini dari
+      // divisi. `ov` = untuk_role tumpang-tindih dengan salah satu peran ini.
+      const peranCocok = adalahHR(pengguna) ? `{${r},admin_hr}` : `{${r}}`;
       kueri = kueri.or(
-        `and(untuk_role.is.null,untuk_user.is.null,or(${umumRelevan.join(",")})),untuk_role.cs.{${r}},untuk_user.eq.${Number(pengguna.id)}`,
+        `and(untuk_role.is.null,untuk_user.is.null,or(${umumRelevan.join(",")})),untuk_role.ov.${peranCocok},untuk_user.eq.${Number(pengguna.id)}`,
       );
     } else {
       kueri = kueri.is("untuk_user", null);

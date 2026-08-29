@@ -10,6 +10,7 @@ import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import { bolehChatbotRole, geminiSiap, tanyaGemini } from "@/lib/gemini";
+import { jabatanBolehAsisten } from "@/lib/jabatan";
 
 export const dynamic = "force-dynamic";
 // Putaran alat + jaringan Gemini bisa >10 detik.
@@ -25,7 +26,9 @@ export async function GET(request: Request) {
     const user = await userDariToken(tokenDari(request));
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
     return {
-      boleh: await bolehChatbotRole(user.role),
+      // Akses = per-role (diatur master) ATAU jabatan penerima voice
+      // command (fitur 1.22.x/5).
+      boleh: (await bolehChatbotRole(user.role)) || jabatanBolehAsisten(user.jabatan),
       siap: geminiSiap(),
     };
   });
@@ -38,7 +41,7 @@ export async function POST(request: Request) {
   return bungkus(async () => {
     const user = await userDariToken(tokenDari(request));
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
-    if (!(await bolehChatbotRole(user.role))) {
+    if (!(await bolehChatbotRole(user.role)) && !jabatanBolehAsisten(user.jabatan)) {
       throw Object.assign(
         new Error("Jabatan Anda belum diberi akses Asisten AI."),
         { status: 403 },

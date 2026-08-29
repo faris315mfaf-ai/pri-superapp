@@ -7,6 +7,7 @@
 // DELETE → hapus acara (pembuatnya, atau pengurus).
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
 import { after } from "next/server";
@@ -85,7 +86,7 @@ async function kirimPengingatTertunda() {
 }
 
 function bolehKelola(user: { role: string; divisi?: string | null }): boolean {
-  return PENGURUS.has(user.role) || (user.divisi ?? "") === DIVISI_ACARA;
+  return PENGURUS.has(user.role) || adalahHR(user) || (user.divisi ?? "") === DIVISI_ACARA;
 }
 
 export async function GET(request: Request) {
@@ -184,7 +185,7 @@ export async function DELETE(request: Request) {
     if (!acara) throw Object.assign(new Error("Acara tidak ditemukan."), { status: 404 });
 
     const pembuatnya = Number(acara.dibuat_oleh) === Number(user.id);
-    if (!pembuatnya && !PENGURUS.has(user.role)) {
+    if (!pembuatnya && !PENGURUS.has(user.role) && !adalahHR(user)) {
       throw Object.assign(new Error("Anda tidak berwenang menghapus acara ini."), {
         status: 403,
       });

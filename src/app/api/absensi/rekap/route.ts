@@ -11,6 +11,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { kirimWa, kirimWaDenganLampiran, nomorWaSah, normalkanNomorWa } from "@/lib/fonnte";
 import { statusTelat } from "@/lib/absensi-status";
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
     const token = h.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : "";
     const user = await userDariToken(token);
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
-    if (!PENGURUS.has(user.role)) {
+    if (!PENGURUS.has(user.role) && !adalahHR(user)) {
       throw Object.assign(new Error("Hanya pengurus yang boleh membuat rekap absensi."), {
         status: 403,
       });

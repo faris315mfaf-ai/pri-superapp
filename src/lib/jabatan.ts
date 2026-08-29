@@ -16,8 +16,11 @@
 // Anggota biasa = jabatan kosong (bawaan), strukturnya lewat Divisi.
 export const JABATAN_PARTAI = [
   "Ketua Umum",
+  "Wakil Ketua Umum",
   "Sekretaris Jenderal",
   "Wakil Sekretaris Jenderal",
+  "Direktur Eksekutif",
+  "Wakil Direktur Eksekutif",
   "Kepala Sekretariat",
   "Ketua HRD",
   "Pimpinan Redaksi TV Rakyat",
@@ -30,8 +33,12 @@ export const JABATAN_PARTAI = [
  */
 export const KUOTA_JABATAN: Record<string, number> = {
   "Ketua Umum": 1,
+  "Wakil Ketua Umum": 1,
   "Sekretaris Jenderal": 1,
   "Wakil Sekretaris Jenderal": 1,
+  "Direktur Eksekutif": 1,
+  // Wakil Direktur Eksekutif: TANPA kuota (tak terdaftar) — banyak wakil
+  // dibedakan lewat bidang_jabatan (mis. "Bidang IT", "Bidang Hukum").
   "Kepala Sekretariat": 1,
   "Ketua HRD": 1,
   // Khusus Pimred boleh DUA orang — modul TV butuh cadangan approver.
@@ -66,6 +73,25 @@ export function bolehBentukTim(user: { role?: string; jabatan?: string | null })
   return user.role === "ketua" && Boolean((user.jabatan ?? "").trim());
 }
 
+/**
+ * Jabatan yang OTOMATIS mendapat modul Asisten AI + voice command
+ * (fitur 1.22.x/5) — di samping akses per-role yang diatur master.
+ * Selaras arah baru: kuasa mengikuti JABATAN, bukan peran aplikasi.
+ */
+export const JABATAN_ASISTEN: readonly string[] = [
+  "Ketua Umum",
+  "Wakil Ketua Umum",
+  "Sekretaris Jenderal",
+  "Wakil Sekretaris Jenderal",
+  "Direktur Eksekutif",
+  "Wakil Direktur Eksekutif",
+];
+
+/** true bila jabatannya berhak modul Asisten AI (voice command). */
+export function jabatanBolehAsisten(jabatan?: string | null): boolean {
+  return JABATAN_ASISTEN.includes((jabatan ?? "").trim());
+}
+
 export type CakupanPengumuman = "semua" | "jabatan" | "tim";
 
 /**
@@ -81,10 +107,15 @@ export function cakupanPengumuman(user: {
   jabatan?: string | null;
 }): CakupanPengumuman[] {
   const j = (user.jabatan ?? "").trim();
-  if (user.role === "master" || j === "Ketua Umum") return ["semua", "jabatan", "tim"];
+  // Ketua Umum & Wakil Ketua Umum (dan master) menyapa seluruh partai.
+  if (user.role === "master" || j === "Ketua Umum" || j === "Wakil Ketua Umum") {
+    return ["semua", "jabatan", "tim"];
+  }
   if (
     j === "Sekretaris Jenderal" ||
     j === "Wakil Sekretaris Jenderal" ||
+    j === "Direktur Eksekutif" ||
+    j === "Wakil Direktur Eksekutif" ||
     j === "Kepala Sekretariat" ||
     j === "Ketua HRD"
   ) {

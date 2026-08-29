@@ -5,6 +5,7 @@
 // setiap akun wajib (biaya tetap ~6 request) padahal daftar postingannya
 // sudah ada. Tombol "Lanjutkan" hanya membangunkan pekerja antrian.
 import { bungkus } from "@/lib/api-helper";
+import { adalahHR } from "@/lib/hr";
 import { pastikanMasuk } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { panggilWebhookN8n, N8nBelumDiaturError } from "@/lib/n8n";
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     // sepenuhnya: siapa pun yang tahu alamatnya bisa memicu scraping dan
     // membakar kuota TikHub/Ayrshare tanpa jejak siapa pemicunya.
     const user = await pastikanMasuk(request);
-    if (!BOLEH_ANALISIS.has(user.role)) {
+    if (!BOLEH_ANALISIS.has(user.role) && !adalahHR(user)) {
       throw Object.assign(
         new Error("Hanya pengurus QC yang boleh menjalankan analisis."),
         { status: 403 },

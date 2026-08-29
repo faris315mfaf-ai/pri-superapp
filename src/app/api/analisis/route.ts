@@ -12,6 +12,7 @@
 // padahal pekerjaannya baru dimulai.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { adalahHR } from "@/lib/hr";
 import { pastikanMasuk } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 
@@ -196,7 +197,7 @@ export async function POST(request: Request) {
     // sepenuhnya: siapa pun yang tahu alamatnya bisa memicu scraping dan
     // membakar kuota TikHub/Ayrshare tanpa jejak siapa pemicunya.
     const user = await pastikanMasuk(request);
-    if (!BOLEH_ANALISIS.has(user.role)) {
+    if (!BOLEH_ANALISIS.has(user.role) && !adalahHR(user)) {
       throw Object.assign(
         new Error("Hanya pengurus QC yang boleh menjalankan analisis."),
         { status: 403 },

@@ -16,6 +16,7 @@
 //   `{periode}|||{nama}|||{platform}|||{akun}|||{idPost}`.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import {
@@ -147,7 +148,7 @@ export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await userDariToken(tokenDari(request));
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
-    if (!BOLEH.has(user.role)) {
+    if (!BOLEH.has(user.role) && !adalahHR(user)) {
       throw Object.assign(new Error("Hanya pengurus QC yang boleh melihat cakupan."), {
         status: 403,
       });
@@ -183,7 +184,7 @@ export async function POST(request: Request) {
   return bungkus(async () => {
     const user = await userDariToken(tokenDari(request));
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
-    if (!BOLEH.has(user.role)) {
+    if (!BOLEH.has(user.role) && !adalahHR(user)) {
       throw Object.assign(new Error("Hanya pengurus QC yang boleh menjalankan analisis."), {
         status: 403,
       });

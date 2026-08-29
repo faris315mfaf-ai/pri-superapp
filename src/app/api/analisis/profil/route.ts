@@ -11,6 +11,7 @@
 // DELETE {id}     → hapus profil (di penyedia + di database)
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { penyediaAktif } from "@/lib/sosmed-penyedia";
 
@@ -23,7 +24,7 @@ async function pastikanPengurus(request: Request) {
   const token = h.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : "";
   const user = await userDariToken(token);
   if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
-  if (!PENGURUS.has(user.role)) {
+  if (!PENGURUS.has(user.role) && !adalahHR(user)) {
     throw Object.assign(new Error("Hanya pengurus yang boleh mengelola profil analisis."), {
       status: 403,
     });
