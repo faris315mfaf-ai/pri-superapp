@@ -24,10 +24,24 @@ export class WajahBelumDiaturError extends Error {}
 
 const LUX_BASE = "https://api.luxand.cloud";
 
-/** Ambang kemiripan minimal agar dianggap "cocok" (0..1). */
+/** Ambang kemiripan untuk absen 1:1 (identitas sudah pasti dari sesi). */
 function ambangCocok(): number {
   const n = Number(process.env.WAJAH_AMBANG);
-  return Number.isFinite(n) && n > 0 && n <= 1 ? n : 0.7;
+  return Number.isFinite(n) && n > 0 && n <= 1 ? n : 0.75;
+}
+/**
+ * Ambang untuk LOGIN 1:N — jauh lebih ketat: di sini sistem MENERBITKAN
+ * sesi baru untuk siapa pun yang cocok, jadi false-accept = orang lain
+ * masuk sebagai Anda. Bawaan 0.85.
+ */
+function ambangLogin(): number {
+  const n = Number(process.env.WAJAH_AMBANG_LOGIN);
+  return Number.isFinite(n) && n > 0 && n <= 1 ? n : 0.85;
+}
+/** Selisih minimal kandidat teratas vs kedua agar tak ambigu (anti mirip). */
+function marginAman(): number {
+  const n = Number(process.env.WAJAH_MARGIN);
+  return Number.isFinite(n) && n >= 0 && n <= 1 ? n : 0.1;
 }
 
 /** Mode anti-foto untuk verifikasi (BUKAN pendaftaran). */
@@ -169,20 +183,23 @@ async function luxTambahFoto(uuid: string, foto: Blob): Promise<boolean> {
   return json?.status === "success";
 }
 
-/** Cari subjek paling cocok untuk sebuah foto. */
-async function luxSearch(foto: Blob): Promise<{ nama: string; skor: number } | null> {
+/**
+ * Cari subjek paling cocok. Kembalikan skor TERBAIK & KEDUA agar pemanggil
+ * bisa menolak kecocokan yang ambigu (dua orang mirip).
+ */
+async function luxSearch(
+  foto: Blob,
+): Promise<{ nama: string; skor: number; skorKedua: number } | null> {
   const { json } = await luxKirim<{ id?: number; name?: string; probability?: number }[]>(
     "/photo/search",
     "POST",
     foto,
   );
-  const daftar = Array.isArray(json) ? json : [];
-  let terbaik: { nama: string; skor: number } | null = null;
-  for (const h of daftar) {
-    const skor = Number(h.probability ?? 0);
-    if (!terbaik || skor > terbaik.skor) terbaik = { nama: String(h.name ?? ""), skor };
-  }
-  return terbaik;
+  const daftar = (Array.isArray(json) ? json : [])
+    .map((h) => ({ nama: String(h.name ?? ""), skor: Number(h.probability ?? 0) }))
+    .sort((a, b) => b.skor - a.skor);
+  if (daftar.length === 0) return null;
+  return { nama: daftar[0].nama, skor: daftar[0].skor, skorKedua: daftar[1]?.skor ?? 0 };
 }
 
 async function luxHapus(uuid: string): Promise<void> {
@@ -303,6 +320,7 @@ export async function verifikasiWajahPenyedia(
     const live = await cekLiveness(foto);
     if (!live.live) return { lolos: false, cocok: false, live: false, skor: live.skor };
     const m = await luxSearch(foto);
+    // 1:1 — kecocokan HARUS subjek pengguna ini & di atas ambang.
     const cocok = Boolean(m && m.nama === namaSubjek(userId) && m.skor >= ambangCocok());
     return { lolos: cocok, cocok, live: true, skor: m?.skor ?? 0 };
   }
@@ -331,7 +349,12 @@ export async function identifikasiWajah(
     const live = await cekLiveness(foto);
     if (!live.live) return { userId: null, live: false, skor: live.skor, alasan: live.alasan };
     const m = await luxSearch(foto);
-    if (!m || m.skor < ambangCocok()) return { userId: null, live: true, skor: m?.skor ?? 0 };
+    // LOGIN 1:N sangat ketat: (a) kecocokan tinggi (ambangLogin, bawaan
+    // 0.85), DAN (b) tak ambigu — kandidat teratas harus unggul jelas dari
+    // kandidat kedua. Ini mencegah "wajah orang lain (mirip) ikut masuk".
+    if (!m || m.skor < ambangLogin() || m.skor - m.skorKedua < marginAman()) {
+      return { userId: null, live: true, skor: m?.skor ?? 0 };
+    }
     return { userId: userIdDariNama(m.nama), live: true, skor: m.skor };
   }
   // Generik: minta penyedia mengidentifikasi.
