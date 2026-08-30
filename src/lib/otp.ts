@@ -7,7 +7,7 @@
 //    dipakai membanjiri nomor orang lain dengan pesan.
 import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import { supabase } from "@/lib/supabase";
-import { conviaSiap, kirimOtpTemplate, normalkanNomorWa } from "@/lib/convia";
+import { conviaOtpAktif, kirimOtpTemplate, normalkanNomorWa } from "@/lib/convia";
 import { kirimWa as kirimWaFonnte } from "@/lib/fonnte";
 
 /** Berapa lama kode berlaku */
@@ -75,7 +75,10 @@ export async function kirimOtp(
     `Berlaku ${MASA_BERLAKU_MENIT} menit. Jangan berikan kode ini kepada siapa pun, ` +
     `termasuk yang mengaku pengurus partai.`;
 
-  if (conviaSiap()) {
+  // Convia dipakai HANYA bila template OTP sudah approved (CONVIA_OTP_AKTIF).
+  // Selama template ditolak/belum ada, langsung Fonnte — tanpa panggilan
+  // Convia yang pasti gagal.
+  if (conviaOtpAktif()) {
     try {
       await kirimOtpTemplate(nomor, kode);
       return;

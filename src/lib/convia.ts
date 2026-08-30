@@ -36,6 +36,16 @@ export function conviaSiap(): boolean {
   return Boolean(process.env.CONVIA_API_KEY);
 }
 
+/**
+ * OTP lewat Convia hanya DINYALAKAN bila template OTP sudah disetujui Meta —
+ * disetel eksplisit lewat env CONVIA_OTP_AKTIF=true. Sebelum itu OTP tetap
+ * memakai Fonnte TANPA panggilan Convia yang pasti gagal (template ditolak/
+ * belum ada). Begitu template Anda approved, set CONVIA_OTP_AKTIF=true.
+ */
+export function conviaOtpAktif(): boolean {
+  return conviaSiap() && process.env.CONVIA_OTP_AKTIF === "true";
+}
+
 /** Rapikan nomor ke format 62… (sama seperti Fonnte). */
 export function normalkanNomorWa(nomor: string): string {
   const d = (nomor ?? "").replace(/\D/g, "");
