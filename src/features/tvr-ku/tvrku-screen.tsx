@@ -36,6 +36,7 @@ import {
 import { ProgressRing } from "@/components/progress-ring";
 import { PlatformIcon, labelPlatform } from "@/components/platform-icon";
 import { SeksiLipat } from "@/components/seksi-lipat";
+import { TataLetakModul, type SeksiModul } from "@/components/tata-letak-modul";
 import { toast } from "@/hooks/use-app-store";
 import {
   getAkunTvr,
@@ -598,10 +599,13 @@ export function TvrKuScreen({
         <ThemeToggle />
       </header>
 
-      <div className="mt-5 md:grid md:grid-cols-2 md:items-start md:gap-4">
-      <div>
-
-      {/* KPI hari ini */}
+      {/* Atur Tata Letak (fitur 1.22.x): semua seksi bisa diseret/
+          disembunyikan/dilipat — satu kolom. */}
+      <TataLetakModul
+        modul="tvrku"
+        bungkusSeksi={false}
+        seksi={[
+        { id: "kpi", judul: "KPI Video Hari Ini", ikon: Video, render: () => (
       <FadeInUp>
         <GlassCard className="flex items-center gap-4 p-4">
           <ProgressRing value={dibebaskan ? 100 : persenKpi} size={72}>
@@ -627,13 +631,16 @@ export function TvrKuScreen({
           </div>
         </GlassCard>
       </FadeInUp>
-
+        ) },
+        { id: "tugas", judul: "Tugas & Unggah Video", ikon: Clapperboard, render: () => (
+      <>
       {/* Tugas link dari Pimred + unggah video tugas (tampil hanya
           bila memang ada tugas — anggota lain tidak terganggu) */}
       <PanelTugasSaya />
       <KirimVideoManual hanyaBilaAdaTugas />
-
-      {/* Grafik 7 hari — bisa dilipat (fitur 1.20/2) */}
+      </>
+        ) },
+        { id: "grafik", judul: "Laporan 7 Hari Terakhir", ikon: Video, render: () => (
       <FadeInUp delay={0.06}>
         <div className="mt-4">
         <SeksiLipat id="tvrku-grafik" judul="Laporan 7 Hari Terakhir" ikon={Video} bawaanTerbuka>
@@ -663,8 +670,8 @@ export function TvrKuScreen({
         </SeksiLipat>
         </div>
       </FadeInUp>
-
-      {/* Akun TV Rakyat saya */}
+        ) },
+        { id: "akun", judul: "Akun TV Rakyat Saya", ikon: Link2, render: () => (
       <FadeInUp delay={0.1}>
         <div className="mt-5 flex items-center justify-between">
           <SectionTitle judul="Akun TV Rakyat Saya" className="!mt-0" />
@@ -776,9 +783,8 @@ export function TvrKuScreen({
           </div>
         )}
       </FadeInUp>
-
-      {/* Website TV Rakyat — didaftarkan lewat form kecil terpisah
-          dari akun sosmed (spek 3.2) */}
+        ) },
+        { id: "website", judul: "Website TV Rakyat", ikon: Globe, render: () => (
       <FadeInUp delay={0.12}>
         <div className="mt-5 flex items-center justify-between">
           <SectionTitle judul="Website TV Rakyat" className="!mt-0" />
@@ -837,11 +843,8 @@ export function TvrKuScreen({
           </div>
         )}
       </FadeInUp>
-
-      </div>
-      <div>
-
-      {/* Laporan video hari ini */}
+        ) },
+        { id: "laporan", judul: "Laporan Video Hari Ini", ikon: Video, render: () => (
       <FadeInUp delay={0.14}>
         <div className="mt-5 flex items-center justify-between md:mt-0">
           <SectionTitle judul="Laporan Video Hari Ini" className="!mt-0" />
@@ -918,9 +921,9 @@ export function TvrKuScreen({
           </div>
         )}
       </FadeInUp>
-
-      </div>
-      </div>
+        ) },
+        ] as SeksiModul[]}
+      />
 
       {/* Modal-modal */}
       <AnimatePresence>
