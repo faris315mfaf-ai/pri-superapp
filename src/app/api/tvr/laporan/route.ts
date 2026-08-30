@@ -177,7 +177,7 @@ export async function GET(request: Request) {
     const [{ data, error }, jenisBebas, targetKu] = await Promise.all([
       db
         .from("laporan_video")
-        .select("id, platform, url_video, tanggal_wib, dibuat_pada")
+        .select("id, platform, url_video, keyword, tanggal_wib, dibuat_pada")
         .eq("user_id", Number(user.id))
         .eq("tanggal_wib", tanggal)
         .order("id"),
@@ -259,9 +259,12 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as {
       platform?: string;
       url?: string;
+      /** Keyword/tema wajib (fitur 1.22.x/keyword) — kunci pencarian utama */
+      keyword?: string;
       /** Mode batch (spek 3.3): banyak link sekaligus */
-      banyak?: { platform?: string; url?: string }[];
+      banyak?: { platform?: string; url?: string; keyword?: string }[];
     };
+    const bersihkanKeyword = (k?: string) => (k ?? "").trim().slice(0, 60) || null;
 
     await pastikanFiturAktif(user, "tvrku", "TV Rakyat Saya sedang dimatikan untuk peran Anda.");
     const db = supabase();
@@ -286,9 +289,10 @@ export async function POST(request: Request) {
               user_id: Number(user.id),
               platform,
               url_video: urlBersih,
+              keyword: bersihkanKeyword(item.keyword),
               tanggal_wib: tanggal,
             })
-            .select("id, platform, url_video")
+            .select("id, platform, url_video, keyword")
             .single();
           if (error) {
             gagal.push({
@@ -322,9 +326,10 @@ export async function POST(request: Request) {
         user_id: Number(user.id),
         platform,
         url_video: urlBersih,
+        keyword: bersihkanKeyword(body.keyword),
         tanggal_wib: tanggal,
       })
-      .select("id, platform, url_video, tanggal_wib, dibuat_pada")
+      .select("id, platform, url_video, keyword, tanggal_wib, dibuat_pada")
       .single();
 
     if (error) {
@@ -445,11 +450,12 @@ export async function PATCH(request: Request) {
       .update({
         platform,
         url_video: (/^https?:\/\//i.test(url) ? url : `https://${url}`).slice(0, 500),
+        keyword: ((body as { keyword?: string }).keyword ?? "").trim().slice(0, 60) || null,
       })
       .eq("id", id)
       .eq("user_id", Number(user.id))
       .eq("tanggal_wib", tanggalWibSekarang())
-      .select("id, platform, url_video, tanggal_wib, dibuat_pada")
+      .select("id, platform, url_video, keyword, tanggal_wib, dibuat_pada")
       .maybeSingle();
     if (error) {
       if (error.code === "23505") {

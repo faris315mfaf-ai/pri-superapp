@@ -53,6 +53,7 @@ import {
   type KerjaKpi,
   type LaporanVideo,
   kirimLaporanBatch,
+  getKeywordWajib,
   hubungkanSosmedTvr,
   sinkronSosmedTvr,
 } from "@/services";
@@ -297,27 +298,52 @@ function ModalLaporanBatch({
   /** Dipanggil setelah tersimpan (jumlah sukses, daftar gagal) */
   onSelesai: (tersimpan: number, gagal: { url: string; alasan: string }[]) => void;
 }) {
-  const [tulisan, setTulisan] = useState("");
-  const [antrean, setAntrean] = useState<string[]>([]);
+  const [keyword, setKeyword] = useState("");
+  const [link, setLink] = useState("");
+  const [antrean, setAntrean] = useState<{ keyword: string; url: string }[]>([]);
+  const [keywords, setKeywords] = useState<string[]>([]);
   const [sedangKirim, setSedangKirim] = useState(false);
 
+  // Keyword wajib yang ditetapkan Pimred (fitur 1.22.x/keyword) — jadi
+  // saran & acuan saat anggota melaporkan videonya.
+  useEffect(() => {
+    let hidup = true;
+    void (async () => {
+      try {
+        const d = await getKeywordWajib();
+        if (hidup) setKeywords(d.data.filter((k) => k.aktif).map((k) => k.keyword));
+      } catch {
+        // keyword opsional; kegagalan memuat tak menghalangi laporan.
+      }
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, []);
+
   function tambahKeDaftar() {
-    const url = tulisan.trim();
-    if (url.length < 8) return;
-    if (antrean.includes(url)) {
+    const url = link.trim();
+    if (url.length < 8) {
+      toast("peringatan", "Isi link video dulu");
+      return;
+    }
+    if (antrean.some((a) => a.url === url)) {
       toast("info", "Link ini sudah ada di daftar");
       return;
     }
-    setAntrean((a) => [...a, url]);
-    setTulisan("");
+    setAntrean((a) => [...a, { keyword: keyword.trim(), url }]);
+    setKeyword("");
+    setLink("");
   }
 
   async function simpan() {
-    // Link yang masih di kolom ketik ikut terhitung — pengguna tidak
-    // wajib menekan Add dulu untuk mode satu-link.
+    // Baris yang masih di kolom ketik ikut terhitung — pengguna tidak
+    // wajib menekan + dulu untuk satu laporan.
     const semua = [...antrean];
-    const sisa = tulisan.trim();
-    if (sisa.length >= 8 && !semua.includes(sisa)) semua.push(sisa);
+    const sisaUrl = link.trim();
+    if (sisaUrl.length >= 8 && !semua.some((a) => a.url === sisaUrl)) {
+      semua.push({ keyword: keyword.trim(), url: sisaUrl });
+    }
     if (semua.length === 0 || sedangKirim) return;
     setSedangKirim(true);
     try {
@@ -330,7 +356,7 @@ function ModalLaporanBatch({
     }
   }
 
-  const totalSiap = antrean.length + (tulisan.trim().length >= 8 ? 1 : 0);
+  const totalSiap = antrean.length + (link.trim().length >= 8 ? 1 : 0);
 
   return (
     <motion.div
@@ -353,45 +379,69 @@ function ModalLaporanBatch({
       >
         <h3 className="font-heading text-base font-bold text-teks-utama">Laporkan Video</h3>
         <p className="mt-1 text-[11.5px] leading-relaxed text-teks-sekunder">
-          Tempel satu link lalu Simpan, atau tekan Add untuk menumpuk
-          beberapa link dan menyimpannya sekaligus.
+          Isi <b>keyword</b> (tema yang ditentukan Pimred) di kiri dan{" "}
+          <b>link video</b> di kanan, lalu tekan + untuk menumpuk beberapa.
         </p>
+        {keywords.length > 0 && (
+          <p className="mt-1 text-[10.5px] leading-snug text-teks-sekunder">
+            Keyword wajib: <b className="text-teks-utama/80">{keywords.join(", ")}</b>
+          </p>
+        )}
 
-        <div className="mt-3.5 flex gap-2">
+        <div className="mt-3 flex gap-2">
           <input
-            value={tulisan}
-            onChange={(e) => setTulisan(e.target.value)}
+            list="daftar-keyword-laporan"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder="Keyword"
+            aria-label="Keyword"
+            className="glass w-[38%] min-w-0 rounded-xl px-3 py-2.5 text-sm text-teks-utama placeholder:text-teks-sekunder/60 focus:outline-none"
+          />
+          <input
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
                 tambahKeDaftar();
               }
             }}
-            placeholder="Tempel link video…"
-            className="glass min-w-0 flex-1 rounded-xl px-3.5 py-2.5 text-sm text-teks-utama placeholder:text-teks-sekunder/60 focus:outline-none"
+            placeholder="Link video…"
+            aria-label="Link video"
+            className="glass min-w-0 flex-1 rounded-xl px-3 py-2.5 text-sm text-teks-utama placeholder:text-teks-sekunder/60 focus:outline-none"
           />
           <button
             type="button"
             onClick={tambahKeDaftar}
-            disabled={tulisan.trim().length < 8}
-            aria-label="Tambahkan link ke daftar"
-            className="glass btn-tekan flex items-center gap-1 rounded-xl px-3 text-xs font-bold text-teks-utama disabled:opacity-50"
+            disabled={link.trim().length < 8}
+            aria-label="Tambahkan keyword & link ke daftar"
+            className="glass btn-tekan flex items-center justify-center rounded-xl px-3 text-teks-utama disabled:opacity-50"
           >
-            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-            Add
+            <Plus className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
+        <datalist id="daftar-keyword-laporan">
+          {keywords.map((k) => (
+            <option key={k} value={k} />
+          ))}
+        </datalist>
 
         {antrean.length > 0 && (
           <div className="scrollbar-tipis mt-2.5 flex max-h-40 flex-col gap-1.5 overflow-y-auto">
-            {antrean.map((url) => (
-              <div key={url} className="glass-soft flex items-center gap-2 rounded-lg px-2.5 py-1.5">
-                <Link2 className="h-3.5 w-3.5 shrink-0 text-teks-sekunder" aria-hidden="true" />
-                <p className="min-w-0 flex-1 truncate text-[11.5px] text-teks-utama">{url}</p>
+            {antrean.map((item) => (
+              <div key={item.url} className="glass-soft flex items-center gap-2 rounded-lg px-2.5 py-1.5">
+                {item.keyword ? (
+                  <span className="shrink-0 rounded-md bg-pri/12 px-1.5 py-0.5 text-[10px] font-bold text-pri">
+                    {item.keyword}
+                  </span>
+                ) : (
+                  <Link2 className="h-3.5 w-3.5 shrink-0 text-teks-sekunder" aria-hidden="true" />
+                )}
+                <p className="min-w-0 flex-1 truncate text-[11.5px] text-teks-utama">{item.url}</p>
                 <button
                   type="button"
-                  onClick={() => setAntrean((a) => a.filter((x) => x !== url))}
-                  aria-label="Buang link ini"
+                  onClick={() => setAntrean((a) => a.filter((x) => x.url !== item.url))}
+                  aria-label="Buang baris ini"
                   className="btn-tekan p-1 text-teks-sekunder"
                 >
                   <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -881,7 +931,12 @@ export function TvrKuScreen({
                 <PlatformIcon platform={l.platform} size={15} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-xs font-semibold text-teks-utama">{l.url_video}</p>
-                  <p className="text-[10px] text-teks-sekunder">
+                  <p className="mt-0.5 flex items-center gap-1.5 text-[10px] text-teks-sekunder">
+                    {l.keyword && (
+                      <span className="rounded bg-pri/12 px-1.5 py-0.5 text-[9px] font-bold text-pri">
+                        {l.keyword}
+                      </span>
+                    )}
                     dilaporkan {jamWIB(l.dibuat_pada)}
                   </p>
                 </div>

@@ -973,6 +973,41 @@ export async function setIntervalBerita(menit: number): Promise<number> {
   return Number(json?.interval_menit ?? menit);
 }
 
+// ------------------------------------------------------------
+// Keyword wajib laporan video (fitur 1.22.x/keyword)
+// ------------------------------------------------------------
+
+export type KeywordWajib = { id: string; keyword: string; aktif: boolean };
+
+export async function getKeywordWajib(): Promise<{ data: KeywordWajib[]; pimred: boolean }> {
+  const json = await fetchJson("/api/tv/keyword", { headers: headerToken() });
+  return { data: (json.data ?? []) as KeywordWajib[], pimred: json.pimred === true };
+}
+
+export async function tambahKeyword(keyword: string): Promise<void> {
+  await fetchJson("/api/tv/keyword", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ keyword }),
+  });
+}
+
+export async function toggleKeyword(id: string): Promise<void> {
+  await fetchJson("/api/tv/keyword", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id }),
+  });
+}
+
+export async function hapusKeyword(id: string): Promise<void> {
+  await fetchJson("/api/tv/keyword", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id }),
+  });
+}
+
 /**
  * Mulai pemindaian berita baru lewat n8n (Apify), lalu TUNGGU sampai
  * hasil barunya muncul di database.
@@ -1380,6 +1415,7 @@ export type LaporanVideo = {
   id: string;
   platform: string;
   url_video: string;
+  keyword: string | null;
   tanggal_wib: string;
   dibuat_pada: string;
 };
@@ -1430,11 +1466,15 @@ export async function getRekapVideoSemua(tanggal?: string): Promise<{
   };
 }
 
-export async function tambahLaporanVideo(platform: string, url: string): Promise<LaporanVideo> {
+export async function tambahLaporanVideo(
+  platform: string,
+  url: string,
+  keyword?: string,
+): Promise<LaporanVideo> {
   const json = await fetchJson("/api/tvr/laporan", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ platform, url }),
+    body: JSON.stringify({ platform, url, keyword }),
   });
   return json.data as LaporanVideo;
 }
@@ -1971,11 +2011,12 @@ export async function ubahLaporanVideo(
   id: string,
   platform: string,
   url: string,
+  keyword?: string,
 ): Promise<LaporanVideo> {
   const json = await fetchJson("/api/tvr/laporan", {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ id, platform, url }),
+    body: JSON.stringify({ id, platform, url, keyword }),
   });
   return json.data as LaporanVideo;
 }
@@ -3319,12 +3360,14 @@ export async function tandaiGrupDibaca(): Promise<void> {
  * Platform tiap link ditebak server dari alamatnya.
  */
 export async function kirimLaporanBatch(
-  links: string[],
+  items: { keyword?: string; url: string }[],
 ): Promise<{ tersimpan: number; gagal: { url: string; alasan: string }[] }> {
   const json = await fetchJson("/api/tvr/laporan", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ banyak: links.map((url) => ({ url })) }),
+    body: JSON.stringify({
+      banyak: items.map((it) => ({ url: it.url, keyword: it.keyword })),
+    }),
   });
   return {
     tersimpan: Array.isArray(json.tersimpan) ? json.tersimpan.length : 0,

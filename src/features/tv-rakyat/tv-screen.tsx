@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Tv, Newspaper, Send, Clapperboard, Activity, History, Radar, ListChecks } from "lucide-react";
+import { Tv, Newspaper, Send, Clapperboard, Activity, History, Radar, ListChecks, Tag } from "lucide-react";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
 import { BeritaPanel } from "./berita-panel";
@@ -19,6 +19,7 @@ import { InsightDetailScreen } from "./insight-detail-screen";
 import { KirimVideoManual } from "@/features/tvr-ku/kirim-video-manual";
 import { PanelTugasLink } from "./tugas-link-panel";
 import { HasilScrapingPanel } from "./hasil-scraping-panel";
+import { KelolaKeywordPanel } from "./kelola-keyword-panel";
 import { TataLetakModul, type SeksiModul } from "@/components/tata-letak-modul";
 import { PipelinePanel } from "./pipeline-panel";
 import { KirimVideoPanel } from "./kirim-video-panel";
@@ -225,6 +226,16 @@ export function TvScreen({
               keterangan="Tambah/stop akun IG & TikTok + interval scraping"
             >
               <KelolaSumberPanel />
+            </SeksiLipat>
+        ) },
+        pimred && { id: "kelola-keyword", judul: "Keyword Wajib Laporan", ikon: Tag, render: () => (
+            <SeksiLipat
+              id="kelola-keyword"
+              judul="Keyword Wajib Laporan"
+              ikon={Tag}
+              keterangan="Tema wajib video yang harus diangkat semua anggota"
+            >
+              <KelolaKeywordPanel />
             </SeksiLipat>
         ) },
         pimred && { id: "hasil-scraping", judul: "Hasil Scraping Berita", ikon: ListChecks, render: () => (
