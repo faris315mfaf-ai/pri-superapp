@@ -110,14 +110,17 @@ function hariIniWIB(): string {
   return new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
+// QC multi-platform (fitur 1.22.x/2): X, Threads, YouTube kini aktif.
+// Facebook tetap nonaktif — pengomentar Facebook hanya punya nama
+// tampilan, bukan @username yang bisa dicocokkan ke kader.
 const CHIP_PLATFORM = [
   { id: "semua", label: "Semua", tersedia: true },
   { id: "instagram", label: "Instagram", tersedia: true },
   { id: "tiktok", label: "TikTok", tersedia: true },
-  { id: "twitter", label: "X", tersedia: false },
+  { id: "twitter", label: "X", tersedia: true },
+  { id: "threads", label: "Threads", tersedia: true },
+  { id: "youtube", label: "YouTube", tersedia: true },
   { id: "facebook", label: "Facebook", tersedia: false },
-  { id: "threads", label: "Threads", tersedia: false },
-  { id: "youtube", label: "YouTube", tersedia: false },
 ];
 
 /** Waktu relatif singkat dari timestamp */

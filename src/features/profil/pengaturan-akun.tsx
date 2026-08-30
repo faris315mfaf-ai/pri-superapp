@@ -22,7 +22,9 @@ import {
   Pencil,
   Plus,
   Trash2,
+  Twitter,
   X,
+  Youtube,
   ZoomIn,
 } from "lucide-react";
 import { toast, useAppStore } from "@/hooks/use-app-store";
@@ -51,18 +53,27 @@ import { cn } from "@/lib/utils";
 // Akun media sosial — tombol pembuka + pop-up kelola
 // ------------------------------------------------------------
 
+// QC multi-platform (fitur 1.22.x/2): kader mendaftarkan username untuk
+// Instagram, TikTok, X, Threads, dan YouTube. Warna dipilih yang jelas
+// terbaca di tema terang maupun gelap (X/Threads memakai aksen, bukan
+// hitam murni yang lenyap di mode gelap).
+type PlatformId = "instagram" | "tiktok" | "twitter" | "threads" | "youtube";
 const PLATFORM: {
-  id: "instagram" | "tiktok";
+  id: PlatformId;
   label: string;
   ikon: KomponenIkon;
   warna: string;
 }[] = [
   { id: "instagram", label: "Instagram", ikon: Instagram, warna: "#E1306C" },
   { id: "tiktok", label: "TikTok", ikon: Music2, warna: "#0EA5E9" },
+  { id: "twitter", label: "X", ikon: Twitter, warna: "#1D9BF0" },
+  { id: "threads", label: "Threads", ikon: AtSign, warna: "#4F46E5" },
+  { id: "youtube", label: "YouTube", ikon: Youtube, warna: "#FF0000" },
 ];
 
-/** Platform yang belum tersedia — dinyatakan terbuka, bukan disembunyikan */
-const PLATFORM_SEGERA = ["X (Twitter)", "Facebook", "YouTube Shorts", "Threads"];
+/** Facebook sengaja TIDAK didukung: pengomentar Facebook hanya punya nama
+ *  tampilan, bukan @username stabil yang bisa dicocokkan ke kader. */
+const PLATFORM_TAK_DIDUKUNG = "Facebook (komentarnya tak bisa dicocokkan ke akun kader).";
 
 function labelPlatform(id: string): string {
   return PLATFORM.find((p) => p.id === id)?.label ?? id;
@@ -129,7 +140,7 @@ export function TombolAkunSosmed({
   );
 }
 
-type Sunting = { id?: string; platform: "instagram" | "tiktok"; username: string };
+type Sunting = { id?: string; platform: PlatformId; username: string };
 
 /** Pop-up kelola: tambah, ubah, hapus. Bisa lebih dari satu per platform. */
 export function ModalAkunSosmed({ onTutup }: { onTutup: () => void }) {
@@ -346,10 +357,10 @@ export function ModalAkunSosmed({ onTutup }: { onTutup: () => void }) {
 
       <div className="mt-4 rounded-xl border border-dashed border-teks-sekunder/25 p-3">
         <p className="text-[11px] font-semibold tracking-wide text-teks-sekunder uppercase">
-          Segera hadir
+          Belum didukung
         </p>
         <p className="mt-1 text-[12px] leading-relaxed text-teks-sekunder">
-          {PLATFORM_SEGERA.join(" · ")}
+          {PLATFORM_TAK_DIDUKUNG}
         </p>
       </div>
     </Sheet>

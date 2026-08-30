@@ -454,10 +454,18 @@ export async function ambilKomentarPostingan(
   platform: string,
   idPost: string,
   kunciProfil?: string,
+  headerTambahan?: Record<string, string>,
 ): Promise<KomentarPostingan[]> {
   const d = await panggil<Record<string, unknown>>(
     `/comments/${encodeURIComponent(idPost)}?searchPlatformId=true&platform=${encodeURIComponent(platform)}`,
-    { method: "GET", timeoutMs: 45000, ...(kunciProfil !== undefined ? { kunciProfil } : {}) },
+    {
+      method: "GET",
+      timeoutMs: 45000,
+      ...(kunciProfil !== undefined ? { kunciProfil } : {}),
+      // Header ekstra (mis. kredensial X sendiri — sejak 31 Mar 2026
+      // Ayrshare mewajibkan kunci API X milik pengguna untuk operasi X).
+      ...(headerTambahan ? { headers: headerTambahan } : {}),
+    },
   );
 
   const mentah = d[platform];

@@ -354,9 +354,13 @@ export async function getKontenAkun(username: string): Promise<AkunKonten | null
 // Akun media sosial milik pengguna (acuan QC)
 // ------------------------------------------------------------
 
+// QC multi-platform (fitur 1.22.x/2): kader mendaftarkan username untuk
+// lima platform. Facebook tak termasuk — komentarnya tak bisa dicocokkan.
+export type PlatformSosmed = "instagram" | "tiktok" | "twitter" | "threads" | "youtube";
+
 export type AkunSosmed = {
   id: string;
-  platform: "instagram" | "tiktok";
+  platform: PlatformSosmed;
   username: string;
   catatan: string | null;
   aktif: boolean;
@@ -371,7 +375,7 @@ export async function getAkunSosmed(): Promise<AkunSosmed[]> {
 }
 
 export async function tambahAkunSosmed(data: {
-  platform: "instagram" | "tiktok";
+  platform: PlatformSosmed;
   username: string;
   catatan?: string;
 }): Promise<AkunSosmed> {
@@ -385,7 +389,7 @@ export async function tambahAkunSosmed(data: {
 
 export async function ubahAkunSosmed(data: {
   id: string;
-  platform: "instagram" | "tiktok";
+  platform: PlatformSosmed;
   username: string;
   catatan?: string;
 }): Promise<void> {

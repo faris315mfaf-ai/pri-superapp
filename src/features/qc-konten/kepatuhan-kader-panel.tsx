@@ -146,6 +146,9 @@ export function KepatuhanKaderPanel({
                 ["", "Semua Platform"],
                 ["instagram", "Instagram"],
                 ["tiktok", "TikTok"],
+                ["twitter", "X"],
+                ["threads", "Threads"],
+                ["youtube", "YouTube"],
               ].map(([id, label]) => (
                 <button
                   key={id || "semua"}

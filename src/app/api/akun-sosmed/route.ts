@@ -15,8 +15,30 @@ import { userDariToken } from "@/lib/sesi";
 
 export const dynamic = "force-dynamic";
 
-const PLATFORM_SAH = ["instagram", "tiktok"] as const;
+// QC multi-platform (fitur 1.22.x/2): selain Instagram & TikTok, kini
+// X (twitter), Threads, dan YouTube ikut dicek komentarnya lewat
+// Ayrshare. Facebook SENGAJA tak didukung — pengomentar Facebook cuma
+// punya nama tampilan, bukan @username stabil yang bisa dicocokkan.
+const PLATFORM_SAH = ["instagram", "tiktok", "twitter", "threads", "youtube"] as const;
 type Platform = (typeof PLATFORM_SAH)[number];
+
+/**
+ * Aturan username per platform:
+ * - `domain`  : pola untuk mengambil handle bila pengguna menempel URL profil.
+ * - `sah`     : pola username yang sah SETELAH dirapikan (huruf kecil).
+ * - `label`   : nama ramah untuk pesan galat.
+ *
+ * Bedanya nyata: X hanya huruf/angka/garis bawah maksimal 15 karakter
+ * (tanpa titik); YouTube @handle boleh tanda hubung dan 3–30 karakter;
+ * IG/TikTok/Threads memakai pola titik & garis bawah 2–30 karakter.
+ */
+const ATURAN_PLATFORM: Record<Platform, { domain: RegExp; sah: RegExp; label: string }> = {
+  instagram: { domain: /instagram\.com\/@?([A-Za-z0-9._]+)/i, sah: /^[a-z0-9._]{2,30}$/, label: "Instagram" },
+  tiktok: { domain: /tiktok\.com\/@?([A-Za-z0-9._]+)/i, sah: /^[a-z0-9._]{2,30}$/, label: "TikTok" },
+  twitter: { domain: /(?:twitter\.com|x\.com)\/@?([A-Za-z0-9_]+)/i, sah: /^[a-z0-9_]{1,15}$/, label: "X (Twitter)" },
+  threads: { domain: /threads\.(?:net|com)\/@?([A-Za-z0-9._]+)/i, sah: /^[a-z0-9._]{2,30}$/, label: "Threads" },
+  youtube: { domain: /youtube\.com\/@?([A-Za-z0-9._-]+)/i, sah: /^[a-z0-9._-]{3,30}$/, label: "YouTube" },
+};
 
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
@@ -31,11 +53,12 @@ async function pastikanMasuk(request: Request) {
 
 /**
  * Rapikan username: buang @, spasi, dan URL lengkap kalau pengguna
- * menempelkan tautan profil alih-alih mengetik namanya saja.
+ * menempelkan tautan profil alih-alih mengetik namanya saja. Pola URL
+ * mengikuti platform (mis. x.com untuk X, youtube.com/@ untuk YouTube).
  */
-function rapikanUsername(mentah: string): string {
+function rapikanUsername(platform: Platform, mentah: string): string {
   let u = (mentah ?? "").trim();
-  const cocok = /(?:instagram\.com|tiktok\.com)\/@?([A-Za-z0-9._]+)/i.exec(u);
+  const cocok = ATURAN_PLATFORM[platform].domain.exec(u);
   if (cocok) u = cocok[1];
   return u.replace(/^@+/, "").replace(/\/+$/, "").trim().toLowerCase();
 }
@@ -43,16 +66,16 @@ function rapikanUsername(mentah: string): string {
 function periksaMasukan(platformMentah: string, usernameMentah: string) {
   const platform = (platformMentah ?? "").toLowerCase() as Platform;
   if (!PLATFORM_SAH.includes(platform)) {
-    throw Object.assign(new Error("Platform harus Instagram atau TikTok."), {
-      status: 400,
-    });
-  }
-  const username = rapikanUsername(usernameMentah);
-  if (!/^[a-z0-9._]{2,30}$/.test(username)) {
     throw Object.assign(
-      new Error(
-        "Username hanya boleh huruf, angka, titik, dan garis bawah (2–30 karakter).",
-      ),
+      new Error("Platform harus Instagram, TikTok, X, Threads, atau YouTube."),
+      { status: 400 },
+    );
+  }
+  const username = rapikanUsername(platform, usernameMentah);
+  const aturan = ATURAN_PLATFORM[platform];
+  if (!aturan.sah.test(username)) {
+    throw Object.assign(
+      new Error(`Username ${aturan.label} tidak sah. Isi handle-nya saja, tanpa spasi.`),
       { status: 400 },
     );
   }

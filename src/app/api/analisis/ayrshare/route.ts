@@ -100,6 +100,61 @@ function dedup<T>(baris: T[], kunci: (b: T) => string): T[] {
 }
 
 /**
+ * Awalan id_komentar per platform (fitur 1.22.x/2). WAJIB berbeda tiap
+ * platform: tanpa ini, komentar X ber-id "123" bisa menimpa komentar
+ * TikTok ber-id "123". ig/tt sengaja dipertahankan agar cocok dengan
+ * format pipeline TikHub lama (ig-<id>/tt-<id>).
+ */
+const AWALAN_ID: Record<string, string> = {
+  instagram: "ig",
+  tiktok: "tt",
+  twitter: "tw",
+  threads: "th",
+  youtube: "yt",
+};
+
+/**
+ * Header kredensial X milik pengguna, bila diatur di env. Sejak
+ * 31 Maret 2026 Ayrshare mewajibkan kunci API X SENDIRI untuk semua
+ * operasi X (termasuk baca komentar). Tanpa ini, komentar X tak
+ * terbaca dan postingannya ditandai "perlu cek manual" — BUKAN
+ * dituduh "belum komen".
+ */
+function headerPlatform(platform: string): Record<string, string> | undefined {
+  if (platform === "twitter") {
+    const k = process.env.X_OAUTH1_API_KEY;
+    const s = process.env.X_OAUTH1_API_SECRET;
+    if (k && s) {
+      return { "X-Twitter-OAuth1-Api-Key": k, "X-Twitter-OAuth1-Api-Secret": s };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Tandai satu postingan sebagai PERLU CEK MANUAL karena komentarnya tak
+ * bisa dibaca otomatis. Krusial untuk kejujuran angka: rekap tidak boleh
+ * menuduh siapa pun "belum komen" pada postingan yang memang belum
+ * benar-benar diperiksa (mis. X tanpa kredensial). Postingan ini
+ * SENGAJA tidak menulis baris rekap sama sekali.
+ */
+async function tandaiPerluCekManual(
+  db: ReturnType<typeof supabase>,
+  idPost: string,
+  alasan: string,
+): Promise<void> {
+  await db
+    .from("postingan")
+    .update({
+      komentar_status: "gagal",
+      komentar_error: alasan.slice(0, 300),
+      perlu_cek_manual: true,
+      komentar_diperiksa_pada: new Date().toISOString(),
+    })
+    .eq("id_postingan", idPost);
+}
+
+/**
  * GET /api/analisis/ayrshare — CAKUPAN saja, tanpa menjalankan apa pun.
  *
  * Dipakai layar QC untuk menampilkan secara DINAMIS akun wajib mana yang
@@ -288,6 +343,12 @@ export async function POST(request: Request) {
     let totalPost = 0;
     let totalKomentar = 0;
     let totalComply = 0;
+    // Postingan yang komentarnya tak terbaca otomatis (mis. X tanpa
+    // kredensial) — dihitung terpisah supaya tidak menyamar jadi "belum
+    // komen". platformGagalCek menahan agar sisa postingan platform yang
+    // sama tak dipanggil ulang (percuma & membakar anggaran).
+    let gagalCek = 0;
+    const platformGagalCek = new Set<string>();
 
     for (const akun of cocokTertaut) {
       // 1. Postingan periode ini (riwayat akun tertaut).
@@ -353,10 +414,43 @@ export async function POST(request: Request) {
         // Komentar DIAMBIL pakai id Ayrshare, tapi DISIMPAN pakai id
         // kanonik — dua hal berbeda yang tidak boleh tertukar.
         const idPost = idKanonik;
-        const komentar = await ambilKomentarPostingan(akun.platform, post.id, akun.kunci);
+
+        // Platform yang komentarnya SUDAH terbukti gagal dibaca pada run
+        // ini (mis. X tanpa kredensial) → langsung tandai perlu cek
+        // manual tanpa memanggil ulang yang pasti gagal.
+        if (platformGagalCek.has(akun.platform)) {
+          await tandaiPerluCekManual(db, idPost, `komentar ${akun.platform} tak terbaca otomatis`);
+          gagalCek += 1;
+          continue;
+        }
+
+        let komentar: Awaited<ReturnType<typeof ambilKomentarPostingan>>;
+        try {
+          komentar = await ambilKomentarPostingan(
+            akun.platform,
+            post.id,
+            akun.kunci,
+            headerPlatform(akun.platform),
+          );
+        } catch (e) {
+          // Gagal baca komentar (mis. X wajib kunci API sendiri sejak
+          // 31 Mar 2026, atau platform sedang bermasalah). JANGAN tulis
+          // rekap "Belum Komen" — kita memang belum memeriksanya. Tandai
+          // perlu cek manual, dan setel platform ini agar postingan
+          // sisanya tidak dipanggil lagi (hemat anggaran waktu).
+          platformGagalCek.add(akun.platform);
+          const pesan = e instanceof Error ? e.message : "gagal membaca komentar";
+          await tandaiPerluCekManual(db, idPost, pesan);
+          peringatan.push(
+            `${akun.username} (${akun.platform}): komentar tak terbaca — ${pesan}. ` +
+              `Postingan ditandai "perlu cek manual", bukan "belum komen".`,
+          );
+          gagalCek += 1;
+          continue;
+        }
         totalKomentar += komentar.length;
 
-        const awalanId = akun.platform === "instagram" ? "ig" : "tt";
+        const awalanId = AWALAN_ID[akun.platform] ?? akun.platform.slice(0, 2);
         const barisKomentar = komentar.map((k) => {
           const unameLower = k.username.toLowerCase().replace(/^@/, "");
           const pemilik = pemilikAkun.get(`${akun.platform}|${unameLower}`);
@@ -445,6 +539,8 @@ export async function POST(request: Request) {
       postingan: totalPost,
       komentar: totalKomentar,
       comply: totalComply,
+      /** Postingan yang komentarnya tak terbaca otomatis (perlu cek manual) */
+      gagal_cek: gagalCek,
       peringatan,
       /** Komentar terbaca hingga jam ini (jam mulai run — spek 1.16) */
       data_sampai: new Date(mulaiPada).toISOString(),
