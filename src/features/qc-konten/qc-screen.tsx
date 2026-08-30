@@ -53,6 +53,7 @@ import { RingkasanQc } from "./ringkasan-qc";
 import { KepatuhanKaderPanel } from "./kepatuhan-kader-panel";
 import { ProfilAnalisisPanel } from "./profil-analisis-panel";
 import { AnggotaTanpaAkunPanel } from "./anggota-tanpa-akun-panel";
+import { RiwayatUpdateKomentar } from "./riwayat-update-komentar";
 import { SeksiLipat } from "@/components/seksi-lipat";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { cn } from "@/lib/utils";
@@ -961,6 +962,12 @@ export function QcScreen({
           <History className="h-4 w-4" aria-hidden="true" />
           Buka Riwayat Analisis
         </button>
+
+        {/* Riwayat kapan Ayrshare memperbarui komentar (fitur 1.22.x/3-
+            perbaikan) — jadi satu kesatuan dengan analisisnya. */}
+        <div className="mt-4 border-t border-teks-sekunder/15 pt-3">
+          <RiwayatUpdateKomentar muatUlang={terakhirAnalisis ?? 0} />
+        </div>
       </SeksiLipat>
       </div>
 

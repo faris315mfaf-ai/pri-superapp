@@ -2995,6 +2995,30 @@ export async function getCakupanAyrshare(): Promise<CakupanAyrshare> {
   }
 }
 
+// Riwayat "kapan Ayrshare memperbarui komentar" (fitur 1.22.x/3-perbaikan)
+export type RiwayatUpdateKomentar = {
+  id: string;
+  dijalankan_pada: string;
+  periode: string | null;
+  sumber: string;
+  postingan: number;
+  komentar: number;
+  comply: number;
+  gagal_cek: number;
+  selesai: boolean;
+};
+
+export async function getRiwayatUpdateKomentar(): Promise<RiwayatUpdateKomentar[]> {
+  try {
+    const json = await fetchJson("/api/analisis/ayrshare?riwayat=1", {
+      headers: headerToken(),
+    });
+    return (json.riwayat ?? []) as RiwayatUpdateKomentar[];
+  } catch {
+    return [];
+  }
+}
+
 // ------------------------------------------------------------
 // Tim TV Rakyat (wewenang yang ditunjuk Pimpinan Redaksi)
 // ------------------------------------------------------------

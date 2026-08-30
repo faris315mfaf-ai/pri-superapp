@@ -14,11 +14,13 @@
 //   aktif × postingan; yang cocok = Comply) — format id_unik persis
 //   punya n8n supaya kedua pipeline saling menimpa dengan benar:
 //   `{periode}|||{nama}|||{platform}|||{akun}|||{idPost}`.
+import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
+import { bersihkanKomentarKedaluwarsa } from "@/lib/qc-komentar";
 import {
   ambilAkunTertaut,
   ambilKomentarPostingan,
@@ -208,6 +210,30 @@ export async function GET(request: Request) {
         status: 403,
       });
     }
+
+    // ?riwayat=1 → riwayat "kapan Ayrshare memperbarui komentar"
+    // (fitur 1.22.x/3-perbaikan). Dipisah dari cakupan supaya ringan.
+    if (new URL(request.url).searchParams.get("riwayat") === "1") {
+      const { data } = await supabase()
+        .from("qc_analisis_riwayat")
+        .select("id, dijalankan_pada, periode, sumber, postingan, komentar, comply, gagal_cek, selesai")
+        .order("dijalankan_pada", { ascending: false })
+        .limit(30);
+      return {
+        riwayat: (data ?? []).map((r) => ({
+          id: String(r.id),
+          dijalankan_pada: r.dijalankan_pada,
+          periode: r.periode,
+          sumber: r.sumber,
+          postingan: r.postingan,
+          komentar: r.komentar,
+          comply: r.comply,
+          gagal_cek: r.gagal_cek,
+          selesai: r.selesai === true,
+        })),
+      };
+    }
+
     if (!ayrshareSiap()) return { siap: false, tercakup: [], terlewat: [] };
 
     const { data: akunWajib } = await supabase()
@@ -530,6 +556,25 @@ export async function POST(request: Request) {
         }
       }
     }
+
+    // Catat SATU baris riwayat "Ayrshare memperbarui komentar" bila putaran
+    // ini benar-benar memeriksa postingan (fitur 1.22.x/3-perbaikan) —
+    // supaya pengurus punya riwayat kapan komentar terakhir di-update.
+    if (totalPost > 0) {
+      await db.from("qc_analisis_riwayat").insert({
+        periode,
+        sumber: "ayrshare",
+        oleh_user_id: Number(user.id),
+        postingan: totalPost,
+        komentar: totalKomentar,
+        comply: totalComply,
+        gagal_cek: gagalCek,
+        data_sampai: new Date(mulaiPada).toISOString(),
+        selesai: sisaBelumDiperiksa === 0,
+      });
+    }
+    // Retensi: komentar > 2 hari dibersihkan oportunistik (tanpa cron).
+    after(bersihkanKomentarKedaluwarsa);
 
     return {
       sukses: true,
