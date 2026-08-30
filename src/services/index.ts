@@ -1689,6 +1689,57 @@ export async function daftarkanVideoManual(data: {
 }
 
 // ------------------------------------------------------------
+// Jadwal Posting TV Rakyat Official (fitur 1.22.x/3)
+// ------------------------------------------------------------
+
+export type JadwalPosting = {
+  id: string;
+  caption: string;
+  media_url: string;
+  is_video: boolean;
+  platforms: string[];
+  judul_youtube: string;
+  jadwal_pada: string;
+  status: "terjadwal" | "terkirim" | "gagal" | "dibatalkan";
+  error: string | null;
+  oleh: string;
+  dibuat_pada: string;
+};
+
+export async function getJadwalPosting(): Promise<JadwalPosting[]> {
+  const json = await fetchJson("/api/tv/jadwal", { headers: headerToken() });
+  return (json.data ?? []) as JadwalPosting[];
+}
+
+/** Jadwalkan satu posting ke Ayrshare (Ayrshare menerbitkan pada waktunya). */
+export async function jadwalkanPosting(data: {
+  caption: string;
+  media_url: string;
+  media_public_id?: string;
+  is_video: boolean;
+  platforms: string[];
+  judul_youtube?: string;
+  /** ISO string waktu tayang (mis. dari input datetime-local, dikonversi). */
+  jadwal_pada: string;
+}): Promise<{ id: string; status: string; ayrshare_id: string }> {
+  const json = await fetchJson("/api/tv/jadwal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+  return json as { id: string; status: string; ayrshare_id: string };
+}
+
+/** Batalkan jadwal yang belum tayang (dihapus juga di Ayrshare). */
+export async function batalkanJadwalPosting(id: string): Promise<void> {
+  await fetchJson("/api/tv/jadwal", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id }),
+  });
+}
+
+// ------------------------------------------------------------
 // Chat internal + pengumuman berjenjang
 // ------------------------------------------------------------
 

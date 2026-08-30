@@ -287,15 +287,26 @@ export async function unggahVideo(opsi: {
   judulYoutube?: string;
   /** Kunci anti-dobel: permintaan ulang dengan kunci sama tidak memposting dua kali */
   idempotencyKey?: string;
+  /**
+   * Jadwalkan tayang di masa depan (fitur 1.22.x/3). Format WAJIB
+   * ISO-8601 Zulu/UTC "YYYY-MM-DDThh:mm:ssZ". Ayrshare sendiri yang
+   * menerbitkan pada waktunya — TANPA cron di aplikasi. Kosong = posting
+   * langsung seperti biasa.
+   */
+  scheduleDate?: string;
+  /** false untuk media gambar (bawaan true = video). */
+  isVideo?: boolean;
 }): Promise<{ idAyrshare: string; hasil: HasilUnggahPlatform[] }> {
   const badan: Record<string, unknown> = {
     post: opsi.caption,
     platforms: opsi.platforms,
     mediaUrls: [opsi.videoUrl],
-    isVideo: true,
+    isVideo: opsi.isVideo ?? true,
   };
 
   if (opsi.idempotencyKey) badan.idempotencyKey = opsi.idempotencyKey;
+  // Jadwal tayang (Ayrshare yang menerbitkan nanti).
+  if (opsi.scheduleDate) badan.scheduleDate = opsi.scheduleDate;
 
   // YouTube menolak unggahan tanpa judul (maks. 100 karakter), dan
   // "shorts: true" meminta YouTube memperlakukannya sebagai Short.
@@ -338,6 +349,20 @@ export async function unggahVideo(opsi: {
   }
 
   return { idAyrshare: d.id ?? "", hasil };
+}
+
+/**
+ * Batalkan / hapus satu postingan Ayrshare berdasarkan id-nya (fitur
+ * 1.22.x/3). Dipakai untuk MEMBATALKAN posting terjadwal yang belum
+ * tayang — Ayrshare memakai endpoint DELETE /post yang sama untuk
+ * postingan biasa maupun terjadwal.
+ */
+export async function hapusPostingan(idAyrshare: string): Promise<void> {
+  await panggil("/post", {
+    method: "DELETE",
+    body: JSON.stringify({ id: idAyrshare }),
+    timeoutMs: 45000,
+  });
 }
 
 // ------------------------------------------------------------

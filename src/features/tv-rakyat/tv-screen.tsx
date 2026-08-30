@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Tv, Newspaper, Send, Clapperboard, Activity, History, Radar, ListChecks } from "lucide-react";
+import { Tv, Newspaper, Send, Clapperboard, Activity, History, Radar, ListChecks, CalendarClock } from "lucide-react";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
 import { BeritaPanel } from "./berita-panel";
@@ -19,6 +19,7 @@ import { InsightDetailScreen } from "./insight-detail-screen";
 import { KirimVideoManual } from "@/features/tvr-ku/kirim-video-manual";
 import { PanelTugasLink } from "./tugas-link-panel";
 import { HasilScrapingPanel } from "./hasil-scraping-panel";
+import { JadwalPostingPanel } from "./jadwal-posting-panel";
 import { PipelinePanel } from "./pipeline-panel";
 import { KirimVideoPanel } from "./kirim-video-panel";
 import { ProgressPanel } from "./progress-panel";
@@ -313,6 +314,20 @@ export function TvScreen({
             <SectionTitle judul="Upload Manual" />
             <KirimVideoManual />
           </div>
+          )}
+
+          {/* Jadwal posting resmi (fitur 1.22.x/3) — komposer caption+media+
+              platform+waktu tayang; Ayrshare menerbitkan pada waktunya.
+              Hanya bagi yang berhak UPLOAD (memposting atas nama partai). */}
+          {bolehUpload && (
+          <SeksiLipat
+            id="jadwal-posting"
+            judul="Jadwal Posting Official"
+            ikon={CalendarClock}
+            keterangan="Jadwalkan posting resmi ke sosmed"
+          >
+            <JadwalPostingPanel />
+          </SeksiLipat>
           )}
 
           {/* Status pipeline (pindahan dari dashboard super admin) —
