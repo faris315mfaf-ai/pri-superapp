@@ -54,6 +54,7 @@ import { KepatuhanKaderPanel } from "./kepatuhan-kader-panel";
 import { ProfilAnalisisPanel } from "./profil-analisis-panel";
 import { AnggotaTanpaAkunPanel } from "./anggota-tanpa-akun-panel";
 import { RiwayatUpdateKomentar } from "./riwayat-update-komentar";
+import { TataLetakModul, type SeksiModul } from "@/components/tata-letak-modul";
 import { SeksiLipat } from "@/components/seksi-lipat";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { cn } from "@/lib/utils";
@@ -619,8 +620,13 @@ export function QcScreen({
         </div>
       )}
 
-      {/* 1 · Periode Berjalan (spek 2.1a — bawaan terbuka) */}
-      <div className="mt-4 flex flex-col gap-2.5">
+      {/* Atur Tata Letak (fitur 1.22.x): seret/sembunyikan/lipat tiap seksi */}
+      <div className="mt-4">
+      <TataLetakModul
+        modul="qc"
+        bungkusSeksi={false}
+        seksi={[
+        { id: "periode", judul: "1 · Periode Berjalan", ikon: CalendarDays, render: () => (
       <SeksiLipat id="hr-periode" judul="1 · Periode Berjalan" ikon={CalendarDays} bawaanTerbuka>
       <FadeInUp delay={0.05}>
         <GlassCard className="relative p-4">
@@ -699,8 +705,8 @@ export function QcScreen({
       </FadeInUp>
 
       </SeksiLipat>
-
-      {/* 2 · Mulai Analisis (spek 2.1b) */}
+        ) },
+        { id: "mulai", judul: "2 · Mulai Analisis", ikon: Zap, render: () => (
       <SeksiLipat id="hr-mulai" judul="2 · Mulai Analisis" ikon={Zap} keterangan="Jalankan analisis kepatuhan hari ini">
       <FadeInUp delay={0.1}>
         {sedangAnalisis ? (
@@ -913,8 +919,8 @@ export function QcScreen({
 
 
       </SeksiLipat>
-
-      {/* 3 · Analisis Akun yang Belum Tertaut (spek 2.1c) */}
+        ) },
+        { id: "belum-tertaut", judul: "3 · Analisis Akun yang Belum Tertaut", ikon: ScanSearch, render: () => (
       <SeksiLipat
         id="hr-belum-tertaut"
         judul="3 · Analisis Akun yang Belum Tertaut"
@@ -924,19 +930,23 @@ export function QcScreen({
         <ProfilAnalisisPanel />
         <AnggotaTanpaAkunPanel />
       </SeksiLipat>
-
-      {/* 4-6 · Tingkat, Tren, & Kepatuhan Per Akun (spek 2.1d-f) */}
+        ) },
+        { id: "tingkat", judul: "4 · Tingkat Kepatuhan Kader", ikon: CheckCircle2, render: () => (
       <SeksiLipat id="hr-tingkat" judul="4 · Tingkat Kepatuhan Kader" ikon={CheckCircle2}>
         <RingkasanQc muatUlang={terakhirAnalisis ?? 0} bagian="kpi" />
       </SeksiLipat>
+        ) },
+        { id: "tren", judul: "5 · Tren Kepatuhan Kader", ikon: History, render: () => (
       <SeksiLipat id="hr-tren" judul="5 · Tren Kepatuhan Kader" ikon={History}>
         <RingkasanQc muatUlang={terakhirAnalisis ?? 0} bagian="tren" />
       </SeksiLipat>
+        ) },
+        { id: "per-akun", judul: "6 · Kepatuhan Per Akun Wajib", ikon: Circle, render: () => (
       <SeksiLipat id="hr-per-akun" judul="6 · Kepatuhan Per Akun Wajib" ikon={Circle}>
         <RingkasanQc muatUlang={terakhirAnalisis ?? 0} bagian="akun" />
       </SeksiLipat>
-
-      {/* 7 · Siapa Sudah & Belum Komen (spek 2.1g — satu grup) */}
+        ) },
+        { id: "siapa", judul: "7 · Siapa Sudah & Belum Komen", ikon: Check, render: () => (
       <SeksiLipat
         id="hr-siapa"
         judul="7 · Siapa Sudah & Belum Komen"
@@ -945,8 +955,8 @@ export function QcScreen({
       >
         <KepatuhanKaderPanel muatUlang={terakhirAnalisis ?? 0} />
       </SeksiLipat>
-
-      {/* 8 · Hasil Analisis (spek 2.1h) */}
+        ) },
+        { id: "hasil", judul: "8 · Hasil Analisis", ikon: ScanSearch, render: () => (
       <SeksiLipat id="hr-hasil" judul="8 · Hasil Analisis" ikon={ScanSearch}>
         <p className="text-[12px] leading-relaxed text-teks-sekunder">
           {dataSampai
@@ -969,6 +979,9 @@ export function QcScreen({
           <RiwayatUpdateKomentar muatUlang={terakhirAnalisis ?? 0} />
         </div>
       </SeksiLipat>
+        ) },
+        ] as SeksiModul[]}
+      />
       </div>
 
       {/* Kemajuan pemeriksaan — angkanya dari DATABASE, jadi tetap benar
