@@ -34,6 +34,7 @@ import {
   Trash2,
   Upload,
   UserCog,
+  UserCheck,
   KeyRound,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
@@ -173,6 +174,41 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
           <FadeInUp delay={0.04}>
             {/* Mode perbaikan: kontrol lengkap (jam selesai + pesan) */}
             <KontrolPerbaikan />
+
+            {/* Bypass persetujuan pendaftaran: pengguna baru langsung aktif. */}
+            <GlassCard className="mt-4 p-4">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
+                  <UserCheck className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-bold text-teks-utama">
+                      Daftar tanpa persetujuan
+                    </p>
+                    <SwitchKaca
+                      aktif={data.pengaturan.daftar_auto_aktif === "true"}
+                      disabled={sedangProses}
+                      onUbah={() => {
+                        const nyala = data.pengaturan.daftar_auto_aktif === "true";
+                        void jalankan(
+                          "daftar_auto_aktif",
+                          { nilai: !nyala },
+                          nyala
+                            ? "Persetujuan pendaftaran DIWAJIBKAN lagi"
+                            : "Pendaftar baru kini langsung aktif",
+                        );
+                      }}
+                      labelAria="Bypass persetujuan pendaftaran"
+                    />
+                  </div>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-teks-sekunder">
+                    Bila nyala, pengguna baru langsung AKTIF tanpa menunggu persetujuan
+                    pengurus. Verifikasi email tetap berlaku bila pengirim email sudah diatur.
+                  </p>
+                </div>
+              </div>
+            </GlassCard>
 
             <SectionTitle judul="Peran Istimewa" className="mt-6" />
             <p className="mb-2 text-[11px] leading-relaxed text-teks-sekunder">

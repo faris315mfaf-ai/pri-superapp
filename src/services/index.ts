@@ -237,7 +237,7 @@ export async function daftar(data: {
   email: string;
   nama: string;
   nomor_wa?: string;
-}): Promise<{ email: string; otp_terkirim: boolean }> {
+}): Promise<{ email: string; otp_terkirim: boolean; auto_aktif: boolean }> {
   const json = await fetchJson("/api/daftar", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -248,6 +248,8 @@ export async function daftar(data: {
     // false = OTP gagal terkirim; pengguna lanjut ke layar menunggu
     // persetujuan tanpa verifikasi email (lihat /api/daftar).
     otp_terkirim: json.otp_terkirim !== false,
+    // true = sakelar bypass menyala → akun langsung aktif tanpa persetujuan.
+    auto_aktif: json.auto_aktif === true,
   };
 }
 

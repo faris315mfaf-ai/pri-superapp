@@ -278,6 +278,20 @@ export async function POST(request: Request) {
       return { sukses: true, mode_perbaikan: nyala };
     }
 
+    // --- Sakelar BYPASS persetujuan pendaftaran ---
+    // Bila nyala, pendaftaran baru langsung berstatus 'aktif' (tanpa
+    // menunggu persetujuan pengurus). Verifikasi email tetap berlaku bila
+    // pengirim email sudah diatur. Default: mati (perlu persetujuan).
+    if (body.aksi === "daftar_auto_aktif") {
+      const nyala = body.nilai === true;
+      const { error } = await db.from("pengaturan_sistem").upsert(
+        { kunci: "daftar_auto_aktif", nilai: nyala ? "true" : "false" },
+        { onConflict: "kunci" },
+      );
+      if (error) throw new Error("Gagal menyimpan pengaturan pendaftaran.");
+      return { sukses: true, daftar_auto_aktif: nyala };
+    }
+
     // --- Reset sandi (spek 1.15 akses master) ---
     // Sandi TIDAK PERNAH bisa DIBACA siapa pun (tersimpan sebagai hash
     // satu-arah) — kemampuan master adalah MENGGANTINYA untuk membantu

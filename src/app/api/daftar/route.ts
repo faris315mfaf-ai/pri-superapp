@@ -20,6 +20,20 @@ import { kirimKabar } from "@/lib/notifikasi";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * BYPASS persetujuan (fitur "daftar tanpa persetujuan"): bila sakelar
+ * `daftar_auto_aktif` menyala (diatur master), pendaftar baru langsung
+ * berstatus 'aktif' tanpa menunggu persetujuan pengurus. Default mati.
+ */
+async function daftarAutoAktif(db: ReturnType<typeof supabase>): Promise<boolean> {
+  const { data } = await db
+    .from("pengaturan_sistem")
+    .select("nilai")
+    .eq("kunci", "daftar_auto_aktif")
+    .maybeSingle();
+  return data?.nilai === "true";
+}
+
 export async function POST(request: Request) {
   // Rate limit SEBELUM query database: 5 pendaftaran / jam / IP.
   const tolak = await pastikanTidakMelebihiBatas(request, "daftar", 5, 60 * 60);
@@ -70,6 +84,9 @@ export async function POST(request: Request) {
     }
 
     const db = supabase();
+    // Bypass persetujuan: status awal 'aktif' bila sakelar menyala.
+    const autoAktif = await daftarAutoAktif(db);
+    const statusAwal = autoAktif ? "aktif" : "menunggu";
 
     // Tolak duplikat lebih dulu supaya pesannya jelas. Nomor WA ikut
     // dicek HANYA bila diisi.
@@ -107,6 +124,7 @@ export async function POST(request: Request) {
           nomor_wa: nomor || null,
           password_hash: await buatHashSandi(password),
           nama,
+          status: statusAwal,
         })
         .eq("id", bentrok.id);
     } else {
@@ -121,7 +139,7 @@ export async function POST(request: Request) {
         role: "anggota",
         jabatan: "",
         avatar_url: "",
-        status: "menunggu",
+        status: statusAwal,
         profil_lengkap: false,
         wa_terverifikasi: false,
         aktif: true,
@@ -143,7 +161,7 @@ export async function POST(request: Request) {
       const status = (e as { status?: number })?.status;
       if (status === 429) {
         // Jeda 60 detik (kode belum kedaluwarsa) BUKAN kegagalan kirim.
-        return { sukses: true, email, otp_terkirim: true };
+        return { sukses: true, email, otp_terkirim: true, auto_aktif: autoAktif };
       }
       // Termasuk EmailBelumDiaturError (SMTP belum diatur di server):
       // JANGAN menggagalkan pendaftaran. Akunnya sudah dibuat 'menunggu',
@@ -168,6 +186,6 @@ export async function POST(request: Request) {
       });
     }
 
-    return { sukses: true, email, otp_terkirim: otpTerkirim };
+    return { sukses: true, email, otp_terkirim: otpTerkirim, auto_aktif: autoAktif };
   });
 }

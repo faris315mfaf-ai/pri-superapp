@@ -214,11 +214,25 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
             {langkah === "developer" && <DevMode onBerhasil={lanjutkan} />}
             {langkah === "daftar" && (
               <FormDaftar
-                onTerkirim={(email, otpTerkirim) => {
+                onTerkirim={(email, otpTerkirim, autoAktif) => {
                   setEmailOtp(email);
-                  // OTP gagal terkirim → lewati verifikasi, langsung ke
-                  // layar menunggu persetujuan (HR/master sudah dikabari).
-                  setLangkah(otpTerkirim ? "otp" : "menunggu");
+                  if (otpTerkirim) {
+                    setLangkah("otp");
+                  } else if (autoAktif) {
+                    // Bypass persetujuan menyala TAPI OTP tak terkirim
+                    // (pengirim email belum diatur). Akun sudah AKTIF —
+                    // arahkan masuk pakai username + kata sandi.
+                    toast(
+                      "info",
+                      "Akun sudah aktif",
+                      "Silakan masuk dengan username & kata sandi Anda.",
+                    );
+                    setLangkah("masuk");
+                  } else {
+                    // OTP gagal + perlu persetujuan → layar menunggu
+                    // (HR/master sudah dikabari untuk menyetujui manual).
+                    setLangkah("menunggu");
+                  }
                 }}
                 keMasuk={() => setLangkah("masuk")}
               />
@@ -589,7 +603,7 @@ function FormDaftar({
   onTerkirim,
   keMasuk,
 }: {
-  onTerkirim: (email: string, otpTerkirim: boolean) => void;
+  onTerkirim: (email: string, otpTerkirim: boolean, autoAktif: boolean) => void;
   keMasuk: () => void;
 }) {
   const [nama, setNama] = useState("");
@@ -615,7 +629,7 @@ function FormDaftar({
     setError(null);
     setMemuat(true);
     try {
-      const { email: emailKembali, otp_terkirim } = await daftarService({
+      const { email: emailKembali, otp_terkirim, auto_aktif } = await daftarService({
         nama: nama.trim(),
         username: username.trim(),
         password: sandi,
@@ -624,14 +638,14 @@ function FormDaftar({
       });
       if (otp_terkirim) {
         toast("sukses", "Kode terkirim", "Cek email Anda untuk kode 6 angka.");
-      } else {
+      } else if (!auto_aktif) {
         toast(
           "info",
           "Pendaftaran diterima",
           "Kode email gagal terkirim — akun Anda menunggu persetujuan pengurus.",
         );
       }
-      onTerkirim(emailKembali, otp_terkirim);
+      onTerkirim(emailKembali, otp_terkirim, auto_aktif);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal mendaftar. Coba lagi.");
     } finally {
