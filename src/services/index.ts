@@ -2940,6 +2940,25 @@ export async function verifikasiWaSaya(kode: string): Promise<UserLengkap> {
   return json.user as UserLengkap;
 }
 
+// Set + verifikasi nomor WA BARU untuk akun yang belum punya nomor
+// (fitur 1.22.x/1).
+export async function kirimKodeWaBaru(nomor: string): Promise<void> {
+  await fetchJson("/api/verifikasi/wa-nomor", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ nomor }),
+  });
+}
+
+export async function verifikasiWaBaru(nomor: string, kode: string): Promise<UserLengkap> {
+  const json = await fetchJson("/api/verifikasi/wa-nomor", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ nomor, kode }),
+  });
+  return json.user as UserLengkap;
+}
+
 /**
  * Rekap kepatuhan komentar satu periode. Dipakai kartu KPI beranda.
  * Lewat fetchJson supaya token perangkat ikut terkirim — endpoint

@@ -14,6 +14,7 @@ import {
 } from "@/lib/sesi";
 import { pastikanBukanPerbaikan } from "@/lib/perbaikan";
 import { siaranUltahHarian } from "@/lib/ultah";
+import { siaranVerifikasiBerkala } from "@/lib/verifikasi-ingatkan";
 import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +63,9 @@ export async function GET(request: Request) {
     // Ucapan ulang tahun global — sekali sehari, menumpang pembukaan
     // aplikasi siapa pun (tanpa cron).
     after(siaranUltahHarian);
+    // Ajakan verifikasi berkala (fitur 1.22.x/1) — sekali per jendela
+    // (bawaan 60 menit) ke anggota yang WA/Google/Wajah-nya belum lengkap.
+    after(siaranVerifikasiBerkala);
 
     return { user };
   });

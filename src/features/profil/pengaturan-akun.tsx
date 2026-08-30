@@ -34,8 +34,10 @@ import {
   getAkunSosmed,
   hapusAkunSosmed,
   kirimKodeVerifikasiWa,
+  kirimKodeWaBaru,
   mintaOtpGantiSandi,
   tambahAkunSosmed,
+  verifikasiWaBaru,
   verifikasiWaSaya,
   ubahAkunSosmed,
   type AkunSosmed,
@@ -670,21 +672,34 @@ export function ModalGantiSandi({
 // ------------------------------------------------------------
 
 export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
-  const [tahap, setTahap] = useState<"minta" | "kode">("minta");
+  const user = useAppStore((s) => s.user);
+  const setUser = useAppStore((s) => s.setUser);
+  // Akun tanpa nomor WA harus MENGISI nomornya dulu (fitur 1.22.x/1);
+  // yang sudah punya nomor langsung ke tahap kirim kode.
+  const punyaNomor = Boolean(user?.nomor_wa);
+  const [tahap, setTahap] = useState<"nomor" | "minta" | "kode">(
+    punyaNomor ? "minta" : "nomor",
+  );
+  const [nomor, setNomor] = useState("");
   const [kode, setKode] = useState("");
   const [memuat, setMemuat] = useState(false);
   const [error, setError] = useState("");
-  const user = useAppStore((s) => s.user);
-  const setUser = useAppStore((s) => s.setUser);
 
   const nomorSamar = (user?.nomor_wa ?? "").replace(/^(\d{4})\d+(\d{3})$/, "$1••••$2");
 
-  async function minta() {
+  // Kirim kode: ke nomor TERDAFTAR (punya nomor) atau ke nomor yang BARU
+  // diketik (belum punya nomor).
+  async function kirim() {
     if (memuat) return;
     setError("");
+    if (!punyaNomor && nomor.trim().length < 9) {
+      setError("Isi nomor WhatsApp yang benar dulu.");
+      return;
+    }
     setMemuat(true);
     try {
-      await kirimKodeVerifikasiWa();
+      if (punyaNomor) await kirimKodeVerifikasiWa();
+      else await kirimKodeWaBaru(nomor.trim());
       setTahap("kode");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal mengirim kode.");
@@ -698,7 +713,9 @@ export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
     setError("");
     setMemuat(true);
     try {
-      const segar = await verifikasiWaSaya(kode);
+      const segar = punyaNomor
+        ? await verifikasiWaSaya(kode)
+        : await verifikasiWaBaru(nomor.trim(), kode);
       setUser(segar);
       toast("sukses", "WhatsApp terverifikasi \u2705", "Terima kasih!");
       onTutup();
@@ -712,7 +729,36 @@ export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
 
   return (
     <Sheet judul="Verifikasi WhatsApp" onTutup={onTutup}>
-      {tahap === "minta" ? (
+      {tahap === "nomor" ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-[13px] leading-relaxed text-teks-sekunder">
+            Akun Anda belum punya nomor WhatsApp. Masukkan nomor Anda untuk
+            menerima kode verifikasi — nomor ini juga dipakai untuk notifikasi
+            & pemulihan sandi.
+          </p>
+          <input
+            value={nomor}
+            onChange={(e) => setNomor(e.target.value.replace(/[^0-9+]/g, ""))}
+            inputMode="tel"
+            autoComplete="tel"
+            aria-label="Nomor WhatsApp"
+            placeholder="08123456789"
+            disabled={memuat}
+            className="glass-soft h-12 w-full rounded-xl px-3.5 text-[15px] text-teks-utama outline-none placeholder:text-teks-sekunder/50 focus:ring-2 focus:ring-pri/50 disabled:opacity-60"
+          />
+          <PesanError pesan={error} />
+          <button
+            type="button"
+            onClick={() => void kirim()}
+            disabled={memuat || nomor.trim().length < 9}
+            className="btn-tekan flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-bold text-white disabled:opacity-50"
+            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+          >
+            {memuat && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+            Kirim Kode
+          </button>
+        </div>
+      ) : tahap === "minta" ? (
         <div className="flex flex-col gap-3">
           <p className="text-[13px] leading-relaxed text-teks-sekunder">
             Nomor WhatsApp akun Anda (<b>{nomorSamar}</b>) belum terverifikasi.
@@ -722,7 +768,7 @@ export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
           <PesanError pesan={error} />
           <button
             type="button"
-            onClick={() => void minta()}
+            onClick={() => void kirim()}
             disabled={memuat}
             className="btn-tekan flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-bold text-white disabled:opacity-60"
             style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
@@ -734,7 +780,8 @@ export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
       ) : (
         <div className="flex flex-col gap-3">
           <p className="text-[13px] leading-relaxed text-teks-sekunder">
-            Masukkan 6 angka yang kami kirim ke WhatsApp <b>{nomorSamar}</b>.
+            Masukkan 6 angka yang kami kirim ke WhatsApp{" "}
+            <b>{punyaNomor ? nomorSamar : nomor.trim()}</b>.
           </p>
           <input
             value={kode}
@@ -759,7 +806,7 @@ export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
           </button>
           <button
             type="button"
-            onClick={() => void minta()}
+            onClick={() => void kirim()}
             disabled={memuat}
             className="self-center text-[12px] font-semibold text-pri underline-offset-4 hover:underline disabled:opacity-50"
           >
