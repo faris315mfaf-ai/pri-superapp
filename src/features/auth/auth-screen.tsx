@@ -5,8 +5,9 @@
 //
 // Layar utama hanya berisi identitas partai dan dua tombol besar.
 // Semua pengisian terjadi di dalam pop-up, sesuai permintaan:
-//   Masuk  → nomor WhatsApp/username + kata sandi
-//   Daftar → username, kata sandi, nomor WhatsApp → OTP → profil
+//   Masuk  → email / username / nomor WhatsApp + kata sandi
+//   Daftar → nama, username, sandi, email → OTP EMAIL → profil
+//            (nomor WhatsApp opsional, hanya data — tanpa OTP)
 //
 // Setelah pendaftaran, akun berstatus "menunggu" sampai super admin
 // menyetujui dan menetapkan perannya.
@@ -17,6 +18,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   ArrowRight,
+  AtSign,
   Camera,
   Eye,
   EyeOff,
@@ -43,7 +45,7 @@ import {
   ambilToken,
   bacaGalatSidikJari,
   daftar as daftarService,
-  kirimUlangOtp,
+  kirimUlangOtpEmail,
   lengkapiProfil,
   login as loginService,
   lupaSandiKirim,
@@ -52,7 +54,7 @@ import {
   masukSidikJari,
   masukWajah,
   perangkatDukungSidikJari,
-  verifikasiOtp,
+  verifikasiOtpEmail,
   wajahLoginTersedia,
   type UserLengkap,
 } from "@/services";
@@ -75,8 +77,8 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
   // akun berstatus "menunggu" (mis. baru daftar lewat Google) — layar
   // langsung dibuka di HALAMAN TUNGGU, bukan di menu masuk/daftar.
   const [langkah, setLangkah] = useState<Langkah>(awalMenunggu ? "menunggu" : "tertutup");
-  // Nomor yang sedang diverifikasi, dibawa dari langkah daftar ke OTP.
-  const [nomorOtp, setNomorOtp] = useState("");
+  // Email yang sedang diverifikasi, dibawa dari langkah daftar ke OTP.
+  const [emailOtp, setEmailOtp] = useState("");
   const [userSementara, setUserSementara] = useState<UserLengkap | null>(awalMenunggu);
 
   function tutup() {
@@ -152,7 +154,7 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
         </div>
 
         <p className="mt-6 text-center text-[11.5px] leading-relaxed text-teks-sekunder">
-          Pendaftaran diverifikasi lewat WhatsApp dan perlu
+          Pendaftaran diverifikasi lewat email dan perlu
           <br />
           persetujuan pengurus sebelum dapat digunakan.
         </p>
@@ -189,7 +191,7 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
                 : langkah === "daftar"
                   ? "Buat Akun Baru"
                   : langkah === "otp"
-                    ? "Verifikasi WhatsApp"
+                    ? "Verifikasi Email"
                     : langkah === "profil"
                       ? "Lengkapi Profil"
                       : langkah === "lupa"
@@ -212,8 +214,8 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
             {langkah === "developer" && <DevMode onBerhasil={lanjutkan} />}
             {langkah === "daftar" && (
               <FormDaftar
-                onTerkirim={(nomor, otpTerkirim) => {
-                  setNomorOtp(nomor);
+                onTerkirim={(email, otpTerkirim) => {
+                  setEmailOtp(email);
                   // OTP gagal terkirim → lewati verifikasi, langsung ke
                   // layar menunggu persetujuan (HR/master sudah dikabari).
                   setLangkah(otpTerkirim ? "otp" : "menunggu");
@@ -223,7 +225,7 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
             )}
             {langkah === "otp" && (
               <FormOtp
-                nomor={nomorOtp}
+                email={emailOtp}
                 onBerhasil={lanjutkan}
                 kembali={() => setLangkah("daftar")}
               />
@@ -460,14 +462,14 @@ function FormMasuk({
     <form onSubmit={kirim} className="flex flex-col gap-3" noValidate>
       <div>
         <label htmlFor="identitas" className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
-          Nomor WhatsApp atau Username
+          Email, Username, atau Nomor WA
         </label>
         <Kolom
           id="identitas"
-          ikon={Phone}
+          ikon={AtSign}
           value={identitas}
           onChange={(e) => setIdentitas(e.target.value)}
-          placeholder="0812xxxxxxx atau username"
+          placeholder="email, username, atau nomor WA"
           autoComplete="username"
           disabled={memuat}
         />
@@ -587,11 +589,12 @@ function FormDaftar({
   onTerkirim,
   keMasuk,
 }: {
-  onTerkirim: (nomor: string, otpTerkirim: boolean) => void;
+  onTerkirim: (email: string, otpTerkirim: boolean) => void;
   keMasuk: () => void;
 }) {
   const [nama, setNama] = useState("");
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [sandi, setSandi] = useState("");
   const [nomor, setNomor] = useState("");
   const [lihat, setLihat] = useState(false);
@@ -599,9 +602,12 @@ function FormDaftar({
   const [error, setError] = useState<string | null>(null);
 
   const usernameSah = /^[a-z0-9._]{3,20}$/.test(username.trim());
-  const nomorSah = /^0?8[0-9]{8,12}$/.test(nomor.replace(/[^0-9]/g, ""));
+  const emailSah = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim().toLowerCase());
+  // Nomor WA OPSIONAL: kosong = sah; kalau diisi harus berformat benar.
+  const nomorBersih = nomor.replace(/[^0-9]/g, "");
+  const nomorSah = nomorBersih === "" || /^0?8[0-9]{8,12}$/.test(nomorBersih);
   const sandiSah = sandi.length >= 8;
-  const sah = usernameSah && nomorSah && sandiSah && nama.trim().length >= 2;
+  const sah = usernameSah && emailSah && sandiSah && nama.trim().length >= 2 && nomorSah;
 
   async function kirim(e: React.FormEvent) {
     e.preventDefault();
@@ -609,22 +615,23 @@ function FormDaftar({
     setError(null);
     setMemuat(true);
     try {
-      const { nomor_wa, otp_terkirim } = await daftarService({
+      const { email: emailKembali, otp_terkirim } = await daftarService({
         nama: nama.trim(),
         username: username.trim(),
         password: sandi,
-        nomor_wa: nomor,
+        email: email.trim().toLowerCase(),
+        nomor_wa: nomor.trim() || undefined,
       });
       if (otp_terkirim) {
-        toast("sukses", "Kode terkirim", "Cek WhatsApp Anda untuk kode 6 angka.");
+        toast("sukses", "Kode terkirim", "Cek email Anda untuk kode 6 angka.");
       } else {
         toast(
           "info",
           "Pendaftaran diterima",
-          "Kode WhatsApp gagal terkirim — akun Anda menunggu persetujuan pengurus.",
+          "Kode email gagal terkirim — akun Anda menunggu persetujuan pengurus.",
         );
       }
-      onTerkirim(nomor_wa, otp_terkirim);
+      onTerkirim(emailKembali, otp_terkirim);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal mendaftar. Coba lagi.");
     } finally {
@@ -655,7 +662,7 @@ function FormDaftar({
         </label>
         <Kolom
           id="d-username"
-          ikon={Mail}
+          ikon={AtSign}
           type="text"
           value={username}
           onChange={(e) =>
@@ -666,28 +673,27 @@ function FormDaftar({
           disabled={memuat}
         />
         <p className="mt-1 text-[11px] text-teks-sekunder">
-          Dipakai untuk masuk (selain nomor WhatsApp). 3–20 karakter:
-          huruf kecil, angka, titik, garis bawah.
+          Dipakai untuk masuk. 3–20 karakter: huruf kecil, angka, titik, garis bawah.
         </p>
       </div>
 
       <div>
-        <label htmlFor="d-nomor" className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
-          Nomor WhatsApp
+        <label htmlFor="d-email" className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
+          Email
         </label>
         <Kolom
-          id="d-nomor"
-          ikon={Phone}
-          type="tel"
-          inputMode="numeric"
-          value={nomor}
-          onChange={(e) => setNomor(e.target.value)}
-          placeholder="0812xxxxxxx"
-          autoComplete="tel"
+          id="d-email"
+          ikon={Mail}
+          type="email"
+          inputMode="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="email.anda@gmail.com"
+          autoComplete="email"
           disabled={memuat}
         />
-        <p className="mt-1 text-[11.5px] text-teks-sekunder">
-          Kode verifikasi dikirim ke nomor ini. Pastikan aktif di WhatsApp.
+        <p className="mt-1 text-[11.5px] text-pri">
+          Pastikan email benar — kode verifikasi 6 angka akan dikirim ke sini.
         </p>
       </div>
 
@@ -721,10 +727,30 @@ function FormDaftar({
         )}
       </div>
 
+      <div>
+        <label htmlFor="d-nomor" className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
+          Nomor WhatsApp <span className="font-normal text-teks-sekunder/70">(opsional)</span>
+        </label>
+        <Kolom
+          id="d-nomor"
+          ikon={Phone}
+          type="tel"
+          inputMode="numeric"
+          value={nomor}
+          onChange={(e) => setNomor(e.target.value)}
+          placeholder="0812xxxxxxx"
+          autoComplete="tel"
+          disabled={memuat}
+        />
+        <p className="mt-1 text-[11.5px] text-teks-sekunder">
+          Hanya disimpan sebagai data — TIDAK ada kode yang dikirim ke sini.
+        </p>
+      </div>
+
       <PesanError pesan={error} />
 
       <TombolUtama type="submit" memuat={memuat} disabled={!sah}>
-        Kirim Kode ke WhatsApp
+        Kirim Kode ke Email
         <ArrowRight className="h-4.5 w-4.5" />
       </TombolUtama>
 
@@ -747,11 +773,11 @@ function FormDaftar({
 // ------------------------------------------------------------
 
 function FormOtp({
-  nomor,
+  email,
   onBerhasil,
   kembali,
 }: {
-  nomor: string;
+  email: string;
   onBerhasil: (u: UserLengkap) => void;
   kembali: () => void;
 }) {
@@ -760,9 +786,9 @@ function FormOtp({
   const [mengirimUlang, setMengirimUlang] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Tampilkan nomornya sebagian saja — cukup untuk memastikan tidak
-  // salah nomor, tanpa memajang nomor lengkap di layar.
-  const nomorSamar = nomor.replace(/^(62\d{3})\d+(\d{3})$/, "$1••••$2");
+  // Tampilkan emailnya sebagian saja — cukup untuk memastikan tidak salah
+  // alamat, tanpa memajang email lengkap di layar.
+  const emailSamar = email.replace(/^(.{2})[^@]*(@.*)$/, "$1•••$2");
 
   async function kirim(e: React.FormEvent) {
     e.preventDefault();
@@ -770,8 +796,8 @@ function FormOtp({
     setError(null);
     setMemuat(true);
     try {
-      const user = await verifikasiOtp(nomor, kode);
-      toast("sukses", "Nomor terverifikasi");
+      const user = await verifikasiOtpEmail(email, kode);
+      toast("sukses", "Email terverifikasi");
       onBerhasil(user);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kode tidak diterima.");
@@ -786,7 +812,7 @@ function FormOtp({
     setMengirimUlang(true);
     setError(null);
     try {
-      await kirimUlangOtp(nomor);
+      await kirimUlangOtpEmail(email);
       toast("sukses", "Kode baru terkirim");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal mengirim ulang.");
@@ -798,9 +824,9 @@ function FormOtp({
   return (
     <form onSubmit={kirim} className="flex flex-col gap-4" noValidate>
       <p className="text-[13px] leading-relaxed text-teks-sekunder">
-        Kami mengirim 6 angka ke WhatsApp{" "}
-        <span className="font-semibold text-teks-utama">{nomorSamar}</span>. Masukkan di
-        bawah ini.
+        Kami mengirim 6 angka ke email{" "}
+        <span className="font-semibold text-teks-utama">{emailSamar}</span>. Masukkan di
+        bawah ini. Cek juga folder Spam bila tak muncul.
       </p>
 
       <input
@@ -828,7 +854,7 @@ function FormOtp({
           className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-teks-sekunder"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Ubah nomor
+          Ubah email
         </button>
         <button
           type="button"
@@ -1050,7 +1076,7 @@ function FormProfil({
 }
 
 // ------------------------------------------------------------
-// Langkah: Lupa kata sandi (OTP ke WhatsApp terdaftar)
+// Langkah: Lupa kata sandi (OTP ke EMAIL terdaftar)
 // ------------------------------------------------------------
 
 function FormLupaSandi({ kembali }: { kembali: () => void }) {
@@ -1124,8 +1150,8 @@ function FormLupaSandi({ kembali }: { kembali: () => void }) {
     return (
       <form onSubmit={setel} className="flex flex-col gap-3" noValidate>
         <p className="text-[13px] leading-relaxed text-teks-sekunder">
-          Kode 6 angka dikirim ke WhatsApp yang TERDAFTAR pada akun itu.
-          Masukkan kodenya lalu buat sandi baru.
+          Kode 6 angka dikirim ke email yang TERDAFTAR pada akun itu.
+          Masukkan kodenya lalu buat sandi baru. Cek juga folder Spam.
         </p>
         <input
           value={kode}
@@ -1177,14 +1203,14 @@ function FormLupaSandi({ kembali }: { kembali: () => void }) {
   return (
     <form onSubmit={minta} className="flex flex-col gap-3" noValidate>
       <p className="text-[13px] leading-relaxed text-teks-sekunder">
-        Masukkan username atau nomor WhatsApp akun Anda. Kode pemulihan akan
-        dikirim ke WhatsApp yang terdaftar.
+        Masukkan email, username, atau nomor WhatsApp akun Anda. Kode
+        pemulihan dikirim ke EMAIL yang terdaftar pada akun.
       </p>
       <Kolom
-        ikon={Phone}
+        ikon={AtSign}
         value={identitas}
         onChange={(e) => setIdentitas(e.target.value)}
-        placeholder="0812xxxxxxx atau username"
+        placeholder="email, username, atau nomor WA"
         autoComplete="username"
         disabled={memuat}
       />

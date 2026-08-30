@@ -1,17 +1,17 @@
-// PUT  /api/sandi — minta kode OTP untuk mengganti kata sandi
+// PUT  /api/sandi — minta kode OTP EMAIL untuk mengganti kata sandi
 // POST /api/sandi — ganti kata sandi dengan kode tersebut
 //
 // Dua penjaga yang disengaja:
-//  1. Kode dikirim ke nomor WhatsApp yang TERDAFTAR pada akun, bukan ke
-//     nomor yang diketik. Kalau tidak, siapa pun yang sempat memegang
-//     ponsel yang masih masuk bisa memindahkan akun ke nomornya sendiri.
-//  2. Ganti sandi dibatasi 1x per minggu — membatasi kerusakan bila
-//     sebuah sesi dicuri, dan mencegah nomor dibanjiri kode.
+//  1. Kode dikirim ke EMAIL yang TERDAFTAR pada akun (bukan alamat yang
+//     diketik). Pemegang sesi yang dicuri pun tak bisa mengalihkan kode
+//     ke email miliknya.
+//  2. Ganti sandi dibatasi 1x per minggu — membatasi kerusakan bila sebuah
+//     sesi dicuri, dan mencegah email dibanjiri kode.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { buatHashSandi } from "@/lib/sandi";
-import { normalkanNomorWa, FonnteBelumDiaturError } from "@/lib/fonnte";
-import { kirimOtp, verifikasiOtp } from "@/lib/otp";
+import { kirimOtpEmail, verifikasiOtpEmail, emailSah, normalkanEmail } from "@/lib/otp-email";
+import { EmailBelumDiaturError } from "@/lib/email";
 import { hapusCacheUser, cabutSemuaSesi, userDariToken } from "@/lib/sesi";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,25 @@ async function pastikanMasuk(request: Request) {
   const user = await userDariToken(tokenDari(request));
   if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
   return user;
+}
+
+/** Ambil email terdaftar akun; melempar bila belum punya email yang sah. */
+async function emailAkun(userId: number): Promise<string> {
+  const { data } = await supabase()
+    .from("app_user")
+    .select("email")
+    .eq("id", userId)
+    .maybeSingle();
+  const email = normalkanEmail(data?.email ?? "");
+  if (!emailSah(email)) {
+    throw Object.assign(
+      new Error(
+        "Akun ini belum punya email yang bisa diverifikasi. Hubungi pengurus untuk menambah email.",
+      ),
+      { status: 400 },
+    );
+  }
+  return email;
 }
 
 /** Melempar bila sandi baru diganti kurang dari JEDA_HARI yang lalu */
@@ -57,32 +76,12 @@ export async function PUT(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
     await pastikanBolehGanti(Number(user.id));
-
-    const body = (await request.json().catch(() => ({}))) as { nomor_wa?: string };
-    const diketik = normalkanNomorWa(body.nomor_wa ?? "");
-
-    if (!user.nomor_wa) {
-      throw Object.assign(
-        new Error(
-          "Akun ini belum punya nomor WhatsApp terdaftar. Hubungi pengurus untuk mengaturnya.",
-        ),
-        { status: 400 },
-      );
-    }
-
-    // Nomor yang diketik harus COCOK dengan yang terdaftar. Kodenya
-    // tetap dikirim ke nomor terdaftar, apa pun yang diketik.
-    if (diketik !== normalkanNomorWa(user.nomor_wa)) {
-      throw Object.assign(
-        new Error("Nomor tidak cocok dengan yang terdaftar pada akun ini."),
-        { status: 403 },
-      );
-    }
+    const email = await emailAkun(Number(user.id));
 
     try {
-      await kirimOtp(user.nomor_wa, "ganti_sandi");
+      await kirimOtpEmail(email, "ganti_sandi");
     } catch (e) {
-      if (e instanceof FonnteBelumDiaturError) {
+      if (e instanceof EmailBelumDiaturError) {
         throw Object.assign(new Error(e.message), { status: 503 });
       }
       throw e;
@@ -98,24 +97,17 @@ export async function POST(request: Request) {
     await pastikanBolehGanti(Number(user.id));
 
     const body = (await request.json().catch(() => ({}))) as {
-      nomor_wa?: string;
       kode?: string;
       sandi_baru?: string;
     };
 
     const sandiBaru = body.sandi_baru ?? "";
     if (sandiBaru.length < 8) {
-      throw Object.assign(new Error("Kata sandi baru minimal 8 karakter."), {
-        status: 400,
-      });
-    }
-    if (!user.nomor_wa) {
-      throw Object.assign(new Error("Akun ini belum punya nomor WhatsApp."), {
-        status: 400,
-      });
+      throw Object.assign(new Error("Kata sandi baru minimal 8 karakter."), { status: 400 });
     }
 
-    const hasil = await verifikasiOtp(user.nomor_wa, body.kode ?? "");
+    const email = await emailAkun(Number(user.id));
+    const hasil = await verifikasiOtpEmail(email, body.kode ?? "");
     if (!hasil.sah) {
       throw Object.assign(new Error(hasil.pesan), { status: hasil.status ?? 400 });
     }
@@ -132,13 +124,9 @@ export async function POST(request: Request) {
       console.error("[sandi] ganti:", error.message);
       throw new Error("Gagal menyimpan kata sandi baru.");
     }
-    // Baris app_user berubah → buang cache sesinya supaya perubahan
-    // (termasuk pencabutan akses) berlaku seketika, bukan menunggu TTL.
     await hapusCacheUser(user.id);
 
-    // Sandi berganti = semua perangkat lain harus keluar. Kalau tidak,
-    // perangkat yang mungkin sudah disusupi tetap memegang akses meski
-    // sandinya sudah diganti.
+    // Sandi berganti = semua perangkat lain harus keluar.
     await cabutSemuaSesi(Number(user.id));
 
     return { sukses: true };

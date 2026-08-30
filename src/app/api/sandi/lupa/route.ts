@@ -1,31 +1,30 @@
 // LUPA KATA SANDI — tanpa perlu masuk.
 //
-// PUT  /api/sandi/lupa  {identitas}                     → kirim kode OTP
+// PUT  /api/sandi/lupa  {identitas}                     → kirim kode OTP EMAIL
 // POST /api/sandi/lupa  {identitas, kode, sandi_baru}   → setel sandi baru
 //
-// Bukti kepemilikan = memegang WhatsApp yang TERDAFTAR pada akun:
-// kode selalu dikirim ke nomor terdaftar, tidak pernah ke nomor yang
-// diketik penyerang. Jawaban PUT sengaja sama untuk akun yang ada
-// maupun tidak — supaya endpoint ini tidak bisa dipakai menebak
-// username siapa saja yang terdaftar.
+// Bukti kepemilikan = memegang EMAIL yang TERDAFTAR pada akun: kode
+// selalu dikirim ke email terdaftar, tidak pernah ke alamat yang diketik
+// penyerang. Jawaban PUT sengaja sama untuk akun yang ada maupun tidak,
+// supaya endpoint ini tak bisa dipakai menebak username yang terdaftar.
 //
-// Batas "ganti sandi 1x/minggu" milik pengguna yang MASIH bisa masuk
-// tidak berlaku di sini: orang lupa sandi justru sedang terkunci.
-// Penyalahgunaan dicegah lapisan lain: jeda kirim OTP 60 detik,
-// kode 6 digit berumur 5 menit, maksimal 5 percobaan.
+// CATATAN: pengguna LAMA yang emailnya masih sintetis (<username>@pri.internal)
+// tak bisa reset lewat email — mereka minta reset ke pengurus. Ini
+// konsekuensi disengaja dari mematikan OTP WhatsApp.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import { buatHashSandi } from "@/lib/sandi";
-import { normalkanNomorWa, FonnteBelumDiaturError } from "@/lib/fonnte";
-import { kirimOtp, verifikasiOtp } from "@/lib/otp";
+import { normalkanNomorWa } from "@/lib/fonnte";
+import { kirimOtpEmail, verifikasiOtpEmail, emailSah } from "@/lib/otp-email";
+import { EmailBelumDiaturError } from "@/lib/email";
 import { hapusCacheUser, cabutSemuaSesi } from "@/lib/sesi";
 
 export const dynamic = "force-dynamic";
 
 type BarisAkun = {
   id: number;
-  nomor_wa: string | null;
+  email: string | null;
   status: string;
   aktif: boolean;
 };
@@ -39,17 +38,22 @@ async function cariAkun(identitasMentah: string): Promise<BarisAkun | null> {
   const sebagaiNomor = normalkanNomorWa(identitas);
   const { data } = await db
     .from("app_user")
-    .select("id, nomor_wa, status, aktif")
-    .or(
-      `username.eq.${identitas},email.eq.${identitas},nomor_wa.eq.${sebagaiNomor || "-"}`,
-    )
+    .select("id, email, status, aktif")
+    .or(`username.eq.${identitas},email.eq.${identitas},nomor_wa.eq.${sebagaiNomor || "-"}`)
     .limit(1)
     .maybeSingle();
   return (data as BarisAkun) ?? null;
 }
 
+/** Akun boleh menerima OTP reset: aktif, tidak ditolak, punya email SAH. */
+function bolehReset(akun: BarisAkun | null): akun is BarisAkun {
+  return Boolean(
+    akun && akun.aktif && akun.status !== "ditolak" && akun.email && emailSah(akun.email),
+  );
+}
+
 const PESAN_NETRAL =
-  "Bila akunnya terdaftar, kode sudah dikirim ke WhatsApp yang terpasang pada akun itu.";
+  "Bila akunnya terdaftar, kode sudah dikirim ke email yang terpasang pada akun itu.";
 
 export async function PUT(request: Request) {
   // Rate limit SEBELUM query database: 3 permintaan kode / jam / IP.
@@ -60,16 +64,15 @@ export async function PUT(request: Request) {
     const body = (await request.json().catch(() => ({}))) as { identitas?: string };
     const akun = await cariAkun(body.identitas ?? "");
 
-    // Akun tidak ada / tanpa nomor / diblokir → jawaban tetap netral.
-    if (akun && akun.aktif && akun.status !== "ditolak" && akun.nomor_wa) {
+    // Akun tidak ada / tanpa email sah / diblokir → jawaban tetap netral.
+    if (bolehReset(akun)) {
       try {
-        await kirimOtp(akun.nomor_wa, "ganti_sandi");
+        await kirimOtpEmail(akun.email!, "ganti_sandi");
       } catch (e) {
-        if (e instanceof FonnteBelumDiaturError) {
+        if (e instanceof EmailBelumDiaturError) {
           throw Object.assign(new Error(e.message), { status: 503 });
         }
-        // Jeda 60 detik antar kiriman perlu disampaikan apa adanya —
-        // tanpa itu pengguna mengira kodenya hilang dan panik.
+        // Jeda 60 detik antar kiriman perlu disampaikan apa adanya.
         throw e;
       }
     }
@@ -79,7 +82,6 @@ export async function PUT(request: Request) {
 }
 
 export async function POST(request: Request) {
-  // Penyetelan sandi ikut jendela yang sama dengan permintaan kodenya.
   const tolak = await pastikanTidakMelebihiBatas(request, "sandi-lupa-setel", 3, 60 * 60);
   if (tolak) return tolak;
 
@@ -96,12 +98,14 @@ export async function POST(request: Request) {
     }
 
     const akun = await cariAkun(body.identitas ?? "");
-    if (!akun || !akun.aktif || akun.status === "ditolak" || !akun.nomor_wa) {
+    if (!bolehReset(akun)) {
       // Di tahap POST orang sudah memegang kode; pesan boleh terus terang.
-      throw Object.assign(new Error("Akun tidak ditemukan."), { status: 404 });
+      throw Object.assign(new Error("Akun tidak ditemukan atau tak punya email."), {
+        status: 404,
+      });
     }
 
-    const hasil = await verifikasiOtp(akun.nomor_wa, body.kode ?? "");
+    const hasil = await verifikasiOtpEmail(akun.email!, body.kode ?? "");
     if (!hasil.sah) {
       throw Object.assign(new Error(hasil.pesan), { status: hasil.status ?? 400 });
     }
@@ -117,8 +121,6 @@ export async function POST(request: Request) {
       console.error("[sandi/lupa] simpan:", error.message);
       throw new Error("Gagal menyimpan kata sandi baru.");
     }
-    // Baris app_user berubah → buang cache sesinya supaya perubahan
-    // (termasuk pencabutan akses) berlaku seketika, bukan menunggu TTL.
     await hapusCacheUser(akun.id);
 
     // Semua perangkat lama keluar — pemegang sandi baru yang berkuasa.

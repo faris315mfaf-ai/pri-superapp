@@ -230,46 +230,47 @@ export async function keluar(semuaPerangkat = false): Promise<void> {
 // Pendaftaran
 // ------------------------------------------------------------
 
-/** Langkah 1 — kirim data diri, kode OTP dikirim ke WhatsApp */
+/** Langkah 1 — kirim data diri, kode OTP dikirim ke EMAIL. Nomor WA opsional. */
 export async function daftar(data: {
   username: string;
   password: string;
-  nomor_wa: string;
-  nama?: string;
-}): Promise<{ nomor_wa: string; otp_terkirim: boolean }> {
+  email: string;
+  nama: string;
+  nomor_wa?: string;
+}): Promise<{ email: string; otp_terkirim: boolean }> {
   const json = await fetchJson("/api/daftar", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
   return {
-    nomor_wa: json.nomor_wa as string,
+    email: json.email as string,
     // false = OTP gagal terkirim; pengguna lanjut ke layar menunggu
-    // persetujuan tanpa verifikasi WA (lihat /api/daftar).
+    // persetujuan tanpa verifikasi email (lihat /api/daftar).
     otp_terkirim: json.otp_terkirim !== false,
   };
 }
 
-/** Langkah 2 — verifikasi kode; berhasil = token tersimpan */
-export async function verifikasiOtp(
-  nomor_wa: string,
+/** Langkah 2 — verifikasi kode EMAIL; berhasil = token tersimpan */
+export async function verifikasiOtpEmail(
+  email: string,
   kode: string,
 ): Promise<UserLengkap> {
-  const json = await fetchJson("/api/otp", {
+  const json = await fetchJson("/api/otp-email", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nomor_wa, kode, nama_perangkat: namaPerangkat() }),
+    body: JSON.stringify({ email, kode, nama_perangkat: namaPerangkat() }),
   });
   if (json.token) simpanToken(json.token as string);
   return json.user as UserLengkap;
 }
 
-/** Minta kode baru dikirim ulang */
-export async function kirimUlangOtp(nomor_wa: string): Promise<void> {
-  await fetchJson("/api/otp", {
+/** Minta kode EMAIL baru dikirim ulang */
+export async function kirimUlangOtpEmail(email: string): Promise<void> {
+  await fetchJson("/api/otp-email", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nomor_wa }),
+    body: JSON.stringify({ email }),
   });
 }
 
@@ -409,21 +410,20 @@ export async function hapusAkunSosmed(id: string): Promise<void> {
 }
 
 // ------------------------------------------------------------
-// Ganti kata sandi (lewat OTP WhatsApp, maksimal 1x per minggu)
+// Ganti kata sandi (lewat OTP EMAIL terdaftar, maksimal 1x per minggu)
 // ------------------------------------------------------------
 
-/** Langkah 1: minta kode ke nomor WhatsApp terdaftar */
-export async function mintaOtpGantiSandi(nomor_wa: string): Promise<void> {
+/** Langkah 1: minta kode ke EMAIL terdaftar akun (tak perlu ketik apa pun) */
+export async function mintaOtpGantiSandi(): Promise<void> {
   await fetchJson("/api/sandi", {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ nomor_wa }),
+    body: JSON.stringify({}),
   });
 }
 
 /** Langkah 2: kirim kode + sandi baru */
 export async function gantiSandi(data: {
-  nomor_wa: string;
   kode: string;
   sandi_baru: string;
 }): Promise<void> {

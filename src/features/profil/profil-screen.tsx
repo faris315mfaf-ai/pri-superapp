@@ -976,12 +976,7 @@ export function ProfilScreen({
 
       {modalVerifWa && <ModalVerifikasiWa onTutup={() => setModalVerifWa(false)} />}
 
-      {modalSandi && (
-        <ModalGantiSandi
-          nomorWa={(user as { nomor_wa?: string | null }).nomor_wa ?? null}
-          onTutup={() => setModalSandi(false)}
-        />
-      )}
+      {modalSandi && <ModalGantiSandi onTutup={() => setModalSandi(false)} />}
 
       <ModalKaca
         terbuka={modalTentang}

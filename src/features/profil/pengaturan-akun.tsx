@@ -5,7 +5,7 @@
 //   • TombolAkunSosmed / ModalAkunSosmed — kelola username IG/TikTok
 //     (boleh lebih dari satu per platform), acuan pemeriksaan QC
 //   • ModalGantiFoto  — pilih foto, potong, kecilkan ke ~100 KB
-//   • ModalGantiSandi — ganti sandi lewat OTP WhatsApp, 1x seminggu
+//   • ModalGantiSandi — ganti sandi lewat OTP EMAIL terdaftar, 1x seminggu
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
@@ -550,15 +550,8 @@ export function ModalGantiFoto({
 // Ganti kata sandi (OTP WhatsApp)
 // ------------------------------------------------------------
 
-export function ModalGantiSandi({
-  nomorWa,
-  onTutup,
-}: {
-  nomorWa: string | null;
-  onTutup: () => void;
-}) {
-  const [langkah, setLangkah] = useState<"nomor" | "kode">("nomor");
-  const [nomor, setNomor] = useState("");
+export function ModalGantiSandi({ onTutup }: { onTutup: () => void }) {
+  const [langkah, setLangkah] = useState<"mulai" | "kode">("mulai");
   const [kode, setKode] = useState("");
   const [sandiBaru, setSandiBaru] = useState("");
   const [memuat, setMemuat] = useState(false);
@@ -570,8 +563,8 @@ export function ModalGantiSandi({
     setError(null);
     setMemuat(true);
     try {
-      await mintaOtpGantiSandi(nomor.trim());
-      toast("sukses", "Kode terkirim", "Cek WhatsApp Anda.");
+      await mintaOtpGantiSandi();
+      toast("sukses", "Kode terkirim", "Cek email terdaftar Anda (termasuk folder Spam).");
       setLangkah("kode");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal mengirim kode.");
@@ -586,7 +579,7 @@ export function ModalGantiSandi({
     setError(null);
     setMemuat(true);
     try {
-      await gantiSandi({ nomor_wa: nomor.trim(), kode, sandi_baru: sandiBaru });
+      await gantiSandi({ kode, sandi_baru: sandiBaru });
       toast(
         "sukses",
         "Kata sandi diganti",
@@ -600,35 +593,20 @@ export function ModalGantiSandi({
     }
   }
 
-  const nomorSamar = nomorWa
-    ? nomorWa.replace(/^(62\d{3})\d+(\d{3})$/, "$1••••$2")
-    : "(belum ada)";
-
   return (
     <Sheet judul="Ganti Kata Sandi" onTutup={memuat ? undefined : onTutup}>
-      {langkah === "nomor" ? (
+      {langkah === "mulai" ? (
         <form onSubmit={minta} className="flex flex-col gap-3" noValidate>
           <p className="text-[13px] leading-relaxed text-teks-sekunder">
-            Demi keamanan, kode verifikasi dikirim ke nomor WhatsApp yang
-            terdaftar pada akun ini:{" "}
-            <span className="font-semibold text-teks-utama">{nomorSamar}</span>.
-            Ketik nomor tersebut untuk melanjutkan.
+            Demi keamanan, kode verifikasi 6 angka dikirim ke{" "}
+            <span className="font-semibold text-teks-utama">email yang terdaftar</span>{" "}
+            pada akun ini. Tekan tombol di bawah untuk mengirim kode.
           </p>
-          <input
-            value={nomor}
-            onChange={(e) => setNomor(e.target.value)}
-            inputMode="numeric"
-            placeholder="0812xxxxxxx"
-            disabled={memuat}
-            className="glass-soft h-12 w-full rounded-xl px-3.5 text-[15px] text-teks-utama outline-none focus:ring-2 focus:ring-pri/50 disabled:opacity-60"
-          />
           {error && <PesanError pesan={error} />}
           <p className="text-[11.5px] leading-relaxed text-teks-sekunder">
             Kata sandi hanya boleh diganti sekali dalam seminggu.
           </p>
-          <TombolMerah memuat={memuat} disabled={nomor.trim().length < 9}>
-            Kirim Kode
-          </TombolMerah>
+          <TombolMerah memuat={memuat}>Kirim Kode ke Email</TombolMerah>
         </form>
       ) : (
         <form onSubmit={ganti} className="flex flex-col gap-3" noValidate>
