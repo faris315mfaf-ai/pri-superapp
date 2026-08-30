@@ -7,7 +7,8 @@
 //    dipakai membanjiri nomor orang lain dengan pesan.
 import { createHash, randomInt, timingSafeEqual } from "node:crypto";
 import { supabase } from "@/lib/supabase";
-import { kirimWa, normalkanNomorWa } from "@/lib/fonnte";
+import { conviaSiap, kirimOtpTemplate, normalkanNomorWa } from "@/lib/convia";
+import { kirimWa as kirimWaFonnte } from "@/lib/fonnte";
 
 /** Berapa lama kode berlaku */
 export const MASA_BERLAKU_MENIT = 5;
@@ -65,12 +66,24 @@ export async function kirimOtp(
   });
   if (error) throw new Error("Gagal menyiapkan kode verifikasi.");
 
-  await kirimWa(
-    nomor,
+  // OTP lewat TEMPLATE Convia (WABA resmi — satu-satunya cara sah untuk
+  // kontak pertama). Bila Convia belum siap / template belum disetujui /
+  // gagal, JATUH ke Fonnte supaya OTP tak pernah gagal (fitur 1.22.x/convia;
+  // fallback sementara sampai template Convia dipastikan jalan).
+  const pesanTeks =
     `*PRI SuperApp*\n\nKode verifikasi Anda: *${kode}*\n\n` +
-      `Berlaku ${MASA_BERLAKU_MENIT} menit. Jangan berikan kode ini kepada siapa pun, ` +
-      `termasuk yang mengaku pengurus partai.`,
-  );
+    `Berlaku ${MASA_BERLAKU_MENIT} menit. Jangan berikan kode ini kepada siapa pun, ` +
+    `termasuk yang mengaku pengurus partai.`;
+
+  if (conviaSiap()) {
+    try {
+      await kirimOtpTemplate(nomor, kode);
+      return;
+    } catch (e) {
+      console.error("[otp] Convia template gagal → fallback Fonnte:", e);
+    }
+  }
+  await kirimWaFonnte(nomor, pesanTeks);
 }
 
 export type HasilVerifikasi =
