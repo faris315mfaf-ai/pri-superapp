@@ -19,6 +19,7 @@ import { InsightDetailScreen } from "./insight-detail-screen";
 import { KirimVideoManual } from "@/features/tvr-ku/kirim-video-manual";
 import { PanelTugasLink } from "./tugas-link-panel";
 import { HasilScrapingPanel } from "./hasil-scraping-panel";
+import { TataLetakModul, type SeksiModul } from "@/components/tata-letak-modul";
 import { PipelinePanel } from "./pipeline-panel";
 import { KirimVideoPanel } from "./kirim-video-panel";
 import { ProgressPanel } from "./progress-panel";
@@ -196,9 +197,14 @@ export function TvScreen({
       */}
       {/* Desktop (fix 4.1): Sumber lebih ramping, Produksi lebih lega,
           jarak antar kolom proporsional. */}
-      <div className="mt-6 lg:grid lg:grid-cols-[5fr_7fr] lg:items-start lg:gap-8">
-        {/* ── Bagian KIRI: Sumber ── */}
-        <section className="flex flex-col gap-4">
+      {/* Atur Tata Letak (fitur 1.22.x): semua seksi bisa diseret/
+          disembunyikan/dilipat — satu kolom. */}
+      <div className="mt-6">
+      <TataLetakModul
+        modul="tv"
+        bungkusSeksi={false}
+        seksi={[
+        { id: "sumber-berita", judul: "Sumber Berita", ikon: Newspaper, render: () => (
           <SeksiLipat
             id="sumber-berita"
             judul="Sumber Berita"
@@ -210,9 +216,8 @@ export function TvScreen({
               idTerpilih={videoSumber?.id ?? null}
             />
           </SeksiLipat>
-
-          {/* Kelola akun sumber scraping (fitur 1.22/bug 6) — khusus Pimred */}
-          {pimred && (
+        ) },
+        pimred && { id: "kelola-sumber", judul: "Kelola Sumber Berita", ikon: Radar, render: () => (
             <SeksiLipat
               id="kelola-sumber"
               judul="Kelola Sumber Berita"
@@ -221,12 +226,8 @@ export function TvScreen({
             >
               <KelolaSumberPanel />
             </SeksiLipat>
-          )}
-
-          {/* Hasil scraping + status (fitur 1.22.x/5-bug) — khusus Pimred.
-              Satu tempat memantau semua video hasil pindaian: sudah dipakai?
-              siapa penanggung jawabnya? videonya sudah tayang? */}
-          {pimred && (
+        ) },
+        pimred && { id: "hasil-scraping", judul: "Hasil Scraping Berita", ikon: ListChecks, render: () => (
             <SeksiLipat
               id="hasil-scraping"
               judul="Hasil Scraping Berita"
@@ -243,11 +244,8 @@ export function TvScreen({
                 }}
               />
             </SeksiLipat>
-          )}
-
-          {/* Distribusi tugas link ke anggota — khusus Pimred. Link video
-              yang dipilih di panel Berita / tombol "Pakai" otomatis terisi. */}
-          {pimred && (
+        ) },
+        pimred && { id: "bagi-tugas", judul: "Bagi Tugas ke Anggota", ikon: Send, render: () => (
             <SeksiLipat
               id="bagi-tugas"
               judul="Bagi Tugas ke Anggota"
@@ -257,14 +255,8 @@ export function TvScreen({
             >
               <PanelTugasLink linkAwal={linkPakai || videoSumber?.link_video} />
             </SeksiLipat>
-          )}
-        </section>
-
-        {/* ── Bagian KANAN: Produksi ── */}
-        <section className="mt-6 flex flex-col gap-4 lg:mt-0">
-          {/* Buat Video — hanya untuk yang berhak MEMPROSES (fitur 1.22.x/
-              bug 3): Pimred atau anggota tim TV yang ditunjuk. */}
-          {bolehProses && (
+        ) },
+        bolehProses && { id: "buat-video", judul: "Buat Video", ikon: Clapperboard, render: () => (
           <SeksiLipat
             id="buat-video"
             judul="Buat Video"
@@ -302,15 +294,11 @@ export function TvScreen({
               )}
             </AnimatePresence>
           </SeksiLipat>
-          )}
-
-          {/* Log — unggah video manual (hasil edit sendiri) + riwayat ACC-nya
-              (fitur 1.22.x). Hanya untuk yang berhak UPLOAD. */}
-          {bolehUpload && <KirimVideoManual judulSeksi="Log" />}
-
-          {/* Status pipeline (pindahan dari dashboard super admin) —
-              bisa dilipat (fitur 1.22/2); hanya bagi yang memproses. */}
-          {bolehProses && (
+        ) },
+        bolehUpload && { id: "log", judul: "Log", ikon: Clapperboard, render: () => (
+          <KirimVideoManual judulSeksi="Log" />
+        ) },
+        bolehProses && { id: "status-pipeline", judul: "Status Pipeline", ikon: Activity, render: () => (
           <FadeInUp delay={0.08}>
             <SeksiLipat
               id="status-pipeline"
@@ -322,10 +310,8 @@ export function TvScreen({
               <PipelinePanel muatUlang={refreshKey} />
             </SeksiLipat>
           </FadeInUp>
-          )}
-
-          {/* Riwayat pemrosesan — bisa di-expand/minimize (fitur 1.22/2);
-              thumbnail kecil tiap baris diambil dari thumbnail video asli. */}
+        ) },
+        { id: "riwayat-pemrosesan", judul: "Riwayat Pemrosesan", ikon: History, render: () => (
           <FadeInUp delay={0.1}>
             <SeksiLipat
               id="riwayat-pemrosesan"
@@ -342,7 +328,9 @@ export function TvScreen({
               />
             </SeksiLipat>
           </FadeInUp>
-        </section>
+        ) },
+        ].filter(Boolean) as SeksiModul[]}
+      />
       </div>
 
       {/* Galeri 30 konten terbaru seluruh sosmed + metrik (spek 1.15) */}
