@@ -12,15 +12,21 @@
 // Penerima dihitung SAAT kirim lalu disimpan di pengumuman_penerima,
 // dan notifikasi + push dikirim TERTARGET per orang — sesuai prinsip
 // "notifikasi hanya untuk yang relevan".
+import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
+import { conviaPengumumanAktif } from "@/lib/convia";
+import { siarkanPengumumanKeWa } from "@/lib/pengumuman-wa";
 import { cakupanPengumuman, JABATAN_PARTAI } from "@/lib/jabatan";
 import { adalahHR } from "@/lib/hr";
 import { DIVISI } from "@/lib/struktur";
 
 export const dynamic = "force-dynamic";
+// Siaran WhatsApp (toggle "kirim ke WA") ke ratusan nomor dijalankan di
+// latar lewat after(); beri fungsi cukup umur agar batch terakhir tuntas.
+export const maxDuration = 120;
 
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
@@ -114,7 +120,10 @@ export async function POST(request: Request) {
       jabatan_target?: string;
       divisi_target?: string;
       kecuali?: unknown;
+      /** true = kirim juga isi pengumuman ke WhatsApp semua penerima. */
+      kirim_wa?: boolean;
     };
+    const kirimWa = body.kirim_wa === true;
     const judul = (body.judul ?? "").trim();
     const isi = (body.isi ?? "").trim();
     if (judul.length < 3 || isi.length < 3) {
@@ -246,6 +255,30 @@ export async function POST(request: Request) {
       untukUserIds: penerima,
     });
 
-    return { sukses: true, id: String(baris.id), jumlah_penerima: penerima.length };
+    // Siaran WhatsApp (opsional) DI LATAR: respons balik ke admin tanpa
+    // menunggu ratusan pesan terkirim. after() menjaga fungsi tetap hidup
+    // sampai batch terakhir tuntas (dalam batas maxDuration).
+    if (kirimWa) {
+      after(async () => {
+        try {
+          const hasil = await siarkanPengumumanKeWa(penerima, judul, isi);
+          if (!hasil.aktif) {
+            console.warn("[pengumuman] siaran WA dilewati:", hasil.alasanLewat);
+          }
+        } catch (e) {
+          console.error("[pengumuman] siaran WA gagal:", e);
+        }
+      });
+    }
+
+    return {
+      sukses: true,
+      id: String(baris.id),
+      jumlah_penerima: penerima.length,
+      // Beri tahu klien apakah siaran WA benar-benar diproses atau
+      // hanya diminta tapi gerbang Convia belum menyala.
+      wa_diminta: kirimWa,
+      wa_aktif: kirimWa ? conviaPengumumanAktif() : false,
+    };
   });
 }

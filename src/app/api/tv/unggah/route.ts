@@ -63,9 +63,18 @@ async function siarkanKeRuangChat(
   }
 }
 // Mengunggah video ke Instagram/YouTube lewat Ayrshare bisa memakan
-// puluhan detik. Bawaan Vercel (10 detik) akan memutusnya di tengah
-// jalan — video telanjur terkirim tapi aplikasi melaporkan gagal.
-export const maxDuration = 60;
+// BEBERAPA MENIT (Ayrshare mengunduh video kita lalu mengunggahnya ke
+// tiap platform; Reels IG + YouTube paling lambat). Bila fungsi Vercel
+// mati sebelum Ayrshare menjawab, video TELANJUR tayang tapi status di
+// aplikasi berhenti di "SIAP DITINJAU" — persis bug yang dilaporkan.
+//
+// Dulu nilainya 60 dtk padahal batas tunggu Ayrshare 120 dtk: begitu
+// posting lewat 60 dtk, Vercel membunuh fungsi SEBELUM kode penyimpan
+// status ("SUDAH DIPROSES") sempat jalan, DAN sebelum catch pelepas
+// kunci jalan — jadi videonya tayang tapi aplikasi bilang gagal/ditinjau.
+// Kini 300 dtk (batas paket) > 230 dtk batas tunggu Ayrshare, jadi
+// unggahan lambat pun selesai lalu statusnya benar-benar tersimpan.
+export const maxDuration = 300;
 
 const PLATFORM_DIKENAL = new Set([
   "instagram",
@@ -89,6 +98,34 @@ const BATAS_CAPTION: Record<string, number> = {
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
   return h.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : "";
+}
+
+/**
+ * Unggah ke Ayrshare dengan SATU kali ulang untuk kegagalan sementara
+ * (timeout / jaringan / 5xx). Ulangan aman dari dobel-posting karena
+ * opsi memakai idempotencyKey yang sama — Ayrshare mengenali permintaan
+ * kembar dan tidak memposting dua kali. Galat 4xx (permintaan salah,
+ * mis. caption ditolak) TIDAK diulang: mengulang hanya membuang waktu
+ * dan hasilnya pasti sama.
+ */
+async function unggahDenganUlang(
+  opsi: Parameters<typeof unggahVideo>[0],
+  maksUlang = 1,
+): Promise<{ idAyrshare: string; hasil: HasilUnggahPlatform[] }> {
+  let galatTerakhir: unknown;
+  for (let coba = 0; coba <= maksUlang; coba++) {
+    try {
+      return await unggahVideo(opsi);
+    } catch (e) {
+      galatTerakhir = e;
+      const status = (e as { status?: number })?.status;
+      // 4xx = permintaan salah → berhenti, lempar apa adanya.
+      if (typeof status === "number" && status >= 400 && status < 500) throw e;
+      // Masih ada jatah ulang → beri jeda singkat lalu coba lagi.
+      if (coba < maksUlang) await new Promise((r) => setTimeout(r, 2500));
+    }
+  }
+  throw galatTerakhir;
 }
 
 export async function POST(request: Request) {
@@ -246,17 +283,23 @@ export async function POST(request: Request) {
 
     let idAyrshare: string;
     let hasil: HasilUnggahPlatform[];
+    // Kunci anti-dobel dipakai BAIK untuk percobaan pertama maupun ulang:
+    // sama persis, sehingga Ayrshare tidak memposting dua kali walau kita
+    // memanggilnya lagi setelah gangguan sementara.
+    const kunciDobel = `pri-${kode}-${siapKirim.slice().sort().join("_")}`;
     try {
-      ({ idAyrshare, hasil } = await unggahVideo({
+      // Ulangi SEKALI bila gagal karena hal sementara (jaringan/timeout/
+      // 5xx). Karena idempotencyKey sama, ulangan ini AMAN — tidak akan
+      // membuat postingan ganda. Galat permintaan (4xx: caption salah,
+      // dsb.) tidak diulang karena mengulang tak akan menolong.
+      ({ idAyrshare, hasil } = await unggahDenganUlang({
         videoUrl,
         caption,
         platforms: siapKirim,
         judulYoutube: video.judul_overlay || video.judul || "TV Rakyat",
-        // Lapis 3 anti-dobel (sisi Ayrshare): permintaan identik yang
-        // terkirim dua kali karena gangguan jaringan tidak diposting
-        // dua kali. Kunci memuat daftar platform supaya percobaan
-        // ULANG untuk subset yang gagal tetap dianggap permintaan baru.
-        idempotencyKey: `pri-${kode}-${siapKirim.slice().sort().join("_")}`,
+        // Kunci memuat daftar platform supaya percobaan ULANG untuk
+        // subset yang gagal tetap dianggap permintaan baru.
+        idempotencyKey: kunciDobel,
       }));
     } catch (e) {
       // Kunci proses dilepas supaya percobaan berikutnya tidak harus

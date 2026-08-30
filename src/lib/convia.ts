@@ -25,6 +25,11 @@ const MAKS_COBA = 3;
 const OTP_TEMPLATE = process.env.CONVIA_OTP_TEMPLATE?.trim() || "otp_pri";
 const OTP_TEMPLATE_LANG = process.env.CONVIA_OTP_TEMPLATE_LANG?.trim() || "id";
 
+/** Nama & bahasa template PENGUMUMAN massal (dibuat + approve Meta juga). */
+const PENGUMUMAN_TEMPLATE = process.env.CONVIA_PENGUMUMAN_TEMPLATE?.trim() || "pengumuman_pri";
+const PENGUMUMAN_TEMPLATE_LANG =
+  process.env.CONVIA_PENGUMUMAN_TEMPLATE_LANG?.trim() || "id";
+
 export class ConviaBelumDiaturError extends Error {
   constructor() {
     super("Pengiriman WhatsApp belum diatur. Isi CONVIA_API_KEY di pengaturan server.");
@@ -44,6 +49,20 @@ export function conviaSiap(): boolean {
  */
 export function conviaOtpAktif(): boolean {
   return conviaSiap() && process.env.CONVIA_OTP_AKTIF === "true";
+}
+
+/**
+ * Siaran pengumuman ke WhatsApp semua pengguna hanya DINYALAKAN bila
+ * template pengumuman sudah disetujui Meta — lewat env
+ * CONVIA_PENGUMUMAN_AKTIF=true. Alasannya sama dengan OTP: WABA resmi
+ * MELARANG pesan bebas ke nomor yang belum pernah chat, jadi siaran
+ * massal WAJIB lewat template resmi. Selama template belum siap, siaran
+ * WA dilewati (pengumuman dalam-aplikasi + push tetap jalan) — dan kita
+ * SENGAJA tidak memakai gateway tak resmi untuk siaran massal karena
+ * berisiko nomor diblokir WhatsApp.
+ */
+export function conviaPengumumanAktif(): boolean {
+  return conviaSiap() && process.env.CONVIA_PENGUMUMAN_AKTIF === "true";
 }
 
 /** Rapikan nomor ke format 62… (sama seperti Fonnte). */
@@ -88,11 +107,13 @@ async function kirimKeConvia(badan: Record<string, unknown>, timeoutMs: number):
       } catch {
         // biarkan pesan bawaan
       }
-      // 4xx = permintaan/template salah → jangan diulang, lempar apa adanya.
-      if (res.status >= 400 && res.status < 500) {
+      // 4xx = permintaan/template salah → jangan diulang, lempar apa
+      // adanya. KECUALI 429 (kena batas laju): itu sementara — penting
+      // untuk siaran massal pengumuman — jadi diulang dengan jeda seperti 5xx.
+      if (res.status >= 400 && res.status < 500 && res.status !== 429) {
         throw new GalatPermanen(pesan);
       }
-      // 5xx → sementara, ulangi.
+      // 5xx / 429 → sementara, ulangi.
       galatTerakhir = new Error(pesan);
     } catch (e) {
       if (e instanceof GalatPermanen || e instanceof ConviaBelumDiaturError) throw e;
@@ -162,6 +183,54 @@ export async function kirimOtpTemplate(nomor: string, kode: string): Promise<voi
             sub_type: "url",
             index: 0,
             parameters: [{ type: "text", text: kode }],
+          },
+        ],
+      },
+    },
+    15_000,
+  );
+}
+
+/**
+ * Rapikan teks agar SAH sebagai parameter template Meta. Meta menolak
+ * parameter yang memuat baris baru, tab, atau lebih dari 4 spasi
+ * beruntun — padahal isi pengumuman biasanya banyak baris baru. Maka
+ * semua deret spasi/enter dijadikan satu spasi, lalu dipotong sesuai
+ * batas supaya tidak melewati panjang parameter.
+ */
+function parameterAman(teks: string, batas: number): string {
+  return (teks ?? "").replace(/\s+/g, " ").trim().slice(0, batas);
+}
+
+/**
+ * Kirim satu pengumuman lewat TEMPLATE Convia — satu-satunya cara sah
+ * menyiarkan ke nomor yang belum pernah chat di WABA (fitur pengumuman→WA).
+ *
+ * Dua parameter body: {{1}} = judul, {{2}} = isi. Template harus dibuat &
+ * disetujui di dasbor Convia (kategori Utility) dengan teks TETAP di
+ * sekeliling parameter, mis. body:  "📢 *{{1}}*\n\n{{2}}".
+ * Melempar bila gagal — pemanggil (lib/pengumuman-wa) yang mencatat/lewat.
+ */
+export async function kirimPengumumanTemplate(
+  nomor: string,
+  judul: string,
+  isi: string,
+): Promise<void> {
+  await kirimKeConvia(
+    {
+      channel: "whatsapp",
+      message_type: "template",
+      phone_number: normalkanNomorWa(nomor),
+      template: {
+        name: PENGUMUMAN_TEMPLATE,
+        language: { code: PENGUMUMAN_TEMPLATE_LANG },
+        components: [
+          {
+            type: "body",
+            parameters: [
+              { type: "text", text: parameterAman(judul, 120) },
+              { type: "text", text: parameterAman(isi, 700) },
+            ],
           },
         ],
       },

@@ -11,10 +11,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Loader2, Megaphone, Search, Send, UserMinus, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Loader2,
+  Megaphone,
+  MessageCircle,
+  Search,
+  Send,
+  UserMinus,
+  X,
+} from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { AvatarInisial, GlassSkeleton } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
+import { SwitchKaca } from "@/features/profil/switch-kaca";
 import { toast } from "@/hooks/use-app-store";
 import {
   getPengguna,
@@ -49,6 +59,7 @@ export function PengumumanScreen({
   const [divisiTarget, setDivisiTarget] = useState("");
   const [jabatanTarget, setJabatanTarget] = useState("");
 
+  const [kirimWa, setKirimWa] = useState(false);
   const [roster, setRoster] = useState<PenggunaAdmin[] | null>(null);
   const [kecuali, setKecuali] = useState<Set<string>>(() => new Set());
   const [cariKecuali, setCariKecuali] = useState("");
@@ -106,19 +117,38 @@ export function PengumumanScreen({
     if (!sah || kirim) return;
     setKirim(true);
     try {
-      const jumlah = await kirimPengumuman({
+      const hasil = await kirimPengumuman({
         judul: judul.trim(),
         isi: isi.trim(),
         cakupan,
         divisi_target: cakupan === "divisi" ? divisiTarget : undefined,
         jabatan_target: cakupan === "jabatan" ? jabatanTarget : undefined,
         kecuali: Array.from(kecuali),
+        kirim_wa: kirimWa,
       });
       toast(
         "sukses",
         "Pengumuman terkirim",
-        `Sampai ke ${jumlah} pengguna${kecuali.size > 0 ? ` (${kecuali.size} dikecualikan)` : ""}.`,
+        `Sampai ke ${hasil.jumlah_penerima} pengguna${kecuali.size > 0 ? ` (${kecuali.size} dikecualikan)` : ""}.`,
       );
+      // Beri kabar apa adanya soal siaran WhatsApp: kalau diminta tapi
+      // template Convia belum menyala, siaran DILEWATI — jangan biarkan
+      // admin mengira WA terkirim padahal tidak.
+      if (kirimWa) {
+        if (hasil.wa_aktif) {
+          toast(
+            "info",
+            "Siaran WhatsApp diproses",
+            "Isi pengumuman sedang dikirim ke WhatsApp penerima di latar belakang.",
+          );
+        } else {
+          toast(
+            "peringatan",
+            "WhatsApp belum aktif",
+            "Template pengumuman Convia belum disiapkan, jadi siaran WA dilewati. Pengumuman dalam aplikasi tetap terkirim.",
+          );
+        }
+      }
       setJudul("");
       setIsi("");
       setKecuali(new Set());
@@ -328,6 +358,30 @@ export function PengumumanScreen({
               );
             })
           )}
+        </div>
+      </GlassCard>
+
+      {/* Kirim juga ke WhatsApp */}
+      <GlassCard className="mt-3 p-4">
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
+            <MessageCircle className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-bold text-teks-utama">Kirim juga ke WhatsApp</p>
+              <SwitchKaca
+                aktif={kirimWa}
+                onUbah={() => setKirimWa((v) => !v)}
+                labelAria="Kirim pengumuman ke WhatsApp semua penerima"
+              />
+            </div>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-teks-sekunder">
+              Isi pengumuman dikirim ke nomor WhatsApp semua penerima lewat Convia.
+              Perlu template pengumuman yang sudah disetujui; jika belum, siaran WA
+              dilewati dan pengumuman dalam aplikasi tetap terkirim.
+            </p>
+          </div>
         </div>
       </GlassCard>
 

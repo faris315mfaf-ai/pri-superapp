@@ -318,10 +318,19 @@ export async function unggahVideo(opsi: {
     };
   }
 
+  // Batas tunggu HARUS lebih kecil dari maxDuration route pemanggil
+  // (tv/unggah = 300 dtk). Dulu 120 dtk sementara maxDuration hanya 60:
+  // untuk video lambat (Reels IG + YouTube) fungsi Vercel MATI di detik
+  // 60 sebelum Ayrshare menjawab, sehingga status tak pernah jadi
+  // "SUDAH DIPROSES" padahal videonya SUDAH tayang — itulah bug "masih
+  // ditinjau padahal sudah diunggah". Kini 230 dtk (di bawah 300) memberi
+  // Ayrshare waktu menyelesaikan unggahan lambat lalu kode penyimpanan
+  // sempat berjalan. Untuk posting terjadwal (scheduleDate) Ayrshare
+  // menjawab cepat, jadi batas besar ini tak pernah tersentuh di sana.
   const d = await panggil<BalasanPost>("/post", {
     method: "POST",
     body: JSON.stringify(badan),
-    timeoutMs: 120000,
+    timeoutMs: 230000,
   });
 
   const hasil: HasilUnggahPlatform[] = (d.postIds ?? []).map((p) => ({

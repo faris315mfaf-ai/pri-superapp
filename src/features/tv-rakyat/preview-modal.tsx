@@ -471,10 +471,20 @@ export function PreviewModal({
         }
       } catch (e) {
         setModeUnggah(false);
+        const pesan = e instanceof Error ? e.message : "Coba lagi sebentar.";
+        // Unggah video besar bisa memakan beberapa menit. Bila panggilan
+        // terputus (jaringan/waktu habis) videonya BISA JADI tetap tayang
+        // di sosmed — arahkan admin memeriksa Riwayat Video, bukan mengira
+        // gagal lalu mengunggah ulang (yang aman karena anti-dobel, tapi
+        // membuat bingung). Statusnya tersimpan benar di server.
+        const mungkinTerputus =
+          /waktu|tidak menjawab|jaringan|server|fetch|timeout|gagal memuat/i.test(pesan);
         toast(
           "error",
           "Gagal mengunggah",
-          e instanceof Error ? e.message : "Coba lagi sebentar.",
+          mungkinTerputus
+            ? `${pesan} Jika video ternyata sudah tayang, cek Riwayat Video — statusnya akan benar sendiri.`
+            : pesan,
         );
       }
     })();

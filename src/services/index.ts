@@ -1972,13 +1972,21 @@ export async function kirimPengumuman(data: {
   divisi_target?: string;
   /** id pengguna yang dikecualikan (fitur 1.22.x/1) */
   kecuali?: string[];
-}): Promise<number> {
+  /** true = kirim juga isi pengumuman ke WhatsApp semua penerima */
+  kirim_wa?: boolean;
+}): Promise<{ jumlah_penerima: number; wa_diminta: boolean; wa_aktif: boolean }> {
   const json = await fetchJson("/api/pengumuman", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify(data),
   });
-  return json.jumlah_penerima as number;
+  return {
+    jumlah_penerima: json.jumlah_penerima as number,
+    // wa_diminta = toggle dinyalakan; wa_aktif = template Convia siap
+    // (kalau diminta tapi tak aktif, UI memberi tahu admin apa adanya).
+    wa_diminta: Boolean(json.wa_diminta),
+    wa_aktif: Boolean(json.wa_aktif),
+  };
 }
 
 // ------------------------------------------------------------

@@ -633,13 +633,17 @@ function ModalPengumuman({ onTutup }: { onTutup: () => void }) {
     if (judul.trim().length < 3 || isi.trim().length < 3 || sedangKirim) return;
     setSedangKirim(true);
     try {
-      const jumlah = await kirimPengumuman({
+      const hasil = await kirimPengumuman({
         judul: judul.trim(),
         isi: isi.trim(),
         cakupan,
         jabatan_target: cakupan === "jabatan" ? jabatanTarget : undefined,
       });
-      toast("sukses", "Pengumuman terkirim", `${jumlah} orang menerima notifikasi.`);
+      toast(
+        "sukses",
+        "Pengumuman terkirim",
+        `${hasil.jumlah_penerima} orang menerima notifikasi.`,
+      );
       setJudul("");
       setIsi("");
       setFormBuka(false);
