@@ -89,11 +89,12 @@ export function KelolaSumberPanel() {
     }
   }
 
-  async function simpanInterval() {
+  async function simpanInterval(nilai?: number) {
     if (sibuk) return;
+    const target = nilai ?? menit;
     setSibuk(true);
     try {
-      const hasil = await setIntervalBerita(menit);
+      const hasil = await setIntervalBerita(target);
       setMenit(hasil);
       toast("sukses", "Interval disimpan", `Scraping tiap ${hasil} menit.`);
     } catch (e) {
@@ -102,6 +103,10 @@ export function KelolaSumberPanel() {
       setSibuk(false);
     }
   }
+
+  // Preset yang bisa dipilih Pimred (fitur 1.22.x/5-bug). Klik = langsung
+  // simpan supaya tak perlu tekan tombol terpisah.
+  const PRESET_MENIT = [5, 10, 15, 30];
 
   if (!data) return <GlassSkeleton className="h-40 rounded-xl" />;
 
@@ -114,6 +119,31 @@ export function KelolaSumberPanel() {
           Seberapa sering n8n memindai sumber (menit). Minimal {data.interval_min} menit
           untuk menghemat kuota.
         </p>
+        {/* Preset cepat — pilihan umum Pimred (fitur 1.22.x/5-bug) */}
+        <div className="mb-2 flex gap-1.5">
+          {PRESET_MENIT.map((p) => {
+            const aktif = menit === p;
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => {
+                  setMenit(p);
+                  void simpanInterval(p);
+                }}
+                disabled={sibuk}
+                aria-pressed={aktif}
+                className={cn(
+                  "btn-tekan flex-1 rounded-lg py-1.5 text-[12px] font-bold disabled:opacity-60",
+                  aktif ? "text-white" : "glass text-teks-sekunder",
+                )}
+                style={aktif ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" } : undefined}
+              >
+                {p}m
+              </button>
+            );
+          })}
+        </div>
         <div className="flex gap-2">
           <input
             type="number"

@@ -12,7 +12,7 @@
 //   (bawaan bisa diatur lewat prop bawaanTerbuka).
 // ============================================================
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +33,7 @@ export function SeksiLipat({
   ikon: Ikon,
   bawaanTerbuka = false,
   keterangan,
+  bukaSinyal,
   children,
 }: {
   /** Unik per seksi — jadi kunci localStorage */
@@ -42,6 +43,10 @@ export function SeksiLipat({
   /** false (bawaan) = mulai TERLIPAT */
   bawaanTerbuka?: boolean;
   keterangan?: string;
+  /** Naikkan angkanya dari luar untuk MEMBUKA paksa seksi ini +
+   *  menggulirkannya ke layar (mis. tombol "Pakai" mengarahkan ke
+   *  Bagi Tugas). Nilai awal/undefined tidak melakukan apa-apa. */
+  bukaSinyal?: number;
   children: ReactNode;
 }) {
   // Lazy initializer membaca localStorage SEKALI saat mount — aman
@@ -49,6 +54,21 @@ export function SeksiLipat({
   const [terbuka, setTerbuka] = useState(() =>
     typeof window === "undefined" ? bawaanTerbuka : bacaSimpanan(id, bawaanTerbuka),
   );
+  const seksiRef = useRef<HTMLElement>(null);
+
+  // Buka paksa ketika bukaSinyal berubah (abaikan render pertama).
+  const sinyalTerakhir = useRef(bukaSinyal);
+  useEffect(() => {
+    if (bukaSinyal === undefined || bukaSinyal === sinyalTerakhir.current) return;
+    sinyalTerakhir.current = bukaSinyal;
+    setTerbuka(true);
+    try {
+      localStorage.setItem(`tvr_collapse_${id}`, "0");
+    } catch {
+      // Preferensi gagal disimpan bukan masalah.
+    }
+    seksiRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [bukaSinyal, id]);
 
   function toggle() {
     setTerbuka((v) => {
@@ -62,7 +82,7 @@ export function SeksiLipat({
   }
 
   return (
-    <section className="glass rounded-2xl">
+    <section ref={seksiRef} className="glass rounded-2xl scroll-mt-4">
       <button
         type="button"
         onClick={toggle}

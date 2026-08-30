@@ -99,15 +99,24 @@ export async function GET(request: Request) {
         console.error("[tv/tugas] kandidat:", error.message);
         throw new Error("Gagal memuat kandidat anggota.");
       }
-      return {
-        data: (data ?? [])
-          .filter((a) => Number(a.id) !== Number(user.id))
-          .map((a) => ({
-            id: String(a.id),
-            nama: a.nama_panggilan || a.nama || "",
-            jabatan: a.jabatan ?? "",
-          })),
-      };
+      const kandidat = (data ?? []).map((a) => ({
+        id: String(a.id),
+        nama:
+          Number(a.id) === Number(user.id)
+            ? `${a.nama_panggilan || a.nama || "Saya"} (saya)`
+            : a.nama_panggilan || a.nama || "",
+        jabatan: a.jabatan ?? "",
+      }));
+      // Pimred bisa menugaskan DIRINYA sendiri (fitur 1.22.x/5-bug),
+      // walau jabatannya membuatnya tak terdaftar di Divisi TV Rakyat.
+      if (!kandidat.some((k) => Number(k.id) === Number(user.id))) {
+        kandidat.unshift({
+          id: String(user.id),
+          nama: `${user.nama_panggilan || user.nama || "Saya"} (saya)`,
+          jabatan: user.jabatan ?? "",
+        });
+      }
+      return { data: kandidat };
     }
 
     let q = db
@@ -169,7 +178,9 @@ export async function POST(request: Request) {
     // Anti-cheat (fitur 1.22/bug 7): tolak di server bila target bukan
     // anggota Divisi TV Rakyat — walau dropdown sudah menyaring, klien
     // tak boleh jadi satu-satunya penjaga.
-    if (String(target.divisi ?? "").trim() !== DIVISI_TV) {
+    // Kecuali Pimred menugaskan DIRINYA sendiri (fitur 1.22.x/5-bug),
+    // target wajib anggota Divisi TV Rakyat.
+    if (String(target.divisi ?? "").trim() !== DIVISI_TV && targetId !== Number(user.id)) {
       throw Object.assign(
         new Error("Tugas hanya boleh diberikan ke anggota Divisi TV Rakyat."),
         { status: 400 },

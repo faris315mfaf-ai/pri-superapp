@@ -880,6 +880,27 @@ export async function getBeritaTerbaru(): Promise<Berita[]> {
   return ambilData<Berita[]>("/api/berita");
 }
 
+// Hasil scraping + status tiap item (fitur 1.22.x/5-bug)
+export type HasilScraping = {
+  kode: string;
+  judul: string;
+  sumber: string;
+  platform: "instagram" | "tiktok";
+  sumber_akun: string;
+  link: string;
+  thumbnail_url: string;
+  jenis: string;
+  waktu_terbit: string;
+  tahap: "baru" | "ditugaskan" | "video_dibuat" | "tayang";
+  penanggung: string;
+  status_tugas: string | null;
+};
+
+export async function getHasilScraping(): Promise<HasilScraping[]> {
+  const json = await fetchJson("/api/berita/hasil", { headers: headerToken() });
+  return (json.data ?? []) as HasilScraping[];
+}
+
 // ------------------------------------------------------------
 // Kelola sumber berita untuk scraping (fitur 1.22/bug 6)
 // ------------------------------------------------------------

@@ -1,16 +1,20 @@
 // GET  /api/berita — berita terbaru hasil scraping (dibaca dari Supabase)
-// POST /api/berita — picu scraping baru lewat workflow n8n "TV Rakyat -
-//                    Cek Berita Terbaru", lalu kembalikan hasil terbarunya.
+// POST /api/berita — picu scraping baru LANGSUNG lewat TikHub (fitur
+//                    1.22.x/5-bug), lalu kembalikan hasil terbarunya.
 //
-// Aplikasi tidak melakukan scraping sendiri: Apify, dedup, dan penyimpanan
-// semuanya dikerjakan n8n. Aplikasi hanya menekan tombolnya lalu membaca
-// tabel `berita` di Supabase.
+// Sejak 1.22.x scraping dikerjakan APLIKASI sendiri via TikHub (bukan
+// Apify/n8n): lib/scrape-berita menarik postingan akun sumber_berita
+// aktif & menyimpannya ke tabel `berita`. Dijalankan di latar (after)
+// supaya permintaan tak menggantung; layar memantau tabel `berita`.
+import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { bungkus, pastikanSukses } from "@/lib/api-helper";
 import { pastikanMasuk } from "@/lib/sesi";
-import { panggilWebhookN8n, N8nBelumDiaturError } from "@/lib/n8n";
+import { jalankanScrapeBerita } from "@/lib/scrape-berita";
+import { tikhubSiap } from "@/lib/tikhub";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /** Kolom yang dibutuhkan kartu berita di layar TV Rakyat */
 const KOLOM =
@@ -48,17 +52,28 @@ export async function GET(request: Request) {
  * Respons memuat daftar berita SAAT INI beserta penanda `dimulai`,
  * supaya layar bisa membandingkan mana yang baru nanti.
  */
-export async function POST() {
+export async function POST(request: Request) {
   return bungkus(async () => {
-    try {
-      await panggilWebhookN8n("N8N_WEBHOOK_SCRAPE_BERITA", {});
-    } catch (e) {
-      if (e instanceof N8nBelumDiaturError) {
-        throw Object.assign(new Error(e.message), { status: 503 });
-      }
-      throw e;
+    await pastikanMasuk(request);
+    if (!tikhubSiap()) {
+      throw Object.assign(
+        new Error("Scraper berita belum diaktifkan (TIKHUB_TOKEN kosong)."),
+        { status: 503 },
+      );
     }
-
+    // Scrape dijalankan SETELAH respons terkirim — permintaan tak
+    // menggantung; layar memantau tabel `berita` sampai yang baru muncul.
+    after(async () => {
+      try {
+        const hasil = await jalankanScrapeBerita();
+        console.log(
+          `[berita] scrape: ${hasil.disimpan} baru dari ${hasil.akun} akun` +
+            (hasil.gagal.length ? ` (gagal: ${hasil.gagal.join("; ")})` : ""),
+        );
+      } catch (e) {
+        console.error("[berita] scrape gagal:", e instanceof Error ? e.message : e);
+      }
+    });
     return { dimulai: true, data: await ambilBerita() };
   });
 }

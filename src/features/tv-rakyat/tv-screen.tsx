@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Tv, Newspaper, Send, Clapperboard, Activity, History, Radar } from "lucide-react";
+import { Tv, Newspaper, Send, Clapperboard, Activity, History, Radar, ListChecks } from "lucide-react";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
 import { BeritaPanel } from "./berita-panel";
@@ -18,6 +18,7 @@ import { InsightPanel } from "./insight-panel";
 import { InsightDetailScreen } from "./insight-detail-screen";
 import { KirimVideoManual } from "@/features/tvr-ku/kirim-video-manual";
 import { PanelTugasLink } from "./tugas-link-panel";
+import { HasilScrapingPanel } from "./hasil-scraping-panel";
 import { PipelinePanel } from "./pipeline-panel";
 import { KirimVideoPanel } from "./kirim-video-panel";
 import { ProgressPanel } from "./progress-panel";
@@ -65,6 +66,11 @@ export function TvScreen({
   // Link-nya TIDAK disalin ke form doksli — doksli tetap dicari & diisi
   // admin sendiri; ini cuma penanda video mana yang sedang dikerjakan.
   const [videoSumber, setVideoSumber] = useState<Berita | null>(null);
+  // Link berita yang "Dipakai" dari panel Hasil Scraping → mengisi Bagi
+  // Tugas (fitur 1.22.x/5-bug). sinyalBukaTugas dinaikkan agar seksi
+  // Bagi Tugas otomatis terbuka & tergulir ke layar.
+  const [linkPakai, setLinkPakai] = useState<string>("");
+  const [sinyalBukaTugas, setSinyalBukaTugas] = useState(0);
   // Fase alur utama
   const [fase, setFase] = useState<FaseTv>("form");
   const [payload, setPayload] = useState<PayloadProses | null>(null);
@@ -218,16 +224,39 @@ export function TvScreen({
             </SeksiLipat>
           )}
 
+          {/* Hasil scraping + status (fitur 1.22.x/5-bug) — khusus Pimred.
+              Satu tempat memantau semua video hasil pindaian: sudah dipakai?
+              siapa penanggung jawabnya? videonya sudah tayang? */}
+          {pimred && (
+            <SeksiLipat
+              id="hasil-scraping"
+              judul="Hasil Scraping Berita"
+              ikon={ListChecks}
+              keterangan="Pantau status tiap video & penanggung jawabnya"
+            >
+              <HasilScrapingPanel
+                muatUlang={refreshKey}
+                onPakai={(item) => {
+                  // "Pakai" → isi Bagi Tugas dengan link berita ini lalu
+                  // buka seksinya supaya Pimred tinggal memilih anggota.
+                  setLinkPakai(item.link ?? "");
+                  setSinyalBukaTugas((n) => n + 1);
+                }}
+              />
+            </SeksiLipat>
+          )}
+
           {/* Distribusi tugas link ke anggota — khusus Pimred. Link video
-              yang dipilih di panel Berita otomatis terisi. */}
+              yang dipilih di panel Berita / tombol "Pakai" otomatis terisi. */}
           {pimred && (
             <SeksiLipat
               id="bagi-tugas"
               judul="Bagi Tugas ke Anggota"
               ikon={Send}
               keterangan="Kirim link video ke anggota tim"
+              bukaSinyal={sinyalBukaTugas}
             >
-              <PanelTugasLink linkAwal={videoSumber?.link_video} />
+              <PanelTugasLink linkAwal={linkPakai || videoSumber?.link_video} />
             </SeksiLipat>
           )}
         </section>

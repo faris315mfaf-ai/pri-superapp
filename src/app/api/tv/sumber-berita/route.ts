@@ -18,11 +18,12 @@ import { adalahPimred } from "@/lib/jabatan";
 
 export const dynamic = "force-dynamic";
 
-// Batas interval: minimal 5 menit menjaga kuota scraping (Apify) tidak
+// Batas interval: minimal 5 menit menjaga kuota scraping (TikHub) tidak
 // terkuras — pelajaran dari workflow yang dulu jalan tiap 1 menit.
+// Bawaan 5 menit (fitur 1.22.x/5-bug); UI menawarkan preset 5/10/15/30.
 const INTERVAL_MIN = 5;
 const INTERVAL_MAKS = 1440;
-const INTERVAL_BAWAAN = 60;
+const INTERVAL_BAWAAN = 5;
 
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
