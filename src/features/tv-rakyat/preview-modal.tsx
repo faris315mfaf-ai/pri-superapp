@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
+  CalendarClock,
   CheckCircle2,
   XCircle,
   ChevronDown,
@@ -27,6 +28,7 @@ import {
 import { PlatformIcon } from "@/components/platform-icon";
 import { toast } from "@/hooks/use-app-store";
 import {
+  jadwalkanPosting,
   putuskanVideo,
   simpanSuntinganVideo,
   unggahVideoSosmed,
@@ -177,6 +179,11 @@ export function PreviewModal({
   // Hasil nyata per platform dari Ayrshare (null = belum ada hasil)
   const [hasilUnggah, setHasilUnggah] = useState<HasilUnggahPlatform[] | null>(null);
   const [konfirmasiBuang, setKonfirmasiBuang] = useState(false);
+  // Jadwal tayang (fitur 1.22.x/3, digabung ke sini) — bila diisi, video
+  // tidak diposting sekarang melainkan dijadwalkan lewat Ayrshare.
+  const [jadwalMode, setJadwalMode] = useState(false);
+  const [jadwalWaktu, setJadwalWaktu] = useState("");
+  const [sedangJadwal, setSedangJadwal] = useState(false);
 
   const timerRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const platformAktif = useMemo(
@@ -469,6 +476,72 @@ export function PreviewModal({
           "Gagal mengunggah",
           e instanceof Error ? e.message : "Coba lagi sebentar.",
         );
+      }
+    })();
+  }
+
+  // Jadwalkan tayang lewat Ayrshare (fitur 1.22.x/3, kini bagian dari
+  // komposer ini) — pakai video, caption, & platform yang sama, hanya
+  // ditambah waktu tayang. Gerbangnya sama dengan Unggah Sekarang.
+  function jadwalkanTayang() {
+    if (sedangJadwal || modeUnggah) return;
+    if (!bolehSetujui && persetujuan !== "disetujui") {
+      toast(
+        "peringatan",
+        "Belum disetujui Pimpinan Redaksi",
+        persetujuan === "ditolak"
+          ? "Video ini ditolak dan tidak boleh dijadwalkan."
+          : "Minta persetujuan Pimred dulu sebelum menjadwalkan.",
+      );
+      return;
+    }
+    if (platformAktif.length === 0) {
+      toast("peringatan", "Pilih minimal satu platform tujuan");
+      return;
+    }
+    if (platformKelebihan.length > 0) {
+      toast(
+        "peringatan",
+        "Caption melebihi batas platform",
+        "Perbaiki dulu: " + platformKelebihan.map((p) => p.label).join(", "),
+      );
+      return;
+    }
+    if (!urlVideo) {
+      toast("error", "Video belum siap", "Render video belum tersedia.");
+      return;
+    }
+    const t = new Date(jadwalWaktu);
+    if (!jadwalWaktu || Number.isNaN(t.getTime())) {
+      toast("peringatan", "Tentukan waktu tayang dulu");
+      return;
+    }
+    if (t.getTime() < Date.now() + 5 * 60 * 1000) {
+      toast("peringatan", "Jadwal minimal 5 menit dari sekarang");
+      return;
+    }
+
+    setSedangJadwal(true);
+    void (async () => {
+      try {
+        await jadwalkanPosting({
+          caption: captionEdit.trim(),
+          media_url: urlVideo,
+          is_video: true,
+          platforms: platformAktif.map((p) => p.platform),
+          judul_youtube: judulEdit.trim() || undefined,
+          jadwal_pada: t.toISOString(),
+        });
+        toast(
+          "sukses",
+          "Posting dijadwalkan",
+          "Ayrshare akan menayangkannya pada waktu yang Anda tentukan.",
+        );
+        onSelesaiUnggah(platformAktif.length);
+      } catch (e) {
+        toast("error", "Gagal menjadwalkan", e instanceof Error ? e.message : "Coba lagi.");
+      } finally {
+        setSedangJadwal(false);
       }
     })();
   }
@@ -1032,39 +1105,98 @@ export function PreviewModal({
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => (modeTinjau ? onTutup() : setKonfirmasiBuang(true))}
-                className="btn-tekan flex h-12 items-center justify-center gap-2 rounded-xl border border-pri/45 bg-pri/5 px-2 text-sm font-semibold text-pri"
-              >
-                {modeTinjau ? (
-                  <X className="h-4.5 w-4.5 shrink-0" />
-                ) : (
-                  <Trash2 className="h-4.5 w-4.5 shrink-0" />
-                )}
-                {modeTinjau ? "Tutup" : "Buang"}
-              </button>
-              <button
-                type="button"
-                onClick={mulaiUnggah}
-                disabled={!adaVideo || (!bolehSetujui && persetujuan !== "disetujui")}
-                title={
-                  !adaVideo
-                    ? "Video belum selesai diproses"
-                    : !bolehSetujui && persetujuan !== "disetujui"
-                      ? "Menunggu persetujuan Pimpinan Redaksi"
-                      : undefined
-                }
-                className="btn-tekan flex h-12 items-center justify-center gap-2 rounded-xl px-2 text-sm leading-tight font-bold text-white disabled:cursor-not-allowed disabled:opacity-45"
-                style={{
-                  background: "linear-gradient(135deg, #10B981, #059669)",
-                  boxShadow: "0 8px 20px rgba(16, 185, 129, 0.35)",
-                }}
-              >
-                <Rocket className="h-4.5 w-4.5 shrink-0" />
-                Unggah Sekarang
-              </button>
+            <div className="flex flex-col gap-3">
+              {/* Sekarang atau jadwalkan (fitur 1.22.x/3, digabung) */}
+              <div className="glass-soft flex gap-1 rounded-xl p-1">
+                {(
+                  [
+                    [false, "Sekarang", Rocket] as const,
+                    [true, "Jadwalkan", CalendarClock] as const,
+                  ]
+                ).map(([v, label, Ikon]) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setJadwalMode(v)}
+                    aria-pressed={jadwalMode === v}
+                    className={cn(
+                      "btn-tekan flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-[12.5px] font-bold",
+                      jadwalMode === v ? "text-white" : "text-teks-sekunder",
+                    )}
+                    style={
+                      jadwalMode === v
+                        ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" }
+                        : undefined
+                    }
+                  >
+                    <Ikon className="h-3.5 w-3.5" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {jadwalMode && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] font-semibold text-teks-sekunder">
+                    Waktu tayang (waktu perangkat Anda)
+                  </span>
+                  <input
+                    type="datetime-local"
+                    value={jadwalWaktu}
+                    onChange={(e) => setJadwalWaktu(e.target.value)}
+                    className="glass-soft h-11 w-full rounded-xl px-3 text-[13px] text-teks-utama outline-none focus:ring-2 focus:ring-pri/50"
+                  />
+                </label>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => (modeTinjau ? onTutup() : setKonfirmasiBuang(true))}
+                  className="btn-tekan flex h-12 items-center justify-center gap-2 rounded-xl border border-pri/45 bg-pri/5 px-2 text-sm font-semibold text-pri"
+                >
+                  {modeTinjau ? (
+                    <X className="h-4.5 w-4.5 shrink-0" />
+                  ) : (
+                    <Trash2 className="h-4.5 w-4.5 shrink-0" />
+                  )}
+                  {modeTinjau ? "Tutup" : "Buang"}
+                </button>
+                <button
+                  type="button"
+                  onClick={jadwalMode ? jadwalkanTayang : mulaiUnggah}
+                  disabled={
+                    !adaVideo ||
+                    (!bolehSetujui && persetujuan !== "disetujui") ||
+                    sedangJadwal
+                  }
+                  title={
+                    !adaVideo
+                      ? "Video belum selesai diproses"
+                      : !bolehSetujui && persetujuan !== "disetujui"
+                        ? "Menunggu persetujuan Pimpinan Redaksi"
+                        : undefined
+                  }
+                  className="btn-tekan flex h-12 items-center justify-center gap-2 rounded-xl px-2 text-sm leading-tight font-bold text-white disabled:cursor-not-allowed disabled:opacity-45"
+                  style={{
+                    background: jadwalMode
+                      ? "linear-gradient(135deg, #DC2626, #B91C1C)"
+                      : "linear-gradient(135deg, #10B981, #059669)",
+                    boxShadow: jadwalMode
+                      ? "0 8px 20px rgba(220, 38, 38, 0.35)"
+                      : "0 8px 20px rgba(16, 185, 129, 0.35)",
+                  }}
+                >
+                  {sedangJadwal ? (
+                    <Loader2 className="h-4.5 w-4.5 shrink-0 animate-spin" />
+                  ) : jadwalMode ? (
+                    <CalendarClock className="h-4.5 w-4.5 shrink-0" />
+                  ) : (
+                    <Rocket className="h-4.5 w-4.5 shrink-0" />
+                  )}
+                  {jadwalMode ? "Jadwalkan Tayang" : "Unggah Sekarang"}
+                </button>
+              </div>
             </div>
           )}
         </div>

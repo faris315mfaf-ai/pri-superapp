@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Tv, Newspaper, Send, Clapperboard, Activity, History, Radar, ListChecks, CalendarClock } from "lucide-react";
+import { Tv, Newspaper, Send, Clapperboard, Activity, History, Radar, ListChecks } from "lucide-react";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
 import { BeritaPanel } from "./berita-panel";
@@ -19,7 +19,6 @@ import { InsightDetailScreen } from "./insight-detail-screen";
 import { KirimVideoManual } from "@/features/tvr-ku/kirim-video-manual";
 import { PanelTugasLink } from "./tugas-link-panel";
 import { HasilScrapingPanel } from "./hasil-scraping-panel";
-import { JadwalPostingPanel } from "./jadwal-posting-panel";
 import { PipelinePanel } from "./pipeline-panel";
 import { KirimVideoPanel } from "./kirim-video-panel";
 import { ProgressPanel } from "./progress-panel";
@@ -30,7 +29,6 @@ import { KelolaSumberPanel } from "./kelola-sumber-panel";
 import { SeksiLipat } from "@/components/seksi-lipat";
 import { useAppStore } from "@/hooks/use-app-store";
 import { EmbedTerbaru } from "./embed-terbaru";
-import { SectionTitle } from "@/components/pri-ui";
 import type { Berita, HasilProsesVideo, User, VideoAntrian } from "@/types";
 import { adalahPimred } from "@/lib/jabatan";
 
@@ -306,29 +304,9 @@ export function TvScreen({
           </SeksiLipat>
           )}
 
-          {/* Upload video manual (hasil edit sendiri) — hanya untuk yang
-              berhak UPLOAD (fitur 1.22.x/bug 3). Form per-platform, caption,
-              judul & tombol unggah tak muncul bagi yang belum ditunjuk. */}
-          {bolehUpload && (
-          <div>
-            <SectionTitle judul="Upload Manual" />
-            <KirimVideoManual />
-          </div>
-          )}
-
-          {/* Jadwal posting resmi (fitur 1.22.x/3) — komposer caption+media+
-              platform+waktu tayang; Ayrshare menerbitkan pada waktunya.
-              Hanya bagi yang berhak UPLOAD (memposting atas nama partai). */}
-          {bolehUpload && (
-          <SeksiLipat
-            id="jadwal-posting"
-            judul="Jadwal Posting Official"
-            ikon={CalendarClock}
-            keterangan="Jadwalkan posting resmi ke sosmed"
-          >
-            <JadwalPostingPanel />
-          </SeksiLipat>
-          )}
+          {/* Log — unggah video manual (hasil edit sendiri) + riwayat ACC-nya
+              (fitur 1.22.x). Hanya untuk yang berhak UPLOAD. */}
+          {bolehUpload && <KirimVideoManual judulSeksi="Log" />}
 
           {/* Status pipeline (pindahan dari dashboard super admin) —
               bisa dilipat (fitur 1.22/2); hanya bagi yang memproses. */}

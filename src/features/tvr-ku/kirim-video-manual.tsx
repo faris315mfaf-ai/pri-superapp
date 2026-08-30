@@ -43,9 +43,12 @@ function badgeStatus(k: KirimanManual) {
 
 export function KirimVideoManual({
   hanyaBilaAdaTugas = false,
+  judulSeksi = "Kirim Video Hasil Edit",
 }: {
   /** true (TVR Saya): kartu hanya tampil bila anggota punya tugas link terbuka. */
   hanyaBilaAdaTugas?: boolean;
+  /** Judul seksi — di TV Rakyat Official dipakai "Log" (fitur 1.22.x). */
+  judulSeksi?: string;
 }) {
   const [daftar, setDaftar] = useState<KirimanManual[] | null>(null);
   const [muatUlang, setMuatUlang] = useState(0);
@@ -207,7 +210,7 @@ export function KirimVideoManual({
 
   return (
     <FadeInUp delay={0.18}>
-      <SectionTitle judul="Kirim Video Hasil Edit" className="mt-6" />
+      <SectionTitle judul={judulSeksi} className="mt-6" />
       <GlassCard className="p-4">
         <p className="text-xs leading-relaxed text-teks-sekunder">
           Unggah video yang sudah Anda edit untuk ditayangkan lewat TV Rakyat.
