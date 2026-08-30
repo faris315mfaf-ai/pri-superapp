@@ -34,6 +34,10 @@ import { jamWIB, tanggalIndonesia } from "@/lib/format";
 // diatur Pimred (1-200 MB, fitur 1.20/6) dan dibaca saat kartu tampil.
 const MAKS_UKURAN_MB_BAWAAN = 100;
 
+// Riwayat Log ditampilkan maks 5 per layar + nomor halaman (fitur 1.22.x)
+// supaya daftar panjang (puluhan video "siap ditinjau") tidak memenuhi layar.
+const PER_HAL = 5;
+
 function badgeStatus(k: KirimanManual) {
   if (k.status === "SUDAH DIPROSES") return <StatusBadge label="sudah tayang" warna="hijau" />;
   if (k.persetujuan === "ditolak") return <StatusBadge label="ditolak" warna="merah" />;
@@ -51,6 +55,7 @@ export function KirimVideoManual({
   judulSeksi?: string;
 }) {
   const [daftar, setDaftar] = useState<KirimanManual[] | null>(null);
+  const [halaman, setHalaman] = useState(1);
   const [muatUlang, setMuatUlang] = useState(0);
   const [persen, setPersen] = useState<number | null>(null);
   const [judul, setJudul] = useState("");
@@ -208,6 +213,12 @@ export function KirimVideoManual({
   // Mode TVR Saya: tanpa tugas terbuka, kartu ini tidak perlu tampil.
   if (hanyaBilaAdaTugas && tugasSaya.length === 0) return null;
 
+  // Paginasi Log: maks 5 per halaman + nomor halaman.
+  const daftarAman = daftar ?? [];
+  const totalHal = Math.max(1, Math.ceil(daftarAman.length / PER_HAL));
+  const halAman = Math.min(halaman, totalHal);
+  const tampilRiwayat = daftarAman.slice((halAman - 1) * PER_HAL, halAman * PER_HAL);
+
   return (
     <FadeInUp delay={0.18}>
       <SectionTitle judul={judulSeksi} className="mt-6" />
@@ -283,12 +294,13 @@ export function KirimVideoManual({
         )}
       </GlassCard>
 
-      {/* Riwayat kiriman */}
+      {/* Riwayat kiriman — maks 5 per halaman */}
       {daftar === null ? (
         <GlassSkeleton className="mt-2 h-16 rounded-2xl" />
       ) : daftar.length > 0 ? (
-        <div className="mt-2 flex flex-col gap-2">
-          {daftar.map((k) => (
+        <div className="mt-2">
+          <div className="flex flex-col gap-2">
+          {tampilRiwayat.map((k) => (
             <GlassCard key={k.kode} className="flex items-center gap-3 p-3">
               {k.thumbnail_url ? (
                 <img src={k.thumbnail_url} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
@@ -319,6 +331,33 @@ export function KirimVideoManual({
               {badgeStatus(k)}
             </GlassCard>
           ))}
+          </div>
+          {totalHal > 1 && (
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
+              {Array.from({ length: totalHal }).map((_, i) => {
+                const n = i + 1;
+                const aktif = n === halAman;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setHalaman(n)}
+                    aria-current={aktif ? "page" : undefined}
+                    className={`btn-tekan angka-tab flex h-8 min-w-8 items-center justify-center rounded-lg px-2 text-[12.5px] font-bold ${
+                      aktif ? "text-white" : "glass text-teks-sekunder"
+                    }`}
+                    style={
+                      aktif
+                        ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" }
+                        : undefined
+                    }
+                  >
+                    {n}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       ) : null}
     </FadeInUp>

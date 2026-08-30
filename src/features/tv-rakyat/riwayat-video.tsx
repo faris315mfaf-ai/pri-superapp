@@ -94,10 +94,11 @@ export function RiwayatVideo({
 }) {
   const [cache, setCache] = useState<CacheRiwayat | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("SEMUA");
-  // Paginasi (fitur 1.22.x/bug 4): maksimal 10 baris per halaman supaya
-  // daftar tidak sumpek; nomor halaman di bawahnya.
+  // Paginasi (fitur 1.22.x): maksimal 5 baris per halaman supaya daftar
+  // "siap ditinjau/upload" yang panjang tidak memenuhi layar; nomor
+  // halaman di bawahnya.
   const [halaman, setHalaman] = useState(1);
-  const PER_HAL = 10;
+  const PER_HAL = 5;
 
   // Muat ulang data saat mount dan setiap refreshKey naik.
   // Saat kunci cache tidak cocok → tampil skeleton (sedang memuat).
