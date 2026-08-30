@@ -15,9 +15,15 @@ import {
 import { pastikanBukanPerbaikan } from "@/lib/perbaikan";
 import { siaranUltahHarian } from "@/lib/ultah";
 import { siaranVerifikasiBerkala } from "@/lib/verifikasi-ingatkan";
+import { sinkronKontenTvTerjadwal } from "@/lib/sinkron-konten-tv";
 import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
+// Respons /api/sesi tetap kembali seketika; nilai ini hanya memberi
+// ruang bagi pekerjaan after() (sinkron konten TV Rakyat, anggaran ~40 dtk)
+// agar tuntas tanpa dipotong. Hanya SATU pembukaan aplikasi per jendela
+// 30 menit yang benar-benar menjalankan sinkron (klaim atomik).
+export const maxDuration = 60;
 
 /** Ambil token dari header Authorization: Bearer <token> */
 function tokenDari(request: Request): string {
@@ -66,6 +72,10 @@ export async function GET(request: Request) {
     // Ajakan verifikasi berkala (fitur 1.22.x/1) — sekali per jendela
     // (bawaan 60 menit) ke anggota yang WA/Google/Wajah-nya belum lengkap.
     after(siaranVerifikasiBerkala);
+    // Sinkron konten TV Rakyat dari Ayrshare — sekali per jendela (bawaan
+    // 30 menit): isi kanal konten + daftar postingan wajib-komen + cek
+    // komentar. Tanpa cron; menumpang pembukaan aplikasi.
+    after(sinkronKontenTvTerjadwal);
 
     return { user };
   });

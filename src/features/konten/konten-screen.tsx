@@ -44,6 +44,7 @@ import {
 } from "@/services";
 import { toast } from "@/hooks/use-app-store";
 import { KartuVideoBaru } from "@/features/beranda/kartu-video-baru";
+import { KartuWajibKomen } from "@/features/konten/kartu-wajib-komen";
 import { BerandaAnggotaPanel } from "./beranda-anggota";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { cn } from "@/lib/utils";
@@ -243,6 +244,10 @@ export function KontenScreen({
           lengkap dengan kewajiban komen & share. Umurnya mengikuti
           pengaturan Pimred (1-24 jam, fitur 1.20/8). */}
       <KartuVideoBaru />
+
+      {/* Postingan wajib dikomentari kader hari ini — status DIVERIFIKASI
+          dari komentar asli (rekap QC), hasil sinkron otomatis Ayrshare. */}
+      <KartuWajibKomen />
 
       {daftar === null ? (
         <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2">

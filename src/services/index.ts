@@ -2900,6 +2900,32 @@ export async function tandaiInteraksiVideo(
   });
 }
 
+// --- Postingan wajib dikomentari kader (QC, status TERVERIFIKASI) ---
+
+export type WajibKomenItem = {
+  id_postingan: string;
+  platform: string;
+  akun: string;
+  url: string;
+  caption: string;
+  thumbnail: string;
+  waktu_posting: string | null;
+  /** true = komentar kader ini SUDAH ketemu di postingan (dari rekap QC) */
+  sudah_komentar: boolean;
+};
+
+export type WajibKomen = {
+  periode: string;
+  belum: number;
+  data: WajibKomenItem[];
+};
+
+/** Daftar postingan wajib komen hari ini + status komentar saya (verified). */
+export async function getWajibKomen(): Promise<WajibKomen> {
+  const json = await fetchJson("/api/tv/wajib-komen", { headers: headerToken() });
+  return json as WajibKomen;
+}
+
 /** Sakelar mode perbaikan — khusus master (lihat /api/master). */
 /** Analisis ulang QC berbasis data Ayrshare (tanpa n8n/TikHub). */
 export type HasilAnalisisAyrshare = {

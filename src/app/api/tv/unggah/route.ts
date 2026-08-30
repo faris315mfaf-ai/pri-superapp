@@ -26,6 +26,8 @@ import { kirimKabar } from "@/lib/notifikasi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { retensiJamTv } from "@/lib/pengaturan-tv";
 import { tayangAtauDiproses } from "@/lib/ayrshare-status";
+import { daftarkanVideoUnggahan } from "@/lib/sinkron-konten-tv";
+import { after } from "next/server";
 
 export const dynamic = "force-dynamic";
 
@@ -171,7 +173,7 @@ export async function POST(request: Request) {
     const { data: video, error: eBaca } = await db
       .from("video_antrian")
       .select(
-        "kode, judul, judul_overlay, caption_asli, caption_platform, hasil_render_url, status, platform_terunggah, persetujuan, tugas_id, diupload_oleh_id, ayrshare_hasil",
+        "kode, judul, judul_overlay, caption_asli, caption_platform, hasil_render_url, status, platform_terunggah, persetujuan, tugas_id, diupload_oleh_id, ayrshare_hasil, thumbnail_url",
       )
       .eq("kode", kode)
       .maybeSingle();
@@ -409,6 +411,19 @@ export async function POST(request: Request) {
         kategori: "info",
         jenis_peristiwa: "tv_publik",
       });
+
+      // 3. Daftarkan SEKETIKA ke kanal konten + wajib-komen (feed_konten +
+      // postingan), tanpa menunggu sinkron berkala. Di latar (after) agar
+      // tak menunda respons. Komentar diperiksa pada sinkron berkala.
+      after(() =>
+        daftarkanVideoUnggahan({
+          posting: berhasil
+            .filter((h) => h.postUrl)
+            .map((h) => ({ platform: h.platform, id: h.id, postUrl: h.postUrl })),
+          caption: video.caption_asli ?? "",
+          thumbnailUrl: video.thumbnail_url ?? "",
+        }),
+      );
     }
 
     // ---- Pemberitahuan kegagalan per platform (fitur 1.20/9) ----
