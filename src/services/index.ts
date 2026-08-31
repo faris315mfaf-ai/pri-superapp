@@ -561,10 +561,13 @@ export async function getKomentarByPostingan(id_postingan: string): Promise<Kome
 /** Rekap kepatuhan sebuah postingan + ringkasan sudah/belum/persen */
 export async function getRekapPostingan(
   id_postingan: string,
+  periode?: string,
 ): Promise<{ rekap: Rekap[]; ringkasan: RingkasanPostingan }> {
-  const json = await fetchJson(
-    `/api/rekap?id_postingan=${encodeURIComponent(id_postingan)}`,
-  );
+  // Periode ikut dikirim: postingan hari transisi jendela QC punya rekap
+  // di dua label periode — tanpa saringan ini kader terhitung dobel.
+  const params = new URLSearchParams({ id_postingan });
+  if (periode) params.set("periode", periode);
+  const json = await fetchJson(`/api/rekap?${params.toString()}`);
   return {
     rekap: json.data as Rekap[],
     ringkasan: json.ringkasan as RingkasanPostingan,

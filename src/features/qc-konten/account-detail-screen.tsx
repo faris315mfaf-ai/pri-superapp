@@ -27,12 +27,51 @@ import {
 } from "@/services";
 import { toast } from "@/hooks/use-app-store";
 import { formatAngkaRingkas, warnaKepatuhan } from "@/lib/format";
+import { periodeSaatIni } from "@/lib/periode-qc";
 
 type AccountDetailScreenProps = {
   akunWajib: string;
+  /** Label periode QC yang sedang dilihat (dari layar QC). Kosong = periode berjalan. */
+  periode?: string;
   onKembali: () => void;
   onBukaPostingan: (idPostingan: string) => void;
 };
+
+/**
+ * Thumbnail postingan dengan cadangan: URL CDN TikTok/IG cepat kedaluwarsa,
+ * jadi saat gambar gagal dimuat tampilkan latar gradien + ikon platform —
+ * bukan teks alt yang berantakan seperti bug sebelumnya.
+ * Dipakai juga oleh PostDetailScreen (ekspor).
+ */
+export function ThumbnailPostingan({
+  url,
+  platform,
+  className = "h-36 w-full",
+}: {
+  url: string;
+  platform: string;
+  className?: string;
+}) {
+  const [gagal, setGagal] = useState(false);
+  if (!url || gagal) {
+    return (
+      <div
+        className={`flex items-center justify-center bg-gradient-to-br from-pri/25 via-black/10 to-black/30 dark:from-pri/20 dark:via-white/5 dark:to-black/40 ${className}`}
+      >
+        <PlatformIcon platform={platform} size={34} />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={url}
+      alt="Thumbnail postingan"
+      loading="lazy"
+      onError={() => setGagal(true)}
+      className={`object-cover ${className}`}
+    />
+  );
+}
 
 /** "2026-08-23T09:42:00+07:00" → "09:42" */
 function jamMenit(iso: string): string {
@@ -45,19 +84,24 @@ function jamMenit(iso: string): string {
 
 export function AccountDetailScreen({
   akunWajib,
+  periode,
   onKembali,
   onBukaPostingan,
 }: AccountDetailScreenProps) {
   const [akun, setAkun] = useState<AkunWajibWithStats | null>(null);
   const [postingan, setPostingan] = useState<PostinganWithKepatuhan[] | null>(null);
+  // SELALU kunci ke satu periode. Dulu layar ini menarik SEMUA postingan
+  // sepanjang masa (242 baris) → statistik jadi kacau + rekap terpotong
+  // di batas 1000 baris PostgREST → tampil "0% kepatuhan" palsu.
+  const periodeAktif = periode || periodeSaatIni();
 
   useEffect(() => {
     let hidup = true;
     void (async () => {
       try {
         const [daftarAkun, daftarPostingan] = await Promise.all([
-          getAkunWajib(),
-          getPostinganByAkun(akunWajib),
+          getAkunWajib(periodeAktif),
+          getPostinganByAkun(akunWajib, periodeAktif),
         ]);
         if (!hidup) return;
         setAkun(daftarAkun.find((a) => a.akun_wajib === akunWajib) ?? null);
@@ -71,21 +115,35 @@ export function AccountDetailScreen({
     return () => {
       hidup = false;
     };
-  }, [akunWajib]);
+  }, [akunWajib, periodeAktif]);
 
   const statistik = useMemo(() => {
     if (!postingan || postingan.length === 0) return null;
+    // Penyebut = jumlah kader NYATA di rekap tiap postingan (sudah+belum),
+    // BUKAN angka 24 hardcoded sisa desain dummy lama (roster asli ±151).
     const totalKomentarKader = postingan.reduce((a, p) => a + p.sudah_komentar_kader, 0);
-    const rataKepatuhan = Math.round(
-      postingan.reduce((a, p) => a + (p.sudah_komentar_kader / 24) * 100, 0) /
-        postingan.length,
+    const dinilai = postingan.filter(
+      (p) => p.sudah_komentar_kader + p.belum_komentar_kader > 0,
     );
+    const rataKepatuhan =
+      dinilai.length === 0
+        ? null
+        : Math.round(
+            dinilai.reduce((a, p) => {
+              const total = p.sudah_komentar_kader + p.belum_komentar_kader;
+              return a + (p.sudah_komentar_kader / total) * 100;
+            }, 0) / dinilai.length,
+          );
     return { totalKomentarKader, rataKepatuhan };
   }, [postingan]);
 
   return (
     <div className="kolom-aplikasi px-4 pb-32">
-      <ScreenHeader judul={`@${akunWajib}`} onKembali={onKembali} kanan={<ThemeToggle />} />
+      <ScreenHeader
+        judul={akunWajib.includes(" ") ? akunWajib : `@${akunWajib}`}
+        onKembali={onKembali}
+        kanan={<ThemeToggle />}
+      />
 
       {/* Header akun */}
       <FadeInUp>
@@ -99,14 +157,16 @@ export function AccountDetailScreen({
             </div>
             <div className="min-w-0">
               <h2 className="truncate font-heading text-lg font-extrabold text-teks-utama">
-                @{akunWajib}
+                {/* Akun hasil tarik Ayrshare (FB/Threads/YT) memakai NAMA
+                    TAMPILAN berspasi — jangan ditempeli "@" seolah username. */}
+                {akunWajib.includes(" ") ? akunWajib : `@${akunWajib}`}
               </h2>
               <p className="truncate text-xs text-teks-sekunder">
                 {akun?.nama_tampilan ?? "Memuat..."}
               </p>
               <div className="mt-2">
                 <StatusBadge
-                  label={`${akun?.total_postingan ?? postingan?.length ?? 0} postingan hari ini`}
+                  label={`${postingan?.length ?? akun?.total_postingan ?? 0} postingan periode ini`}
                   warna="pri"
                 />
               </div>
@@ -126,7 +186,7 @@ export function AccountDetailScreen({
                 className="angka-tab font-heading text-lg font-extrabold"
                 style={{ color: warnaKepatuhan(statistik?.rataKepatuhan ?? 0) }}
               >
-                {statistik ? `${statistik.rataKepatuhan}%` : "–"}
+                {statistik?.rataKepatuhan != null ? `${statistik.rataKepatuhan}%` : "–"}
               </span>
               <span className="text-[10px] font-medium text-teks-sekunder">
                 Rata-rata Kepatuhan
@@ -146,9 +206,15 @@ export function AccountDetailScreen({
 
       {/* Daftar postingan */}
       <div className="mt-5 flex flex-col gap-4">
-        <h3 className="font-heading text-[15px] font-bold text-teks-utama">
-          Postingan Periode Ini
-        </h3>
+        <div className="flex items-baseline justify-between gap-2">
+          <h3 className="font-heading text-[15px] font-bold text-teks-utama">
+            Postingan Periode Ini
+          </h3>
+          {/* Transparan soal jendela data yang sedang ditampilkan. */}
+          <span className="angka-tab shrink-0 text-[10.5px] text-teks-sekunder">
+            {periodeAktif}
+          </span>
+        </div>
 
         {postingan === null ? (
           [0, 1, 2].map((i) => (
@@ -171,8 +237,15 @@ export function AccountDetailScreen({
           </GlassCard>
         ) : (
           postingan.map((p, i) => {
-            const persen = Math.round((p.sudah_komentar_kader / 24) * 100);
-            const lengkap = p.sudah_komentar_kader >= 24;
+            // Penyebut riil = jumlah baris rekap postingan ini (roster kader
+            // yang dinilai, ±151 orang) — bukan angka 24 hardcoded.
+            const totalKader = p.sudah_komentar_kader + p.belum_komentar_kader;
+            const persen =
+              totalKader > 0
+                ? Math.round((p.sudah_komentar_kader / totalKader) * 100)
+                : 0;
+            const lengkap = totalKader > 0 && p.belum_komentar_kader === 0;
+            const belumDiperiksa = totalKader === 0;
             return (
               <FadeInUp key={p.id_postingan} delay={0.04 + i * 0.06}>
                 <GlassCard
@@ -182,15 +255,12 @@ export function AccountDetailScreen({
                 >
                   {/* Thumbnail + badge status */}
                   <div className="relative">
-                    <img
-                      src={p.thumbnail_url}
-                      alt={`Thumbnail postingan ${p.id_postingan}`}
-                      loading="lazy"
-                      className="h-36 w-full object-cover"
-                    />
+                    <ThumbnailPostingan url={p.thumbnail_url} platform={p.platform} />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
                     <div className="absolute top-3 right-3">
-                      {lengkap ? (
+                      {belumDiperiksa ? (
+                        <StatusBadge label="Belum Diperiksa" warna="kuning" />
+                      ) : lengkap ? (
                         <StatusBadge label="Lengkap" warna="hijau" />
                       ) : (
                         <StatusBadge
@@ -227,16 +297,22 @@ export function AccountDetailScreen({
                     <div className="mt-3">
                       <div className="mb-1.5 flex items-center justify-between text-[11px]">
                         <span className="text-teks-sekunder">
-                          <span className="angka-tab font-bold text-teks-utama">
-                            {p.sudah_komentar_kader}
-                          </span>{" "}
-                          dari 24 kader sudah komentar
+                          {belumDiperiksa ? (
+                            "Komentar belum diperiksa sinkron"
+                          ) : (
+                            <>
+                              <span className="angka-tab font-bold text-teks-utama">
+                                {p.sudah_komentar_kader}
+                              </span>{" "}
+                              dari {totalKader} kader sudah komentar
+                            </>
+                          )}
                         </span>
                         <span
                           className="angka-tab font-bold"
                           style={{ color: warnaKepatuhan(persen) }}
                         >
-                          {persen}%
+                          {belumDiperiksa ? "–" : `${persen}%`}
                         </span>
                       </div>
                       <div className="h-2.5 w-full overflow-hidden rounded-full bg-black/8 dark:bg-white/10">

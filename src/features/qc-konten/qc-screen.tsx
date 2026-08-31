@@ -104,7 +104,7 @@ export function QcScreen({
   onBukaHalaman,
   bolehHR = false,
 }: {
-  onBukaAkun: (akunWajib: string) => void;
+  onBukaAkun: (akunWajib: string, periode?: string) => void;
   onBukaNotifikasi?: () => void;
   /** Buka halaman HR Center (tabel-anggota / absensi-hari-ini / setel-kpi
    *  serta kelola-pengguna / pengumuman untuk orang HR) */
@@ -638,7 +638,7 @@ export function QcScreen({
               akunTampil.map((akun, i) => (
                 <FadeInUp key={akun.id} delay={0.05 + i * 0.07}>
                   <GlassCard
-                    onClick={() => onBukaAkun(akun.akun_wajib)}
+                    onClick={() => onBukaAkun(akun.akun_wajib, periodePilih)}
                     ariaLabel={`Buka detail akun ${akun.akun_wajib}`}
                     className="p-4"
                   >

@@ -45,11 +45,25 @@ import type { Kader, Komentar, Rekap } from "@/types";
 import type { PostinganWithKepatuhan } from "@/services";
 import { cn } from "@/lib/utils";
 import { WhatsAppIcon } from "./whatsapp-icon";
+import { ThumbnailPostingan } from "./account-detail-screen";
+import { periodeSaatIni } from "@/lib/periode-qc";
 
 type PostDetailScreenProps = {
   idPostingan: string;
   akunWajib: string;
+  /** Label periode QC yang sedang dilihat. Kosong = periode berjalan. */
+  periode?: string;
   onKembali: () => void;
+};
+
+/** Nama platform untuk label tombol "Buka di ..." (dulu hardcoded Instagram). */
+const NAMA_PLATFORM: Record<string, string> = {
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  facebook: "Facebook",
+  threads: "Threads",
+  twitter: "X",
 };
 
 type BarisBelum = { kader: Kader; rekap: Rekap };
@@ -67,6 +81,7 @@ function jamMenit(iso: string): string {
 export function PostDetailScreen({
   idPostingan,
   akunWajib,
+  periode,
   onKembali,
 }: PostDetailScreenProps) {
   const [postingan, setPostingan] = useState<PostinganWithKepatuhan | null>(null);
@@ -79,14 +94,17 @@ export function PostDetailScreen({
   const [cari, setCari] = useState("");
   const [modalIngatkan, setModalIngatkan] = useState(false);
 
-  // Muat semua data paralel
+  // Muat semua data paralel — SELALU terkunci ke satu periode. Dulu
+  // getPostinganByAkun tanpa periode menarik ratusan postingan sepanjang
+  // masa, dan rekap tanpa periode menghitung dobel postingan hari transisi.
+  const periodeAktif = periode || periodeSaatIni();
   useEffect(() => {
     let hidup = true;
     void (async () => {
       try {
         const [daftarPostingan, dataRekap, daftarKomentar, daftarKader] = await Promise.all([
-          getPostinganByAkun(akunWajib),
-          getRekapPostingan(idPostingan),
+          getPostinganByAkun(akunWajib, periodeAktif),
+          getRekapPostingan(idPostingan, periodeAktif),
           getKomentarByPostingan(idPostingan),
           getKader(),
         ]);
@@ -107,7 +125,7 @@ export function PostDetailScreen({
     return () => {
       hidup = false;
     };
-  }, [idPostingan, akunWajib]);
+  }, [idPostingan, akunWajib, periodeAktif]);
 
   // Gabungkan rekap + kader + komentar
   const { barisBelum, barisSudah } = useMemo(() => {
@@ -191,10 +209,10 @@ export function PostDetailScreen({
           {/* Bagian atas: thumbnail + caption + aksi */}
           <FadeInUp>
             <GlassCard className="overflow-hidden p-0">
-              <img
-                src={postingan.thumbnail_url}
-                alt={`Thumbnail postingan ${postingan.id_postingan}`}
-                className="aspect-square w-full object-cover"
+              <ThumbnailPostingan
+                url={postingan.thumbnail_url}
+                platform={postingan.platform}
+                className="aspect-square w-full"
               />
               <div className="p-4">
                 <p className="text-sm leading-relaxed text-teks-utama">
@@ -208,7 +226,7 @@ export function PostDetailScreen({
                   className="glass btn-tekan mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-teks-utama"
                 >
                   <ExternalLink className="h-4 w-4 text-pri" />
-                  Buka di Instagram
+                  Buka di {NAMA_PLATFORM[postingan.platform] ?? "Sosial Media"}
                 </button>
               </div>
             </GlassCard>

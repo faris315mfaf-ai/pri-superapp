@@ -73,8 +73,8 @@ import { cn } from "@/lib/utils";
 // ------------------------------------------------------------
 
 type SubLayar =
-  | { nama: "qc-akun"; akunWajib: string }
-  | { nama: "qc-postingan"; idPostingan: string; akunWajib: string }
+  | { nama: "qc-akun"; akunWajib: string; periode?: string }
+  | { nama: "qc-postingan"; idPostingan: string; akunWajib: string; periode?: string }
   // Panel super admin: menyetujui pendaftar & menetapkan peran
   | { nama: "kelola-pengguna" }
   // Kehadiran & kinerja (dibuka dari tab Profil)
@@ -674,7 +674,9 @@ export default function Page() {
                   | "pengumuman",
               })
             }
-            onBukaAkun={(akunWajib) => setSubLayar({ nama: "qc-akun", akunWajib })}
+            onBukaAkun={(akunWajib, periode) =>
+              setSubLayar({ nama: "qc-akun", akunWajib, periode })
+            }
             onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           />
         ),
@@ -917,12 +919,14 @@ export default function Page() {
                 ) : subLayar.nama === "qc-akun" ? (
                   <AccountDetailScreen
                     akunWajib={subLayar.akunWajib}
+                    periode={subLayar.periode}
                     onKembali={() => setSubLayar(null)}
                     onBukaPostingan={(idPostingan) =>
                       setSubLayar({
                         nama: "qc-postingan",
                         idPostingan,
                         akunWajib: subLayar.akunWajib,
+                        periode: subLayar.periode,
                       })
                     }
                   />
@@ -930,8 +934,13 @@ export default function Page() {
                   <PostDetailScreen
                     idPostingan={subLayar.idPostingan}
                     akunWajib={subLayar.akunWajib}
+                    periode={subLayar.periode}
                     onKembali={() =>
-                      setSubLayar({ nama: "qc-akun", akunWajib: subLayar.akunWajib })
+                      setSubLayar({
+                        nama: "qc-akun",
+                        akunWajib: subLayar.akunWajib,
+                        periode: subLayar.periode,
+                      })
                     }
                   />
                 )}

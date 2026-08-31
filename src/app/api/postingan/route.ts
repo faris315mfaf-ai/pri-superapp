@@ -8,7 +8,7 @@ import { pastikanMasuk } from "@/lib/sesi";
 
 export const dynamic = "force-dynamic";
 
-type BarisRekap = { id_postingan: string; sudah_komentar: boolean };
+type BarisRekap = { id_postingan: string; periode: string; sudah_komentar: boolean };
 
 export async function GET(request: Request) {
   return bungkus(async () => {
@@ -37,17 +37,32 @@ export async function GET(request: Request) {
 
     // Ambil rekap hanya untuk postingan yang benar-benar tampil,
     // supaya tidak menarik seluruh tabel rekap yang bisa puluhan ribu baris.
+    // PENTING (1 Sep 2026): PostgREST memotong respons di 1000 baris —
+    // 8 postingan x 151 kader saja sudah 1208 baris, jadi TANPA paginasi
+    // hitungan "sudah komentar" diam-diam terpotong (bug "0% kepatuhan").
     const idList = postingan.map((p) => p.id_postingan as string);
-    const rekap = pastikanSukses(
-      await db
-        .from("v_app_rekap")
-        .select("id_postingan, sudah_komentar")
-        .in("id_postingan", idList),
-      "rekap kepatuhan",
-    ) as BarisRekap[];
+    const rekap: BarisRekap[] = [];
+    const UKURAN = 1000;
+    for (let mulai = 0; ; mulai += UKURAN) {
+      const halaman = pastikanSukses(
+        await db
+          .from("v_app_rekap")
+          .select("id_postingan, periode, sudah_komentar")
+          .in("id_postingan", idList)
+          .order("id_unik")
+          .range(mulai, mulai + UKURAN - 1),
+        "rekap kepatuhan",
+      ) as BarisRekap[];
+      rekap.push(...halaman);
+      if (halaman.length < UKURAN) break;
+    }
 
     const data = postingan.map((p) => {
-      const baris = rekap.filter((r) => r.id_postingan === p.id_postingan);
+      // Cocokkan juga PERIODE: postingan hari transisi jendela QC punya
+      // baris rekap di dua label periode — tanpa ini kadernya dihitung dobel.
+      const baris = rekap.filter(
+        (r) => r.id_postingan === p.id_postingan && r.periode === p.periode,
+      );
       const sudah = baris.filter((r) => r.sudah_komentar).length;
       return {
         ...p,
