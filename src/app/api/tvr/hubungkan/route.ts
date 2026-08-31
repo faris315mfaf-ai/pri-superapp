@@ -10,7 +10,7 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
-import { penyediaAktif } from "@/lib/sosmed-penyedia";
+import { penyediaAnggota } from "@/lib/sosmed-penyedia";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +46,7 @@ async function profilKu(userId: number, penyediaId: string) {
 export async function POST(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
-    const penyedia = penyediaAktif();
+    const penyedia = penyediaAnggota();
     const db = supabase();
 
     let profil = await profilKu(Number(user.id), penyedia.id);
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
-    const penyedia = penyediaAktif();
+    const penyedia = penyediaAnggota();
     const db = supabase();
 
     const profil = await profilKu(Number(user.id), penyedia.id);

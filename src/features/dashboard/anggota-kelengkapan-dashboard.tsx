@@ -298,6 +298,8 @@ export function AnggotaKelengkapanDashboard() {
                     {d.label}
                   </th>
                 ))}
+                {/* Akun TV Rakyat tertaut via upload-post (target 6) */}
+                <th className="px-2 py-2.5 text-center">TVR</th>
                 <th className="px-3 py-2.5 text-center">%</th>
               </tr>
             </thead>
@@ -305,7 +307,7 @@ export function AnggotaKelengkapanDashboard() {
               {tersaring.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={DIMENSI.length + 2}
+                    colSpan={DIMENSI.length + 3}
                     className="px-3 py-8 text-center text-teks-sekunder"
                   >
                     Tidak ada anggota pada kategori ini.
@@ -347,6 +349,18 @@ export function AnggotaKelengkapanDashboard() {
                         )}
                       </td>
                     ))}
+                    <td className="px-2 py-2 text-center">
+                      <span
+                        className={cn(
+                          "angka-tab rounded-full px-1.5 py-0.5 text-[10px] font-bold",
+                          (a.tvr_tertaut ?? 0) >= 6
+                            ? "bg-sukses/15 text-emerald-600 dark:text-emerald-400"
+                            : "bg-gagal/10 text-gagal",
+                        )}
+                      >
+                        {a.tvr_tertaut ?? 0}/6
+                      </span>
+                    </td>
                     <td className="angka-tab px-3 py-2 text-center font-bold text-teks-utama">
                       {a.persen}%
                     </td>

@@ -51,36 +51,54 @@ const ayrshare: PenyediaSosmed = {
 };
 
 // ------------------------------------------------------------
-// Adaptor upload-post (KODE SIMPANAN — spek 1.17)
-//
-// Pemetaan endpoint yang sudah dipelajari (lengkapi saat migrasi):
-// - Buat profil    : POST https://api.upload-post.com/api/uploadposts/users
-//                    { username } — header "Authorization: Apikey <KEY>"
-// - Tautan penautan: POST .../users/generate-jwt { username } → { access_url }
-// - Akun tertaut   : GET  .../users → profiles[].social_accounts
-// - Hapus profil   : DELETE .../users { username }
+// Adaptor upload-post (AKTIF sejak rombakan TVR Saya, 31 Agu 2026)
 // "profileKey" pada penyedia ini = username profil upload-post.
+// Implementasi API-nya di lib/upload-post (kontrak diverifikasi live).
 // ------------------------------------------------------------
+import {
+  akunTertautUp,
+  buatProfilUp,
+  hapusProfilUp,
+  tautanHubungkanUp,
+  uploadPostSiap,
+} from "@/lib/upload-post";
 
-function belumAktif(): never {
-  throw Object.assign(
-    new Error(
-      "Penyedia upload-post belum diaktifkan. Isi UPLOAD_POST_API_KEY lalu lengkapi adaptornya di lib/sosmed-penyedia.ts.",
-    ),
-    { status: 503, pesanAman: true },
-  );
+/** Username profil upload-post dari judul: huruf kecil/angka/strip. */
+function slugProfil(judul: string): string {
+  const dasar = judul
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return dasar || `pri-${Date.now().toString(36)}`;
 }
 
 const uploadPost: PenyediaSosmed = {
   id: "upload-post",
-  // TODO(migrasi upload-post): implementasi per pemetaan di atas.
-  buatProfil: async () => belumAktif(),
-  hapusProfil: async () => belumAktif(),
-  tautanHubungkan: async () => belumAktif(),
-  akunTertaut: async () => belumAktif(),
+  async buatProfil(judul) {
+    const username = slugProfil(judul);
+    await buatProfilUp(username);
+    return { profileKey: username, refId: username };
+  },
+  hapusProfil: (profileKey) => hapusProfilUp(profileKey),
+  tautanHubungkan: (profileKey) => tautanHubungkanUp(profileKey),
+  async akunTertaut(profileKey) {
+    const akun = await akunTertautUp(profileKey);
+    return Object.entries(akun).map(([platform, username]) => ({ platform, username }));
+  },
 };
 
 /** Penyedia aktif — env SOSMED_PENYEDIA ("ayrshare" bawaan). */
 export function penyediaAktif(): PenyediaSosmed {
   return process.env.SOSMED_PENYEDIA === "upload-post" ? uploadPost : ayrshare;
+}
+
+/**
+ * Penyedia untuk AKUN PRIBADI ANGGOTA (TVR Saya): upload-post begitu
+ * kuncinya terpasang, tanpa menyentuh jalur Official/QC yang tetap
+ * Ayrshare. Dipisah dari penyediaAktif() supaya dua dunia itu tidak
+ * saling menular lewat satu env global.
+ */
+export function penyediaAnggota(): PenyediaSosmed {
+  return uploadPostSiap() ? uploadPost : penyediaAktif();
 }

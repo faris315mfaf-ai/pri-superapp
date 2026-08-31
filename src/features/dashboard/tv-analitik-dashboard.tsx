@@ -36,6 +36,7 @@ import { Activity, Clapperboard } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { EmptyState, GlassSkeleton } from "@/components/pri-ui";
 import { PlatformIcon } from "@/components/platform-icon";
+import { TvAnggotaPanel } from "./tv-anggota-panel";
 import { toast } from "@/hooks/use-app-store";
 import {
   getDashboardTv,
@@ -465,6 +466,13 @@ export function TvAnalitikDashboard() {
           </div>
         )}
       </GlassCard>
+
+      {/* Pengendali akun TV Rakyat ANGGOTA (upload-post) + gabungan
+          insight Official+anggota (rombakan TVR Saya, 31 Agu 2026). */}
+      <p className="mt-1 text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">
+        Akun TV Rakyat Anggota
+      </p>
+      <TvAnggotaPanel />
     </div>
   );
 }

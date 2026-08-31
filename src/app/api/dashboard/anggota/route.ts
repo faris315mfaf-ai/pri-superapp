@@ -50,8 +50,22 @@ export async function GET(request: Request) {
         .limit(500),
       db.from("akun_sosmed_user").select("user_id").limit(2000),
     ]);
+    // Akun TV Rakyat tertaut (upload-post) — target 6 platform/anggota.
+    const { data: tvr } = await supabase()
+      .from("akun_tvr_user")
+      .select("user_id, platform")
+      .eq("terhubung", true)
+      .neq("platform", "website")
+      .limit(3000);
 
     const punyaSosmed = new Set((sosmed ?? []).map((s) => Number(s.user_id)));
+    const tvrPer = new Map<number, Set<string>>();
+    for (const b of tvr ?? []) {
+      const id = Number(b.user_id);
+      const set = tvrPer.get(id) ?? new Set<string>();
+      set.add(String(b.platform));
+      tvrPer.set(id, set);
+    }
 
     const anggota = (roster ?? []).map((u) => {
       const dimensi = {
@@ -69,6 +83,8 @@ export async function GET(request: Request) {
         divisi: (u.divisi as string) ?? "",
         // Untuk grafik pertumbuhan pendaftar (kumulatif per tanggal).
         bergabung: (u.created_at as string) ?? null,
+        // Akun TV Rakyat tertaut (target 6 platform).
+        tvr_tertaut: tvrPer.get(Number(u.id))?.size ?? 0,
         dimensi,
         terpenuhi,
         persen: Math.round((terpenuhi / 5) * 100),

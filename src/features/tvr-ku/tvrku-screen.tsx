@@ -23,7 +23,7 @@ import {
   Pencil,
   Plus,
   Trash2,
-  Video, Globe, X, RefreshCw } from "lucide-react";
+  Video, Globe, X, RefreshCw, BarChart3 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import {
   EmptyState,
@@ -62,6 +62,8 @@ import type { KomponenIkon, User } from "@/types";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { PanelTugasSaya } from "./tugas-saya";
 import { KirimVideoManual } from "./kirim-video-manual";
+import { UnggahSosmedSaya } from "./unggah-sosmed-saya";
+import { InsightSayaPanel } from "./insight-saya-panel";
 import { cn } from "@/lib/utils";
 
 const PLATFORM_TVR = [
@@ -832,6 +834,22 @@ export function TvrKuScreen({
             ))}
           </div>
         )}
+      </FadeInUp>
+        ) },
+        { id: "unggah-sosmed", judul: "Unggah ke Sosmed Saya", ikon: Clapperboard, render: () => (
+      <FadeInUp delay={0.1}>
+        <SectionTitle judul="Unggah ke Sosmed Saya" />
+        <div className="mt-2.5">
+          <UnggahSosmedSaya />
+        </div>
+      </FadeInUp>
+        ) },
+        { id: "insight-saya", judul: "Insight Akun Saya", ikon: BarChart3, render: () => (
+      <FadeInUp delay={0.11}>
+        <SectionTitle judul="Insight Akun Saya" />
+        <div className="mt-2.5">
+          <InsightSayaPanel />
+        </div>
       </FadeInUp>
         ) },
         { id: "website", judul: "Website TV Rakyat", ikon: Globe, render: () => (

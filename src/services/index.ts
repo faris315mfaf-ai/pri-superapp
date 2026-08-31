@@ -2443,10 +2443,122 @@ export type KelengkapanAnggota = {
   nama: string;
   avatar_url: string;
   divisi: string;
+  /** Tanggal akun dibuat (grafik pertumbuhan) */
+  bergabung?: string | null;
+  /** Akun TV Rakyat tertaut via upload-post (target 6 platform) */
+  tvr_tertaut?: number;
   dimensi: { login: boolean; sosmed: boolean; google: boolean; email: boolean; wa: boolean };
   terpenuhi: number;
   persen: number;
 };
+
+// ------------------------------------------------------------
+// TV Rakyat Saya — unggah ke sosmed pribadi via upload-post (31 Agu 2026)
+// ------------------------------------------------------------
+
+export type TvrkuPost = {
+  id: string;
+  judul: string;
+  caption: string;
+  platforms: string[];
+  video_url: string;
+  jadwal: string | null;
+  hasil: Record<string, unknown> | null;
+  dibuat_pada: string;
+};
+
+/** Riwayat unggahan sosmed pribadi saya (30 terakhir). */
+export async function getRiwayatTvrkuPost(): Promise<TvrkuPost[]> {
+  const json = await fetchJson("/api/tvr/unggah", { headers: headerToken() });
+  return (json.data ?? []) as TvrkuPost[];
+}
+
+/** Langkah 1: minta URL unggah tertandatangan (video naik langsung ke storage). */
+export async function siapkanUnggahTvrku(
+  nama: string,
+  ukuran: number,
+): Promise<{ path: string; url: string; token: string }> {
+  const json = await fetchJson("/api/tvr/unggah", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "siapkan", nama, ukuran }),
+  });
+  return json as { path: string; url: string; token: string };
+}
+
+/** Langkah 2: post video (yang sudah terunggah) ke sosmed pribadi. */
+export async function postTvrku(data: {
+  path: string;
+  judul: string;
+  caption?: string;
+  platforms: string[];
+  jadwal?: string;
+}): Promise<{ sukses: boolean; terjadwal: boolean; hasil: Record<string, unknown> }> {
+  const json = await fetchJson("/api/tvr/unggah", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "post", ...data }),
+  });
+  return json as { sukses: boolean; terjadwal: boolean; hasil: Record<string, unknown> };
+}
+
+/** Insight akun sosmed pribadi saya (per platform, cache 15 menit). */
+export async function getInsightSaya(paksa = false): Promise<{
+  siap: boolean;
+  profil: string | null;
+  insight: Record<string, unknown> | null;
+  diperbarui_pada?: string | null;
+}> {
+  const json = await fetchJson(`/api/tvr/insight-saya${paksa ? "?paksa=1" : ""}`, {
+    headers: headerToken(),
+  });
+  return json as {
+    siap: boolean;
+    profil: string | null;
+    insight: Record<string, unknown> | null;
+    diperbarui_pada?: string | null;
+  };
+}
+
+export type ProfilTvAnggota = {
+  user_id: string;
+  nama: string;
+  avatar_url: string;
+  divisi: string;
+  profil: string;
+  akun: Record<string, string>;
+  tertaut: number;
+  pengikut: Record<string, number | null>;
+  insight_pada: string | null;
+};
+
+/** Pengendali akun TV Rakyat anggota (dashboard TV, admin). */
+export async function getTvAnggotaDashboard(): Promise<{
+  siap: boolean;
+  kuota: number;
+  terpakai: number;
+  profil: ProfilTvAnggota[];
+}> {
+  const json = await fetchJson("/api/dashboard/tv-anggota", { headers: headerToken() });
+  return json as {
+    siap: boolean;
+    kuota: number;
+    terpakai: number;
+    profil: ProfilTvAnggota[];
+  };
+}
+
+/** Insight lengkap satu profil anggota (admin; cache 15 menit). */
+export async function getTvAnggotaProfil(
+  profil: string,
+  paksa = false,
+): Promise<{ insight: Record<string, unknown>; diperbarui_pada: string | null }> {
+  const json = await fetchJson(
+    `/api/dashboard/tv-anggota?profil=${encodeURIComponent(profil)}${paksa ? "&paksa=1" : ""}`,
+    { headers: headerToken() },
+  );
+  return json as { insight: Record<string, unknown>; diperbarui_pada: string | null };
+}
 
 // ------------------------------------------------------------
 // v1.20 — Asisten AI (chatbot Gemini + mode suara)
