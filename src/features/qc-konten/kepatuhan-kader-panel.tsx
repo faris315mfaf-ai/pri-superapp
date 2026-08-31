@@ -34,6 +34,7 @@ type RingkasKader = RingkasKepatuhanKader;
 export function KepatuhanKaderPanel({
   muatUlang = 0,
   editable = true,
+  periode: periodeProp,
 }: {
   muatUlang?: number;
   /**
@@ -42,6 +43,11 @@ export function KepatuhanKaderPanel({
    * bukan menindak. Data & tampilan lainnya persis sama.
    */
   editable?: boolean;
+  /**
+   * Periode yang ditampilkan (fitur Riwayat 31 Agu 2026, format
+   * "YYYY-MM-DD 00:00-23:59"). Kosong = hari ini — perilaku lama.
+   */
+  periode?: string;
 }) {
   const [perKaderMentah, setPerKaderMentah] = useState<RingkasKader[] | null>(null);
   const [saring, setSaring] = useState<"semua" | "sudah" | "belum">("belum");
@@ -52,7 +58,7 @@ export function KepatuhanKaderPanel({
   // Rincian per kader diambil LAZY saat popup dibuka — daftar utama
   // memakai agregat database (bebas cap 1000 baris PostgREST).
   const [rincian, setRincian] = useState<BarisKepatuhan[] | null>(null);
-  const periode = `${tanggalWibPerangkat()} 00:00-23:59`;
+  const periode = periodeProp || `${tanggalWibPerangkat()} 00:00-23:59`;
 
   useEffect(() => {
     let hidup = true;
@@ -67,7 +73,7 @@ export function KepatuhanKaderPanel({
     return () => {
       hidup = false;
     };
-  }, [muatUlang, platformSaring]);
+  }, [muatUlang, platformSaring, periode]);
 
   useEffect(() => {
     if (!dibuka) return;
@@ -83,7 +89,7 @@ export function KepatuhanKaderPanel({
     return () => {
       hidup = false;
     };
-  }, [dibuka]);
+  }, [dibuka, periode]);
 
   const perKader = useMemo<RingkasKader[]>(
     () =>

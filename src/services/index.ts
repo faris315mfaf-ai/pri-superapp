@@ -521,8 +521,15 @@ export async function ubahPengguna(
 // ------------------------------------------------------------
 
 /** Daftar akun wajib beserta statistik kepatuhannya */
-export async function getAkunWajib(): Promise<AkunWajibWithStats[]> {
-  return ambilData<AkunWajibWithStats[]>("/api/akun-wajib");
+/**
+ * Daftar akun wajib + statistik kepatuhan. `periode` opsional (format
+ * "YYYY-MM-DD 00:00-23:59") — kosong = periode terbaru (pilihan server).
+ * Dipakai fitur Riwayat HR Center: memilih tanggal mengganti SELURUH
+ * data layar ke periode itu.
+ */
+export async function getAkunWajib(periode?: string): Promise<AkunWajibWithStats[]> {
+  const q = periode ? `?periode=${encodeURIComponent(periode)}` : "";
+  return ambilData<AkunWajibWithStats[]>(`/api/akun-wajib${q}`);
 }
 
 /** Roster 24 kader aktif */

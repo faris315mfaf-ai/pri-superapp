@@ -34,7 +34,20 @@ function waktuWib(iso: string): string {
   }
 }
 
-export function RiwayatUpdateKomentar({ muatUlang = 0 }: { muatUlang?: number }) {
+export function RiwayatUpdateKomentar({
+  muatUlang = 0,
+  onPilih,
+  periodeAktif,
+}: {
+  muatUlang?: number;
+  /**
+   * Fitur Riwayat (31 Agu 2026): bila diisi, tiap entri BISA DIKLIK —
+   * layar otomatis berpindah menampilkan data periode entri itu.
+   */
+  onPilih?: (periode: string) => void;
+  /** Periode yang sedang ditampilkan (untuk sorotan entri aktif). */
+  periodeAktif?: string;
+}) {
   const [data, setData] = useState<RiwayatUpdateKomentar[] | null>(null);
   const [memuat, setMemuat] = useState(false);
 
@@ -74,29 +87,60 @@ export function RiwayatUpdateKomentar({ muatUlang = 0 }: { muatUlang?: number })
         <EmptyState
           ikon={History}
           judul="Belum ada pembaruan"
-          keterangan="Jalankan analisis; setiap kali Ayrshare memperbarui komentar akan tercatat di sini."
+          keterangan="Deteksi komentar berjalan otomatis (±30 menit sekali) — setiap pembaruan tercatat di sini."
           className="py-6"
         />
       ) : (
         <div className="flex flex-col gap-1.5">
-          {data.map((r) => (
-            <GlassCard key={r.id} className="flex items-center gap-3 px-3 py-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-[12px] font-semibold text-teks-utama">
-                  {waktuWib(r.dijalankan_pada)}
-                </p>
-                <p className="mt-0.5 text-[10.5px] text-teks-sekunder">
-                  {r.postingan} postingan · {r.komentar} komentar · {r.comply} comply
-                  {r.gagal_cek > 0 ? ` · ${r.gagal_cek} perlu cek manual` : ""}
-                </p>
-              </div>
-              {!r.selesai && (
-                <span className="shrink-0 rounded-full bg-kuning/15 px-2 py-0.5 text-[10px] font-semibold text-kuning">
-                  sebagian
-                </span>
-              )}
-            </GlassCard>
-          ))}
+          {data.map((r) => {
+            const bisaKlik = Boolean(onPilih && r.periode);
+            const aktif = Boolean(periodeAktif && r.periode === periodeAktif);
+            const isi = (
+              <>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12px] font-semibold text-teks-utama">
+                    {waktuWib(r.dijalankan_pada)}
+                  </p>
+                  <p className="mt-0.5 text-[10.5px] text-teks-sekunder">
+                    {r.postingan} postingan · {r.komentar} komentar · {r.comply} comply
+                    {r.gagal_cek > 0 ? ` · ${r.gagal_cek} perlu cek manual` : ""}
+                  </p>
+                </div>
+                {aktif && (
+                  <span className="shrink-0 rounded-full bg-pri/15 px-2 py-0.5 text-[10px] font-bold text-pri">
+                    ditampilkan
+                  </span>
+                )}
+                {!r.selesai && (
+                  <span className="shrink-0 rounded-full bg-kuning/15 px-2 py-0.5 text-[10px] font-semibold text-kuning">
+                    sebagian
+                  </span>
+                )}
+              </>
+            );
+            // Bisa diklik → seluruh layar berpindah ke data periode entri
+            // ini (fitur Riwayat). Tanpa onPilih → kartu pasif (perilaku lama).
+            return bisaKlik ? (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => onPilih!(r.periode!)}
+                aria-pressed={aktif}
+                className={cn(
+                  "btn-tekan flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left",
+                  aktif
+                    ? "border-pri/40 bg-pri/[0.06]"
+                    : "glass border-transparent hover:bg-black/[0.03] dark:hover:bg-white/[0.05]",
+                )}
+              >
+                {isi}
+              </button>
+            ) : (
+              <GlassCard key={r.id} className="flex items-center gap-3 px-3 py-2">
+                {isi}
+              </GlassCard>
+            );
+          })}
         </div>
       )}
 
