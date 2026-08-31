@@ -1,17 +1,21 @@
 // TV RAKYAT SAYA — unggah video ke SOSMED PRIBADI anggota via upload-post
-// (rombakan 31 Agu 2026). Cermin fitur unggah TV Rakyat Official, tapi
-// per anggota (profil upload-post masing-masing, kuota 225).
+// (rombakan 31 Agu 2026; jalur media pindah ke CLOUDINARY 1 Sep 2026).
+// Cermin fitur unggah TV Rakyat Official, tapi per anggota (profil
+// upload-post masing-masing, kuota 225).
 //
-// POST {aksi:"siapkan", nama, ukuran}  → URL unggah TERTANDATANGAN ke bucket
-//   "tvrku" — berkas video BESAR naik langsung peramban→storage, tidak
-//   melewati fungsi server (batas body Vercel ~4,5 MB).
-// POST {aksi:"post", path, judul, caption, platforms[], jadwal?} → validasi
-//   → serahkan URL publik video ke upload-post (schedule_date bila jadwal)
-//   → simpan riwayat tvrku_post + hapus_media_pada = tayang + 2 jam.
+// Alur (1 Sep 2026): peramban mengunggah video LANGSUNG ke Cloudinary
+// (unsigned preset — jalur yang sama dan sudah terbukti dengan
+// kirim-video-manual; batas body Vercel 4,5 MB tak berlaku), lalu:
+// POST {aksi:"post", video_url, public_id, judul, caption, platforms[],
+//   jadwal?} → validasi URL milik cloud kita → serahkan ke upload-post
+//   (schedule_date bila jadwal) → simpan riwayat tvrku_post +
+//   hapus_media_pada = tayang + 2 jam.
 // GET  → riwayat post saya (+ status berkas).
 //
-// Berkas video DIHAPUS otomatis 2 jam setelah post/jadwal (postingan di
-// sosmed TETAP) — penyapu tanpa-cron ala bersihkanMediaKedaluwarsa.
+// Media DIHAPUS otomatis dari Cloudinary 2 jam setelah tayang (postingan
+// di sosmed TETAP) — penyapu tanpa-cron. Jalur lama {aksi:"siapkan"} +
+// bucket "tvrku" dipertahankan untuk klien yang masih memuat JS lama;
+// penyapu mengenali kedua jenis berkas dari bentuk video_url-nya.
 import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
@@ -21,6 +25,7 @@ import { maksUploadMb } from "@/lib/pengaturan-tv";
 import { unggahVideoUp, uploadPostSiap } from "@/lib/upload-post";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
+import { hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
 
 export const dynamic = "force-dynamic";
 // upload-post mengunduh video dari URL kita lalu memposting ke banyak
@@ -62,12 +67,24 @@ async function bersihkanVideoKedaluwarsa(): Promise<void> {
     const db = supabase();
     const { data } = await db
       .from("tvrku_post")
-      .select("id, video_path")
+      .select("id, video_path, video_url")
       .not("hapus_media_pada", "is", null)
       .lt("hapus_media_pada", new Date().toISOString())
       .limit(20);
     if (!data || data.length === 0) return;
-    const jalur = data.map((b) => String(b.video_path)).filter(Boolean);
+    // Dua generasi berkas hidup berdampingan: baris baru = Cloudinary
+    // (video_path berisi public_id), baris lama = bucket storage "tvrku".
+    // Dibedakan dari bentuk video_url — tanpa migrasi kolom.
+    const dariCloudinary = data.filter((b) =>
+      String(b.video_url ?? "").includes("res.cloudinary.com"),
+    );
+    const dariStorage = data.filter(
+      (b) => !String(b.video_url ?? "").includes("res.cloudinary.com"),
+    );
+    for (const b of dariCloudinary) {
+      if (b.video_path) await hapusVideoCloudinary(String(b.video_path));
+    }
+    const jalur = dariStorage.map((b) => String(b.video_path)).filter(Boolean);
     if (jalur.length > 0) await db.storage.from("tvrku").remove(jalur);
     await db
       .from("tvrku_post")
@@ -118,6 +135,8 @@ export async function POST(request: Request) {
       nama?: string;
       ukuran?: number;
       path?: string;
+      video_url?: string;
+      public_id?: string;
       judul?: string;
       caption?: string;
       platforms?: string[];
@@ -152,9 +171,33 @@ export async function POST(request: Request) {
 
     // ---- Langkah 2: post ke sosmed via upload-post ----
     if (body.aksi === "post") {
+      // Jalur BARU (1 Sep 2026): media sudah di Cloudinary — klien
+      // mengirim secure_url + public_id. Jalur LAMA (path bucket)
+      // tetap diterima untuk klien yang masih memuat JS versi lama.
+      const videoUrlCloud = String(body.video_url ?? "").trim();
+      const publicId = String(body.public_id ?? "").trim();
       const path = String(body.path ?? "");
-      // Jalur harus milik user ini (anti memposting berkas orang lain).
-      if (!path.startsWith(`${user.id}/`)) {
+      const pakaiCloudinary = Boolean(videoUrlCloud);
+      if (pakaiCloudinary) {
+        const konfig = konfigUploadCloudinary();
+        if (!konfig) {
+          throw Object.assign(
+            new Error("Penyimpanan video (Cloudinary) belum diatur. Hubungi pengelola."),
+            { status: 503 },
+          );
+        }
+        // URL wajib milik cloud KITA — mencegah orang menyodorkan URL
+        // sembarangan untuk diposting lewat kuota upload-post partai.
+        if (
+          !videoUrlCloud.startsWith(`https://res.cloudinary.com/${konfig.cloudName}/`)
+        ) {
+          throw Object.assign(new Error("URL video tidak dikenal."), { status: 400 });
+        }
+        if (!publicId || !/^[\w/-]+$/.test(publicId)) {
+          throw Object.assign(new Error("Berkas video tidak dikenal."), { status: 400 });
+        }
+      } else if (!path.startsWith(`${user.id}/`)) {
+        // Jalur lama: harus milik user ini (anti memposting berkas orang lain).
         throw Object.assign(new Error("Berkas video tidak dikenal."), { status: 400 });
       }
       const judul = (body.judul ?? "").trim();
@@ -192,7 +235,9 @@ export async function POST(request: Request) {
         jadwal = new Date(t).toISOString();
       }
 
-      const videoUrl = db.storage.from("tvrku").getPublicUrl(path).data.publicUrl;
+      const videoUrl = pakaiCloudinary
+        ? videoUrlCloud
+        : db.storage.from("tvrku").getPublicUrl(path).data.publicUrl;
       const hasil = await unggahVideoUp({
         profil,
         videoUrl,
@@ -215,7 +260,9 @@ export async function POST(request: Request) {
           judul,
           caption: (body.caption ?? "").slice(0, 2200),
           platforms,
-          video_path: path,
+          // Cloudinary: video_path menampung public_id (dipakai penyapu
+          // untuk destroy); jalur lama tetap path bucket.
+          video_path: pakaiCloudinary ? publicId : path,
           video_url: videoUrl,
           jadwal: jadwal ?? null,
           hasil: hasil.mentah,

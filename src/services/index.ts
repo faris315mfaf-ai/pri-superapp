@@ -2528,9 +2528,14 @@ export async function siapkanUnggahTvrku(
   return json as { path: string; url: string; token: string };
 }
 
-/** Langkah 2: post video (yang sudah terunggah) ke sosmed pribadi. */
+/**
+ * Langkah 2: post video (yang sudah terunggah ke Cloudinary) ke sosmed
+ * pribadi. Sejak 1 Sep 2026 media naik peramban→Cloudinary (pola sama
+ * dengan kirim-video-manual) — kirim video_url + public_id, bukan path.
+ */
 export async function postTvrku(data: {
-  path: string;
+  video_url: string;
+  public_id: string;
   judul: string;
   caption?: string;
   platforms: string[];
