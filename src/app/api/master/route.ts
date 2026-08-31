@@ -352,6 +352,36 @@ export async function POST(request: Request) {
       return { sukses: true };
     }
 
+    // --- Akurasi face recognition (31 Agu 2026) ---
+    // Bug: "beberapa akun bisa masuk padahal wajah berbeda" → master
+    // bisa MEMPERKETAT ambang tanpa deploy. Nilai dikirim sebagai
+    // PERSEN (mis. 90 = 0.90) supaya mudah dipahami; disimpan desimal.
+    // body.username = kunci (wajah_ambang_login | wajah_margin | wajah_ambang),
+    // body.nilai = persen.
+    if (body.aksi === "wajah_akurasi") {
+      const kunci = String(body.username ?? "");
+      const SAH: Record<string, [number, number]> = {
+        wajah_ambang_login: [50, 99], // ketat login 1:N
+        wajah_margin: [0, 50],        // selisih anti-mirip
+        wajah_ambang: [50, 99],       // absen 1:1
+      };
+      const batas = SAH[kunci];
+      if (!batas) throw Object.assign(new Error("Pengaturan wajah tidak dikenal."), { status: 400 });
+      const persen = Number(body.nilai);
+      if (!Number.isFinite(persen) || persen < batas[0] || persen > batas[1]) {
+        throw Object.assign(
+          new Error(`Nilai harus ${batas[0]}-${batas[1]} persen.`),
+          { status: 400 },
+        );
+      }
+      const { error } = await db.from("pengaturan_sistem").upsert(
+        { kunci, nilai: String(persen / 100), diubah_pada: new Date().toISOString() },
+        { onConflict: "kunci" },
+      );
+      if (error) throw new Error("Gagal menyimpan pengaturan wajah.");
+      return { sukses: true };
+    }
+
     // --- Bersihkan log galat ---
     if (body.aksi === "bersihkan_log") {
       const { error } = await db.from("log_klien").delete().gt("id", 0);

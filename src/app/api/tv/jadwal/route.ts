@@ -14,6 +14,7 @@ import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { ambilAkunTertaut, hapusPostingan, unggahVideo, ayrshareSiap } from "@/lib/ayrshare";
 import { bolehUploadVideo } from "@/lib/tv-tim";
+import { simpanSampul } from "@/lib/sampul";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 
 export const dynamic = "force-dynamic";
@@ -113,6 +114,8 @@ export async function POST(request: Request) {
       platforms?: string[];
       judul_youtube?: string;
       jadwal_pada?: string;
+      /** Sampul video base64 (jpg/png) — YT/IG/TikTok/FB. */
+      sampulDataUrl?: string;
     };
 
     const caption = (body.caption ?? "").trim();
@@ -163,6 +166,9 @@ export async function POST(request: Request) {
 
     // idempotencyKey mencegah dobel jadwal bila permintaan diulang.
     const idemp = `jadwal-${pengguna.id}-${t.getTime()}-${[...platforms].sort().join(",")}`;
+    // Sampul kustom ikut dijadwalkan (fitur 31 Agu 2026).
+    const sampulUrl = await simpanSampul(`jadwal-${pengguna.id}`, body.sampulDataUrl);
+
     const hasil = await unggahVideo({
       videoUrl: mediaUrl,
       caption: caption || " ", // Ayrshare menolak post kosong.
@@ -170,6 +176,7 @@ export async function POST(request: Request) {
       isVideo,
       scheduleDate,
       judulYoutube: body.judul_youtube,
+      thumbnailUrl: sampulUrl ?? undefined,
       idempotencyKey: idemp,
     });
 

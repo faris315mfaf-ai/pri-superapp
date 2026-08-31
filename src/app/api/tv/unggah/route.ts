@@ -26,6 +26,7 @@ import { kirimKabar } from "@/lib/notifikasi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { retensiJamTv } from "@/lib/pengaturan-tv";
 import { tayangAtauDiproses } from "@/lib/ayrshare-status";
+import { simpanSampul } from "@/lib/sampul";
 import { daftarkanVideoUnggahan } from "@/lib/sinkron-konten-tv";
 import { after } from "next/server";
 
@@ -158,6 +159,8 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as {
       kode?: string;
       platforms?: string[];
+      /** Sampul video base64 (jpg/png) — dipasang ke YT/IG/TikTok/FB. */
+      sampulDataUrl?: string;
     };
     const kode = (body.kode ?? "").trim();
     if (!kode) throw Object.assign(new Error("Video tidak disebutkan."), { status: 400 });
@@ -294,11 +297,16 @@ export async function POST(request: Request) {
       // 5xx). Karena idempotencyKey sama, ulangan ini AMAN — tidak akan
       // membuat postingan ganda. Galat permintaan (4xx: caption salah,
       // dsb.) tidak diulang karena mengulang tak akan menolong.
+      // Sampul kustom (fitur 31 Agu 2026): dipasang ke YT/IG/TikTok/FB;
+      // Threads & X tidak mendukung sampul. Tanpa sampul = perilaku lama.
+      const sampulUrl = await simpanSampul(kode, body.sampulDataUrl);
+
       ({ idAyrshare, hasil } = await unggahDenganUlang({
         videoUrl,
         caption,
         platforms: siapKirim,
         judulYoutube: video.judul_overlay || video.judul || "TV Rakyat",
+        thumbnailUrl: sampulUrl ?? undefined,
         // Kunci memuat daftar platform supaya percobaan ULANG untuk
         // subset yang gagal tetap dianggap permintaan baru.
         idempotencyKey: kunciDobel,

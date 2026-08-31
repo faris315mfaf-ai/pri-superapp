@@ -20,6 +20,26 @@ export async function GET(request: Request) {
     const periode = searchParams.get("periode");
     const namaKader = searchParams.get("nama_kader");
 
+    // --- Kewajiban komentar SAYA (perbaikan 0/0, 31 Agu 2026) ---
+    // Dihitung DI SERVER untuk SATU pengguna: presisi & ringan. Dulu
+    // beranda menarik rekap SELURUH partai lalu menyaring di klien —
+    // dua cacat sekaligus: (a) dipanggil tanpa header login → 401 →
+    // dianggap kosong → selalu 0/0; (b) kalaupun login, ribuan baris
+    // terpangkas cap 1000 PostgREST (urut nama) sehingga pengguna
+    // berabjad belakang kebagian 0 baris. Cabang ini menutup keduanya.
+    if (searchParams.get("saya") === "1" && periode) {
+      const { data } = await supabase()
+        .from("v_app_kepatuhan_kader")
+        .select("total, sudah")
+        .eq("periode", periode)
+        .eq("nama_kader", user.nama)
+        .maybeSingle();
+      return {
+        total: Number(data?.total ?? 0),
+        sudah: Number(data?.sudah ?? 0),
+      };
+    }
+
     // --- Ringkas per kader (spek 1.15) ---
     // Agregasi DI DATABASE (view) — satu baris per kader, jadi tidak
     // mungkin kena cap 1000 baris PostgREST yang membuat agregasi

@@ -20,7 +20,7 @@ import { FadeInUp } from "@/components/pri-ui";
 import { ProgressRing } from "@/components/progress-ring";
 import {
   getLaporanKerja,
-  getRekapPeriode,
+  getKomentarSaya,
   getPengumuman,
   type KerjaKpi,
   type Pengumuman,
@@ -156,20 +156,18 @@ export function BerandaAnggotaPanel({
       // tidak menggugurkan yang lain.
       const [kerja, rekap] = await Promise.allSettled([
         getLaporanKerja(),
-        getRekapPeriode(`${tanggalWibPerangkat()} 00:00-23:59`),
+        // Dihitung SERVER per pengguna (perbaikan 0/0; /api/rekap?saya=1).
+        getKomentarSaya(`${tanggalWibPerangkat()} 00:00-23:59`),
       ]);
       if (!hidup) return;
 
       if (kerja.status === "fulfilled") setKpiKerja(kerja.value.kpi);
 
       if (rekap.status === "fulfilled" && rekap.value) {
-        const barisku = rekap.value.filter((b) => b.nama_kader === user.nama);
-        setKomentar({
-          total: barisku.length,
-          sudah: barisku.filter((b) => b.sudah_komentar).length,
-        });
+        setKomentar(rekap.value);
       } else {
-        setKomentar({ total: 0, sudah: 0 });
+        // Gagal dimuat = biarkan "…" — jangan pamer 0/0 palsu.
+        setKomentar(null);
       }
     })();
     return () => {

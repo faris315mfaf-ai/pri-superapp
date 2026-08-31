@@ -19,6 +19,7 @@ import {
 import { FotoBulat } from "@/components/foto-bulat";
 import { SwitchKaca } from "@/features/profil/switch-kaca";
 import { toast } from "@/hooks/use-app-store";
+import { cn } from "@/lib/utils";
 import {
   aturWewenangTv,
   getKelolaTimTv,
@@ -101,13 +102,23 @@ export function KelolaTimPanel() {
     }
   }
 
-  async function ubahWewenang(a: AnggotaTv, kunci: "boleh_acc" | "boleh_upload", nilai: boolean) {
+  /**
+   * Divisi wewenang (31 Agu 2026, pengganti dua toggle): satu pilihan
+   * memetakan KEDUA kolom sekaligus —
+   *   Setujui         → acc=true,  upload=false
+   *   Upload          → acc=false, upload=true
+   *   Setujui+Upload  → acc=true,  upload=true
+   * Menekan pilihan yang SEDANG aktif mencabut keduanya (tanpa wewenang).
+   */
+  async function pilihDivisi(a: AnggotaTv, acc: boolean, upload: boolean) {
+    const aktifSekarang = a.boleh_acc === acc && a.boleh_upload === upload;
+    const tuju = aktifSekarang ? { boleh_acc: false, boleh_upload: false } : { boleh_acc: acc, boleh_upload: upload };
     // Optimis di layar; server menyimpan.
     setTim((lama) =>
-      (lama ?? []).map((t) => (t.user_id === a.user_id ? { ...t, [kunci]: nilai } : t)),
+      (lama ?? []).map((t) => (t.user_id === a.user_id ? { ...t, ...tuju } : t)),
     );
     try {
-      await aturWewenangTv(a.user_id, { [kunci]: nilai });
+      await aturWewenangTv(a.user_id, tuju);
     } catch (e) {
       toast("error", "Gagal menyimpan wewenang", e instanceof Error ? e.message : "");
       await muat();
@@ -361,30 +372,47 @@ export function KelolaTimPanel() {
                     <X className="h-4 w-4" />
                   </button>
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <label className="flex items-center gap-2 rounded-lg bg-black/5 px-2.5 py-1.5 dark:bg-white/5">
-                    <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emas" aria-hidden="true" />
-                    <span className="min-w-0 flex-1 text-[11px] font-semibold text-teks-utama">
-                      Setujui video
-                    </span>
-                    <SwitchKaca
-                      aktif={a.boleh_acc}
-                      onUbah={() => void ubahWewenang(a, "boleh_acc", !a.boleh_acc)}
-                      labelAria={`Wewenang setujui video untuk ${a.nama}`}
-                    />
-                  </label>
-                  <label className="flex items-center gap-2 rounded-lg bg-black/5 px-2.5 py-1.5 dark:bg-white/5">
-                    <Upload className="h-3.5 w-3.5 shrink-0 text-sukses" aria-hidden="true" />
-                    <span className="min-w-0 flex-1 text-[11px] font-semibold text-teks-utama">
-                      Upload sosmed
-                    </span>
-                    <SwitchKaca
-                      aktif={a.boleh_upload}
-                      onUbah={() => void ubahWewenang(a, "boleh_upload", !a.boleh_upload)}
-                      labelAria={`Wewenang upload untuk ${a.nama}`}
-                    />
-                  </label>
+                {/* Divisi wewenang (pengganti toggle, 31 Agu 2026):
+                    satu dari tiga pilihan; ketuk yang aktif = cabut. */}
+                <div className="mt-2 grid grid-cols-3 gap-1.5">
+                  {(
+                    [
+                      { label: "Setujui", Ikon: ShieldCheck, acc: true, upload: false },
+                      { label: "Upload", Ikon: Upload, acc: false, upload: true },
+                      { label: "Setujui+Upload", Ikon: ShieldCheck, acc: true, upload: true },
+                    ] as const
+                  ).map((d) => {
+                    const aktif = a.boleh_acc === d.acc && a.boleh_upload === d.upload;
+                    return (
+                      <button
+                        key={d.label}
+                        type="button"
+                        onClick={() => void pilihDivisi(a, d.acc, d.upload)}
+                        aria-pressed={aktif}
+                        title={aktif ? "Ketuk lagi untuk mencabut wewenang" : `Jadikan divisi ${d.label}`}
+                        className={cn(
+                          "btn-tekan flex items-center justify-center gap-1 rounded-lg px-1.5 py-1.5 text-[10.5px] font-bold",
+                          aktif
+                            ? "text-white"
+                            : "bg-black/5 text-teks-sekunder dark:bg-white/5",
+                        )}
+                        style={
+                          aktif
+                            ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" }
+                            : undefined
+                        }
+                      >
+                        <d.Ikon className="h-3 w-3 shrink-0" aria-hidden="true" />
+                        <span className="truncate">{d.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
+                {!a.boleh_acc && !a.boleh_upload && (
+                  <p className="mt-1 text-[10px] text-teks-sekunder">
+                    Belum diberi divisi — pilih salah satu di atas.
+                  </p>
+                )}
               </div>
             ))}
           </div>

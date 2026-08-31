@@ -17,6 +17,7 @@ import {
   ChevronDown,
   Copy,
   ExternalLink,
+  ImagePlus,
   Loader2,
   Pause,
   Play,
@@ -184,6 +185,25 @@ export function PreviewModal({
   const [jadwalMode, setJadwalMode] = useState(false);
   const [jadwalWaktu, setJadwalWaktu] = useState("");
   const [sedangJadwal, setSedangJadwal] = useState(false);
+  // Sampul kustom (fitur 31 Agu 2026) — data URL jpg/png < 2 MB;
+  // dipasang ke YouTube/Instagram/TikTok/Facebook saat posting.
+  const [sampul, setSampul] = useState<string | null>(null);
+  const sampulInputRef = useRef<HTMLInputElement>(null);
+
+  function pilihSampul(f: File | null | undefined) {
+    if (!f) return;
+    if (!/^image\/(jpeg|png)$/.test(f.type)) {
+      toast("peringatan", "Sampul harus JPG/PNG");
+      return;
+    }
+    if (f.size > 2 * 1024 * 1024) {
+      toast("peringatan", "Sampul terlalu besar", "Maksimal 2 MB (syarat YouTube).");
+      return;
+    }
+    const r = new FileReader();
+    r.onload = () => setSampul(String(r.result ?? "") || null);
+    r.readAsDataURL(f);
+  }
 
   const timerRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const platformAktif = useMemo(
@@ -436,6 +456,7 @@ export function PreviewModal({
         const balasan = await unggahVideoSosmed(
           hasil.kode!,
           platformAktif.map((p) => p.platform),
+          sampul ?? undefined,
         );
         setHasilUnggah(balasan.hasil);
         setUnggahSelesai(balasan.berhasil);
@@ -541,6 +562,7 @@ export function PreviewModal({
           platforms: platformAktif.map((p) => p.platform),
           judul_youtube: judulEdit.trim() || undefined,
           jadwal_pada: t.toISOString(),
+          sampulDataUrl: sampul ?? undefined,
         });
         toast(
           "sukses",
@@ -1158,6 +1180,58 @@ export function PreviewModal({
                   />
                 </label>
               )}
+
+              {/* Sampul kustom (fitur 31 Agu 2026): dipasang ke YouTube,
+                  Instagram, TikTok, Facebook — Threads & X tak mendukung. */}
+              <div className="glass-soft flex items-center gap-2.5 rounded-xl p-2.5">
+                <input
+                  ref={sampulInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  className="hidden"
+                  onChange={(e) => pilihSampul(e.target.files?.[0])}
+                />
+                {sampul ? (
+                  <img
+                    src={sampul}
+                    alt="Sampul video"
+                    className="h-12 w-9 shrink-0 rounded-md object-cover"
+                  />
+                ) : (
+                  <span className="flex h-12 w-9 shrink-0 items-center justify-center rounded-md bg-black/5 text-teks-sekunder dark:bg-white/10">
+                    <ImagePlus className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11.5px] font-bold text-teks-utama">
+                    Sampul video {sampul ? "" : "(opsional)"}
+                  </p>
+                  <p className="text-[10px] leading-snug text-teks-sekunder">
+                    JPG/PNG &lt; 2 MB · dipasang ke YT, IG, TikTok, FB
+                  </p>
+                </div>
+                {sampul ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSampul(null);
+                      if (sampulInputRef.current) sampulInputRef.current.value = "";
+                    }}
+                    className="btn-tekan shrink-0 rounded-lg p-1.5 text-gagal"
+                    aria-label="Hapus sampul"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => sampulInputRef.current?.click()}
+                    className="glass btn-tekan shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-teks-utama"
+                  >
+                    Pilih
+                  </button>
+                )}
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <button

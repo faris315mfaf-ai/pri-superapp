@@ -39,7 +39,7 @@ import {
   getAbsensi,
   getLaporanKerja,
   getLaporanVideo,
-  getRekapPeriode,
+  getKomentarSaya,
   type KerjaKpi,
   getStreakSaya,
 } from "@/services";
@@ -123,8 +123,10 @@ export function BerandaScreen({
         mauKerja ? getLaporanKerja() : Promise.resolve(null),
         mauVideo ? getLaporanVideo() : Promise.resolve(null),
         mauAbsen ? getAbsensi(false) : Promise.resolve(null),
+        // Dihitung SERVER per pengguna (perbaikan 0/0 — presisi &
+        // bebas cap 1000 baris; lihat /api/rekap?saya=1).
         mauKomentar
-          ? getRekapPeriode(`${tanggalWibPerangkat()} 00:00-23:59`)
+          ? getKomentarSaya(`${tanggalWibPerangkat()} 00:00-23:59`)
           : Promise.resolve(null),
         getStreakSaya(),
       ]);
@@ -149,11 +151,7 @@ export function BerandaScreen({
         });
       }
       if (rekap.status === "fulfilled" && rekap.value) {
-        const barisku = rekap.value.filter((b) => b.nama_kader === user.nama);
-        setKomentar({
-          total: barisku.length,
-          sudah: barisku.filter((b) => b.sudah_komentar).length,
-        });
+        setKomentar(rekap.value);
       }
     })();
     return () => {

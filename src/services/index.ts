@@ -1369,11 +1369,13 @@ export type BalasanUnggah = {
 export async function unggahVideoSosmed(
   kode: string,
   platforms: string[],
+  /** Sampul base64 jpg/png <2MB — dipasang ke YT/IG/TikTok/FB (opsional). */
+  sampulDataUrl?: string,
 ): Promise<BalasanUnggah> {
   const json = await fetchJson("/api/tv/unggah", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ kode, platforms }),
+    body: JSON.stringify({ kode, platforms, sampulDataUrl }),
   });
   return json as BalasanUnggah;
 }
@@ -1820,6 +1822,8 @@ export async function jadwalkanPosting(data: {
   judul_youtube?: string;
   /** ISO string waktu tayang (mis. dari input datetime-local, dikonversi). */
   jadwal_pada: string;
+  /** Sampul base64 jpg/png <2MB — YT/IG/TikTok/FB (opsional). */
+  sampulDataUrl?: string;
 }): Promise<{ id: string; status: string; ayrshare_id: string }> {
   const json = await fetchJson("/api/tv/jadwal", {
     method: "POST",
@@ -3334,6 +3338,24 @@ export async function getRekapPeriode(
     // Kartu KPI bersifat pelengkap — kegagalannya tidak boleh
     // menggagalkan seluruh beranda.
     return [];
+  }
+}
+
+/**
+ * Kewajiban komentar SAYA hari itu — dihitung server per pengguna
+ * (perbaikan bug 0/0: presisi, beserta header login, tanpa cap 1000).
+ * null = gagal dimuat (biar UI menampilkan "…", bukan 0/0 palsu).
+ */
+export async function getKomentarSaya(
+  periode: string,
+): Promise<{ total: number; sudah: number } | null> {
+  try {
+    const json = await fetchJson(`/api/rekap?saya=1&periode=${encodeURIComponent(periode)}`, {
+      headers: headerToken(),
+    });
+    return { total: Number(json.total ?? 0), sudah: Number(json.sudah ?? 0) };
+  } catch {
+    return null;
   }
 }
 

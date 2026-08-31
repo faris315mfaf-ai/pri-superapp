@@ -46,6 +46,38 @@ function marginAman(): number {
   return Number.isFinite(n) && n >= 0 && n <= 1 ? n : 0.1;
 }
 
+/**
+ * Ambang EFEKTIF (fitur Panel Master 31 Agu 2026 — bug "akun lain bisa
+ * masuk dengan wajah berbeda"): master bisa MENAIKKAN akurasi tanpa
+ * deploy lewat pengaturan_sistem. Urutan prioritas per nilai:
+ * pengaturan_sistem (sah 0-1) → env → bawaan. Satu query untuk ketiganya;
+ * gagal baca DB tak boleh mematikan wajah (jatuh ke env/bawaan).
+ */
+async function ambangEfektif(): Promise<{
+  cocok: number;
+  login: number;
+  margin: number;
+}> {
+  const hasil = { cocok: ambangCocok(), login: ambangLogin(), margin: marginAman() };
+  try {
+    const { supabase } = await import("@/lib/supabase");
+    const { data } = await supabase()
+      .from("pengaturan_sistem")
+      .select("kunci, nilai")
+      .in("kunci", ["wajah_ambang", "wajah_ambang_login", "wajah_margin"]);
+    for (const b of data ?? []) {
+      const n = Number(b.nilai);
+      if (!Number.isFinite(n)) continue;
+      if (b.kunci === "wajah_ambang" && n > 0 && n <= 1) hasil.cocok = n;
+      if (b.kunci === "wajah_ambang_login" && n > 0 && n <= 1) hasil.login = n;
+      if (b.kunci === "wajah_margin" && n >= 0 && n <= 1) hasil.margin = n;
+    }
+  } catch {
+    // DB rewel → pakai env/bawaan; verifikasi wajah tetap jalan.
+  }
+  return hasil;
+}
+
 /** Mode anti-foto untuk verifikasi (BUKAN pendaftaran). */
 function modeLiveness(): "off" | "v1" | "v2" {
   const m = (process.env.WAJAH_LIVENESS || "v2").toLowerCase();
@@ -335,8 +367,10 @@ export async function verifikasiWajahPenyedia(
     const live = await cekLiveness(foto);
     if (!live.live) return { lolos: false, cocok: false, live: false, skor: live.skor };
     const m = await luxSearch(foto);
-    // 1:1 — kecocokan HARUS subjek pengguna ini & di atas ambang.
-    const cocok = Boolean(m && m.nama === namaSubjek(userId) && m.skor >= ambangCocok());
+    // 1:1 — kecocokan HARUS subjek pengguna ini & di atas ambang
+    // (bisa disetel master lewat Panel Master → wajah_ambang).
+    const ambang = await ambangEfektif();
+    const cocok = Boolean(m && m.nama === namaSubjek(userId) && m.skor >= ambang.cocok);
     return { lolos: cocok, cocok, live: true, skor: m?.skor ?? 0 };
   }
   const d = await generikPanggil<{ cocok?: boolean; live?: boolean; skor?: number }>({
@@ -364,10 +398,12 @@ export async function identifikasiWajah(
     const live = await cekLiveness(foto);
     if (!live.live) return { userId: null, live: false, skor: live.skor, alasan: live.alasan };
     const m = await luxSearch(foto);
-    // LOGIN 1:N sangat ketat: (a) kecocokan tinggi (ambangLogin, bawaan
-    // 0.85), DAN (b) tak ambigu — kandidat teratas harus unggul jelas dari
-    // kandidat kedua. Ini mencegah "wajah orang lain (mirip) ikut masuk".
-    if (!m || m.skor < ambangLogin() || m.skor - m.skorKedua < marginAman()) {
+    // LOGIN 1:N sangat ketat: (a) kecocokan tinggi (bawaan 0.85), DAN
+    // (b) tak ambigu — kandidat teratas harus unggul jelas dari kandidat
+    // kedua. Mencegah "wajah orang lain (mirip) ikut masuk". Keduanya
+    // kini bisa DIPERKETAT master dari Panel Master tanpa deploy.
+    const ambang = await ambangEfektif();
+    if (!m || m.skor < ambang.login || m.skor - m.skorKedua < ambang.margin) {
       return { userId: null, live: true, skor: m?.skor ?? 0 };
     }
     return { userId: userIdDariNama(m.nama), live: true, skor: m.skor };

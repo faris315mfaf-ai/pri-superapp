@@ -36,6 +36,7 @@ import {
   UserCog,
   UserCheck,
   KeyRound,
+  ScanFace,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { FotoBulat } from "@/components/foto-bulat";
@@ -209,6 +210,20 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                 </div>
               </div>
             </GlassCard>
+
+            {/* Akurasi face recognition (31 Agu 2026) — memperketat ambang
+                tanpa deploy; obat bug "wajah beda bisa masuk". */}
+            <KontrolWajah
+              pengaturan={data.pengaturan}
+              sedangProses={sedangProses}
+              onSimpan={(kunci, persen) =>
+                jalankan(
+                  "wajah_akurasi",
+                  { username: kunci, nilai: String(persen) },
+                  "Akurasi wajah tersimpan — berlaku seketika",
+                )
+              }
+            />
 
             <SectionTitle judul="Peran Istimewa" className="mt-6" />
             <p className="mb-2 text-[11px] leading-relaxed text-teks-sekunder">
@@ -1107,5 +1122,120 @@ function SeksiBasisPengetahuan() {
         )}
       </GlassCard>
     </>
+  );
+}
+
+// ------------------------------------------------------------
+// KontrolWajah — akurasi face recognition (31 Agu 2026).
+//
+// Tiga ambang (disimpan desimal di pengaturan_sistem, tampil PERSEN):
+// - wajah_ambang_login : ketat login wajah 1:N (bawaan 85%)
+// - wajah_margin       : selisih anti-kembar kandidat 1 vs 2 (bawaan 10%)
+// - wajah_ambang       : verifikasi absen 1:1 (bawaan 75%)
+// Menaikkan angka = lebih ketat (lebih sulit wajah orang lain lolos).
+// ------------------------------------------------------------
+function KontrolWajah({
+  pengaturan,
+  sedangProses,
+  onSimpan,
+}: {
+  pengaturan: Record<string, string>;
+  sedangProses: boolean;
+  onSimpan: (kunci: string, persen: number) => Promise<void> | void;
+}) {
+  const BARIS = [
+    {
+      kunci: "wajah_ambang_login",
+      label: "Ketat login wajah",
+      ket: "Kemiripan minimal saat masuk pakai wajah (1:N).",
+      bawaan: 85,
+      min: 50,
+      maks: 99,
+    },
+    {
+      kunci: "wajah_margin",
+      label: "Jarak anti-mirip",
+      ket: "Selisih minimal kandidat teratas vs kedua — penangkal wajah mirip/kembar.",
+      bawaan: 10,
+      min: 0,
+      maks: 50,
+    },
+    {
+      kunci: "wajah_ambang",
+      label: "Ketat absen wajah",
+      ket: "Kemiripan minimal verifikasi absen (1:1).",
+      bawaan: 75,
+      min: 50,
+      maks: 99,
+    },
+  ] as const;
+
+  // Nilai tampil: dari pengaturan (desimal) → persen; kosong = bawaan.
+  const [nilai, setNilai] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      BARIS.map((b) => {
+        const d = Number(pengaturan[b.kunci]);
+        return [b.kunci, String(Number.isFinite(d) && d > 0 ? Math.round(d * 100) : b.bawaan)];
+      }),
+    ),
+  );
+
+  return (
+    <GlassCard className="mt-4 p-4">
+      <div className="flex items-center gap-2">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-500/12 text-blue-600 dark:text-blue-400">
+          <ScanFace className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <div>
+          <p className="text-sm font-bold text-teks-utama">Akurasi Face Recognition</p>
+          <p className="text-[11px] text-teks-sekunder">
+            Semakin TINGGI semakin ketat — berlaku seketika tanpa deploy.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-col gap-2.5">
+        {BARIS.map((b) => (
+          <div key={b.kunci} className="glass-soft rounded-xl p-2.5">
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-bold text-teks-utama">
+                  {b.label}{" "}
+                  <span className="font-normal text-teks-sekunder">(bawaan {b.bawaan}%)</span>
+                </p>
+                <p className="text-[10px] leading-snug text-teks-sekunder">{b.ket}</p>
+              </div>
+              <input
+                type="number"
+                min={b.min}
+                max={b.maks}
+                value={nilai[b.kunci] ?? ""}
+                onChange={(e) =>
+                  setNilai((lama) => ({ ...lama, [b.kunci]: e.target.value }))
+                }
+                aria-label={b.label}
+                className="glass-input h-9 w-16 shrink-0 rounded-lg text-center text-[13px] font-bold text-teks-utama"
+              />
+              <span className="text-[11px] text-teks-sekunder">%</span>
+              <button
+                type="button"
+                disabled={sedangProses}
+                onClick={() => {
+                  const n = Math.round(Number(nilai[b.kunci]));
+                  if (!Number.isFinite(n) || n < b.min || n > b.maks) {
+                    toast("peringatan", `Nilai harus ${b.min}-${b.maks}%`);
+                    return;
+                  }
+                  void onSimpan(b.kunci, n);
+                }}
+                className="glass btn-tekan shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-teks-utama disabled:opacity-50"
+              >
+                Simpan
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </GlassCard>
   );
 }

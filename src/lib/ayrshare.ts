@@ -296,6 +296,14 @@ export async function unggahVideo(opsi: {
   scheduleDate?: string;
   /** false untuk media gambar (bawaan true = video). */
   isVideo?: boolean;
+  /**
+   * URL PUBLIK gambar sampul video (fitur sampul 31 Agu 2026). Dipasang
+   * ke platform yang MENDUKUNG sampul: YouTube, Instagram Reels, TikTok,
+   * Facebook (parameter Ayrshare `thumbNail`, kontrak per docs resmi).
+   * Threads & X tidak punya opsi sampul — dilewati, bukan dipaksakan.
+   * Syarat terketat (YouTube): URL berakhiran .png/.jpg/.jpeg, < 2 MB.
+   */
+  thumbnailUrl?: string;
 }): Promise<{ idAyrshare: string; hasil: HasilUnggahPlatform[] }> {
   const badan: Record<string, unknown> = {
     post: opsi.caption,
@@ -308,6 +316,8 @@ export async function unggahVideo(opsi: {
   // Jadwal tayang (Ayrshare yang menerbitkan nanti).
   if (opsi.scheduleDate) badan.scheduleDate = opsi.scheduleDate;
 
+  const sampul = (opsi.thumbnailUrl ?? "").trim();
+
   // YouTube menolak unggahan tanpa judul (maks. 100 karakter), dan
   // "shorts: true" meminta YouTube memperlakukannya sebagai Short.
   if (opsi.platforms.includes("youtube")) {
@@ -315,7 +325,21 @@ export async function unggahVideo(opsi: {
       title: (opsi.judulYoutube || "TV Rakyat").slice(0, 100),
       visibility: "public",
       shorts: true,
+      // Catatan docs: sampul kustom butuh channel YouTube TERVERIFIKASI;
+      // bila belum, video tetap tayang hanya sampulnya tak terpasang.
+      ...(sampul ? { thumbNail: sampul } : {}),
     };
+  }
+  if (sampul) {
+    if (opsi.platforms.includes("instagram")) {
+      badan.instagramOptions = { thumbNail: sampul };
+    }
+    if (opsi.platforms.includes("tiktok")) {
+      badan.tikTokOptions = { thumbNail: sampul };
+    }
+    if (opsi.platforms.includes("facebook")) {
+      badan.faceBookOptions = { thumbNail: sampul };
+    }
   }
 
   // Batas tunggu HARUS lebih kecil dari maxDuration route pemanggil
