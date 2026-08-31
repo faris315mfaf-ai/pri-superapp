@@ -39,6 +39,7 @@ import {
 } from "@/components/pri-ui";
 import { toast, useAppStore } from "@/hooks/use-app-store";
 import { FotoBulat } from "@/components/foto-bulat";
+import { CincinJuara } from "@/features/peringkat/cincin-mythic";
 import { ConfettiUltah, TopiUltah, ulangTahunHariIni } from "@/components/ultah";
 import { KartuLengkapiData } from "./lengkapi-data";
 import { GaleriMomen } from "./galeri-momen";
@@ -475,6 +476,9 @@ export function ProfilScreen({
         </div>
 
         <div className="relative mt-4 flex flex-col items-center">
+          {/* Cincin Mythical (1 Sep 2026): mengikuti pemilik peringkat
+              1-3 leaderboard TVR sampai ke halaman profilnya. */}
+          <CincinJuara userId={user.id} ukuran={120}>
           <button
             type="button"
             onClick={() => setModalFoto(true)}
@@ -495,6 +499,7 @@ export function ProfilScreen({
               <Camera className="h-3 w-3" />
             </span>
           </button>
+          </CincinJuara>
           {/* Nama + edit inline (fitur 1.19/3.2): ikon pensil membuka
               input di tempat; Simpan memanggil PATCH /api/profil dan
               tercatat di jejak audit. */}

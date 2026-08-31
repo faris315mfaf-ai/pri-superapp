@@ -1173,14 +1173,7 @@ export type TvNasional = {
       akun_terbaca: number;
     }
   >;
-  anggota: {
-    user_id: string;
-    nama: string;
-    avatar_url: string;
-    profil: string;
-    diperbarui: string | null;
-    platform: Record<string, MetrikNasional | null>;
-  }[];
+  anggota: AnggotaTvrNasional[];
   cakupan: {
     profil_total: number;
     profil_terbaca: number;
@@ -1189,9 +1182,48 @@ export type TvNasional = {
   };
 };
 
+export type AnggotaTvrNasional = {
+  user_id: string;
+  nama: string;
+  avatar_url: string;
+  profil: string;
+  diperbarui: string | null;
+  platform: Record<string, MetrikNasional | null>;
+  /** Handle per platform (untuk tautan langsung ke profil sosmednya). */
+  akun: Record<string, string>;
+};
+
 export async function getTvNasional(): Promise<TvNasional> {
   const json = await fetchJson("/api/dashboard/tv-nasional");
   return json as TvNasional;
+}
+
+// ---- Leaderboard mahkota TV Rakyat (1 Sep 2026, semua pengguna) ----
+export type JuaraTvr = {
+  user_id: string;
+  nama: string;
+  avatar_url: string;
+  peringkat: number;
+  total_pengikut: number;
+};
+
+export type PeringkatTvr = {
+  platforms: string[];
+  indikator: (keyof MetrikNasional)[];
+  anggota: AnggotaTvrNasional[];
+  top3: JuaraTvr[];
+  diperbarui: string;
+};
+
+export async function getPeringkatTvr(): Promise<PeringkatTvr> {
+  const json = await fetchJson("/api/peringkat-tvr");
+  return json as PeringkatTvr;
+}
+
+/** Hanya tiga besar — untuk cincin badge di avatar (ringan). */
+export async function getTop3Tvr(): Promise<JuaraTvr[]> {
+  const json = await fetchJson("/api/peringkat-tvr?ringkas=1");
+  return (json.top3 ?? []) as JuaraTvr[];
 }
 
 // ------------------------------------------------------------

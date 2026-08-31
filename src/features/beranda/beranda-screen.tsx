@@ -24,10 +24,13 @@ import {
   MessageCircle,
   Video, Megaphone, Newspaper } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
-import { FadeInUp, StatusBadge, ThemeToggle } from "@/components/pri-ui";
+import { AvatarInisial, FadeInUp, StatusBadge, ThemeToggle } from "@/components/pri-ui";
 import { ProgressRing } from "@/components/progress-ring";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { IkonStreak } from "@/components/ikon-streak";
+import { FotoBulat } from "@/components/foto-bulat";
+import { TombolPeringkat } from "@/features/peringkat/tombol-peringkat";
+import { CincinJuara } from "@/features/peringkat/cincin-mythic";
 import { useAppStore } from "@/hooks/use-app-store";
 import { KartuPengumumanTerbaru } from "@/features/konten/beranda-anggota";
 import { KontenScreen } from "@/features/konten/konten-screen";
@@ -189,12 +192,22 @@ export function BerandaScreen({
           <JamDigital className="mt-0.5 block font-heading text-lg font-extrabold tracking-tight text-teks-utama" />
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {/* Avatar saya — bercincin Mythical bila masuk 3 besar TVR */}
+          <CincinJuara userId={user.id} ukuran={36}>
+            {user.avatar_url ? (
+              <FotoBulat src={user.avatar_url} ukuran={36} />
+            ) : (
+              <AvatarInisial nama={user.nama} ukuran={36} />
+            )}
+          </CincinJuara>
           {/* Api task streak (spek 4.1): absensi harian berturut-turut */}
           {streak > 0 && (
             <span className="glass flex h-10 items-center rounded-xl px-2.5">
               <IkonStreak hari={streak} />
             </span>
           )}
+          {/* Mahkota leaderboard TV Rakyat (kiri lonceng, 1 Sep 2026) */}
+          <TombolPeringkat />
           <TombolLonceng onBuka={onBukaNotifikasi} />
           <ThemeToggle />
         </div>

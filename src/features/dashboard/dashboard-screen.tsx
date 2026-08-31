@@ -37,6 +37,8 @@ import { KartuKelolaPengguna } from "./kartu-kelola-pengguna";
 import { TataLetakModul, type SeksiModul } from "@/components/tata-letak-modul";
 import { RingkasanUtama } from "./ringkasan-utama";
 import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
+import { TombolPeringkat } from "@/features/peringkat/tombol-peringkat";
+import { CincinJuara } from "@/features/peringkat/cincin-mythic";
 
 type DashboardScreenProps = {
   user: User;
@@ -155,7 +157,13 @@ export function DashboardScreen({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <AvatarInisial nama={user.nama} ukuran="lg" />
+          {/* Avatar — bercincin Mythical bila masuk 3 besar TVR */}
+          <CincinJuara userId={user.id} ukuran={48}>
+            <AvatarInisial nama={user.nama} ukuran="lg" />
+          </CincinJuara>
+
+          {/* Mahkota leaderboard TV Rakyat (kiri lonceng, 1 Sep 2026) */}
+          <TombolPeringkat />
 
           {/* Tombol lonceng notifikasi + badge belum dibaca */}
           <button
