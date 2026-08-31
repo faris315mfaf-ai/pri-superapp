@@ -16,8 +16,13 @@
 //   Tautan : POST /api/uploadposts/users/generate-jwt {username}
 //            → {access_url} (halaman penautan, berlaku 48 jam)
 //   Unggah : POST /api/upload (multipart form-data)
-//            field: user, platform[] (boleh berulang), title, caption,
-//            video_url ATAU video, schedule_date (ISO 8601, opsional)
+//            field: user, platform[] (boleh berulang), title (teks
+//            fallback SEMUA platform — TikTok/IG/Threads/X memakainya
+//            sebagai caption), video (berkas ATAU URL — TIDAK ada
+//            "video_url"!), youtube_/facebook_title+description,
+//            scheduled_date (ISO 8601; BUKAN "schedule_date") —
+//            kontrak diverifikasi dari docs.upload-post.com 1 Sep 2026
+//            setelah bug "video url or video file is required".
 //            → validasi per platform jelas ("has no X account configured")
 //   Insight: GET /api/analytics/{username}?platforms=a,b,c
 //            → objek per platform (akun tak tertaut = {success:false, silent})
@@ -215,15 +220,33 @@ export async function unggahVideoUp(opsi: {
   platforms: string[];
   scheduleDate?: string;
 }): Promise<HasilUnggahUp> {
+  const judul = opsi.judul.trim().slice(0, 100) || "TV Rakyat";
+  const caption = opsi.caption?.trim() ?? "";
+  // Kontrak upload-post (docs, 1 Sep 2026): parameter "caption" TIDAK
+  // ada. `title` = teks fallback semua platform — TikTok/IG/Threads/X
+  // menampilkannya sebagai caption postingan, jadi judul+caption
+  // digabung di sana; YouTube & Facebook punya kolom judul/deskripsi
+  // terpisah lewat parameter platform-spesifik.
+  const teksLengkap = (caption ? `${judul}\n\n${caption}` : judul).slice(0, 2200);
+
   const form = new FormData();
   form.set("user", opsi.profil);
-  form.set("title", opsi.judul.slice(0, 100) || "TV Rakyat");
-  if (opsi.caption?.trim()) form.set("caption", opsi.caption.trim().slice(0, 2200));
-  form.set("video_url", opsi.videoUrl);
+  form.set("title", teksLengkap);
+  form.set("youtube_title", judul);
+  form.set("facebook_title", judul);
+  if (caption) {
+    form.set("youtube_description", caption.slice(0, 5000));
+    form.set("facebook_description", caption.slice(0, 5000));
+  }
+  // Nama field yang benar adalah `video` (menerima berkas ATAU URL) —
+  // "video_url" ditolak dengan "video url or video file is required".
+  form.set("video", opsi.videoUrl);
   for (const p of opsi.platforms) {
     form.append("platform[]", KE_UP[p] ?? p);
   }
-  if (opsi.scheduleDate) form.set("schedule_date", opsi.scheduleDate);
+  // Jadwal: field yang benar `scheduled_date` — nama lama "schedule_date"
+  // DIABAIKAN diam-diam oleh API (video langsung terposting!).
+  if (opsi.scheduleDate) form.set("scheduled_date", opsi.scheduleDate);
 
   const d = await panggil<Record<string, unknown>>("/upload", {
     method: "POST",
@@ -234,7 +257,14 @@ export async function unggahVideoUp(opsi: {
   return {
     sukses: (d as { success?: boolean }).success !== false,
     mentah: d,
-    request_id: String((d as { request_id?: string }).request_id ?? "") || null,
+    // Post langsung membalas request_id; post TERJADWAL membalas job_id
+    // (HTTP 202) — dua-duanya dipakai korelasi riwayat.
+    request_id:
+      String(
+        (d as { request_id?: string; job_id?: string }).request_id ??
+          (d as { job_id?: string }).job_id ??
+          "",
+      ) || null,
   };
 }
 
