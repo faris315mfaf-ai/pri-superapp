@@ -154,7 +154,9 @@ export function KpiAnggotaDashboard() {
     void (async () => {
       try {
         const r = await getDashboardKpiAnggota(detail.id, fTanggal);
-        if (hidup) setRiwayatDetail(r);
+        // Sementara hanya riwayatnya yang dipakai; daftar link + embed +
+        // deteksi link bodong menyusul di rombakan modal detail.
+        if (hidup) setRiwayatDetail(r.riwayat);
       } catch {
         if (hidup) setRiwayatDetail([]);
       }

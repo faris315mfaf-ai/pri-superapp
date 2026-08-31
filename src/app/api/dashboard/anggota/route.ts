@@ -42,7 +42,7 @@ export async function GET(request: Request) {
       db
         .from("app_user")
         .select(
-          "id, nama, avatar_url, divisi, last_login_at, google_linked, email_verified_at, wa_terverifikasi",
+          "id, nama, avatar_url, divisi, last_login_at, google_linked, email_verified_at, wa_terverifikasi, created_at",
         )
         .eq("aktif", true)
         .eq("status", "aktif")
@@ -67,6 +67,8 @@ export async function GET(request: Request) {
         nama: u.nama as string,
         avatar_url: (u.avatar_url as string) ?? "",
         divisi: (u.divisi as string) ?? "",
+        // Untuk grafik pertumbuhan pendaftar (kumulatif per tanggal).
+        bergabung: (u.created_at as string) ?? null,
         dimensi,
         terpenuhi,
         persen: Math.round((terpenuhi / 5) * 100),

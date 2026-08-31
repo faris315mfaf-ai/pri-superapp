@@ -547,10 +547,18 @@ export async function jalankanAlat(
           .eq("tanggal_wib", tanggal),
       ]);
       const per = new Map((video ?? []).map((v) => [Number(v.user_id), Number(v.jumlah)]));
+      // Aturan KPI 5x6 (31 Agu 2026): target TOTAL = target-per-platform x
+      // platform aktif (platform banned dikecualikan). Perkiraan total-
+      // based (bukan ketat per platform) — cukup untuk ringkasan asisten.
+      const { bannedAktifPerUser, PLATFORM_KPI: PK, KPI_PER_PLATFORM: KPP } =
+        await import("@/lib/kpi-video");
+      const bannedPer = await bannedAktifPerUser();
       let tercapai = 0;
       let totalVideo = 0;
       for (const u of roster ?? []) {
-        const target = u.kpi_video != null ? Number(u.kpi_video) : 5;
+        const perPlatform = u.kpi_video != null ? Number(u.kpi_video) : KPP;
+        const aktif = PK.length - (bannedPer.get(Number(u.id))?.size ?? 0);
+        const target = perPlatform * aktif;
         const jumlah = per.get(Number(u.id)) ?? 0;
         totalVideo += jumlah;
         if (jumlah >= target) tercapai += 1;

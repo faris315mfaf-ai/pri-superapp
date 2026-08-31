@@ -3,23 +3,28 @@
 // POST   /api/tvr/laporan — laporkan satu link video (platform + url)
 // DELETE /api/tvr/laporan — hapus laporan sendiri (hari yang sama)
 //
-// KPI: minimal 5 video per anggota per hari. Kewajiban ini DIBEBASKAN
-// bila pengajuan izin/sakit anggota untuk hari itu sudah disetujui —
-// orang sakit tidak ditagih video.
+// KPI (aturan 31 Agu 2026): 5 video x 6 platform = 30 link/hari,
+// KETAT PER PLATFORM — tercapai hanya bila TIAP platform aktif berisi
+// minimal 5 link (lihat lib/kpi-video). Platform yang akunnya kena
+// banned (tabel tvr_banned, dengan bukti) otomatis dikecualikan.
+// Kewajiban DIBEBASKAN bila izin/sakit hari itu disetujui.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { beriKoin } from "@/lib/koin";
+import {
+  bannedAktifPerUser,
+  hitungKpi,
+  KPI_PER_PLATFORM,
+  PLATFORM_KPI,
+  targetPerPlatformDari,
+} from "@/lib/kpi-video";
 
 export const dynamic = "force-dynamic";
 
-// Bawaan 5 video/hari; per akun bisa disetel HR/QC/Pengawas lewat
-// kolom app_user.kpi_video (spek 3.1) — mis. diturunkan saat suspend.
-const KPI_VIDEO_HARIAN = 5;
-
-/** Target KPI seorang user: kolom kpi_video, NULL = bawaan. */
+/** Target per platform seorang user: kolom kpi_video, NULL = bawaan 5. */
 async function targetKpiUser(userId: number): Promise<number> {
   try {
     const { data } = await supabase()
@@ -27,21 +32,13 @@ async function targetKpiUser(userId: number): Promise<number> {
       .select("kpi_video")
       .eq("id", userId)
       .maybeSingle();
-    const n = Number(data?.kpi_video);
-    return Number.isFinite(n) && data?.kpi_video != null ? n : KPI_VIDEO_HARIAN;
+    return targetPerPlatformDari(data?.kpi_video);
   } catch {
-    return KPI_VIDEO_HARIAN;
+    return KPI_PER_PLATFORM;
   }
 }
 
-const PLATFORM_SAH = new Set([
-  "instagram",
-  "tiktok",
-  "youtube",
-  "facebook",
-  "threads",
-  "twitter",
-]);
+const PLATFORM_SAH = new Set<string>(PLATFORM_KPI);
 const BOLEH_LIHAT_SEMUA = new Set(["admin_hr", "super_admin", "master"]);
 
 function tokenDari(request: Request): string {
@@ -90,55 +87,64 @@ export async function GET(request: Request) {
           status: 403,
         });
       }
-      const [{ data: baris }, { data: bebas }, { data: targetRows }] = await Promise.all([
-        db
-          .from("laporan_video")
-          .select("user_id, platform, app_user(nama)")
-          .eq("tanggal_wib", tanggal),
-        db
-          .from("perizinan")
-          .select("user_id, jenis")
-          .eq("tanggal_wib", tanggal)
-          .eq("status", "disetujui"),
-        // Target khusus per akun (spek 3.1) — hanya yang disetel.
-        db.from("app_user").select("id, kpi_video").not("kpi_video", "is", null),
-      ]);
+      const [{ data: baris }, { data: bebas }, { data: targetRows }, bannedPer] =
+        await Promise.all([
+          db
+            .from("laporan_video")
+            .select("user_id, platform, app_user(nama)")
+            .eq("tanggal_wib", tanggal),
+          db
+            .from("perizinan")
+            .select("user_id, jenis")
+            .eq("tanggal_wib", tanggal)
+            .eq("status", "disetujui"),
+          // Target khusus per akun (spek 3.1) — hanya yang disetel.
+          db.from("app_user").select("id, kpi_video").not("kpi_video", "is", null),
+          bannedAktifPerUser(),
+        ]);
       const targetPer = new Map(
         (targetRows ?? []).map((t) => [Number(t.id), Number(t.kpi_video)]),
       );
 
       const bebasPer = new Map((bebas ?? []).map((b) => [Number(b.user_id), b.jenis as string]));
-      const rekap = new Map<number, { nama: string; jumlah: number }>();
+      // Hitung PER PLATFORM per orang (aturan ketat 5x6).
+      const rekap = new Map<number, { nama: string; per: Map<string, number> }>();
       for (const b of baris ?? []) {
         const id = Number(b.user_id);
-        const ada = rekap.get(id);
-        if (ada) ada.jumlah += 1;
-        else {
+        let ada = rekap.get(id);
+        if (!ada) {
           const embedded = b.app_user as { nama?: string } | { nama?: string }[] | null;
           const nama = Array.isArray(embedded) ? embedded[0]?.nama : embedded?.nama;
-          rekap.set(id, { nama: nama ?? "", jumlah: 1 });
+          ada = { nama: nama ?? "", per: new Map() };
+          rekap.set(id, ada);
         }
+        const p = String(b.platform);
+        ada.per.set(p, (ada.per.get(p) ?? 0) + 1);
       }
       return {
         tanggal,
-        kpi_target: KPI_VIDEO_HARIAN,
+        kpi_target: KPI_PER_PLATFORM * PLATFORM_KPI.length, // 30 bawaan
         data: Array.from(rekap.entries()).map(([user_id, r]) => {
-          const target = targetPer.get(user_id) ?? KPI_VIDEO_HARIAN;
+          const kpi = hitungKpi(
+            r.per,
+            bannedPer.get(user_id) ?? new Set(),
+            targetPer.get(user_id) ?? KPI_PER_PLATFORM,
+          );
           return {
             user_id: String(user_id),
             nama: r.nama,
-            jumlah: r.jumlah,
-            kpi_target: target,
-            tercapai: r.jumlah >= target,
+            jumlah: kpi.jumlah,
+            kpi_target: kpi.target_total,
+            tercapai: kpi.tercapai,
             dibebaskan: bebasPer.get(user_id) ?? null,
+            per_platform: kpi.per_platform,
           };
         }),
         dibebaskan: Array.from(bebasPer.entries()).map(([user_id, jenis]) => ({
           user_id: String(user_id),
           jenis,
         })),
-        // Target khusus SEMUA akun yang disetel (termasuk yang belum
-        // melapor hari ini) — dipakai UI untuk menampilkan x/target.
+        // Target khusus (per platform) semua akun yang disetel.
         target_khusus: Array.from(targetPer.entries()).map(([user_id, kpi]) => ({
           user_id: String(user_id),
           kpi,
@@ -170,11 +176,17 @@ export async function GET(request: Request) {
         const t = d.toISOString().slice(0, 10);
         riwayat.push({ tanggal: t, jumlah: per.get(t) ?? 0 });
       }
-      return { data: riwayat, kpi_target: await targetKpiUser(Number(user.id)) };
+      // Garis target di grafik = target TOTAL (per-platform x platform aktif).
+      const [tpp, bannedKu] = await Promise.all([
+        targetKpiUser(Number(user.id)),
+        bannedAktifPerUser([Number(user.id)]),
+      ]);
+      const aktif = PLATFORM_KPI.length - (bannedKu.get(Number(user.id))?.size ?? 0);
+      return { data: riwayat, kpi_target: tpp * aktif };
     }
 
     // --- Laporan milik sendiri ---
-    const [{ data, error }, jenisBebas, targetKu] = await Promise.all([
+    const [{ data, error }, jenisBebas, targetKu, bannedKu] = await Promise.all([
       db
         .from("laporan_video")
         .select("id, platform, url_video, keyword, tanggal_wib, dibuat_pada")
@@ -183,18 +195,30 @@ export async function GET(request: Request) {
         .order("id"),
       kpiDibebaskan(Number(user.id), tanggal),
       targetKpiUser(Number(user.id)),
+      bannedAktifPerUser([Number(user.id)]),
     ]);
     if (error) {
       console.error("[tvr/laporan] baca:", error.message);
       throw new Error("Gagal memuat laporan video.");
     }
     const daftar = (data ?? []).map((d) => ({ ...d, id: String(d.id) }));
+
+    // Aturan ketat 5x6: hitung per platform, platform banned dikecualikan.
+    const perPlatform = new Map<string, number>();
+    for (const d of daftar) {
+      perPlatform.set(d.platform, (perPlatform.get(d.platform) ?? 0) + 1);
+    }
+    const kpi = hitungKpi(perPlatform, bannedKu.get(Number(user.id)) ?? new Set(), targetKu);
+
     return {
       tanggal,
       hari_ini: tanggalWibSekarang(),
       data: daftar,
-      kpi_target: targetKu,
-      kpi_tercapai: daftar.length >= targetKu,
+      // kpi_target kini TOTAL (per-platform x platform aktif) supaya
+      // tampilan "x/target" langsung benar tanpa mengubah pemanggil lama.
+      kpi_target: kpi.target_total,
+      kpi_tercapai: kpi.tercapai,
+      per_platform: kpi.per_platform,
       dibebaskan: jenisBebas,
     };
   });
@@ -390,8 +414,8 @@ export async function PATCH(request: Request) {
     };
 
     // --- Cabang 1: HR/QC/Pengawas menyetel target KPI per akun
-    //     (spek 3.1). Dibedakan dari edit laporan lewat adanya user_id
-    //     tanpa id laporan. kpi null = kembali ke bawaan 5. ---
+    //     (spek 3.1). Sejak aturan 5x6, nilai ini = target PER PLATFORM
+    //     (bawaan 5; 0 = bebas KPI). kpi null = kembali ke bawaan. ---
     if (body.user_id != null && body.id == null) {
       if (!BOLEH_LIHAT_SEMUA.has(user.role) && user.role !== "admin_tv" && !adalahHR(user)) {
         throw Object.assign(new Error("Anda tidak berwenang mengatur KPI."), { status: 403 });
@@ -416,7 +440,7 @@ export async function PATCH(request: Request) {
         console.error("[tvr/laporan] setel kpi:", error.message);
         throw new Error("Gagal menyimpan KPI.");
       }
-      return { sukses: true, kpi_target: kpi ?? KPI_VIDEO_HARIAN };
+      return { sukses: true, kpi_target: kpi ?? KPI_PER_PLATFORM };
     }
 
     // --- Cabang 2: edit laporan sendiri (perilaku lama). ---

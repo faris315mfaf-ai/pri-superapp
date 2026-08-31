@@ -1422,12 +1422,23 @@ export type LaporanVideo = {
   dibuat_pada: string;
 };
 
+/** Rincian capaian satu platform (aturan KPI 5x6). */
+export type RincianPlatformKpi = {
+  platform: string;
+  jumlah: number;
+  target: number;
+  banned: boolean;
+};
+
 export type BalasanLaporanVideo = {
   tanggal: string;
   hari_ini: string;
   data: LaporanVideo[];
+  /** Target TOTAL (per-platform x platform aktif; bawaan 30). */
   kpi_target: number;
+  /** Tercapai KETAT: tiap platform aktif >= target per platform. */
   kpi_tercapai: boolean;
+  per_platform: RincianPlatformKpi[];
   dibebaskan: string | null;
 };
 
@@ -1462,10 +1473,56 @@ export async function getRekapVideoSemua(tanggal?: string): Promise<{
   });
   return {
     tanggal: json.tanggal as string,
-    kpi_target: Number(json.kpi_target ?? 5),
+    kpi_target: Number(json.kpi_target ?? 30),
     data: (json.data ?? []) as RekapVideoBaris[],
     target_khusus: (json.target_khusus ?? []) as { user_id: string; kpi: number }[],
   };
+}
+
+// --- Lapor akun kena banned (aturan KPI 5x6) ---
+
+export type BannedKu = {
+  id: string;
+  platform: string;
+  bukti_url: string;
+  keterangan: string | null;
+  dibuat_pada: string;
+};
+
+/** Laporan banned SAYA yang masih aktif. */
+export async function getBannedKu(): Promise<BannedKu[]> {
+  const json = await fetchJson("/api/tvr/banned", { headers: headerToken() });
+  return (json.data ?? []) as BannedKu[];
+}
+
+/** Semua laporan banned aktif + bukti (HR/pengurus). */
+export async function getBannedSemua(): Promise<
+  (BannedKu & { user_id: string; nama: string })[]
+> {
+  const json = await fetchJson("/api/tvr/banned?semua=1", { headers: headerToken() });
+  return (json.data ?? []) as (BannedKu & { user_id: string; nama: string })[];
+}
+
+/** Lapor akun kena banned — target KPI platform itu langsung dikecualikan. */
+export async function laporBanned(data: {
+  platform: string;
+  buktiDataUrl: string;
+  keterangan?: string;
+}): Promise<void> {
+  await fetchJson("/api/tvr/banned", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+}
+
+/** Cabut laporan banned (pemilik saat akun pulih, atau HR). */
+export async function cabutBanned(id: string): Promise<void> {
+  await fetchJson("/api/tvr/banned", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id }),
+  });
 }
 
 export async function tambahLaporanVideo(
@@ -2294,10 +2351,13 @@ export type KpiDashboardAnggota = {
   avatar_url: string;
   divisi: string;
   jumlah: number;
+  /** Target TOTAL (aturan 5x6; platform banned dikecualikan). */
   target: number;
   tercapai: boolean;
   /** "izin" | "sakit" bila hari itu dibebaskan; null bila tidak */
   dibebaskan: string | null;
+  /** Platform yang sedang dilaporkan banned. */
+  banned?: string[];
 };
 
 export type RencanaDashboard = {
@@ -2754,16 +2814,127 @@ export async function getDashboardAnggota(): Promise<KelengkapanAnggota[]> {
   return (json?.anggota ?? []) as KelengkapanAnggota[];
 }
 
-/** Riwayat video 7 hari satu anggota (modal detail dashboard KPI). */
+export type DetailKpiAnggota = {
+  riwayat: { tanggal: string; jumlah: number }[];
+  /** SEMUA link video jendela 7 hari (untuk daftar embed). */
+  links: LaporanVideo[];
+  per_platform: RincianPlatformKpi[];
+  target_total: number;
+  tercapai: boolean;
+  banned: string[];
+};
+
+/** Detail satu anggota: riwayat 7 hari + link video + rincian platform. */
 export async function getDashboardKpiAnggota(
   userId: string,
   tanggal?: string,
-): Promise<{ tanggal: string; jumlah: number }[]> {
+): Promise<DetailKpiAnggota> {
   const t = tanggal ? `&tanggal=${encodeURIComponent(tanggal)}` : "";
   const json = await fetchJson(`/api/dashboard/kpi?user=${encodeURIComponent(userId)}${t}`, {
     headers: headerToken(),
   });
-  return (json?.riwayat ?? []) as { tanggal: string; jumlah: number }[];
+  return {
+    riwayat: (json?.riwayat ?? []) as { tanggal: string; jumlah: number }[],
+    links: (json?.links ?? []) as LaporanVideo[],
+    per_platform: (json?.per_platform ?? []) as RincianPlatformKpi[],
+    target_total: Number(json?.target_total ?? 30),
+    tercapai: json?.tercapai === true,
+    banned: (json?.banned ?? []) as string[],
+  };
+}
+
+/** Periksa hidup/matinya link video satu anggota (deteksi link bodong). */
+export async function cekLinkAnggota(
+  userId: string,
+  tanggal?: string,
+): Promise<Record<string, "hidup" | "bodong" | "tak_terverifikasi">> {
+  const t = tanggal ? `&tanggal=${encodeURIComponent(tanggal)}` : "";
+  const json = await fetchJson(
+    `/api/dashboard/kpi?cek=1&user=${encodeURIComponent(userId)}${t}`,
+    { headers: headerToken() },
+  );
+  const peta: Record<string, "hidup" | "bodong" | "tak_terverifikasi"> = {};
+  for (const b of (json?.data ?? []) as { id: string; status: string }[]) {
+    peta[b.id] = b.status as "hidup" | "bodong" | "tak_terverifikasi";
+  }
+  return peta;
+}
+
+/** Tren KPI 30 hari (total, % tercapai, per platform per hari). */
+export type TrenKpi30 = {
+  tanggal: string;
+  total: number;
+  persen_tercapai: number;
+  per_platform: Record<string, number>;
+};
+export async function getDashboardKpiTren(): Promise<TrenKpi30[]> {
+  const json = await fetchJson("/api/dashboard/kpi?tren=30", { headers: headerToken() });
+  return (json?.tren ?? []) as TrenKpi30[];
+}
+
+// --- Tren dashboard (grafik absensi & kepatuhan) ---
+
+export type TrenAbsensi = { tanggal: string; hadir: number; telat: number; izin: number };
+export async function getTrenAbsensi(
+  hari: 7 | 30,
+): Promise<{ tren: TrenAbsensi[]; total_anggota: number }> {
+  const json = await fetchJson(`/api/dashboard/tren?jenis=absensi&hari=${hari}`, {
+    headers: headerToken(),
+  });
+  return {
+    tren: (json?.tren ?? []) as TrenAbsensi[],
+    total_anggota: Number(json?.total_anggota ?? 0),
+  };
+}
+
+export type TrenKepatuhan = { tanggal: string; persen: number; sudah: number; total: number };
+export type KepatuhanPerAkun = {
+  akun: string;
+  platform: string;
+  persen: number;
+  sudah: number;
+  total: number;
+};
+export async function getTrenKepatuhan(hari: 7 | 30): Promise<{
+  tren: TrenKepatuhan[];
+  hari_ini: { patuh_penuh: number; belum_penuh: number };
+  per_akun_wajib: KepatuhanPerAkun[];
+}> {
+  const json = await fetchJson(`/api/dashboard/tren?jenis=kepatuhan&hari=${hari}`, {
+    headers: headerToken(),
+  });
+  return {
+    tren: (json?.tren ?? []) as TrenKepatuhan[],
+    hari_ini: (json?.hari_ini ?? { patuh_penuh: 0, belum_penuh: 0 }) as {
+      patuh_penuh: number;
+      belum_penuh: number;
+    },
+    per_akun_wajib: (json?.per_akun_wajib ?? []) as KepatuhanPerAkun[],
+  };
+}
+
+// --- Papan peringkat (4 kategori) ---
+
+export type BarisPeringkat = {
+  id: string;
+  nama: string;
+  avatar_url: string;
+  divisi: string;
+  skor: number;
+  detail: string;
+};
+export type PeringkatDashboard = {
+  hari: number;
+  komen: BarisPeringkat[];
+  video: BarisPeringkat[];
+  absensi: BarisPeringkat[];
+  kpi: BarisPeringkat[];
+};
+export async function getPeringkatDashboard(hari: 7 | 30): Promise<PeringkatDashboard> {
+  const json = await fetchJson(`/api/dashboard/peringkat?hari=${hari}`, {
+    headers: headerToken(),
+  });
+  return json as PeringkatDashboard;
 }
 
 // ------------------------------------------------------------

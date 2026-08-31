@@ -19,7 +19,10 @@ import { supabase } from "@/lib/supabase";
 import { DIVISI } from "@/lib/struktur";
 
 export const UMUR_SEGAR_MENIT = 60;
-const TARGET_VIDEO_BAWAAN = 5;
+// Aturan KPI 5x6 (31 Agu 2026): bawaan 5 video x 6 platform = 30/hari.
+// Snapshot memakai perkiraan total-based (banned per user tidak ditarik
+// di sini demi ringan — angka rincinya ada di dashboard KPI).
+const TARGET_VIDEO_BAWAAN = 30;
 
 // Bahan belajar TXT (fitur 1.22/4). Batas menjaga biaya token AI:
 // tiap berkas dipotong, dan total yang disuntikkan ke AI dibatasi.
@@ -180,7 +183,8 @@ export async function bangunSnapshot(): Promise<Record<string, unknown>> {
     let totalVideo = 0;
     const perDivisi: Record<string, { video: number; orang: number }> = {};
     for (const u of roster) {
-      const target = u.kpi_video != null ? Number(u.kpi_video) : TARGET_VIDEO_BAWAAN;
+      // kpi_video = target PER PLATFORM (x6); null = bawaan total 30.
+      const target = u.kpi_video != null ? Number(u.kpi_video) * 6 : TARGET_VIDEO_BAWAAN;
       const jml = per.get(Number(u.id)) ?? 0;
       totalVideo += jml;
       if (jml >= target) tercapai += 1;
