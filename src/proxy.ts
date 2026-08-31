@@ -11,6 +11,8 @@
 // Sumber daya eksternal DIPETAKAN dari kode nyata (bukan template):
 // - connect-src https://api.cloudinary.com : unggah video manual
 //   langsung dari peramban (XHR di kirim-video-manual.tsx).
+// - connect-src <origin SUPABASE_URL> : unggah video TVR Saya langsung
+//   peramban→storage (URL tertandatangan, unggah-sosmed-saya.tsx).
 // - connect-src (https+wss) generativelanguage.googleapis.com : mode
 //   suara Asisten AI (Gemini Live, fitur 1.20/3) — peramban menyambung
 //   WebSocket memakai token sementara dari server, bukan kunci asli.
@@ -31,6 +33,18 @@
 // ============================================================
 import { NextRequest, NextResponse } from "next/server";
 
+// Origin Supabase untuk connect-src: unggah video TVR Saya naik LANGSUNG
+// peramban→storage lewat URL tertandatangan (unggah-sosmed-saya.tsx).
+// Tanpa origin ini CSP memblokir PUT-nya → "Failed to fetch" (bug 1 Sep
+// 2026). Diambil dari env supaya tidak hardcode; dihitung sekali saja.
+const ASAL_SUPABASE = (() => {
+  try {
+    return process.env.SUPABASE_URL ? new URL(process.env.SUPABASE_URL).origin : "";
+  } catch {
+    return "";
+  }
+})();
+
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   // Di development React memakai eval untuk membangun stack trace;
@@ -44,7 +58,7 @@ export function proxy(request: NextRequest) {
     img-src 'self' https: data: blob:;
     media-src 'self' https: blob:;
     font-src 'self' data:;
-    connect-src 'self' https://api.cloudinary.com https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com${dev ? " ws:" : ""};
+    connect-src 'self' https://api.cloudinary.com https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com${ASAL_SUPABASE ? ` ${ASAL_SUPABASE}` : ""}${dev ? " ws:" : ""};
     worker-src 'self' blob:;
     object-src 'none';
     base-uri 'self';

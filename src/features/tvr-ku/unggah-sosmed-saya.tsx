@@ -108,11 +108,20 @@ export function UnggahSosmedSaya() {
       // 1. Berkas naik langsung ke storage (URL tertandatangan).
       setTahap("unggah");
       const { path, url } = await siapkanUnggahTvrku(berkas.name, berkas.size);
-      const naik = await fetch(url, {
-        method: "PUT",
-        headers: { "content-type": berkas.type || "video/mp4" },
-        body: berkas,
-      });
+      let naik: Response;
+      try {
+        naik = await fetch(url, {
+          method: "PUT",
+          headers: { "content-type": berkas.type || "video/mp4" },
+          body: berkas,
+        });
+      } catch {
+        // fetch DITOLAK peramban (jaringan putus / diblokir) — jangan
+        // lempar "Failed to fetch" mentah yang membingungkan.
+        throw new Error(
+          "Video gagal diunggah ke penyimpanan. Periksa koneksi internet lalu coba lagi.",
+        );
+      }
       if (!naik.ok) throw new Error("Gagal mengunggah berkas video. Coba lagi.");
 
       // 2. Server menyerahkan URL-nya ke upload-post.
@@ -234,31 +243,63 @@ export function UnggahSosmedSaya() {
           ))}
         </div>
 
-        {/* Jadwal */}
-        <div className="mt-3 flex items-center gap-2">
+        {/* Mode kirim: dua pilihan jelas (permintaan 1 Sep 2026) —
+            Upload Sekarang ATAU Jadwalkan Upload. */}
+        <p className="mt-3 text-[11.5px] font-semibold text-teks-sekunder">Waktu kirim:</p>
+        <div className="mt-1.5 grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={() => setPakaiJadwal((v) => !v)}
+            onClick={() => setPakaiJadwal(false)}
+            disabled={Boolean(tahap)}
+            aria-pressed={!pakaiJadwal}
+            className={cn(
+              "btn-tekan flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[12px] font-bold",
+              !pakaiJadwal ? "text-white" : "glass text-teks-sekunder",
+            )}
+            style={
+              !pakaiJadwal
+                ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" }
+                : undefined
+            }
+          >
+            <Send className="h-3.5 w-3.5" />
+            Upload Sekarang
+          </button>
+          <button
+            type="button"
+            onClick={() => setPakaiJadwal(true)}
             disabled={Boolean(tahap)}
             aria-pressed={pakaiJadwal}
             className={cn(
-              "btn-tekan flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-bold",
-              pakaiJadwal ? "bg-pri/15 text-pri" : "glass text-teks-sekunder",
+              "btn-tekan flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[12px] font-bold",
+              pakaiJadwal ? "text-white" : "glass text-teks-sekunder",
             )}
+            style={
+              pakaiJadwal
+                ? { background: "linear-gradient(135deg, #7C3AED, #5B21B6)" }
+                : undefined
+            }
           >
             <CalendarClock className="h-3.5 w-3.5" />
-            Jadwalkan
+            Jadwalkan Upload
           </button>
-          {pakaiJadwal && (
+        </div>
+        {pakaiJadwal && (
+          <div className="mt-2">
             <input
               type="datetime-local"
               value={jadwal}
               onChange={(e) => setJadwal(e.target.value)}
               disabled={Boolean(tahap)}
-              className="glass-input h-9 flex-1 rounded-xl px-2.5 text-[12px] text-teks-utama"
+              aria-label="Waktu jadwal upload"
+              className="glass-input h-10 w-full rounded-xl px-2.5 text-[12px] text-teks-utama"
             />
-          )}
-        </div>
+            <p className="mt-1 text-[10.5px] text-teks-sekunder">
+              Minimal 5 menit dari sekarang, maksimal 30 hari ke depan. Video
+              diposting otomatis pada waktunya.
+            </p>
+          </div>
+        )}
         <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder">
           Berkas video dihapus otomatis dari aplikasi 2 jam setelah tayang — postingan
           di sosmed Anda tetap ada.
