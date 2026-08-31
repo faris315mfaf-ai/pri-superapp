@@ -84,19 +84,24 @@ export async function GET(request: Request) {
     // (permintaan 31 Agu 2026: kartu akun memakai gambar postingan
     // terbaru dari data Ayrshare, bukan avatar statis).
     const thumbPer = new Map<string, string>();
+    // Waktu UPDATE terakhir per akun (fix 31 Agu 2026: kartu harus jujur
+    // kapan datanya terakhir disegarkan sinkron).
+    const updatePer = new Map<string, string>();
     if (periodeDipakai) {
       const { data: posts } = await db
         .from("postingan")
-        .select("akun_wajib, platform, thumbnail_url, waktu_posting")
+        .select("akun_wajib, platform, thumbnail_url, waktu_posting, updated_at")
         .eq("periode", periodeDipakai)
-        .not("thumbnail_url", "is", null)
-        .neq("thumbnail_url", "")
         .order("waktu_posting", { ascending: false })
         .limit(400);
       for (const p of posts ?? []) {
         const kunci = `${String(p.akun_wajib).toLowerCase()}|${String(p.platform).toLowerCase()}`;
-        // Sudah urut terbaru dulu — simpan hanya yang pertama.
-        if (!thumbPer.has(kunci)) thumbPer.set(kunci, String(p.thumbnail_url));
+        // Sudah urut terbaru dulu — simpan hanya thumbnail pertama yang terisi.
+        if (!thumbPer.has(kunci) && p.thumbnail_url) {
+          thumbPer.set(kunci, String(p.thumbnail_url));
+        }
+        const u = String(p.updated_at ?? "");
+        if (u && u > (updatePer.get(kunci) ?? "")) updatePer.set(kunci, u);
       }
     }
 
@@ -119,6 +124,12 @@ export async function GET(request: Request) {
           thumbPer.get(
             `${String(a.akun_wajib).toLowerCase()}|${String(a.platform).toLowerCase()}`,
           ) ?? "",
+        // Kapan data postingan akun ini terakhir disegarkan sinkron
+        // (null = belum ada postingan pada periode ini).
+        update_terakhir:
+          updatePer.get(
+            `${String(a.akun_wajib).toLowerCase()}|${String(a.platform).toLowerCase()}`,
+          ) ?? null,
       };
     });
 

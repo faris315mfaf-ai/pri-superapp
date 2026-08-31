@@ -34,6 +34,8 @@ export type AkunWajibWithStats = AkunWajib & {
   kader_patuh_penuh: number;
   /** Thumbnail POSTINGAN TERBARU akun ini pada periode (31 Agu 2026). */
   thumbnail_terbaru?: string;
+  /** Kapan data postingan akun ini terakhir disegarkan sinkron. */
+  update_terakhir?: string | null;
 };
 
 export type PostinganWithKepatuhan = Postingan & {
@@ -2454,12 +2456,21 @@ export async function getDashboardTvAktivitas(): Promise<TvDashboardData["aktivi
 export type KelengkapanAnggota = {
   id: string;
   nama: string;
+  /** Email asli ("" bila masih sintetis pendaftaran-WA lama) */
+  email?: string;
+  nomor_wa?: string | null;
   avatar_url: string;
   divisi: string;
   /** Tanggal akun dibuat (grafik pertumbuhan) */
   bergabung?: string | null;
+  /** Fitur login yang aktif untuk akun ini (31 Agu 2026) */
+  login_aktif?: { email: boolean; google: boolean; wajah: boolean; sidik_jari: boolean };
+  /** Akun TV Rakyat pribadi yang sudah login (upload-post) */
+  tvr_akun?: { platform: string; username: string }[];
   /** Akun TV Rakyat tertaut via upload-post (target 6 platform) */
   tvr_tertaut?: number;
+  /** Username sosmed yang dipakai berkomentar (QC) */
+  qc_akun?: { platform: string; username: string }[];
   dimensi: { login: boolean; sosmed: boolean; google: boolean; email: boolean; wa: boolean };
   terpenuhi: number;
   persen: number;

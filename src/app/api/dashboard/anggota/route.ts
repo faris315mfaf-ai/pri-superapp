@@ -38,39 +38,67 @@ export async function GET(request: Request) {
     }
 
     const db = supabase();
-    const [{ data: roster }, { data: sosmed }] = await Promise.all([
+    const [
+      { data: roster },
+      { data: sosmed },
+      { data: tvr },
+      { data: wajah },
+      { data: sidik },
+    ] = await Promise.all([
       db
         .from("app_user")
         .select(
-          "id, nama, avatar_url, divisi, last_login_at, google_linked, email_verified_at, wa_terverifikasi, created_at",
+          "id, nama, email, nomor_wa, avatar_url, divisi, last_login_at, google_linked, email_verified_at, wa_terverifikasi, created_at",
         )
         .eq("aktif", true)
         .eq("status", "aktif")
         .neq("role", "master")
         .limit(500),
-      db.from("akun_sosmed_user").select("user_id").limit(2000),
+      // Username sosmed yang dipakai komentar QC (per user, lengkap).
+      db
+        .from("akun_sosmed_user")
+        .select("user_id, platform, username")
+        .eq("aktif", true)
+        .limit(3000),
+      // SEMUA akun TV Rakyat pribadi yang sudah login (upload-post).
+      db
+        .from("akun_tvr_user")
+        .select("user_id, platform, username")
+        .eq("terhubung", true)
+        .neq("platform", "website")
+        .limit(3000),
+      // Fitur login: face recognition (punya template wajah).
+      db.from("wajah_template").select("user_id").limit(2000),
+      // Fitur login: sidik jari (punya kredensial WebAuthn).
+      db.from("kredensial_webauthn").select("user_id").limit(2000),
     ]);
-    // Akun TV Rakyat tertaut (upload-post) — target 6 platform/anggota.
-    const { data: tvr } = await supabase()
-      .from("akun_tvr_user")
-      .select("user_id, platform")
-      .eq("terhubung", true)
-      .neq("platform", "website")
-      .limit(3000);
 
-    const punyaSosmed = new Set((sosmed ?? []).map((s) => Number(s.user_id)));
-    const tvrPer = new Map<number, Set<string>>();
+    const qcPer = new Map<number, { platform: string; username: string }[]>();
+    for (const b of sosmed ?? []) {
+      const id = Number(b.user_id);
+      const arr = qcPer.get(id) ?? [];
+      arr.push({ platform: String(b.platform), username: String(b.username) });
+      qcPer.set(id, arr);
+    }
+    const tvrPer = new Map<number, { platform: string; username: string }[]>();
     for (const b of tvr ?? []) {
       const id = Number(b.user_id);
-      const set = tvrPer.get(id) ?? new Set<string>();
-      set.add(String(b.platform));
-      tvrPer.set(id, set);
+      const arr = tvrPer.get(id) ?? [];
+      arr.push({ platform: String(b.platform), username: String(b.username) });
+      tvrPer.set(id, arr);
     }
+    const punyaWajah = new Set((wajah ?? []).map((w) => Number(w.user_id)));
+    const punyaSidik = new Set((sidik ?? []).map((w) => Number(w.user_id)));
+
+    // Email sintetis pendaftaran-WA lama bukan email sungguhan — jangan
+    // ditampilkan seolah-olah kontak yang bisa dihubungi.
+    const emailAsli = (e: string) => (e.endsWith("@pri.internal") ? "" : e);
 
     const anggota = (roster ?? []).map((u) => {
+      const id = Number(u.id);
       const dimensi = {
         login: u.last_login_at != null,
-        sosmed: punyaSosmed.has(Number(u.id)),
+        sosmed: (qcPer.get(id)?.length ?? 0) > 0,
         google: u.google_linked === true,
         email: u.email_verified_at != null,
         wa: u.wa_terverifikasi === true,
@@ -79,12 +107,26 @@ export async function GET(request: Request) {
       return {
         id: String(u.id),
         nama: u.nama as string,
+        // Detail kontak (permintaan 31 Agu 2026 — dashboard ini memang
+        // khusus HR/pengurus, gerbangnya di atas).
+        email: emailAsli(String(u.email ?? "")),
+        nomor_wa: (u.nomor_wa as string | null) ?? null,
         avatar_url: (u.avatar_url as string) ?? "",
         divisi: (u.divisi as string) ?? "",
         // Untuk grafik pertumbuhan pendaftar (kumulatif per tanggal).
         bergabung: (u.created_at as string) ?? null,
-        // Akun TV Rakyat tertaut (target 6 platform).
-        tvr_tertaut: tvrPer.get(Number(u.id))?.size ?? 0,
+        // Fitur login yang AKTIF untuk akun ini.
+        login_aktif: {
+          email: u.email_verified_at != null,
+          google: u.google_linked === true,
+          wajah: punyaWajah.has(id),
+          sidik_jari: punyaSidik.has(id),
+        },
+        // Akun TV Rakyat pribadi yang sudah login (nama + platform).
+        tvr_akun: tvrPer.get(id) ?? [],
+        tvr_tertaut: tvrPer.get(id)?.length ?? 0,
+        // Username sosmed yang dipakai berkomentar (QC).
+        qc_akun: qcPer.get(id) ?? [],
         dimensi,
         terpenuhi,
         persen: Math.round((terpenuhi / 5) * 100),

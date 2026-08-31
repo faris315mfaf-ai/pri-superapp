@@ -95,6 +95,14 @@ function metrikNilai(metrik: { label: string; nilai: number }[], label: string):
   return metrik.find((m) => m.label === label)?.nilai ?? 0;
 }
 
+/** Sama, tapi null bila metriknya memang tak diberikan platform (jujur). */
+function metrikNilaiAtauNull(
+  metrik: { label: string; nilai: number }[],
+  label: string,
+): number | null {
+  return metrik.find((m) => m.label === label)?.nilai ?? null;
+}
+
 /**
  * Header kredensial X milik pengguna bila diatur di env. Sejak 31 Mar
  * 2026 Ayrshare mewajibkan kunci API X SENDIRI untuk operasi X. Tanpa
@@ -349,20 +357,31 @@ export async function jalankanAnalisisAyrshare(opsi: {
 
     await db.from("postingan").upsert(
       dedup(
-        postPeriode.map((p) => ({
-          id_postingan: idPostinganKanonik(akun.platform, p.id, p.url),
-          akun_wajib: akun.username,
-          platform: akun.platform,
-          url_postingan: p.url,
-          periode,
-          waktu_posting: p.waktu,
-          caption_asli: p.teks,
-          thumbnail_url: p.thumbnail,
-          // Penanda "ayrshare" dipasang SETELAH komentarnya terbaca
-          // (di bawah), supaya panggilan lanjutan tak melewati postingan
-          // yang sebenarnya belum diperiksa.
-          updated_at: new Date().toISOString(),
-        })),
+        postPeriode.map((p) => {
+          // Angka RIIL dari Ayrshare (fix "data dummy" 31 Agu 2026):
+          // dulu jumlah_like & total_komen_publik tak pernah diisi mesin
+          // → selalu 0 di kartu/detail, tampak palsu. Hanya ditulis bila
+          // metriknya memang ada (YouTube/Threads tak memberi angka —
+          // jangan menimpa dengan nol palsu).
+          const suka = metrikNilaiAtauNull(p.metrik, "Suka");
+          const komenPublik = metrikNilaiAtauNull(p.metrik, "Komentar");
+          return {
+            id_postingan: idPostinganKanonik(akun.platform, p.id, p.url),
+            akun_wajib: akun.username,
+            platform: akun.platform,
+            url_postingan: p.url,
+            periode,
+            waktu_posting: p.waktu,
+            caption_asli: p.teks,
+            thumbnail_url: p.thumbnail,
+            ...(suka !== null ? { jumlah_like: suka } : {}),
+            ...(komenPublik !== null ? { total_komen_publik: komenPublik } : {}),
+            // Penanda "ayrshare" dipasang SETELAH komentarnya terbaca
+            // (di bawah), supaya panggilan lanjutan tak melewati postingan
+            // yang sebenarnya belum diperiksa.
+            updated_at: new Date().toISOString(),
+          };
+        }),
         (b) => b.id_postingan,
       ),
       { onConflict: "id_postingan" },

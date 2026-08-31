@@ -651,10 +651,14 @@ export function QcScreen({
                         </span>
                       </div>
 
-                      {/* Info akun */}
+                      {/* Info akun. Ayrshare memberi NAMA TAMPILAN (bukan
+                          @handle) untuk FB/Threads/YouTube — jangan
+                          merender "@tv rakyat | medianya rakyat". */}
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-heading text-[15px] font-bold text-teks-utama">
-                          @{akun.akun_wajib}
+                          {akun.akun_wajib.includes(" ")
+                            ? akun.akun_wajib
+                            : `@${akun.akun_wajib}`}
                         </p>
                         <p className="truncate text-xs text-teks-sekunder">
                           {akun.nama_tampilan}
@@ -665,6 +669,13 @@ export function QcScreen({
                             warna="netral"
                           />
                         </div>
+                        {/* Kejujuran kesegaran data (permintaan 31 Agu):
+                            kapan postingan akun ini terakhir di-update. */}
+                        <p className="mt-1 text-[10px] text-teks-sekunder">
+                          {akun.update_terakhir
+                            ? `Update terakhir ${new Date(akun.update_terakhir).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" })} WIB`
+                            : "Belum ada postingan pada jendela ini"}
+                        </p>
                       </div>
 
                       {/* Ring kepatuhan */}
