@@ -165,6 +165,8 @@ export type InsightProfil = {
   komentar: number | null;
   jangkauan: number | null;
   tayangan: number | null;
+  /** Jumlah dibagikan/share (1 Sep 2026 — dashboard TV Rakyat Nasional). */
+  bagikan: number | null;
   /** Kapan Ayrshare terakhir menyegarkan angkanya (ISO) */
   diperbarui: string | null;
   /** Kapan Ayrshare akan menyegarkan lagi (ISO) — dipakai UI & cache */
@@ -235,6 +237,7 @@ export async function ambilInsight(platform = "instagram"): Promise<InsightProfi
     komentar: metrik(a, "commentsCount", "commentCountTotal", "comments", "replies"),
     jangkauan: metrik(a, "reachCount", "profileViews", "engagedViews", "pagePostEngagements"),
     tayangan: metrik(a, "viewsCount", "viewCountTotal", "viewCount", "views", "pageVideoViews"),
+    bagikan: metrik(a, "shareCount", "sharesCount", "shareCountTotal", "shares"),
     diperbarui: blok?.lastUpdated ?? null,
     berikutnya: blok?.nextUpdate ?? null,
     catatan: (blok?.warning ?? [])

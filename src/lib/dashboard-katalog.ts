@@ -6,6 +6,7 @@
 // ============================================================
 import {
   CalendarCheck,
+  Globe2,
   Target,
   MessageSquareHeart,
   Tv,
@@ -49,9 +50,23 @@ export const KATALOG_DASHBOARD: readonly {
     keterangan: "Kelengkapan data seluruh anggota",
     ikon: Users,
   },
+  // Dashboard TV Rakyat Nasional (1 Sep 2026): statistik gabungan
+  // Official + seluruh akun pengguna, per sosmed + leaderboard.
+  {
+    kunci: "tvnasional",
+    label: "TV Rakyat Nasional",
+    keterangan: "Statistik gabungan Official + akun pengguna per sosmed",
+    ikon: Globe2,
+  },
 ];
 
-export type KunciDashboard = "absensi" | "kpi" | "kepatuhan" | "tv" | "anggota";
+export type KunciDashboard =
+  | "absensi"
+  | "kpi"
+  | "kepatuhan"
+  | "tv"
+  | "anggota"
+  | "tvnasional";
 
 export const KUNCI_DASHBOARD_SAH = new Set<string>(
   KATALOG_DASHBOARD.map((d) => d.kunci),

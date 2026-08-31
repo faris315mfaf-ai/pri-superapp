@@ -57,6 +57,14 @@ const KpiAnggotaDashboard = dynamic(
     ),
   { ssr: false },
 );
+// Dashboard TV Rakyat Nasional (1 Sep 2026) — dimuat saat dibuka.
+const TvNasionalDashboard = dynamic(
+  () =>
+    import("@/features/dashboard/tv-nasional-dashboard").then(
+      (m) => m.TvNasionalDashboard,
+    ),
+  { ssr: false },
+);
 import { SetelKpiScreen } from "@/features/pengguna/setel-kpi-screen";
 import { modulUntukDivisi } from "@/lib/modul-divisi";
 import { adalahHR } from "@/lib/hr";
@@ -99,6 +107,8 @@ type SubLayar =
   | { nama: "setel-kpi" }
   // KPI Video anggota dibuka dari kartu ringkasan dashboard (1 Sep 2026)
   | { nama: "dashboard-kpi" }
+  // Dashboard TV Rakyat Nasional (1 Sep 2026)
+  | { nama: "tv-nasional" }
   // Kirim pengumuman ke divisi/semua (HR Center, fitur 1.22.x/1)
   | { nama: "pengumuman" }
   // Notifikasi: kini dibuka dari lonceng kanan atas, bukan tab bawah
@@ -783,6 +793,7 @@ export default function Page() {
             onBukaModulTv={() => pilihTab("tv")}
             onBukaAbsensi={() => setSubLayar({ nama: "absensi-hari-ini" })}
             onBukaKpiVideo={() => setSubLayar({ nama: "dashboard-kpi" })}
+            onBukaTvNasional={() => setSubLayar({ nama: "tv-nasional" })}
             onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
             jumlahBelumBaca={belumBaca}
           />
@@ -1040,6 +1051,14 @@ export default function Page() {
                       onKembali={() => setSubLayar(null)}
                     />
                     <KpiAnggotaDashboard />
+                  </div>
+                ) : subLayar.nama === "tv-nasional" ? (
+                  <div className="kolom-aplikasi px-4 pb-32">
+                    <ScreenHeader
+                      judul="TV Rakyat Nasional"
+                      onKembali={() => setSubLayar(null)}
+                    />
+                    <TvNasionalDashboard />
                   </div>
                 ) : subLayar.nama === "setel-kpi" ? (
                   <SetelKpiScreen user={user} onKembali={() => setSubLayar(null)} />

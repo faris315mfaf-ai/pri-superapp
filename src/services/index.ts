@@ -1150,6 +1150,50 @@ export async function getRingkasUtama(): Promise<RingkasUtama> {
   return json as RingkasUtama;
 }
 
+// ---- Dashboard TV Rakyat Nasional (1 Sep 2026) ----
+export type MetrikNasional = {
+  pengikut: number | null;
+  tayangan: number | null;
+  jangkauan: number | null;
+  suka: number | null;
+  komentar: number | null;
+  bagikan: number | null;
+};
+
+export type TvNasional = {
+  indikator: (keyof MetrikNasional)[];
+  platforms: string[];
+  total: MetrikNasional;
+  per_platform: Record<
+    string,
+    {
+      official: MetrikNasional | null;
+      pengguna: MetrikNasional;
+      total: MetrikNasional;
+      akun_terbaca: number;
+    }
+  >;
+  anggota: {
+    user_id: string;
+    nama: string;
+    avatar_url: string;
+    profil: string;
+    diperbarui: string | null;
+    platform: Record<string, MetrikNasional | null>;
+  }[];
+  cakupan: {
+    profil_total: number;
+    profil_terbaca: number;
+    official_terbaca: number;
+    catatan: string;
+  };
+};
+
+export async function getTvNasional(): Promise<TvNasional> {
+  const json = await fetchJson("/api/dashboard/tv-nasional");
+  return json as TvNasional;
+}
+
 // ------------------------------------------------------------
 // Periode QC
 // ------------------------------------------------------------

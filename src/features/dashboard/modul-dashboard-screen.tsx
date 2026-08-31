@@ -38,6 +38,10 @@ const KpiAnggotaDashboard = dynamic(
   () => import("./kpi-anggota-dashboard").then((m) => m.KpiAnggotaDashboard),
   { ssr: false, loading: () => <GlassSkeleton className="h-64 rounded-2xl" /> },
 );
+const TvNasionalDashboard = dynamic(
+  () => import("./tv-nasional-dashboard").then((m) => m.TvNasionalDashboard),
+  { ssr: false, loading: () => <GlassSkeleton className="h-64 rounded-2xl" /> },
+);
 const AnggotaKelengkapanDashboard = dynamic(
   () =>
     import("./anggota-kelengkapan-dashboard").then(
@@ -178,6 +182,8 @@ function IsiSubDashboard({ kunci }: { kunci: string | null }) {
   if (kunci === "tv") return <TvAnalitikDashboard />;
   // 3.3.e: kelengkapan data anggota (5 dimensi centang).
   if (kunci === "anggota") return <AnggotaKelengkapanDashboard />;
+  // 1 Sep 2026: statistik nasional Official + akun pengguna per sosmed.
+  if (kunci === "tvnasional") return <TvNasionalDashboard />;
 
   const info = KATALOG_DASHBOARD.find((d) => d.kunci === kunci);
   if (!info) return null;

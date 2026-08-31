@@ -31,7 +31,7 @@ import { sapaanHari, tanggalIndonesia } from "@/lib/format";
 import { APP_TODAY_ISO } from "@/types";
 import type { User } from "@/types";
 import { AksesCepatPanel } from "./akses-cepat-panel";
-import { CalendarDays, ClipboardList, Database, LayoutGrid, Tv, Users } from "lucide-react";
+import { CalendarDays, ClipboardList, Database, Globe2, LayoutGrid, Tv, Users } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { KartuKelolaPengguna } from "./kartu-kelola-pengguna";
 import { TataLetakModul, type SeksiModul } from "@/components/tata-letak-modul";
@@ -54,6 +54,8 @@ type DashboardScreenProps = {
   /** Kartu ringkasan (1 Sep 2026): buka absensi & KPI video anggota. */
   onBukaAbsensi?: () => void;
   onBukaKpiVideo?: () => void;
+  /** Buka dashboard TV Rakyat Nasional (1 Sep 2026). */
+  onBukaTvNasional?: () => void;
 };
 
 export function DashboardScreen({
@@ -66,6 +68,7 @@ export function DashboardScreen({
   jumlahBelumBaca,
   onBukaAbsensi,
   onBukaKpiVideo,
+  onBukaTvNasional,
 }: DashboardScreenProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [memuat, setMemuat] = useState(true);
@@ -270,6 +273,40 @@ export function DashboardScreen({
                   judul: "Kelola Pengguna",
                   ikon: Users,
                   render: () => <KartuKelolaPengguna onBuka={onBukaKelolaPengguna} />,
+                },
+                // Dashboard TV Rakyat Nasional (1 Sep 2026): statistik
+                // gabungan Official + akun pengguna, per sosmed.
+                onBukaTvNasional && {
+                  id: "tvnasional",
+                  judul: "TV Rakyat Nasional",
+                  ikon: Globe2,
+                  render: () => (
+                    <button
+                      type="button"
+                      onClick={onBukaTvNasional}
+                      className="btn-tekan w-full text-left"
+                      aria-label="Buka dashboard TV Rakyat Nasional"
+                    >
+                      <GlassCard className="flex items-center gap-3 p-4">
+                        <span
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
+                          style={{ background: "linear-gradient(135deg, #0EA5E9, #1D4ED8)" }}
+                          aria-hidden="true"
+                        >
+                          <Globe2 className="h-5 w-5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-heading text-[15px] font-bold text-teks-utama">
+                            TV Rakyat Nasional
+                          </span>
+                          <span className="mt-0.5 block text-[11.5px] leading-snug text-teks-sekunder">
+                            Pengikut, tayangan, jangkauan, komentar & bagikan — Official +
+                            seluruh akun pengguna, per sosmed + leaderboard.
+                          </span>
+                        </span>
+                      </GlassCard>
+                    </button>
+                  ),
                 },
                 {
                   id: "akses-cepat",

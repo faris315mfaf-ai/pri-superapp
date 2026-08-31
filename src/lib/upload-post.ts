@@ -45,6 +45,9 @@ const KE_UP: Record<string, string> = {
 const DARI_UP: Record<string, string> = Object.fromEntries(
   Object.entries(KE_UP).map(([app, up]) => [up, app]),
 );
+/** Peta nama platform aplikasi → upload-post (twitter→"x"), diekspor
+ *  untuk pembaca insight_cache (dashboard TV Rakyat Nasional). */
+export const PETA_PLATFORM_UP: Readonly<Record<string, string>> = KE_UP;
 
 export class UploadPostBelumDiaturError extends Error {
   constructor() {
