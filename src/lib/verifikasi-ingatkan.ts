@@ -1,10 +1,13 @@
 // ============================================================
 // Ingatkan verifikasi akun (KHUSUS SISI SERVER) — fitur 1.22.x/1.
 //
-// Mendeteksi anggota aktif yang BELUM lengkap verifikasinya (WhatsApp,
-// Google, atau Wajah) lalu mengirim notifikasi + push berkala yang
-// mengajak menyelesaikannya. Menumpang after() di /api/sesi (dibuka
-// setiap orang membuka aplikasi), jadi TANPA cron.
+// Mendeteksi anggota aktif yang BELUM lengkap verifikasinya (Google
+// atau Wajah) lalu mengirim notifikasi + push berkala yang mengajak
+// menyelesaikannya. Menumpang after() di /api/sesi (dibuka setiap
+// orang membuka aplikasi), jadi TANPA cron.
+//
+// WhatsApp SENGAJA tidak diingatkan lagi: OTP pindah ke email dan
+// nomor WA kini hanya data opsional (permintaan user, 31 Agu 2026).
 //
 // Kekerapan diklaim ATOMIK lewat pengaturan_sistem: bawaan tiap 60
 // menit; bisa diubah tanpa deploy lewat kunci
@@ -52,10 +55,10 @@ export async function siaranVerifikasiBerkala(): Promise<void> {
       .select("kunci");
     if (!klaim || klaim.length === 0) return; // sudah dikirim untuk jendela ini
 
-    // Anggota aktif (bukan master) + status verifikasi WA & Google.
+    // Anggota aktif (bukan master) + status verifikasi Google.
     const { data: users } = await db
       .from("app_user")
-      .select("id, wa_terverifikasi, google_linked")
+      .select("id, google_linked")
       .eq("aktif", true)
       .eq("status", "aktif")
       .neq("role", "master");
@@ -72,7 +75,6 @@ export async function siaranVerifikasiBerkala(): Promise<void> {
     const kelompok = new Map<string, number[]>();
     for (const u of users) {
       const kurang: string[] = [];
-      if (u.wa_terverifikasi !== true) kurang.push("WhatsApp");
       if (u.google_linked !== true) kurang.push("Google");
       if (!punyaWajah.has(Number(u.id))) kurang.push("Wajah");
       if (kurang.length === 0) continue;

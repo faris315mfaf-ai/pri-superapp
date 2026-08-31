@@ -173,12 +173,16 @@ export type PetaIzin = Partial<Record<KunciFitur, boolean>>;
  * nyala. Master selalu diizinkan: dialah yang memegang panel
  * pengaturannya, dan mengunci dirinya sendiri hanya akan membuat
  * sistem tidak bisa dipulihkan dari dalam.
+ *
+ * SUPER ADMIN (= jabatan Ketua Umum pada model peran baru) juga selalu
+ * diizinkan — permintaan user 31 Agu 2026: "buka seluruh mode untuk
+ * ketua umum". Matriks izin tinggal mengatur peran di bawahnya.
  */
 export function bolehFitur(
   izin: PetaIzin | null | undefined,
   kunci: KunciFitur,
   peran?: string,
 ): boolean {
-  if (peran === "master") return true;
+  if (peran === "master" || peran === "super_admin") return true;
   return izin?.[kunci] !== false;
 }

@@ -11,6 +11,7 @@ import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import {
+  aksesPenuhAsisten,
   bolehChatbotRole,
   geminiSiap,
   jalankanAlat,
@@ -28,12 +29,20 @@ function tokenDari(request: Request): string {
 }
 
 export async function POST(request: Request) {
-  const tolak = await pastikanTidakMelebihiBatas(request, "asisten-suara", 20, 10 * 60);
-  if (tolak) return tolak;
-
   return bungkus(async () => {
     const user = await userDariToken(tokenDari(request));
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
+    // Rate limit dilewati untuk pemegang akses penuh (master/Ketua Umum)
+    // — sesi suara + jembatan alatnya tak boleh terhambat batas 20/10 mnt.
+    if (!aksesPenuhAsisten(user)) {
+      const tolak = await pastikanTidakMelebihiBatas(request, "asisten-suara", 20, 10 * 60);
+      if (tolak) {
+        throw Object.assign(
+          new Error("Terlalu sering. Tunggu sebentar lalu coba lagi."),
+          { status: 429 },
+        );
+      }
+    }
     if (!(await bolehChatbotRole(user.role)) && !jabatanBolehAsisten(user.jabatan)) {
       throw Object.assign(
         new Error("Jabatan Anda belum diberi akses Asisten AI."),
@@ -102,7 +111,7 @@ export async function POST(request: Request) {
             // Instruksi (identitas + pelatihan master) & alat MENGIKUTI
             // pemanggil — master bersuara pun punya alat aksinya.
             systemInstruction: { parts: [{ text: await instruksiUntuk(pemanggil) }] },
-            tools: [{ functionDeclarations: deklarasiAlatUntuk(pemanggil.role) }],
+            tools: [{ functionDeclarations: deklarasiAlatUntuk(pemanggil) }],
           },
         }),
       },

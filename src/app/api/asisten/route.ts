@@ -9,7 +9,7 @@
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
-import { bolehChatbotRole, geminiSiap, tanyaGemini } from "@/lib/gemini";
+import { aksesPenuhAsisten, bolehChatbotRole, geminiSiap, tanyaGemini } from "@/lib/gemini";
 import { jabatanBolehAsisten } from "@/lib/jabatan";
 
 export const dynamic = "force-dynamic";
@@ -35,12 +35,20 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const tolak = await pastikanTidakMelebihiBatas(request, "asisten", 30, 10 * 60);
-  if (tolak) return tolak;
-
   return bungkus(async () => {
     const user = await userDariToken(tokenDari(request));
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
+    // Rate limit dilewati untuk pemegang akses penuh (master/Ketua Umum)
+    // — "akses tak terhingga" (31 Agu 2026). Peran lain tetap 30/10 mnt.
+    if (!aksesPenuhAsisten(user)) {
+      const tolak = await pastikanTidakMelebihiBatas(request, "asisten", 30, 10 * 60);
+      if (tolak) {
+        throw Object.assign(
+          new Error("Terlalu sering. Tunggu sebentar lalu coba lagi."),
+          { status: 429 },
+        );
+      }
+    }
     if (!(await bolehChatbotRole(user.role)) && !jabatanBolehAsisten(user.jabatan)) {
       throw Object.assign(
         new Error("Jabatan Anda belum diberi akses Asisten AI."),

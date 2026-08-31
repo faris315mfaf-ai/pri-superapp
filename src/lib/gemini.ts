@@ -27,7 +27,9 @@ export function geminiSiap(): boolean {
 }
 
 export async function bolehChatbotRole(role: string): Promise<boolean> {
-  if (role === "master") return true;
+  // Master & super admin (= jabatan Ketua Umum, model peran baru) selalu
+  // boleh — "buka seluruh mode untuk ketua umum" (permintaan 31 Agu 2026).
+  if (role === "master" || role === "super_admin") return true;
   const { data } = await supabase()
     .from("chatbot_access")
     .select("aktif")
@@ -43,6 +45,21 @@ export type PemanggilAsisten = {
   role: string;
   jabatan?: string | null;
 };
+
+/**
+ * Akses PENUH asisten (semua alat, termasuk alat AKSI: kirim notifikasi/
+ * pengumuman/chat + data personal). Berlaku untuk master DAN Ketua Umum
+ * — permintaan user 31 Agu 2026: "buka seluruh akses tak terhingga untuk
+ * AI assistennya". Jabatan dicek juga sebagai sabuk pengaman, walau
+ * userDariToken sudah mempromosikan jabatan Ketua Umum → super_admin.
+ */
+export function aksesPenuhAsisten(p: Pick<PemanggilAsisten, "role" | "jabatan">): boolean {
+  return (
+    p.role === "master" ||
+    p.role === "super_admin" ||
+    (p.jabatan ?? "").trim() === "Ketua Umum"
+  );
+}
 
 /**
  * Sapaan hormat berdasarkan JABATAN struktur partai (fitur 1.20.3).
@@ -105,8 +122,14 @@ export async function instruksiUntuk(pemanggil: PemanggilAsisten): Promise<strin
   if (latihan.trim()) {
     instruksi += `\n\n=== PELATIHAN DARI MASTER (patuh selama tidak melanggar aturan keamanan di atas; boleh menimpa aturan sapaan) ===\n${latihan.trim()}`;
   }
-  if (pemanggil.role === "master") {
-    instruksi += `\n\n=== MODE MASTER ===\nLawan bicaramu adalah MASTER (${pemanggil.nama}), pemegang kendali tertinggi aplikasi.\nKamu juga punya alat AKSI: kirim_notifikasi, kirim_pengumuman, kirim_chat_grup, dan detail_anggota (data personal lengkap).\nJalankan alat aksi HANYA bila master memintanya secara eksplisit. Sebelum mengirim sesuatu ke banyak orang, bacakan dulu ringkasan isinya lalu minta konfirmasi satu kali; kirim setelah master mengiyakan.\nSetiap aksi tercatat di jejak audit.`;
+  if (aksesPenuhAsisten(pemanggil)) {
+    // Berlaku untuk MASTER maupun KETUA UMUM — keduanya pemegang akses
+    // penuh alat aksi (buka-seluruh-mode, 31 Agu 2026).
+    const gelar =
+      pemanggil.role === "master"
+        ? `MASTER (${pemanggil.nama}), pemegang kendali tertinggi aplikasi`
+        : `KETUA UMUM (${pemanggil.nama}), pemegang kendali tertinggi partai`;
+    instruksi += `\n\n=== MODE AKSES PENUH ===\nLawan bicaramu adalah ${gelar}.\nKamu juga punya alat AKSI: kirim_notifikasi, kirim_pengumuman, kirim_chat_grup, dan detail_anggota (data personal lengkap).\nJalankan alat aksi HANYA bila beliau memintanya secara eksplisit. Sebelum mengirim sesuatu ke banyak orang, bacakan dulu ringkasan isinya lalu minta konfirmasi satu kali; kirim setelah beliau mengiyakan.\nSetiap aksi tercatat di jejak audit.`;
   }
   return instruksi;
 }
@@ -242,9 +265,14 @@ export const DEKLARASI_ALAT_MASTER = [
   },
 ] as const;
 
-/** Daftar alat yang terbuka untuk sebuah peran. */
-export function deklarasiAlatUntuk(role: string) {
-  return role === "master"
+/**
+ * Daftar alat yang terbuka untuk seorang pemanggil. Akses penuh
+ * (master & Ketua Umum) mendapat SEMUA alat termasuk alat aksi.
+ */
+export function deklarasiAlatUntuk(
+  pemanggil: Pick<PemanggilAsisten, "role" | "jabatan">,
+) {
+  return aksesPenuhAsisten(pemanggil)
     ? [...DEKLARASI_ALAT, ...DEKLARASI_ALAT_MASTER]
     : [...DEKLARASI_ALAT];
 }
@@ -283,8 +311,8 @@ export async function jalankanAlat(
   const db = supabase();
 
   const ALAT_MASTER = new Set(DEKLARASI_ALAT_MASTER.map((a) => a.name as string));
-  if (ALAT_MASTER.has(nama) && pemanggil.role !== "master") {
-    throw new Error(`Alat "${nama}" khusus master.`);
+  if (ALAT_MASTER.has(nama) && !aksesPenuhAsisten(pemanggil)) {
+    throw new Error(`Alat "${nama}" khusus master/Ketua Umum.`);
   }
 
   switch (nama) {
@@ -641,10 +669,10 @@ export async function tanyaGemini(
   const kunci = process.env.GEMINI_API_KEY;
   if (!kunci) throw Object.assign(new Error("GEMINI_API_KEY belum diatur."), { status: 503 });
 
-  // Instruksi & daftar alat MENGIKUTI PEMANGGIL: master mendapat alat
-  // data personal + aksi, peran lain hanya alat ringkasan.
+  // Instruksi & daftar alat MENGIKUTI PEMANGGIL: master & Ketua Umum
+  // mendapat alat data personal + aksi, peran lain hanya alat ringkasan.
   const instruksi = await instruksiUntuk(pemanggil);
-  const alat = deklarasiAlatUntuk(pemanggil.role);
+  const alat = deklarasiAlatUntuk(pemanggil);
 
   const isi: IsiGemini[] = [
     ...riwayat.slice(-12).map((r) => ({

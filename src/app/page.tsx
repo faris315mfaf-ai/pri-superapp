@@ -38,7 +38,6 @@ import { PanelMasterScreen } from "@/features/profil/panel-master";
 import { PengaturanFiturScreen } from "@/features/profil/pengaturan-fitur";
 import { BerandaScreen } from "@/features/beranda/beranda-screen";
 import { DatabaseScreen } from "@/features/database/database-screen";
-import { ModalVerifikasiWa } from "@/features/profil/pengaturan-akun";
 import { LayarPerbaikan } from "@/features/perbaikan/layar-perbaikan";
 import { PilihUcapanUltah } from "@/features/notifikasi/pilih-ucapan-ultah";
 import { ModalChangelog } from "@/features/profil/modal-changelog";
@@ -503,13 +502,7 @@ export default function Page() {
     setTab(t);
   }
 
-  // ------------------------------------------------------------
-  // Tagihan verifikasi WhatsApp — muncul lagi tiap 3 jam sampai
-  // nomornya diverifikasi. Stempel waktunya di localStorage supaya
-  // menutup aplikasi tidak me-reset hitungannya.
-  // ------------------------------------------------------------
   const izinFitur = useAppStore((s) => s.izinFitur);
-  const [nagVerifWa, setNagVerifWa] = useState(false);
   const [ultahBuka, setUltahBuka] = useState(false);
   // Changelog "Apa yang Baru" (spek 1.4): tampil otomatis SEKALI
   // begitu pengguna pertama membuka aplikasi setelah update.
@@ -539,31 +532,9 @@ export default function Page() {
       // Gagal menyimpan penanda hanya berarti modalnya muncul lagi nanti.
     }
   }
-  useEffect(() => {
-    if (!aplikasiAktif || !user || user.wa_terverifikasi !== false) return;
-    const JEDA_MS = 3 * 60 * 60 * 1000;
-    function cek() {
-      let terakhir = 0;
-      try {
-        terakhir = Number(localStorage.getItem("pri-nag-verif-wa") ?? 0);
-      } catch {
-        // localStorage terblokir: tagih sekali per sesi saja.
-      }
-      if (Date.now() - terakhir >= JEDA_MS) setNagVerifWa(true);
-    }
-    cek();
-    const detak = setInterval(cek, 10 * 60_000);
-    return () => clearInterval(detak);
-  }, [aplikasiAktif, user]);
-
-  function tutupNagVerifWa() {
-    try {
-      localStorage.setItem("pri-nag-verif-wa", String(Date.now()));
-    } catch {
-      // dibiarkan — nag berikutnya muncul saat aplikasi dibuka lagi
-    }
-    setNagVerifWa(false);
-  }
+  // Catatan: tagihan (nag) verifikasi WhatsApp DIHAPUS — OTP kini via
+  // email dan nomor WA hanya data opsional; verifikasi WA tetap bisa
+  // dilakukan sukarela dari layar Profil.
 
   // ------------------------------------------------------------
   // Tombol BACK Android (dan gestur kembali) — navigasi mulus.
@@ -851,11 +822,6 @@ export default function Page() {
             pilihTab("chat");
           }}
         />
-      )}
-
-      {/* Tagihan verifikasi WA (tiap 3 jam bagi yang belum) */}
-      {siap && user && !menyambut && nagVerifWa && (
-        <ModalVerifikasiWa onTutup={tutupNagVerifWa} />
       )}
 
       {/* Aplikasi utama */}

@@ -22,8 +22,12 @@ export type { KunciDashboard };
 /** Daftar kunci dashboard yang menyala untuk sebuah jabatan. */
 export async function aksesDashboardRole(role: string): Promise<string[]> {
   // Master selalu penuh — pemegang kendali tidak boleh bisa terkunci
-  // dari halaman pengaturannya sendiri.
-  if (role === "master") return KATALOG_DASHBOARD.map((d) => d.kunci);
+  // dari halaman pengaturannya sendiri. Super admin (= Ketua Umum pada
+  // model peran baru) juga selalu penuh — "buka seluruh mode untuk
+  // ketua umum" (permintaan user 31 Agu 2026).
+  if (role === "master" || role === "super_admin") {
+    return KATALOG_DASHBOARD.map((d) => d.kunci);
+  }
   const { data } = await supabase()
     .from("dashboard_access")
     .select("dashboard_key")
@@ -36,7 +40,8 @@ export async function aksesDashboardRole(role: string): Promise<string[]> {
 
 /** Apakah jabatan ini boleh membuka satu sub-dashboard? */
 export async function bolehDashboard(role: string, kunci: KunciDashboard): Promise<boolean> {
-  if (role === "master") return true;
+  // Master & super admin (Ketua Umum) selalu boleh — lihat catatan di atas.
+  if (role === "master" || role === "super_admin") return true;
   const { data } = await supabase()
     .from("dashboard_access")
     .select("aktif")
