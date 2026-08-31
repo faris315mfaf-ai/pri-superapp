@@ -18,6 +18,7 @@ import { Check, MessageCircleWarning, Search, X } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { AvatarInisial, GlassSkeleton, SectionTitle, StatusBadge } from "@/components/pri-ui";
 import {
+  getAkunWajib,
   getDetailKepatuhanKader,
   getRingkasKepatuhan,
   type BarisKepatuhan,
@@ -28,6 +29,7 @@ function tanggalWibPerangkat(): string {
   return new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
 }
 import { cn } from "@/lib/utils";
+import { periodeSaatIni } from "@/lib/periode-qc";
 
 type RingkasKader = RingkasKepatuhanKader;
 
@@ -53,18 +55,28 @@ export function KepatuhanKaderPanel({
   const [saring, setSaring] = useState<"semua" | "sudah" | "belum">("belum");
   // Saringan platform (spek 1.18/2.1g)
   const [platformSaring, setPlatformSaring] = useState<string>("");
+  // Saringan KELOMPOK AKUN wajib (31 Agu 2026): tv rakyat / dpp.pri /
+  // muhammad nazaruddin. Opsinya dibaca dari akun_wajib (nama tampilan).
+  const [akunSaring, setAkunSaring] = useState<string>("");
+  const [akunOpsi, setAkunOpsi] = useState<string[]>([]);
+  // Urutan: persen TERTINGGI di atas (bawaan, permintaan user) ⇄ terendah.
+  const [urut, setUrut] = useState<"tinggi" | "rendah">("tinggi");
   const [cari, setCari] = useState("");
   const [dibuka, setDibuka] = useState<RingkasKader | null>(null);
   // Rincian per kader diambil LAZY saat popup dibuka — daftar utama
   // memakai agregat database (bebas cap 1000 baris PostgREST).
   const [rincian, setRincian] = useState<BarisKepatuhan[] | null>(null);
-  const periode = periodeProp || `${tanggalWibPerangkat()} 00:00-23:59`;
+  const periode = periodeProp || periodeSaatIni();
 
   useEffect(() => {
     let hidup = true;
     void (async () => {
       try {
-        const hasil = await getRingkasKepatuhan(periode, platformSaring || undefined);
+        const hasil = await getRingkasKepatuhan(
+          periode,
+          platformSaring || undefined,
+          akunSaring || undefined,
+        );
         if (hidup) setPerKaderMentah(hasil);
       } catch {
         if (hidup) setPerKaderMentah([]);
@@ -73,7 +85,25 @@ export function KepatuhanKaderPanel({
     return () => {
       hidup = false;
     };
-  }, [muatUlang, platformSaring, periode]);
+  }, [muatUlang, platformSaring, akunSaring, periode]);
+
+  // Opsi kelompok akun (sekali muat) — nama tampilan akun wajib unik.
+  useEffect(() => {
+    let hidup = true;
+    void (async () => {
+      try {
+        const daftar = await getAkunWajib();
+        if (hidup) {
+          setAkunOpsi([...new Set(daftar.map((a) => a.nama_tampilan).filter(Boolean))]);
+        }
+      } catch {
+        // Tanpa opsi akun, saringan platform tetap jalan.
+      }
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!dibuka) return;
@@ -93,12 +123,13 @@ export function KepatuhanKaderPanel({
 
   const perKader = useMemo<RingkasKader[]>(
     () =>
-      [...(perKaderMentah ?? [])].sort(
-        (a, b) =>
-          (a.total ? a.sudah / a.total : 0) - (b.total ? b.sudah / b.total : 0) ||
-          a.nama_kader.localeCompare(b.nama_kader),
-      ),
-    [perKaderMentah],
+      [...(perKaderMentah ?? [])].sort((a, b) => {
+        const pa = a.total ? a.sudah / a.total : 0;
+        const pb = b.total ? b.sudah / b.total : 0;
+        const beda = urut === "tinggi" ? pb - pa : pa - pb;
+        return beda || a.nama_kader.localeCompare(b.nama_kader);
+      }),
+    [perKaderMentah, urut],
   );
 
   const tersaring = perKader.filter((k) => {
@@ -123,8 +154,8 @@ export function KepatuhanKaderPanel({
           </p>
         ) : (
           <>
-            {/* Saringan status + cari nama */}
-            <div className="flex items-center gap-1.5">
+            {/* Saringan status + urutan persen */}
+            <div className="tanpa-scrollbar -mx-3 flex items-center gap-1.5 overflow-x-auto px-3">
               {(
                 [
                   ["belum", `Belum ${jumlahBelum}`, "merah"],
@@ -138,23 +169,33 @@ export function KepatuhanKaderPanel({
                   onClick={() => setSaring(id)}
                   aria-pressed={saring === id}
                   className={cn(
-                    "btn-tekan rounded-full transition-opacity",
+                    "btn-tekan shrink-0 rounded-full transition-opacity",
                     saring !== id && "opacity-45",
                   )}
                 >
                   <StatusBadge label={label} warna={warna} />
                 </button>
               ))}
+              {/* Urutan persen — bawaan TERTINGGI di atas */}
+              <button
+                type="button"
+                onClick={() => setUrut((u) => (u === "tinggi" ? "rendah" : "tinggi"))}
+                className="glass-soft btn-tekan ml-auto shrink-0 rounded-full px-2.5 py-1 text-[10.5px] font-bold text-teks-sekunder"
+                title="Balik urutan persen"
+              >
+                {urut === "tinggi" ? "％ Tertinggi ↓" : "％ Terendah ↓"}
+              </button>
             </div>
-            {/* Saringan platform */}
-            <div className="mt-1.5 flex gap-1.5">
+            {/* Saringan platform — bisa digulir ke samping */}
+            <div className="tanpa-scrollbar -mx-3 mt-1.5 flex gap-1.5 overflow-x-auto px-3">
               {[
                 ["", "Semua Platform"],
                 ["instagram", "Instagram"],
                 ["tiktok", "TikTok"],
-                ["twitter", "X"],
+                ["youtube", "YT Short"],
                 ["threads", "Threads"],
-                ["youtube", "YouTube"],
+                ["facebook", "Facebook"],
+                ["twitter", "X"],
               ].map(([id, label]) => (
                 <button
                   key={id || "semua"}
@@ -165,7 +206,7 @@ export function KepatuhanKaderPanel({
                   }}
                   aria-pressed={platformSaring === id}
                   className={cn(
-                    "btn-tekan rounded-full px-3 py-1.5 text-[11px] font-semibold",
+                    "btn-tekan shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold",
                     platformSaring === id ? "text-white" : "glass-soft text-teks-sekunder",
                   )}
                   style={
@@ -178,6 +219,35 @@ export function KepatuhanKaderPanel({
                 </button>
               ))}
             </div>
+            {/* Saringan KELOMPOK AKUN (tv rakyat aktif; dpp.pri & muhammad
+                nazaruddin tampil tapi datanya menyusul setelah akun mereka
+                tersambung) — bisa digulir ke samping */}
+            {akunOpsi.length > 0 && (
+              <div className="tanpa-scrollbar -mx-3 mt-1.5 flex gap-1.5 overflow-x-auto px-3">
+                {["", ...akunOpsi].map((nama) => (
+                  <button
+                    key={nama || "semua-akun"}
+                    type="button"
+                    onClick={() => {
+                      setPerKaderMentah(null);
+                      setAkunSaring(nama);
+                    }}
+                    aria-pressed={akunSaring === nama}
+                    className={cn(
+                      "btn-tekan shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold capitalize",
+                      akunSaring === nama ? "text-white" : "glass-soft text-teks-sekunder",
+                    )}
+                    style={
+                      akunSaring === nama
+                        ? { background: "linear-gradient(135deg, #B45309, #F59E0B)" }
+                        : undefined
+                    }
+                  >
+                    {nama || "Semua Akun"}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="relative mt-2">
               <Search
                 className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-teks-sekunder"
@@ -218,16 +288,32 @@ export function KepatuhanKaderPanel({
                         {k.sudah}/{k.total} kewajiban terpenuhi
                       </p>
                     </div>
-                    <span
-                      className={cn(
-                        "angka-tab shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold",
-                        k.sudah >= k.total
-                          ? "bg-sukses/15 text-sukses"
-                          : "bg-gagal/15 text-gagal",
-                      )}
-                    >
-                      {k.total > 0 ? Math.round((k.sudah / k.total) * 100) : 0}%
-                    </span>
+                    {/* Bar GRADIEN ala pengisian daya: merah (0%) →
+                        kuning (50%) → hijau (100%). Warna & isi bar
+                        mengikuti persennya. */}
+                    {(() => {
+                      const persen = k.total > 0 ? Math.round((k.sudah / k.total) * 100) : 0;
+                      const hue = Math.round((persen / 100) * 120); // 0=merah, 120=hijau
+                      return (
+                        <span className="flex shrink-0 flex-col items-end gap-0.5">
+                          <span
+                            className="angka-tab text-[10.5px] font-extrabold"
+                            style={{ color: `hsl(${hue} 75% 42%)` }}
+                          >
+                            {persen}%
+                          </span>
+                          <span className="block h-2 w-16 overflow-hidden rounded-full border border-black/10 bg-black/10 dark:border-white/10 dark:bg-white/10">
+                            <span
+                              className="block h-full rounded-full transition-[width] duration-300"
+                              style={{
+                                width: `${Math.max(persen, 4)}%`,
+                                background: `linear-gradient(90deg, hsl(0 80% 52%), hsl(${hue} 75% 45%))`,
+                              }}
+                            />
+                          </span>
+                        </span>
+                      );
+                    })()}
                   </button>
                 ))
               )}

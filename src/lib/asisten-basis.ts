@@ -17,6 +17,7 @@
 // ============================================================
 import { supabase } from "@/lib/supabase";
 import { DIVISI } from "@/lib/struktur";
+import { periodeSaatIni } from "@/lib/periode-qc";
 
 export const UMUR_SEGAR_MENIT = 60;
 // Aturan KPI 5x6 (31 Agu 2026): bawaan 5 video x 6 platform = 30/hari.
@@ -206,7 +207,7 @@ export async function bangunSnapshot(): Promise<Record<string, unknown>> {
 
   // --- Kepatuhan komentar hari ini ---
   try {
-    const periode = `${hariIni} 00:00-23:59`;
+    const periode = periodeSaatIni();
     const { data } = await db
       .from("v_app_kepatuhan_kader")
       .select("nama_kader, sudah, total")

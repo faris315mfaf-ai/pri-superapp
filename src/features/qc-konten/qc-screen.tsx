@@ -16,7 +16,7 @@
 // ============================================================
 
 import { useEffect, useMemo, useState } from "react";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   CalendarDays,
   Check,
@@ -27,6 +27,7 @@ import {
   TrendingUp,
   UserCog,
   Megaphone,
+  X,
 } from "lucide-react";
 import {
   EmptyState,
@@ -42,9 +43,14 @@ import { PlatformIcon } from "@/components/platform-icon";
 import {
   getAkunWajib,
   getAntrianQc,
+  getRingkasPlatformQc,
+  setAmbangTindak,
   type AkunWajibWithStats,
   type AntrianQc,
+  type KaderTindakLanjut,
+  type RingkasPlatformQc,
 } from "@/services";
+import { periodeSaatIni, periodeUntukTanggalPilih } from "@/lib/periode-qc";
 import { toast } from "@/hooks/use-app-store";
 import { RiwayatAnalisisModal } from "./riwayat-analisis-modal";
 import { KepatuhanKaderPanel } from "./kepatuhan-kader-panel";
@@ -107,12 +113,14 @@ export function QcScreen({
    *  Pengguna & Kirim Pengumuman (fitur 1.22.x/1). */
   bolehHR?: boolean;
 }) {
-  // TANGGAL TERPILIH — jantung fitur Riwayat: semua data layar mengikuti
-  // tanggal ini. Bawaan hari ini (WIB). Diubah lewat pemilih tanggal
-  // ATAU dengan mengeklik entri riwayat pembaruan.
-  const [tanggalPilih, setTanggalPilih] = useState<string>(() => hariIniWIB());
-  const periodePilih = `${tanggalPilih} 00:00-23:59`;
-  const hariIni = tanggalPilih === hariIniWIB();
+  // PERIODE TERPILIH — jantung fitur Riwayat: semua data layar mengikuti
+  // label periode ini. Bawaan = jendela QC yang SEDANG berjalan
+  // (17:00→16:59 WIB, lib/periode-qc). Diubah lewat pemilih tanggal ATAU
+  // dengan mengeklik entri riwayat (memakai label PERSIS entri itu, jadi
+  // data berlabel lama 00:00-23:59 pun tetap terbuka).
+  const [periodePilih, setPeriodePilih] = useState<string>(() => periodeSaatIni());
+  const tanggalPilih = periodePilih.slice(0, 10);
+  const hariIni = periodePilih === periodeSaatIni();
 
   // Data akun wajib + statistik untuk periode terpilih
   const [akunList, setAkunList] = useState<AkunWajibWithStats[] | null>(null);
@@ -125,6 +133,35 @@ export function QcScreen({
   // Modal riwayat seluruh analisis (tombol Riwayat di header)
   const [riwayatBuka, setRiwayatBuka] = useState(false);
 
+  // Ringkasan PER PLATFORM + daftar tindak lanjut (< ambang) — rombakan
+  // 31 Agu 2026 (pengganti 3 kartu lama yang menghitung 24 kader mati).
+  const [ringkasPlat, setRingkasPlat] = useState<{
+    ambang: number;
+    per_platform: RingkasPlatformQc[];
+    tindak_lanjut: KaderTindakLanjut[];
+  } | null>(null);
+  const [modalTindak, setModalTindak] = useState(false);
+  const [ambangEdit, setAmbangEdit] = useState("");
+  const [simpanAmbang, setSimpanAmbang] = useState(false);
+
+  useEffect(() => {
+    let hidup = true;
+    void (async () => {
+      try {
+        const r = await getRingkasPlatformQc(periodePilih);
+        if (hidup) {
+          setRingkasPlat(r);
+          setAmbangEdit(String(r.ambang));
+        }
+      } catch {
+        if (hidup) setRingkasPlat({ ambang: 70, per_platform: [], tindak_lanjut: [] });
+      }
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, [periodePilih]);
+
   // Filter platform
   const [platform, setPlatform] = useState("semua");
 
@@ -132,7 +169,13 @@ export function QcScreen({
   function gantiTanggal(t: string) {
     setAkunList(null);
     setGagalMuat(false);
-    setTanggalPilih(t || hariIniWIB());
+    setRingkasPlat(null);
+    const tanggal = t || hariIniWIB();
+    // Hari ini = jendela berjalan (label bisa milik kemarin bila belum
+    // 17:00); tanggal lain memakai label sesuai era aturannya.
+    setPeriodePilih(
+      tanggal === hariIniWIB() ? periodeSaatIni() : periodeUntukTanggalPilih(tanggal),
+    );
   }
 
   // Muat data akun tiap tanggal berganti.
@@ -190,18 +233,27 @@ export function QcScreen({
 
   const akunTampil = useMemo(() => {
     if (!akunList) return [];
-    if (platform === "semua") return akunList;
-    return akunList.filter((a) => a.platform === platform);
+    // FOKUS TV RAKYAT dulu (permintaan 31 Agu 2026): hanya akun resmi
+    // TV Rakyat (semua platform yang tertaut, otomatis bertambah lewat
+    // daftar-otomatis mesin analisis). dpp.pri & akun Ketum menyusul
+    // begitu tersambung.
+    const tvSaja = akunList.filter(
+      (a) => (a.nama_tampilan ?? "").toLowerCase() === "tv rakyat",
+    );
+    const dasar = tvSaja.length > 0 ? tvSaja : akunList;
+    if (platform === "semua") return dasar;
+    return dasar.filter((a) => a.platform === platform);
   }, [akunList, platform]);
 
-  /** Dipanggil saat entri riwayat diklik — pindah ke periode entri itu. */
+  /** Dipanggil saat entri riwayat diklik — pindah ke periode entri itu
+   *  memakai LABEL PERSIS entri (data lama 00:00-23:59 tetap terbuka). */
   function pilihDariRiwayat(periode: string) {
-    const tanggal = periode.slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal)) return;
-    if (tanggal !== tanggalPilih) {
-      gantiTanggal(tanggal);
-      toast("info", "Riwayat dibuka", `Menampilkan data ${labelTanggal(tanggal)}.`);
-    }
+    if (periode === periodePilih) return;
+    setAkunList(null);
+    setGagalMuat(false);
+    setRingkasPlat(null);
+    setPeriodePilih(periode);
+    toast("info", "Riwayat dibuka", `Menampilkan data ${labelTanggal(periode.slice(0, 10))}.`);
   }
 
   return (
@@ -329,6 +381,7 @@ export function QcScreen({
           <RiwayatUpdateKomentar
             onPilih={pilihDariRiwayat}
             periodeAktif={periodePilih}
+            batas={5}
           />
         </div>
       </FadeInUp>
@@ -435,34 +488,74 @@ export function QcScreen({
       {/* Konten hasil */}
       {adaData || (akunList !== null && (ringkasan?.totalPostingan ?? 0) > 0) ? (
         <>
-          {/* Ringkasan 3 kartu */}
+          {/* Ringkasan PER SOSIAL MEDIA (rombakan 31 Agu 2026): jumlah
+              postingan dipisah per platform, dan "kader patuh penuh"
+              dihitung per platform (100% di platform itu saja). */}
           <FadeInUp delay={0.05} className="mt-5">
-            <div className="grid grid-cols-3 gap-2.5">
-              <GlassCard className="flex flex-col items-center p-3">
-                <span className="angka-tab font-heading text-xl font-extrabold text-teks-utama">
-                  {ringkasan?.totalPostingan ?? "–"}
+            <GlassCard className="p-3.5">
+              <p className="text-[12.5px] font-bold text-teks-utama">
+                Ringkasan Per Sosial Media
+              </p>
+              {ringkasPlat === null ? (
+                <GlassSkeleton className="mt-2 h-20 rounded-xl" />
+              ) : ringkasPlat.per_platform.length === 0 ? (
+                <p className="mt-2 text-[11.5px] text-teks-sekunder">
+                  Belum ada postingan pada periode ini.
+                </p>
+              ) : (
+                <div className="mt-2 flex flex-col gap-1.5">
+                  {ringkasPlat.per_platform.map((p) => (
+                    <div
+                      key={p.platform}
+                      className="glass-soft flex items-center gap-2.5 rounded-xl px-2.5 py-2"
+                    >
+                      <PlatformIcon platform={p.platform} size={15} denganWadah />
+                      <span className="min-w-0 flex-1 text-[12px] font-bold text-teks-utama capitalize">
+                        {p.platform === "twitter" ? "X" : p.platform}
+                      </span>
+                      <span className="angka-tab text-[11px] font-semibold text-teks-sekunder">
+                        {p.postingan} postingan
+                      </span>
+                      <span
+                        className={cn(
+                          "angka-tab shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-extrabold",
+                          p.patuh_penuh > 0
+                            ? "bg-sukses/15 text-sukses"
+                            : "bg-black/5 text-teks-sekunder dark:bg-white/10",
+                        )}
+                        title="Kader yang 100% patuh di platform ini"
+                      >
+                        {p.patuh_penuh}/{p.total_kader} patuh
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </GlassCard>
+
+            {/* Perlu ditindaklanjuti — DIKLIK: daftar kader < ambang + WA */}
+            <button
+              type="button"
+              onClick={() => setModalTindak(true)}
+              className="btn-tekan mt-2.5 w-full"
+              aria-label="Buka daftar kader yang perlu ditindaklanjuti"
+            >
+              <GlassCard className="flex items-center gap-3 p-3.5">
+                <span className="angka-tab font-heading text-2xl font-extrabold text-gagal">
+                  {ringkasPlat?.tindak_lanjut.length ?? "–"}
                 </span>
-                <span className="mt-0.5 text-center text-[10px] leading-tight font-medium text-teks-sekunder">
-                  Total Postingan
+                <span className="min-w-0 flex-1 text-left">
+                  <span className="block text-[12.5px] font-bold text-teks-utama">
+                    Perlu Ditindaklanjuti
+                  </span>
+                  <span className="block text-[10.5px] text-teks-sekunder">
+                    Kader di bawah {ringkasPlat?.ambang ?? 70}% — ketuk untuk daftar &
+                    tombol WhatsApp
+                  </span>
                 </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-teks-sekunder" />
               </GlassCard>
-              <GlassCard className="flex flex-col items-center p-3">
-                <span className="angka-tab font-heading text-xl font-extrabold text-sukses">
-                  {ringkasan ? `${ringkasan.patuhPenuh}/${ringkasan.totalPasangan}` : "–"}
-                </span>
-                <span className="mt-0.5 text-center text-[10px] leading-tight font-medium text-teks-sekunder">
-                  Kader Patuh Penuh
-                </span>
-              </GlassCard>
-              <GlassCard className="flex flex-col items-center p-3">
-                <span className="angka-tab font-heading text-xl font-extrabold text-gagal">
-                  {ringkasan ? ringkasan.totalPasangan - ringkasan.patuhPenuh : "–"}
-                </span>
-                <span className="mt-0.5 text-center text-[10px] leading-tight font-medium text-teks-sekunder">
-                  Perlu Ditindaklanjuti
-                </span>
-              </GlassCard>
-            </div>
+            </button>
           </FadeInUp>
 
           {/* Filter chip platform */}
@@ -638,6 +731,134 @@ export function QcScreen({
           </FadeInUp>
         )
       )}
+
+      {/* MODAL Perlu Ditindaklanjuti (31 Agu 2026): kader < ambang +
+          tombol WhatsApp langsung; ambangnya bisa disetel HR. */}
+      <AnimatePresence>
+        {modalTindak && (
+          <motion.div
+            className="fixed inset-0 z-[90] flex items-end justify-center sm:items-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div
+              className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+              onClick={() => setModalTindak(false)}
+            />
+            <motion.div
+              initial={{ y: 24, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 24, opacity: 0 }}
+              className="glass relative max-h-[82dvh] w-full max-w-md overflow-y-auto rounded-t-3xl p-4 sm:rounded-3xl"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-bold text-teks-utama">Perlu Ditindaklanjuti</p>
+                <button
+                  type="button"
+                  onClick={() => setModalTindak(false)}
+                  aria-label="Tutup"
+                  className="glass btn-tekan rounded-lg p-1.5 text-teks-utama"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Ambang bisa disetel HR (10-100%) */}
+              <div className="glass-soft mt-2.5 flex items-center gap-2 rounded-xl p-2.5">
+                <p className="min-w-0 flex-1 text-[11.5px] text-teks-sekunder">
+                  Tampilkan kader di bawah
+                </p>
+                <input
+                  type="number"
+                  min={10}
+                  max={100}
+                  value={ambangEdit}
+                  onChange={(e) => setAmbangEdit(e.target.value)}
+                  aria-label="Ambang persen tindak lanjut"
+                  className="glass-input h-9 w-16 shrink-0 rounded-lg text-center text-[13px] font-bold text-teks-utama"
+                />
+                <span className="text-[11px] text-teks-sekunder">%</span>
+                <button
+                  type="button"
+                  disabled={simpanAmbang}
+                  onClick={() => {
+                    const n = Math.round(Number(ambangEdit));
+                    if (!Number.isFinite(n) || n < 10 || n > 100) {
+                      toast("peringatan", "Ambang harus 10-100%");
+                      return;
+                    }
+                    setSimpanAmbang(true);
+                    void setAmbangTindak(n)
+                      .then(async () => {
+                        toast("sukses", `Ambang jadi ${n}%`);
+                        const r = await getRingkasPlatformQc(periodePilih);
+                        setRingkasPlat(r);
+                      })
+                      .catch((e: unknown) =>
+                        toast("error", "Gagal", e instanceof Error ? e.message : ""),
+                      )
+                      .finally(() => setSimpanAmbang(false));
+                  }}
+                  className="glass btn-tekan shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-teks-utama disabled:opacity-50"
+                >
+                  Simpan
+                </button>
+              </div>
+
+              <div className="mt-2.5 flex flex-col gap-1.5">
+                {(ringkasPlat?.tindak_lanjut ?? []).length === 0 ? (
+                  <p className="py-6 text-center text-[12px] text-teks-sekunder">
+                    Tidak ada — semua kader di atas ambang. 👏
+                  </p>
+                ) : (
+                  (ringkasPlat?.tindak_lanjut ?? []).map((k) => (
+                    <div
+                      key={k.nama_kader}
+                      className="glass-soft flex items-center gap-2.5 rounded-xl px-2.5 py-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[12.5px] font-semibold text-teks-utama">
+                          {k.nama_kader}
+                        </p>
+                        <p className="text-[10px] text-teks-sekunder">
+                          {k.sudah}/{k.total} kewajiban
+                        </p>
+                      </div>
+                      <span
+                        className="angka-tab shrink-0 text-[11px] font-extrabold"
+                        style={{
+                          color: `hsl(${Math.round((k.persen / 100) * 120)} 75% 42%)`,
+                        }}
+                      >
+                        {k.persen}%
+                      </span>
+                      {k.nomor_wa ? (
+                        <a
+                          href={`https://wa.me/${k.nomor_wa.replace(/\D/g, "")}?text=${encodeURIComponent(
+                            `Halo ${k.nama_kader}, kepatuhan komentar Anda hari ini baru ${k.persen}% (${k.sudah}/${k.total}). Mohon segera lengkapi komentar di postingan TV Rakyat ya. Terima kasih 🙏`,
+                          )}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-tekan shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-white"
+                          style={{ background: "linear-gradient(135deg, #10B981, #059669)" }}
+                        >
+                          WA
+                        </a>
+                      ) : (
+                        <span className="shrink-0 text-[10px] text-teks-sekunder">
+                          tanpa nomor
+                        </span>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }
@@ -653,10 +874,13 @@ export function QcScreen({
 function AvatarAkunWajib({ akun, urut }: { akun: AkunWajibWithStats; urut: number }) {
   const [gagalGambar, setGagalGambar] = useState(false);
 
-  if (akun.avatar_url && !gagalGambar) {
+  // Prioritas: thumbnail POSTINGAN TERBARU periode ini (data Ayrshare,
+  // permintaan 31 Agu 2026) → avatar profil → inisial.
+  const gambar = akun.thumbnail_terbaru || akun.avatar_url;
+  if (gambar && !gagalGambar) {
     return (
       <img
-        src={akun.avatar_url}
+        src={gambar}
         alt=""
         loading="lazy"
         onError={() => setGagalGambar(true)}

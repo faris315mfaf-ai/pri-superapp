@@ -574,7 +574,9 @@ export async function jalankanAlat(
     }
 
     case "ringkasan_kepatuhan": {
-      const periode = `${tanggalWibSekarang()} 00:00-23:59`;
+      // Jendela QC kini 17:00-16:59 (31 Agu 2026) — lib/periode-qc.
+      const { periodeSaatIni } = await import("@/lib/periode-qc");
+      const periode = periodeSaatIni();
       const { data } = await db
         .from("v_app_kepatuhan_kader")
         .select("nama_kader, sudah, total")

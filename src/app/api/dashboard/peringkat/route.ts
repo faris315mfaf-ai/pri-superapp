@@ -23,6 +23,7 @@ import {
   KPI_PER_PLATFORM,
   targetPerPlatformDari,
 } from "@/lib/kpi-video";
+import { labelPeriodeUntukTanggal } from "@/lib/periode-qc";
 
 export const dynamic = "force-dynamic";
 
@@ -78,9 +79,10 @@ export async function GET(request: Request) {
     const awal = tanggalMundur(hariIni, hari - 1);
     const db = supabase();
 
+    // Jendela QC 17:00-16:59 (31 Agu 2026) + label lama utk riwayat.
     const daftarPeriode: string[] = [];
     for (let i = hari - 1; i >= 0; i--) {
-      daftarPeriode.push(`${tanggalMundur(hariIni, i)} 00:00-23:59`);
+      daftarPeriode.push(...labelPeriodeUntukTanggal(tanggalMundur(hariIni, i)));
     }
 
     const [

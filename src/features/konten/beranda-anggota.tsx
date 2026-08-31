@@ -157,7 +157,7 @@ export function BerandaAnggotaPanel({
       const [kerja, rekap] = await Promise.allSettled([
         getLaporanKerja(),
         // Dihitung SERVER per pengguna (perbaikan 0/0; /api/rekap?saya=1).
-        getKomentarSaya(`${tanggalWibPerangkat()} 00:00-23:59`),
+        getKomentarSaya(),
       ]);
       if (!hidup) return;
 

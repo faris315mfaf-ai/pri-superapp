@@ -126,7 +126,7 @@ export function BerandaScreen({
         // Dihitung SERVER per pengguna (perbaikan 0/0 — presisi &
         // bebas cap 1000 baris; lihat /api/rekap?saya=1).
         mauKomentar
-          ? getKomentarSaya(`${tanggalWibPerangkat()} 00:00-23:59`)
+          ? getKomentarSaya()
           : Promise.resolve(null),
         getStreakSaya(),
       ]);

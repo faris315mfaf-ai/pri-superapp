@@ -22,6 +22,7 @@ import {
   ambilRiwayatPostingan,
   ayrshareSiap,
 } from "@/lib/ayrshare";
+import { akhirPeriodeMsDari, awalPeriodeMsDari, periodeSaatIni } from "@/lib/periode-qc";
 
 /**
  * Banyaknya riwayat yang diminta per platform sebelum disaring ke
@@ -55,15 +56,11 @@ const AWALAN_ID: Record<string, string> = {
   youtube: "yt",
 };
 
+// Jendela periode kini 17:00→16:59 WIB (permintaan user 31 Agu 2026) —
+// SATU sumber kebenaran di lib/periode-qc. Nama lama dipertahankan agar
+// pemanggil (rute wajib-komen dll.) tidak perlu berubah.
 export function periodeHariIni(): string {
-  const tanggal = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  return `${tanggal} 00:00-23:59`;
-}
-
-/** Awal jendela periode (00:00 WIB) dalam epoch ms. */
-function awalPeriodeMs(): number {
-  const tanggal = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  return new Date(`${tanggal}T00:00:00+07:00`).getTime();
+  return periodeSaatIni();
 }
 
 /**
@@ -204,7 +201,11 @@ export async function jalankanAnalisisAyrshare(opsi: {
 }): Promise<HasilAnalisisAyrshare> {
   const db = supabase();
   const periode = periodeHariIni();
-  const batasMs = awalPeriodeMs();
+  // Jendela KETAT dua sisi (fix "hanya postingan hari ini"): hanya
+  // postingan yang terbit DI DALAM jendela 17:00→16:59 yang diambil;
+  // postingan jendela kemarin dianggap lewat — beku sebagai riwayat.
+  const batasMs = awalPeriodeMsDari(periode);
+  const batasAkhirMs = akhirPeriodeMsDari(periode);
 
   // --- Data dasar: akun wajib (+ nama tampilan utk feed), roster, akun sosmed anggota ---
   const [{ data: akunWajib }, { data: roster }, { data: akunAnggota }] = await Promise.all([
@@ -216,6 +217,41 @@ export async function jalankanAnalisisAyrshare(opsi: {
   // 1.17: akun tertaut dikumpulkan dari SEMUA profil; tiap akun wajib
   // yang cocok membawa kunci profil sumbernya untuk scraping.
   const semuaTertaut = await kumpulkanAkunTertaut();
+
+  // DAFTAR-OTOMATIS akun TV Rakyat (31 Agu 2026): SEMUA platform yang
+  // tertaut di profil UTAMA Ayrshare (= akun resmi TV Rakyat) otomatis
+  // masuk akun_wajib — YouTube/Facebook/Threads menyusul IG & TikTok
+  // tanpa perlu diketik manual (usernamenya diambil dari penautan asli,
+  // jadi pasti cocok). X sengaja dilewati (akunnya kena banned).
+  const adaDiWajib = new Set(
+    (akunWajib ?? []).map((a) => `${a.platform}|${String(a.username).toLowerCase()}`),
+  );
+  const barisBaru = semuaTertaut
+    .filter(
+      (t) =>
+        t.kunci === undefined && // hanya profil utama (akun resmi TV Rakyat)
+        t.platform !== "twitter" &&
+        !adaDiWajib.has(`${t.platform}|${t.username}`),
+    )
+    .map((t) => ({
+      username: t.username,
+      platform: t.platform,
+      nama_akun: "tv rakyat",
+      aktif: true,
+    }));
+  if (barisBaru.length > 0) {
+    const { error: eDaftar } = await db
+      .from("akun_wajib")
+      .upsert(barisBaru, { onConflict: "platform,username", ignoreDuplicates: true });
+    if (!eDaftar) {
+      // Ikut diproses pada run INI juga — tanpa menunggu putaran berikut.
+      for (const b of barisBaru) {
+        (akunWajib ?? []).push({ username: b.username, platform: b.platform, nama_akun: b.nama_akun });
+      }
+    } else {
+      console.error("[analisis/ayrshare] daftar-otomatis akun:", eDaftar.message);
+    }
+  }
   const sumberDari = (a: { username: string; platform: string }) =>
     semuaTertaut.find(
       (t) => t.platform === a.platform && t.username === a.username.toLowerCase(),
@@ -296,9 +332,11 @@ export async function jalankanAnalisisAyrshare(opsi: {
     // 1. Postingan periode ini (riwayat akun tertaut). AMBIL BANYAK, LALU
     // SARING: TV Rakyat bisa memposting puluhan kali sehari.
     const riwayat = await ambilRiwayatPostingan(akun.platform, AMBIL_RIWAYAT, akun.kunci);
-    const postPeriode = riwayat.filter(
-      (p) => p.id && p.waktu && new Date(p.waktu).getTime() >= batasMs,
-    );
+    const postPeriode = riwayat.filter((p) => {
+      if (!p.id || !p.waktu) return false;
+      const t = new Date(p.waktu).getTime();
+      return t >= batasMs && t < batasAkhirMs;
+    });
 
     if (riwayat.length >= AMBIL_RIWAYAT && postPeriode.length === riwayat.length) {
       peringatan.push(
@@ -426,6 +464,25 @@ export async function jalankanAnalisisAyrshare(opsi: {
         await db.from("komentar").upsert(dedup(barisKomentar, (b) => b.id_komentar), {
           onConflict: "id_komentar",
         });
+      }
+
+      // FACEBOOK TIDAK MENGHAKIMI (keputusan user 31 Agu 2026): komentar
+      // FB hanya membawa NAMA TAMPILAN (tanpa @username), mustahil
+      // dicocokkan otomatis ke kader. Komentarnya TETAP tersimpan (tampil
+      // di kelompok "tidak terdaftar"), tapi TIDAK ada baris rekap —
+      // tak seorang pun divonis "belum komen" dari postingan Facebook.
+      if (akun.platform === "facebook") {
+        const { error: eTandaiFb } = await db
+          .from("postingan")
+          .update({
+            komentar_status: "ayrshare",
+            komentar_diperiksa_pada: new Date().toISOString(),
+          })
+          .eq("id_postingan", idPost);
+        if (eTandaiFb) {
+          console.error("[analisis/ayrshare] tandai FB:", eTandaiFb.message);
+        }
+        continue;
       }
 
       // 3. Rekap: SEMUA anggota aktif × postingan ini. Cocok = Comply.

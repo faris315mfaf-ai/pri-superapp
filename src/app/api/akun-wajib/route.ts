@@ -80,6 +80,26 @@ export async function GET(request: Request) {
 
     const perAkun = new Map(ringkasan.map((r) => [r.akun_wajib, r]));
 
+    // Thumbnail POSTINGAN TERBARU per (akun, platform) pada periode ini
+    // (permintaan 31 Agu 2026: kartu akun memakai gambar postingan
+    // terbaru dari data Ayrshare, bukan avatar statis).
+    const thumbPer = new Map<string, string>();
+    if (periodeDipakai) {
+      const { data: posts } = await db
+        .from("postingan")
+        .select("akun_wajib, platform, thumbnail_url, waktu_posting")
+        .eq("periode", periodeDipakai)
+        .not("thumbnail_url", "is", null)
+        .neq("thumbnail_url", "")
+        .order("waktu_posting", { ascending: false })
+        .limit(400);
+      for (const p of posts ?? []) {
+        const kunci = `${String(p.akun_wajib).toLowerCase()}|${String(p.platform).toLowerCase()}`;
+        // Sudah urut terbaru dulu — simpan hanya yang pertama.
+        if (!thumbPer.has(kunci)) thumbPer.set(kunci, String(p.thumbnail_url));
+      }
+    }
+
     const data = akun.map((a) => {
       const r = perAkun.get(a.akun_wajib as string);
       const total = Number(r?.total_unit ?? 0);
@@ -95,6 +115,10 @@ export async function GET(request: Request) {
         // pernah benar di bawah batas 1.000 baris, jadi kini memakai
         // hitungan unit yang bisa dipertanggungjawabkan.
         kader_patuh_penuh: sudah,
+        thumbnail_terbaru:
+          thumbPer.get(
+            `${String(a.akun_wajib).toLowerCase()}|${String(a.platform).toLowerCase()}`,
+          ) ?? "",
       };
     });
 

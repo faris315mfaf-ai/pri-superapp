@@ -13,6 +13,7 @@ import { userDariToken } from "@/lib/sesi";
 import { bolehDashboard } from "@/lib/dashboard-akses";
 import { adalahHR } from "@/lib/hr";
 import { tepatWaktu } from "@/lib/absensi-status";
+import { labelPeriodeUntukTanggal, periodeSaatIni } from "@/lib/periode-qc";
 
 export const dynamic = "force-dynamic";
 
@@ -102,12 +103,13 @@ export async function GET(request: Request) {
 
     // ---------- Tren KEPATUHAN KOMEN ----------
     if (jenis === "kepatuhan") {
-      // Daftar periode = tanggal (format "YYYY-MM-DD 00:00-23:59").
-      const daftarPeriode: string[] = [];
-      for (let i = hari - 1; i >= 0; i--) {
-        daftarPeriode.push(`${tanggalMundur(hariIni, i)} 00:00-23:59`);
-      }
-      const periodeHariIni = `${hariIni} 00:00-23:59`;
+      // Jendela QC kini 17:00-16:59 (31 Agu 2026). Riwayat bisa berlabel
+      // format LAMA (00:00-23:59) — keduanya diikutkan lalu digabung per
+      // TANGGAL supaya grafik mulus melewati hari pergantian aturan.
+      const daftarTanggal: string[] = [];
+      for (let i = hari - 1; i >= 0; i--) daftarTanggal.push(tanggalMundur(hariIni, i));
+      const daftarPeriode = daftarTanggal.flatMap((t) => labelPeriodeUntukTanggal(t));
+      const periodeHariIni = periodeSaatIni();
 
       const [{ data: perKader }, { data: rekapHariIni }] = await Promise.all([
         // Agregat per kader per periode (view DB) — ratusan baris, ringan.
@@ -138,10 +140,18 @@ export async function GET(request: Request) {
           else belumPenuh += 1;
         }
       }
-      const tren = daftarPeriode.map((p) => {
-        const d = perPeriode.get(p) ?? { total: 0, sudah: 0 };
+      const tren = daftarTanggal.map((t) => {
+        // Gabungkan kedua label (baru + lama) milik tanggal yang sama.
+        const d = { total: 0, sudah: 0 };
+        for (const label of labelPeriodeUntukTanggal(t)) {
+          const x = perPeriode.get(label);
+          if (x) {
+            d.total += x.total;
+            d.sudah += x.sudah;
+          }
+        }
         return {
-          tanggal: p.slice(0, 10),
+          tanggal: t,
           persen: d.total > 0 ? Math.round((d.sudah / d.total) * 100) : 0,
           sudah: d.sudah,
           total: d.total,

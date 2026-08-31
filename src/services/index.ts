@@ -32,6 +32,8 @@ export type AkunWajibWithStats = AkunWajib & {
   belum: number;
   persen: number;
   kader_patuh_penuh: number;
+  /** Thumbnail POSTINGAN TERBARU akun ini pada periode (31 Agu 2026). */
+  thumbnail_terbaru?: string;
 };
 
 export type PostinganWithKepatuhan = Postingan & {
@@ -3354,10 +3356,12 @@ export async function getRekapPeriode(
  * null = gagal dimuat (biar UI menampilkan "…", bukan 0/0 palsu).
  */
 export async function getKomentarSaya(
-  periode: string,
+  /** Kosong = jendela QC yang sedang berjalan (server yang menghitung). */
+  periode?: string,
 ): Promise<{ total: number; sudah: number } | null> {
   try {
-    const json = await fetchJson(`/api/rekap?saya=1&periode=${encodeURIComponent(periode)}`, {
+    const p = periode ? `&periode=${encodeURIComponent(periode)}` : "";
+    const json = await fetchJson(`/api/rekap?saya=1${p}`, {
       headers: headerToken(),
     });
     return { total: Number(json.total ?? 0), sudah: Number(json.sudah ?? 0) };
@@ -3910,13 +3914,60 @@ export type RingkasKepatuhanKader = {
 export async function getRingkasKepatuhan(
   periode: string,
   platform?: string,
+  /** Saringan kelompok akun wajib (mis. "tv rakyat") — 31 Agu 2026. */
+  akun?: string,
 ): Promise<RingkasKepatuhanKader[]> {
   const p = platform ? `&platform=${encodeURIComponent(platform)}` : "";
+  const a = akun ? `&akun=${encodeURIComponent(akun)}` : "";
   const json = await fetchJson(
-    `/api/rekap?ringkas_kader=1&periode=${encodeURIComponent(periode)}${p}`,
+    `/api/rekap?ringkas_kader=1&periode=${encodeURIComponent(periode)}${p}${a}`,
     { headers: headerToken() },
   );
   return (json.data ?? []) as RingkasKepatuhanKader[];
+}
+
+// --- Ringkasan per platform + tindak lanjut (rombakan 31 Agu 2026) ---
+
+export type RingkasPlatformQc = {
+  platform: string;
+  postingan: number;
+  patuh_penuh: number;
+  total_kader: number;
+};
+export type KaderTindakLanjut = {
+  nama_kader: string;
+  total: number;
+  sudah: number;
+  persen: number;
+  nomor_wa: string | null;
+};
+
+/** Ringkasan per sosmed + daftar kader < ambang (periode kosong = berjalan). */
+export async function getRingkasPlatformQc(periode?: string): Promise<{
+  periode: string;
+  ambang: number;
+  per_platform: RingkasPlatformQc[];
+  tindak_lanjut: KaderTindakLanjut[];
+}> {
+  const p = periode ? `&periode=${encodeURIComponent(periode)}` : "";
+  const json = await fetchJson(`/api/rekap?ringkas_platform=1${p}`, {
+    headers: headerToken(),
+  });
+  return json as {
+    periode: string;
+    ambang: number;
+    per_platform: RingkasPlatformQc[];
+    tindak_lanjut: KaderTindakLanjut[];
+  };
+}
+
+/** Setel ambang "perlu ditindaklanjuti" (pengurus/HR, 10-100%). */
+export async function setAmbangTindak(ambang: number): Promise<void> {
+  await fetchJson("/api/rekap", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ ambang }),
+  });
 }
 
 export type AnggotaTanpaAkun = { id: string; nama: string; divisi: string };

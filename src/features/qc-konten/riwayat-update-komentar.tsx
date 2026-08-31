@@ -38,6 +38,7 @@ export function RiwayatUpdateKomentar({
   muatUlang = 0,
   onPilih,
   periodeAktif,
+  batas,
 }: {
   muatUlang?: number;
   /**
@@ -47,6 +48,8 @@ export function RiwayatUpdateKomentar({
   onPilih?: (periode: string) => void;
   /** Periode yang sedang ditampilkan (untuk sorotan entri aktif). */
   periodeAktif?: string;
+  /** Batas jumlah entri yang ditampilkan (31 Agu 2026: 5 di HR Center). */
+  batas?: number;
 }) {
   const [data, setData] = useState<RiwayatUpdateKomentar[] | null>(null);
   const [memuat, setMemuat] = useState(false);
@@ -92,7 +95,7 @@ export function RiwayatUpdateKomentar({
         />
       ) : (
         <div className="flex flex-col gap-1.5">
-          {data.map((r) => {
+          {(batas ? data.slice(0, batas) : data).map((r) => {
             const bisaKlik = Boolean(onPilih && r.periode);
             const aktif = Boolean(periodeAktif && r.periode === periodeAktif);
             const isi = (

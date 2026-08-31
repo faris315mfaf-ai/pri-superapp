@@ -26,7 +26,7 @@ import {
   ScreenHeader,
   StatusBadge,
   ThemeToggle,
-} from "@/components/pri-ui";
+ SectionTitle } from "@/components/pri-ui";
 import { GlassCard } from "@/components/glass-card";
 import {
   getKader,
@@ -476,6 +476,60 @@ export function PostDetailScreen({
               )}
             </AnimatePresence>
           </div>
+
+          {/* SEMUA KOMENTAR MASUK (31 Agu 2026): dibagi dua — komentar
+              dari AKUN TERDAFTAR di sistem (tercocok ke kader) vs akun
+              yang TIDAK terdaftar. Sumbernya tabel komentar apa adanya. */}
+          <FadeInUp delay={0.1} className="mt-5">
+            <SectionTitle judul={`Semua Komentar Masuk (${komentar.length})`} />
+            {komentar.length === 0 ? (
+              <GlassCard className="p-4">
+                <p className="text-center text-[12px] text-teks-sekunder">
+                  Belum ada komentar terbaca di postingan ini.
+                </p>
+              </GlassCard>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {(
+                  [
+                    ["Akun Terdaftar di Sistem", komentar.filter((k) => k.nama_kader)],
+                    ["Tidak Terdaftar di Sistem", komentar.filter((k) => !k.nama_kader)],
+                  ] as const
+                ).map(([judulKelompok, daftar]) => (
+                  <GlassCard key={judulKelompok} className="p-3.5">
+                    <p className="text-[12px] font-bold text-teks-utama">
+                      {judulKelompok}{" "}
+                      <span className="angka-tab font-normal text-teks-sekunder">
+                        ({daftar.length})
+                      </span>
+                    </p>
+                    {daftar.length === 0 ? (
+                      <p className="mt-1.5 text-[11px] text-teks-sekunder">Tidak ada.</p>
+                    ) : (
+                      <div className="scrollbar-tipis mt-2 flex max-h-72 flex-col gap-1.5 overflow-y-auto">
+                        {daftar.map((k) => (
+                          <div
+                            key={k.id_komentar}
+                            className="glass-soft rounded-xl rounded-tl-sm px-3 py-2"
+                          >
+                            <p className="text-[11px] font-bold text-teks-utama">
+                              {k.nama_kader ? `${k.nama_kader} · ` : ""}
+                              <span className="font-mono font-normal text-teks-sekunder">
+                                @{k.ig_username}
+                              </span>
+                            </p>
+                            <p className="mt-0.5 text-xs leading-snug text-teks-utama italic">
+                              “{k.isi_komentar}”
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </GlassCard>
+                ))}
+              </div>
+            )}
+          </FadeInUp>
         </>
       )}
 
