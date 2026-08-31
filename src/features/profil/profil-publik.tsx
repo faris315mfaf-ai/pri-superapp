@@ -14,12 +14,24 @@ import { Heart, X, ExternalLink } from "lucide-react";
 import { AvatarInisial, GlassSkeleton, SectionTitle } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
 import { toast } from "@/hooks/use-app-store";
-import { getProfilMomen, sukaProfil, type ProfilMomen } from "@/services";
+import {
+  getPeringkatTvr,
+  getProfilMomen,
+  sukaProfil,
+  type AnggotaTvrNasional,
+  type MetrikNasional,
+  type ProfilMomen,
+} from "@/services";
 import { GaleriMomen } from "./galeri-momen";
 import { PlatformIcon } from "@/components/platform-icon";
 import { VideoEmbedMini } from "@/components/video-embed-mini";
 import { KoinChip } from "@/components/koin-chip";
-import { urlProfilSosmed } from "@/lib/format";
+import { formatAngkaRingkas, urlProfilSosmed } from "@/lib/format";
+import {
+  CincinJuara,
+  LabelMythic,
+  useTop3Tvr,
+} from "@/features/peringkat/cincin-mythic";
 import { cn } from "@/lib/utils";
 
 export function ProfilPublikModal({
@@ -101,14 +113,19 @@ export function ProfilPublikModal({
           <div className="scrollbar-tipis min-h-0 flex-1 overflow-y-auto">
             {/* Hero ala ML: foto besar + badge + skor suka */}
             <div className="flex flex-col items-center pt-2 text-center">
-              {pemilik?.avatar_url ? (
-                <FotoBulat src={pemilik.avatar_url} ukuran={120} />
-              ) : (
-                <AvatarInisial nama={pemilik?.nama ?? namaAwal} ukuran={120} />
-              )}
-              <h2 className="mt-3 font-heading text-xl font-extrabold tracking-tight text-teks-utama">
+              {/* Border Mythical ikut tampil saat profil dilihat dari
+                  chat (1 Sep 2026) */}
+              <CincinJuara userId={userId} ukuran={120}>
+                {pemilik?.avatar_url ? (
+                  <FotoBulat src={pemilik.avatar_url} ukuran={120} />
+                ) : (
+                  <AvatarInisial nama={pemilik?.nama ?? namaAwal} ukuran={120} />
+                )}
+              </CincinJuara>
+              <h2 className="mt-4 font-heading text-xl font-extrabold tracking-tight text-teks-utama">
                 {pemilik?.nama ?? namaAwal}
               </h2>
+              <ChipMythicSaya userId={userId} />
               {pemilik?.nama_panggilan && (
                 <p className="text-xs text-teks-sekunder">“{pemilik.nama_panggilan}”</p>
               )}
@@ -168,6 +185,10 @@ export function ProfilPublikModal({
               </>
             )}
 
+            {/* Insight seluruh akun sosmed TV Rakyat miliknya
+                (1 Sep 2026 — tampil saat profil dilihat lewat chat) */}
+            <InsightTvrPublik userId={userId} />
+
             {/* Video yang diupload HARI INI (spek 1.15) */}
             {data && data.video_hari_ini.length > 0 && (
               <>
@@ -198,5 +219,112 @@ export function ProfilPublikModal({
         </motion.div>
       </motion.div>
     </AnimatePresence>
+  );
+}
+
+// ------------------------------------------------------------
+// Chip badge Mythical di bawah nama (bila pemilik profil juara).
+// ------------------------------------------------------------
+function ChipMythicSaya({ userId }: { userId: string }) {
+  const top3 = useTop3Tvr();
+  const tier = top3.find((j) => String(j.user_id) === String(userId))?.peringkat;
+  if (!tier) return null;
+  return (
+    <span className="mt-1.5 inline-block">
+      <LabelMythic tier={tier} />
+    </span>
+  );
+}
+
+// ------------------------------------------------------------
+// InsightTvrPublik (1 Sep 2026) — data insight SELURUH akun sosmed
+// TV Rakyat milik pemilik profil: per platform tampil handle (klik →
+// profilnya) + 6 indikator (pengikut, tayangan, jangkauan, suka,
+// komentar, dibagikan). Sumber = /api/peringkat-tvr (angka yang sama
+// dengan leaderboard — satu sumber kebenaran).
+// ------------------------------------------------------------
+const LABEL_INDIKATOR_PUBLIK: Record<keyof MetrikNasional, string> = {
+  pengikut: "Pengikut",
+  tayangan: "Tayangan",
+  jangkauan: "Jangkauan",
+  suka: "Suka",
+  komentar: "Komentar",
+  bagikan: "Dibagikan",
+};
+
+function InsightTvrPublik({ userId }: { userId: string }) {
+  const [anggota, setAnggota] = useState<AnggotaTvrNasional | null | "memuat">("memuat");
+
+  useEffect(() => {
+    let hidup = true;
+    void getPeringkatTvr()
+      .then((r) => {
+        if (!hidup) return;
+        setAnggota(r.anggota.find((a) => String(a.user_id) === String(userId)) ?? null);
+      })
+      .catch(() => hidup && setAnggota(null));
+    return () => {
+      hidup = false;
+    };
+  }, [userId]);
+
+  if (anggota === "memuat") {
+    return <GlassSkeleton className="mt-6 h-24 rounded-2xl" />;
+  }
+  if (!anggota) return null;
+  const platformIsi = Object.keys(anggota.platform).filter(
+    (p) => anggota.platform[p] !== null,
+  );
+  if (platformIsi.length === 0) return null;
+
+  return (
+    <>
+      <SectionTitle judul="Insight Sosmed TV Rakyat" className="mt-6" />
+      <div className="flex flex-col gap-2">
+        {platformIsi.map((plat) => {
+          const m = anggota.platform[plat];
+          if (!m) return null;
+          const handle = anggota.akun[plat] ?? "";
+          return (
+            <div key={plat} className="glass-soft rounded-2xl p-3">
+              <div className="flex items-center gap-2">
+                <PlatformIcon platform={plat} size={14} denganWadah />
+                {handle ? (
+                  <a
+                    href={urlProfilSosmed(plat, handle)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-tekan flex min-w-0 items-center gap-1 text-[12px] font-bold text-teks-utama"
+                  >
+                    <span className="truncate">
+                      {handle.includes(" ") ? handle : `@${handle.replace(/^@+/, "")}`}
+                    </span>
+                    <ExternalLink className="h-3 w-3 shrink-0 text-teks-sekunder" />
+                  </a>
+                ) : (
+                  <span className="text-[12px] font-bold text-teks-utama">
+                    {plat}
+                  </span>
+                )}
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-1.5">
+                {(Object.keys(LABEL_INDIKATOR_PUBLIK) as (keyof MetrikNasional)[]).map(
+                  (k) => (
+                    <div key={k} className="rounded-lg bg-black/[0.04] px-1.5 py-1.5 text-center dark:bg-white/[0.06]">
+                      <p className="angka-tab text-[12.5px] leading-none font-extrabold text-teks-utama">
+                        {m[k] === null ? "–" : formatAngkaRingkas(m[k])}
+                      </p>
+                      <p className="mt-0.5 text-[8.5px] font-semibold text-teks-sekunder">
+                        {LABEL_INDIKATOR_PUBLIK[k]}
+                      </p>
+                    </div>
+                  ),
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }

@@ -43,6 +43,11 @@ const LABEL_PLATFORM: Record<string, string> = {
   twitter: "X",
 };
 
+/** Handle bernama-tampilan (berspasi, mis. dari Facebook) tak diberi "@". */
+function tampilkanUsername(handle: string): string {
+  return handle.includes(" ") ? handle : `@${handle.replace(/^@+/, "")}`;
+}
+
 export function TombolPeringkat() {
   const [buka, setBuka] = useState(false);
   return (
@@ -196,6 +201,12 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
                       <p className="mt-2 w-full truncate text-center text-[11.5px] font-bold text-teks-utama">
                         {juara.nama}
                       </p>
+                      {/* Username sosmed yang dimaksud (1 Sep 2026) */}
+                      {juara.akun[platformPilih] && (
+                        <p className="w-full truncate text-center text-[10px] font-semibold text-pri">
+                          {tampilkanUsername(juara.akun[platformPilih])}
+                        </p>
+                      )}
                       <LabelMythic tier={tier} kecil />
                       <p className="angka-tab text-[10.5px] text-teks-sekunder">
                         {formatAngkaRingkas(juara.nilai)} {LABEL_INDIKATOR[indikatorPilih].toLowerCase()}
@@ -282,6 +293,12 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[12.5px] font-semibold text-teks-utama">
                             {a.nama}
+                          </span>
+                          {/* Username sosmed platform terpilih (1 Sep 2026) */}
+                          <span className="block truncate text-[10.5px] font-semibold text-pri">
+                            {a.akun[platformPilih]
+                              ? tampilkanUsername(a.akun[platformPilih])
+                              : "belum tertaut di sini"}
                           </span>
                           {tier && (
                             <span className="mt-0.5 block">

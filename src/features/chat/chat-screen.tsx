@@ -35,6 +35,7 @@ import {
   X, Search } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { FotoBulat } from "@/components/foto-bulat";
+import { CincinJuara } from "@/features/peringkat/cincin-mythic";
 import {
   AvatarInisial,
   EmptyState,
@@ -277,11 +278,14 @@ function PanelPercakapan({
           aria-label={`Lihat profil ${kontak.lawan_nama}`}
           className="btn-tekan flex min-w-0 flex-1 items-center gap-3 text-left"
         >
-          {kontak.lawan_avatar ? (
-            <FotoBulat src={kontak.lawan_avatar} ukuran={36} />
-          ) : (
-            <AvatarInisial nama={kontak.lawan_nama} ukuran={36} />
-          )}
+          {/* Border Mythical ikut tampil di chat (1 Sep 2026) */}
+          <CincinJuara userId={kontak.lawan_id} ukuran={36}>
+            {kontak.lawan_avatar ? (
+              <FotoBulat src={kontak.lawan_avatar} ukuran={36} />
+            ) : (
+              <AvatarInisial nama={kontak.lawan_nama} ukuran={36} />
+            )}
+          </CincinJuara>
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-teks-utama">
               <span className="truncate">{kontak.lawan_nama}</span>
@@ -1064,11 +1068,13 @@ export function ChatScreen({
                   className="btn-tekan text-left"
                 >
                   <GlassCard className="flex items-center gap-3 p-3">
-                    {k.lawan_avatar ? (
-                      <FotoBulat src={k.lawan_avatar} ukuran={44} />
-                    ) : (
-                      <AvatarInisial nama={k.lawan_nama} ukuran={44} />
-                    )}
+                    <CincinJuara userId={k.lawan_id} ukuran={44}>
+                      {k.lawan_avatar ? (
+                        <FotoBulat src={k.lawan_avatar} ukuran={44} />
+                      ) : (
+                        <AvatarInisial nama={k.lawan_nama} ukuran={44} />
+                      )}
+                    </CincinJuara>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-bold text-teks-utama">
@@ -1230,11 +1236,13 @@ export function ChatScreen({
                       onClick={() => void mulai(c.id, c.nama)}
                       className="glass-soft btn-tekan flex items-center gap-3 rounded-2xl p-3 text-left"
                     >
-                      {c.avatar_url ? (
-                        <FotoBulat src={c.avatar_url} ukuran={40} />
-                      ) : (
-                        <AvatarInisial nama={c.nama} ukuran={40} />
-                      )}
+                      <CincinJuara userId={c.id} ukuran={40}>
+                        {c.avatar_url ? (
+                          <FotoBulat src={c.avatar_url} ukuran={40} />
+                        ) : (
+                          <AvatarInisial nama={c.nama} ukuran={40} />
+                        )}
+                      </CincinJuara>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-bold text-teks-utama">
                           {c.nama}

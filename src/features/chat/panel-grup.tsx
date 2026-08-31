@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ImagePlus, Loader2, Send, Smile, Users, X } from "lucide-react";
 import { AvatarInisial } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
+import { CincinJuara } from "@/features/peringkat/cincin-mythic";
 import { toast } from "@/hooks/use-app-store";
 import { kompresGambar } from "@/lib/gambar-kompres";
 import {
@@ -240,12 +241,15 @@ export function PanelGrup({
               <div key={p.id} className={cn("flex gap-2", milikku ? "justify-end" : "justify-start")}>
                 {!milikku && (
                   <span className="w-7 shrink-0 self-end">
-                    {gantiPembicara &&
-                      (p.pengirim_avatar ? (
-                        <FotoBulat src={p.pengirim_avatar} ukuran={28} />
-                      ) : (
-                        <AvatarInisial nama={p.pengirim_nama || "?"} ukuran={28} />
-                      ))}
+                    {gantiPembicara && (
+                      <CincinJuara userId={p.pengirim_id} ukuran={28}>
+                        {p.pengirim_avatar ? (
+                          <FotoBulat src={p.pengirim_avatar} ukuran={28} />
+                        ) : (
+                          <AvatarInisial nama={p.pengirim_nama || "?"} ukuran={28} />
+                        )}
+                      </CincinJuara>
+                    )}
                   </span>
                 )}
                 <div

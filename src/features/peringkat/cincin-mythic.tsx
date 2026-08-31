@@ -50,14 +50,15 @@ export const TIER_MYTHIC: Record<number, WarnaTier> = {
     labelGradasi: "linear-gradient(135deg, #F97316, #DC2626)",
   },
   2: {
+    // Revisi 1 Sep 2026 (permintaan user): Glory berwarna BIRU, 3x lebih megah.
     nama: "Mythical Glory",
-    buluTerang: "#FEF9C3",
-    bulu: "#F59E0B",
-    buluUjung: "#B45309",
-    permata: "#F59E0B",
-    permataTerang: "#FDE68A",
-    cahaya: "rgba(245, 158, 11, 0.55)",
-    labelGradasi: "linear-gradient(135deg, #F59E0B, #B45309)",
+    buluTerang: "#E0F2FE",
+    bulu: "#38BDF8",
+    buluUjung: "#1D4ED8",
+    permata: "#3B82F6",
+    permataTerang: "#BAE6FD",
+    cahaya: "rgba(59, 130, 246, 0.6)",
+    labelGradasi: "linear-gradient(135deg, #38BDF8, #1D4ED8)",
   },
   3: {
     nama: "Mythical Honor",
@@ -90,6 +91,36 @@ function jalurBintang(r: number): string {
 }
 
 /**
+ * Tingkat KEMEGAHAN per tier (revisi 1 Sep 2026):
+ *   #1 Immortal → 5x lebih megah & berkilau: 3 lapis sayap, 10 bintang,
+ *      lidah api naik, sinar berputar, aura ganda;
+ *   #2 Glory    → biru, 3x lebih megah: 2 lapis sayap, 7 bintang, aura ganda;
+ *   #3 Honor    → tetap seperti semula.
+ */
+const MEGAH: Record<
+  number,
+  { lapis: number; kilau: number; api: boolean; sinar: boolean; auraGanda: boolean }
+> = {
+  1: { lapis: 3, kilau: 10, api: true, sinar: true, auraGanda: true },
+  2: { lapis: 2, kilau: 7, api: false, sinar: false, auraGanda: true },
+  3: { lapis: 1, kilau: 4, api: false, sinar: false, auraGanda: false },
+};
+
+/** Posisi bintang kilau (dipakai berurutan sebanyak MEGAH.kilau). */
+const TITIK_KILAU = [
+  { x: 30, y: 60, r: 5, tunda: 0 },
+  { x: 194, y: 74, r: 4, tunda: 0.6 },
+  { x: 42, y: 178, r: 4, tunda: 1.1 },
+  { x: 186, y: 168, r: 5, tunda: 1.6 },
+  { x: 110, y: 4, r: 4, tunda: 0.3 },
+  { x: 16, y: 118, r: 4, tunda: 1.4 },
+  { x: 204, y: 122, r: 4, tunda: 0.9 },
+  { x: 74, y: 22, r: 3.5, tunda: 1.9 },
+  { x: 148, y: 20, r: 3.5, tunda: 0.45 },
+  { x: 110, y: 214, r: 4, tunda: 1.25 },
+];
+
+/**
  * Bingkai ornamen mengelilingi avatar. `ukuran` = diameter AVATAR
  * (kotak layout); sayap, permata & aura melebar keluar dari situ.
  */
@@ -106,6 +137,7 @@ export function CincinMythic({
 }) {
   void denganMahkota;
   const t = TIER_MYTHIC[tier];
+  const m = MEGAH[tier] ?? MEGAH[3];
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   if (!t) return <>{children}</>;
 
@@ -127,40 +159,49 @@ export function CincinMythic({
   ];
   const CX = 110;
   const CY = 112;
-  const R_PANGKAL = 64;
+  // Lapisan sayap (kemegahan): tiap lapis lebih jauh, lebih panjang,
+  // lebih transparan — memberi kesan sayap tebal berlapis.
+  const LAPIS = [
+    { r: 64, s: 1, o: 1 },
+    { r: 73, s: 1.26, o: 0.8 },
+    { r: 84, s: 1.52, o: 0.6 },
+  ].slice(0, m.lapis);
 
-  function bulu(sisiKanan: boolean) {
+  function bulu(sisiKanan: boolean, lapis: { r: number; s: number; o: number }, kunci: string) {
     return heliks.map(({ sudut, panjang }, i) => {
       const a = sisiKanan ? 180 - sudut : sudut; // cermin sempurna
       const rad = (a * Math.PI) / 180;
       // Sudut matematis → koordinat layar (sumbu y layar mengarah turun).
-      const x = CX + R_PANGKAL * Math.cos(rad);
-      const y = CY - R_PANGKAL * Math.sin(rad);
+      const x = CX + lapis.r * Math.cos(rad);
+      const y = CY - lapis.r * Math.sin(rad);
       // Helai menunjuk MENJAUH dari pusat: rotasi = arah radial.
       const arah = 90 - a;
       return (
         <path
-          key={`${sisiKanan ? "ka" : "ki"}-${i}`}
-          d={jalurBulu(panjang)}
+          key={`${kunci}-${sisiKanan ? "ka" : "ki"}-${i}`}
+          d={jalurBulu(panjang * lapis.s)}
           transform={`translate(${x} ${y}) rotate(${arah}) ${sisiKanan ? "scale(-1 1)" : ""}`}
           fill={`url(#bulu-${uid})`}
           stroke="rgba(120, 53, 15, 0.45)"
           strokeWidth="0.8"
+          opacity={lapis.o}
         />
       );
     });
   }
 
-  const kilau = [
-    { x: 30, y: 60, r: 5, tunda: 0 },
-    { x: 194, y: 74, r: 4, tunda: 0.6 },
-    { x: 42, y: 178, r: 4, tunda: 1.1 },
-    { x: 186, y: 168, r: 5, tunda: 1.6 },
+  const kilau = TITIK_KILAU.slice(0, m.kilau);
+  // Lidah api Immortal: naik dari kiri-kanan bawah lalu memudar.
+  const api = [
+    { x: 58, y: 176, tunda: 0 },
+    { x: 162, y: 176, tunda: 0.7 },
+    { x: 84, y: 196, tunda: 1.2 },
+    { x: 136, y: 196, tunda: 0.4 },
   ];
 
   return (
     <span
-      className="relative inline-flex shrink-0 items-center justify-center"
+      className="relative inline-flex shrink-0 items-center justify-center align-middle"
       style={{ width: ukuran, height: ukuran }}
     >
       {/* Aura istimewa berdenyut di belakang bingkai */}
@@ -168,12 +209,25 @@ export function CincinMythic({
         aria-hidden="true"
         className="pointer-events-none absolute rounded-full blur-lg"
         style={{
-          inset: -(ukuran * 0.28),
+          inset: -(ukuran * (m.api ? 0.4 : 0.28)),
           background: `radial-gradient(circle, ${t.cahaya} 0%, transparent 68%)`,
         }}
         animate={{ opacity: [0.5, 1, 0.5], scale: [1, 1.1, 1] }}
         transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
       />
+      {/* Aura kedua (Glory/Immortal — lebih megah): denyut berlawanan */}
+      {m.auraGanda && (
+        <motion.span
+          aria-hidden="true"
+          className="pointer-events-none absolute rounded-full blur-md"
+          style={{
+            inset: -(ukuran * 0.16),
+            background: `radial-gradient(circle, ${t.cahaya} 0%, transparent 60%)`,
+          }}
+          animate={{ opacity: [0.9, 0.4, 0.9], scale: [1.06, 1, 1.06] }}
+          transition={{ duration: 2.1, repeat: Infinity, ease: "easeInOut" }}
+        />
+      )}
 
       {/* Bingkai ornamen (sayap + cincin + permata + kilau) */}
       <motion.svg
@@ -202,15 +256,59 @@ export function CincinMythic({
           </radialGradient>
         </defs>
 
-        {/* Sayap kiri & kanan — mengepak sangat halus */}
+        {/* Sinar kemuliaan berputar (khusus Immortal) */}
+        {m.sinar && (
+          <motion.g
+            animate={{ rotate: 360 }}
+            transition={{ duration: 22, repeat: Infinity, ease: "linear" }}
+            style={{ transformOrigin: "110px 112px" }}
+            opacity="0.22"
+          >
+            {Array.from({ length: 12 }, (_, i) => (
+              <path
+                key={i}
+                d="M110 112 L104 22 L116 22 Z"
+                transform={`rotate(${i * 30} 110 112)`}
+                fill={`url(#bulu-${uid})`}
+              />
+            ))}
+          </motion.g>
+        )}
+
+        {/* Sayap kiri & kanan berlapis — mengepak sangat halus.
+            Lapisan terluar digambar duluan supaya lapisan inti di depan. */}
         <motion.g
           animate={{ rotate: [-1.4, 1.4, -1.4] }}
           transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
           style={{ transformOrigin: "110px 112px" }}
         >
-          {bulu(false)}
-          {bulu(true)}
+          {[...LAPIS].reverse().map((lapis, li) => (
+            <g key={li}>
+              {bulu(false, lapis, `l${li}`)}
+              {bulu(true, lapis, `l${li}`)}
+            </g>
+          ))}
         </motion.g>
+
+        {/* Lidah api naik (khusus Immortal — berkilau membara).
+            Posisi lewat <g> statis; motion hanya menganimasikan
+            kenaikan relatifnya (kalau digabung, transform base tertimpa). */}
+        {m.api &&
+          api.map((f, i) => (
+            <g key={`api-${i}`} transform={`translate(${f.x} ${f.y})`}>
+              <motion.path
+                d="M0 0 C 5 -6, 5 -14, 0 -20 C -5 -14, -5 -6, 0 0 Z"
+                fill={`url(#permata-${uid})`}
+                animate={{ y: [0, -26], opacity: [0, 0.9, 0], scale: [0.7, 1.15, 0.8] }}
+                transition={{
+                  duration: 1.7,
+                  repeat: Infinity,
+                  ease: "easeOut",
+                  delay: f.tunda,
+                }}
+              />
+            </g>
+          ))}
 
         {/* Cincin bingkai berlapis */}
         <circle cx={CX} cy={CY} r="66" fill="none" stroke="rgba(120,53,15,0.6)" strokeWidth="2" />
@@ -278,8 +376,17 @@ export function CincinMythic({
         ))}
       </motion.svg>
 
-      {/* Avatar asli di tengah lubang bingkai */}
-      <span className="relative z-20 inline-flex items-center justify-center">{children}</span>
+      {/* Avatar asli di tengah lubang bingkai — ukurannya DIPAKSA persis
+          (fix 1 Sep 2026: foto kadang melenceng karena wadah tanpa ukuran
+          eksplisit mengikuti baseline teks). */}
+      {/* (Tanpa overflow-hidden: topi ulang tahun/badge kamera di profil
+          menonjol keluar lingkaran dan tidak boleh terpotong.) */}
+      <span
+        className="relative z-20 inline-flex shrink-0 items-center justify-center"
+        style={{ width: ukuran, height: ukuran }}
+      >
+        {children}
+      </span>
     </span>
   );
 }
