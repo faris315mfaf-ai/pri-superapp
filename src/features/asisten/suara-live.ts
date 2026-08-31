@@ -42,6 +42,13 @@ type Callback = {
    * (UI memulai gelembung baru setelahnya).
    */
   onTranskrip?: (arah: "masuk" | "keluar", teks: string, selesai: boolean) => void;
+  /**
+   * Latensi (fitur 1 Sep 2026 — indikator lag): "koneksi" = lama
+   * WebSocket tersambung sampai sesi siap; "respons" = jeda dari
+   * terakhir kali pengguna bersuara sampai suara balasan PERTAMA
+   * asisten terdengar. Milidetik.
+   */
+  onLatensi?: (jenis: "koneksi" | "respons", ms: number) => void;
 };
 
 /**
@@ -111,13 +118,23 @@ export class AsistenSuara {
   private prosesor: ScriptProcessorNode | null = null;
   private jadwalSpeaker = 0;
   private hidup = false;
+  // Pengukur latensi (fitur 1 Sep 2026) — lihat Callback.onLatensi.
+  private tSambung = 0;
+  private tPermintaan = 0;
+  private sedangBicara = false;
+  private sapaan: string | undefined;
 
   constructor(private cb: Callback) {}
 
-  /** Mulai sesi: minta mik → token → sambung → alirkan audio. */
-  async mulai(token: string, model: string): Promise<void> {
+  /**
+   * Mulai sesi: minta mik → token → sambung → alirkan audio.
+   * `sapaan` (opsional): asisten MEMBUKA percakapan dengan mengucapkan
+   * kalimat ini duluan (dipakai robot Ketua Umum: "Halo Pak Ketum...").
+   */
+  async mulai(token: string, model: string, sapaan?: string): Promise<void> {
     if (this.hidup) return;
     this.hidup = true;
+    this.sapaan = sapaan;
     try {
       this.cb.onStatus("meminta-mik");
       // Mik 16 kHz mono — format masukan yang diminta Gemini Live.
@@ -126,6 +143,7 @@ export class AsistenSuara {
       });
 
       this.cb.onStatus("menyambung");
+      this.tSambung = performance.now();
       // Token sementara dikirim sebagai access_token — kunci asli
       // tidak pernah menyentuh peramban.
       const ws = new WebSocket(`${URL_LIVE}?access_token=${encodeURIComponent(token)}`);
@@ -174,7 +192,11 @@ export class AsistenSuara {
     prosesor.onaudioprocess = (ev) => {
       if (!this.hidup || this.ws?.readyState !== WebSocket.OPEN) return;
       const sampel = ev.inputBuffer.getChannelData(0);
-      this.cb.onTingkat?.("masuk", tingkatDari(sampel));
+      const level = tingkatDari(sampel);
+      this.cb.onTingkat?.("masuk", level);
+      // Catat kapan pengguna terakhir BERSUARA (bukan sunyi) — titik
+      // awal pengukur latensi respons.
+      if (level > 0.07 && !this.sedangBicara) this.tPermintaan = performance.now();
       const data = keBase64Pcm(sampel);
       this.ws.send(
         JSON.stringify({
@@ -208,7 +230,34 @@ export class AsistenSuara {
       };
 
       if (pesan.setupComplete !== undefined) {
+        if (this.tSambung > 0) {
+          this.cb.onLatensi?.("koneksi", Math.round(performance.now() - this.tSambung));
+        }
         this.mulaiMik();
+        // Sapaan pembuka (robot Ketua Umum): minta model bicara duluan.
+        // Dikirim sebagai giliran teks — modelnya menjawab dengan SUARA.
+        if (this.sapaan && this.ws?.readyState === WebSocket.OPEN) {
+          this.tPermintaan = performance.now();
+          this.ws.send(
+            JSON.stringify({
+              clientContent: {
+                turns: [
+                  {
+                    role: "user",
+                    parts: [
+                      {
+                        text:
+                          "(instruksi sistem — jangan dibacakan) Buka percakapan " +
+                          `dengan mengucapkan persis: "${this.sapaan}" lalu diam menunggu.`,
+                      },
+                    ],
+                  },
+                ],
+                turnComplete: true,
+              },
+            }),
+          );
+        }
         return;
       }
 
@@ -221,6 +270,7 @@ export class AsistenSuara {
       // Pengguna menyela → buang antrean suara yang belum diputar.
       if (pesan.serverContent?.interrupted) {
         this.hentikanSpeaker();
+        this.sedangBicara = false;
         this.cb.onStatus("mendengarkan");
       }
 
@@ -232,6 +282,7 @@ export class AsistenSuara {
       if (pesan.serverContent?.turnComplete) {
         // Tutup gelembung transkrip giliran ini.
         this.cb.onTranskrip?.("keluar", "", true);
+        this.sedangBicara = false;
         this.cb.onStatus("mendengarkan");
       }
 
@@ -259,6 +310,15 @@ export class AsistenSuara {
   /** Antrekan audio balasan (PCM 24 kHz) supaya mulus tanpa putus. */
   private putar(sampel: Float32Array) {
     if (!this.hidup) return;
+    // Potongan suara PERTAMA giliran ini = momen asisten mulai bicara →
+    // laporkan jeda sejak pengguna terakhir bersuara (indikator lag).
+    if (!this.sedangBicara) {
+      this.sedangBicara = true;
+      if (this.tPermintaan > 0) {
+        this.cb.onLatensi?.("respons", Math.round(performance.now() - this.tPermintaan));
+        this.tPermintaan = 0;
+      }
+    }
     if (!this.ctxSpeaker) {
       this.ctxSpeaker = new AudioContext({ sampleRate: 24000 });
       this.jadwalSpeaker = this.ctxSpeaker.currentTime;

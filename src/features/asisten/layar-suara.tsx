@@ -19,6 +19,7 @@ import { Mic, MicOff, PhoneOff, ShieldAlert, X } from "lucide-react";
 import { toast } from "@/hooks/use-app-store";
 import { mintaTokenSuara } from "@/services";
 import { AsistenSuara, cekIzinMik, type StatusSuara } from "./suara-live";
+import { RobotWajah } from "./robot-asisten";
 import { cn } from "@/lib/utils";
 
 const LABEL: Record<StatusSuara, string> = {
@@ -33,10 +34,21 @@ const LABEL: Record<StatusSuara, string> = {
 
 type Izin = "memeriksa" | "granted" | "prompt" | "denied" | "unsupported";
 
-export function LayarSuara({ onTutup }: { onTutup: () => void }) {
+export function LayarSuara({
+  onTutup,
+  sapaan,
+}: {
+  onTutup: () => void;
+  /** Kalimat pembuka yang DIUCAPKAN asisten duluan (robot Ketua Umum). */
+  sapaan?: string;
+}) {
   const [izin, setIzin] = useState<Izin>("memeriksa");
   const [status, setStatus] = useState<StatusSuara>("siap");
   const [pesanGalat, setPesanGalat] = useState<string | null>(null);
+  // Latensi (fitur 1 Sep 2026): supaya kelihatan lag atau tidak.
+  const [latensi, setLatensi] = useState<{ koneksi: number | null; respons: number | null }>(
+    { koneksi: null, respons: null },
+  );
   // Transkrip percakapan (fitur 1.20.3) — teks berjalan seperti Gemini.
   const [transkrip, setTranskrip] = useState<{ arah: "masuk" | "keluar"; teks: string }[]>([]);
   // Penanda gelembung yang sedang dibangun tiap arah (indeks di array).
@@ -113,7 +125,7 @@ export function LayarSuara({ onTutup }: { onTutup: () => void }) {
           mulaiRef.current = false;
         },
         onTingkat: (arah, level) => {
-          // Suara asisten menggerakkan orb lebih kuat daripada suara
+          // Suara asisten menggerakkan robot lebih kuat daripada suara
           // pengguna — persis rasa "dia yang sedang bicara".
           const el = orbRef.current;
           if (!el) return;
@@ -121,9 +133,13 @@ export function LayarSuara({ onTutup }: { onTutup: () => void }) {
           el.style.setProperty("--tingkat", String(1 + kuat * 0.35));
         },
         onTranskrip: tambahTranskrip,
+        onLatensi: (jenis, ms) =>
+          setLatensi((l) =>
+            jenis === "koneksi" ? { ...l, koneksi: ms } : { ...l, respons: ms },
+          ),
       });
       mesinRef.current = mesin;
-      await mesin.mulai(token, model);
+      await mesin.mulai(token, model, sapaan);
     } catch (e) {
       mulaiRef.current = false;
       setPesanGalat(e instanceof Error ? e.message : "Gagal memulai mode suara.");
@@ -163,7 +179,7 @@ export function LayarSuara({ onTutup }: { onTutup: () => void }) {
         </button>
       </div>
 
-      {/* ===== AVATAR ORB ala Gemini ===== */}
+      {/* ===== AVATAR ROBOT (1 Sep 2026 — pengganti bola biru) ===== */}
       <div className="flex flex-col items-center gap-6">
         <div
           ref={orbRef}
@@ -180,7 +196,7 @@ export function LayarSuara({ onTutup }: { onTutup: () => void }) {
                 aria-hidden="true"
               />
             ))}
-          {/* Cahaya lembut di belakang orb */}
+          {/* Cahaya lembut di belakang robot */}
           <span
             className="absolute inset-[-28px] rounded-full opacity-60 blur-2xl"
             style={{
@@ -190,27 +206,38 @@ export function LayarSuara({ onTutup }: { onTutup: () => void }) {
             }}
             aria-hidden="true"
           />
-          {/* Orb utama: skala mengikuti level suara (CSS var --tingkat) */}
+          {/* Robot utama: skala mengikuti level suara (CSS var --tingkat);
+              DIAM saat menyambung, mulut bergerak saat berbicara. */}
           <span
-            className={cn(
-              "relative block h-40 w-40 rounded-full transition-transform duration-150 ease-out",
-              status === "menyambung" && "orb-denyut",
-            )}
-            style={{
-              transform: "scale(var(--tingkat))",
-              background:
-                "radial-gradient(circle at 32% 28%, #C4B5FD 0%, #8B5CF6 34%, #4F46E5 68%, #312E81 100%)",
-              boxShadow:
-                "0 0 60px rgba(139, 92, 246, 0.55), inset -14px -18px 40px rgba(30, 27, 75, 0.55), inset 10px 12px 30px rgba(255, 255, 255, 0.25)",
-            }}
+            className="relative block transition-transform duration-150 ease-out"
+            style={{ transform: "scale(var(--tingkat))" }}
             aria-hidden="true"
-          />
+          >
+            <RobotWajah
+              ukuran={176}
+              mode={
+                status === "menyambung" || status === "siap" || status === "meminta-mik"
+                  ? "diam"
+                  : status === "berbicara"
+                    ? "bicara"
+                    : "dengar"
+              }
+            />
+          </span>
         </div>
 
         <div className="text-center">
           <p className="font-heading text-lg font-bold text-white" aria-live="polite">
             {LABEL[status]}
           </p>
+          {/* Latensi — kelihatan lag atau tidak (fitur 1 Sep 2026). */}
+          {(latensi.koneksi !== null || latensi.respons !== null) && (
+            <p className="angka-tab mt-1 text-[11px] font-semibold tracking-wide text-white/55">
+              {latensi.koneksi !== null && <>koneksi {latensi.koneksi} ms</>}
+              {latensi.koneksi !== null && latensi.respons !== null && " · "}
+              {latensi.respons !== null && <>respons {latensi.respons} ms</>}
+            </p>
+          )}
           {status === "mendengarkan" && transkrip.length === 0 && (
             <p className="mt-1 text-[12.5px] text-white/60">
               Contoh: “Berapa yang sudah absen hari ini?”

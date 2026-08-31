@@ -44,6 +44,19 @@ import { ModalChangelog } from "@/features/profil/modal-changelog";
 import { AcaraScreen } from "@/features/acara/acara-screen";
 import { TabelAnggotaScreen } from "@/features/pengguna/tabel-anggota-screen";
 import { AbsensiHariIniScreen } from "@/features/pengguna/absensi-hari-ini-screen";
+import { RobotMelayang } from "@/features/asisten/robot-asisten";
+import { LayarSuara } from "@/features/asisten/layar-suara";
+import dynamic from "next/dynamic";
+import { ScreenHeader } from "@/components/pri-ui";
+
+// Layar KPI Video anggota (berat: grafik + tabel) — dimuat saat dibuka.
+const KpiAnggotaDashboard = dynamic(
+  () =>
+    import("@/features/dashboard/kpi-anggota-dashboard").then(
+      (m) => m.KpiAnggotaDashboard,
+    ),
+  { ssr: false },
+);
 import { SetelKpiScreen } from "@/features/pengguna/setel-kpi-screen";
 import { modulUntukDivisi } from "@/lib/modul-divisi";
 import { adalahHR } from "@/lib/hr";
@@ -84,6 +97,8 @@ type SubLayar =
   | { nama: "tabel-anggota" }
   | { nama: "absensi-hari-ini" }
   | { nama: "setel-kpi" }
+  // KPI Video anggota dibuka dari kartu ringkasan dashboard (1 Sep 2026)
+  | { nama: "dashboard-kpi" }
   // Kirim pengumuman ke divisi/semua (HR Center, fitur 1.22.x/1)
   | { nama: "pengumuman" }
   // Notifikasi: kini dibuka dari lonceng kanan atas, bukan tab bawah
@@ -107,6 +122,46 @@ const TAB_AWAL: Record<Role, KunciTab> = {
   ketua: "beranda",
   anggota: "beranda",
 };
+
+// ------------------------------------------------------------
+// Posisi navigasi tersimpan (fitur 1 Sep 2026): refresh peramban
+// TIDAK melempar ke beranda — kembali ke tab & sub-layar terakhir.
+// sessionStorage dipilih sadar: hidup selama tab peramban itu
+// (refresh selamat), tapi buka aplikasi besok = mulai bersih.
+// ------------------------------------------------------------
+const KUNCI_NAV = "pri_nav_v1";
+
+function bacaNavTersimpan(
+  userId: string | number | null | undefined,
+): { tab: KunciTab; subLayar: SubLayar | null } | null {
+  if (typeof window === "undefined" || !userId) return null;
+  try {
+    const mentah = sessionStorage.getItem(KUNCI_NAV);
+    if (!mentah) return null;
+    const j = JSON.parse(mentah) as {
+      userId?: unknown;
+      tab?: unknown;
+      subLayar?: { nama?: unknown } | null;
+    };
+    // Milik akun lain (ganti login di tab sama) → abaikan.
+    if (String(j.userId) !== String(userId)) return null;
+    if (typeof j.tab !== "string") return null;
+    const subLayar =
+      j.subLayar && typeof j.subLayar === "object" && typeof j.subLayar.nama === "string"
+        ? (j.subLayar as SubLayar)
+        : null;
+    return { tab: j.tab as KunciTab, subLayar };
+  } catch {
+    return null;
+  }
+}
+
+/** Tab tersimpan hanya dipakai bila masih sah untuk peran ini. */
+function tabAwalDenganRestor(role: Role, userId: string | number | null | undefined): KunciTab {
+  const tersimpan = bacaNavTersimpan(userId);
+  if (tersimpan && (TAB_ROLE[role] ?? []).includes(tersimpan.tab)) return tersimpan.tab;
+  return TAB_AWAL[role];
+}
 
 const TAB_ROLE: Record<Role, KunciTab[]> = {
   // Modul KONTEN kembali & WAJIB untuk semua peran (fitur 1.20/5):
@@ -141,9 +196,13 @@ export default function Page() {
   const [menyambut, setMenyambut] = useState(false);
   const [tab, setTab] = useState<KunciTab>(() => {
     const tersimpan = useAppStore.getState().user;
-    return tersimpan ? TAB_AWAL[tersimpan.role] : "beranda";
+    return tersimpan ? tabAwalDenganRestor(tersimpan.role, tersimpan.id) : "beranda";
   });
-  const [subLayar, setSubLayar] = useState<SubLayar | null>(null);
+  const [subLayar, setSubLayar] = useState<SubLayar | null>(() => {
+    // Refresh peramban: buka lagi sub-layar terakhir (fitur 1 Sep 2026).
+    const tersimpan = useAppStore.getState().user;
+    return tersimpan ? (bacaNavTersimpan(tersimpan.id)?.subLayar ?? null) : null;
+  });
   // Kunci sub-dashboard yang boleh dibuka jabatan ini (fitur 1.19/3.3).
   // Diisi effect di bawah; dipakai tabBoleh, jadi dideklarasikan di sini.
   const [aksesDashboard, setAksesDashboard] = useState<string[]>([]);
@@ -245,7 +304,10 @@ export default function Page() {
           setMenungguUser(tersimpan);
         } else if (tersimpan) {
           setUser(tersimpan);
-          setTab(TAB_AWAL[tersimpan.role]);
+          // Hormati posisi navigasi tersimpan (refresh ≠ lempar ke awal).
+          setTab(tabAwalDenganRestor(tersimpan.role, tersimpan.id));
+          const navTersimpan = bacaNavTersimpan(tersimpan.id);
+          if (navTersimpan?.subLayar) setSubLayar(navTersimpan.subLayar);
         } else if (useAppStore.getState().user) {
           // Ada sisa profil di penyimpanan lokal tapi tokennya sudah
           // tidak berlaku — bersihkan supaya tidak menampilkan data
@@ -504,6 +566,9 @@ export default function Page() {
 
   const izinFitur = useAppStore((s) => s.izinFitur);
   const [ultahBuka, setUltahBuka] = useState(false);
+  // Robot maskot Ketua Umum (fitur 1 Sep 2026): diklik → tersenyum →
+  // langsung masuk mode suara asisten dengan sapaan "Halo Pak Ketum".
+  const [suaraRobotBuka, setSuaraRobotBuka] = useState(false);
   // Changelog "Apa yang Baru" (spek 1.4): tampil otomatis SEKALI
   // begitu pengguna pertama membuka aplikasi setelah update.
   const [changelogBuka, setChangelogBuka] = useState(false);
@@ -558,11 +623,75 @@ export default function Page() {
     tabRef.current = tab;
   }, [subLayar, tab]);
 
+  // ------------------------------------------------------------
+  // Riwayat navigasi bertumpuk (fitur 1 Sep 2026): back = MUNDUR ke
+  // modul yang dibuka sebelumnya (persis riwayat peramban), bukan
+  // langsung melompat ke tab awal. Effect ini merekam SETIAP
+  // perpindahan (tab maupun sub-layar) dari mana pun asalnya —
+  // footer, kartu, notifikasi — tanpa perlu membungkus semua
+  // pemanggil setTab/setSubLayar satu per satu.
+  // ------------------------------------------------------------
+  const riwayatNavRef = useRef<{ tab: KunciTab; subLayar: SubLayar | null }[]>([]);
+  const lewatiCatatRef = useRef(false);
+  const posisiKiniRef = useRef<{ tab: KunciTab; subLayar: SubLayar | null }>({
+    tab,
+    subLayar,
+  });
+  useEffect(() => {
+    const sebelum = posisiKiniRef.current;
+    const berubah =
+      sebelum.tab !== tab ||
+      JSON.stringify(sebelum.subLayar) !== JSON.stringify(subLayar);
+    if (!berubah) return;
+    if (lewatiCatatRef.current) {
+      // Perpindahan ini HASIL menekan back — jangan direkam lagi,
+      // kalau direkam back akan bolak-balik antara dua layar.
+      lewatiCatatRef.current = false;
+    } else {
+      riwayatNavRef.current.push({ ...sebelum });
+      // Batasi 40 langkah — cukup dalam, tidak menimbun memori.
+      if (riwayatNavRef.current.length > 40) riwayatNavRef.current.shift();
+    }
+    posisiKiniRef.current = { tab, subLayar };
+  }, [tab, subLayar]);
+
+  // Simpan posisi terakhir untuk restor saat refresh (fitur 1 Sep 2026).
+  useEffect(() => {
+    try {
+      if (!user) {
+        sessionStorage.removeItem(KUNCI_NAV);
+        return;
+      }
+      sessionStorage.setItem(
+        KUNCI_NAV,
+        JSON.stringify({ userId: user.id, tab, subLayar }),
+      );
+    } catch {
+      // Penyimpanan penuh/diblokir — navigasi tetap jalan tanpa restor.
+    }
+  }, [user, tab, subLayar]);
+
   useEffect(() => {
     if (!user) return;
+    // Ganti akun/login baru: riwayat milik sesi lama tidak relevan.
+    riwayatNavRef.current = [];
     history.pushState({ pri: true }, "");
 
     function saatBack() {
+      // 1. Ada riwayat → mundur SATU langkah ke posisi sebelumnya.
+      const tumpukan = riwayatNavRef.current;
+      if (tumpukan.length > 0) {
+        const sebelum = tumpukan.pop();
+        if (sebelum) {
+          lewatiCatatRef.current = true;
+          setSubLayar(sebelum.subLayar);
+          setTab(sebelum.tab);
+          history.pushState({ pri: true }, "");
+          return;
+        }
+      }
+      // 2. Riwayat kosong tapi sub-layar terbuka (mis. habis refresh
+      //    langsung di sub-layar) → tutup sub-layarnya dulu.
       const tabAwal = TAB_AWAL[useAppStore.getState().user?.role ?? "anggota"] ?? "beranda";
       if (subLayarRef.current) {
         setSubLayar(null);
@@ -652,6 +781,8 @@ export default function Page() {
             onBukaKelolaPengguna={() => setSubLayar({ nama: "kelola-pengguna" })}
             onBukaModulQc={() => pilihTab("qc")}
             onBukaModulTv={() => pilihTab("tv")}
+            onBukaAbsensi={() => setSubLayar({ nama: "absensi-hari-ini" })}
+            onBukaKpiVideo={() => setSubLayar({ nama: "dashboard-kpi" })}
             onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
             jumlahBelumBaca={belumBaca}
           />
@@ -902,6 +1033,14 @@ export default function Page() {
                   <TabelAnggotaScreen onKembali={() => setSubLayar(null)} />
                 ) : subLayar.nama === "absensi-hari-ini" ? (
                   <AbsensiHariIniScreen onKembali={() => setSubLayar(null)} />
+                ) : subLayar.nama === "dashboard-kpi" ? (
+                  <div className="kolom-aplikasi px-4 pb-32">
+                    <ScreenHeader
+                      judul="KPI Video Anggota"
+                      onKembali={() => setSubLayar(null)}
+                    />
+                    <KpiAnggotaDashboard />
+                  </div>
                 ) : subLayar.nama === "setel-kpi" ? (
                   <SetelKpiScreen user={user} onKembali={() => setSubLayar(null)} />
                 ) : subLayar.nama === "pengumuman" ? (
@@ -949,6 +1088,19 @@ export default function Page() {
             )}
           </AnimatePresence>
         </div>
+      )}
+
+      {/* Robot AI Ketua Umum (fitur 1 Sep 2026) — melayang di SEMUA
+          layar khusus super admin/master. Disembunyikan saat mode
+          suaranya sendiri sedang terbuka. */}
+      {user && (user.role === "super_admin" || user.role === "master") && !suaraRobotBuka && (
+        <RobotMelayang onBuka={() => setSuaraRobotBuka(true)} />
+      )}
+      {suaraRobotBuka && (
+        <LayarSuara
+          sapaan="Halo Pak Ketum, ada yang bisa dibantu?"
+          onTutup={() => setSuaraRobotBuka(false)}
+        />
       )}
 
       {/* Lapisan global: toast + push banner */}

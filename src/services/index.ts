@@ -1135,6 +1135,21 @@ export async function getDashboard(): Promise<DashboardData> {
   return json as DashboardData;
 }
 
+/** Ringkasan 4 angka utama dashboard (kartu paling atas, 1 Sep 2026). */
+export type RingkasUtama = {
+  periode: string;
+  tanggal: string;
+  komen: { persen: number; kader_aktif: number; total_kader: number };
+  absensi: { hadir: number; total: number };
+  kerja: { sudah_lapor: number; total: number; rata: number };
+  video: { tercapai: number; total: number; video_hari_ini: number };
+};
+
+export async function getRingkasUtama(): Promise<RingkasUtama> {
+  const json = await fetchJson("/api/dashboard/ringkas");
+  return json as RingkasUtama;
+}
+
 // ------------------------------------------------------------
 // Periode QC
 // ------------------------------------------------------------

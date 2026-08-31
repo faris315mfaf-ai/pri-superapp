@@ -52,6 +52,7 @@ import {
 } from "@/services";
 import { periodeSaatIni, periodeUntukTanggalPilih } from "@/lib/periode-qc";
 import { toast } from "@/hooks/use-app-store";
+import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 import { RiwayatAnalisisModal } from "./riwayat-analisis-modal";
 import { KepatuhanKaderPanel } from "./kepatuhan-kader-panel";
 import { RiwayatUpdateKomentar } from "./riwayat-update-komentar";
@@ -144,6 +145,14 @@ export function QcScreen({
   const [ambangEdit, setAmbangEdit] = useState("");
   const [simpanAmbang, setSimpanAmbang] = useState(false);
 
+  // Penyegaran otomatis (1 Sep 2026): untuk PERIODE BERJALAN, data akun
+  // & ringkasan ditarik ulang diam-diam tiap 30 dtk + saat aplikasi
+  // dibuka kembali. Periode riwayat sudah beku — tidak perlu disegarkan.
+  const [tik, setTik] = useState(0);
+  useSegarOtomatis(() => {
+    if (periodePilih === periodeSaatIni()) setTik((t) => t + 1);
+  });
+
   useEffect(() => {
     let hidup = true;
     void (async () => {
@@ -160,7 +169,7 @@ export function QcScreen({
     return () => {
       hidup = false;
     };
-  }, [periodePilih]);
+  }, [periodePilih, tik]);
 
   // Filter platform
   const [platform, setPlatform] = useState("semua");
@@ -178,7 +187,8 @@ export function QcScreen({
     );
   }
 
-  // Muat data akun tiap tanggal berganti.
+  // Muat data akun tiap tanggal berganti (dan tiap detak penyegar
+  // otomatis — data lama tetap tampil sampai yang baru tiba).
   useEffect(() => {
     let hidup = true;
     void (async () => {
@@ -195,7 +205,7 @@ export function QcScreen({
     return () => {
       hidup = false;
     };
-  }, [periodePilih]);
+  }, [periodePilih, tik]);
 
   // Baca kemajuan dari database; untuk HARI INI diulang tiap 30 detik —
   // deteksi otomatis berjalan di latar (sinkron Ayrshare), jadi angka di

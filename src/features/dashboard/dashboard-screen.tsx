@@ -35,6 +35,8 @@ import { CalendarDays, ClipboardList, Database, LayoutGrid, Tv, Users } from "lu
 import { GlassCard } from "@/components/glass-card";
 import { KartuKelolaPengguna } from "./kartu-kelola-pengguna";
 import { TataLetakModul, type SeksiModul } from "@/components/tata-letak-modul";
+import { RingkasanUtama } from "./ringkasan-utama";
+import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 
 type DashboardScreenProps = {
   user: User;
@@ -49,6 +51,9 @@ type DashboardScreenProps = {
    */
   onBukaKelolaPengguna?: () => void;
   onBukaDatabase?: () => void;
+  /** Kartu ringkasan (1 Sep 2026): buka absensi & KPI video anggota. */
+  onBukaAbsensi?: () => void;
+  onBukaKpiVideo?: () => void;
 };
 
 export function DashboardScreen({
@@ -59,6 +64,8 @@ export function DashboardScreen({
   onBukaModulTv,
   onBukaNotifikasi,
   jumlahBelumBaca,
+  onBukaAbsensi,
+  onBukaKpiVideo,
 }: DashboardScreenProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [memuat, setMemuat] = useState(true);
@@ -115,6 +122,18 @@ export function DashboardScreen({
     }
   }, [pesanError]);
 
+  // Penyegaran otomatis (1 Sep 2026): data dashboard ditarik ulang
+  // DIAM-DIAM tiap 30 dtk + saat aplikasi dibuka kembali — tanpa
+  // menyalakan skeleton (angka lama tetap tampil sampai yang baru tiba).
+  useSegarOtomatis(() => {
+    void getDashboard()
+      .then((hasil) => {
+        setData(hasil);
+        setPesanError(null);
+      })
+      .catch(() => {});
+  });
+
   const namaPanggilan = user.nama.split(" ")[0] || user.nama;
 
   return (
@@ -166,6 +185,20 @@ export function DashboardScreen({
 
       {/* Pengumuman terbaru — beranda tidak boleh ketinggalan info */}
       <KartuPengumumanTerbaru />
+
+      {/* ===== Ringkasan 4 angka utama (1 Sep 2026) =====
+          Selalu di paling atas (di luar tata letak kustom) supaya
+          rangkuman kepatuhan-komen/absensi/KPI tidak bisa tersembunyi. */}
+      <div className="mt-4">
+        <FadeInUp>
+          <RingkasanUtama
+            onBukaKomen={onBukaModulQc}
+            onBukaAbsensi={onBukaAbsensi}
+            onBukaKerja={onBukaDatabase}
+            onBukaVideo={onBukaKpiVideo}
+          />
+        </FadeInUp>
+      </div>
 
       {/* ===== Konten ===== */}
       <div className="mt-5 flex flex-col gap-4">

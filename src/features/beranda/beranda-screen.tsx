@@ -45,6 +45,7 @@ import {
 } from "@/services";
 import { bolehFitur } from "@/lib/fitur";
 import { jamWIB, sapaanHari, tanggalIndonesia } from "@/lib/format";
+import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 import type { KomponenIkon, User } from "@/types";
 
 function tanggalWibPerangkat(): string {
@@ -116,6 +117,11 @@ export function BerandaScreen({
   const mauKomentar = boleh("beranda.kpi_komentar");
   const mauAbsen = boleh("beranda.absensi");
 
+  // Penyegaran otomatis (1 Sep 2026): angka KPI/absen/komentar beranda
+  // ditarik ulang diam-diam tiap 30 dtk + saat aplikasi dibuka kembali.
+  const [tik, setTik] = useState(0);
+  useSegarOtomatis(() => setTik((t) => t + 1));
+
   useEffect(() => {
     let hidup = true;
     void (async () => {
@@ -157,7 +163,7 @@ export function BerandaScreen({
     return () => {
       hidup = false;
     };
-  }, [user.id, user.nama, mauKerja, mauVideo, mauAbsen, mauKomentar]);
+  }, [user.id, user.nama, mauKerja, mauVideo, mauAbsen, mauKomentar, tik]);
 
   const persenKerja = kpiKerja && kpiKerja.rencana_total > 0 ? (kpiKerja.kpi_persen ?? 0) : 0;
   const persenVideo = video && video.target > 0

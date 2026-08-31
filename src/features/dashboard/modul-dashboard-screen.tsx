@@ -23,6 +23,7 @@ import { FadeInUp, GlassSkeleton } from "@/components/pri-ui";
 import { KATALOG_DASHBOARD } from "@/lib/dashboard-katalog";
 import type { User } from "@/types";
 import { cn } from "@/lib/utils";
+import { RingkasanUtama } from "./ringkasan-utama";
 
 // Sub-dashboard dimuat malas: tiap sub membawa tabel/grafik besar
 // (recharts) yang tidak perlu ikut bundle awal aplikasi.
@@ -98,6 +99,16 @@ export function ModulDashboardScreen({ user, boleh, onBukaKelola }: ModulDashboa
           </button>
         )}
       </header>
+
+      {/* Ringkasan 4 angka utama (1 Sep 2026) — tampil untuk semua
+          pemegang akses dashboard, di atas pilihan sub-dashboard. */}
+      {daftar.length > 0 && (
+        <div className="mt-4">
+          <FadeInUp>
+            <RingkasanUtama />
+          </FadeInUp>
+        </div>
+      )}
 
       {daftar.length === 0 ? (
         // Jabatan ini belum diberi akses apa pun.
