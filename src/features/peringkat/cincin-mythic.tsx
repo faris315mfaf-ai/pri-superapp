@@ -8,7 +8,7 @@
 // Legends). Diberikan pada juara 1-2-3 dari SETIAP kategori
 // leaderboard; peringkat border = peringkat terbaik yang diraih:
 //   #1 Mythical Immortal (emas-merah membara)
-//   #2 Mythical Glory    (emas murni)
+//   #2 Mythical Glory    (biru safir)
 //   #3 Mythical Honor    (emas-ungu)
 //
 // Bingkai digambar SVG murni (tajam di semua ukuran, warna per tier,
@@ -92,32 +92,32 @@ function jalurBintang(r: number): string {
 
 /**
  * Tingkat KEMEGAHAN per tier (revisi 1 Sep 2026):
- *   #1 Immortal → 5x lebih megah & berkilau: 3 lapis sayap, 10 bintang,
- *      lidah api naik, sinar berputar, aura ganda;
- *   #2 Glory    → biru, 3x lebih megah: 2 lapis sayap, 7 bintang, aura ganda;
- *   #3 Honor    → tetap seperti semula.
+ *   #1 Immortal → paling megah: 3 lapis sayap, 7 bintang, lidah api,
+ *      sinar berputar, aura ganda;
+ *   #2 Glory    → biru: 2 lapis sayap, 5 bintang, aura ganda;
+ *   #3 Honor    → paling kalem: 1 lapis, 4 bintang.
+ * (Revisi "norak & kepotong": semua ornamen dirapatkan ±1,7x avatar
+ *  dan dijamin muat di kanvas — tidak ada lagi ujung terpangkas.)
  */
 const MEGAH: Record<
   number,
   { lapis: number; kilau: number; api: boolean; sinar: boolean; auraGanda: boolean }
 > = {
-  1: { lapis: 3, kilau: 10, api: true, sinar: true, auraGanda: true },
-  2: { lapis: 2, kilau: 7, api: false, sinar: false, auraGanda: true },
+  1: { lapis: 3, kilau: 7, api: true, sinar: true, auraGanda: true },
+  2: { lapis: 2, kilau: 5, api: false, sinar: false, auraGanda: true },
   3: { lapis: 1, kilau: 4, api: false, sinar: false, auraGanda: false },
 };
 
-/** Posisi bintang kilau (dipakai berurutan sebanyak MEGAH.kilau). */
+/** Posisi bintang kilau — semua DI DALAM kanvas, dekat cincin
+ *  (revisi "kepotong & norak" 1 Sep 2026: dirapatkan ke dalam). */
 const TITIK_KILAU = [
-  { x: 30, y: 60, r: 5, tunda: 0 },
-  { x: 194, y: 74, r: 4, tunda: 0.6 },
-  { x: 42, y: 178, r: 4, tunda: 1.1 },
-  { x: 186, y: 168, r: 5, tunda: 1.6 },
-  { x: 110, y: 4, r: 4, tunda: 0.3 },
-  { x: 16, y: 118, r: 4, tunda: 1.4 },
-  { x: 204, y: 122, r: 4, tunda: 0.9 },
-  { x: 74, y: 22, r: 3.5, tunda: 1.9 },
-  { x: 148, y: 20, r: 3.5, tunda: 0.45 },
-  { x: 110, y: 214, r: 4, tunda: 1.25 },
+  { x: 44, y: 66, r: 4, tunda: 0 },
+  { x: 180, y: 78, r: 3.5, tunda: 0.6 },
+  { x: 52, y: 168, r: 3.5, tunda: 1.1 },
+  { x: 174, y: 160, r: 4, tunda: 1.6 },
+  { x: 110, y: 26, r: 3.5, tunda: 0.3 },
+  { x: 34, y: 118, r: 3.5, tunda: 1.4 },
+  { x: 186, y: 122, r: 3.5, tunda: 0.9 },
 ];
 
 /**
@@ -159,12 +159,14 @@ export function CincinMythic({
   ];
   const CX = 110;
   const CY = 112;
-  // Lapisan sayap (kemegahan): tiap lapis lebih jauh, lebih panjang,
-  // lebih transparan — memberi kesan sayap tebal berlapis.
+  // Lapisan sayap (kemegahan): tiap lapis sedikit lebih jauh & lebih
+  // transparan. Revisi 1 Sep 2026 ("kepotong & norak"): SEMUA ujung
+  // helai dijamin <= r±96 dari pusat — muat di kanvas 220, jangkauan
+  // border lebih rapat (±1,7x avatar, bukan hampir 2x).
   const LAPIS = [
-    { r: 64, s: 1, o: 1 },
-    { r: 73, s: 1.26, o: 0.8 },
-    { r: 84, s: 1.52, o: 0.6 },
+    { r: 58, s: 0.62, o: 1 },
+    { r: 62, s: 0.57, o: 0.75 },
+    { r: 66, s: 0.5, o: 0.55 },
   ].slice(0, m.lapis);
 
   function bulu(sisiKanan: boolean, lapis: { r: number; s: number; o: number }, kunci: string) {
@@ -193,10 +195,10 @@ export function CincinMythic({
   const kilau = TITIK_KILAU.slice(0, m.kilau);
   // Lidah api Immortal: naik dari kiri-kanan bawah lalu memudar.
   const api = [
-    { x: 58, y: 176, tunda: 0 },
-    { x: 162, y: 176, tunda: 0.7 },
-    { x: 84, y: 196, tunda: 1.2 },
-    { x: 136, y: 196, tunda: 0.4 },
+    { x: 66, y: 168, tunda: 0 },
+    { x: 154, y: 168, tunda: 0.7 },
+    { x: 88, y: 184, tunda: 1.2 },
+    { x: 132, y: 184, tunda: 0.4 },
   ];
 
   return (
@@ -209,10 +211,10 @@ export function CincinMythic({
         aria-hidden="true"
         className="pointer-events-none absolute rounded-full blur-lg"
         style={{
-          inset: -(ukuran * (m.api ? 0.4 : 0.28)),
+          inset: -(ukuran * (m.api ? 0.24 : 0.18)),
           background: `radial-gradient(circle, ${t.cahaya} 0%, transparent 68%)`,
         }}
-        animate={{ opacity: [0.5, 1, 0.5], scale: [1, 1.1, 1] }}
+        animate={{ opacity: [0.3, 0.7, 0.3], scale: [1, 1.06, 1] }}
         transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
       />
       {/* Aura kedua (Glory/Immortal — lebih megah): denyut berlawanan */}
@@ -221,10 +223,10 @@ export function CincinMythic({
           aria-hidden="true"
           className="pointer-events-none absolute rounded-full blur-md"
           style={{
-            inset: -(ukuran * 0.16),
+            inset: -(ukuran * 0.1),
             background: `radial-gradient(circle, ${t.cahaya} 0%, transparent 60%)`,
           }}
-          animate={{ opacity: [0.9, 0.4, 0.9], scale: [1.06, 1, 1.06] }}
+          animate={{ opacity: [0.55, 0.25, 0.55], scale: [1.04, 1, 1.04] }}
           transition={{ duration: 2.1, repeat: Infinity, ease: "easeInOut" }}
         />
       )}
@@ -235,7 +237,7 @@ export function CincinMythic({
         viewBox="0 0 220 220"
         className="pointer-events-none absolute z-10"
         style={{ width: total, height: total, top: -ofs, left: -ofs }}
-        animate={{ scale: [1, 1.02, 1] }}
+        animate={{ scale: [1, 1.012, 1] }}
         transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
       >
         <defs>
@@ -262,12 +264,12 @@ export function CincinMythic({
             animate={{ rotate: 360 }}
             transition={{ duration: 22, repeat: Infinity, ease: "linear" }}
             style={{ transformOrigin: "110px 112px" }}
-            opacity="0.22"
+            opacity="0.13"
           >
             {Array.from({ length: 12 }, (_, i) => (
               <path
                 key={i}
-                d="M110 112 L104 22 L116 22 Z"
+                d="M110 112 L105 36 L115 36 Z"
                 transform={`rotate(${i * 30} 110 112)`}
                 fill={`url(#bulu-${uid})`}
               />
@@ -299,7 +301,7 @@ export function CincinMythic({
               <motion.path
                 d="M0 0 C 5 -6, 5 -14, 0 -20 C -5 -14, -5 -6, 0 0 Z"
                 fill={`url(#permata-${uid})`}
-                animate={{ y: [0, -26], opacity: [0, 0.9, 0], scale: [0.7, 1.15, 0.8] }}
+                animate={{ y: [0, -18], opacity: [0, 0.7, 0], scale: [0.6, 1, 0.7] }}
                 transition={{
                   duration: 1.7,
                   repeat: Infinity,
@@ -317,20 +319,20 @@ export function CincinMythic({
 
         {/* Puncak: lengkung mahkota + permata perisai */}
         <path
-          d={`M74 42 C 88 24, 132 24, 146 42`}
+          d={`M82 50 C 94 34, 126 34, 138 50`}
           fill="none"
           stroke={`url(#cincin-${uid})`}
-          strokeWidth="7"
+          strokeWidth="5.5"
           strokeLinecap="round"
         />
         <path
-          d="M110 12 L126 32 L110 50 L94 32 Z"
+          d="M110 24 L123 40 L110 54 L97 40 Z"
           fill={`url(#cincin-${uid})`}
           stroke="rgba(120,53,15,0.6)"
           strokeWidth="1.5"
         />
         <motion.path
-          d="M110 19 L120 32 L110 43 L100 32 Z"
+          d="M110 30 L118 40 L110 49 L102 40 Z"
           fill={`url(#permata-${uid})`}
           animate={{ opacity: [0.75, 1, 0.75] }}
           transition={{ duration: 1.7, repeat: Infinity, ease: "easeInOut" }}
@@ -338,20 +340,20 @@ export function CincinMythic({
 
         {/* Bawah: permata tetes + sulur emas */}
         <path
-          d={`M84 190 C 96 200, 124 200, 136 190`}
+          d={`M88 182 C 98 190, 122 190, 132 182`}
           fill="none"
           stroke={`url(#cincin-${uid})`}
-          strokeWidth="6"
+          strokeWidth="5"
           strokeLinecap="round"
         />
         <path
-          d="M110 172 C 124 182, 124 198, 110 208 C 96 198, 96 182, 110 172 Z"
+          d="M110 168 C 121 176, 121 189, 110 197 C 99 189, 99 176, 110 168 Z"
           fill={`url(#cincin-${uid})`}
           stroke="rgba(120,53,15,0.6)"
           strokeWidth="1.5"
         />
         <motion.path
-          d="M110 179 C 119 186, 119 196, 110 202 C 101 196, 101 186, 110 179 Z"
+          d="M110 174 C 117 179, 117 188, 110 193 C 103 188, 103 179, 110 174 Z"
           fill={`url(#permata-${uid})`}
           animate={{ opacity: [0.75, 1, 0.75] }}
           transition={{ duration: 1.9, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
