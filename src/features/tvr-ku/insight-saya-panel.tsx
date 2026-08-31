@@ -48,7 +48,15 @@ const LABEL_METRIK: Record<string, string> = {
   video_count: "Jumlah Video",
   posts: "Jumlah Post",
   comments: "Komentar",
+  comment_count: "Komentar",
   engagement: "Interaksi",
+  saves: "Disimpan",
+  saved: "Disimpan",
+  shares: "Dibagikan",
+  share_count: "Dibagikan",
+  profile_views: "Kunjungan Profil",
+  watch_time: "Durasi Tonton",
+  average_view_duration: "Rata2 Tonton",
 };
 
 /** Ambil pasangan metrik ANGKA dari objek platform (maks 6, jujur). */

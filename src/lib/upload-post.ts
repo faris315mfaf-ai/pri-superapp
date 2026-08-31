@@ -113,13 +113,25 @@ function petaAkun(social: Record<string, unknown> | undefined): Record<string, s
   const hasil: Record<string, string> = {};
   for (const [kunciUp, nilai] of Object.entries(social ?? {})) {
     const app = DARI_UP[kunciUp] ?? kunciUp;
-    // Nilai bisa string username ATAU objek {username,...} — dua-duanya
-    // pernah terlihat di API; kosong berarti belum tertaut.
+    // Bentuk NYATA balasan upload-post (diverifikasi 31 Agu 2026):
+    //   "tiktok": ""                                  → BELUM tertaut
+    //   "youtube": { display_name, handle, ... }       → tertaut
+    // Kuncinya `handle` (mis. "@channel") / `display_name` — BUKAN
+    // `username`. Salah baca di sini membuat SEMUA akun terbaca kosong
+    // (bug nyata: Insight menampilkan YouTube, tapi menu Unggah bilang
+    // "belum ada akun tertaut"). `username` tetap diterima untuk jaga-jaga.
+    const o = (typeof nilai === "object" && nilai ? nilai : {}) as {
+      handle?: string;
+      display_name?: string;
+      username?: string;
+    };
     const uname =
       typeof nilai === "string"
         ? nilai
-        : String((nilai as { username?: string })?.username ?? "");
-    if (uname.trim()) hasil[app] = uname.trim();
+        : String(o.handle ?? o.display_name ?? o.username ?? "");
+    // Buang "@" di depan supaya seragam dengan akun_tvr_user.
+    const bersih = uname.trim().replace(/^@+/, "");
+    if (bersih) hasil[app] = bersih;
   }
   return hasil;
 }
@@ -229,6 +241,71 @@ export async function unggahVideoUp(opsi: {
 // ------------------------------------------------------------
 // Insight
 // ------------------------------------------------------------
+
+// ------------------------------------------------------------
+// Daftar postingan (untuk KPI OTOMATIS)
+// ------------------------------------------------------------
+
+export type PostinganUp = {
+  id: string;
+  /** URL asli postingan di platform — inilah yang dicatat sebagai laporan. */
+  permalink: string;
+  caption: string;
+  jenis: string;
+  /** SELALU ISO string (sudah dinormalkan), atau null bila tak terbaca. */
+  waktu: string | null;
+};
+
+/**
+ * Normalkan `timestamp` upload-post ke ISO. WAJIB: bentuknya BERBEDA
+ * antar platform (diverifikasi 31 Agu 2026) —
+ *   TikTok    : 1788123600            (unix DETIK, angka/teks)
+ *   Threads/FB: "2026-08-30T16:19:31+0000"
+ *   X         : "2026-08-30T21:00:01.000Z"
+ *   YouTube   : "2026-01-07T08:47:40Z"
+ * Tanpa ini, Date.parse("1788123600") = NaN dan postingan TikTok tak
+ * pernah cocok → KPI TikTok diam-diam tidak pernah tercatat.
+ */
+function keIso(nilai: unknown): string | null {
+  if (nilai == null) return null;
+  if (typeof nilai === "number" || /^\d{9,14}$/.test(String(nilai))) {
+    const n = Number(nilai);
+    if (!Number.isFinite(n)) return null;
+    // < 1e12 = detik (bukan milidetik).
+    const ms = n < 1e12 ? n * 1000 : n;
+    const d = new Date(ms);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  const t = Date.parse(String(nilai));
+  return Number.isFinite(t) ? new Date(t).toISOString() : null;
+}
+
+/**
+ * Postingan terbaru satu profil pada satu platform.
+ * Kontrak diverifikasi 31 Agu 2026:
+ *   GET /uploadposts/media?platform=<up>&user=<profil>&limit=N
+ *   → { success, media:[{id, caption, media_type, media_url, permalink, timestamp}] }
+ * Dipakai merekonsiliasi unggahan aplikasi → laporan_video (KPI otomatis),
+ * karena URL postingan baru tersedia SETELAH platform selesai menerbitkan.
+ */
+export async function postinganTerbaruUp(
+  profil: string,
+  platformApp: string,
+  limit = 5,
+): Promise<PostinganUp[]> {
+  const up = KE_UP[platformApp] ?? platformApp;
+  const d = await panggil<{ media?: Record<string, unknown>[] }>(
+    `/uploadposts/media?platform=${encodeURIComponent(up)}&user=${encodeURIComponent(profil)}&limit=${Math.min(Math.max(limit, 1), 25)}`,
+    { method: "GET", timeoutMs: 20000 },
+  );
+  return (d.media ?? []).map((m) => ({
+    id: String(m.id ?? ""),
+    permalink: String(m.permalink ?? m.media_url ?? ""),
+    caption: String(m.caption ?? "").slice(0, 300),
+    jenis: String(m.media_type ?? ""),
+    waktu: keIso(m.timestamp),
+  }));
+}
 
 /**
  * Analitik satu profil untuk platform terpilih (bawaan: keenamnya).

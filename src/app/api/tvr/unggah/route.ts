@@ -20,6 +20,7 @@ import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { maksUploadMb } from "@/lib/pengaturan-tv";
 import { unggahVideoUp, uploadPostSiap } from "@/lib/upload-post";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
+import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 
 export const dynamic = "force-dynamic";
 // upload-post mengunduh video dari URL kita lalu memposting ke banyak
@@ -86,6 +87,9 @@ export async function GET(request: Request) {
       .eq("user_id", Number(user.id))
       .order("id", { ascending: false })
       .limit(30);
+    // KPI OTOMATIS: tiap membuka riwayat, unggahan yang URL postingannya
+    // sudah terbit dicatat jadi laporan_video — tanpa lapor manual.
+    after(() => rekonsiliasiKpiOtomatis(Number(user.id)));
     after(bersihkanVideoKedaluwarsa);
     return {
       data: (data ?? []).map((b) => ({
@@ -222,6 +226,9 @@ export async function POST(request: Request) {
         .single();
       if (error) console.error("[tvrku/unggah] simpan riwayat:", error.message);
 
+      // Coba catat KPI segera (platform cepat seperti YouTube/TikTok
+      // biasanya sudah punya URL); sisanya menyusul saat layar dibuka.
+      if (!jadwal) after(() => rekonsiliasiKpiOtomatis(Number(user.id)));
       after(bersihkanVideoKedaluwarsa);
       return {
         sukses: hasil.sukses,

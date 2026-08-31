@@ -503,7 +503,6 @@ export function TvrKuScreen({
   const [riwayat7, setRiwayat7] = useState<{ tanggal: string; jumlah: number }[]>([]);
   const [memuat, setMemuat] = useState(true);
   const [muatUlang, setMuatUlang] = useState(0);
-  const [modalAkun, setModalAkun] = useState(false);
   const [modalWebsite, setModalWebsite] = useState(false);
   const [modalLaporan, setModalLaporan] = useState(false);
   const [editAkun, setEditAkun] = useState<AkunTvr | null>(null);
@@ -545,16 +544,9 @@ export function TvrKuScreen({
   const persenKpi = Math.min(100, Math.round((100 * jumlahHariIni) / kpiTarget));
   const maksGrafik = Math.max(kpiTarget, ...riwayat7.map((r) => r.jumlah), 1);
 
-  async function tambahAkun(platform: string, username: string) {
-    try {
-      await tambahAkunTvr(platform, username);
-      toast("sukses", "Akun ditambahkan", `@${username.replace(/^@+/, "")} (${labelPlatform(platform)})`);
-      setModalAkun(false);
-      setMuatUlang((n) => n + 1);
-    } catch (e) {
-      toast("error", "Gagal menambahkan akun", e instanceof Error ? e.message : "");
-    }
-  }
+  // Fungsi tambahAkun manual DIHAPUS (31 Agu 2026) — akun sosmed hanya
+  // masuk lewat login upload-post. Penambahan "website" tetap ada
+  // (bukan sosmed, tidak lewat penyedia).
 
   // Penautan sosmed sungguhan (spek 1.17): 1 pengguna = 1 profil penyedia.
   const [sedangHubung, setSedangHubung] = useState(false);
@@ -725,17 +717,11 @@ export function TvrKuScreen({
         ) },
         { id: "akun", judul: "Akun TV Rakyat Saya", ikon: Link2, render: () => (
       <FadeInUp delay={0.1}>
-        <div className="mt-5 flex items-center justify-between">
+        {/* Tombol "+ Tambah" DIHAPUS (31 Agu 2026): akun tidak lagi
+            diketik manual — semuanya datang otomatis dari akun yang
+            Anda LOGIN lewat upload-post. */}
+        <div className="mt-5">
           <SectionTitle judul="Akun TV Rakyat Saya" className="!mt-0" />
-          <button
-            type="button"
-            onClick={() => setModalAkun(true)}
-            className="btn-tekan flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold text-white"
-            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-            Tambah
-          </button>
         </div>
 
         {/* Penautan sosmed sungguhan (spek 1.17): login akunmu lewat
@@ -772,9 +758,9 @@ export function TvrKuScreen({
             <EmptyState
               ikon={Video}
               judul="Belum Ada Akun"
-              keterangan="Daftarkan akun TV Rakyat Anda di 6 platform: Instagram, TikTok, YT Short, Facebook, Threads, dan X."
-              labelAksi="Daftarkan Akun"
-              onAksi={() => setModalAkun(true)}
+              keterangan="Tekan Hubungkan Sosmed (Login) di atas, lalu login akun TV Rakyat Anda di 6 platform: Instagram, TikTok, YT Short, Facebook, Threads, dan X. Akunnya masuk ke sini otomatis."
+              labelAksi="Hubungkan Sosmed (Login)"
+              onAksi={() => void hubungkanSosmed()}
               className="py-5"
             />
           </GlassCard>
@@ -1000,15 +986,8 @@ export function TvrKuScreen({
 
       {/* Modal-modal */}
       <AnimatePresence>
-        {modalAkun && (
-          <ModalTambah
-            judul="Daftarkan Akun TV Rakyat"
-            placeholder="Username akun (mis. tvrakyat.bangka)"
-            ikonKirim={Plus}
-            onTutup={() => setModalAkun(false)}
-            onKirim={tambahAkun}
-          />
-        )}
+        {/* Modal "Daftarkan Akun TV Rakyat" DIHAPUS (31 Agu 2026):
+            penambahan akun manual diganti penuh oleh login upload-post. */}
         {modalWebsite && (
           <ModalWebsite onTutup={() => setModalWebsite(false)} onKirim={tambahWebsite} />
         )}

@@ -18,10 +18,10 @@ import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
 import { toast } from "@/hooks/use-app-store";
 import {
-  getAkunTvr,
   getRiwayatTvrkuPost,
   postTvrku,
   siapkanUnggahTvrku,
+  sinkronSosmedTvr,
   type TvrkuPost,
 } from "@/services";
 import { PlatformIcon } from "@/components/platform-icon";
@@ -61,12 +61,18 @@ export function UnggahSosmedSaya() {
     let hidup = true;
     void (async () => {
       try {
-        const [akun, posts] = await Promise.all([getAkunTvr(), getRiwayatTvrkuPost()]);
+        // Sumber kebenaran = upload-post LANGSUNG (bukan tabel lokal):
+        // begitu satu platform di-login, toggle-nya langsung terbuka di
+        // sini. Ini juga yang memperbaiki bug "Insight sudah membaca
+        // YouTube tapi menu unggah bilang belum ada akun tertaut".
+        const [sinkron, posts] = await Promise.all([
+          sinkronSosmedTvr(),
+          getRiwayatTvrkuPost(),
+        ]);
         if (!hidup) return;
-        // Hanya platform yang TERHUBUNG (login sungguhan via upload-post).
-        const t = akun
-          .filter((a) => a.terhubung && a.platform !== "website")
-          .map((a) => a.platform);
+        const t = sinkron.terhubung
+          .map((a) => a.platform)
+          .filter((p) => p !== "website");
         setTertaut([...new Set(t)]);
         setRiwayat(posts);
       } catch {
@@ -153,7 +159,8 @@ export function UnggahSosmedSaya() {
         <p className="text-[13px] leading-relaxed text-teks-sekunder">
           Belum ada akun sosmed yang tertaut. Tekan <b>Hubungkan Sosmed (Login)</b> di
           seksi Akun TV Rakyat Saya dulu — setelah login, platformnya muncul di sini
-          dan Anda bisa memposting langsung dari aplikasi.
+          dan Anda bisa memposting langsung dari aplikasi. Cukup login satu platform
+          pun sudah bisa dipakai; platform lain menyusul saat Anda login.
         </p>
       </GlassCard>
     );
@@ -255,6 +262,10 @@ export function UnggahSosmedSaya() {
         <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder">
           Berkas video dihapus otomatis dari aplikasi 2 jam setelah tayang — postingan
           di sosmed Anda tetap ada.
+        </p>
+        <p className="mt-1 text-[10.5px] leading-relaxed text-emerald-600 dark:text-emerald-400">
+          ✓ Video yang diunggah dari sini otomatis menambah KPI Anda — tak perlu
+          melapor link lagi. Tiap platform tujuan dihitung 1 video.
         </p>
 
         <button

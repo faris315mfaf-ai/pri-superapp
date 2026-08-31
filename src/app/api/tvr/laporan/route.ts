@@ -8,12 +8,14 @@
 // minimal 5 link (lihat lib/kpi-video). Platform yang akunnya kena
 // banned (tabel tvr_banned, dengan bukti) otomatis dikecualikan.
 // Kewajiban DIBEBASKAN bila izin/sakit hari itu disetujui.
+import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { beriKoin } from "@/lib/koin";
+import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import {
   bannedAktifPerUser,
   hitungKpi,
@@ -209,6 +211,10 @@ export async function GET(request: Request) {
       perPlatform.set(d.platform, (perPlatform.get(d.platform) ?? 0) + 1);
     }
     const kpi = hitungKpi(perPlatform, bannedKu.get(Number(user.id)) ?? new Set(), targetKu);
+
+    // KPI OTOMATIS: unggahan lewat aplikasi yang URL postingannya sudah
+    // terbit dicatat sendiri (hasilnya tampak pada pembukaan berikutnya).
+    after(() => rekonsiliasiKpiOtomatis(Number(user.id)));
 
     return {
       tanggal,
