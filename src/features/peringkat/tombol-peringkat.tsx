@@ -106,14 +106,9 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
     if (!data) return [];
     return data.anggota
       .map((a) => ({ ...a, nilai: a.platform[platformPilih]?.[indikatorPilih] ?? null }))
-      .filter((a): a is typeof a & { nilai: number } => a.nilai !== null)
+      .filter((a): a is typeof a & { nilai: number } => a.nilai !== null && a.nilai > 0)
       .sort((x, y) => y.nilai - x.nilai);
   }, [data, platformPilih, indikatorPilih]);
-
-  const tierPer = useMemo(
-    () => new Map((data?.top3 ?? []).map((j) => [j.user_id, j.peringkat])),
-    [data],
-  );
 
   /** Klik nama → profil sosmed. Prioritas: platform yang sedang dipilih. */
   function bukaProfil(akun: Record<string, string>, nama: string) {
@@ -127,11 +122,13 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
     window.open(urlProfilSosmed(platform, akun[platform]), "_blank", "noopener,noreferrer");
   }
 
-  // Podium ditata 2-1-3 (juara 1 di tengah, paling tinggi & besar).
-  const podium = data
-    ? [data.top3.find((j) => j.peringkat === 2), data.top3.find((j) => j.peringkat === 1), data.top3.find((j) => j.peringkat === 3)]
-    : [];
-  const akunPer = new Map((data?.anggota ?? []).map((a) => [a.user_id, a.akun]));
+  // Podium = juara 1-2-3 KATEGORI YANG SEDANG DIPILIH (permintaan
+  // user: border diberikan per kategori), ditata 2-1-3 — juara 1 di
+  // tengah, paling tinggi & besar.
+  const podium: { juara: (typeof baris)[number]; tier: number }[] = [];
+  if (baris[1]) podium.push({ juara: baris[1], tier: 2 });
+  if (baris[0]) podium.push({ juara: baris[0], tier: 1 });
+  if (baris[2]) podium.push({ juara: baris[2], tier: 3 });
 
   return (
     <motion.div
@@ -175,38 +172,36 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
             </div>
           ) : (
             <>
-              {/* ===== Podium 3 besar (badge Mythical) ===== */}
-              {data.top3.length > 0 && (
-                <div className="mt-2 flex items-end justify-center gap-4 pt-6 pb-2">
-                  {podium.map((j) =>
-                    j ? (
-                      <button
-                        key={j.user_id}
-                        type="button"
-                        onClick={() => bukaProfil(akunPer.get(j.user_id) ?? {}, j.nama)}
-                        className={cn(
-                          "btn-tekan flex w-[30%] flex-col items-center gap-1.5",
-                          j.peringkat === 1 ? "-translate-y-3" : "",
-                        )}
-                        aria-label={`Buka profil sosmed ${j.nama}`}
-                      >
-                        <CincinMythic tier={j.peringkat} ukuran={j.peringkat === 1 ? 72 : 56}>
-                          <Avatar
-                            src={j.avatar_url}
-                            nama={j.nama}
-                            ukuran={j.peringkat === 1 ? 72 : 56}
-                          />
-                        </CincinMythic>
-                        <p className="mt-1 w-full truncate text-center text-[11.5px] font-bold text-teks-utama">
-                          {j.nama}
-                        </p>
-                        <LabelMythic tier={j.peringkat} kecil />
-                        <p className="angka-tab text-[10.5px] text-teks-sekunder">
-                          {formatAngkaRingkas(j.total_pengikut)} pengikut
-                        </p>
-                      </button>
-                    ) : null,
-                  )}
+              {/* ===== Podium juara 1-2-3 kategori terpilih (border Mythical) ===== */}
+              {podium.length > 0 && (
+                <div className="mt-2 flex items-end justify-center gap-5 pt-12 pb-3">
+                  {podium.map(({ juara, tier }) => (
+                    <button
+                      key={juara.user_id}
+                      type="button"
+                      onClick={() => bukaProfil(juara.akun, juara.nama)}
+                      className={cn(
+                        "btn-tekan flex w-[30%] flex-col items-center gap-1.5",
+                        tier === 1 ? "-translate-y-3" : "",
+                      )}
+                      aria-label={`Buka profil sosmed ${juara.nama}`}
+                    >
+                      <CincinMythic tier={tier} ukuran={tier === 1 ? 68 : 52}>
+                        <Avatar
+                          src={juara.avatar_url}
+                          nama={juara.nama}
+                          ukuran={tier === 1 ? 68 : 52}
+                        />
+                      </CincinMythic>
+                      <p className="mt-2 w-full truncate text-center text-[11.5px] font-bold text-teks-utama">
+                        {juara.nama}
+                      </p>
+                      <LabelMythic tier={tier} kecil />
+                      <p className="angka-tab text-[10.5px] text-teks-sekunder">
+                        {formatAngkaRingkas(juara.nilai)} {LABEL_INDIKATOR[indikatorPilih].toLowerCase()}
+                      </p>
+                    </button>
+                  ))}
                 </div>
               )}
 
@@ -260,14 +255,19 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
               ) : (
                 <div className="mt-3 flex flex-col gap-1.5">
                   {baris.map((a, i) => {
-                    const tier = tierPer.get(a.user_id);
+                    // Border per KATEGORI: 3 teratas kategori ini bersinar.
+                    const tier = i < 3 ? i + 1 : undefined;
                     return (
                       <button
                         key={a.user_id}
                         type="button"
                         onClick={() => bukaProfil(a.akun, a.nama)}
                         aria-label={`Buka profil sosmed ${a.nama}`}
-                        className="glass-soft btn-tekan flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left"
+                        className={cn(
+                          "glass-soft btn-tekan flex items-center gap-2.5 rounded-xl px-2.5 text-left",
+                          // Beri ruang napas untuk border ornamen 3 teratas.
+                          tier ? "py-4" : "py-2",
+                        )}
                       >
                         <span className="angka-tab w-6 shrink-0 text-center text-[12px] font-extrabold text-teks-sekunder">
                           {i + 1}
@@ -300,8 +300,8 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
               )}
 
               <p className="mt-3 text-center text-[10px] text-teks-sekunder">
-                3 besar (badge Mythical) = total pengikut gabungan seluruh sosmed ·
-                angka menyegar otomatis
+                Border Mythical = juara 1–3 di tiap kategori · border di avatar
+                memakai peringkat terbaik yang diraih · angka menyegar otomatis
               </p>
             </>
           )}

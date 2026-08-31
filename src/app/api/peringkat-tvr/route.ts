@@ -15,10 +15,10 @@ import { bungkus } from "@/lib/api-helper";
 import { pastikanMasuk } from "@/lib/sesi";
 import {
   INDIKATOR_TVR,
+  juaraKategoriTvr,
   kumpulkanAnggotaTvr,
   PLATFORM_TVR,
   segarkanProfilTvrBasi,
-  tigaBesarTvr,
 } from "@/lib/tvr-peringkat";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,10 @@ export async function GET(request: Request) {
   return bungkus(async () => {
     await pastikanMasuk(request);
     const anggota = await kumpulkanAnggotaTvr();
-    const top3 = tigaBesarTvr(anggota);
+    // "top3" = SEMUA pemegang border (juara 1-3 di kategori mana pun),
+    // masing-masing membawa peringkat TERBAIKNYA — dipakai cincin
+    // border avatar di seluruh aplikasi.
+    const top3 = juaraKategoriTvr(anggota);
     after(segarkanProfilTvrBasi);
 
     const { searchParams } = new URL(request.url);

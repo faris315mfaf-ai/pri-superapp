@@ -153,34 +153,58 @@ export type JuaraTvr = {
   user_id: string;
   nama: string;
   avatar_url: string;
-  /** 1 | 2 | 3 */
+  /** Peringkat TERBAIK yang diraih di kategori mana pun: 1 | 2 | 3 */
   peringkat: number;
-  /** Total pengikut gabungan seluruh sosmed (dasar penentuan badge). */
+  /** Total pengikut gabungan seluruh sosmed (info tambahan). */
   total_pengikut: number;
+  /** Berapa kategori (sosmed × indikator) tempat dia juara 1-3. */
+  kategori_juara: number;
 };
 
 /**
- * Tiga besar nasional — dasar badge "Mythical" di seluruh aplikasi:
- * TOTAL PENGIKUT gabungan semua sosmed (indikator paling mewakili
- * "peringkat akun"). Hanya yang punya pengikut > 0.
+ * Pemegang BORDER "Mythical" (revisi 1 Sep 2026, permintaan user):
+ * border diberikan pada peringkat 1-2-3 dari SETIAP KATEGORI —
+ * kategori = kombinasi sosmed × indikator (6×6). Peringkat border
+ * seseorang = peringkat TERBAIK yang ia raih di kategori mana pun;
+ * jumlah kategori juaranya ikut dihitung (dipakai keterangan UI).
  */
-export function tigaBesarTvr(anggota: AnggotaTvr[]): JuaraTvr[] {
-  return anggota
-    .map((a) => {
-      let total = 0;
-      for (const plat of PLATFORM_TVR) total += a.platform[plat]?.pengikut ?? 0;
-      return { a, total };
-    })
-    .filter((x) => x.total > 0)
-    .sort((x, y) => y.total - x.total)
-    .slice(0, 3)
-    .map((x, i) => ({
-      user_id: x.a.user_id,
-      nama: x.a.nama,
-      avatar_url: x.a.avatar_url,
-      peringkat: i + 1,
-      total_pengikut: x.total,
-    }));
+export function juaraKategoriTvr(anggota: AnggotaTvr[]): JuaraTvr[] {
+  const terbaik = new Map<string, { peringkat: number; kategori: number }>();
+  for (const plat of PLATFORM_TVR) {
+    for (const ind of INDIKATOR_TVR) {
+      const urut = anggota
+        .map((a) => ({ a, nilai: a.platform[plat]?.[ind] ?? null }))
+        .filter((x): x is typeof x & { nilai: number } => x.nilai !== null && x.nilai > 0)
+        .sort((x, y) => y.nilai - x.nilai)
+        .slice(0, 3);
+      urut.forEach((x, i) => {
+        const lama = terbaik.get(x.a.user_id);
+        terbaik.set(x.a.user_id, {
+          peringkat: Math.min(lama?.peringkat ?? 99, i + 1),
+          kategori: (lama?.kategori ?? 0) + 1,
+        });
+      });
+    }
+  }
+  const hasil: JuaraTvr[] = [];
+  for (const a of anggota) {
+    const j = terbaik.get(a.user_id);
+    if (!j) continue;
+    let total = 0;
+    for (const plat of PLATFORM_TVR) total += a.platform[plat]?.pengikut ?? 0;
+    hasil.push({
+      user_id: a.user_id,
+      nama: a.nama,
+      avatar_url: a.avatar_url,
+      peringkat: j.peringkat,
+      total_pengikut: total,
+      kategori_juara: j.kategori,
+    });
+  }
+  // Urut: peringkat terbaik dulu, lalu paling banyak kategori juara.
+  return hasil.sort(
+    (x, y) => x.peringkat - y.peringkat || y.kategori_juara - x.kategori_juara,
+  );
 }
 
 /** Umur cache insight anggota sebelum dianggap basi (jam). */

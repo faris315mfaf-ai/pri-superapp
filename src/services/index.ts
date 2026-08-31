@@ -1203,8 +1203,11 @@ export type JuaraTvr = {
   user_id: string;
   nama: string;
   avatar_url: string;
+  /** Peringkat terbaik yang diraih di kategori mana pun (1-3). */
   peringkat: number;
   total_pengikut: number;
+  /** Jumlah kategori (sosmed × indikator) tempat dia juara 1-3. */
+  kategori_juara: number;
 };
 
 export type PeringkatTvr = {
