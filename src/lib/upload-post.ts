@@ -359,3 +359,42 @@ export async function analitikProfilUp(
     { method: "GET", timeoutMs },
   );
 }
+
+// ------------------------------------------------------------
+// Jadwal terbit (2 Sep 2026)
+// ------------------------------------------------------------
+
+export type JadwalUp = {
+  job_id: string;
+  /** ISO tanpa zona dari upload-post (UTC). */
+  scheduled_date: string;
+  profil: string;
+  judul: string;
+  jenis: string;
+};
+
+/**
+ * Daftar SELURUH posting terjadwal di akun upload-post partai.
+ * CATATAN PENTING: upload-post TIDAK menyediakan pembatalan lewat API
+ * (DELETE /uploadposts/schedule ditolak 405; per-job 404) — jadi
+ * pembatalan di aplikasi ditempuh dengan menghapus berkas videonya,
+ * lihat /api/tvr/jadwal-saya.
+ */
+export async function daftarJadwalUp(): Promise<JadwalUp[]> {
+  const d = await panggil<{
+    scheduled_posts?: {
+      job_id?: string;
+      scheduled_date?: string;
+      profile_username?: string;
+      title?: string;
+      post_type?: string;
+    }[];
+  }>("/uploadposts/schedule", { method: "GET", timeoutMs: 20000 });
+  return (d.scheduled_posts ?? []).map((p) => ({
+    job_id: String(p.job_id ?? ""),
+    scheduled_date: String(p.scheduled_date ?? ""),
+    profil: String(p.profile_username ?? ""),
+    judul: String(p.title ?? "").slice(0, 200),
+    jenis: String(p.post_type ?? ""),
+  }));
+}

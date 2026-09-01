@@ -4371,3 +4371,28 @@ export async function getKuotaSistem(): Promise<KuotaSistem> {
   const json = await fetchJson("/api/master/kuota", { headers: headerToken() });
   return json as KuotaSistem;
 }
+
+// ---- Antrean posting terjadwal TVR Saya (2 Sep 2026) ----
+export type JadwalTvrku = {
+  job_id: string;
+  scheduled_date: string;
+  profil: string;
+  judul: string;
+  jenis: string;
+  /** false untuk kiriman TAUTAN — berkasnya bukan milik aplikasi. */
+  bisa_batal: boolean;
+};
+
+export async function getJadwalTvrku(): Promise<JadwalTvrku[]> {
+  const json = await fetchJson("/api/tvr/jadwal-saya", { headers: headerToken() });
+  return (json.data ?? []) as JadwalTvrku[];
+}
+
+export async function batalkanJadwalTvrku(job_id: string): Promise<{ pesan: string }> {
+  const json = await fetchJson("/api/tvr/jadwal-saya", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ job_id }),
+  });
+  return { pesan: String(json.pesan ?? "Jadwal dibatalkan.") };
+}

@@ -22,10 +22,13 @@ import { GlassSkeleton } from "@/components/pri-ui";
 import { toast, useAppStore } from "@/hooks/use-app-store";
 import { adalahPalugodam } from "@/lib/struktur";
 import {
+  batalkanJadwalTvrku,
+  getJadwalTvrku,
   getRiwayatTvrkuPost,
   postTvrku,
   siapkanUnggahTvrku,
   sinkronSosmedTvr,
+  type JadwalTvrku,
   type TvrkuPost,
 } from "@/services";
 import { PlatformIcon } from "@/components/platform-icon";
@@ -67,6 +70,9 @@ export function UnggahSosmedSaya() {
   const bolehLink = adalahPalugodam({ role: user?.role, divisi: user?.divisi });
   const [modeLink, setModeLink] = useState(false);
   const [tautan, setTautan] = useState("");
+  // Antrean posting terjadwal (2 Sep 2026) — dari upload-post.
+  const [jadwalAntre, setJadwalAntre] = useState<JadwalTvrku[] | null>(null);
+  const [sedangBatal, setSedangBatal] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -77,11 +83,13 @@ export function UnggahSosmedSaya() {
         // begitu satu platform di-login, toggle-nya langsung terbuka di
         // sini. Ini juga yang memperbaiki bug "Insight sudah membaca
         // YouTube tapi menu unggah bilang belum ada akun tertaut".
-        const [sinkron, posts] = await Promise.all([
+        const [sinkron, posts, antre] = await Promise.all([
           sinkronSosmedTvr(),
           getRiwayatTvrkuPost(),
+          getJadwalTvrku().catch(() => [] as JadwalTvrku[]),
         ]);
         if (!hidup) return;
+        setJadwalAntre(antre);
         const t = sinkron.terhubung
           .map((a) => a.platform)
           .filter((p) => p !== "website");
@@ -98,6 +106,20 @@ export function UnggahSosmedSaya() {
       hidup = false;
     };
   }, []);
+
+  async function batalkanJadwal(job: JadwalTvrku) {
+    if (sedangBatal) return;
+    setSedangBatal(job.job_id);
+    try {
+      const r = await batalkanJadwalTvrku(job.job_id);
+      toast("sukses", "Jadwal dibatalkan", r.pesan);
+      setJadwalAntre(await getJadwalTvrku().catch(() => jadwalAntre ?? []));
+    } catch (e) {
+      toast("error", "Gagal membatalkan", e instanceof Error ? e.message : "Coba lagi.");
+    } finally {
+      setSedangBatal("");
+    }
+  }
 
   function togglePlatform(p: string) {
     setPilih((lama) => {
@@ -143,6 +165,7 @@ export function UnggahSosmedSaya() {
         setPakaiJadwal(false);
         setJadwal("");
         setRiwayat(await getRiwayatTvrkuPost().catch(() => riwayat ?? []));
+        setJadwalAntre(await getJadwalTvrku().catch(() => jadwalAntre ?? []));
         return;
       }
 
@@ -200,6 +223,7 @@ export function UnggahSosmedSaya() {
       setJadwal("");
       if (inputRef.current) inputRef.current.value = "";
       setRiwayat(await getRiwayatTvrkuPost().catch(() => riwayat ?? []));
+      setJadwalAntre(await getJadwalTvrku().catch(() => jadwalAntre ?? []));
     } catch (e) {
       toast("error", "Gagal", e instanceof Error ? e.message : "Coba lagi sebentar.");
     } finally {
@@ -428,6 +452,48 @@ export function UnggahSosmedSaya() {
           )}
         </button>
       </GlassCard>
+
+      {/* Antrean terjadwal (2 Sep 2026) — belum tayang, bisa dibatalkan */}
+      {jadwalAntre !== null && jadwalAntre.length > 0 && (
+        <GlassCard className="p-4">
+          <p className="flex items-center gap-1.5 text-[12.5px] font-bold text-teks-utama">
+            <CalendarClock className="h-3.5 w-3.5 text-pri" />
+            Menunggu Tayang ({jadwalAntre.length})
+          </p>
+          <div className="mt-2 flex flex-col gap-2">
+            {jadwalAntre.map((j) => (
+              <div key={j.job_id} className="glass-soft rounded-xl p-2.5">
+                <p className="line-clamp-2 text-[12px] font-semibold text-teks-utama">
+                  {j.judul || "(tanpa judul)"}
+                </p>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="angka-tab text-[10.5px] text-teks-sekunder">
+                    {jamWib(j.scheduled_date.endsWith("Z") ? j.scheduled_date : `${j.scheduled_date}Z`)}
+                  </span>
+                  {j.bisa_batal ? (
+                    <button
+                      type="button"
+                      onClick={() => void batalkanJadwal(j)}
+                      disabled={Boolean(sedangBatal)}
+                      className="btn-tekan ml-auto rounded-full bg-gagal/12 px-2.5 py-1 text-[10.5px] font-bold text-gagal disabled:opacity-50"
+                    >
+                      {sedangBatal === j.job_id ? "Membatalkan…" : "Batalkan"}
+                    </button>
+                  ) : (
+                    <span className="ml-auto text-[10px] text-teks-sekunder">
+                      kiriman tautan — cabut di sumbernya
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder">
+            Membatalkan bekerja dengan menghapus berkas videonya, sehingga saat
+            waktunya tiba postingan itu tidak jadi terbit.
+          </p>
+        </GlassCard>
+      )}
 
       {/* Riwayat */}
       {riwayat !== null && riwayat.length > 0 && (
