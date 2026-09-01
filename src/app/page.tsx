@@ -65,6 +65,21 @@ const TvNasionalDashboard = dynamic(
     ),
   { ssr: false },
 );
+// Sub-dashboard dari Dashboard utama (1 Sep 2026) — dimuat saat dibuka.
+const KepatuhanKaderPanelLayar = dynamic(
+  () =>
+    import("@/features/qc-konten/kepatuhan-kader-panel").then(
+      (m) => m.KepatuhanKaderPanel,
+    ),
+  { ssr: false },
+);
+const TvAnalitikDashboardLayar = dynamic(
+  () =>
+    import("@/features/dashboard/tv-analitik-dashboard").then(
+      (m) => m.TvAnalitikDashboard,
+    ),
+  { ssr: false },
+);
 import { SetelKpiScreen } from "@/features/pengguna/setel-kpi-screen";
 import { modulUntukDivisi } from "@/lib/modul-divisi";
 import { adalahHR } from "@/lib/hr";
@@ -109,6 +124,10 @@ type SubLayar =
   | { nama: "dashboard-kpi" }
   // Dashboard TV Rakyat Nasional (1 Sep 2026)
   | { nama: "tv-nasional" }
+  // Sub-dashboard dibuka dari Dashboard utama (1 Sep 2026):
+  // kepatuhan komen (baca-saja) & analitik TV Rakyat.
+  | { nama: "dashboard-kepatuhan" }
+  | { nama: "dashboard-tv" }
   // Kirim pengumuman ke divisi/semua (HR Center, fitur 1.22.x/1)
   | { nama: "pengumuman" }
   // Notifikasi: kini dibuka dari lonceng kanan atas, bukan tab bawah
@@ -794,6 +813,8 @@ export default function Page() {
             onBukaAbsensi={() => setSubLayar({ nama: "absensi-hari-ini" })}
             onBukaKpiVideo={() => setSubLayar({ nama: "dashboard-kpi" })}
             onBukaTvNasional={() => setSubLayar({ nama: "tv-nasional" })}
+            onBukaKepatuhan={() => setSubLayar({ nama: "dashboard-kepatuhan" })}
+            onBukaTvAnalitik={() => setSubLayar({ nama: "dashboard-tv" })}
             onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
             jumlahBelumBaca={belumBaca}
           />
@@ -1059,6 +1080,24 @@ export default function Page() {
                       onKembali={() => setSubLayar(null)}
                     />
                     <TvNasionalDashboard />
+                  </div>
+                ) : subLayar.nama === "dashboard-kepatuhan" ? (
+                  <div className="kolom-aplikasi px-4 pb-32">
+                    <ScreenHeader
+                      judul="Kepatuhan Komen"
+                      onKembali={() => setSubLayar(null)}
+                    />
+                    {/* Baca-saja: dashboard tempat memantau, aksi WA-nya
+                        tetap di HR Center. */}
+                    <KepatuhanKaderPanelLayar editable={false} />
+                  </div>
+                ) : subLayar.nama === "dashboard-tv" ? (
+                  <div className="kolom-aplikasi px-4 pb-32">
+                    <ScreenHeader
+                      judul="Dashboard TV Rakyat"
+                      onKembali={() => setSubLayar(null)}
+                    />
+                    <TvAnalitikDashboardLayar />
                   </div>
                 ) : subLayar.nama === "setel-kpi" ? (
                   <SetelKpiScreen user={user} onKembali={() => setSubLayar(null)} />

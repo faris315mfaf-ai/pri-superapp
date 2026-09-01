@@ -35,6 +35,7 @@ import { CalendarDays, ClipboardList, Database, Globe2, LayoutGrid, Tv, Users } 
 import { GlassCard } from "@/components/glass-card";
 import { KartuKelolaPengguna } from "./kartu-kelola-pengguna";
 import { TataLetakModul, type SeksiModul } from "@/components/tata-letak-modul";
+import { KATALOG_DASHBOARD } from "@/lib/dashboard-katalog";
 import { RingkasanUtama } from "./ringkasan-utama";
 import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 import { TombolPeringkat } from "@/features/peringkat/tombol-peringkat";
@@ -58,6 +59,9 @@ type DashboardScreenProps = {
   onBukaKpiVideo?: () => void;
   /** Buka dashboard TV Rakyat Nasional (1 Sep 2026). */
   onBukaTvNasional?: () => void;
+  /** Seksi "Semua Dashboard" (1 Sep 2026): kepatuhan & analitik TV. */
+  onBukaKepatuhan?: () => void;
+  onBukaTvAnalitik?: () => void;
 };
 
 export function DashboardScreen({
@@ -71,6 +75,8 @@ export function DashboardScreen({
   onBukaAbsensi,
   onBukaKpiVideo,
   onBukaTvNasional,
+  onBukaKepatuhan,
+  onBukaTvAnalitik,
 }: DashboardScreenProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [memuat, setMemuat] = useState(true);
@@ -210,6 +216,62 @@ export function DashboardScreen({
           />
         </FadeInUp>
       </div>
+
+      {/* ===== Semua Dashboard (1 Sep 2026): seluruh sub-dashboard
+          (Absensi, KPI Anggota, Kepatuhan Komen, TV Rakyat, Database
+          Anggota, TV Rakyat Nasional) bisa dibuka langsung dari sini.
+          Ikon & label mengikuti katalog resmi supaya seragam dengan
+          tab Dashboard milik pemegang jabatan. */}
+      {(() => {
+        const tujuan: Record<string, (() => void) | undefined> = {
+          absensi: onBukaAbsensi,
+          kpi: onBukaKpiVideo,
+          kepatuhan: onBukaKepatuhan,
+          tv: onBukaTvAnalitik,
+          anggota: onBukaDatabase,
+          tvnasional: onBukaTvNasional,
+        };
+        const daftar = KATALOG_DASHBOARD.filter((d) => tujuan[d.kunci]);
+        if (daftar.length === 0) return null;
+        return (
+          <div className="mt-4">
+            <FadeInUp delay={0.05}>
+              <p className="mb-2 font-heading text-[13px] font-bold text-teks-utama">
+                Semua Dashboard
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {daftar.map((d) => (
+                  <button
+                    key={d.kunci}
+                    type="button"
+                    onClick={tujuan[d.kunci]}
+                    aria-label={`Buka dashboard ${d.label}`}
+                    className="btn-tekan text-left"
+                  >
+                    <GlassCard className="flex h-full items-center gap-2.5 p-3">
+                      <span
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white"
+                        style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+                        aria-hidden="true"
+                      >
+                        <d.ikon className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-[12.5px] font-bold text-teks-utama">
+                          {d.label}
+                        </span>
+                        <span className="block truncate text-[10px] leading-snug text-teks-sekunder">
+                          {d.keterangan}
+                        </span>
+                      </span>
+                    </GlassCard>
+                  </button>
+                ))}
+              </div>
+            </FadeInUp>
+          </div>
+        );
+      })()}
 
       {/* ===== Konten ===== */}
       <div className="mt-5 flex flex-col gap-4">
