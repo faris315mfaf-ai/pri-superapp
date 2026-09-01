@@ -18,6 +18,7 @@
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
+import { SeksiKuota } from "./seksi-kuota";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -416,6 +417,12 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
           {/* 5. Basis Pengetahuan AI (fitur 1.20.4) — khusus master */}
           <FadeInUp delay={0.18}>
             <SeksiBasisPengetahuan />
+          </FadeInUp>
+
+          {/* 6. Kuota & Penyimpanan (2 Sep 2026) — pantauan pemakaian
+              Supabase / Cloudinary / upload-post dalam satu layar. */}
+          <FadeInUp delay={0.2}>
+            <SeksiKuota />
           </FadeInUp>
         </>
       )}

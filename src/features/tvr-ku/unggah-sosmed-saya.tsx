@@ -137,6 +137,7 @@ export function UnggahSosmedSaya() {
       setTahap("post");
       const hasil = await postTvrku({
         ...(siap.cara === "r2" ? { r2_key: siap.r2_key } : { path: siap.path }),
+        ukuran: berkas.size,
         judul: judul.trim(),
         caption: caption.trim() || undefined,
         platforms: [...pilih],

@@ -2620,6 +2620,8 @@ export async function postTvrku(data: {
   public_id?: string;
   /** Jalur bucket Supabase (cadangan lama). */
   path?: string;
+  /** Ukuran berkas (byte) — dicatat untuk pantauan kuota. */
+  ukuran?: number;
   judul: string;
   caption?: string;
   platforms: string[];
@@ -4334,4 +4336,36 @@ export async function hapusKpiTugas(id: string): Promise<void> {
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ id }),
   });
+}
+
+// ---- Kuota & penyimpanan (Panel Master, 2 Sep 2026) ----
+export type KuotaSistem = {
+  penyimpanan: {
+    total_byte: number;
+    bucket: { nama: string; objek: number; byte: number }[];
+  };
+  video_bulan_ini: {
+    jumlah: number;
+    byte: number;
+    bandwidth_byte: number;
+    tanpa_ukuran: number;
+  };
+  cloudinary:
+    | { siap: false }
+    | {
+        siap: true;
+        paket: string;
+        kredit_pakai: number;
+        kredit_limit: number;
+        persen: number;
+        bandwidth_gb: number;
+        simpan_gb: number;
+      };
+  uploadpost: { siap: false } | { siap: true; paket: string; profil: number; limit: number };
+  r2_aktif: boolean;
+};
+
+export async function getKuotaSistem(): Promise<KuotaSistem> {
+  const json = await fetchJson("/api/master/kuota", { headers: headerToken() });
+  return json as KuotaSistem;
 }

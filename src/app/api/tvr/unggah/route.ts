@@ -312,6 +312,10 @@ export async function POST(request: Request) {
           // R2 → key objek, Cloudinary → public_id, lama → path bucket.
           video_path: pakaiR2 ? r2Key : pakaiCloudinary ? publicId : path,
           video_url: videoUrl,
+          // Ukuran berkas dicatat untuk pantauan kuota Panel Master.
+          ukuran_byte: Number.isFinite(Number(body.ukuran)) && Number(body.ukuran) > 0
+            ? Math.floor(Number(body.ukuran))
+            : null,
           jadwal: jadwal ?? null,
           hasil: hasil.mentah,
           request_id: hasil.request_id,
