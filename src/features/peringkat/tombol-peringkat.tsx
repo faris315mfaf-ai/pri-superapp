@@ -24,7 +24,7 @@ import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 import { getPeringkatTvr, type MetrikNasional, type PeringkatTvr } from "@/services";
 import { formatAngkaRingkas, urlProfilSosmed } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { CincinMythic, LabelMythic } from "./cincin-mythic";
+import { CincinMythic, FITUR_PERINGKAT_AKTIF, LabelMythic } from "./cincin-mythic";
 
 const LABEL_INDIKATOR: Record<keyof MetrikNasional, string> = {
   pengikut: "Pengikut",
@@ -50,6 +50,9 @@ function tampilkanUsername(handle: string): string {
 
 export function TombolPeringkat() {
   const [buka, setBuka] = useState(false);
+  // Fitur leaderboard DIMATIKAN (1 Sep 2026 — hemat RAM, permintaan
+  // user): mahkota tidak dirender sama sekali. Sakelar di cincin-mythic.
+  if (!FITUR_PERINGKAT_AKTIF) return null;
   return (
     <>
       <button

@@ -24,6 +24,14 @@ import { motion } from "framer-motion";
 import { getTop3Tvr, type JuaraTvr } from "@/services";
 import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 
+/**
+ * SAKELAR FITUR LEADERBOARD (1 Sep 2026 — permintaan user: matikan
+ * fitur yang paling menguras RAM). false = mahkota, popup, border
+ * animasi, dan SEMUA polling top3 mati total; avatar tampil biasa.
+ * Kode dipertahankan utuh — tinggal ganti true untuk menghidupkan lagi.
+ */
+export const FITUR_PERINGKAT_AKTIF = false;
+
 type WarnaTier = {
   nama: string;
   /** Gradasi bulu sayap: pangkal → tengah → ujung */
@@ -440,6 +448,7 @@ async function ambilTop3Bersama(paksa = false): Promise<JuaraTvr[]> {
 export function useTop3Tvr(): JuaraTvr[] {
   const [data, setData] = useState<JuaraTvr[]>(cacheTop3?.data ?? []);
   useEffect(() => {
+    if (!FITUR_PERINGKAT_AKTIF) return;
     pendengar.add(setData);
     void ambilTop3Bersama().then((d) => setData(d)).catch(() => {});
     return () => {
@@ -448,9 +457,10 @@ export function useTop3Tvr(): JuaraTvr[] {
   }, []);
   // "Realtime": disegarkan tiap 60 dtk + saat aplikasi dibuka kembali.
   useSegarOtomatis(() => {
+    if (!FITUR_PERINGKAT_AKTIF) return;
     void ambilTop3Bersama(true).catch(() => {});
   }, 60);
-  return data;
+  return FITUR_PERINGKAT_AKTIF ? data : [];
 }
 
 /**
@@ -468,9 +478,11 @@ export function CincinJuara({
   children: ReactNode;
   denganMahkota?: boolean;
 }) {
+  // Hook dipanggil tanpa syarat (aturan React); saat fitur mati hook
+  // ini pasif total (tanpa fetch/polling) dan mengembalikan [].
   const top3 = useTop3Tvr();
   const tier = top3.find((j) => String(j.user_id) === String(userId))?.peringkat;
-  if (!tier) return <>{children}</>;
+  if (!FITUR_PERINGKAT_AKTIF || !tier) return <>{children}</>;
   return (
     <CincinMythic tier={tier} ukuran={ukuran} denganMahkota={denganMahkota}>
       {children}
