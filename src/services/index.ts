@@ -4396,3 +4396,41 @@ export async function batalkanJadwalTvrku(job_id: string): Promise<{ pesan: stri
   });
   return { pesan: String(json.pesan ?? "Jadwal dibatalkan.") };
 }
+
+// ---- PALUGODAM: edit otomatis + upload otomatis (2 Sep 2026) ----
+export type PesananPalugodam = {
+  id: string;
+  kode_antrian: string;
+  platforms: string[];
+  caption_umum: string;
+  jadwal: string | null;
+  status: string;
+  pesan: string;
+  dibuat_pada: string;
+  render_tahap: string;
+  render_persen: number;
+  render_selesai: boolean;
+};
+
+export async function getPesananPalugodam(): Promise<PesananPalugodam[]> {
+  const json = await fetchJson("/api/tvr/edit-otomatis", { headers: headerToken() });
+  return (json.data ?? []) as PesananPalugodam[];
+}
+
+export async function kirimEditOtomatis(data: {
+  link: string;
+  highlight: string;
+  judul_overlay: string;
+  sumber_akun?: string;
+  caption_umum?: string;
+  caption_platform?: Record<string, string>;
+  platforms: string[];
+  jadwal?: string;
+}): Promise<{ kode: string; pesan: string }> {
+  const json = await fetchJson("/api/tvr/edit-otomatis", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+  return { kode: String(json.kode ?? ""), pesan: String(json.pesan ?? "") };
+}

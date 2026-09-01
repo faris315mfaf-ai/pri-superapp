@@ -16,11 +16,12 @@
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
-import { CalendarClock, Check, Link2, Loader2, Send, UploadCloud, X } from "lucide-react";
+import { CalendarClock, Check, Link2, Loader2, Send, UploadCloud, Wand2, X } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
 import { toast, useAppStore } from "@/hooks/use-app-store";
 import { adalahPalugodam } from "@/lib/struktur";
+import { ModalEditOtomatis } from "./modal-edit-otomatis";
 import {
   batalkanJadwalTvrku,
   getJadwalTvrku,
@@ -73,6 +74,8 @@ export function UnggahSosmedSaya() {
   // Antrean posting terjadwal (2 Sep 2026) — dari upload-post.
   const [jadwalAntre, setJadwalAntre] = useState<JadwalTvrku[] | null>(null);
   const [sedangBatal, setSedangBatal] = useState("");
+  // PALUGODAM: pop-up gabungan edit otomatis + upload otomatis.
+  const [bukaEditOtomatis, setBukaEditOtomatis] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -248,6 +251,45 @@ export function UnggahSosmedSaya() {
 
   return (
     <div className="flex flex-col gap-3">
+      {/* PALUGODAM: satu pintu untuk edit + upload otomatis */}
+      {bolehLink && (
+        <button
+          type="button"
+          onClick={() => setBukaEditOtomatis(true)}
+          className="btn-tekan w-full text-left"
+          aria-label="Buka Edit & Upload Otomatis"
+        >
+          <GlassCard className="flex items-center gap-3 p-4">
+            <span
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
+              style={{ background: "linear-gradient(135deg, #7C3AED, #4C1D95)" }}
+              aria-hidden="true"
+            >
+              <Wand2 className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-heading text-[14px] font-bold text-teks-utama">
+                Edit &amp; Upload Otomatis
+              </span>
+              <span className="mt-0.5 block text-[11px] leading-snug text-teks-sekunder">
+                Khusus PALUGODAM — tempel link, isi HIGHLIGHT &amp; judul, sistem
+                merender lalu memposting sendiri.
+              </span>
+            </span>
+          </GlassCard>
+        </button>
+      )}
+
+      {bukaEditOtomatis && (
+        <ModalEditOtomatis
+          tertaut={tertaut}
+          onTutup={() => setBukaEditOtomatis(false)}
+          onSelesai={() => {
+            void getRiwayatTvrkuPost().then(setRiwayat).catch(() => {});
+          }}
+        />
+      )}
+
       <GlassCard className="p-4">
         {/* PALUGODAM: pilih cara kirim — unggah berkas atau tempel tautan */}
         {bolehLink && (

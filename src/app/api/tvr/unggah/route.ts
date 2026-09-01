@@ -27,6 +27,7 @@ import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
 import { adalahPalugodam } from "@/lib/struktur";
+import { prosesPesananPalugodam } from "@/lib/palugodam";
 import {
   dariR2,
   hapusVideoR2,
@@ -123,6 +124,8 @@ export async function GET(request: Request) {
     // sudah terbit dicatat jadi laporan_video — tanpa lapor manual.
     after(() => rekonsiliasiKpiOtomatis(Number(user.id)));
     after(bersihkanVideoKedaluwarsa);
+    // PALUGODAM: pesanan yang rendernya sudah selesai ikut diposting.
+    if (adalahPalugodam(user)) after(() => prosesPesananPalugodam(Number(user.id)));
     return {
       data: (data ?? []).map((b) => ({
         ...b,

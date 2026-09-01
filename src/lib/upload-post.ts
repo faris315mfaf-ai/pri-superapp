@@ -222,6 +222,14 @@ export async function unggahVideoUp(opsi: {
   /** Nama platform versi APLIKASI (twitter, bukan x). */
   platforms: string[];
   scheduleDate?: string;
+  /**
+   * Caption KHUSUS per platform (nama platform versi aplikasi).
+   * Dipetakan ke field `{platform}_title` milik upload-post — itulah
+   * yang tampil sebagai caption di TikTok/IG/Threads/X, dan sebagai
+   * judul di YouTube/Facebook. Platform yang tidak disebut memakai
+   * `title` umum. Dipakai fitur PALUGODAM (2 Sep 2026).
+   */
+  captionPer?: Record<string, string>;
 }): Promise<HasilUnggahUp> {
   const judul = opsi.judul.trim().slice(0, 100) || "TV Rakyat";
   const caption = opsi.caption?.trim() ?? "";
@@ -245,7 +253,16 @@ export async function unggahVideoUp(opsi: {
   // "video_url" ditolak dengan "video url or video file is required".
   form.set("video", opsi.videoUrl);
   for (const p of opsi.platforms) {
-    form.append("platform[]", KE_UP[p] ?? p);
+    const up = KE_UP[p] ?? p;
+    form.append("platform[]", up);
+    // Caption khusus platform ini (bila diisi) menimpa title umum.
+    const khusus = opsi.captionPer?.[p]?.trim();
+    if (khusus) {
+      form.set(`${up}_title`, khusus.slice(0, 2200));
+      if (up === "youtube" || up === "facebook") {
+        form.set(`${up}_description`, khusus.slice(0, 5000));
+      }
+    }
   }
   // Jadwal: field yang benar `scheduled_date` — nama lama "schedule_date"
   // DIABAIKAN diam-diam oleh API (video langsung terposting!).
