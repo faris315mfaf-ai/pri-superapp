@@ -2620,6 +2620,8 @@ export async function postTvrku(data: {
   public_id?: string;
   /** Jalur bucket Supabase (cadangan lama). */
   path?: string;
+  /** PALUGODAM: tautan video (tanpa unggah berkas). */
+  video_link?: string;
   /** Ukuran berkas (byte) — dicatat untuk pantauan kuota. */
   ukuran?: number;
   judul: string;

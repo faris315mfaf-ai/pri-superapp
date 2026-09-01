@@ -28,7 +28,23 @@ export const DIVISI = [
   "Divisi Sayap Partai",
   "Divisi Zona",
   "Divisi Acara",
+  // PALUGODAM (2 Sep 2026): divisi produksi konten mandiri — anggotanya
+  // mendapat alur unggah+jadwal sendiri di modul TV Rakyat Saya,
+  // setara TV Rakyat Official tapi ke sosmed pribadi masing-masing.
+  "Divisi PALUGODAM",
 ] as const;
+
+/** Divisi produksi konten mandiri (fitur khusus di TV Rakyat Saya). */
+export const DIVISI_PALUGODAM = "Divisi PALUGODAM";
+
+/** true bila orang ini anggota PALUGODAM (master ikut, untuk pengujian). */
+export function adalahPalugodam(u: {
+  role?: string;
+  divisi?: string | null;
+}): boolean {
+  if (u.role === "master" || u.role === "super_admin") return true;
+  return (u.divisi ?? "").trim() === DIVISI_PALUGODAM;
+}
 
 export type Divisi = (typeof DIVISI)[number];
 

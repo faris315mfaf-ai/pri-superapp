@@ -16,10 +16,11 @@
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
-import { CalendarClock, Check, Loader2, Send, UploadCloud, X } from "lucide-react";
+import { CalendarClock, Check, Link2, Loader2, Send, UploadCloud, X } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
-import { toast } from "@/hooks/use-app-store";
+import { toast, useAppStore } from "@/hooks/use-app-store";
+import { adalahPalugodam } from "@/lib/struktur";
 import {
   getRiwayatTvrkuPost,
   postTvrku,
@@ -58,8 +59,14 @@ export function UnggahSosmedSaya() {
   const [pakaiJadwal, setPakaiJadwal] = useState(false);
   const [jadwal, setJadwal] = useState("");
   const [tahap, setTahap] = useState<"" | "unggah" | "post">("");
-  // Persentase unggah ke Cloudinary (progres XHR nyata).
+  // Persentase unggah (progres XHR nyata).
   const [persen, setPersen] = useState(0);
+  // PALUGODAM (2 Sep 2026): boleh mengirim video cukup lewat TAUTAN
+  // hasil editannya sendiri — tanpa unggah berkas sama sekali.
+  const user = useAppStore((st) => st.user);
+  const bolehLink = adalahPalugodam({ role: user?.role, divisi: user?.divisi });
+  const [modeLink, setModeLink] = useState(false);
+  const [tautan, setTautan] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -101,15 +108,45 @@ export function UnggahSosmedSaya() {
     });
   }
 
+  const adaVideo = modeLink ? tautan.trim().startsWith("https://") : Boolean(berkas);
   const sah =
-    Boolean(berkas) &&
+    adaVideo &&
     judul.trim().length >= 3 &&
     pilih.size > 0 &&
     (!pakaiJadwal || Boolean(jadwal));
 
   async function kirim() {
-    if (!sah || tahap || !berkas) return;
+    if (!sah || tahap) return;
     try {
+      // PALUGODAM: kiriman TAUTAN langsung ke langkah post — tidak ada
+      // berkas yang diunggah, jadi nol penyimpanan & nol lalu-lintas.
+      if (modeLink) {
+        setTahap("post");
+        const h = await postTvrku({
+          video_link: tautan.trim(),
+          judul: judul.trim(),
+          caption: caption.trim() || undefined,
+          platforms: [...pilih],
+          jadwal: pakaiJadwal && jadwal ? new Date(jadwal).toISOString() : undefined,
+        });
+        if (h.terjadwal) {
+          toast("sukses", "Terjadwal", "Video akan diposting otomatis pada waktunya.");
+        } else if (h.sukses) {
+          toast("sukses", "Video terkirim", `Diposting ke ${pilih.size} platform Anda.`);
+        } else {
+          toast("peringatan", "Sebagian gagal", "Cek rincian di riwayat.");
+        }
+        setTautan("");
+        setJudul("");
+        setCaption("");
+        setPilih(new Set());
+        setPakaiJadwal(false);
+        setJadwal("");
+        setRiwayat(await getRiwayatTvrkuPost().catch(() => riwayat ?? []));
+        return;
+      }
+
+      if (!berkas) return;
       // 1. Berkas naik LANGSUNG peramban → penyimpanan sementara lewat
       //    URL bertanda tangan dari server (utama: Cloudflare R2 —
       //    bandwidth keluar gratis; cadangan: bucket Supabase). Berkas
@@ -188,6 +225,56 @@ export function UnggahSosmedSaya() {
   return (
     <div className="flex flex-col gap-3">
       <GlassCard className="p-4">
+        {/* PALUGODAM: pilih cara kirim — unggah berkas atau tempel tautan */}
+        {bolehLink && (
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setModeLink(false)}
+              disabled={Boolean(tahap)}
+              aria-pressed={!modeLink}
+              className={cn(
+                "btn-tekan flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[12px] font-bold",
+                !modeLink ? "bg-pri/15 text-pri" : "glass text-teks-sekunder",
+              )}
+            >
+              <UploadCloud className="h-3.5 w-3.5" />
+              Unggah Berkas
+            </button>
+            <button
+              type="button"
+              onClick={() => setModeLink(true)}
+              disabled={Boolean(tahap)}
+              aria-pressed={modeLink}
+              className={cn(
+                "btn-tekan flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[12px] font-bold",
+                modeLink ? "bg-pri/15 text-pri" : "glass text-teks-sekunder",
+              )}
+            >
+              <Link2 className="h-3.5 w-3.5" />
+              Kirim Tautan
+            </button>
+          </div>
+        )}
+
+        {modeLink ? (
+          <>
+            <input
+              value={tautan}
+              onChange={(e) => setTautan(e.target.value)}
+              placeholder="https://... tautan video hasil editan Anda"
+              inputMode="url"
+              disabled={Boolean(tahap)}
+              className="glass-input h-11 w-full rounded-xl px-3 text-sm text-teks-utama"
+            />
+            <p className="mt-1.5 text-[10.5px] leading-relaxed text-teks-sekunder">
+              Khusus Divisi PALUGODAM. Tautan harus https dan bisa diakses publik
+              (bukan Google Drive privat) — video diambil langsung dari sana, jadi
+              tidak memakai penyimpanan aplikasi sama sekali.
+            </p>
+          </>
+        ) : (
+        <>
         {/* Pilih berkas */}
         <input
           ref={inputRef}
@@ -205,6 +292,8 @@ export function UnggahSosmedSaya() {
           <UploadCloud className="h-5 w-5 text-pri" />
           {berkas ? `${berkas.name} (${Math.round(berkas.size / 1_048_576)} MB)` : "Pilih Video"}
         </button>
+        </>
+        )}
 
         <input
           value={judul}

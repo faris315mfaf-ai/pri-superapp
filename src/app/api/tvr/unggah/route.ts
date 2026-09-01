@@ -26,6 +26,7 @@ import { unggahVideoUp, uploadPostSiap } from "@/lib/upload-post";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
+import { adalahPalugodam } from "@/lib/struktur";
 import {
   dariR2,
   hapusVideoR2,
@@ -152,6 +153,8 @@ export async function POST(request: Request) {
       video_url?: string;
       public_id?: string;
       r2_key?: string;
+      /** PALUGODAM: kirim video cukup lewat tautan, tanpa unggah berkas. */
+      video_link?: string;
       judul?: string;
       caption?: string;
       platforms?: string[];
@@ -205,10 +208,42 @@ export async function POST(request: Request) {
       const videoUrlCloud = String(body.video_url ?? "").trim();
       const publicId = String(body.public_id ?? "").trim();
       const r2Key = String(body.r2_key ?? "").trim();
+      const videoLink = String(body.video_link ?? "").trim();
       const path = String(body.path ?? "");
-      const pakaiR2 = Boolean(r2Key);
-      const pakaiCloudinary = !pakaiR2 && Boolean(videoUrlCloud);
-      if (pakaiR2) {
+      // PALUGODAM (2 Sep 2026): boleh menyerahkan TAUTAN video hasil
+      // editannya sendiri — tanpa unggah berkas sama sekali, jadi tidak
+      // memakai penyimpanan maupun kuota lalu-lintas kita.
+      const pakaiLink = Boolean(videoLink);
+      const pakaiR2 = !pakaiLink && Boolean(r2Key);
+      const pakaiCloudinary = !pakaiLink && !pakaiR2 && Boolean(videoUrlCloud);
+
+      if (pakaiLink) {
+        if (!adalahPalugodam(user)) {
+          throw Object.assign(
+            new Error("Kirim lewat tautan khusus anggota Divisi PALUGODAM."),
+            { status: 403 },
+          );
+        }
+        let sah = false;
+        try {
+          const u = new URL(videoLink);
+          // Hanya https publik: cegah tautan lokal/jaringan dalam
+          // dipakai memancing server upload-post ke alamat internal.
+          sah =
+            u.protocol === "https:" &&
+            !/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[)/i.test(
+              u.hostname,
+            );
+        } catch {
+          sah = false;
+        }
+        if (!sah) {
+          throw Object.assign(
+            new Error("Tautan video harus alamat https yang bisa diakses publik."),
+            { status: 400 },
+          );
+        }
+      } else if (pakaiR2) {
         // Jalur milik user ini (anti memposting berkas orang lain).
         if (!r2Key.startsWith(`${user.id}/`) || !/^[\w./-]+$/.test(r2Key)) {
           throw Object.assign(new Error("Berkas video tidak dikenal."), { status: 400 });
@@ -281,11 +316,13 @@ export async function POST(request: Request) {
       // URL yang diserahkan ke upload-post. R2: tautan bertanda tangan
       // berumur 7 hari (batas SigV4) — cukup untuk post langsung maupun
       // terjadwal, karena jadwal dibatasi 7 hari juga.
-      const videoUrl = pakaiR2
-        ? presignR2("GET", r2Key, MAKS_UMUR_URL_DETIK)
-        : pakaiCloudinary
-          ? videoUrlCloud
-          : db.storage.from("tvrku").getPublicUrl(path).data.publicUrl;
+      const videoUrl = pakaiLink
+        ? videoLink
+        : pakaiR2
+          ? presignR2("GET", r2Key, MAKS_UMUR_URL_DETIK)
+          : pakaiCloudinary
+            ? videoUrlCloud
+            : db.storage.from("tvrku").getPublicUrl(path).data.publicUrl;
       const hasil = await unggahVideoUp({
         profil,
         videoUrl,
@@ -310,7 +347,8 @@ export async function POST(request: Request) {
           platforms,
           // video_path menampung penunjuk berkas sesuai generasinya:
           // R2 → key objek, Cloudinary → public_id, lama → path bucket.
-          video_path: pakaiR2 ? r2Key : pakaiCloudinary ? publicId : path,
+          // Kiriman TAUTAN tidak punya berkas milik kita → kosong.
+          video_path: pakaiLink ? "" : pakaiR2 ? r2Key : pakaiCloudinary ? publicId : path,
           video_url: videoUrl,
           // Ukuran berkas dicatat untuk pantauan kuota Panel Master.
           ukuran_byte: Number.isFinite(Number(body.ukuran)) && Number(body.ukuran) > 0
@@ -319,7 +357,9 @@ export async function POST(request: Request) {
           jadwal: jadwal ?? null,
           hasil: hasil.mentah,
           request_id: hasil.request_id,
-          hapus_media_pada: hapusPada,
+          // Kiriman TAUTAN: berkasnya milik anggota di layanan lain —
+          // sistem tidak berhak menghapusnya, jadi tanpa jadwal sapu.
+          hapus_media_pada: pakaiLink ? null : hapusPada,
         })
         .select("id")
         .single();
