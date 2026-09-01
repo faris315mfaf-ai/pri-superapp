@@ -348,10 +348,14 @@ export async function postinganTerbaruUp(
 export async function analitikProfilUp(
   username: string,
   platformsApp?: string[],
+  // Penyapu latar memakai timeout PENDEK (insiden 1 Sep 2026: 5 profil x
+  // 45 dtk menembus maxDuration 60 dtk -> Runtime Timeout 5xx); jalur
+  // interaktif (insight saya / dashboard) tetap 45 dtk.
+  timeoutMs = 45000,
 ): Promise<Record<string, unknown>> {
   const daftar = (platformsApp ?? Object.keys(KE_UP)).map((p) => KE_UP[p] ?? p);
   return panggil<Record<string, unknown>>(
     `/analytics/${encodeURIComponent(username)}?platforms=${daftar.join(",")}`,
-    { method: "GET", timeoutMs: 45000 },
+    { method: "GET", timeoutMs },
   );
 }

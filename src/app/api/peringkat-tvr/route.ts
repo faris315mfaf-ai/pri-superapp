@@ -32,10 +32,14 @@ export async function GET(request: Request) {
     // masing-masing membawa peringkat TERBAIKNYA — dipakai cincin
     // border avatar di seluruh aplikasi.
     const top3 = juaraKategoriTvr(anggota);
-    after(segarkanProfilTvrBasi);
 
     const { searchParams } = new URL(request.url);
+    // Jalur ?ringkas=1 dipanggil SANGAT sering (cincin avatar semua
+    // pengguna, tiap 60 dtk) — JANGAN menjadwalkan penyapu di sini
+    // (insiden 1 Sep 2026). Sapuan cukup dari pembukaan leaderboard/
+    // dashboard, dan tetap dijaga klaim atomik 10-menit di dalamnya.
     if (searchParams.get("ringkas") === "1") return { top3 };
+    after(segarkanProfilTvrBasi);
 
     return {
       platforms: PLATFORM_TVR,

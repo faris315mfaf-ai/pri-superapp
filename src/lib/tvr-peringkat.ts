@@ -209,14 +209,50 @@ export function juaraKategoriTvr(anggota: AnggotaTvr[]): JuaraTvr[] {
 
 /** Umur cache insight anggota sebelum dianggap basi (jam). */
 const BASI_JAM = 6;
-/** Maks profil yang disegarkan di latar per permintaan. */
-const MAKS_SEGAR = 5;
+/** Maks profil yang disegarkan per sapuan (insiden 1 Sep: dulu 5). */
+const MAKS_SEGAR = 2;
+/** Timeout per panggilan analitik saat menyapu (dulu 45 dtk). */
+const TIMEOUT_SAPU_MS = 12_000;
+/** Anggaran waktu total satu sapuan — jauh di bawah maxDuration 60 dtk. */
+const ANGGARAN_SAPU_MS = 30_000;
+/** Kunci klaim atomik + interval antar sapuan. */
+const KUNCI_KLAIM_SAPU = "tvr_insight_bucket";
+const INTERVAL_SAPU_MENIT = 10;
 
-/** Segarkan insight profil paling basi — dipanggil lewat after(). */
+/**
+ * Segarkan insight profil paling basi — dipanggil lewat after().
+ *
+ * PELAJARAN INSIDEN 1 Sep 2026 (5xx multi-route + Runtime Timeout 60s):
+ * versi awal berjalan pada SETIAP request /api/peringkat-tvr (di-polling
+ * seluruh pengguna) tanpa klaim, 5 profil x timeout 45 dtk = kerja bisa
+ * 225 dtk di fungsi ber-maxDuration 60 dtk → kawanan fungsi timeout,
+ * membebani Supabase, menyeret /api/sesi & /api/asisten ikut 5xx.
+ * Sekarang: (1) KLAIM ATOMIK — maksimal SATU sapuan tiap 10 menit di
+ * seluruh instance (pola sinkron_konten_bucket yang terbukti);
+ * (2) anggaran keras: 2 profil, timeout 12 dtk/panggilan, total ≤30 dtk.
+ */
 export async function segarkanProfilTvrBasi(): Promise<void> {
   try {
     if (!uploadPostSiap()) return;
+    const mulai = Date.now();
     const db = supabase();
+
+    // --- Klaim atomik: hanya satu pemenang per jendela 10 menit ---
+    const bucket = String(Math.floor(Date.now() / (INTERVAL_SAPU_MENIT * 60_000)));
+    await db
+      .from("pengaturan_sistem")
+      .upsert(
+        { kunci: KUNCI_KLAIM_SAPU, nilai: "" },
+        { onConflict: "kunci", ignoreDuplicates: true },
+      );
+    const { data: klaim } = await db
+      .from("pengaturan_sistem")
+      .update({ nilai: bucket })
+      .eq("kunci", KUNCI_KLAIM_SAPU)
+      .neq("nilai", bucket)
+      .select("kunci");
+    if (!klaim || klaim.length === 0) return; // jendela ini sudah disapu
+
     const batas = new Date(Date.now() - BASI_JAM * 3600_000).toISOString();
     const { data } = await db
       .from("sosmed_profile")
@@ -227,8 +263,14 @@ export async function segarkanProfilTvrBasi(): Promise<void> {
       .order("insight_pada", { ascending: true, nullsFirst: true })
       .limit(MAKS_SEGAR);
     for (const p of data ?? []) {
+      // Penjaga anggaran total — berhenti jauh sebelum maxDuration.
+      if (Date.now() - mulai > ANGGARAN_SAPU_MS) break;
       try {
-        const insight = await analitikProfilUp(String(p.profile_key));
+        const insight = await analitikProfilUp(
+          String(p.profile_key),
+          undefined,
+          TIMEOUT_SAPU_MS,
+        );
         await db
           .from("sosmed_profile")
           .update({ insight_cache: insight, insight_pada: new Date().toISOString() })
@@ -244,6 +286,6 @@ export async function segarkanProfilTvrBasi(): Promise<void> {
       }
     }
   } catch (e) {
-    console.error("[tvr-peringkat] penyegar:", e);
+    console.error("[tvr-peringkat] penyapu:", e);
   }
 }
