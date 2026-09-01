@@ -12,9 +12,11 @@ import { supabase } from "@/lib/supabase";
 import type { Role, User } from "@/types";
 import { after } from "next/server";
 import {
+  ambilCacheLonggar,
   ambilCacheSesi,
   hapusCacheToken,
   hapusCacheUser,
+  simpanCacheLonggar,
   simpanCacheSesi,
 } from "@/lib/cache-sesi";
 
@@ -221,8 +223,15 @@ export async function userDariTokenLonggar(token: string): Promise<UserPublik | 
   const bersih = (token ?? "").trim();
   if (!bersih) return null;
 
-  const db = supabase();
   const hash = hashToken(bersih);
+  // Cache 30 dtk (1 Sep 2026 — pemangkasan beban Supabase): /api/sesi
+  // dipanggil setiap aplikasi dibuka & halaman tunggu memoles tiap 5
+  // dtk; tanpa cache = 2 query per panggilan. Perubahan status akun
+  // (disetujui/ditolak) menyapu cache ini lewat hapusCacheUser.
+  const dariCache = ambilCacheLonggar(hash);
+  if (dariCache) return dariCache;
+
+  const db = supabase();
   const { data: sesi } = await db
     .from("sesi_perangkat")
     .select("user_id")
@@ -238,7 +247,9 @@ export async function userDariTokenLonggar(token: string): Promise<UserPublik | 
 
   const u = data as BarisUser | null;
   if (!u || !u.aktif || u.status === "ditolak") return null;
-  return keUserPublik(u);
+  const publik = keUserPublik(u);
+  simpanCacheLonggar(hash, publik);
+  return publik;
 }
 
 /**
@@ -277,7 +288,9 @@ async function catatPemakaian(
 }
 
 /** Jarak minimum antar penulisan dipakai_pada untuk satu sesi. */
-const JEDA_CATAT_MS = 5 * 60_000;
+// 5→15 menit (1 Sep 2026): layar "perangkat saya" tak butuh presisi
+// lebih dari itu, dan tulisan per-permintaan adalah beban terbesar.
+const JEDA_CATAT_MS = 15 * 60_000;
 
 /** id sesi → kapan terakhir dipakai_pada ditulis. */
 const catatanTerakhir = new Map<string, number>();

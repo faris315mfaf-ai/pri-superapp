@@ -62,8 +62,15 @@ const MAKS_BYTE_GAMBAR = 150 * 1024; // 100KB target klien + kelonggaran
  * memperlambat layar. Percakapannya sendiri TIDAK dihapus — hanya
  * isinya, supaya daftar kontak tetap utuh.
  */
+// Penahan 10 menit per instance (1 Sep 2026 — pemangkasan beban
+// Supabase): dulu sapuan retensi ikut jalan pada TIAP polling chat
+// (ratusan DELETE+SELECT per jam padahal retensinya berhari-hari).
+let sapuTerakhirMs = 0;
+
 async function bersihkanPesanLama() {
   try {
+    if (Date.now() - sapuTerakhirMs < 10 * 60_000) return;
+    sapuTerakhirMs = Date.now();
     const batas = new Date(Date.now() - RETENSI_HARI * 24 * 60 * 60 * 1000).toISOString();
     const db = supabase();
     // File gambar milik pesan kedaluwarsa ikut dihapus dari storage —

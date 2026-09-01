@@ -32,8 +32,10 @@
 import { klienRedis } from "@/lib/redis";
 import type { UserPublik } from "@/lib/sesi";
 
-/** Umur entri cache. */
-const TTL_DETIK = 60;
+/** Umur entri cache. Dinaikkan 60→300 dtk (1 Sep 2026, pemangkasan
+ *  beban Supabase): pencabutan akses TETAP seketika lewat
+ *  hapusCacheUser — TTL hanyalah jaring pengaman terakhir. */
+const TTL_DETIK = 300;
 
 /** Batas entri di memori proses; yang terlama dibuang lebih dulu. */
 const MAKS_ENTRI = 5000;
@@ -160,9 +162,45 @@ export async function hapusCacheUser(userId: number | string): Promise<void> {
     for (const tokenHash of set) memori.delete(tokenHash);
     milikSiapa.delete(id);
   }
+  hapusCacheLonggarUser(id);
 }
 
 /** true bila cache sesi memakai Redis — dipakai /api/sehat. */
 export function cacheSesiTerpusat(): boolean {
   return klienRedis() !== null;
+}
+
+// ------------------------------------------------------------
+// Cache jalur LONGGAR (1 Sep 2026 — pemangkasan beban Supabase).
+// userDariTokenLonggar dipakai /api/sesi (dipanggil SETIAP kali
+// aplikasi dibuka + halaman tunggu memoles tiap 5 detik) dan dulu
+// SELALU 2 query. TTL pendek 30 dtk; hapusCacheUser ikut menyapunya
+// supaya persetujuan pendaftar tetap terasa cepat.
+// ------------------------------------------------------------
+const TTL_LONGGAR_MS = 30_000;
+const memoriLonggar = new Map<string, Entri>();
+
+export function ambilCacheLonggar(tokenHash: string): UserPublik | null {
+  const e = memoriLonggar.get(tokenHash);
+  if (!e) return null;
+  if (Date.now() - e.diambilPada > TTL_LONGGAR_MS) {
+    memoriLonggar.delete(tokenHash);
+    return null;
+  }
+  return e.user;
+}
+
+export function simpanCacheLonggar(tokenHash: string, user: UserPublik): void {
+  memoriLonggar.set(tokenHash, { user, diambilPada: Date.now() });
+  if (memoriLonggar.size > MAKS_ENTRI) {
+    const tertua = memoriLonggar.keys().next().value;
+    if (tertua !== undefined) memoriLonggar.delete(tertua);
+  }
+}
+
+/** Dipanggil dari hapusCacheUser — ukurannya kecil, sapu linear cukup. */
+export function hapusCacheLonggarUser(userId: string): void {
+  for (const [hash, e] of memoriLonggar) {
+    if (String(e.user.id) === userId) memoriLonggar.delete(hash);
+  }
 }

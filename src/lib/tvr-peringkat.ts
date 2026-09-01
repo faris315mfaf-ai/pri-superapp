@@ -218,6 +218,8 @@ const ANGGARAN_SAPU_MS = 30_000;
 /** Kunci klaim atomik + interval antar sapuan. */
 const KUNCI_KLAIM_SAPU = "tvr_insight_bucket";
 const INTERVAL_SAPU_MENIT = 10;
+/** Bucket terakhir yang sudah beres menurut instance ini. */
+let bucketSapuInstance = "";
 
 /**
  * Segarkan insight profil paling basi — dipanggil lewat after().
@@ -239,6 +241,9 @@ export async function segarkanProfilTvrBasi(): Promise<void> {
 
     // --- Klaim atomik: hanya satu pemenang per jendela 10 menit ---
     const bucket = String(Math.floor(Date.now() / (INTERVAL_SAPU_MENIT * 60_000)));
+    // Hubungan pendek per-instance: jendela yang sudah beres menurut
+    // instance ini tak perlu menyentuh database lagi (hemat 2 query).
+    if (bucket === bucketSapuInstance) return;
     await db
       .from("pengaturan_sistem")
       .upsert(
@@ -251,6 +256,7 @@ export async function segarkanProfilTvrBasi(): Promise<void> {
       .eq("kunci", KUNCI_KLAIM_SAPU)
       .neq("nilai", bucket)
       .select("kunci");
+    bucketSapuInstance = bucket;
     if (!klaim || klaim.length === 0) return; // jendela ini sudah disapu
 
     const batas = new Date(Date.now() - BASI_JAM * 3600_000).toISOString();

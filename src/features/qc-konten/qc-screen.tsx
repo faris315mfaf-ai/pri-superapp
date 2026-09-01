@@ -223,7 +223,7 @@ export function QcScreen({
     const detak = setInterval(() => {
       if (document.visibilityState === "hidden") return;
       void baca();
-    }, 30_000);
+    }, 60_000); // 30→60 dtk (1 Sep 2026 — pemangkasan beban Supabase)
     return () => {
       hidup = false;
       clearInterval(detak);

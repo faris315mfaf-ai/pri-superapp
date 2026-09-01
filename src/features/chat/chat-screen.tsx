@@ -172,7 +172,7 @@ function PanelPercakapan({
     const detak = setInterval(() => {
       if (document.visibilityState === "hidden") return;
       void tarik(false);
-    }, 4000);
+    }, 6000); // 4→6 dtk (1 Sep 2026): tetap terasa langsung, beban -33%
     return () => {
       hidup = false;
       clearInterval(detak);
@@ -880,7 +880,7 @@ export function ChatScreen({
     const detak = setInterval(() => {
       if (document.visibilityState === "hidden") return;
       void muat();
-    }, 10000);
+    }, 15000); // 10→15 dtk (1 Sep 2026 — pemangkasan beban Supabase)
     return () => {
       hidup = false;
       clearInterval(detak);

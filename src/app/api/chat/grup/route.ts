@@ -43,8 +43,13 @@ async function pastikanMasuk(request: Request) {
 }
 
 /** Hapus pesan grup lebih tua dari retensi + file gambarnya (best-effort). */
+// Penahan 10 menit per instance (1 Sep 2026 — pemangkasan beban Supabase).
+let sapuGrupTerakhirMs = 0;
+
 async function bersihkanPesanGrupLama() {
   try {
+    if (Date.now() - sapuGrupTerakhirMs < 10 * 60_000) return;
+    sapuGrupTerakhirMs = Date.now();
     const batas = new Date(Date.now() - RETENSI_HARI * 24 * 60 * 60 * 1000).toISOString();
     const db = supabase();
     const { data: bergambar } = await db

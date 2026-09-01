@@ -10,7 +10,9 @@
 
 import { useEffect, useRef } from "react";
 
-export function useSegarOtomatis(segarkan: () => void, jedaDetik = 30) {
+// Bawaan 30→60 dtk (1 Sep 2026 — pemangkasan beban Supabase): dengan
+// ratusan pengguna, tiap detik jeda = puluhan ribu request per hari.
+export function useSegarOtomatis(segarkan: () => void, jedaDetik = 60) {
   // Ref supaya interval tidak dipasang ulang tiap render walau
   // pemanggil mengirim fungsi inline baru (disalin lewat effect —
   // menulis ref saat render dilarang aturan react-hooks/refs).

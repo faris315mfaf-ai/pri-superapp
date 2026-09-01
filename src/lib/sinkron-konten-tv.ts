@@ -38,6 +38,20 @@ async function bacaIntervalMenit(db: ReturnType<typeof supabase>): Promise<numbe
   return Number.isFinite(n) && n >= INTERVAL_MIN ? Math.floor(n) : INTERVAL_BAWAAN;
 }
 
+// Cache nilai interval 5 menit + bucket yang SUDAH beres menurut
+// instance ini (1 Sep 2026 — pemangkasan beban Supabase).
+let intervalCache: { nilai: number; pada: number } | null = null;
+let bucketSelesaiInstance = "";
+
+async function bacaIntervalMenitCache(db: ReturnType<typeof supabase>): Promise<number> {
+  if (intervalCache && Date.now() - intervalCache.pada < 5 * 60_000) {
+    return intervalCache.nilai;
+  }
+  const nilai = await bacaIntervalMenit(db);
+  intervalCache = { nilai, pada: Date.now() };
+  return nilai;
+}
+
 /**
  * Sinkron BERKALA. Maksimal sekali per jendela: hanya request yang
  * berhasil mengubah nilai klaim ke "bucket" jendela sekarang yang jalan,
@@ -47,9 +61,14 @@ async function bacaIntervalMenit(db: ReturnType<typeof supabase>): Promise<numbe
 export async function sinkronKontenTvTerjadwal(): Promise<void> {
   try {
     if (!ayrshareSiap()) return;
+    // Hubungan pendek per-instance (1 Sep 2026 — pemangkasan beban
+    // Supabase): /api/sesi dipanggil sangat sering; tanpa ini TIAP
+    // panggilan = 1 baca interval + 1 tulis klaim ke pengaturan_sistem.
+    // Instance yang sudah tahu jendela ini beres langsung pulang.
     const db = supabase();
-    const intervalMenit = await bacaIntervalMenit(db);
+    const intervalMenit = await bacaIntervalMenitCache(db);
     const bucket = String(Math.floor(Date.now() / (intervalMenit * 60_000)));
+    if (bucket === bucketSelesaiInstance) return;
 
     // Pastikan baris klaim ada (tanpa menimpa nilainya), lalu klaim atomik.
     await db
@@ -61,6 +80,9 @@ export async function sinkronKontenTvTerjadwal(): Promise<void> {
       .eq("kunci", KUNCI_KLAIM)
       .neq("nilai", bucket)
       .select("kunci");
+    // Klaim gagal ATAU menang — dua-duanya berarti jendela ini beres
+    // bagi instance ini; jangan sentuh database lagi sampai jendela baru.
+    bucketSelesaiInstance = bucket;
     if (!klaim || klaim.length === 0) return; // jendela ini sudah dikerjakan
 
     // Mesin melempar 409 bila tak ada akun tertaut — itu normal (belum
