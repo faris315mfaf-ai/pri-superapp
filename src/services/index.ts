@@ -2598,13 +2598,13 @@ export async function getRiwayatTvrkuPost(): Promise<TvrkuPost[]> {
 export async function siapkanUnggahTvrku(
   nama: string,
   ukuran: number,
-): Promise<{ path: string; url: string; token: string }> {
+): Promise<{ cara: "r2" | "supabase"; url: string; r2_key?: string; path?: string }> {
   const json = await fetchJson("/api/tvr/unggah", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ aksi: "siapkan", nama, ukuran }),
   });
-  return json as { path: string; url: string; token: string };
+  return json as { cara: "r2" | "supabase"; url: string; r2_key?: string; path?: string };
 }
 
 /**
@@ -2613,8 +2613,13 @@ export async function siapkanUnggahTvrku(
  * dengan kirim-video-manual) — kirim video_url + public_id, bukan path.
  */
 export async function postTvrku(data: {
-  video_url: string;
-  public_id: string;
+  /** Jalur R2 (utama) — kunci objek yang baru diunggah. */
+  r2_key?: string;
+  /** Jalur Cloudinary (cadangan). */
+  video_url?: string;
+  public_id?: string;
+  /** Jalur bucket Supabase (cadangan lama). */
+  path?: string;
   judul: string;
   caption?: string;
   platforms: string[];

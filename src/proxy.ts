@@ -45,6 +45,13 @@ const ASAL_SUPABASE = (() => {
   }
 })();
 
+// Origin Cloudflare R2 (1 Sep 2026): video TVR Saya diunggah LANGSUNG
+// peramban→R2 lewat URL bertanda tangan. Tanpa origin ini CSP memblokir
+// PUT-nya — persis pelajaran bug "Failed to fetch" Supabase kemarin.
+const ASAL_R2 = process.env.R2_ACCOUNT_ID
+  ? `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+  : "";
+
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   // Di development React memakai eval untuk membangun stack trace;
@@ -58,7 +65,7 @@ export function proxy(request: NextRequest) {
     img-src 'self' https: data: blob:;
     media-src 'self' https: blob:;
     font-src 'self' data:;
-    connect-src 'self' https://api.cloudinary.com https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com${ASAL_SUPABASE ? ` ${ASAL_SUPABASE}` : ""}${dev ? " ws:" : ""};
+    connect-src 'self' https://api.cloudinary.com https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com${ASAL_SUPABASE ? ` ${ASAL_SUPABASE}` : ""}${ASAL_R2 ? ` ${ASAL_R2}` : ""}${dev ? " ws:" : ""};
     worker-src 'self' blob:;
     object-src 'none';
     base-uri 'self';

@@ -8,11 +8,11 @@
 // Berkas video otomatis dihapus dari penyimpanan 2 jam setelah tayang
 // (postingan di sosmednya TETAP).
 //
-// Video BESAR naik langsung peramban→CLOUDINARY (unsigned preset,
-// pola sama dengan kirim-video-manual yang terbukti jalan; 1 Sep 2026 —
-// jalur storage lama diblokir CSP di sebagian klien), lalu server
-// menyerahkan URL Cloudinary-nya ke upload-post. Berkas dihapus
-// otomatis dari Cloudinary 2 jam setelah tayang.
+// Video BESAR naik LANGSUNG peramban→penyimpanan lewat URL bertanda
+// tangan dari server: utama CLOUDFLARE R2 (bandwidth keluar gratis —
+// Cloudinary menagih bandwidth dan sudah 140% kuota), cadangan bucket
+// Supabase. Server lalu menyerahkan tautan bertanda tangan itu ke
+// upload-post; berkasnya dihapus otomatis 2 jam setelah tayang.
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
@@ -21,9 +21,9 @@ import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
 import { toast } from "@/hooks/use-app-store";
 import {
-  getKonfigUploadVideo,
   getRiwayatTvrkuPost,
   postTvrku,
+  siapkanUnggahTvrku,
   sinkronSosmedTvr,
   type TvrkuPost,
 } from "@/services";
@@ -110,56 +110,33 @@ export function UnggahSosmedSaya() {
   async function kirim() {
     if (!sah || tahap || !berkas) return;
     try {
-      // 1. Berkas naik LANGSUNG peramban → Cloudinary (pola persis
-      //    kirim-video-manual yang sudah terbukti jalan di produksi;
-      //    server cuma memberi cloud name + unsigned preset). Berkas
-      //    dihapus otomatis dari Cloudinary 2 jam setelah tayang.
+      // 1. Berkas naik LANGSUNG peramban → penyimpanan sementara lewat
+      //    URL bertanda tangan dari server (utama: Cloudflare R2 —
+      //    bandwidth keluar gratis; cadangan: bucket Supabase). Berkas
+      //    dihapus otomatis 2 jam setelah tayang.
       setTahap("unggah");
       setPersen(0);
-      const konfig = await getKonfigUploadVideo();
-      if (konfig.maks_upload_mb && berkas.size > konfig.maks_upload_mb * 1024 * 1024) {
-        throw new Error(
-          `Video terlalu besar (${Math.round(berkas.size / 1_048_576)} MB). Batasnya ${konfig.maks_upload_mb} MB.`,
-        );
-      }
-      const hasilUpload = await new Promise<{ secure_url: string; public_id: string }>(
-        (selesai, gagal) => {
-          const bentuk = new FormData();
-          bentuk.append("file", berkas);
-          bentuk.append("upload_preset", konfig.uploadPreset);
-          bentuk.append("resource_type", "video");
-          const xhr = new XMLHttpRequest();
-          xhr.open("POST", `https://api.cloudinary.com/v1_1/${konfig.cloudName}/video/upload`);
-          xhr.upload.onprogress = (ev) => {
-            if (ev.lengthComputable) setPersen(Math.round((100 * ev.loaded) / ev.total));
-          };
-          xhr.onload = () => {
-            try {
-              const json = JSON.parse(xhr.responseText) as {
-                secure_url?: string;
-                public_id?: string;
-                error?: { message?: string };
-              };
-              if (xhr.status >= 200 && xhr.status < 300 && json.secure_url && json.public_id) {
-                selesai({ secure_url: json.secure_url, public_id: json.public_id });
-              } else {
-                gagal(new Error(json.error?.message ?? "Penyimpanan video menolak berkas ini."));
-              }
-            } catch {
-              gagal(new Error("Balasan penyimpanan video tidak terbaca."));
-            }
-          };
-          xhr.onerror = () =>
-            gagal(new Error("Koneksi terputus saat mengunggah video. Coba lagi."));
-          xhr.send(bentuk);
-        },
-      );
+      const siap = await siapkanUnggahTvrku(berkas.name, berkas.size);
+      await new Promise<void>((selesai, gagal) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", siap.url);
+        xhr.setRequestHeader("content-type", berkas.type || "video/mp4");
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable) setPersen(Math.round((100 * ev.loaded) / ev.total));
+        };
+        xhr.onload = () =>
+          xhr.status >= 200 && xhr.status < 300
+            ? selesai()
+            : gagal(new Error("Penyimpanan video menolak berkas ini. Coba lagi."));
+        xhr.onerror = () =>
+          gagal(new Error("Koneksi terputus saat mengunggah video. Coba lagi."));
+        xhr.send(berkas);
+      });
 
-      // 2. Server menyerahkan URL Cloudinary-nya ke upload-post.
+      // 2. Server menyerahkan tautan videonya ke upload-post.
       setTahap("post");
       const hasil = await postTvrku({
-        video_url: hasilUpload.secure_url,
-        public_id: hasilUpload.public_id,
+        ...(siap.cara === "r2" ? { r2_key: siap.r2_key } : { path: siap.path }),
         judul: judul.trim(),
         caption: caption.trim() || undefined,
         platforms: [...pilih],
@@ -327,14 +304,14 @@ export function UnggahSosmedSaya() {
               className="glass-input h-10 w-full rounded-xl px-2.5 text-[12px] text-teks-utama"
             />
             <p className="mt-1 text-[10.5px] text-teks-sekunder">
-              Minimal 5 menit dari sekarang, maksimal 30 hari ke depan. Video
+              Minimal 5 menit dari sekarang, maksimal 7 hari ke depan. Video
               diposting otomatis pada waktunya.
             </p>
           </div>
         )}
         <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder">
-          Video diunggah ke penyimpanan sementara (Cloudinary) dan dihapus otomatis
-          2 jam setelah tayang — postingan di sosmed Anda tetap ada.
+          Video diunggah ke penyimpanan sementara dan dihapus otomatis 2 jam
+          setelah tayang — postingan di sosmed Anda tetap ada.
         </p>
         <p className="mt-1 text-[10.5px] leading-relaxed text-emerald-600 dark:text-emerald-400">
           ✓ Video yang diunggah dari sini otomatis menambah KPI Anda — tak perlu

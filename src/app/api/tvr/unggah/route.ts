@@ -26,6 +26,13 @@ import { unggahVideoUp, uploadPostSiap } from "@/lib/upload-post";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
+import {
+  dariR2,
+  hapusVideoR2,
+  MAKS_UMUR_URL_DETIK,
+  presignR2,
+  r2Siap,
+} from "@/lib/r2";
 
 export const dynamic = "force-dynamic";
 // upload-post mengunduh video dari URL kita lalu memposting ke banyak
@@ -72,15 +79,22 @@ async function bersihkanVideoKedaluwarsa(): Promise<void> {
       .lt("hapus_media_pada", new Date().toISOString())
       .limit(20);
     if (!data || data.length === 0) return;
-    // Dua generasi berkas hidup berdampingan: baris baru = Cloudinary
-    // (video_path berisi public_id), baris lama = bucket storage "tvrku".
-    // Dibedakan dari bentuk video_url — tanpa migrasi kolom.
+    // TIGA generasi berkas hidup berdampingan, dibedakan dari bentuk
+    // video_url (tanpa migrasi kolom): R2 (baru) → key objek,
+    // Cloudinary → public_id, lama → path bucket "tvrku".
     const dariCloudinary = data.filter((b) =>
       String(b.video_url ?? "").includes("res.cloudinary.com"),
     );
     const dariStorage = data.filter(
-      (b) => !String(b.video_url ?? "").includes("res.cloudinary.com"),
+      (b) =>
+        !String(b.video_url ?? "").includes("res.cloudinary.com") &&
+        !dariR2(String(b.video_url ?? "")),
     );
+    for (const b of data) {
+      if (b.video_path && dariR2(String(b.video_url ?? ""))) {
+        await hapusVideoR2(String(b.video_path));
+      }
+    }
     for (const b of dariCloudinary) {
       if (b.video_path) await hapusVideoCloudinary(String(b.video_path));
     }
@@ -137,6 +151,7 @@ export async function POST(request: Request) {
       path?: string;
       video_url?: string;
       public_id?: string;
+      r2_key?: string;
       judul?: string;
       caption?: string;
       platforms?: string[];
@@ -159,6 +174,19 @@ export async function POST(request: Request) {
       }
       const ext = /\.(mp4|mov|m4v|webm)$/i.exec(body.nama ?? "")?.[1]?.toLowerCase() ?? "mp4";
       const path = `${user.id}/${Date.now()}.${ext}`;
+
+      // JALUR UTAMA (1 Sep 2026): Cloudflare R2 — bandwidth keluar
+      // gratis, jadi video yang cuma numpang 2 jam nyaris tanpa biaya.
+      if (r2Siap()) {
+        return {
+          sukses: true,
+          cara: "r2" as const,
+          r2_key: path,
+          url: presignR2("PUT", path, 15 * 60),
+        };
+      }
+
+      // Cadangan: bucket Supabase (dipakai bila R2 belum dipasang).
       const { data, error } = await db.storage
         .from("tvrku")
         .createSignedUploadUrl(path);
@@ -166,7 +194,7 @@ export async function POST(request: Request) {
         console.error("[tvrku/unggah] siapkan:", error?.message);
         throw new Error("Gagal menyiapkan unggahan. Coba lagi.");
       }
-      return { sukses: true, path, url: data.signedUrl, token: data.token };
+      return { sukses: true, cara: "supabase" as const, path, url: data.signedUrl, token: data.token };
     }
 
     // ---- Langkah 2: post ke sosmed via upload-post ----
@@ -176,9 +204,22 @@ export async function POST(request: Request) {
       // tetap diterima untuk klien yang masih memuat JS versi lama.
       const videoUrlCloud = String(body.video_url ?? "").trim();
       const publicId = String(body.public_id ?? "").trim();
+      const r2Key = String(body.r2_key ?? "").trim();
       const path = String(body.path ?? "");
-      const pakaiCloudinary = Boolean(videoUrlCloud);
-      if (pakaiCloudinary) {
+      const pakaiR2 = Boolean(r2Key);
+      const pakaiCloudinary = !pakaiR2 && Boolean(videoUrlCloud);
+      if (pakaiR2) {
+        // Jalur milik user ini (anti memposting berkas orang lain).
+        if (!r2Key.startsWith(`${user.id}/`) || !/^[\w./-]+$/.test(r2Key)) {
+          throw Object.assign(new Error("Berkas video tidak dikenal."), { status: 400 });
+        }
+        if (!r2Siap()) {
+          throw Object.assign(
+            new Error("Penyimpanan video (R2) belum diatur. Hubungi pengelola."),
+            { status: 503 },
+          );
+        }
+      } else if (pakaiCloudinary) {
         const konfig = konfigUploadCloudinary();
         if (!konfig) {
           throw Object.assign(
@@ -229,15 +270,22 @@ export async function POST(request: Request) {
             { status: 400 },
           );
         }
-        if (t > Date.now() + 30 * 86_400_000) {
-          throw Object.assign(new Error("Jadwal maksimal 30 hari ke depan."), { status: 400 });
+        // Maksimal 7 hari: URL video bertanda tangan R2 juga berumur
+        // 7 hari (batas SigV4), jadi jadwal tak boleh melewatinya.
+        if (t > Date.now() + 7 * 86_400_000) {
+          throw Object.assign(new Error("Jadwal maksimal 7 hari ke depan."), { status: 400 });
         }
         jadwal = new Date(t).toISOString();
       }
 
-      const videoUrl = pakaiCloudinary
-        ? videoUrlCloud
-        : db.storage.from("tvrku").getPublicUrl(path).data.publicUrl;
+      // URL yang diserahkan ke upload-post. R2: tautan bertanda tangan
+      // berumur 7 hari (batas SigV4) — cukup untuk post langsung maupun
+      // terjadwal, karena jadwal dibatasi 7 hari juga.
+      const videoUrl = pakaiR2
+        ? presignR2("GET", r2Key, MAKS_UMUR_URL_DETIK)
+        : pakaiCloudinary
+          ? videoUrlCloud
+          : db.storage.from("tvrku").getPublicUrl(path).data.publicUrl;
       const hasil = await unggahVideoUp({
         profil,
         videoUrl,
@@ -260,9 +308,9 @@ export async function POST(request: Request) {
           judul,
           caption: (body.caption ?? "").slice(0, 2200),
           platforms,
-          // Cloudinary: video_path menampung public_id (dipakai penyapu
-          // untuk destroy); jalur lama tetap path bucket.
-          video_path: pakaiCloudinary ? publicId : path,
+          // video_path menampung penunjuk berkas sesuai generasinya:
+          // R2 → key objek, Cloudinary → public_id, lama → path bucket.
+          video_path: pakaiR2 ? r2Key : pakaiCloudinary ? publicId : path,
           video_url: videoUrl,
           jadwal: jadwal ?? null,
           hasil: hasil.mentah,
