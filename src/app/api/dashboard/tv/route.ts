@@ -49,7 +49,7 @@ export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await userDariToken(tokenDari(request));
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
-    if (!LANGSUNG_BOLEH.has(user.role) && !(await bolehDashboard(user.role, "tv"))) {
+    if (!LANGSUNG_BOLEH.has(user.role) && !(await bolehDashboard(user, "tv"))) {
       throw Object.assign(
         new Error("Jabatan Anda tidak punya akses dashboard TV Rakyat."),
         { status: 403 },

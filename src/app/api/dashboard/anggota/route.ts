@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await userDariToken(tokenDari(request));
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
-    if (!HR.has(user.role) && !adalahHR(user) && !(await bolehDashboard(user.role, "anggota"))) {
+    if (!HR.has(user.role) && !adalahHR(user) && !(await bolehDashboard(user, "anggota"))) {
       throw Object.assign(
         new Error("Jabatan Anda tidak punya akses dashboard Database Anggota."),
         { status: 403 },

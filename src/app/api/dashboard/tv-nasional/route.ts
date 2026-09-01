@@ -118,7 +118,7 @@ export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await userDariToken(tokenDari(request));
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
-    if (!PENGATUR.has(user.role) && !(await bolehDashboard(user.role, "tvnasional"))) {
+    if (!PENGATUR.has(user.role) && !(await bolehDashboard(user, "tvnasional"))) {
       throw Object.assign(
         new Error("Jabatan Anda tidak punya akses dashboard TV Rakyat Nasional."),
         { status: 403 },

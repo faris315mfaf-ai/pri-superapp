@@ -48,7 +48,7 @@ export async function GET(request: Request) {
 
     // Gerbang mengikuti sub-dashboard terkait.
     const kunciDash = jenis === "absensi" ? "absensi" : "kepatuhan";
-    if (!HR.has(user.role) && !adalahHR(user) && !(await bolehDashboard(user.role, kunciDash))) {
+    if (!HR.has(user.role) && !adalahHR(user) && !(await bolehDashboard(user, kunciDash))) {
       throw Object.assign(new Error("Jabatan Anda tidak punya akses dashboard ini."), {
         status: 403,
       });

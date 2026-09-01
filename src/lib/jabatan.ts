@@ -19,6 +19,9 @@ export const JABATAN_PARTAI = [
   "Wakil Ketua Umum",
   "Sekretaris Jenderal",
   "Wakil Sekretaris Jenderal",
+  // Bendahara Umum & wakilnya (permintaan 1 Sep 2026).
+  "Bendahara Umum",
+  "Wakil Bendahara Umum",
   "Direktur Eksekutif",
   "Wakil Direktur Eksekutif",
   "Kepala Sekretariat",
@@ -36,6 +39,8 @@ export const KUOTA_JABATAN: Record<string, number> = {
   "Wakil Ketua Umum": 1,
   "Sekretaris Jenderal": 1,
   "Wakil Sekretaris Jenderal": 1,
+  "Bendahara Umum": 1,
+  "Wakil Bendahara Umum": 1,
   "Direktur Eksekutif": 1,
   // Wakil Direktur Eksekutif: TANPA kuota (tak terdaftar) — banyak wakil
   // dibedakan lewat bidang_jabatan (mis. "Bidang IT", "Bidang Hukum").
@@ -114,6 +119,8 @@ export function cakupanPengumuman(user: {
   if (
     j === "Sekretaris Jenderal" ||
     j === "Wakil Sekretaris Jenderal" ||
+    j === "Bendahara Umum" ||
+    j === "Wakil Bendahara Umum" ||
     j === "Direktur Eksekutif" ||
     j === "Wakil Direktur Eksekutif" ||
     j === "Kepala Sekretariat" ||

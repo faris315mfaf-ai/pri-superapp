@@ -19,33 +19,58 @@ import {
 export { KATALOG_DASHBOARD, KUNCI_DASHBOARD_SAH };
 export type { KunciDashboard };
 
-/** Daftar kunci dashboard yang menyala untuk sebuah jabatan. */
-export async function aksesDashboardRole(role: string): Promise<string[]> {
+/** Pemakai yang dinilai: cukup peran + jabatannya. */
+type PemakaiDashboard = { role: string; jabatan?: string | null };
+
+/** Kompat: pemanggil lama mengirim string role saja. */
+function urai(pemakai: PemakaiDashboard | string): PemakaiDashboard {
+  return typeof pemakai === "string" ? { role: pemakai } : pemakai;
+}
+
+/**
+ * ATURAN BARU (permintaan user 1 Sep 2026): SEMUA pemegang JABATAN
+ * struktur (Ketua Umum s.d. Pimred, termasuk Bendahara Umum & wakil)
+ * otomatis mendapat dashboard SELENGKAP-LENGKAPNYA — tanpa perlu
+ * dinyalakan satu-satu oleh master. Tabel dashboard_access tetap
+ * dipakai untuk pemberian akses per-peran bagi yang TANPA jabatan.
+ */
+function aksesPenuh(p: PemakaiDashboard): boolean {
+  if (p.role === "master" || p.role === "super_admin") return true;
+  return (p.jabatan ?? "").trim() !== "";
+}
+
+/** Daftar kunci dashboard yang menyala untuk seorang pemakai. */
+export async function aksesDashboardRole(
+  pemakai: PemakaiDashboard | string,
+): Promise<string[]> {
+  const p = urai(pemakai);
   // Master selalu penuh — pemegang kendali tidak boleh bisa terkunci
-  // dari halaman pengaturannya sendiri. Super admin (= Ketua Umum pada
-  // model peran baru) juga selalu penuh — "buka seluruh mode untuk
-  // ketua umum" (permintaan user 31 Agu 2026).
-  if (role === "master" || role === "super_admin") {
+  // dari halaman pengaturannya sendiri. Super admin (= Ketua Umum) dan
+  // kini SEMUA pemegang jabatan juga penuh (1 Sep 2026).
+  if (aksesPenuh(p)) {
     return KATALOG_DASHBOARD.map((d) => d.kunci);
   }
   const { data } = await supabase()
     .from("dashboard_access")
     .select("dashboard_key")
-    .eq("role", role)
+    .eq("role", p.role)
     .eq("aktif", true);
   return (data ?? [])
     .map((b) => String(b.dashboard_key))
     .filter((k) => KUNCI_DASHBOARD_SAH.has(k));
 }
 
-/** Apakah jabatan ini boleh membuka satu sub-dashboard? */
-export async function bolehDashboard(role: string, kunci: KunciDashboard): Promise<boolean> {
-  // Master & super admin (Ketua Umum) selalu boleh — lihat catatan di atas.
-  if (role === "master" || role === "super_admin") return true;
+/** Apakah pemakai ini boleh membuka satu sub-dashboard? */
+export async function bolehDashboard(
+  pemakai: PemakaiDashboard | string,
+  kunci: KunciDashboard,
+): Promise<boolean> {
+  const p = urai(pemakai);
+  if (aksesPenuh(p)) return true;
   const { data } = await supabase()
     .from("dashboard_access")
     .select("aktif")
-    .eq("role", role)
+    .eq("role", p.role)
     .eq("dashboard_key", kunci)
     .maybeSingle();
   return data?.aktif === true;

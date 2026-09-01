@@ -99,7 +99,7 @@ export async function GET(request: Request) {
       // persetujuan tetap dijaga terpisah.
       let idBawahan: number[] | null = null;
       const lihatSemua =
-        PERAN_HR.has(user.role) || adalahHR(user) || (await bolehDashboard(user.role, "absensi"));
+        PERAN_HR.has(user.role) || adalahHR(user) || (await bolehDashboard(user, "absensi"));
       if (!lihatSemua) {
         const { data: tim } = await db
           .from("tim_anggota")

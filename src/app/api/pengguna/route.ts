@@ -58,7 +58,7 @@ export async function GET(request: Request) {
       // Fitur 1.19/3.3: jabatan yang diberi master akses dashboard
       // berbasis daftar anggota ikut boleh MEMBACA roster (baca-saja;
       // semua tindakan pengubah tetap dijaga ketat di PATCH).
-      const akses = await aksesDashboardRole(pembaca.role);
+      const akses = await aksesDashboardRole(pembaca);
       const butuhRoster = ["absensi", "kpi", "anggota"];
       if (!butuhRoster.some((k) => akses.includes(k))) {
         throw Object.assign(new Error("Hanya pengurus yang boleh membuka daftar akun"), {

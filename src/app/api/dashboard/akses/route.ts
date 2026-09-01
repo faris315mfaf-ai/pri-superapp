@@ -58,7 +58,7 @@ export async function GET(request: Request) {
       };
     }
 
-    const boleh = await aksesDashboardRole(user.role);
+    const boleh = await aksesDashboardRole(user);
     // Orang HR (peran admin_hr / Divisi HR — fitur 1.22.x/1) mendapat
     // akses dashboard HR (absensi, kpi, kepatuhan, anggota) di samping
     // yang mungkin diberi master untuk perannya. Dashboard TV tidak.

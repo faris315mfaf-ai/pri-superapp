@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     if (
       !adalahPengurus(user.role) &&
       !adalahHR(user) &&
-      (await aksesDashboardRole(user.role)).length === 0
+      (await aksesDashboardRole(user)).length === 0
     ) {
       throw Object.assign(new Error("Jabatan Anda tidak punya akses dashboard."), {
         status: 403,

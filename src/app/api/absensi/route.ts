@@ -165,7 +165,7 @@ export async function GET(request: Request) {
       !adalahHR(user) &&
       // Fitur 1.19/3.3.a: akses dashboard "absensi" = boleh MEMBACA
       // absensi semua anggota (baca-saja; POST tetap dijaga).
-      !(await bolehDashboard(user.role, "absensi"))
+      !(await bolehDashboard(user, "absensi"))
     ) {
       throw Object.assign(new Error("Hanya HR yang boleh melihat absensi semua anggota."), {
         status: 403,
