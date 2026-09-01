@@ -24,14 +24,28 @@ import {
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+// Cache mikro per-instance (persiapan lonjakan 300 pengguna, 1 Sep
+// 2026): data leaderboard sama untuk SEMUA orang dan sumbernya toh
+// cache insight — hitung sekali per 30 dtk per instance, bukan 3 query
+// setiap permintaan. Basi maksimal 30 dtk = tak terasa.
+let hasilCache: {
+  anggota: Awaited<ReturnType<typeof kumpulkanAnggotaTvr>>;
+  top3: ReturnType<typeof juaraKategoriTvr>;
+  pada: number;
+} | null = null;
+const TTL_CACHE_MS = 30_000;
+
 export async function GET(request: Request) {
   return bungkus(async () => {
     await pastikanMasuk(request);
-    const anggota = await kumpulkanAnggotaTvr();
-    // "top3" = SEMUA pemegang border (juara 1-3 di kategori mana pun),
-    // masing-masing membawa peringkat TERBAIKNYA — dipakai cincin
-    // border avatar di seluruh aplikasi.
-    const top3 = juaraKategoriTvr(anggota);
+    if (!hasilCache || Date.now() - hasilCache.pada > TTL_CACHE_MS) {
+      const anggota = await kumpulkanAnggotaTvr();
+      // "top3" = SEMUA pemegang border (juara 1-3 di kategori mana pun),
+      // masing-masing membawa peringkat TERBAIKNYA — dipakai cincin
+      // border avatar di seluruh aplikasi.
+      hasilCache = { anggota, top3: juaraKategoriTvr(anggota), pada: Date.now() };
+    }
+    const { anggota, top3 } = hasilCache;
 
     const { searchParams } = new URL(request.url);
     // Jalur ?ringkas=1 dipanggil SANGAT sering (cincin avatar semua

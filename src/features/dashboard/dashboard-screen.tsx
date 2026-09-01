@@ -36,6 +36,7 @@ import { GlassCard } from "@/components/glass-card";
 import { KartuKelolaPengguna } from "./kartu-kelola-pengguna";
 import { TataLetakModul, type SeksiModul } from "@/components/tata-letak-modul";
 import { KATALOG_DASHBOARD } from "@/lib/dashboard-katalog";
+import { IkonSinyal } from "@/components/ikon-sinyal";
 import { RingkasanUtama } from "./ringkasan-utama";
 import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 import { TombolPeringkat } from "@/features/peringkat/tombol-peringkat";
@@ -170,6 +171,9 @@ export function DashboardScreen({
 
           {/* Mahkota leaderboard TV Rakyat (kiri lonceng, 1 Sep 2026) */}
           <TombolPeringkat />
+
+          {/* Sinyal latensi server (1 Sep 2026) — pojok kanan atas */}
+          <IkonSinyal />
 
           {/* Tombol lonceng notifikasi + badge belum dibaca */}
           <button

@@ -25,12 +25,19 @@ import { getTop3Tvr, type JuaraTvr } from "@/services";
 import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 
 /**
- * SAKELAR FITUR LEADERBOARD (1 Sep 2026 — permintaan user: matikan
- * fitur yang paling menguras RAM). false = mahkota, popup, border
- * animasi, dan SEMUA polling top3 mati total; avatar tampil biasa.
- * Kode dipertahankan utuh — tinggal ganti true untuk menghidupkan lagi.
+ * SAKELAR FITUR LEADERBOARD. Dinyalakan lagi 1 Sep 2026 malam dalam
+ * MODE RINGAN (permintaan user: "tambahkan leaderboard seperti kemarin
+ * tetapi hilangkan efek-efek badgenya karena memberatkan").
  */
-export const FITUR_PERINGKAT_AKTIF = false;
+export const FITUR_PERINGKAT_AKTIF = true;
+
+/**
+ * MODE RINGAN: border juara = CINCIN STATIS tipis berwarna tier —
+ * TANPA sayap SVG, animasi framer-motion, aura, bintang, mahkota.
+ * Nol beban RAM/CPU tambahan; identitas juara tetap terlihat.
+ * false = kembali ke bingkai ornamen penuh (berat).
+ */
+export const MODE_RINGAN = true;
 
 type WarnaTier = {
   nama: string;
@@ -148,6 +155,35 @@ export function CincinMythic({
   const m = MEGAH[tier] ?? MEGAH[3];
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   if (!t) return <>{children}</>;
+
+  // MODE RINGAN (1 Sep 2026): cincin statis tipis — piringan gradien
+  // diam di belakang avatar (avatar bulat pekat menutup tengahnya,
+  // tersisa tepi 3px = cincin). Nol animasi, nol SVG, nol beban.
+  if (MODE_RINGAN) {
+    const tebal = Math.max(2, Math.round(ukuran * 0.045));
+    return (
+      <span
+        className="relative inline-flex shrink-0 items-center justify-center align-middle"
+        style={{ width: ukuran, height: ukuran }}
+      >
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute rounded-full"
+          style={{
+            inset: -tebal,
+            background: t.labelGradasi,
+            boxShadow: `0 0 ${Math.max(4, ukuran * 0.1)}px ${t.cahaya}`,
+          }}
+        />
+        <span
+          className="relative z-10 inline-flex shrink-0 items-center justify-center"
+          style={{ width: ukuran, height: ukuran }}
+        >
+          {children}
+        </span>
+      </span>
+    );
+  }
 
   // Geometri: lubang avatar di viewBox = lingkaran r56 @ (110,112).
   const skala = ukuran / 112;
@@ -455,11 +491,12 @@ export function useTop3Tvr(): JuaraTvr[] {
       pendengar.delete(setData);
     };
   }, []);
-  // "Realtime": disegarkan tiap 60 dtk + saat aplikasi dibuka kembali.
+  // Disegarkan tiap 120 dtk + saat aplikasi dibuka kembali (dilonggarkan
+  // dari 60 — persiapan lonjakan; server juga ber-cache mikro 30 dtk).
   useSegarOtomatis(() => {
     if (!FITUR_PERINGKAT_AKTIF) return;
     void ambilTop3Bersama(true).catch(() => {});
-  }, 60);
+  }, 120);
   return FITUR_PERINGKAT_AKTIF ? data : [];
 }
 

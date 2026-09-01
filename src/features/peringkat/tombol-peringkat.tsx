@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Crown, ExternalLink, Flame, X } from "lucide-react";
+import { Crown, ExternalLink, X } from "lucide-react";
 import { AvatarInisial, GlassSkeleton } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
 import { PlatformIcon } from "@/components/platform-icon";
@@ -61,21 +61,9 @@ export function TombolPeringkat() {
         aria-label="Buka leaderboard TV Rakyat"
         className="glass btn-tekan relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
       >
-        {/* Api berkobar di belakang mahkota */}
-        <motion.span
-          aria-hidden="true"
-          className="pointer-events-none absolute"
-          style={{ top: 1 }}
-          animate={{ scale: [1, 1.25, 1.05, 1.3, 1], opacity: [0.7, 1, 0.8, 1, 0.7] }}
-          transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <Flame className="h-[13px] w-[13px] text-orange-500" fill="#FB923C" />
-        </motion.span>
-        <Crown
-          className="relative z-10 h-[18px] w-[18px] text-amber-500"
-          fill="#F59E0B"
-          style={{ filter: "drop-shadow(0 2px 6px rgba(245, 158, 11, 0.55))" }}
-        />
+        {/* Mahkota STATIS (mode ringan 1 Sep 2026 — animasi api dicabut
+            karena memberatkan; leaderboard-nya tetap lengkap). */}
+        <Crown className="h-[18px] w-[18px] text-amber-500" fill="#F59E0B" />
       </button>
       <AnimatePresence>{buka && <PopupPeringkat onTutup={() => setBuka(false)} />}</AnimatePresence>
     </>

@@ -29,6 +29,7 @@ import { ProgressRing } from "@/components/progress-ring";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { IkonStreak } from "@/components/ikon-streak";
 import { FotoBulat } from "@/components/foto-bulat";
+import { IkonSinyal } from "@/components/ikon-sinyal";
 import { TombolPeringkat } from "@/features/peringkat/tombol-peringkat";
 import { CincinJuara } from "@/features/peringkat/cincin-mythic";
 import { useAppStore } from "@/hooks/use-app-store";
@@ -209,6 +210,8 @@ export function BerandaScreen({
           {/* Mahkota leaderboard TV Rakyat (kiri lonceng, 1 Sep 2026) */}
           <TombolPeringkat />
           <TombolLonceng onBuka={onBukaNotifikasi} />
+          {/* Sinyal latensi server (1 Sep 2026) — pojok kanan atas */}
+          <IkonSinyal />
           <ThemeToggle />
         </div>
       </header>

@@ -20,6 +20,9 @@ import {
 
 export const dynamic = "force-dynamic";
 
+/** Cache mikro per-instance (lihat catatan di dalam GET). */
+let hasilCache: { isi: Record<string, unknown>; pada: number } | null = null;
+
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
   return h.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : "";
@@ -43,6 +46,13 @@ export async function GET(request: Request) {
       throw Object.assign(new Error("Jabatan Anda tidak punya akses dashboard."), {
         status: 403,
       });
+    }
+
+    // Cache mikro per-instance (persiapan lonjakan, 1 Sep 2026): angka
+    // ringkasan sama untuk semua pengurus — 6 query cukup sekali per
+    // 20 dtk per instance, bukan setiap penyegaran layar.
+    if (hasilCache && Date.now() - hasilCache.pada < 20_000) {
+      return hasilCache.isi;
     }
 
     const db = supabase();
@@ -144,7 +154,7 @@ export async function GET(request: Request) {
       totalVideoHariIni += hasil.jumlah;
     }
 
-    return {
+    const isi = {
       periode,
       tanggal,
       komen: {
@@ -160,5 +170,7 @@ export async function GET(request: Request) {
         video_hari_ini: totalVideoHariIni,
       },
     };
+    hasilCache = { isi, pada: Date.now() };
+    return isi;
   });
 }
