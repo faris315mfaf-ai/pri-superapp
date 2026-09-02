@@ -66,7 +66,7 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
 
     const { data: kandidat } = await db
       .from("tvr_siaran_item")
-      .select("id, siaran_id, profil, user_id, platforms")
+      .select("id, siaran_id, profil, user_id, platforms, video_url, judul, caption")
       .eq("status", "menunggu")
       .order("id", { ascending: true })
       .limit(MAKS_ITEM_PER_SAPUAN);
@@ -133,11 +133,16 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
             ? new Date(jadwalMs).toISOString()
             : undefined;
 
+        // Studio PALUGODAM: item bisa membawa video/judul/caption SENDIRI
+        // (hasil render per profil) — menimpa nilai induk.
+        const videoUrl = String(item.video_url || s.video_url);
+        const judulItem = String(item.judul || s.judul);
+        const captionItem = String(item.caption ?? "") || s.caption;
         const hasil = await unggahVideoUp({
           profil: String(item.profil),
-          videoUrl: s.video_url,
-          judul: s.judul,
-          caption: s.caption,
+          videoUrl,
+          judul: judulItem,
+          caption: captionItem,
           platforms,
           scheduleDate: jadwal,
         });
@@ -162,11 +167,11 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
         if (item.user_id) {
           await db.from("tvrku_post").insert({
             user_id: Number(item.user_id),
-            judul: s.judul.slice(0, 100),
-            caption: s.caption.slice(0, 2200),
+            judul: judulItem.slice(0, 100),
+            caption: captionItem.slice(0, 2200),
             platforms,
             video_path: "",
-            video_url: s.video_url,
+            video_url: videoUrl,
             jadwal: jadwal ?? null,
             hasil: hasil.mentah,
             request_id: hasil.request_id,

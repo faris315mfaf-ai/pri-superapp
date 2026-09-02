@@ -130,3 +130,17 @@ export function deskripsiStruktur(u: {
   const sub = (u.sub_divisi ?? "").trim();
   return `${awalan}${d}${sub ? ` · ${sub}` : ""}`;
 }
+
+/**
+ * Admin Studio PALUGODAM (3 Sep 2026): master/super_admin, atau KEPALA
+ * Divisi PALUGODAM (akun ADMIN PALUGODAM dibuat dengan posisi kepala).
+ * Mengendalikan link → DeepSeek → Creatomate → Siaran Serentak.
+ */
+export function adalahAdminStudio(u: {
+  role?: string;
+  divisi?: string | null;
+  posisi_divisi?: string | null;
+}): boolean {
+  if (u.role === "master" || u.role === "super_admin") return true;
+  return (u.divisi ?? "").trim() === DIVISI_PALUGODAM && u.posisi_divisi === "kepala";
+}

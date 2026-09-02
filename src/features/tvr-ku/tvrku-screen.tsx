@@ -1,5 +1,6 @@
 "use client";
 import { adalahKetum } from "@/lib/jabatan";
+import { adalahAdminStudio } from "@/lib/struktur";
 
 // ============================================================
 // TvrKuScreen — halaman TV Rakyat MILIK ANGGOTA.
@@ -69,6 +70,7 @@ import { PanelTugasSaya } from "./tugas-saya";
 import { KirimVideoManual } from "./kirim-video-manual";
 import { UnggahSosmedSaya } from "./unggah-sosmed-saya";
 import { SiaranSerentak } from "./siaran-serentak";
+import { StudioPalugodam } from "./studio-palugodam";
 import { InsightSayaPanel } from "./insight-saya-panel";
 import { cn } from "@/lib/utils";
 
@@ -507,6 +509,8 @@ export function TvrKuScreen({
   const ketum = adalahKetum(_user);
   // Siaran Serentak (3 Sep 2026): khusus master / Ketua Umum.
   const bolehSiaran = _user.role === "master" || _user.role === "super_admin";
+  // Studio PALUGODAM (3 Sep 2026): master/super_admin + kepala Divisi PALUGODAM.
+  const bolehStudio = adalahAdminStudio(_user);
   const [akun, setAkun] = useState<AkunTvr[] | null>(null);
   const [laporan, setLaporan] = useState<LaporanVideo[]>([]);
   const [menunggu, setMenunggu] = useState<LaporanPending[]>([]);
@@ -853,6 +857,23 @@ export function TvrKuScreen({
         </div>
       </FadeInUp>
         ) },
+        ...(bolehStudio
+          ? [
+              {
+                id: "studio-palugodam",
+                judul: "Studio PALUGODAM",
+                ikon: Clapperboard,
+                render: () => (
+                  <FadeInUp delay={0.1}>
+                    <SectionTitle judul="Studio PALUGODAM" />
+                    <div className="mt-2.5">
+                      <StudioPalugodam />
+                    </div>
+                  </FadeInUp>
+                ),
+              },
+            ]
+          : []),
         ...(bolehSiaran
           ? [
               {

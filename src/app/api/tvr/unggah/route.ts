@@ -29,6 +29,7 @@ import { hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
 import { adalahPalugodam } from "@/lib/struktur";
 import { prosesPesananPalugodam } from "@/lib/palugodam";
 import { bersihkanMediaSiaran } from "@/lib/siaran";
+import { bersihkanMediaStudio } from "@/lib/studio";
 import {
   dariR2,
   hapusVideoR2,
@@ -112,6 +113,7 @@ async function bersihkanVideoKedaluwarsa(): Promise<void> {
   }
   // Berkas Siaran Serentak (3 Sep 2026) ikut disapu di sini.
   await bersihkanMediaSiaran();
+  await bersihkanMediaStudio();
 }
 
 export async function GET(request: Request) {

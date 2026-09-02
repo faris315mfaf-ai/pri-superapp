@@ -187,3 +187,82 @@ export async function scrapeAkun(
   if (platform === "instagram") return scrapeInstagram(username, count);
   return [];
 }
+
+// ------------------------------------------------------------
+// Satu video dari LINK (Studio PALUGODAM, 3 Sep 2026)
+// Diverifikasi empiris 3 Sep 2026:
+//  - TikTok : GET /tiktok/app/v3/fetch_one_video?aweme_id=ID  (atau
+//             fetch_one_video_by_share_url?share_url=... untuk link pendek)
+//             → data.aweme_detail { desc, video.download_no_watermark_addr.url_list[],
+//               video.play_addr.url_list[], video.cover.url_list[] }
+//  - Instagram: GET /instagram/v1/fetch_post_by_url?post_url=...
+//             → data.items[0] { code, caption.text, video_versions[{url}],
+//               image_versions2.candidates[0].url }
+// URL yang dikembalikan = berkas mp4 langsung (bisa diunduh server).
+// ------------------------------------------------------------
+
+export type MediaLink = {
+  platform: "tiktok" | "instagram";
+  /** URL mp4 langsung (berumur pendek — segera diunduh/disalin). */
+  url: string;
+  caption: string;
+  thumbnail_url: string;
+  kode: string;
+};
+
+type DetailTikTok = {
+  aweme_id?: string | number;
+  desc?: string;
+  video?: {
+    download_no_watermark_addr?: { url_list?: string[] };
+    play_addr?: { url_list?: string[] };
+    cover?: { url_list?: string[] };
+  };
+};
+
+export async function mediaDariLink(link: string): Promise<MediaLink> {
+  let u: URL;
+  try {
+    u = new URL(link.trim());
+  } catch {
+    throw new Error("Link tidak sah.");
+  }
+  const host = u.hostname.toLowerCase();
+  if (host.includes("tiktok.com")) {
+    const idPath = /\/video\/(\d+)/.exec(u.pathname)?.[1];
+    const j = await tk<{ data?: { aweme_detail?: DetailTikTok } }>(
+      idPath
+        ? `/tiktok/app/v3/fetch_one_video?aweme_id=${idPath}`
+        : `/tiktok/app/v3/fetch_one_video_by_share_url?share_url=${encodeURIComponent(link.trim())}`,
+      40_000,
+    );
+    const d = j.data?.aweme_detail;
+    const url =
+      d?.video?.download_no_watermark_addr?.url_list?.[0] ?? d?.video?.play_addr?.url_list?.[0] ?? "";
+    if (!d || !url) throw new Error("Video TikTok tidak ditemukan / privat.");
+    return {
+      platform: "tiktok",
+      url,
+      caption: (d.desc ?? "").trim(),
+      thumbnail_url: d.video?.cover?.url_list?.[0] ?? "",
+      kode: String(d.aweme_id ?? idPath ?? Date.now()),
+    };
+  }
+  if (host.includes("instagram.com")) {
+    const j = await tk<{ data?: { items?: PostIG[] } & PostIG }>(
+      `/instagram/v1/fetch_post_by_url?post_url=${encodeURIComponent(link.trim())}`,
+      40_000,
+    );
+    const d = (j.data?.items?.[0] ?? j.data) as (PostIG & { video_versions?: { url?: string }[] }) | undefined;
+    const url = d?.video_versions?.[0]?.url ?? "";
+    if (!d || !url) throw new Error("Video Instagram tidak ditemukan / bukan video / privat.");
+    return {
+      platform: "instagram",
+      url,
+      caption: (d.caption?.text ?? "").trim(),
+      thumbnail_url: d.image_versions2?.candidates?.[0]?.url ?? "",
+      kode: String(d.code ?? d.pk ?? Date.now()),
+    };
+  }
+  throw new Error("Hanya link TikTok atau Instagram yang didukung.");
+}

@@ -4711,3 +4711,89 @@ export async function batalSiaran(id: string): Promise<{ dibatalkan: number }> {
   });
   return { dibatalkan: Number(json?.dibatalkan ?? 0) };
 }
+
+// ---- STUDIO PALUGODAM (3 Sep 2026) ----
+export type StudioSiap = { deepseek: boolean; creatomate: boolean; uploadpost: boolean; r2: boolean };
+export type StudioTemplate = {
+  template_id: string;
+  label: string;
+  elemen_video: string;
+  elemen_judul: string;
+  elemen_highlight: string;
+  aktif: boolean;
+};
+export type StudioProfil = {
+  profil: string;
+  user_id: string | null;
+  nama: string;
+  akun: Record<string, string>;
+  tertaut: number;
+  template: StudioTemplate | null;
+};
+export type StudioProyekRingkas = {
+  id: string;
+  ringkas: string;
+  sumber_platform: string;
+  status: string;
+  siaran_id: string | null;
+  jumlah_item: number;
+  dibuat_pada: string;
+};
+export type StudioItem = {
+  id: string;
+  profil: string;
+  user_id: string | null;
+  nama: string;
+  template_id: string;
+  judul: string;
+  highlight: string;
+  caption: string;
+  render_status: "belum" | "rendering" | "sukses" | "gagal" | string;
+  render_url: string;
+  pesan: string;
+};
+export type StudioProyek = {
+  proyek: {
+    id: string;
+    sumber_link: string;
+    sumber_platform: string;
+    sumber_url: string;
+    sumber_caption: string;
+    penjelasan: string;
+    caption_inti: string;
+    status: string;
+    siaran_id: string | null;
+    dibuat_pada: string;
+  };
+  item: StudioItem[];
+  siaran: {
+    id: string;
+    item: { id: string; profil: string; platforms: string[]; status: string; pesan: string }[];
+    ringkas: { total: number; terkirim: number; gagal: number; menunggu: number; dibatalkan: number };
+  } | null;
+};
+
+export async function getStudioPengaturan(): Promise<{ siap: StudioSiap; profil: StudioProfil[] }> {
+  const json = await fetchJson("/api/studio?bagian=template");
+  return { siap: json.siap as StudioSiap, profil: (json.profil ?? []) as StudioProfil[] };
+}
+
+export async function getStudioProyekList(): Promise<{ siap: StudioSiap; data: StudioProyekRingkas[] }> {
+  const json = await fetchJson("/api/studio?bagian=proyek");
+  return { siap: json.siap as StudioSiap, data: (json.data ?? []) as StudioProyekRingkas[] };
+}
+
+export async function getStudioProyek(id: string): Promise<StudioProyek> {
+  const json = await fetchJson(`/api/studio?id=${encodeURIComponent(id)}`);
+  return json as StudioProyek;
+}
+
+/** Aksi Studio (template_simpan/hapus, sumber_link/berkas, teks_simpan, generate, item_simpan, render, siaran, hapus). */
+export async function studioPost(aksi: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const json = await fetchJson("/api/studio", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ aksi, ...data }),
+  });
+  return (json ?? {}) as Record<string, unknown>;
+}
