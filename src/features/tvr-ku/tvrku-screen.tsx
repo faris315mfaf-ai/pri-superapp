@@ -14,6 +14,7 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
+import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Clapperboard,
@@ -506,6 +507,7 @@ export function TvrKuScreen({
   const [riwayat7, setRiwayat7] = useState<{ tanggal: string; jumlah: number }[]>([]);
   const [memuat, setMemuat] = useState(true);
   const [muatUlang, setMuatUlang] = useState(0);
+  const versiSegar = useVersiSegar();
   const [modalWebsite, setModalWebsite] = useState(false);
   const [modalLaporan, setModalLaporan] = useState(false);
   const [editAkun, setEditAkun] = useState<AkunTvr | null>(null);
@@ -542,7 +544,7 @@ export function TvrKuScreen({
     return () => {
       hidup = false;
     };
-  }, [muatUlang]);
+  }, [muatUlang, versiSegar]);
 
   const jumlahHariIni = laporan.length;
   const persenKpi = Math.min(100, Math.round((100 * jumlahHariIni) / kpiTarget));

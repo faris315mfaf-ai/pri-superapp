@@ -528,11 +528,15 @@ export default function Page() {
       if (document.visibilityState === "visible") void muat();
     };
     document.addEventListener("visibilitychange", saatTerlihat);
+    // Tombol refresh sistem (kanan atas) → notifikasi ikut disegarkan.
+    const saatDiminta = () => void muat();
+    window.addEventListener("pri:segarkan", saatDiminta);
 
     return () => {
       hidup = false;
       clearInterval(berkala);
       document.removeEventListener("visibilitychange", saatTerlihat);
+      window.removeEventListener("pri:segarkan", saatDiminta);
     };
   }, [aplikasiAktif]);
 

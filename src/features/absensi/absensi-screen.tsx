@@ -15,6 +15,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Camera,
@@ -654,6 +655,7 @@ export function AbsensiScreen({ user, onKembali }: AbsensiScreenProps) {
   const [antreanIzin, setAntreanIzin] = useState<Perizinan[]>([]);
   const [modalIzin, setModalIzin] = useState(false);
   const [muatUlangIzin, setMuatUlangIzin] = useState(0);
+  const versiSegar = useVersiSegar();
   const [sedangPutus, setSedangPutus] = useState<string | null>(null);
 
   // Muat riwayat tiap kali saklar mode berubah. setState hanya
@@ -704,7 +706,7 @@ export function AbsensiScreen({ user, onKembali }: AbsensiScreenProps) {
     return () => {
       hidup = false;
     };
-  }, [muatUlangIzin]);
+  }, [muatUlangIzin, versiSegar]);
 
   async function putuskan(id: string, keputusan: "disetujui" | "ditolak") {
     if (sedangPutus) return;

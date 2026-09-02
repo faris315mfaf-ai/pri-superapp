@@ -12,6 +12,7 @@ import { ChevronLeft, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { inisial, warnaAvatar } from "@/lib/format";
 import { useAppStore } from "@/hooks/use-app-store";
+import { TombolSegarSistem } from "@/components/tombol-segar-sistem";
 
 // ------------------------------------------------------------
 // GlassSkeleton — skeleton kaca dengan efek shimmer
@@ -146,12 +147,25 @@ export function ScreenHeader({ judul, onKembali, kanan, className }: ScreenHeade
 // ------------------------------------------------------------
 // ThemeToggle — tombol matahari/bulan dengan animasi rotate
 // ------------------------------------------------------------
-export function ThemeToggle({ className }: { className?: string }) {
+// Sejak 2 Sep 2026 ThemeToggle juga MEMBAWA tombol refresh sistem di
+// sebelah kirinya: ThemeToggle sudah ada di kanan atas hampir semua layar,
+// jadi inilah cara termurah agar tombol refresh "tampil tetap di semua
+// layar" tanpa mengedit belasan header. Tombolnya sendiri sembunyi bila
+// belum login. `tanpaSegar` untuk layar yang tak butuh.
+export function ThemeToggle({
+  className,
+  tanpaSegar = false,
+}: {
+  className?: string;
+  tanpaSegar?: boolean;
+}) {
   const tema = useAppStore((s) => s.tema);
   const toggleTema = useAppStore((s) => s.toggleTema);
   const gelap = tema === "dark";
 
   return (
+    <>
+    {!tanpaSegar && <TombolSegarSistem />}
     <button
       type="button"
       onClick={toggleTema}
@@ -175,6 +189,7 @@ export function ThemeToggle({ className }: { className?: string }) {
         )}
       </motion.span>
     </button>
+    </>
   );
 }
 

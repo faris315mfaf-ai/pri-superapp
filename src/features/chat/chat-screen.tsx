@@ -15,6 +15,7 @@
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
+import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -608,6 +609,7 @@ function ModalPengumuman({ onTutup }: { onTutup: () => void }) {
   const [jabatanTarget, setJabatanTarget] = useState("");
   const [sedangKirim, setSedangKirim] = useState(false);
   const [muatUlang, setMuatUlang] = useState(0);
+  const versiSegar = useVersiSegar();
 
   useEffect(() => {
     let hidup = true;
@@ -631,7 +633,7 @@ function ModalPengumuman({ onTutup }: { onTutup: () => void }) {
     return () => {
       hidup = false;
     };
-  }, [muatUlang]);
+  }, [muatUlang, versiSegar]);
 
   async function kirim() {
     if (judul.trim().length < 3 || isi.trim().length < 3 || sedangKirim) return;
@@ -842,6 +844,7 @@ export function ChatScreen({
 }) {
   const [daftar, setDaftar] = useState<ChatKontak[] | null>(null);
   const [muatUlang, setMuatUlang] = useState(0);
+  const versiSegar = useVersiSegar();
   const [kontakAktif, setKontakAktif] = useState<ChatKontak | null>(null);
   const [modalBaru, setModalBaru] = useState(false);
   const [modalPengumuman, setModalPengumuman] = useState(false);
@@ -886,7 +889,7 @@ export function ChatScreen({
       clearInterval(detak);
     };
      
-  }, [muatUlang]);
+  }, [muatUlang, versiSegar]);
 
   async function bukaModalBaru() {
     setModalBaru(true);
@@ -1296,6 +1299,7 @@ function ModalPengawasChat({
   const [aktif, setAktif] = useState(true);
   const [mode, setMode] = useState<"terbuka" | "persetujuan">("terbuka");
   const [muatUlang, setMuatUlang] = useState(0);
+  const versiSegar = useVersiSegar();
   const [dibuka, setDibuka] = useState<ChatPantau | null>(null);
   const [isiPesan, setIsiPesan] = useState<ChatPesan[] | null>(null);
   const [sedangProses, setSedangProses] = useState(false);
@@ -1316,7 +1320,7 @@ function ModalPengawasChat({
     return () => {
       hidup = false;
     };
-  }, [muatUlang]);
+  }, [muatUlang, versiSegar]);
 
   async function bukaIsi(k: ChatPantau) {
     setDibuka(k);

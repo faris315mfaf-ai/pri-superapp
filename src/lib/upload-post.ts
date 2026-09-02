@@ -304,6 +304,8 @@ export type PostinganUp = {
   jenis: string;
   /** SELALU ISO string (sudah dinormalkan), atau null bila tak terbaca. */
   waktu: string | null;
+  /** Gambar pratinjau bila platform menyediakan (galeri konten, 2 Sep 2026). */
+  thumbnail: string;
 };
 
 /**
@@ -354,6 +356,10 @@ export async function postinganTerbaruUp(
     caption: String(m.caption ?? "").slice(0, 300),
     jenis: String(m.media_type ?? ""),
     waktu: keIso(m.timestamp),
+    thumbnail: String(
+      m.thumbnail_url ??
+        (String(m.media_type ?? "").toLowerCase().includes("image") ? (m.media_url ?? "") : ""),
+    ),
   }));
 }
 

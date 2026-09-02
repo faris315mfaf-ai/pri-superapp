@@ -9,13 +9,20 @@
 // Beda dari KartuVideoBaru: kartu itu laporan-diri untuk video unggahan
 // aplikasi; kartu ini kepatuhan komentar terverifikasi untuk SEMUA
 // postingan akun wajib (termasuk yang diposting langsung di sosmed).
+//
+// Refresh (2 Sep 2026): tombol ↻ di kepala kartu memuat ulang daftar
+// (mis. setelah berkomentar, untuk melihat statusnya berubah) — juga ikut
+// tombol refresh sistem di kanan atas lewat versiSegar.
 // ============================================================
 
 import { useEffect, useState } from "react";
-import { Check, Clock, ExternalLink, MessageCircle } from "lucide-react";
+import { Check, Clock, ExternalLink, MessageCircle, RefreshCw } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { FadeInUp, GlassSkeleton } from "@/components/pri-ui";
+import { toast } from "@/hooks/use-app-store";
+import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { getWajibKomen, type WajibKomenItem } from "@/services";
+import { cn } from "@/lib/utils";
 
 const LABEL_PLATFORM: Record<string, string> = {
   instagram: "Instagram",
@@ -27,7 +34,9 @@ const LABEL_PLATFORM: Record<string, string> = {
 };
 
 export function KartuWajibKomen() {
+  const versiSegar = useVersiSegar();
   const [data, setData] = useState<WajibKomenItem[] | null>(null);
+  const [berputar, setBerputar] = useState(false);
   // Postingan yang tombol "Komentari"-nya sudah diklik: tampilkan
   // "menunggu verifikasi" sampai sinkron berikutnya memastikan komentarnya.
   const [diklik, setDiklik] = useState<Set<string>>(() => new Set());
@@ -45,7 +54,21 @@ export function KartuWajibKomen() {
     return () => {
       hidup = false;
     };
-  }, []);
+  }, [versiSegar]);
+
+  /** Tombol ↻ kartu: muat ulang daftar dengan umpan balik putaran. */
+  function segarkan() {
+    if (berputar) return;
+    setBerputar(true);
+    getWajibKomen()
+      .then((hasil) => {
+        setData(hasil.data);
+        // Status sudah diverifikasi ulang — tanda "menunggu" boleh dilepas
+        // untuk yang kini tercatat sudah komentar (otomatis lewat sudah_komentar).
+      })
+      .catch((e) => toast("error", "Gagal menyegarkan", e instanceof Error ? e.message : ""))
+      .finally(() => setBerputar(false));
+  }
 
   function buka(item: WajibKomenItem) {
     if (item.url) window.open(item.url, "_blank", "noopener,noreferrer");
@@ -72,10 +95,20 @@ export function KartuWajibKomen() {
               {belum} belum
             </span>
           )}
+          <button
+            type="button"
+            onClick={segarkan}
+            disabled={berputar}
+            aria-label="Segarkan daftar wajib dikomentari"
+            title="Segarkan"
+            className="glass btn-tekan ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-teks-utama disabled:opacity-60"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", berputar && "animate-spin")} />
+          </button>
         </div>
         <p className="mt-1 text-[11px] leading-snug text-teks-sekunder">
           Beri komentar di tiap postingan resmi. Status dicek otomatis dari komentar asli
-          Anda — tak perlu menandai sendiri.
+          Anda — tak perlu menandai sendiri. Ketuk ↻ untuk memeriksa ulang.
         </p>
 
         <div className="scrollbar-tipis mt-3 flex max-h-96 flex-col gap-2 overflow-y-auto">

@@ -15,6 +15,7 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
+import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Check,
@@ -205,6 +206,7 @@ export function KartuTim({ user }: { user: User }) {
   const bolehTambah = bolehFitur(izin, "tim.tambah", user.role);
   const [data, setData] = useState<BalasanTim | null>(null);
   const [muatUlang, setMuatUlang] = useState(0);
+  const versiSegar = useVersiSegar();
   const [modalTambah, setModalTambah] = useState(false);
   const [tugasUntuk, setTugasUntuk] = useState<AnggotaTimPantau | null>(null);
   const [sedangProses, setSedangProses] = useState(false);
@@ -222,7 +224,7 @@ export function KartuTim({ user }: { user: User }) {
     return () => {
       hidup = false;
     };
-  }, [muatUlang]);
+  }, [muatUlang, versiSegar]);
 
   if (!data) return null;
 
@@ -580,6 +582,7 @@ const PERAN_PENGACC = new Set(["super_admin", "admin_hr", "master"]);
 export function AntreanAccTim({ user }: { user: User }) {
   const [daftar, setDaftar] = useState<PengajuanTim[] | null>(null);
   const [muatUlang, setMuatUlang] = useState(0);
+  const versiSegar = useVersiSegar();
   const [sedangPutus, setSedangPutus] = useState<string | null>(null);
 
   const bolehAcc = PERAN_PENGACC.has(user.role);
@@ -598,7 +601,7 @@ export function AntreanAccTim({ user }: { user: User }) {
     return () => {
       hidup = false;
     };
-  }, [bolehAcc, muatUlang]);
+  }, [bolehAcc, muatUlang, versiSegar]);
 
   if (!bolehAcc || !daftar || daftar.length === 0) return null;
 

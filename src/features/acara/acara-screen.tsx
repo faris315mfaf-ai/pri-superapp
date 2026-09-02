@@ -10,6 +10,7 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
+import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { AnimatePresence, motion } from "framer-motion";
 import { CalendarDays, CalendarPlus, Loader2, Trash2, X } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
@@ -44,6 +45,7 @@ export function AcaraScreen({
   const [daftar, setDaftar] = useState<AcaraPenting[] | null>(null);
   const [bolehKelola, setBolehKelola] = useState(false);
   const [muatUlang, setMuatUlang] = useState(0);
+  const versiSegar = useVersiSegar();
   const [modalTambah, setModalTambah] = useState(false);
   const [sedangHapus, setSedangHapus] = useState<string | null>(null);
 
@@ -62,7 +64,7 @@ export function AcaraScreen({
     return () => {
       hidup = false;
     };
-  }, [muatUlang]);
+  }, [muatUlang, versiSegar]);
 
   async function hapus(a: AcaraPenting) {
     if (sedangHapus) return;

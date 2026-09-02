@@ -88,6 +88,13 @@ type AppState = {
   wewenangTv: { anggota: boolean; acc: boolean; upload: boolean; proses: boolean };
   setWewenangTv: (w: { anggota: boolean; acc: boolean; upload: boolean; proses: boolean }) => void;
   toggleTema: () => void;
+  /**
+   * Penanda "segarkan data" global (tombol refresh kanan atas, 2 Sep 2026).
+   * Naik 1 tiap klik; komponen yang menaruhnya di deps effect memuat ulang
+   * DATANYA saja — layar tidak dimuat ulang, navigasi tidak berubah.
+   */
+  versiSegar: number;
+  segarkanData: () => void;
 
   // Toast
   toasts: ToastItem[];
@@ -174,6 +181,13 @@ export const useAppStore = create<AppState>()(
       wewenangTv: { anggota: false, acc: false, upload: false, proses: false },
       setWewenangTv: (wewenangTv) => set({ wewenangTv }),
       toggleTema: () => set({ tema: get().tema === "light" ? "dark" : "light" }),
+      versiSegar: 0,
+      segarkanData: () => {
+        set({ versiSegar: get().versiSegar + 1 });
+        // Jalur kedua untuk pemuat yang hidup di luar React (useSegarOtomatis,
+        // pemuat notifikasi di page.tsx): satu peristiwa jendela.
+        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("pri:segarkan"));
+      },
 
       // Toast — otomatis hilang setelah 4 detik
       toasts: [],

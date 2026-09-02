@@ -26,6 +26,13 @@ import {
   type Pengumuman,
 } from "@/services";
 import { jamWIB } from "@/lib/format";
+import { useVersiSegar } from "@/hooks/use-segar-otomatis";
+import { cn } from "@/lib/utils";
+
+// Kartu "Kerja Hari Ini" DISEMBUNYIKAN (permintaan user 2 Sep 2026);
+// pintasan Laporan Kerja tetap ada di tab Profil. Kode dibiarkan supaya
+// tinggal membalik konstanta bila ingin ditampilkan lagi.
+const TAMPILKAN_KERJA_HARI_INI = false;
 import type { User } from "@/types";
 
 function tanggalWibPerangkat(): string {
@@ -51,6 +58,7 @@ function bacaDitutup(): string[] {
 }
 
 export function KartuPengumumanTerbaru() {
+  const versiSegar = useVersiSegar();
   const [daftar, setDaftar] = useState<Pengumuman[] | null>(null);
 
   useEffect(() => {
@@ -68,7 +76,7 @@ export function KartuPengumumanTerbaru() {
     return () => {
       hidup = false;
     };
-  }, []);
+  }, [versiSegar]);
 
   function tutup(id: string) {
     // Simpan maksimal 100 id terakhir supaya localStorage tidak menumpuk.
@@ -146,6 +154,7 @@ export function BerandaAnggotaPanel({
   user: User;
   onBukaLaporanKerja?: () => void;
 }) {
+  const versiSegar = useVersiSegar();
   const [kpiKerja, setKpiKerja] = useState<KerjaKpi | null>(null);
   const [komentar, setKomentar] = useState<{ total: number; sudah: number } | null>(null);
 
@@ -173,7 +182,7 @@ export function BerandaAnggotaPanel({
     return () => {
       hidup = false;
     };
-  }, [user.nama]);
+  }, [user.nama, versiSegar]);
 
   const persenKerja =
     kpiKerja && kpiKerja.rencana_total > 0 ? (kpiKerja.kpi_persen ?? 0) : 0;
@@ -187,8 +196,9 @@ export function BerandaAnggotaPanel({
       <KartuPengumumanTerbaru />
 
       <FadeInUp delay={0.05}>
-        <div className="mt-4 grid grid-cols-2 gap-2.5">
-          {/* Kerja hari ini → pintasan Laporan Kerja */}
+        <div className={cn("mt-4 grid gap-2.5", TAMPILKAN_KERJA_HARI_INI ? "grid-cols-2" : "grid-cols-1")}>
+          {/* Kerja hari ini → pintasan Laporan Kerja (disembunyikan) */}
+          {TAMPILKAN_KERJA_HARI_INI && (
           <button
             type="button"
             onClick={onBukaLaporanKerja}
@@ -212,6 +222,7 @@ export function BerandaAnggotaPanel({
               </div>
             </GlassCard>
           </button>
+          )}
 
           {/* KPI kewajiban komentar konten */}
           <GlassCard className="flex h-full items-center gap-3 p-3.5">

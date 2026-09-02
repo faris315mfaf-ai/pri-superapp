@@ -4508,3 +4508,40 @@ export async function getKepatuhanKomenLeaderboard(): Promise<KepatuhanKomenLead
   const json = await fetchJson("/api/peringkat-tvr?komen=1");
   return json as KepatuhanKomenLeaderboard;
 }
+
+// ---- Galeri video akun TV Rakyat (modul Konten, 2 Sep 2026) ----
+export type LingkaranGaleri = {
+  /** "official" atau user_id anggota */
+  kunci: string;
+  nama: string;
+  avatar_url: string;
+  /** platform → username yang tertaut */
+  akun: Record<string, string>;
+};
+
+export type VideoGaleri = {
+  id: string;
+  platform: string;
+  url: string;
+  thumbnail: string;
+  caption: string;
+  waktu: string | null;
+  like: number | null;
+  komentar: number | null;
+};
+
+export async function getGaleriKonten(): Promise<{
+  official: LingkaranGaleri | null;
+  pengguna: LingkaranGaleri[];
+}> {
+  const json = await fetchJson("/api/konten/galeri");
+  return {
+    official: (json?.official ?? null) as LingkaranGaleri | null,
+    pengguna: (json?.pengguna ?? []) as LingkaranGaleri[],
+  };
+}
+
+export async function getVideoGaleri(siapa: string): Promise<VideoGaleri[]> {
+  const json = await fetchJson(`/api/konten/galeri?siapa=${encodeURIComponent(siapa)}`);
+  return (json?.data ?? []) as VideoGaleri[];
+}

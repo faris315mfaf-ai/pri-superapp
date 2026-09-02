@@ -14,6 +14,7 @@
 // ============================================================
 
 import { useEffect, useMemo, useState } from "react";
+import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import {
   ArrowLeft,
   ArrowUpDown,
@@ -66,6 +67,7 @@ export function TabelAnggotaScreen({ onKembali }: { onKembali: () => void }) {
   const [zonaList, setZonaList] = useState<Zona[]>([]);
   const [zonaUntuk, setZonaUntuk] = useState<PenggunaAdmin | null>(null);
   const [muatUlang, setMuatUlang] = useState(0);
+  const versiSegar = useVersiSegar();
 
   useEffect(() => {
     let hidup = true;
@@ -88,7 +90,7 @@ export function TabelAnggotaScreen({ onKembali }: { onKembali: () => void }) {
     return () => {
       hidup = false;
     };
-  }, [muatUlang]);
+  }, [muatUlang, versiSegar]);
 
   const tersaring = useMemo(() => {
     const kunci = cari.trim().toLowerCase();

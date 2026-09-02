@@ -18,6 +18,7 @@
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
+import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { SeksiKuota } from "./seksi-kuota";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -84,6 +85,7 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
   const [data, setData] = useState<DataMaster | null>(null);
   const [pengguna, setPengguna] = useState<PenggunaAdmin[]>([]);
   const [muatUlang, setMuatUlang] = useState(0);
+  const versiSegar = useVersiSegar();
   const [sedangProses, setSedangProses] = useState(false);
   const [pilihPeranUntuk, setPilihPeranUntuk] = useState<PenggunaAdmin | null>(null);
   const [akunBaru, setAkunBaru] = useState("");
@@ -106,7 +108,7 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
     return () => {
       hidup = false;
     };
-  }, [muatUlang]);
+  }, [muatUlang, versiSegar]);
 
   async function jalankan(
     aksi: string,

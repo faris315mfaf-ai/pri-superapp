@@ -11,6 +11,7 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
+import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { Check, Clock, MessageCircle, PlaySquare, Share2 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { FadeInUp, GlassSkeleton } from "@/components/pri-ui";
@@ -54,6 +55,7 @@ function embedTerbaik(v: VideoInteraksi): { src: string; platform: string } | nu
 }
 
 export function KartuVideoBaru() {
+  const versiSegar = useVersiSegar();
   const [daftar, setDaftar] = useState<VideoInteraksi[] | null>(null);
 
   useEffect(() => {
@@ -69,7 +71,7 @@ export function KartuVideoBaru() {
     return () => {
       hidup = false;
     };
-  }, []);
+  }, [versiSegar]);
 
   async function tandai(kode: string, jenis: "komen" | "share") {
     // Optimis: tombol langsung berubah; server menyimpannya idempoten.

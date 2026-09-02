@@ -12,6 +12,7 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
+import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -85,6 +86,7 @@ export function KelolaPenggunaScreen({ onKembali }: { onKembali: () => void }) {
   const [memilihJabatan, setMemilihJabatan] = useState<PenggunaAdmin | null>(null);
   const [sedangProses, setSedangProses] = useState<string | null>(null);
   const [muatUlang, setMuatUlang] = useState(0);
+  const versiSegar = useVersiSegar();
   const [sedangSemua, setSedangSemua] = useState(false);
   // Penghapusan tidak bisa dibatalkan, jadi selalu lewat konfirmasi
   const [konfirmasiHapus, setKonfirmasiHapus] = useState<PenggunaAdmin | null>(null);
@@ -110,7 +112,7 @@ export function KelolaPenggunaScreen({ onKembali }: { onKembali: () => void }) {
     return () => {
       hidup = false;
     };
-  }, [muatUlang]);
+  }, [muatUlang, versiSegar]);
 
   const [memilihDivisi, setMemilihDivisi] = useState<PenggunaAdmin | null>(null);
 
