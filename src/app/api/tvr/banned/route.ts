@@ -159,7 +159,8 @@ export async function POST(request: Request) {
       isi: `${user.nama} mengajukan akun ${platform}-nya terblokir. Periksa bukti & putuskan di HR Center → ACC KPI.`,
       kategori: "peringatan",
       jenis_peristiwa: "tvr_banned",
-      untukRole: ["admin_hr", "super_admin", "master"],
+      // Ketua Umum (super_admin) SENGAJA tidak dikabari (permintaan 2 Sep 2026).
+        untukRole: ["admin_hr", "master"],
     });
 
     return { sukses: true, id: String(data.id) };

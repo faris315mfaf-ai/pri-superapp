@@ -1,4 +1,5 @@
 "use client";
+import { adalahKetum } from "@/lib/jabatan";
 
 // ============================================================
 // TvrKuScreen — halaman TV Rakyat MILIK ANGGOTA.
@@ -491,6 +492,9 @@ function ModalLaporanBatch({
 // TvrKuScreen
 // ------------------------------------------------------------
 
+// Seksi KPI yang TIDAK berlaku untuk Ketua Umum (2 Sep 2026).
+const SEKSI_KPI_TVRKU = new Set(["kpi", "tugas", "grafik", "laporan", "sosmed-terblokir"]);
+
 export function TvrKuScreen({
   user: _user,
   onBukaNotifikasi,
@@ -498,6 +502,7 @@ export function TvrKuScreen({
   user: User;
   onBukaNotifikasi?: () => void;
 }) {
+  const ketum = adalahKetum(_user);
   const [akun, setAkun] = useState<AkunTvr[] | null>(null);
   const [laporan, setLaporan] = useState<LaporanVideo[]>([]);
   const [menunggu, setMenunggu] = useState<LaporanPending[]>([]);
@@ -656,7 +661,7 @@ export function TvrKuScreen({
       <TataLetakModul
         modul="tvrku"
         bungkusSeksi={false}
-        seksi={[
+        seksi={([
         { id: "kpi", judul: "KPI Video Hari Ini", ikon: Video, render: () => (
       <FadeInUp>
         <GlassCard className="flex items-center gap-4 p-4">
@@ -1039,7 +1044,7 @@ export function TvrKuScreen({
         </div>
       </FadeInUp>
         ) },
-        ] as SeksiModul[]}
+        ] as SeksiModul[]).filter((s) => !ketum || !SEKSI_KPI_TVRKU.has(s.id))}
       />
 
       {/* Modal-modal */}

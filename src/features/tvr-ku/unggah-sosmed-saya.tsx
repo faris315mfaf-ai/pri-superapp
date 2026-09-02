@@ -44,6 +44,9 @@ const LABEL: Record<string, string> = {
   twitter: "X",
 };
 
+/** Batas ukuran video (2 Sep 2026) — sama dengan bucket & pengaturan server. */
+const MAKS_MB = 50;
+
 function jamWib(iso: string): string {
   const t = Date.parse(iso);
   if (!Number.isFinite(t)) return "";
@@ -57,6 +60,19 @@ export function UnggahSosmedSaya() {
   const [riwayat, setRiwayat] = useState<TvrkuPost[] | null>(null);
 
   const [berkas, setBerkas] = useState<File | null>(null);
+  // Berkas yang ditolak karena > MAKS_MB — dipakai kartu arahan kompres.
+  const [terlaluBesar, setTerlaluBesar] = useState<{ nama: string; mb: number } | null>(null);
+
+  function pilihBerkas(f: File | null) {
+    if (f && f.size > MAKS_MB * 1024 * 1024) {
+      setBerkas(null);
+      setTerlaluBesar({ nama: f.name, mb: Math.round(f.size / 1_048_576) });
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+    setTerlaluBesar(null);
+    setBerkas(f);
+  }
   const [judul, setJudul] = useState("");
   const [caption, setCaption] = useState("");
   const [pilih, setPilih] = useState<Set<string>>(() => new Set());
@@ -347,7 +363,7 @@ export function UnggahSosmedSaya() {
           type="file"
           accept="video/mp4,video/quicktime,video/webm"
           className="hidden"
-          onChange={(e) => setBerkas(e.target.files?.[0] ?? null)}
+          onChange={(e) => pilihBerkas(e.target.files?.[0] ?? null)}
         />
         <button
           type="button"
@@ -358,6 +374,46 @@ export function UnggahSosmedSaya() {
           <UploadCloud className="h-5 w-5 text-pri" />
           {berkas ? `${berkas.name} (${Math.round(berkas.size / 1_048_576)} MB)` : "Pilih Video"}
         </button>
+        <p className="mt-1.5 text-[10.5px] text-teks-sekunder">
+          Maksimal {MAKS_MB} MB per video (MP4/MOV/WebM).
+        </p>
+        {terlaluBesar && (
+          <div className="mt-2 rounded-xl border border-amber-400/40 bg-amber-400/10 p-3 text-[11.5px] leading-relaxed text-teks-utama">
+            <p className="font-bold">
+              Video {terlaluBesar.mb} MB — melebihi batas {MAKS_MB} MB
+            </p>
+            <p className="mt-0.5 text-teks-sekunder">
+              Kompres dulu sampai di bawah {MAKS_MB} MB (resolusi 1080p, bitrate 4–6 Mbps sudah
+              bagus untuk sosmed), lalu pilih ulang berkasnya.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <a
+                href="https://www.freeconvert.com/video-compressor"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="glass btn-tekan rounded-lg px-3 py-1.5 text-[11px] font-bold text-teks-utama"
+              >
+                Kompres online (FreeConvert)
+              </a>
+              <a
+                href="https://play.google.com/store/search?q=video%20compressor&c=apps"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="glass btn-tekan rounded-lg px-3 py-1.5 text-[11px] font-bold text-teks-utama"
+              >
+                Aplikasi Android
+              </a>
+              <a
+                href="https://apps.apple.com/search?term=video%20compressor"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="glass btn-tekan rounded-lg px-3 py-1.5 text-[11px] font-bold text-teks-utama"
+              >
+                Aplikasi iPhone
+              </a>
+            </div>
+          </div>
+        )}
         </>
         )}
 

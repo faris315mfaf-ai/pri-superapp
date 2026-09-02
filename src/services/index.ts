@@ -4486,15 +4486,18 @@ export async function getPersetujuanKpi(): Promise<PersetujuanKpi> {
 
 export async function putusPersetujuanKpi(data: {
   jenis: "laporan" | "banned";
-  id: string;
+  id?: string;
+  /** ACC sekaligus: kirim banyak id laporan link (aksi harus "setuju"). */
+  ids?: string[];
   aksi: "setuju" | "tolak";
   catatan?: string;
-}): Promise<void> {
-  await fetchJson("/api/tvr/persetujuan", {
+}): Promise<{ disetujui?: number }> {
+  const json = await fetchJson("/api/tvr/persetujuan", {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify(data),
   });
+  return { disetujui: typeof json?.disetujui === "number" ? json.disetujui : undefined };
 }
 
 // ---- Leaderboard kepatuhan komen (semua pengguna, 2 Sep 2026) ----
@@ -4544,4 +4547,23 @@ export async function getGaleriKonten(): Promise<{
 export async function getVideoGaleri(siapa: string): Promise<VideoGaleri[]> {
   const json = await fetchJson(`/api/konten/galeri?siapa=${encodeURIComponent(siapa)}`);
   return (json?.data ?? []) as VideoGaleri[];
+}
+
+// ---- Ekspor seluruh data aplikasi sebagai TXT (basis data AI, 2 Sep 2026) ----
+export async function unduhEksporData(): Promise<void> {
+  const res = await fetch("/api/master/ekspor", { headers: headerToken() });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(j?.error ?? "Gagal mengekspor data.");
+  }
+  const blob = await res.blob();
+  const nama = res.headers.get("x-nama-berkas") ?? "pri-superapp-data.txt";
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nama;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }

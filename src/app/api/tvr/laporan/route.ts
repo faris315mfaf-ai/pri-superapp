@@ -357,7 +357,8 @@ export async function POST(request: Request) {
         isi: `${user.nama} mengirim ${jumlah} link video untuk disetujui. Periksa di HR Center → ACC KPI.`,
         kategori: "info",
         jenis_peristiwa: "laporan_video_acc",
-        untukRole: ["admin_hr", "super_admin", "master"],
+        // Ketua Umum (super_admin) SENGAJA tidak dikabari (permintaan 2 Sep 2026).
+        untukRole: ["admin_hr", "master"],
       });
     }
 

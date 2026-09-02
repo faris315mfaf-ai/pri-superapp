@@ -8,7 +8,7 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
-import { Ban, Check, ExternalLink, Link2, Loader2, X } from "lucide-react";
+import { Ban, Check, CheckCheck, ExternalLink, Link2, Loader2, X } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { AvatarInisial, EmptyState, GlassSkeleton, ScreenHeader, ThemeToggle } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
@@ -31,6 +31,24 @@ export function PersetujuanKpiScreen({ onKembali }: { onKembali: () => void }) {
   // id yang sedang diminta alasan penolakannya
   const [tolakUntuk, setTolakUntuk] = useState<string | null>(null);
   const [alasan, setAlasan] = useState("");
+  // ACC sekaligus (2 Sep 2026): dua langkah — tekan, lalu konfirmasi.
+  const [konfirmasiSemua, setKonfirmasiSemua] = useState(false);
+
+  async function setujuiSemua() {
+    if (sibuk || !data || data.laporan.length === 0) return;
+    setSibuk("semua");
+    try {
+      const ids = data.laporan.map((l) => l.id);
+      const r = await putusPersetujuanKpi({ jenis: "laporan", ids, aksi: "setuju" });
+      toast("sukses", `${r.disetujui ?? ids.length} laporan disetujui`, "Semua sudah masuk KPI anggotanya.");
+      setKonfirmasiSemua(false);
+      muat();
+    } catch (e) {
+      toast("error", "Gagal ACC sekaligus", e instanceof Error ? e.message : "");
+    } finally {
+      setSibuk("");
+    }
+  }
 
   function muat() {
     getPersetujuanKpi()
@@ -175,6 +193,52 @@ export function PersetujuanKpiScreen({ onKembali }: { onKembali: () => void }) {
           </GlassCard>
         ) : (
           <div className="mt-3 flex flex-col gap-2">
+            {/* ACC sekaligus seluruh antrean laporan link */}
+            <GlassCard className="p-3">
+              {konfirmasiSemua ? (
+                <>
+                  <p className="text-[12px] leading-relaxed text-teks-utama">
+                    Yakin menyetujui <b>{data.laporan.length} laporan</b> sekaligus? Semuanya
+                    langsung masuk KPI anggota masing-masing.
+                  </p>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void setujuiSemua()}
+                      disabled={Boolean(sibuk)}
+                      className="btn-tekan flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-[12px] font-bold text-white disabled:opacity-50"
+                      style={{ background: "linear-gradient(135deg, #10B981, #059669)" }}
+                    >
+                      {sibuk === "semua" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CheckCheck className="h-3.5 w-3.5" />
+                      )}
+                      Ya, setujui semua
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setKonfirmasiSemua(false)}
+                      disabled={Boolean(sibuk)}
+                      className="glass btn-tekan rounded-xl px-3 text-[12px] font-bold text-teks-utama"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setKonfirmasiSemua(true)}
+                  disabled={Boolean(sibuk)}
+                  className="btn-tekan flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[12.5px] font-bold text-white disabled:opacity-50"
+                  style={{ background: "linear-gradient(135deg, #10B981, #059669)" }}
+                >
+                  <CheckCheck className="h-4 w-4" />
+                  Setujui Semua ({data.laporan.length})
+                </button>
+              )}
+            </GlassCard>
             {data.laporan.map((l) => (
               <GlassCard key={l.id} className="p-3">
                 <div className="flex items-center gap-2.5">

@@ -27,6 +27,7 @@ import {
   Bug,
   Crown,
   Database,
+  Download,
   FileText,
   Loader2,
   LogOut,
@@ -69,6 +70,7 @@ import {
   type StatusBasisAI,
   getFotoMaster,
   type FotoMaster,
+  unduhEksporData,
 } from "@/services";
 import { jamWIB, tanggalIndonesia } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -425,6 +427,7 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
               Supabase / Cloudinary / upload-post dalam satu layar. */}
           <FadeInUp delay={0.2}>
             <SeksiKuota />
+            <SeksiEksporData />
           </FadeInUp>
         </>
       )}
@@ -1246,5 +1249,56 @@ function KontrolWajah({
         ))}
       </div>
     </GlassCard>
+  );
+}
+
+// ------------------------------------------------------------
+// Ekspor seluruh data aplikasi sebagai TXT — basis data untuk AI
+// (permintaan 2 Sep 2026). Tanpa foto & tanpa kata sandi.
+// ------------------------------------------------------------
+function SeksiEksporData() {
+  const [sibuk, setSibuk] = useState(false);
+
+  function unduh() {
+    if (sibuk) return;
+    setSibuk(true);
+    unduhEksporData()
+      .then(() => toast("sukses", "Berkas TXT diunduh"))
+      .catch((e) => toast("error", "Gagal mengekspor", e instanceof Error ? e.message : ""))
+      .finally(() => setSibuk(false));
+  }
+
+  return (
+    <>
+      <SectionTitle judul="Ekspor Data (TXT untuk AI)" className="mt-6" />
+      <GlassCard className="p-4">
+        <div className="flex items-start gap-2.5">
+          <span
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
+            style={{ background: "linear-gradient(135deg, #10B981, #047857)" }}
+            aria-hidden="true"
+          >
+            <FileText className="h-4.5 w-4.5" />
+          </span>
+          <p className="text-[11.5px] leading-relaxed text-teks-sekunder">
+            Satu berkas teks berisi SELURUH data yang dimasukkan di aplikasi: database
+            anggota (tanpa foto & kata sandi), akun sosmed, semua link video & laporan
+            KPI, video TV Rakyat, arsip postingan resmi, pengumuman, rencana kerja,
+            tugas, acara, tim, absensi, dan sosmed terblokir. Siap dijadikan basis
+            data AI.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={unduh}
+          disabled={sibuk}
+          className="btn-tekan mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-white disabled:opacity-60"
+          style={{ background: "linear-gradient(135deg, #10B981, #047857)" }}
+        >
+          {sibuk ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          {sibuk ? "Menyusun berkas…" : "Unduh TXT"}
+        </button>
+      </GlassCard>
+    </>
   );
 }

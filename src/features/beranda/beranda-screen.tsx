@@ -1,4 +1,5 @@
 "use client";
+import { adalahKetum } from "@/lib/jabatan";
 
 // ============================================================
 // BerandaScreen — halaman pertama untuk Ketua & Anggota.
@@ -116,10 +117,13 @@ export function BerandaScreen({
 
   // Hanya mengambil data untuk kartu yang MENYALA. Kartu yang
   // dimatikan tidak boleh diam-diam tetap memanggil server.
-  const mauKerja = boleh("beranda.kpi_kerja");
-  const mauVideo = boleh("beranda.kpi_video");
-  const mauKomentar = boleh("beranda.kpi_komentar");
-  const mauAbsen = boleh("beranda.absensi");
+  // Ketua Umum (2 Sep 2026): bukan objek KPI/absensi — kartu-kartunya
+  // tidak dirender dan datanya tidak ditarik.
+  const ketum = adalahKetum(user);
+  const mauKerja = boleh("beranda.kpi_kerja") && !ketum;
+  const mauVideo = boleh("beranda.kpi_video") && !ketum;
+  const mauKomentar = boleh("beranda.kpi_komentar") && !ketum;
+  const mauAbsen = boleh("beranda.absensi") && !ketum;
 
   // Penyegaran otomatis (1 Sep 2026): angka KPI/absen/komentar beranda
   // ditarik ulang diam-diam tiap 30 dtk + saat aplikasi dibuka kembali.

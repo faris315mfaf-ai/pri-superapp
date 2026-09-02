@@ -131,3 +131,12 @@ export function cakupanPengumuman(user: {
   if (j || user.role === "ketua") return ["tim"];
   return [];
 }
+
+/**
+ * Ketua Umum (2 Sep 2026): peran super_admin ATAU jabatan "Ketua Umum".
+ * Dipakai menyembunyikan KPI & absensi pribadi — Ketum bukan objek KPI.
+ */
+export function adalahKetum(u: { role: string; jabatan?: string | null } | null | undefined): boolean {
+  if (!u) return false;
+  return u.role === "super_admin" || (u.jabatan ?? "").trim() === "Ketua Umum";
+}

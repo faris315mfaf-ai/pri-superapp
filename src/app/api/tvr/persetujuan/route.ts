@@ -100,13 +100,16 @@ export async function PATCH(request: Request) {
     const body = (await request.json().catch(() => ({}))) as {
       jenis?: string;
       id?: string;
+      /** ACC sekaligus (2 Sep 2026): banyak laporan link sekali klik. */
+      ids?: string[];
       aksi?: string;
       catatan?: string;
     };
     const id = Number(body.id);
     const aksi = body.aksi === "setuju" ? "setuju" : body.aksi === "tolak" ? "tolak" : "";
     const catatan = (body.catatan ?? "").trim().slice(0, 300);
-    if (!id || !aksi) {
+    const banyak = Array.isArray(body.ids);
+    if ((!id && !banyak) || !aksi) {
       throw Object.assign(new Error("Permintaan tidak lengkap."), { status: 400 });
     }
     if (aksi === "tolak" && !catatan) {
@@ -116,6 +119,63 @@ export async function PATCH(request: Request) {
     }
     const db = supabase();
     const kini = new Date().toISOString();
+
+    // ================= 0. ACC SEKALIGUS (laporan link) =================
+    if (body.jenis === "laporan" && banyak) {
+      if (aksi !== "setuju") {
+        throw Object.assign(new Error("ACC sekaligus hanya untuk menyetujui."), { status: 400 });
+      }
+      const ids = [
+        ...new Set((body.ids ?? []).map((x) => Number(x)).filter((n) => Number.isFinite(n) && n > 0)),
+      ].slice(0, 300);
+      if (ids.length === 0) {
+        throw Object.assign(new Error("Tidak ada laporan yang dipilih."), { status: 400 });
+      }
+      const { data: daftar } = await db
+        .from("laporan_video_pending")
+        .select("id, user_id, platform, url_video, keyword, tanggal_wib")
+        .in("id", ids)
+        .eq("status", "menunggu");
+      let disetujui = 0;
+      const perUser = new Map<number, number>();
+      for (const p of daftar ?? []) {
+        const { data: baru, error } = await db
+          .from("laporan_video")
+          .insert({
+            user_id: Number(p.user_id),
+            platform: p.platform,
+            url_video: p.url_video,
+            keyword: p.keyword,
+            tanggal_wib: p.tanggal_wib,
+            sumber: "manual-acc",
+          })
+          .select("id")
+          .single();
+        // 23505 = sudah tercatat otomatis → tetap dianggap disetujui.
+        if (error && error.code !== "23505") {
+          console.error("[persetujuan] ACC sekaligus:", error.message);
+          continue;
+        }
+        if (baru) await beriKoin(Number(p.user_id), "laporan_video", `laporan-${baru.id}`);
+        await db
+          .from("laporan_video_pending")
+          .update({ status: "disetujui", catatan, diputus_oleh: hr.nama, diputus_pada: kini })
+          .eq("id", p.id);
+        disetujui++;
+        perUser.set(Number(p.user_id), (perUser.get(Number(p.user_id)) ?? 0) + 1);
+      }
+      // Satu kabar per anggota (bukan satu per link) supaya tidak banjir.
+      for (const [uid, n] of perUser) {
+        await kirimKabar({
+          judul: "Laporan video disetujui",
+          isi: `${n} link video Anda disetujui ${hr.nama} dan sudah masuk KPI.`,
+          kategori: "sukses",
+          jenis_peristiwa: "laporan_video_acc",
+          untukUserIds: [uid],
+        });
+      }
+      return { sukses: true, disetujui };
+    }
 
     // ================= 1. LAPORAN VIDEO MANUAL =================
     if (body.jenis === "laporan") {

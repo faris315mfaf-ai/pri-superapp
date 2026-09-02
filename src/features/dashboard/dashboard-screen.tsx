@@ -11,28 +11,20 @@
 import { useCallback, useEffect, useState } from "react";
 import { JamDigital } from "@/components/jam-digital";
 import { AlertTriangle, Bell } from "lucide-react";
-import {
-  AvatarInisial,
-  EmptyState,
-  FadeInUp,
-  GlassSkeleton,
-  ThemeToggle,
-} from "@/components/pri-ui";
+import { AvatarInisial, EmptyState, FadeInUp, GlassSkeleton, ThemeToggle, SectionTitle } from "@/components/pri-ui";
 import { getDashboard } from "@/services";
 import type { DashboardData } from "@/services";
 import { toast } from "@/hooks/use-app-store";
 import {
-  SeksiAbsensiHarian,
   SeksiInsightTvr,
-  SeksiRencanaAnggota,
 } from "./seksi-pemantauan";
 import { KartuPengumumanTerbaru } from "@/features/konten/beranda-anggota";
 import { sapaanHari, tanggalIndonesia } from "@/lib/format";
 import { APP_TODAY_ISO } from "@/types";
 import type { User } from "@/types";
-import { AksesCepatPanel } from "./akses-cepat-panel";
-import { CalendarDays, ClipboardList, Database, Globe2, LayoutGrid, Tv, Users } from "lucide-react";
+import { Database, Globe2, Tv, Users } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
+import { TvNasionalDashboard } from "./tv-nasional-dashboard";
 import { KartuKelolaPengguna } from "./kartu-kelola-pengguna";
 import { TataLetakModul, type SeksiModul } from "@/components/tata-letak-modul";
 import { KATALOG_DASHBOARD } from "@/lib/dashboard-katalog";
@@ -350,59 +342,24 @@ export function DashboardScreen({
                 },
                 // Dashboard TV Rakyat Nasional (1 Sep 2026): statistik
                 // gabungan Official + akun pengguna, per sosmed.
+                // TV Rakyat Nasional (2 Sep 2026): insight SELURUH TV Rakyat
+                // (Official + semua akun anggota) LANGSUNG dihadirkan di sini,
+                // bukan lagi tombol ke sub-dashboard.
                 onBukaTvNasional && {
                   id: "tvnasional",
                   judul: "TV Rakyat Nasional",
                   ikon: Globe2,
                   render: () => (
-                    <button
-                      type="button"
-                      onClick={onBukaTvNasional}
-                      className="btn-tekan w-full text-left"
-                      aria-label="Buka dashboard TV Rakyat Nasional"
-                    >
-                      <GlassCard className="flex items-center gap-3 p-4">
-                        <span
-                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
-                          style={{ background: "linear-gradient(135deg, #0EA5E9, #1D4ED8)" }}
-                          aria-hidden="true"
-                        >
-                          <Globe2 className="h-5 w-5" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block font-heading text-[15px] font-bold text-teks-utama">
-                            TV Rakyat Nasional
-                          </span>
-                          <span className="mt-0.5 block text-[11.5px] leading-snug text-teks-sekunder">
-                            Pengikut, tayangan, jangkauan, komentar & bagikan — Official +
-                            seluruh akun pengguna, per sosmed + leaderboard.
-                          </span>
-                        </span>
-                      </GlassCard>
-                    </button>
-                  ),
-                },
-                {
-                  id: "akses-cepat",
-                  judul: "Akses Cepat",
-                  ikon: LayoutGrid,
-                  render: () => (
-                    <AksesCepatPanel onBukaModulQc={onBukaModulQc} onBukaModulTv={onBukaModulTv} />
+                    <div>
+                      <SectionTitle judul="TV Rakyat Nasional" className="mt-6" />
+                      <TvNasionalDashboard />
+                    </div>
                   ),
                 },
                 { id: "insight-tvr", judul: "Insight TV Rakyat", ikon: Tv, render: () => <SeksiInsightTvr /> },
-                {
-                  id: "absensi",
-                  judul: "Absensi Hari Ini",
-                  ikon: CalendarDays,
-                  render: () => <SeksiAbsensiHarian />,
-                },
-                {
-                  id: "rencana",
-                  judul: "Rencana Kerja Anggota",
-                  ikon: ClipboardList,
-                  render: () => <SeksiRencanaAnggota />,
-                },
+                // "Akses Cepat", "Absensi Hari Ini" & "Rencana Kerja Anggota"
+                // DISEMBUNYIKAN (permintaan 2 Sep 2026) — semuanya tetap
+                // terjangkau lewat kartu "Semua Dashboard" di atas.
               ].filter(Boolean) as SeksiModul[]
             }
           />

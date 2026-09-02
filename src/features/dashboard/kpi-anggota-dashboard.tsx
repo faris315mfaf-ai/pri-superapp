@@ -30,7 +30,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ArrowDownAZ, ArrowUpAZ, Search, X } from "lucide-react";
+import { ArrowDownAZ, ArrowUpAZ, ExternalLink, Search, X } from "lucide-react";
+import { PlatformIcon, labelPlatform } from "@/components/platform-icon";
 import { GlassCard } from "@/components/glass-card";
 import { AvatarInisial, EmptyState, GlassSkeleton, StatusBadge } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
@@ -40,6 +41,7 @@ import {
   getDashboardKpiAnggota,
   type KpiDashboardAnggota,
   type KpiDashboardData,
+  type LaporanVideo,
 } from "@/services";
 import { DIVISI } from "@/lib/struktur";
 import { Target } from "lucide-react";
@@ -124,6 +126,8 @@ export function KpiAnggotaDashboard() {
   // Modal detail anggota
   const [detail, setDetail] = useState<KpiDashboardAnggota | null>(null);
   const [riwayatDetail, setRiwayatDetail] = useState<{ tanggal: string; jumlah: number }[] | null>(null);
+  // Link video anggota itu (jendela 7 hari) — modal menyaring tanggal terpilih per sosmed.
+  const [linksDetail, setLinksDetail] = useState<LaporanVideo[] | null>(null);
 
   // Reset (setData(null)/setGagal) TIDAK dilakukan di effect — aturan
   // lint rumah melarang setState sinkron dalam effect; reset terjadi
@@ -156,9 +160,15 @@ export function KpiAnggotaDashboard() {
         const r = await getDashboardKpiAnggota(detail.id, fTanggal);
         // Sementara hanya riwayatnya yang dipakai; daftar link + embed +
         // deteksi link bodong menyusul di rombakan modal detail.
-        if (hidup) setRiwayatDetail(r.riwayat);
+        if (hidup) {
+          setRiwayatDetail(r.riwayat);
+          setLinksDetail(r.links);
+        }
       } catch {
-        if (hidup) setRiwayatDetail([]);
+        if (hidup) {
+          setRiwayatDetail([]);
+          setLinksDetail([]);
+        }
       }
     })();
     return () => {
@@ -174,6 +184,7 @@ export function KpiAnggotaDashboard() {
 
   function bukaDetail(a: KpiDashboardAnggota) {
     setRiwayatDetail(null);
+    setLinksDetail(null);
     setDetail(a);
   }
 
@@ -789,7 +800,7 @@ export function KpiAnggotaDashboard() {
             role="dialog"
             aria-modal="true"
             aria-label={`Detail KPI ${detail.nama}`}
-            className="glass-strong w-full max-w-[340px] rounded-2xl p-5"
+            className="glass-strong scrollbar-tipis max-h-[88dvh] w-full max-w-[340px] overflow-y-auto rounded-2xl p-5"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3">
@@ -868,9 +879,80 @@ export function KpiAnggotaDashboard() {
                 </ResponsiveContainer>
               </div>
             )}
+
+            {/* Video pada tanggal terpilih, per sosmed (2 Sep 2026) */}
+            <p className="mt-3 mb-1 text-[10.5px] font-bold tracking-wide text-teks-sekunder uppercase">
+              Video {labelTanggal(fTanggal)} per Sosmed
+            </p>
+            {linksDetail === null ? (
+              <GlassSkeleton className="h-20 rounded-xl" />
+            ) : (
+              <VideoHariIniPerSosmed
+                links={linksDetail.filter((l) => l.tanggal_wib === fTanggal)}
+              />
+            )}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const URUTAN_SOSMED = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"];
+
+/** Daftar link video satu anggota pada satu tanggal, dikelompokkan per sosmed. */
+function VideoHariIniPerSosmed({ links }: { links: LaporanVideo[] }) {
+  const per = new Map<string, LaporanVideo[]>();
+  for (const l of links) {
+    const d = per.get(l.platform) ?? [];
+    d.push(l);
+    per.set(l.platform, d);
+  }
+  const platform = URUTAN_SOSMED.filter((p) => per.has(p)).concat(
+    [...per.keys()].filter((p) => !URUTAN_SOSMED.includes(p)),
+  );
+  if (platform.length === 0) {
+    return (
+      <p className="glass rounded-xl px-3 py-3 text-center text-[11px] text-teks-sekunder">
+        Belum ada video yang tercatat pada tanggal ini.
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {platform.map((p) => {
+        const daftar = per.get(p) ?? [];
+        return (
+          <div key={p} className="glass rounded-xl p-2.5">
+            <div className="flex items-center gap-2">
+              <PlatformIcon platform={p} size={13} />
+              <p className="text-[11.5px] font-bold text-teks-utama">{labelPlatform(p)}</p>
+              <span className="angka-tab ml-auto rounded-full bg-pri/12 px-2 text-[10px] font-bold text-pri">
+                {daftar.length} video
+              </span>
+            </div>
+            <div className="mt-1.5 flex flex-col gap-1">
+              {daftar.map((l) => (
+                <a
+                  key={l.id}
+                  href={l.url_video}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-tekan flex items-center gap-1.5 rounded-lg bg-black/5 px-2 py-1.5 text-[10.5px] text-teks-utama dark:bg-white/10"
+                >
+                  <span className="min-w-0 flex-1 truncate">{l.url_video}</span>
+                  {l.keyword && (
+                    <span className="shrink-0 rounded bg-pri/12 px-1 text-[9px] font-bold text-pri">
+                      {l.keyword}
+                    </span>
+                  )}
+                  <ExternalLink className="h-3 w-3 shrink-0 text-teks-sekunder" />
+                </a>
+              ))}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
