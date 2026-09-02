@@ -4648,3 +4648,66 @@ export async function getVideoTerbaik(opsi: {
   );
   return json as VideoTerbaikBalasan;
 }
+
+// ---- SIARAN SERENTAK (3 Sep 2026): satu video → banyak profil upload-post ----
+export type SiaranItem = {
+  id: string;
+  profil: string;
+  user_id: string | null;
+  nama: string;
+  platforms: string[];
+  status: "menunggu" | "diproses" | "terkirim" | "gagal" | "dibatalkan" | string;
+  pesan: string;
+  request_id: string | null;
+  selesai_pada: string | null;
+};
+
+export type Siaran = {
+  id: string;
+  judul: string;
+  caption: string;
+  platforms: string[];
+  jadwal: string | null;
+  status: string;
+  dibuat_pada: string;
+  berkas_ada: boolean;
+  item: SiaranItem[];
+  ringkas: { total: number; terkirim: number; gagal: number; menunggu: number; dibatalkan: number };
+};
+
+export async function getSiaran(): Promise<Siaran[]> {
+  const json = await fetchJson("/api/tvr/siaran");
+  return (json?.data ?? []) as Siaran[];
+}
+
+export async function buatSiaran(data: {
+  r2_key?: string;
+  path?: string;
+  ukuran?: number;
+  judul: string;
+  caption?: string;
+  platforms: string[];
+  profil: string[];
+  jadwal?: string;
+}): Promise<{ id: string; jumlah: number; langsung_gagal: number; terjadwal: boolean }> {
+  const json = await fetchJson("/api/tvr/siaran", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  return {
+    id: String(json?.id ?? ""),
+    jumlah: Number(json?.jumlah ?? 0),
+    langsung_gagal: Number(json?.langsung_gagal ?? 0),
+    terjadwal: json?.terjadwal === true,
+  };
+}
+
+export async function batalSiaran(id: string): Promise<{ dibatalkan: number }> {
+  const json = await fetchJson("/api/tvr/siaran", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+  return { dibatalkan: Number(json?.dibatalkan ?? 0) };
+}

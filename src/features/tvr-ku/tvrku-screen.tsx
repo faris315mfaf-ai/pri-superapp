@@ -32,6 +32,7 @@ import {
   BarChart3,
   Ban,
   Hourglass,
+  Radio,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { EmptyState, FadeInUp, GlassSkeleton, SectionTitle, StatusBadge, ThemeToggle } from "@/components/pri-ui";
@@ -67,6 +68,7 @@ import { TombolLonceng } from "@/components/tombol-lonceng";
 import { PanelTugasSaya } from "./tugas-saya";
 import { KirimVideoManual } from "./kirim-video-manual";
 import { UnggahSosmedSaya } from "./unggah-sosmed-saya";
+import { SiaranSerentak } from "./siaran-serentak";
 import { InsightSayaPanel } from "./insight-saya-panel";
 import { cn } from "@/lib/utils";
 
@@ -503,6 +505,8 @@ export function TvrKuScreen({
   onBukaNotifikasi?: () => void;
 }) {
   const ketum = adalahKetum(_user);
+  // Siaran Serentak (3 Sep 2026): khusus master / Ketua Umum.
+  const bolehSiaran = _user.role === "master" || _user.role === "super_admin";
   const [akun, setAkun] = useState<AkunTvr[] | null>(null);
   const [laporan, setLaporan] = useState<LaporanVideo[]>([]);
   const [menunggu, setMenunggu] = useState<LaporanPending[]>([]);
@@ -849,6 +853,23 @@ export function TvrKuScreen({
         </div>
       </FadeInUp>
         ) },
+        ...(bolehSiaran
+          ? [
+              {
+                id: "siaran-serentak",
+                judul: "Siaran Serentak",
+                ikon: Radio,
+                render: () => (
+                  <FadeInUp delay={0.1}>
+                    <SectionTitle judul="Siaran Serentak" />
+                    <div className="mt-2.5">
+                      <SiaranSerentak />
+                    </div>
+                  </FadeInUp>
+                ),
+              },
+            ]
+          : []),
         { id: "insight-saya", judul: "Insight Akun Saya", ikon: BarChart3, render: () => (
       <FadeInUp delay={0.11}>
         <SectionTitle judul="Insight Akun Saya" />

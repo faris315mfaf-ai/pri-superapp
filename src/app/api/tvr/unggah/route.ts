@@ -28,6 +28,7 @@ import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
 import { adalahPalugodam } from "@/lib/struktur";
 import { prosesPesananPalugodam } from "@/lib/palugodam";
+import { bersihkanMediaSiaran } from "@/lib/siaran";
 import {
   dariR2,
   hapusVideoR2,
@@ -109,6 +110,8 @@ async function bersihkanVideoKedaluwarsa(): Promise<void> {
   } catch (e) {
     console.error("[tvrku/unggah] penyapu:", e);
   }
+  // Berkas Siaran Serentak (3 Sep 2026) ikut disapu di sini.
+  await bersihkanMediaSiaran();
 }
 
 export async function GET(request: Request) {
