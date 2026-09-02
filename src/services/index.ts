@@ -2687,20 +2687,57 @@ export type ProfilTvAnggota = {
   insight_pada: string | null;
 };
 
+/** Profil upload-post yang belum dikenal aplikasi (dibuat di dashboard upload-post). */
+export type ProfilBelumTertaut = { profil: string; akun: Record<string, string>; tertaut: number };
+
 /** Pengendali akun TV Rakyat anggota (dashboard TV, admin). */
 export async function getTvAnggotaDashboard(): Promise<{
   siap: boolean;
   kuota: number;
   terpakai: number;
   profil: ProfilTvAnggota[];
+  belum_tertaut: ProfilBelumTertaut[];
 }> {
   const json = await fetchJson("/api/dashboard/tv-anggota", { headers: headerToken() });
-  return json as {
-    siap: boolean;
-    kuota: number;
-    terpakai: number;
-    profil: ProfilTvAnggota[];
+  return {
+    ...(json as { siap: boolean; kuota: number; terpakai: number; profil: ProfilTvAnggota[] }),
+    belum_tertaut: (json?.belum_tertaut ?? []) as ProfilBelumTertaut[],
   };
+}
+
+/**
+ * Tautkan profil upload-post ke anggota (admin, 2 Sep 2026):
+ * aksi "tautkan" = profil yang sudah ada; "buat" = profil bernama baru.
+ * 409 bila anggota sudah punya profil — ulangi dengan ganti=true.
+ */
+export async function tautkanProfilTv(data: {
+  aksi: "tautkan" | "buat";
+  profil?: string;
+  username?: string;
+  user_id: string;
+  ganti?: boolean;
+}): Promise<{ profil: string; tersinkron: number; konflik: string[]; dibuat?: boolean }> {
+  const json = await fetchJson("/api/dashboard/tv-anggota", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+  return {
+    profil: String(json?.profil ?? ""),
+    tersinkron: Number(json?.tersinkron ?? 0),
+    konflik: (json?.konflik ?? []) as string[],
+    dibuat: json?.dibuat === true,
+  };
+}
+
+/** Tautan login 48 jam untuk menyambungkan akun sosmed ke sebuah profil. */
+export async function tautanProfilTv(profil: string): Promise<string> {
+  const json = await fetchJson("/api/dashboard/tv-anggota", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "tautan", profil }),
+  });
+  return String(json?.url ?? "");
 }
 
 /** Insight lengkap satu profil anggota (admin; cache 15 menit). */

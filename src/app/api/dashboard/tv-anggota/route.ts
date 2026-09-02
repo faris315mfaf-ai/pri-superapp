@@ -11,7 +11,14 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { bolehDashboard } from "@/lib/dashboard-akses";
-import { analitikProfilUp, daftarProfilUp, uploadPostSiap } from "@/lib/upload-post";
+import {
+  analitikProfilUp,
+  buatProfilUp,
+  daftarProfilUp,
+  hapusProfilUp,
+  tautanHubungkanUp,
+  uploadPostSiap,
+} from "@/lib/upload-post";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -134,12 +141,204 @@ export async function GET(request: Request) {
       };
     });
 
+    // Profil yang ADA di upload-post tapi belum dikenal aplikasi (dibuat
+    // langsung di dashboard upload-post) — bisa ditautkan ke anggota (2 Sep 2026).
+    const dikenal = new Set((barisDb ?? []).map((b) => String(b.profile_key)));
+    const belumTertaut = diUp
+      .filter((p) => p.username && !dikenal.has(p.username))
+      .map((p) => ({ profil: p.username, akun: p.akun, tertaut: Object.keys(p.akun).length }))
+      .sort((a, b) => a.profil.localeCompare(b.profil));
+
     return {
       siap: true,
       kuota,
       paket,
       terpakai: diUp.length,
       profil: daftar.sort((a, b) => b.tertaut - a.tertaut || a.nama.localeCompare(b.nama)),
+      belum_tertaut: belumTertaut,
     };
+  });
+}
+
+// ------------------------------------------------------------
+// POST — menautkan profil upload-post ke anggota (2 Sep 2026).
+//   { aksi: "tautkan", profil, user_id, ganti? }  → profil yang SUDAH ADA di
+//        upload-post (dibuat di dashboard mereka) dijadikan profil TVR Saya
+//        milik anggota itu.
+//   { aksi: "buat", username, user_id, ganti? }    → buat profil BERNAMA
+//        (bukan slug otomatis <nama>-pri-<id>) lalu tautkan.
+//   { aksi: "tautan", profil }                     → tautan login 48 jam
+//        untuk menyambungkan akun sosmed ke profil itu (dikirim ke anggota).
+// Satu anggota = satu profil (indeks unik penyedia+user_id). Bila anggota
+// sudah punya profil → 409 kecuali ganti=true (baris lama dialihkan; profil
+// lama di upload-post TIDAK dihapus — biar admin yang memutuskan).
+// Akses: master & super_admin saja.
+// ------------------------------------------------------------
+const PLATFORM6 = new Set(["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"]);
+const POLA_USERNAME = /^[a-z0-9][a-z0-9-]{2,39}$/;
+
+/** Sinkron akun tertaut profil → akun_tvr_user (pola sama dengan tvr/hubungkan). */
+async function sinkronAkunTertaut(
+  db: ReturnType<typeof supabase>,
+  userId: number,
+  akun: Record<string, string>,
+): Promise<{ tersinkron: number; konflik: string[] }> {
+  let tersinkron = 0;
+  const konflik: string[] = [];
+  for (const [platform, mentah] of Object.entries(akun)) {
+    if (!PLATFORM6.has(platform)) continue;
+    const username = String(mentah).toLowerCase().replace(/^@+/, "");
+    if (!username) continue;
+    const { data: ada } = await db
+      .from("akun_tvr_user")
+      .select("id, user_id")
+      .eq("platform", platform)
+      .ilike("username", username)
+      .maybeSingle();
+    if (!ada) {
+      const { error } = await db
+        .from("akun_tvr_user")
+        .insert({ user_id: userId, platform, username, terhubung: true });
+      if (!error) tersinkron += 1;
+    } else if (Number(ada.user_id) === userId) {
+      await db.from("akun_tvr_user").update({ terhubung: true }).eq("id", ada.id);
+    } else {
+      konflik.push(`@${username} (${platform}) sudah terdaftar milik anggota lain`);
+    }
+  }
+  return { tersinkron, konflik };
+}
+
+export async function POST(request: Request) {
+  return bungkus(async () => {
+    const admin = await userDariToken(tokenDari(request));
+    if (!admin) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
+    if (!PENGATUR.has(admin.role)) {
+      throw Object.assign(new Error("Hanya master / Ketua Umum yang boleh menautkan profil."), {
+        status: 403,
+      });
+    }
+    if (!uploadPostSiap()) throw new Error("upload-post belum tersambung (kunci API kosong).");
+
+    const body = (await request.json().catch(() => ({}))) as {
+      aksi?: string;
+      profil?: string;
+      username?: string;
+      user_id?: string;
+      ganti?: boolean;
+    };
+    const db = supabase();
+
+    // --- Tautan login untuk profil apa pun ---
+    if (body.aksi === "tautan") {
+      const profil = (body.profil ?? "").trim();
+      if (!profil) throw Object.assign(new Error("Profil tidak disebutkan."), { status: 400 });
+      return { url: await tautanHubungkanUp(profil) };
+    }
+
+    if (body.aksi !== "tautkan" && body.aksi !== "buat") {
+      throw Object.assign(new Error("aksi harus tautkan / buat / tautan."), { status: 400 });
+    }
+    const userId = Number(body.user_id);
+    if (!Number.isFinite(userId) || userId <= 0) {
+      throw Object.assign(new Error("Pilih anggotanya dulu."), { status: 400 });
+    }
+    const { data: orang } = await db
+      .from("app_user")
+      .select("id, nama, aktif, status")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!orang || orang.aktif !== true || orang.status !== "aktif") {
+      throw Object.assign(new Error("Anggota tidak ditemukan / tidak aktif."), { status: 404 });
+    }
+
+    // Profil milik anggota ini saat ini (kalau ada).
+    const { data: milik } = await db
+      .from("sosmed_profile")
+      .select("id, profile_key")
+      .eq("penyedia", "upload-post")
+      .eq("jenis", "pengguna")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const { profil: diUp } = await daftarProfilUp();
+    let profil = "";
+    let akun: Record<string, string> = {};
+    let dibuatBaru = false;
+
+    if (body.aksi === "tautkan") {
+      profil = (body.profil ?? "").trim();
+      const ada = diUp.find((p) => p.username === profil);
+      if (!ada) {
+        throw Object.assign(new Error(`Profil "${profil}" tidak ada di upload-post.`), { status: 404 });
+      }
+      akun = ada.akun;
+      // Sudah dikenal & milik orang lain? Tolak — jangan merebut diam-diam.
+      const { data: pemilikLain } = await db
+        .from("sosmed_profile")
+        .select("user_id")
+        .eq("profile_key", profil)
+        .maybeSingle();
+      if (pemilikLain && Number(pemilikLain.user_id) !== userId) {
+        throw Object.assign(
+          new Error(`Profil "${profil}" sudah tertaut ke anggota lain (id ${pemilikLain.user_id}).`),
+          { status: 409 },
+        );
+      }
+      if (pemilikLain && Number(pemilikLain.user_id) === userId) {
+        // Sudah tertaut ke orang yang sama — idempoten.
+        const sink = await sinkronAkunTertaut(db, userId, akun);
+        return { sukses: true, profil, user_id: String(userId), ...sink };
+      }
+    } else {
+      profil = (body.username ?? "").trim().toLowerCase();
+      if (!POLA_USERNAME.test(profil)) {
+        throw Object.assign(
+          new Error("Nama profil: huruf kecil, angka, strip; 3–40 karakter."),
+          { status: 400 },
+        );
+      }
+      if (diUp.some((p) => p.username === profil)) {
+        throw Object.assign(
+          new Error(`Profil "${profil}" sudah ada di upload-post — pakai tombol Tautkan.`),
+          { status: 409 },
+        );
+      }
+    }
+
+    if (milik && String(milik.profile_key) !== profil && body.ganti !== true) {
+      throw Object.assign(
+        new Error(`${orang.nama} sudah punya profil "${milik.profile_key}". Kirim ganti=true untuk mengalihkannya ke "${profil}".`),
+        { status: 409 },
+      );
+    }
+
+    if (body.aksi === "buat") {
+      await buatProfilUp(profil);
+      dibuatBaru = true;
+    }
+
+    const kolom = {
+      penyedia: "upload-post",
+      jenis: "pengguna",
+      judul: profil,
+      profile_key: profil,
+      ref_id: profil,
+      user_id: userId,
+      dibuat_oleh: Number(admin.id),
+      insight_cache: null,
+      insight_pada: null,
+    };
+    const { error } = milik
+      ? await db.from("sosmed_profile").update(kolom).eq("id", milik.id)
+      : await db.from("sosmed_profile").insert(kolom);
+    if (error) {
+      if (dibuatBaru) await hapusProfilUp(profil).catch(() => {});
+      console.error("[tv-anggota] tautkan:", error.message);
+      throw new Error("Gagal menyimpan penautan profil.");
+    }
+
+    const sink = await sinkronAkunTertaut(db, userId, akun);
+    return { sukses: true, profil, user_id: String(userId), dibuat: dibuatBaru, ...sink };
   });
 }

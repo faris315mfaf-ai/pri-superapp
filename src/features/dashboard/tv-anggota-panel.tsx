@@ -11,7 +11,8 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { RefreshCw, Users, X } from "lucide-react";
+import { Link2, Plus, RefreshCw, Users, X } from "lucide-react";
+import { ModalTautkanProfil, type PermintaanTautkan } from "./modal-tautkan-profil";
 import { GlassCard } from "@/components/glass-card";
 import { AvatarInisial, GlassSkeleton } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
@@ -21,6 +22,7 @@ import {
   getTvAnggotaDashboard,
   getTvAnggotaProfil,
   type ProfilTvAnggota,
+  type ProfilBelumTertaut,
 } from "@/services";
 import { PlatformIcon } from "@/components/platform-icon";
 import { cn } from "@/lib/utils";
@@ -70,10 +72,14 @@ export function TvAnggotaPanel() {
     kuota: number;
     terpakai: number;
     profil: ProfilTvAnggota[];
+    belum_tertaut?: ProfilBelumTertaut[];
   } | null>(null);
   // Pengikut Official per platform (Ayrshare, cache server).
   const [official, setOfficial] = useState<Record<string, number | null> | null>(null);
   const [buka, setBuka] = useState<ProfilTvAnggota | null>(null);
+  // Penautan profil upload-post → anggota (2 Sep 2026)
+  const [tautkan, setTautkan] = useState<PermintaanTautkan | null>(null);
+  const [tik, setTik] = useState(0);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [memuatDetail, setMemuatDetail] = useState(false);
 
@@ -104,7 +110,7 @@ export function TvAnggotaPanel() {
     return () => {
       hidup = false;
     };
-  }, []);
+  }, [tik]);
 
   async function bukaDetail(p: ProfilTvAnggota, paksa = false) {
     setBuka(p);
@@ -262,6 +268,79 @@ export function TvAnggotaPanel() {
           </div>
         )}
       </GlassCard>
+
+      {/* Profil upload-post yang belum ditautkan ke anggota (2 Sep 2026) */}
+      <GlassCard className="p-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[12.5px] font-bold text-teks-utama">
+            Profil belum ditautkan ({data.belum_tertaut?.length ?? 0})
+          </p>
+          <button
+            type="button"
+            onClick={() => setTautkan({ mode: "buat" })}
+            className="btn-tekan flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold text-white"
+            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            Buat profil bernama
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] leading-relaxed text-teks-sekunder">
+          Profil yang dibuat langsung di dashboard upload-post belum dikenal aplikasi.
+          Tautkan ke anggota supaya muncul di TV Rakyat Saya, KPI otomatis, dan leaderboard.
+        </p>
+        {(data.belum_tertaut ?? []).length === 0 ? (
+          <p className="mt-2 text-[12px] text-teks-sekunder">
+            Semua profil upload-post sudah tertaut ke anggota.
+          </p>
+        ) : (
+          <div className="scrollbar-tipis mt-2 flex max-h-72 flex-col gap-1.5 overflow-y-auto">
+            {(data.belum_tertaut ?? []).map((p) => (
+              <div key={p.profil} className="flex items-center gap-2.5 rounded-xl px-2 py-2">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-pri/10 text-pri">
+                  <Link2 className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[12.5px] font-semibold text-teks-utama">
+                    {p.profil}
+                  </span>
+                  <span className="mt-0.5 flex items-center gap-1">
+                    {PLATFORM6.map((pf) => (
+                      <PlatformIcon
+                        key={pf}
+                        platform={pf}
+                        className={cn(
+                          "h-3 w-3",
+                          p.akun[pf] ? "text-emerald-500" : "text-teks-sekunder/30",
+                        )}
+                      />
+                    ))}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setTautkan({ mode: "tautkan", profil: p.profil })}
+                  className="btn-tekan rounded-full bg-pri/12 px-3 py-1.5 text-[11px] font-bold text-pri"
+                >
+                  Tautkan
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </GlassCard>
+
+      {tautkan && (
+        <ModalTautkanProfil
+          permintaan={tautkan}
+          sudahPunya={new Map(data.profil.map((p) => [p.user_id, p.profil]))}
+          onTutup={() => setTautkan(null)}
+          onSelesai={() => {
+            setTautkan(null);
+            setTik((t) => t + 1);
+          }}
+        />
+      )}
 
       {/* Modal detail per profil */}
       <AnimatePresence>
