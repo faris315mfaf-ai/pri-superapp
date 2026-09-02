@@ -7,14 +7,24 @@
 //   - bolehUploadVideo: siapa yang boleh mengunggah ke sosmed?
 //
 // Aturannya berjenjang: Pimred (jabatan) & master selalu penuh; admin_tv
-// (peran lama) tetap dihormati; sisanya bergantung baris di tabel
-// tv_tim yang ditunjuk Pimred. Dibuat satu tempat supaya tidak ada
+// (peran lama) tetap dihormati; SEMENTARA seluruh anggota Divisi TV
+// Rakyat juga penuh (DIVISI_TV_PENUH, 2 Sep 2026); sisanya bergantung
+// baris di tabel tv_tim yang ditunjuk Pimred. Dibuat satu tempat supaya tidak ada
 // gerbang yang memakai aturan berbeda dari yang lain.
 // ============================================================
 import { supabase } from "@/lib/supabase";
 import { adalahPimred } from "@/lib/jabatan";
 import { bolehProsesVideo } from "@/types";
 import type { UserPublik } from "@/lib/sesi";
+
+/**
+ * SEMENTARA (permintaan 2 Sep 2026): SELURUH anggota Divisi TV Rakyat
+ * berwenang penuh — upload ke sosmed + menyetujui video — tanpa perlu
+ * ditunjuk satu per satu di tv_tim. Ubah ke false bila nanti kembali ke
+ * penunjukan per orang oleh Pimred (butuh deploy ulang).
+ */
+export const DIVISI_TV_PENUH = true;
+export const NAMA_DIVISI_TV = "Divisi TV Rakyat";
 
 export type WewenangTv = {
   anggota: boolean; // masuk modul TV Rakyat
@@ -37,10 +47,13 @@ export async function wewenangTv(user: {
   // Hierarki OTOMATIS (spek 1.18/1.1): Pimpinan Redaksi (jabatan) dan
   // KETUA DIVISI TV RAKYAT (posisi kepala di Divisi TV Rakyat) langsung
   // berwenang penuh — tanpa penunjukan manual di tv_tim.
-  const ketuaDivisiTv =
-    user.posisi_divisi === "kepala" && (user.divisi ?? "") === "Divisi TV Rakyat";
+  const divisiTv = (user.divisi ?? "").trim() === NAMA_DIVISI_TV;
+  const ketuaDivisiTv = user.posisi_divisi === "kepala" && divisiTv;
   const penuh =
-    adalahPimred(user) || ketuaDivisiTv || bolehProsesVideo((user.role ?? "") as never);
+    adalahPimred(user) ||
+    ketuaDivisiTv ||
+    (DIVISI_TV_PENUH && divisiTv) ||
+    bolehProsesVideo((user.role ?? "") as never);
   if (penuh) {
     return { anggota: true, acc: true, upload: true, proses: true };
   }
