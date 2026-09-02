@@ -1,0 +1,43 @@
+{
+  "packageId": "id.pri.superapp",
+  "host": "pri-superapp.vercel.app",
+  "name": "PRI SuperApp",
+  "launcherName": "PRI SuperApp",
+  "display": "standalone",
+  "themeColor": "#DC2626",
+  "themeColorDark": "#0B1120",
+  "navigationColor": "#0B1120",
+  "navigationColorDark": "#0B1120",
+  "navigationDividerColor": "#0B1120",
+  "navigationDividerColorDark": "#0B1120",
+  "backgroundColor": "#0B1120",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://pri-superapp.vercel.app/ikon/ikon-512.png",
+  "maskableIconUrl": "https://pri-superapp.vercel.app/ikon/ikon-maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "C:\\Users\\Admin\\pri-superapp\\apk\\pri-superapp.keystore",
+    "alias": "pri-superapp"
+  },
+  "appVersionName": "1.4.1",
+  "appVersionCode": 5,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://pri-superapp.vercel.app/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://pri-superapp.vercel.app/",
+  "minSdkVersion": 23,
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "appVersion": "1.4.1"
+}

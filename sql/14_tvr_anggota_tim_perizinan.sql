@@ -1,0 +1,30 @@
+-- ============================================================
+-- 14 — Akun TV Rakyat anggota, pelaporan video, struktur tim,
+--      penugasan, perizinan absensi, rilis aplikasi.
+-- (Sudah diterapkan ke Supabase 2026-08-25 lewat migrasi
+--  tvr_anggota_tim_perizinan_rilis + notifikasi_untuk_user_view.
+--  File ini arsip untuk repo — lihat migrasi utk DDL lengkap.)
+--
+-- Ringkasan struktur:
+-- * akun_tvr_user   — akun TV Rakyat MILIK anggota, 6 platform
+--   (instagram/tiktok/youtube/facebook/threads/twitter), unik per
+--   (platform, lower(username)). Terpisah dari akun_sosmed_user
+--   (QC komentar) dan akun official Ayrshare.
+-- * laporan_video   — link video yang dilaporkan anggota; KPI 5
+--   video/hari; unik (user_id, url_video). Kewajiban dibebaskan
+--   bila perizinan hari itu disetujui.
+-- * tim_anggota     — atasan → bawahan; unique(anggota_id) berarti
+--   satu anggota hanya satu atasan; hanya role 'anggota' yang bisa
+--   dijadikan bawahan (dijaga di /api/tim).
+-- * kerja_item      + kategori ('harian'|'besar'), tenggat,
+--   ditugaskan_oleh. v_kerja_kpi kini HANYA menghitung kategori
+--   harian (rencana besar lintas hari merusak persentase harian).
+-- * perizinan       — izin/sakit per hari, surat WAJIB di bucket
+--   privat 'surat' (jpg/png/pdf ≤1MB), status menunggu/disetujui/
+--   ditolak; pemutus: atasan langsung atau admin HR/super admin.
+-- * rilis_aplikasi  — catatan fitur per versi; POST /api/versi
+--   menyiarkan push ke semua perangkat; aplikasi lama menampilkan
+--   menu "Update Tersedia" (banding VERSI_APLIKASI build).
+-- * notifikasi      + untuk_user — notifikasi tersasar per orang
+--   (penugasan, keputusan izin, keanggotaan tim).
+-- ============================================================

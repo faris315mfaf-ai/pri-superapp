@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pemeriksa PRI SuperApp</title>
+<!--
+  Halaman pemeriksa mandiri.
+
+  Sengaja HTML polos tanpa satu pun berkas skrip dari aplikasi: kalau
+  aplikasi utama gagal dimuat (mis. simpanan di ponsel basi), halaman
+  ini TETAP terbuka. Fungsinya dua: memberi tahu apa yang sebenarnya
+  terjadi di perangkat, dan menyediakan tombol pembersih sekali tekan.
+-->
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 24px; background: #0B1120; color: #E2E8F0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.6;
+  }
+  .kotak { max-width: 460px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .kecil { color: #94A3B8; font-size: 13px; margin: 0 0 20px; }
+  .baris {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 11px 0; border-bottom: 1px solid rgba(148,163,184,0.16);
+    font-size: 14px;
+  }
+  .label { color: #94A3B8; flex: 0 0 128px; }
+  .nilai { flex: 1; word-break: break-word; }
+  .ok { color: #34D399; }
+  .gagal { color: #F87171; }
+  button {
+    width: 100%; margin-top: 22px; padding: 14px; border: 0;
+    border-radius: 12px; background: linear-gradient(135deg,#DC2626,#B91C1C);
+    color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
+    font-family: inherit;
+  }
+  button:disabled { opacity: .6; cursor: default; }
+  a { color: #F87171; }
+  #hasil { margin-top: 14px; font-size: 13px; color: #94A3B8; }
+</style>
+</head>
+<body>
+<div class="kotak">
+  <h1>Pemeriksa PRI SuperApp</h1>
+  <p class="kecil">Halaman ini tidak memakai berkas aplikasi, jadi tetap terbuka walau aplikasinya bermasalah.</p>
+
+  <div class="baris"><span class="label">Server</span><span class="nilai" id="server">memeriksa…</span></div>
+  <div class="baris"><span class="label">Berkas aplikasi</span><span class="nilai" id="aset">memeriksa…</span></div>
+  <div class="baris"><span class="label">Versi terpasang</span><span class="nilai" id="versi">memeriksa…</span></div>
+  <div class="baris"><span class="label">Service worker</span><span class="nilai" id="sw">memeriksa…</span></div>
+  <div class="baris"><span class="label">Simpanan</span><span class="nilai" id="cache">memeriksa…</span></div>
+  <div class="baris"><span class="label">Perangkat</span><span class="nilai" id="ua">—</span></div>
+
+  <button id="bersihkan">Bersihkan &amp; Buka Aplikasi</button>
+  <div id="hasil"></div>
+  <p class="kecil" style="margin-top:18px">
+    Setelah dibersihkan Anda akan diarahkan ke <a href="/">aplikasi</a>.
+  </p>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  function tulis(id, teks, kelas) {
+    var el = $(id);
+    el.textContent = teks;
+    if (kelas) el.className = "nilai " + kelas;
+  }
+
+  $("ua").textContent = navigator.userAgent.slice(0, 90);
+
+  // 1. Server terjangkau?
+  fetch("/api/versi", { cache: "no-store" })
+    .then(function (r) {
+      tulis("server", "terjangkau (HTTP " + r.status + ")", r.ok ? "ok" : "gagal");
+      return r.ok ? r.json() : null;
+    })
+    .then(function (j) {
+      var v = j && j.terbaru ? j.terbaru.versi : null;
+      tulis("versi", v ? "server: v" + v : "tidak diketahui");
+    })
+    .catch(function (e) {
+      tulis("server", "TIDAK TERJANGKAU — " + e.message, "gagal");
+      tulis("versi", "—");
+    });
+
+  // 2. Berkas aplikasi utuh? Ambil HTML lalu uji satu skripnya.
+  fetch("/", { cache: "no-store" })
+    .then(function (r) { return r.text(); })
+    .then(function (html) {
+      var cocok = html.match(/\/_next\/static\/[^"]+\.js/);
+      if (!cocok) { tulis("aset", "tidak ada berkas dirujuk", "gagal"); return; }
+      return fetch(cocok[0], { cache: "no-store" }).then(function (r) {
+        tulis(
+          "aset",
+          r.ok ? "utuh (contoh berkas HTTP 200)" : "RUSAK — berkas hilang (HTTP " + r.status + ")",
+          r.ok ? "ok" : "gagal"
+        );
+      });
+    })
+    .catch(function (e) { tulis("aset", "gagal diperiksa — " + e.message, "gagal"); });
+
+  // 3. Service worker & simpanan
+  if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+    navigator.serviceWorker.getRegistrations().then(function (r) {
+      tulis("sw", r.length ? r.length + " terpasang" + (navigator.serviceWorker.controller ? " (mengendalikan halaman)" : "") : "tidak ada");
+    });
+  } else {
+    tulis("sw", "tidak didukung peramban");
+  }
+
+  if (window.caches && caches.keys) {
+    caches.keys().then(function (k) {
+      tulis("cache", k.length ? k.join(", ") : "kosong");
+    });
+  } else {
+    tulis("cache", "tidak didukung peramban");
+  }
+
+  // 4. Tombol pembersih
+  $("bersihkan").addEventListener("click", function () {
+    var tombol = $("bersihkan");
+    tombol.disabled = true;
+    tombol.textContent = "Membersihkan…";
+    var tugas = [];
+    try {
+      if (window.caches && caches.keys) {
+        tugas.push(caches.keys().then(function (n) {
+          return Promise.all(n.map(function (k) { return caches.delete(k); }));
+        }));
+      }
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+        tugas.push(navigator.serviceWorker.getRegistrations().then(function (r) {
+          return Promise.all(r.map(function (x) { return x.unregister(); }));
+        }));
+      }
+    } catch (e) { /* diabaikan */ }
+
+    var lanjut = function () {
+      $("hasil").textContent = "Selesai. Membuka aplikasi…";
+      // Tambahkan penanda waktu agar peramban tidak memakai salinan lama.
+      setTimeout(function () { location.href = "/?segar=" + Date.now(); }, 700);
+    };
+    Promise.all(tugas).then(lanjut, lanjut);
+  });
+})();
+</script>
+</body>
+</html>

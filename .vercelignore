@@ -1,0 +1,32 @@
+# Berkas yang TIDAK perlu diunggah ke Vercel saat deploy.
+#
+# Kenapa perlu: tanpa berkas ini, `vercel --prod` mengunggah SELURUH isi folder,
+# termasuk apk/ yang berukuran 45 MB (proyek Android + hasil build Gradle + berkas
+# .apk). Isinya sama sekali tidak dipakai Next.js — hanya memperlambat tiap deploy.
+#
+# Sudah diperiksa: tidak ada satu pun berkas di src/ yang mengimpor dari folder-folder
+# di bawah ini. Kalau nanti ada yang mengimpor, hapus barisnya dari daftar ini.
+
+# Proyek Android / APK — penyumbang ukuran terbesar
+apk/
+
+# Kode & alat yang hidupnya di n8n, bukan di aplikasi web
+n8n_kode/
+
+# Skrip SQL: dijalankan manual di Supabase, bukan saat build
+sql/
+
+# Uji, contoh, dan skrip bantu — tidak ikut dibundel aplikasi
+tests/
+examples/
+mini-services/
+.zscripts/
+
+# Folder kerja lokal
+upload/
+download/
+.uji-tv/
+
+# Log & catatan kerja
+*.log
+worklog.md
