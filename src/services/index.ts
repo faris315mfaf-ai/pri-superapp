@@ -4720,6 +4720,7 @@ export type StudioTemplate = {
   elemen_video: string;
   elemen_judul: string;
   elemen_highlight: string;
+  elemen_sumber: string;
   aktif: boolean;
 };
 export type StudioProfil = {
@@ -4761,6 +4762,7 @@ export type StudioProyek = {
     sumber_caption: string;
     penjelasan: string;
     caption_inti: string;
+    sumber_akun: string;
     status: string;
     siaran_id: string | null;
     dibuat_pada: string;

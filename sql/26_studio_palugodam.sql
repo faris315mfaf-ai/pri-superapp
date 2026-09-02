@@ -55,3 +55,10 @@ alter table public.tvr_siaran_item
   add column if not exists video_url text,
   add column if not exists judul text,
   add column if not exists caption text;
+
+-- Tambahan (migrasi studio_elemen_sumber): elemen "sumber" + akun asal video.
+alter table public.palugodam_template add column if not exists elemen_sumber text not null default 'sumber';
+alter table public.palugodam_template alter column elemen_video set default 'video-1';
+alter table public.palugodam_template alter column elemen_judul set default 'judul';
+alter table public.palugodam_template alter column elemen_highlight set default 'highlight';
+alter table public.studio_proyek add column if not exists sumber_akun text not null default '';

@@ -80,7 +80,7 @@ function KartuSiap({ siap }: { siap: StudioSiap | null }) {
 function TabTemplate() {
   const [siap, setSiap] = useState<StudioSiap | null>(null);
   const [profil, setProfil] = useState<StudioProfil[] | null>(null);
-  const [edit, setEdit] = useState<Record<string, { template_id: string; label: string; elemen_video: string; elemen_judul: string; elemen_highlight: string }>>({});
+  const [edit, setEdit] = useState<Record<string, { template_id: string; label: string; elemen_video: string; elemen_judul: string; elemen_highlight: string; elemen_sumber: string }>>({});
   const [sibuk, setSibuk] = useState("");
 
   function muat() {
@@ -93,9 +93,10 @@ function TabTemplate() {
           e[p.profil] = {
             template_id: p.template?.template_id ?? "",
             label: p.template?.label ?? "",
-            elemen_video: p.template?.elemen_video ?? "Video",
-            elemen_judul: p.template?.elemen_judul ?? "Judul",
-            elemen_highlight: p.template?.elemen_highlight ?? "Highlight",
+            elemen_video: p.template?.elemen_video ?? "video-1",
+            elemen_judul: p.template?.elemen_judul ?? "judul",
+            elemen_highlight: p.template?.elemen_highlight ?? "highlight",
+            elemen_sumber: p.template?.elemen_sumber ?? "sumber",
           };
         }
         setEdit(e);
@@ -144,8 +145,8 @@ function TabTemplate() {
         <p className="mt-1 text-[11px] leading-relaxed text-teks-sekunder">
           Tiap profil upload-post punya template Creatomate sendiri. Tempel <b>ID template</b> dari
           Creatomate, dan pastikan nama elemen di template sama dengan yang tertulis (bawaan:{" "}
-          <b>Video</b> untuk klip, <b>Judul</b> dan <b>Highlight</b> untuk teks). Profil tanpa
-          template tidak bisa dirender.
+          <b>video-1</b> untuk klip; <b>judul</b>, <b>highlight</b>, dan <b>sumber</b> untuk teks —
+          kosongkan elemen sumber bila template tidak punya). Profil tanpa template tidak bisa dirender.
         </p>
         {profil === null ? (
           <GlassSkeleton className="mt-3 h-24 rounded-xl" />
@@ -182,12 +183,13 @@ function TabTemplate() {
                       className="glass-input h-10 rounded-xl px-3 text-[12px] text-teks-utama"
                     />
                   </div>
-                  <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                  <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
                     {(
                       [
                         ["elemen_video", "Elemen video"],
                         ["elemen_judul", "Elemen judul"],
                         ["elemen_highlight", "Elemen highlight"],
+                        ["elemen_sumber", "Elemen sumber"],
                       ] as const
                     ).map(([k, ph]) => (
                       <input
@@ -239,6 +241,7 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
   const [data, setData] = useState<StudioProyek | null>(null);
   const [captionInti, setCaptionInti] = useState("");
   const [penjelasan, setPenjelasan] = useState("");
+  const [sumberAkun, setSumberAkun] = useState("");
   const [pilih, setPilih] = useState<Set<string>>(new Set());
   const [draft, setDraft] = useState<Draft>({});
   const [platform, setPlatform] = useState<Set<string>>(new Set(PLATFORM6));
@@ -259,6 +262,7 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
           terisi.current = true;
           setCaptionInti(d.proyek.caption_inti || d.proyek.sumber_caption);
           setPenjelasan(d.proyek.penjelasan);
+          setSumberAkun(d.proyek.sumber_akun);
           const awal = d.item.length > 0
             ? d.item.map((i) => i.profil)
             : profilSemua.filter((p) => p.template?.aktif).map((p) => p.profil);
@@ -349,6 +353,13 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
               placeholder="Penjelasan singkat: ini video tentang apa? (membantu DeepSeek membuat judul)"
               className="glass-input mt-2 w-full rounded-xl px-3 py-2 text-[12.5px] text-teks-utama"
             />
+            <input
+              value={sumberAkun}
+              onChange={(e) => setSumberAkun(e.target.value)}
+              maxLength={80}
+              placeholder="Sumber video (tampil di video sebagai 'Sumber: @akun')"
+              className="glass-input mt-2 h-10 w-full rounded-xl px-3 text-[12.5px] text-teks-utama"
+            />
             <div className="mt-3 flex items-center justify-between">
               <p className="text-[11px] font-semibold text-teks-sekunder">Profil tujuan ({pilih.size}):</p>
               <button
@@ -388,7 +399,7 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
             </div>
             <button
               type="button"
-              onClick={() => void jalankan("simpan", "teks_simpan", { caption_inti: captionInti, penjelasan, profil: [...pilih] }, "Teks & profil tersimpan")}
+              onClick={() => void jalankan("simpan", "teks_simpan", { caption_inti: captionInti, penjelasan, sumber_akun: sumberAkun, profil: [...pilih] }, "Teks & profil tersimpan")}
               disabled={Boolean(sibuk) || pilih.size === 0}
               className="glass btn-tekan mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl text-[12.5px] font-bold text-teks-utama disabled:opacity-50"
             >

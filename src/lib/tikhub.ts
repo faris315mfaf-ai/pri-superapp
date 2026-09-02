@@ -208,11 +208,14 @@ export type MediaLink = {
   caption: string;
   thumbnail_url: string;
   kode: string;
+  /** Username akun asal (untuk teks "Sumber: @..."). */
+  akun: string;
 };
 
 type DetailTikTok = {
   aweme_id?: string | number;
   desc?: string;
+  author?: { unique_id?: string; nickname?: string };
   video?: {
     download_no_watermark_addr?: { url_list?: string[] };
     play_addr?: { url_list?: string[] };
@@ -246,6 +249,7 @@ export async function mediaDariLink(link: string): Promise<MediaLink> {
       caption: (d.desc ?? "").trim(),
       thumbnail_url: d.video?.cover?.url_list?.[0] ?? "",
       kode: String(d.aweme_id ?? idPath ?? Date.now()),
+      akun: String(d.author?.unique_id ?? /@([\w.]+)/.exec(u.pathname)?.[1] ?? ""),
     };
   }
   if (host.includes("instagram.com")) {
@@ -253,7 +257,9 @@ export async function mediaDariLink(link: string): Promise<MediaLink> {
       `/instagram/v1/fetch_post_by_url?post_url=${encodeURIComponent(link.trim())}`,
       40_000,
     );
-    const d = (j.data?.items?.[0] ?? j.data) as (PostIG & { video_versions?: { url?: string }[] }) | undefined;
+    const d = (j.data?.items?.[0] ?? j.data) as
+      | (PostIG & { video_versions?: { url?: string }[]; user?: { username?: string } })
+      | undefined;
     const url = d?.video_versions?.[0]?.url ?? "";
     if (!d || !url) throw new Error("Video Instagram tidak ditemukan / bukan video / privat.");
     return {
@@ -262,6 +268,7 @@ export async function mediaDariLink(link: string): Promise<MediaLink> {
       caption: (d.caption?.text ?? "").trim(),
       thumbnail_url: d.image_versions2?.candidates?.[0]?.url ?? "",
       kode: String(d.code ?? d.pk ?? Date.now()),
+      akun: String(d.user?.username ?? ""),
     };
   }
   throw new Error("Hanya link TikTok atau Instagram yang didukung.");

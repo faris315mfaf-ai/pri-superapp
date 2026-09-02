@@ -3,19 +3,20 @@
 // PALUGODAM. KHUSUS SISI SERVER. Kunci di env CREATOMATE_API_KEY.
 //
 // Kontrak API (docs Creatomate v1):
-//   POST https://api.creatomate.com/v1/renders
+//   POST https://api.creatomate.com/v2/renders
 //        Authorization: Bearer <key>
 //        { template_id, modifications: { "<Elemen>.source": url,
 //                                         "<Elemen>.text": "..." } }
 //        → 202 [ { id, status: "planned", url, ... } ]
-//   GET  https://api.creatomate.com/v1/renders/<id>
+//   GET  https://api.creatomate.com/v2/renders/<id>
 //        → { id, status: planned|waiting|transcribing|rendering|succeeded|failed,
 //            url, error_message }
-// Nama elemen mengikuti template yang dibuat user (bawaan: Video, Judul,
-// Highlight) — bisa diubah per profil di pengaturan Studio.
+// Nama elemen mengikuti template yang dibuat user (bawaan: video-1, judul,
+// highlight, sumber) — bisa diubah per profil di pengaturan Studio.
 // ============================================================
 
-const BASE = "https://api.creatomate.com/v1";
+// v2 = versi yang dipakai snippet dashboard Creatomate user (3 Sep 2026).
+const BASE = "https://api.creatomate.com/v2";
 
 export function creatomateSiap(): boolean {
   return Boolean(process.env.CREATOMATE_API_KEY);

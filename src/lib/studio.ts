@@ -22,6 +22,7 @@ export type Sumber = {
   platform: string;
   caption: string;
   ukuran: number;
+  akun: string;
 };
 
 /** URL sumber yang selalu segar (R2 bertanda tangan 7 hari, dibuat ulang tiap dibaca). */
@@ -58,6 +59,7 @@ export async function simpanSumberDariLink(link: string, userId: number): Promis
       platform: media.platform,
       caption: media.caption,
       ukuran: buf.byteLength,
+      akun: media.akun,
     };
   }
   const db = supabase();
@@ -69,6 +71,7 @@ export async function simpanSumberDariLink(link: string, userId: number): Promis
     platform: media.platform,
     caption: media.caption,
     ukuran: buf.byteLength,
+    akun: media.akun,
   };
 }
 
@@ -97,10 +100,11 @@ export async function mulaiRenderProyek(
   const db = supabase();
   const { data: proyek } = await db
     .from("studio_proyek")
-    .select("id, sumber_path, sumber_url")
+    .select("id, sumber_path, sumber_url, sumber_akun")
     .eq("id", proyekId)
     .maybeSingle();
   if (!proyek) throw new Error("Proyek tidak ditemukan.");
+  const sumberAkun = String(proyek.sumber_akun ?? "").trim();
   const sumberUrl = urlSumber(String(proyek.sumber_path ?? ""), String(proyek.sumber_url ?? ""));
   if (!sumberUrl) throw new Error("Video sumber belum ada / sudah disapu.");
 
@@ -110,7 +114,7 @@ export async function mulaiRenderProyek(
       .select("id, profil, template_id, judul, highlight, render_id, render_status")
       .eq("proyek_id", proyekId)
       .in("render_status", ["belum", "gagal"]),
-    db.from("palugodam_template").select("profil, template_id, elemen_video, elemen_judul, elemen_highlight, aktif"),
+    db.from("palugodam_template").select("profil, template_id, elemen_video, elemen_judul, elemen_highlight, elemen_sumber, aktif"),
   ]);
   const tpl = new Map((templates ?? []).map((t) => [String(t.profil), t]));
   let dimulai = 0;
@@ -132,10 +136,13 @@ export async function mulaiRenderProyek(
     }
     try {
       const mods: Record<string, string> = {
-        [`${String(t?.elemen_video || "Video")}.source`]: sumberUrl,
-        [`${String(t?.elemen_judul || "Judul")}.text`]: it.judul,
+        [`${String(t?.elemen_video || "video-1")}.source`]: sumberUrl,
+        [`${String(t?.elemen_judul || "judul")}.text`]: it.judul,
       };
-      if (it.highlight.trim()) mods[`${String(t?.elemen_highlight || "Highlight")}.text`] = it.highlight;
+      if (it.highlight.trim()) mods[`${String(t?.elemen_highlight || "highlight")}.text`] = it.highlight;
+      // Teks "Sumber: @akun" bila template punya elemen sumber & akun asal diketahui.
+      const elemenSumber = String(t?.elemen_sumber ?? "").trim();
+      if (elemenSumber && sumberAkun) mods[`${elemenSumber}.text`] = `Sumber: ${sumberAkun.startsWith("@") ? sumberAkun : `@${sumberAkun}`}`;
       const r = await mulaiRender({ templateId, modifications: mods });
       await db
         .from("studio_proyek_item")

@@ -55,7 +55,7 @@ async function daftarProfilStudio() {
   const [{ profil: diUp }, { data: baris }, { data: tpl }] = await Promise.all([
     uploadPostSiap() ? daftarProfilUp() : Promise.resolve({ profil: [], kuota: 0, paket: "" }),
     db.from("sosmed_profile").select("profile_key, user_id").eq("penyedia", "upload-post").eq("jenis", "pengguna"),
-    db.from("palugodam_template").select("profil, template_id, label, elemen_video, elemen_judul, elemen_highlight, aktif"),
+    db.from("palugodam_template").select("profil, template_id, label, elemen_video, elemen_judul, elemen_highlight, elemen_sumber, aktif"),
   ]);
   const userPer = new Map((baris ?? []).map((b) => [String(b.profile_key), Number(b.user_id)]));
   const ids = [...new Set([...userPer.values()])];
@@ -84,6 +84,7 @@ async function daftarProfilStudio() {
                 elemen_video: String(t.elemen_video),
                 elemen_judul: String(t.elemen_judul),
                 elemen_highlight: String(t.elemen_highlight),
+                elemen_sumber: String(t.elemen_sumber ?? "sumber"),
                 aktif: t.aktif === true,
               }
             : null,
@@ -150,6 +151,7 @@ async function muatProyekLengkap(id: number, userId: number) {
       sumber_caption: String(p.sumber_caption ?? ""),
       penjelasan: String(p.penjelasan ?? ""),
       caption_inti: String(p.caption_inti ?? ""),
+      sumber_akun: String(p.sumber_akun ?? ""),
       status: String(p.status ?? "sumber"),
       siaran_id: p.siaran_id == null ? null : String(p.siaran_id),
       dibuat_pada: String(p.dibuat_pada),
@@ -235,9 +237,11 @@ export async function POST(request: Request) {
           profil,
           template_id: templateId,
           label: String(body.label ?? "").trim().slice(0, 80),
-          elemen_video: String(body.elemen_video ?? "Video").trim() || "Video",
-          elemen_judul: String(body.elemen_judul ?? "Judul").trim() || "Judul",
-          elemen_highlight: String(body.elemen_highlight ?? "Highlight").trim() || "Highlight",
+          elemen_video: String(body.elemen_video ?? "video-1").trim() || "video-1",
+          elemen_judul: String(body.elemen_judul ?? "judul").trim() || "judul",
+          elemen_highlight: String(body.elemen_highlight ?? "highlight").trim() || "highlight",
+          // Boleh dikosongkan bila template tidak punya elemen sumber.
+          elemen_sumber: String(body.elemen_sumber ?? "sumber").trim(),
           aktif: body.aktif !== false,
           diperbarui_pada: new Date().toISOString(),
         },
@@ -268,6 +272,7 @@ export async function POST(request: Request) {
           sumber_url: s.url,
           sumber_caption: s.caption.slice(0, 2200),
           caption_inti: s.caption.slice(0, 2200),
+          sumber_akun: s.akun.slice(0, 80),
           ukuran_byte: s.ukuran,
           hapus_media_pada: hapusPadaSumber(),
         })
@@ -321,6 +326,7 @@ export async function POST(request: Request) {
     if (aksi === "teks_simpan") {
       const captionInti = String(body.caption_inti ?? "").trim().slice(0, 2200);
       const penjelasan = String(body.penjelasan ?? "").trim().slice(0, 1000);
+      const sumberAkun = String(body.sumber_akun ?? "").trim().replace(/^@+/, "").slice(0, 80);
       const profilDipilih = [...new Set(((body.profil as unknown[]) ?? []).map((p) => String(p).trim()).filter(Boolean))];
       if (profilDipilih.length === 0) {
         throw Object.assign(new Error("Pilih minimal satu profil."), { status: 400 });
@@ -350,7 +356,7 @@ export async function POST(request: Request) {
       if (error) throw new Error("Gagal menyimpan daftar profil.");
       await db
         .from("studio_proyek")
-        .update({ caption_inti: captionInti, penjelasan, status: "teks" })
+        .update({ caption_inti: captionInti, penjelasan, sumber_akun: sumberAkun, status: "teks" })
         .eq("id", proyekId);
       return { sukses: true };
     }
