@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CalendarDays,
+  ClipboardCheck,
   Check,
   ChevronRight,
   History,
@@ -306,6 +307,7 @@ export function QcScreen({
               ["tabel-anggota", "Database Anggota", UsersRound, true],
               ["absensi-hari-ini", "Absensi Hari Ini", CalendarDays, true],
               ["setel-kpi", "Setel KPI", TrendingUp, true],
+              ["persetujuan-kpi", "ACC KPI", ClipboardCheck, true],
               ["kelola-pengguna", "Kelola Pengguna", UserCog, bolehHR],
               ["pengumuman", "Kirim Pengumuman", Megaphone, bolehHR],
             ] as const

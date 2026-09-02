@@ -15,6 +15,7 @@ import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { beriKoin } from "@/lib/koin";
+import { kirimKabar } from "@/lib/notifikasi";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import {
   bannedAktifPerUser,
@@ -205,6 +206,17 @@ export async function GET(request: Request) {
     }
     const daftar = (data ?? []).map((d) => ({ ...d, id: String(d.id) }));
 
+    // Laporan MANUAL yang masih menunggu ACC HR (+ yang ditolak 7 hari
+    // terakhir supaya alasannya terbaca) — TIDAK dihitung KPI (2 Sep 2026).
+    const batasTolak = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const { data: pending } = await db
+      .from("laporan_video_pending")
+      .select("id, platform, url_video, keyword, tanggal_wib, dibuat_pada, status, catatan")
+      .eq("user_id", Number(user.id))
+      .or(`status.eq.menunggu,and(status.eq.ditolak,diputus_pada.gte.${batasTolak})`)
+      .order("dibuat_pada", { ascending: false })
+      .limit(50);
+
     // Aturan ketat 5x6: hitung per platform, platform banned dikecualikan.
     const perPlatform = new Map<string, number>();
     for (const d of daftar) {
@@ -220,6 +232,7 @@ export async function GET(request: Request) {
       tanggal,
       hari_ini: tanggalWibSekarang(),
       data: daftar,
+      menunggu: (pending ?? []).map((d) => ({ ...d, id: String(d.id) })),
       // kpi_target kini TOTAL (per-platform x platform aktif) supaya
       // tampilan "x/target" langsung benar tanpa mengubah pemanggil lama.
       kpi_target: kpi.target_total,
@@ -300,9 +313,56 @@ export async function POST(request: Request) {
     const db = supabase();
     const tanggal = tanggalWibSekarang();
 
-    // --- Mode BATCH: simpan banyak link sekali klik (spek 3.3). ---
-    // Tiap link diproses sendiri-sendiri supaya satu link jelek tidak
-    // membatalkan seluruh kiriman; hasil per link dilaporkan balik.
+    // ALUR BARU (2 Sep 2026): laporan MANUAL lewat link TIDAK langsung
+    // dihitung KPI. Ia masuk `laporan_video_pending` (menunggu ACC HR);
+    // disetujui → disalin ke laporan_video oleh /api/tvr/persetujuan.
+    // Latar belakang: deteksi otomatis kadang luput, jadi jalur manual
+    // tetap ada — tapi harus diverifikasi HR supaya tak disalahgunakan.
+    async function ajukan(platformMentah: string, urlMentah: string, keywordMentah?: string) {
+      const { platform, urlBersih } = validasiLink(platformMentah, urlMentah);
+      // Sudah tercatat (otomatis/ACC sebelumnya)? Jangan minta ACC ulang.
+      const { data: sudahAda } = await db
+        .from("laporan_video")
+        .select("id")
+        .eq("user_id", Number(user.id))
+        .eq("url_video", urlBersih)
+        .maybeSingle();
+      if (sudahAda) throw Object.assign(new Error("sudah tercatat di KPI Anda"), { status: 409 });
+      const { data: sudahMenunggu } = await db
+        .from("laporan_video_pending")
+        .select("id")
+        .eq("user_id", Number(user.id))
+        .eq("url_video", urlBersih)
+        .eq("status", "menunggu")
+        .maybeSingle();
+      if (sudahMenunggu) throw Object.assign(new Error("sudah menunggu ACC HR"), { status: 409 });
+      const { data, error } = await db
+        .from("laporan_video_pending")
+        .insert({
+          user_id: Number(user.id),
+          platform,
+          url_video: urlBersih,
+          keyword: bersihkanKeyword(keywordMentah),
+          tanggal_wib: tanggal,
+        })
+        .select("id, platform, url_video, keyword, tanggal_wib, dibuat_pada, status")
+        .single();
+      if (error || !data) throw new Error("gagal tersimpan");
+      return { ...data, id: String(data.id) };
+    }
+
+    async function kabariHR(jumlah: number) {
+      await kirimKabar({
+        judul: "Laporan video manual menunggu ACC",
+        isi: `${user.nama} mengirim ${jumlah} link video untuk disetujui. Periksa di HR Center → ACC KPI.`,
+        kategori: "info",
+        jenis_peristiwa: "laporan_video_acc",
+        untukRole: ["admin_hr", "super_admin", "master"],
+      });
+    }
+
+    // --- Mode BATCH: banyak link sekali klik (spek 3.3). Tiap link
+    //     diproses sendiri supaya satu link jelek tak membatalkan sisanya.
     if (Array.isArray(body.banyak)) {
       const daftar = body.banyak.slice(0, 30); // pagar wajar per kiriman
       if (daftar.length === 0) {
@@ -312,28 +372,8 @@ export async function POST(request: Request) {
       const gagal: { url: string; alasan: string }[] = [];
       for (const item of daftar) {
         try {
-          const { platform, urlBersih } = validasiLink(item.platform ?? "", item.url ?? "");
-          const { data, error } = await db
-            .from("laporan_video")
-            .insert({
-              user_id: Number(user.id),
-              platform,
-              url_video: urlBersih,
-              keyword: bersihkanKeyword(item.keyword),
-              tanggal_wib: tanggal,
-            })
-            .select("id, platform, url_video, keyword")
-            .single();
-          if (error) {
-            gagal.push({
-              url: (item.url ?? "").slice(0, 120),
-              alasan: error.code === "23505" ? "sudah pernah dilaporkan" : "gagal tersimpan",
-            });
-          } else {
-            tersimpan.push({ ...data, id: String(data.id) });
-            // Koin laporan video (spek 1.16) — referensi id laporan.
-            await beriKoin(Number(user.id), "laporan_video", `laporan-${data.id}`);
-          }
+          const d = await ajukan(item.platform ?? "", item.url ?? "", item.keyword);
+          tersimpan.push({ id: d.id, platform: d.platform, url_video: d.url_video });
         } catch (e) {
           gagal.push({
             url: (item.url ?? "").slice(0, 120),
@@ -341,45 +381,50 @@ export async function POST(request: Request) {
           });
         }
       }
-      return { sukses: true, tersimpan, gagal };
+      if (tersimpan.length > 0) await kabariHR(tersimpan.length);
+      return { sukses: true, menunggu: true, tersimpan, gagal };
     }
 
-    // --- Mode satu link (cara lama tetap ada). ---
+    // --- Mode satu link. ---
     const platformDiminta = (body.platform ?? "").toLowerCase();
     if (!PLATFORM_SAH.has(platformDiminta)) {
       throw Object.assign(new Error("Pilih platform tempat video diunggah."), { status: 400 });
     }
-    const { platform, urlBersih } = validasiLink(platformDiminta, body.url ?? "");
-    const { data, error } = await db
-      .from("laporan_video")
-      .insert({
-        user_id: Number(user.id),
-        platform,
-        url_video: urlBersih,
-        keyword: bersihkanKeyword(body.keyword),
-        tanggal_wib: tanggal,
-      })
-      .select("id, platform, url_video, keyword, tanggal_wib, dibuat_pada")
-      .single();
-
-    if (error) {
-      if (error.code === "23505") {
-        throw Object.assign(new Error("Link ini sudah pernah Anda laporkan."), { status: 409 });
+    let data;
+    try {
+      data = await ajukan(platformDiminta, body.url ?? "", body.keyword);
+    } catch (e) {
+      if (e instanceof Error && (e as { status?: number }).status === 409) {
+        throw Object.assign(new Error(`Link ini ${e.message}.`), { status: 409 });
       }
-      console.error("[tvr/laporan] tambah:", error.message);
-      throw new Error("Gagal menyimpan laporan.");
+      throw e;
     }
-    await beriKoin(Number(user.id), "laporan_video", `laporan-${data.id}`);
-    return { sukses: true, data: { ...data, id: String(data.id) } };
+    await kabariHR(1);
+    return { sukses: true, menunggu: true, data };
   });
 }
 
 export async function DELETE(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
-    const body = (await request.json().catch(() => ({}))) as { id?: string };
+    const body = (await request.json().catch(() => ({}))) as { id?: string; pending?: boolean };
     const id = Number(body.id);
     if (!id) throw Object.assign(new Error("Laporan tidak disebutkan."), { status: 400 });
+
+    // Laporan yang masih MENUNGGU ACC boleh ditarik kapan saja oleh pemiliknya.
+    if (body.pending) {
+      const { data, error } = await supabase()
+        .from("laporan_video_pending")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", Number(user.id))
+        .eq("status", "menunggu")
+        .select("id")
+        .maybeSingle();
+      if (error) throw new Error("Gagal menarik laporan.");
+      if (!data) throw Object.assign(new Error("Laporan tidak ditemukan / sudah diputus."), { status: 400 });
+      return { sukses: true };
+    }
 
     // Hanya laporan sendiri dan hanya hari ini — rekap kemarin sudah
     // dibaca atasan, menghapusnya diam-diam mengubah sejarah.

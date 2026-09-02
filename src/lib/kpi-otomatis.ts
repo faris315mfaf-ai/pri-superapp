@@ -109,6 +109,20 @@ export async function rekonsiliasiKpiOtomatis(userId: number): Promise<number> {
           if (!error || error.code === "23505") {
             tercatatBaru.push(platform);
             if (!error) baru += 1;
+            // Bila anggota sempat melaporkan link ini MANUAL (menunggu
+            // ACC HR), deteksi otomatis = bukti sah → langsung disetujui
+            // tanpa membebani HR (2 Sep 2026).
+            await db
+              .from("laporan_video_pending")
+              .update({
+                status: "disetujui",
+                catatan: "Terdeteksi otomatis dari unggahan aplikasi",
+                diputus_oleh: "sistem",
+                diputus_pada: new Date().toISOString(),
+              })
+              .eq("user_id", userId)
+              .eq("url_video", cocok.permalink.slice(0, 500))
+              .eq("status", "menunggu");
           }
         } catch (e) {
           // Satu platform gagal dibaca tidak boleh menggagalkan sisanya;

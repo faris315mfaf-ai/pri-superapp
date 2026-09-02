@@ -55,7 +55,124 @@ const WARNA_TINGKAT: Record<string, string> = {
   "Kosong (0)": "#DC2626",
 };
 
-type TabKategori = "semua" | "lengkap" | keyof KelengkapanAnggota["dimensi"];
+// Tab "akun" (2 Sep 2026): matriks siapa yang sudah menautkan akun TV
+// Rakyat pribadi per platform + akun komentar QC (pelacakan penautan).
+type TabKategori = "semua" | "lengkap" | "akun" | keyof KelengkapanAnggota["dimensi"];
+
+const PLATFORM_TVR = ["instagram", "tiktok", "youtube", "facebook", "twitter", "threads"] as const;
+
+function TabelAkunTertaut({
+  daftar,
+  onBuka,
+}: {
+  daftar: KelengkapanAnggota[];
+  onBuka: (a: KelengkapanAnggota) => void;
+}) {
+  const totalPer = PLATFORM_TVR.map(
+    (p) => daftar.filter((a) => (a.tvr_akun ?? []).some((x) => x.platform === p)).length,
+  );
+  const totalTvr = daftar.filter((a) => (a.tvr_akun ?? []).length > 0).length;
+  const totalQc = daftar.filter((a) => (a.qc_akun ?? []).length > 0).length;
+  return (
+    <GlassCard className="overflow-hidden p-0">
+      <p className="px-3 pt-3 text-[10.5px] leading-relaxed text-teks-sekunder">
+        Siapa yang sudah <b>menautkan akun TV Rakyat pribadi</b> (login upload-post) per
+        sosmed, dan siapa yang sudah <b>mendaftarkan akun komentar</b> untuk QC. Klik nama
+        untuk melihat username-nya.
+      </p>
+      <div className="scrollbar-tipis overflow-x-auto">
+        <table className="w-full min-w-[640px] text-left text-xs">
+          <thead>
+            <tr className="border-b border-glass-border text-[10.5px] text-teks-sekunder">
+              <th className="px-3 py-2.5">Anggota</th>
+              {PLATFORM_TVR.map((p) => (
+                <th key={p} className="px-2 py-2.5 text-center">
+                  <PlatformIcon platform={p} size={13} className="mx-auto" />
+                </th>
+              ))}
+              <th className="px-2 py-2.5 text-center">TVR</th>
+              <th className="px-2 py-2.5 text-center">Akun QC</th>
+            </tr>
+            <tr className="border-b border-glass-border bg-black/[0.03] text-[10px] text-teks-sekunder dark:bg-white/5">
+              <td className="px-3 py-1.5 font-semibold">Sudah tertaut</td>
+              {totalPer.map((n, i) => (
+                <td key={PLATFORM_TVR[i]} className="angka-tab px-2 py-1.5 text-center font-bold text-teks-utama">
+                  {n}
+                </td>
+              ))}
+              <td className="angka-tab px-2 py-1.5 text-center font-bold text-teks-utama">{totalTvr}</td>
+              <td className="angka-tab px-2 py-1.5 text-center font-bold text-teks-utama">{totalQc}</td>
+            </tr>
+          </thead>
+          <tbody>
+            {daftar.length === 0 ? (
+              <tr>
+                <td colSpan={PLATFORM_TVR.length + 3} className="px-3 py-6 text-center text-teks-sekunder">
+                  Tidak ada anggota.
+                </td>
+              </tr>
+            ) : (
+              daftar.map((a) => {
+                const punya = new Set((a.tvr_akun ?? []).map((x) => x.platform));
+                const n = punya.size;
+                const qc = (a.qc_akun ?? []).length;
+                return (
+                  <tr key={a.id} className="border-b border-glass-border/60 last:border-0">
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => onBuka(a)}
+                        className="btn-tekan flex items-center gap-2 text-left"
+                      >
+                        {a.avatar_url ? (
+                          <FotoBulat src={a.avatar_url} ukuran={26} />
+                        ) : (
+                          <AvatarInisial nama={a.nama} ukuran={26} />
+                        )}
+                        <span className="min-w-0">
+                          <span className="block truncate font-semibold text-teks-utama">{a.nama}</span>
+                          <span className="block truncate text-[10px] text-teks-sekunder">{a.divisi || "—"}</span>
+                        </span>
+                      </button>
+                    </td>
+                    {PLATFORM_TVR.map((p) => (
+                      <td key={p} className="px-2 py-2 text-center">
+                        {punya.has(p) ? (
+                          <Check className="mx-auto h-3.5 w-3.5 text-emerald-500" aria-label="tertaut" />
+                        ) : (
+                          <X className="mx-auto h-3.5 w-3.5 text-teks-sekunder/35" aria-label="belum" />
+                        )}
+                      </td>
+                    ))}
+                    <td
+                      className={cn(
+                        "angka-tab px-2 py-2 text-center font-bold",
+                        n === 6 ? "text-emerald-500" : n > 0 ? "text-amber-500" : "text-gagal",
+                      )}
+                    >
+                      {n}/6
+                    </td>
+                    <td className="px-2 py-2 text-center">
+                      {qc > 0 ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-sukses/12 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                          <Check className="h-3 w-3" /> {qc}
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-gagal/12 px-2 py-0.5 text-[10px] font-bold text-gagal">
+                          belum
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </GlassCard>
+  );
+}
 
 export function AnggotaKelengkapanDashboard() {
   const [data, setData] = useState<KelengkapanAnggota[] | null>(null);
@@ -131,9 +248,17 @@ export function AnggotaKelengkapanDashboard() {
   const tersaring = useMemo(() => {
     const daftar = anggota.filter((a) => {
       if (tab === "lengkap") return a.terpenuhi === 5;
+      if (tab === "akun") return true;
       if (tab !== "semua") return !a.dimensi[tab];
       return true;
     });
+    // Tab akun: yang paling banyak menautkan di atas (apresiasi), sisanya menyusul.
+    if (tab === "akun") {
+      return daftar.sort(
+        (x, y) =>
+          (y.tvr_akun?.length ?? 0) - (x.tvr_akun?.length ?? 0) || x.nama.localeCompare(y.nama),
+      );
+    }
     // Paling belum lengkap di atas — itulah yang butuh ditagih.
     return daftar.sort((x, y) => x.terpenuhi - y.terpenuhi || x.nama.localeCompare(y.nama));
   }, [anggota, tab]);
@@ -265,6 +390,7 @@ export function AnggotaKelengkapanDashboard() {
           [
             ["semua", `Semua ${anggota.length}`],
             ["lengkap", `Lengkap ${ringkas.lengkap}`],
+            ["akun", `Akun Tertaut ${anggota.filter((a) => (a.tvr_akun ?? []).length > 0).length}`],
             ...DIMENSI.map((d) => [
               d.kunci,
               `Belum ${d.label} ${anggota.filter((a) => !a.dimensi[d.kunci]).length}`,
@@ -290,7 +416,10 @@ export function AnggotaKelengkapanDashboard() {
         ))}
       </div>
 
-      {/* Tabel detail ✓/✗ per dimensi */}
+      {/* Tabel detail: matriks akun tertaut (tab "akun") atau ✓/✗ per dimensi */}
+      {tab === "akun" ? (
+        <TabelAkunTertaut daftar={tersaring} onBuka={setDibuka} />
+      ) : (
       <GlassCard className="overflow-hidden p-0">
         <div className="scrollbar-tipis overflow-x-auto">
           <table className="w-full min-w-[560px] text-left text-xs">
@@ -376,6 +505,7 @@ export function AnggotaKelengkapanDashboard() {
           </table>
         </div>
       </GlassCard>
+      )}
 
       {/* MODAL DETAIL ANGGOTA (31 Agu 2026): kontak, fitur login aktif,
           akun TV Rakyat pribadi (klik -> profil), & username komentar QC. */}

@@ -27,6 +27,7 @@ import { PostDetailScreen } from "@/features/qc-konten/post-detail-screen";
 import { TvScreen } from "@/features/tv-rakyat/tv-screen";
 import { KelolaPenggunaScreen } from "@/features/pengguna/kelola-pengguna-screen";
 import { PengumumanScreen } from "@/features/pengguna/pengumuman-screen";
+import { PersetujuanKpiScreen } from "@/features/pengguna/persetujuan-kpi-screen";
 import { KontenScreen } from "@/features/konten/konten-screen";
 import { TvrKuScreen } from "@/features/tvr-ku/tvrku-screen";
 import { ChatScreen } from "@/features/chat/chat-screen";
@@ -120,6 +121,8 @@ type SubLayar =
   | { nama: "tabel-anggota" }
   | { nama: "absensi-hari-ini" }
   | { nama: "setel-kpi" }
+  // Meja ACC HR: laporan video manual & permohonan sosmed terblokir (2 Sep 2026)
+  | { nama: "persetujuan-kpi" }
   // KPI Video anggota dibuka dari kartu ringkasan dashboard (1 Sep 2026)
   | { nama: "dashboard-kpi" }
   // Dashboard TV Rakyat Nasional (1 Sep 2026)
@@ -833,6 +836,7 @@ export default function Page() {
                   | "tabel-anggota"
                   | "absensi-hari-ini"
                   | "setel-kpi"
+                  | "persetujuan-kpi"
                   | "kelola-pengguna"
                   | "pengumuman",
               })
@@ -1101,6 +1105,8 @@ export default function Page() {
                   </div>
                 ) : subLayar.nama === "setel-kpi" ? (
                   <SetelKpiScreen user={user} onKembali={() => setSubLayar(null)} />
+                ) : subLayar.nama === "persetujuan-kpi" ? (
+                  <PersetujuanKpiScreen onKembali={() => setSubLayar(null)} />
                 ) : subLayar.nama === "pengumuman" ? (
                   <PengumumanScreen user={user} onKembali={() => setSubLayar(null)} />
                 ) : subLayar.nama === "notifikasi" ? (

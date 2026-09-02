@@ -1550,6 +1550,19 @@ export type BalasanLaporanVideo = {
   kpi_tercapai: boolean;
   per_platform: RincianPlatformKpi[];
   dibebaskan: string | null;
+  /** Laporan manual (link) yang menunggu ACC HR / ditolak 7 hari terakhir. */
+  menunggu?: LaporanPending[];
+};
+
+export type LaporanPending = {
+  id: string;
+  platform: string;
+  url_video: string;
+  keyword: string | null;
+  tanggal_wib: string;
+  dibuat_pada: string;
+  status: "menunggu" | "disetujui" | "ditolak";
+  catatan: string;
 };
 
 export async function getLaporanVideo(tanggal?: string): Promise<BalasanLaporanVideo> {
@@ -1597,6 +1610,9 @@ export type BannedKu = {
   bukti_url: string;
   keterangan: string | null;
   dibuat_pada: string;
+  /** menunggu | disetujui | ditolak (permohonan, 2 Sep 2026) */
+  status?: string;
+  catatan_putusan?: string;
 };
 
 /** Laporan banned SAYA yang masih aktif. */
@@ -1648,11 +1664,11 @@ export async function tambahLaporanVideo(
   return json.data as LaporanVideo;
 }
 
-export async function hapusLaporanVideo(id: string): Promise<void> {
+export async function hapusLaporanVideo(id: string, pending = false): Promise<void> {
   await fetchJson("/api/tvr/laporan", {
     method: "DELETE",
     headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ id }),
+    body: JSON.stringify({ id, pending }),
   });
 }
 
@@ -4433,4 +4449,62 @@ export async function kirimEditOtomatis(data: {
     body: JSON.stringify(data),
   });
   return { kode: String(json.kode ?? ""), pesan: String(json.pesan ?? "") };
+}
+
+// ---- Meja ACC HR: laporan video manual & permohonan blokir (2 Sep 2026) ----
+export type PersetujuanKpi = {
+  laporan: {
+    id: string;
+    user_id: string;
+    nama: string;
+    avatar_url: string;
+    platform: string;
+    url_video: string;
+    keyword: string | null;
+    tanggal_wib: string;
+    dibuat_pada: string;
+  }[];
+  banned: {
+    id: string;
+    user_id: string;
+    nama: string;
+    avatar_url: string;
+    platform: string;
+    bukti_url: string;
+    keterangan: string | null;
+    dibuat_pada: string;
+  }[];
+};
+
+export async function getPersetujuanKpi(): Promise<PersetujuanKpi> {
+  const json = await fetchJson("/api/tvr/persetujuan", { headers: headerToken() });
+  return {
+    laporan: (json.laporan ?? []) as PersetujuanKpi["laporan"],
+    banned: (json.banned ?? []) as PersetujuanKpi["banned"],
+  };
+}
+
+export async function putusPersetujuanKpi(data: {
+  jenis: "laporan" | "banned";
+  id: string;
+  aksi: "setuju" | "tolak";
+  catatan?: string;
+}): Promise<void> {
+  await fetchJson("/api/tvr/persetujuan", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+}
+
+// ---- Leaderboard kepatuhan komen (semua pengguna, 2 Sep 2026) ----
+export type KepatuhanKomenLeaderboard = {
+  periode: string;
+  jendela: string;
+  daftar: { nama: string; avatar_url: string; total: number; sudah: number; persen: number }[];
+};
+
+export async function getKepatuhanKomenLeaderboard(): Promise<KepatuhanKomenLeaderboard> {
+  const json = await fetchJson("/api/peringkat-tvr?komen=1");
+  return json as KepatuhanKomenLeaderboard;
 }

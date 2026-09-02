@@ -12,6 +12,8 @@
 // sosmed. Data ikut segar bertahap lewat penyapu profil basi (after()).
 import { after } from "next/server";
 import { bungkus } from "@/lib/api-helper";
+import { supabase } from "@/lib/supabase";
+import { periodeSaatIni } from "@/lib/periode-qc";
 import { pastikanMasuk } from "@/lib/sesi";
 import {
   INDIKATOR_TVR,
@@ -35,9 +37,51 @@ let hasilCache: {
 } | null = null;
 const TTL_CACHE_MS = 30_000;
 
+// Leaderboard KEPATUHAN KOMEN (2 Sep 2026) — cache mikro 30 dtk.
+let cacheKomen: { isi: Record<string, unknown>; pada: number } | null = null;
+
+async function leaderboardKomen() {
+  if (cacheKomen && Date.now() - cacheKomen.pada < TTL_CACHE_MS) return cacheKomen.isi;
+  const db = supabase();
+  const periode = periodeSaatIni();
+  const [{ data: baris }, { data: roster }] = await Promise.all([
+    // v_app_kepatuhan_kader: periode, nama_kader, total, sudah (+nomor_wa —
+    // SENGAJA tidak dibaca: endpoint ini untuk semua pengguna).
+    db.from("v_app_kepatuhan_kader").select("nama_kader, total, sudah").eq("periode", periode),
+    db.from("app_user").select("nama, avatar_url").eq("aktif", true).eq("status", "aktif").limit(500),
+  ]);
+  const avatarPer = new Map((roster ?? []).map((r) => [String(r.nama), String(r.avatar_url ?? "")]));
+  const daftar = (baris ?? [])
+    .map((b) => {
+      const total = Number(b.total ?? 0);
+      const sudah = Number(b.sudah ?? 0);
+      return {
+        nama: String(b.nama_kader),
+        avatar_url: avatarPer.get(String(b.nama_kader)) ?? "",
+        total,
+        sudah,
+        persen: total > 0 ? Math.round((sudah / total) * 100) : 0,
+      };
+    })
+    // Persen tertinggi dulu; seri → yang paling banyak komentar.
+    .sort((x, y) => y.persen - x.persen || y.sudah - x.sudah || x.nama.localeCompare(y.nama));
+  const isi = {
+    periode,
+    // Jendela penilaian mengikuti lib/periode-qc (17.00 → 16.59 WIB).
+    jendela: "17.00 WIB – 16.59 WIB hari berikutnya",
+    daftar,
+  };
+  cacheKomen = { isi, pada: Date.now() };
+  return isi;
+}
+
 export async function GET(request: Request) {
   return bungkus(async () => {
     await pastikanMasuk(request);
+    // Kategori KEPATUHAN KOMEN — jalur ringan terpisah dari data TVR.
+    if (new URL(request.url).searchParams.get("komen") === "1") {
+      return leaderboardKomen();
+    }
     if (!hasilCache || Date.now() - hasilCache.pada > TTL_CACHE_MS) {
       const anggota = await kumpulkanAnggotaTvr();
       // "top3" = SEMUA pemegang border (juara 1-3 di kategori mana pun),

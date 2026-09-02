@@ -49,16 +49,19 @@ export type HasilKpi = {
 };
 
 /**
- * Platform yang sedang BANNED per user (laporan aktif, belum dicabut).
+ * Platform yang sedang BANNED per user (permohonan DISETUJUI, belum dicabut).
  * Tanpa argumen = seluruh pengguna (untuk rekap massal).
  */
 export async function bannedAktifPerUser(
   userIds?: number[],
 ): Promise<Map<number, Set<string>>> {
+  // Sejak 2 Sep 2026 laporan banned = PERMOHONAN: hanya yang sudah
+  // DISETUJUI HR yang mengurangi target (status 'menunggu' belum).
   let q = supabase()
     .from("tvr_banned")
     .select("user_id, platform")
-    .is("dicabut_pada", null);
+    .is("dicabut_pada", null)
+    .eq("status", "disetujui");
   if (userIds && userIds.length > 0) q = q.in("user_id", userIds);
   const { data } = await q;
   const peta = new Map<number, Set<string>>();

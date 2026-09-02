@@ -3,10 +3,11 @@
 // POST  /api/tvr/banned          — lapor akun kena banned {platform, buktiDataUrl, keterangan?}
 // PATCH /api/tvr/banned          — cabut laporan {id} (pemilik / HR)
 //
-// Efeknya SEKETIKA: platform yang dilaporkan banned dikecualikan dari
-// target KPI (lihat lib/kpi-video) tanpa menunggu persetujuan — sesuai
-// permintaan. Penyeimbangnya: bukti screenshot WAJIB dan HR bisa melihat
-// semua bukti lalu MENCABUT laporan yang janggal (target kembali normal).
+// REVISI 2 Sep 2026 — kini PERMOHONAN, bukan efek seketika: laporan
+// masuk berstatus 'menunggu'; target KPI baru berkurang 5/platform
+// setelah HR MENYETUJUI (lib/kpi-video hanya membaca status
+// 'disetujui'). Persetujuan/penolakan lewat /api/tvr/persetujuan;
+// PATCH di sini tetap untuk MENCABUT (akun pulih / HR).
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { adalahHR } from "@/lib/hr";
@@ -43,12 +44,15 @@ export async function GET(request: Request) {
           status: 403,
         });
       }
-      const { data } = await db
+      const saringStatus = url.searchParams.get("status");
+      let qSemua = db
         .from("tvr_banned")
-        .select("id, user_id, platform, bukti_url, keterangan, dibuat_pada, app_user(nama)")
+        .select("id, user_id, platform, bukti_url, keterangan, dibuat_pada, status, app_user(nama)")
         .is("dicabut_pada", null)
         .order("dibuat_pada", { ascending: false })
         .limit(200);
+      if (saringStatus) qSemua = qSemua.eq("status", saringStatus);
+      const { data } = await qSemua;
       return {
         data: (data ?? []).map((b) => {
           const embedded = b.app_user as { nama?: string } | { nama?: string }[] | null;
@@ -61,17 +65,20 @@ export async function GET(request: Request) {
             bukti_url: b.bukti_url,
             keterangan: b.keterangan ?? "",
             dibuat_pada: b.dibuat_pada,
+            status: String(b.status ?? "disetujui"),
           };
         }),
       };
     }
 
-    // --- Laporan milik sendiri (yang masih aktif) ---
+    // --- Permohonan milik sendiri (menunggu / disetujui; yang ditolak
+    //     ikut tampil 7 hari supaya alasannya terbaca) ---
+    const batasTolak = new Date(Date.now() - 7 * 86_400_000).toISOString();
     const { data } = await db
       .from("tvr_banned")
-      .select("id, platform, bukti_url, keterangan, dibuat_pada")
+      .select("id, platform, bukti_url, keterangan, dibuat_pada, status, catatan_putusan, diputus_pada")
       .eq("user_id", Number(user.id))
-      .is("dicabut_pada", null)
+      .or(`dicabut_pada.is.null,and(status.eq.ditolak,diputus_pada.gte.${batasTolak})`)
       .order("dibuat_pada", { ascending: false });
     return {
       data: (data ?? []).map((b) => ({ ...b, id: String(b.id) })),
@@ -130,6 +137,7 @@ export async function POST(request: Request) {
         bukti_path: jalur,
         bukti_url: buktiUrl,
         keterangan: (body.keterangan ?? "").trim().slice(0, 300) || null,
+        status: "menunggu",
       })
       .select("id")
       .single();
@@ -137,7 +145,7 @@ export async function POST(request: Request) {
       await db.storage.from("banned").remove([jalur]);
       if (error.code === "23505") {
         throw Object.assign(
-          new Error(`Akun ${platform} Anda sudah dilaporkan banned.`),
+          new Error(`Permohonan untuk akun ${platform} Anda sudah ada (menunggu/disetujui).`),
           { status: 409 },
         );
       }
@@ -145,11 +153,10 @@ export async function POST(request: Request) {
       throw new Error("Gagal menyimpan laporan.");
     }
 
-    // Kabari HR — efek KPI sudah berjalan otomatis; HR tinggal memeriksa
-    // buktinya dan mencabut bila janggal.
+    // Kabari HR — target KPI BELUM berubah sampai disetujui.
     await kirimKabar({
-      judul: "Laporan akun kena banned",
-      isi: `${user.nama} melaporkan akun ${platform}-nya kena banned (target KPI otomatis dikurangi). Periksa buktinya di Dashboard KPI.`,
+      judul: "Permohonan sosmed terblokir",
+      isi: `${user.nama} mengajukan akun ${platform}-nya terblokir. Periksa bukti & putuskan di HR Center → ACC KPI.`,
       kategori: "peringatan",
       jenis_peristiwa: "tvr_banned",
       untukRole: ["admin_hr", "super_admin", "master"],

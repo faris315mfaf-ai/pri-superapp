@@ -23,19 +23,20 @@ import {
   Pencil,
   Plus,
   Trash2,
-  Video, Globe, X, RefreshCw, BarChart3 } from "lucide-react";
+  Video,
+  Globe,
+  X,
+  RefreshCw,
+  BarChart3,
+  Ban,
+  Hourglass,
+} from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
-import {
-  EmptyState,
-  FadeInUp,
-  GlassSkeleton,
-  SectionTitle,
-  StatusBadge,
-  ThemeToggle,
-} from "@/components/pri-ui";
+import { EmptyState, FadeInUp, GlassSkeleton, SectionTitle, StatusBadge, ThemeToggle } from "@/components/pri-ui";
 import { ProgressRing } from "@/components/progress-ring";
 import { PlatformIcon, labelPlatform } from "@/components/platform-icon";
 import { SeksiLipat } from "@/components/seksi-lipat";
+import { PermohonanBlokir } from "./permohonan-blokir";
 import { TataLetakModul, type SeksiModul } from "@/components/tata-letak-modul";
 import { toast } from "@/hooks/use-app-store";
 import {
@@ -52,6 +53,7 @@ import {
   type AkunTvr,
   type KerjaKpi,
   type LaporanVideo,
+  type LaporanPending,
   kirimLaporanBatch,
   getKeywordWajib,
   hubungkanSosmedTvr,
@@ -497,6 +499,7 @@ export function TvrKuScreen({
 }) {
   const [akun, setAkun] = useState<AkunTvr[] | null>(null);
   const [laporan, setLaporan] = useState<LaporanVideo[]>([]);
+  const [menunggu, setMenunggu] = useState<LaporanPending[]>([]);
   const [kpiTarget, setKpiTarget] = useState(5);
   const [dibebaskan, setDibebaskan] = useState<string | null>(null);
   const [kpiRencana, setKpiRencana] = useState<KerjaKpi | null>(null);
@@ -522,6 +525,7 @@ export function TvrKuScreen({
         if (!hidup) return;
         setAkun(a);
         setLaporan(l.data);
+        setMenunggu(l.menunggu ?? []);
         setKpiTarget(l.kpi_target);
         setDibebaskan(l.dibebaskan);
         if (k) setKpiRencana(k.kpi);
@@ -606,8 +610,10 @@ export function TvrKuScreen({
     if (tersimpan > 0) {
       toast(
         "sukses",
-        tersimpan === 1 ? "Laporan tersimpan" : `${tersimpan} laporan tersimpan`,
-        gagal.length > 0 ? `${gagal.length} link gagal — lihat rinciannya.` : "",
+        tersimpan === 1 ? "Laporan dikirim ke HR" : `${tersimpan} laporan dikirim ke HR`,
+        gagal.length > 0
+          ? `Dihitung KPI setelah ACC HR. ${gagal.length} link gagal — lihat rinciannya.`
+          : "Dihitung KPI setelah disetujui Divisi HR.",
       );
     }
     for (const gl of gagal.slice(0, 3)) {
@@ -919,7 +925,7 @@ export function TvrKuScreen({
             <EmptyState
               ikon={Link2}
               judul="Belum Ada Laporan"
-              keterangan={`Unggah video di akun TV Rakyat Anda, lalu laporkan linknya di sini. Target: ${kpiTarget} video per hari.`}
+              keterangan={`Unggah lewat aplikasi (otomatis tercatat) atau laporkan linknya di sini — link manual dihitung setelah ACC Divisi HR. Target: ${kpiTarget} video per hari.`}
               labelAksi="Tambah Laporan"
               onAksi={() => setModalLaporan(true)}
               className="py-5"
@@ -979,6 +985,56 @@ export function TvrKuScreen({
             ))}
           </div>
         )}
+        {menunggu.length > 0 && (
+          <div className="mt-3">
+            <p className="flex items-center gap-1.5 text-[11px] font-bold text-teks-sekunder">
+              <Hourglass className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
+              Laporan link menunggu ACC Divisi HR — belum dihitung KPI
+            </p>
+            <div className="mt-1.5 flex flex-col gap-2">
+              {menunggu.map((m) => (
+                <GlassCard key={m.id} className="flex items-center gap-3 p-3">
+                  <PlatformIcon platform={m.platform} size={15} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-semibold text-teks-utama">{m.url_video}</p>
+                    <p className="mt-0.5 text-[10px] text-teks-sekunder">
+                      {m.status === "ditolak"
+                        ? `ditolak${m.catatan ? `: ${m.catatan}` : ""}`
+                        : `dikirim ${jamWIB(m.dibuat_pada)}`}
+                    </p>
+                  </div>
+                  <StatusBadge
+                    label={m.status === "ditolak" ? "ditolak" : "menunggu HR"}
+                    warna={m.status === "ditolak" ? "merah" : "kuning"}
+                  />
+                  {m.status === "menunggu" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void hapusLaporanVideo(m.id, true)
+                          .then(() => setMuatUlang((n) => n + 1))
+                          .catch((e) =>
+                            toast("error", "Gagal menarik", e instanceof Error ? e.message : ""),
+                          );
+                      }}
+                      aria-label="Tarik laporan"
+                      className="btn-tekan p-1.5 text-teks-sekunder/70"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  )}
+                </GlassCard>
+              ))}
+            </div>
+          </div>
+        )}
+      </FadeInUp>
+        ) },
+        { id: "sosmed-terblokir", judul: "Sosmed Terblokir (KPI)", ikon: Ban, render: () => (
+      <FadeInUp delay={0.16}>
+        <div className="mt-5 md:mt-0">
+          <PermohonanBlokir />
+        </div>
       </FadeInUp>
         ) },
         ] as SeksiModul[]}

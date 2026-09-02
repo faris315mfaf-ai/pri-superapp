@@ -21,7 +21,13 @@ import { FotoBulat } from "@/components/foto-bulat";
 import { PlatformIcon } from "@/components/platform-icon";
 import { toast } from "@/hooks/use-app-store";
 import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
-import { getPeringkatTvr, type MetrikNasional, type PeringkatTvr } from "@/services";
+import {
+  getKepatuhanKomenLeaderboard,
+  getPeringkatTvr,
+  type KepatuhanKomenLeaderboard,
+  type MetrikNasional,
+  type PeringkatTvr,
+} from "@/services";
 import { formatAngkaRingkas, urlProfilSosmed } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { CincinMythic, FITUR_PERINGKAT_AKTIF, LabelMythic } from "./cincin-mythic";
@@ -78,7 +84,92 @@ function Avatar({ src, nama, ukuran }: { src: string; nama: string; ukuran: numb
   );
 }
 
+// ===== Mode KEPATUHAN KOMEN (2 Sep 2026): peringkat kepatuhan komentar
+// periode berjalan + penjelasan aturan (jam postingan 17.00–16.59 WIB &
+// wajib pakai akun yang sudah didaftarkan).
+function PanelKomen({ data }: { data: KepatuhanKomenLeaderboard | null }) {
+  if (!data) {
+    return (
+      <div className="flex flex-col gap-3 pt-2">
+        <GlassSkeleton className="h-28 rounded-2xl" />
+        <GlassSkeleton className="h-56 rounded-2xl" />
+      </div>
+    );
+  }
+  return (
+    <>
+      <div className="mt-2 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3 text-[11px] leading-relaxed text-teks-utama">
+        <p className="font-bold">Cara penilaian kepatuhan komen</p>
+        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-teks-sekunder">
+          <li>
+            Dihitung berdasarkan <b>jam postingan</b>: periode <b>17.00 WIB</b> sampai{" "}
+            <b>16.59 WIB</b> hari berikutnya (periode ini: {data.periode}).
+          </li>
+          <li>Wajib berkomentar di <b>setiap</b> postingan akun wajib dalam periode itu.</li>
+          <li>
+            <b>Jangan berkomentar dengan akun yang belum didaftarkan</b> — sistem tidak bisa
+            membaca komentar dari akun yang tidak terdaftar, jadi tidak dihitung.
+          </li>
+        </ul>
+      </div>
+      {data.daftar.length === 0 ? (
+        <p className="mt-5 text-center text-[12px] text-teks-sekunder">
+          Belum ada postingan wajib di periode ini.
+        </p>
+      ) : (
+        <div className="mt-3 flex flex-col gap-1.5">
+          {data.daftar.map((a, i) => (
+            <div
+              key={a.nama}
+              className={cn("flex items-center gap-2.5 rounded-xl px-2.5 py-2", i < 3 && "glass")}
+            >
+              <span
+                className={cn(
+                  "angka-tab w-6 shrink-0 text-center text-[12px] font-extrabold",
+                  i === 0
+                    ? "text-amber-500"
+                    : i === 1
+                      ? "text-slate-400"
+                      : i === 2
+                        ? "text-orange-500"
+                        : "text-teks-sekunder",
+                )}
+              >
+                {i + 1}
+              </span>
+              {a.avatar_url ? (
+                <FotoBulat src={a.avatar_url} ukuran={32} />
+              ) : (
+                <AvatarInisial nama={a.nama} ukuran={32} />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[12.5px] font-bold text-teks-utama">{a.nama}</p>
+                <p className="text-[10px] text-teks-sekunder">
+                  {a.sudah}/{a.total} postingan dikomentari
+                </p>
+              </div>
+              <span
+                className={cn(
+                  "angka-tab shrink-0 text-[13px] font-extrabold",
+                  a.persen >= 100 ? "text-emerald-500" : a.persen >= 50 ? "text-amber-500" : "text-gagal",
+                )}
+              >
+                {a.persen}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="mt-3 text-center text-[10px] text-teks-sekunder">
+        Urutan: persentase tertinggi, lalu jumlah komentar · menyegar otomatis
+      </p>
+    </>
+  );
+}
+
 function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
+  const [mode, setMode] = useState<"tvr" | "komen">("tvr");
+  const [komen, setKomen] = useState<KepatuhanKomenLeaderboard | null>(null);
   const [data, setData] = useState<PeringkatTvr | null>(null);
   const [platformPilih, setPlatformPilih] = useState("instagram");
   const [indikatorPilih, setIndikatorPilih] = useState<keyof MetrikNasional>("pengikut");
@@ -96,7 +187,24 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
     void getPeringkatTvr()
       .then(setData)
       .catch(() => {});
+    if (mode === "komen") {
+      void getKepatuhanKomenLeaderboard()
+        .then(setKomen)
+        .catch(() => {});
+    }
   });
+  // Data kepatuhan komen dimuat saat mode-nya dibuka (hemat: tak semua
+  // orang membukanya).
+  useEffect(() => {
+    if (mode !== "komen") return;
+    let hidup = true;
+    void getKepatuhanKomenLeaderboard()
+      .then((r) => hidup && setKomen(r))
+      .catch(() => hidup && toast("error", "Gagal memuat kepatuhan", "Coba lagi sebentar."));
+    return () => {
+      hidup = false;
+    };
+  }, [mode]);
 
   const baris = useMemo(() => {
     if (!data) return [];
@@ -148,7 +256,7 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
         <div className="flex items-center gap-2 px-4 pt-4 pb-2">
           <Crown className="h-5 w-5 text-amber-500" fill="#F59E0B" />
           <p className="font-heading text-[16px] font-extrabold text-teks-utama">
-            Leaderboard TV Rakyat
+            {mode === "komen" ? "Leaderboard Kepatuhan Komen" : "Leaderboard TV Rakyat"}
           </p>
           <button
             type="button"
@@ -160,8 +268,33 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
           </button>
         </div>
 
+        {/* Mode: TV Rakyat | Kepatuhan Komen (2 Sep 2026) */}
+        <div className="mx-4 mb-1 grid grid-cols-2 gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10">
+          {(
+            [
+              ["tvr", "TV Rakyat"],
+              ["komen", "Kepatuhan Komen"],
+            ] as const
+          ).map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setMode(k)}
+              aria-pressed={mode === k}
+              className={cn(
+                "btn-tekan rounded-lg py-1.5 text-[12px] font-bold",
+                mode === k ? "bg-white text-teks-utama shadow-sm dark:bg-white/15" : "text-teks-sekunder",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <div className="scrollbar-tipis flex-1 overflow-y-auto px-4 pb-6">
-          {!data ? (
+          {mode === "komen" ? (
+            <PanelKomen data={komen} />
+          ) : !data ? (
             <div className="flex flex-col gap-3 pt-2">
               <GlassSkeleton className="h-40 rounded-2xl" />
               <GlassSkeleton className="h-56 rounded-2xl" />
