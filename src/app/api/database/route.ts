@@ -8,6 +8,7 @@
 // izin — jadi super admin bisa memilih peran mana saja yang boleh.
 // Bawaan: super admin & admin HR nyala; ketua/admin TV/anggota mati
 // (baris pengecualiannya di-seed lewat migrasi).
+import { semuaBarisData } from "@/lib/semua-baris";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
@@ -157,13 +158,19 @@ export async function GET(request: Request) {
         .eq("status", "aktif")
         .neq("role", "master")
         .order("nama"),
-      db.from("rekap").select("nama_kader, jumlah_komentar").eq("periode", periode),
+      // Anti-batas-1000 (2 Sep 2026): rekap per periode & laporan video per
+      // hari sama-sama bisa >1000 baris.
+      semuaBarisData((a, b) =>
+        db.from("rekap").select("nama_kader, jumlah_komentar").eq("periode", periode).range(a, b),
+      ),
       db
         .from("absensi")
         .select("user_id")
         .eq("tanggal_wib", hariIni)
         .eq("jenis", "masuk"),
-      db.from("laporan_video").select("user_id").eq("tanggal_wib", hariIni),
+      semuaBarisData((a, b) =>
+        db.from("laporan_video").select("user_id").eq("tanggal_wib", hariIni).range(a, b),
+      ),
     ]);
 
     const komentarPer = new Map<string, { total: number; sudah: number }>();

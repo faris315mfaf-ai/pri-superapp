@@ -36,6 +36,11 @@ export type PostinganScrape = {
   /** Waktu terbit (unix detik). */
   waktu_unix: number;
   jenis: "video" | "foto";
+  /** Angka per postingan (2 Sep 2026) — TikTok: statistics.*, IG: *_count. */
+  tayangan?: number;
+  suka?: number;
+  komentar?: number;
+  bagikan?: number;
 };
 
 async function tk<T>(path: string, timeoutMs = 25000): Promise<T> {
@@ -85,6 +90,12 @@ type AwemeTikTok = {
     cover?: { url_list?: string[] };
     origin_cover?: { url_list?: string[] };
   };
+  statistics?: {
+    play_count?: number;
+    digg_count?: number;
+    comment_count?: number;
+    share_count?: number;
+  };
 };
 
 /** Postingan terbaru TikTok via username (unique_id). */
@@ -109,6 +120,10 @@ export async function scrapeTikTok(username: string, count = 10): Promise<Postin
           v.video?.cover?.url_list?.[0] ?? v.video?.origin_cover?.url_list?.[0] ?? "",
         waktu_unix: Number(v.create_time ?? 0),
         jenis: foto ? ("foto" as const) : ("video" as const),
+        tayangan: Number(v.statistics?.play_count ?? 0),
+        suka: Number(v.statistics?.digg_count ?? 0),
+        komentar: Number(v.statistics?.comment_count ?? 0),
+        bagikan: Number(v.statistics?.share_count ?? 0),
       };
     });
 }
@@ -121,6 +136,10 @@ type PostIG = {
   product_type?: string;
   caption?: { text?: string } | null;
   image_versions2?: { candidates?: { url?: string }[] };
+  like_count?: number;
+  comment_count?: number;
+  play_count?: number;
+  ig_play_count?: number;
 };
 
 /** Postingan terbaru Instagram via username (resolve id → posts). */
@@ -150,6 +169,10 @@ export async function scrapeInstagram(username: string, count = 10): Promise<Pos
         thumbnail_url: p.image_versions2?.candidates?.[0]?.url ?? "",
         waktu_unix: Number(p.taken_at ?? 0),
         jenis: video ? ("video" as const) : ("foto" as const),
+        tayangan: Number(p.play_count ?? p.ig_play_count ?? 0),
+        suka: Number(p.like_count ?? 0),
+        komentar: Number(p.comment_count ?? 0),
+        bagikan: 0,
       };
     });
 }

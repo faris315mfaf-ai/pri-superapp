@@ -507,6 +507,9 @@ export function TvrKuScreen({
   const [laporan, setLaporan] = useState<LaporanVideo[]>([]);
   const [menunggu, setMenunggu] = useState<LaporanPending[]>([]);
   const [kpiTarget, setKpiTarget] = useState(5);
+  // Persen KETAT per platform & status tercapai dari server (2 Sep 2026).
+  const [kpiPersen, setKpiPersen] = useState<number | null>(null);
+  const [kpiTercapai, setKpiTercapai] = useState<boolean | null>(null);
   const [dibebaskan, setDibebaskan] = useState<string | null>(null);
   const [kpiRencana, setKpiRencana] = useState<KerjaKpi | null>(null);
   const [riwayat7, setRiwayat7] = useState<{ tanggal: string; jumlah: number }[]>([]);
@@ -534,6 +537,8 @@ export function TvrKuScreen({
         setLaporan(l.data);
         setMenunggu(l.menunggu ?? []);
         setKpiTarget(l.kpi_target);
+        setKpiPersen(l.kpi_persen ?? null);
+        setKpiTercapai(l.kpi_tercapai ?? null);
         setDibebaskan(l.dibebaskan);
         if (k) setKpiRencana(k.kpi);
         if (r) setRiwayat7(r.data);
@@ -552,7 +557,8 @@ export function TvrKuScreen({
   }, [muatUlang, versiSegar]);
 
   const jumlahHariIni = laporan.length;
-  const persenKpi = Math.min(100, Math.round((100 * jumlahHariIni) / kpiTarget));
+  const persenKpi = kpiPersen ?? Math.min(100, Math.round((100 * jumlahHariIni) / kpiTarget));
+  const targetTercapai = kpiTercapai ?? jumlahHariIni >= kpiTarget;
   const maksGrafik = Math.max(kpiTarget, ...riwayat7.map((r) => r.jumlah), 1);
 
   // Fungsi tambahAkun manual DIHAPUS (31 Agu 2026) — akun sosmed hanya
@@ -675,9 +681,9 @@ export function TvrKuScreen({
             <p className="mt-1 text-xs leading-relaxed text-teks-sekunder">
               {dibebaskan
                 ? `Kewajiban dibebaskan — status ${dibebaskan} Anda hari ini disetujui.`
-                : jumlahHariIni >= kpiTarget
+                : targetTercapai
                   ? `Target ${kpiTarget} video tercapai. Kerja bagus!`
-                  : `Laporkan ${kpiTarget - jumlahHariIni} video lagi untuk mencapai target harian.`}
+                  : `Lengkapi ${Math.max(0, kpiTarget - jumlahHariIni)} video lagi — minimal 5 di TIAP sosmed aktif.`}
             </p>
             {kpiRencana && kpiRencana.rencana_total > 0 && (
               <p className="mt-1.5 text-[11px] text-teks-sekunder">

@@ -6,6 +6,7 @@
 //
 // Akses: pengurus / Divisi HR / jabatan yang diberi akses dashboard
 // apa pun oleh master — sama dengan siapa yang melihat dashboard.
+import { semuaBarisData } from "@/lib/semua-baris";
 import { supabase } from "@/lib/supabase";
 import { bungkus, pastikanSukses } from "@/lib/api-helper";
 import { adalahPengurus, userDariToken } from "@/lib/sesi";
@@ -84,11 +85,14 @@ export async function GET(request: Request) {
         .eq("tanggal_wib", tanggal)
         .limit(1000),
       // 4. Laporan video hari ini (aturan 5x6 per platform).
-      db
-        .from("laporan_video")
-        .select("user_id, platform")
-        .eq("tanggal_wib", tanggal)
-        .limit(20000),
+      //    Anti-batas-1000 (2 Sep 2026): dibaca per halaman.
+      semuaBarisData((a, b) =>
+        db
+          .from("laporan_video")
+          .select("user_id, platform")
+          .eq("tanggal_wib", tanggal)
+          .range(a, b),
+      ),
       bannedAktifPerUser(),
     ]);
     const kepatuhan = pastikanSukses(rKepatuhan, "kepatuhan komen") as {

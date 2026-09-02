@@ -1546,6 +1546,8 @@ export type BalasanLaporanVideo = {
   data: LaporanVideo[];
   /** Target TOTAL (per-platform x platform aktif; bawaan 30). */
   kpi_target: number;
+  /** Persen KETAT per platform (2 Sep 2026). */
+  kpi_persen?: number;
   /** Tercapai KETAT: tiap platform aktif >= target per platform. */
   kpi_tercapai: boolean;
   per_platform: RincianPlatformKpi[];
@@ -2482,6 +2484,8 @@ export type KpiDashboardAnggota = {
   /** Target TOTAL (aturan 5x6; platform banned dikecualikan). */
   target: number;
   tercapai: boolean;
+  /** Persen KETAT per platform (2 Sep 2026): 100 <=> tercapai. */
+  persen?: number;
   /** "izin" | "sakit" bila hari itu dibebaskan; null bila tidak */
   dibebaskan: string | null;
   /** Platform yang sedang dilaporkan banned. */
@@ -3084,6 +3088,7 @@ export type DetailKpiAnggota = {
   per_platform: RincianPlatformKpi[];
   target_total: number;
   tercapai: boolean;
+  persen?: number;
   banned: string[];
 };
 
@@ -3101,6 +3106,7 @@ export async function getDashboardKpiAnggota(
     links: (json?.links ?? []) as LaporanVideo[],
     per_platform: (json?.per_platform ?? []) as RincianPlatformKpi[],
     target_total: Number(json?.target_total ?? 30),
+    persen: typeof json?.persen === "number" ? json.persen : undefined,
     tercapai: json?.tercapai === true,
     banned: (json?.banned ?? []) as string[],
   };
@@ -4566,4 +4572,42 @@ export async function unduhEksporData(): Promise<void> {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+// ---- Leaderboard VIDEO TERBAIK per sosmed (2 Sep 2026) ----
+export type VideoTerbaik = {
+  kode: string;
+  platform: string;
+  judul: string;
+  url: string;
+  thumbnail_url: string;
+  nama_akun: string;
+  akun_username: string;
+  /** null = akun resmi TV Rakyat / akun wajib */
+  user_id: string | null;
+  avatar_url: string;
+  waktu_posting: string | null;
+  tayangan: number;
+  suka: number;
+  komentar: number;
+  bagikan: number;
+};
+
+export type VideoTerbaikBalasan = {
+  platform: "tiktok" | "instagram";
+  metrik: "tayangan" | "suka" | "komentar";
+  hari: number;
+  daftar: VideoTerbaik[];
+  cakupan: { akun_total: number; akun_tersapu: number; terakhir: string | null };
+};
+
+export async function getVideoTerbaik(opsi: {
+  platform: "tiktok" | "instagram";
+  metrik: "tayangan" | "suka" | "komentar";
+  hari: number;
+}): Promise<VideoTerbaikBalasan> {
+  const json = await fetchJson(
+    `/api/peringkat-tvr?video=1&platform=${opsi.platform}&metrik=${opsi.metrik}&hari=${opsi.hari}`,
+  );
+  return json as VideoTerbaikBalasan;
 }

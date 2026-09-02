@@ -141,6 +141,7 @@ export async function GET(request: Request) {
             tercapai: kpi.tercapai,
             dibebaskan: bebasPer.get(user_id) ?? null,
             per_platform: kpi.per_platform,
+            kpi_persen: kpi.persen,
           };
         }),
         dibebaskan: Array.from(bebasPer.entries()).map(([user_id, jenis]) => ({
@@ -237,6 +238,7 @@ export async function GET(request: Request) {
       // tampilan "x/target" langsung benar tanpa mengubah pemanggil lama.
       kpi_target: kpi.target_total,
       kpi_tercapai: kpi.tercapai,
+      kpi_persen: kpi.persen,
       per_platform: kpi.per_platform,
       dibebaskan: jenisBebas,
     };

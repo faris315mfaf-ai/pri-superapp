@@ -14,6 +14,14 @@ import { after } from "next/server";
 import { bungkus } from "@/lib/api-helper";
 import { supabase } from "@/lib/supabase";
 import { periodeSaatIni } from "@/lib/periode-qc";
+import {
+  leaderboardVideo,
+  METRIK_VIDEO,
+  PLATFORM_VIDEO,
+  segarkanVideoMetrik,
+  type MetrikVideo,
+  type PlatformVideo,
+} from "@/lib/video-terbaik";
 import { pastikanMasuk } from "@/lib/sesi";
 import {
   INDIKATOR_TVR,
@@ -81,6 +89,22 @@ export async function GET(request: Request) {
     // Kategori KEPATUHAN KOMEN — jalur ringan terpisah dari data TVR.
     if (new URL(request.url).searchParams.get("komen") === "1") {
       return leaderboardKomen();
+    }
+    // Kategori VIDEO TERBAIK (2 Sep 2026): top video per sosmed berdasarkan
+    // tayangan/suka/komentar. Membuka mode ini juga memicu sapuan metrik
+    // (klaim atomik 15 mnt, maks 6 akun & 30 dtk) lewat after().
+    const qp = new URL(request.url).searchParams;
+    if (qp.get("video") === "1") {
+      const platform = (PLATFORM_VIDEO as readonly string[]).includes(qp.get("platform") ?? "")
+        ? (qp.get("platform") as PlatformVideo)
+        : "tiktok";
+      const metrik = (METRIK_VIDEO as readonly string[]).includes(qp.get("metrik") ?? "")
+        ? (qp.get("metrik") as MetrikVideo)
+        : "tayangan";
+      const hariRaw = Number(qp.get("hari") ?? 30);
+      const hari = [0, 7, 30].includes(hariRaw) ? hariRaw : 30;
+      after(segarkanVideoMetrik);
+      return leaderboardVideo(platform, metrik, hari);
     }
     if (!hasilCache || Date.now() - hasilCache.pada > TTL_CACHE_MS) {
       const anggota = await kumpulkanAnggotaTvr();

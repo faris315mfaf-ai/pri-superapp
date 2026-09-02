@@ -107,7 +107,7 @@ export function BerandaScreen({
   const boleh = (k: Parameters<typeof bolehFitur>[1]) => bolehFitur(izin, k, user.role);
 
   const [kpiKerja, setKpiKerja] = useState<KerjaKpi | null>(null);
-  const [video, setVideo] = useState<{ jumlah: number; target: number } | null>(null);
+  const [video, setVideo] = useState<{ jumlah: number; target: number; persen: number | null } | null>(null);
   const [komentar, setKomentar] = useState<{ total: number; sudah: number } | null>(null);
   const [absen, setAbsen] = useState<{ masuk: string | null; pulang: string | null } | null>(
     null,
@@ -152,7 +152,11 @@ export function BerandaScreen({
       }
       if (kerja.status === "fulfilled" && kerja.value) setKpiKerja(kerja.value.kpi);
       if (vid.status === "fulfilled" && vid.value) {
-        setVideo({ jumlah: vid.value.data.length, target: vid.value.kpi_target });
+        setVideo({
+          jumlah: vid.value.data.length,
+          target: vid.value.kpi_target,
+          persen: vid.value.kpi_persen ?? null,
+        });
       }
       if (abs.status === "fulfilled" && abs.value) {
         const hariIni = abs.value.tanggal_hari_ini;
@@ -174,8 +178,9 @@ export function BerandaScreen({
   }, [user.id, user.nama, mauKerja, mauVideo, mauAbsen, mauKomentar, tik]);
 
   const persenKerja = kpiKerja && kpiKerja.rencana_total > 0 ? (kpiKerja.kpi_persen ?? 0) : 0;
+  // Persen KETAT per platform dari server (2 Sep 2026); cadangan hitung kasar.
   const persenVideo = video && video.target > 0
-    ? Math.min(100, Math.round((100 * video.jumlah) / video.target))
+    ? (video.persen ?? Math.min(100, Math.round((100 * video.jumlah) / video.target)))
     : 0;
   const persenKomentar = komentar && komentar.total > 0
     ? Math.round((100 * komentar.sudah) / komentar.total)

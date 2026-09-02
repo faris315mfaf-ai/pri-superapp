@@ -266,7 +266,11 @@ export function KpiAnggotaDashboard() {
         case "target":
           return arah * (x.target - y.target);
         case "persen":
-          return arah * (x.jumlah / Math.max(1, x.target) - y.jumlah / Math.max(1, y.target));
+          return (
+            arah *
+            ((x.persen ?? (100 * x.jumlah) / Math.max(1, x.target)) -
+              (y.persen ?? (100 * y.jumlah) / Math.max(1, y.target)))
+          );
         default:
           return arah * (x.jumlah - y.jumlah);
       }
@@ -591,10 +595,11 @@ export function KpiAnggotaDashboard() {
                     </tr>
                   ) : (
                     tersaring.map((a, i) => {
-                      const persen = Math.min(
-                        999,
-                        Math.round((a.jumlah / Math.max(1, a.target)) * 100),
-                      );
+                      // Persen KETAT dari server (100% <=> tercapai, 2 Sep 2026);
+                      // cadangan hitung kasar bila server lama.
+                      const persen =
+                        a.persen ??
+                        Math.min(999, Math.round((a.jumlah / Math.max(1, a.target)) * 100));
                       return (
                         <tr
                           key={a.id}

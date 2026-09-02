@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Crown, ExternalLink, X } from "lucide-react";
+import { Crown, ExternalLink, Eye, Heart, MessageCircle, Play, X } from "lucide-react";
 import { AvatarInisial, GlassSkeleton } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
 import { PlatformIcon } from "@/components/platform-icon";
@@ -24,11 +24,13 @@ import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 import {
   getKepatuhanKomenLeaderboard,
   getPeringkatTvr,
+  getVideoTerbaik,
   type KepatuhanKomenLeaderboard,
   type MetrikNasional,
   type PeringkatTvr,
+  type VideoTerbaikBalasan,
 } from "@/services";
-import { formatAngkaRingkas, urlProfilSosmed } from "@/lib/format";
+import { formatAngkaRingkas, jamWIB, urlProfilSosmed } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { CincinMythic, FITUR_PERINGKAT_AKTIF, LabelMythic } from "./cincin-mythic";
 
@@ -167,8 +169,198 @@ function PanelKomen({ data }: { data: KepatuhanKomenLeaderboard | null }) {
   );
 }
 
+// ===== Mode VIDEO TERBAIK (2 Sep 2026): top video per sosmed berdasarkan
+// tayangan / suka / komentar. Angka dari TikHub (TikTok & Instagram),
+// disegarkan bertahap tiap 12 jam per akun.
+const PLATFORM_VIDEO = [
+  ["tiktok", "TikTok"],
+  ["instagram", "Instagram"],
+] as const;
+const METRIK_VIDEO = [
+  ["tayangan", "Tayangan", Eye],
+  ["suka", "Suka", Heart],
+  ["komentar", "Komentar", MessageCircle],
+] as const;
+const HARI_VIDEO = [
+  [7, "7 hari"],
+  [30, "30 hari"],
+  [0, "Semua"],
+] as const;
+
+function PanelVideo() {
+  const [platform, setPlatform] = useState<"tiktok" | "instagram">("tiktok");
+  const [metrik, setMetrik] = useState<"tayangan" | "suka" | "komentar">("tayangan");
+  const [hari, setHari] = useState<number>(30);
+  const [data, setData] = useState<VideoTerbaikBalasan | null>(null);
+
+  useEffect(() => {
+    let hidup = true;
+    void getVideoTerbaik({ platform, metrik, hari })
+      .then((r) => hidup && setData(r))
+      .catch(() => hidup && toast("error", "Gagal memuat video terbaik", "Coba lagi sebentar."));
+    return () => {
+      hidup = false;
+    };
+  }, [platform, metrik, hari]);
+  useSegarOtomatis(() => {
+    void getVideoTerbaik({ platform, metrik, hari })
+      .then(setData)
+      .catch(() => {});
+  });
+
+  const IkonMetrik = METRIK_VIDEO.find(([k]) => k === metrik)?.[2] ?? Eye;
+  // Daftar yang tampil = data untuk filter yang sedang dipilih; saat
+  // filter berganti, daftar lama dibiarkan sampai yang baru tiba.
+  const cocok = data && data.platform === platform && data.metrik === metrik && data.hari === hari;
+
+  return (
+    <>
+      <div className="mt-2 flex gap-2">
+        {PLATFORM_VIDEO.map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setPlatform(k)}
+            aria-pressed={platform === k}
+            className={cn(
+              "btn-tekan flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-[12px] font-bold",
+              platform === k ? "text-white" : "glass text-teks-sekunder",
+            )}
+            style={platform === k ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" } : undefined}
+          >
+            <PlatformIcon platform={k} size={13} />
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-1.5">
+        {METRIK_VIDEO.map(([k, label, Ikon]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setMetrik(k)}
+            aria-pressed={metrik === k}
+            className={cn(
+              "btn-tekan flex flex-1 items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-bold",
+              metrik === k ? "bg-pri/15 text-pri" : "glass text-teks-sekunder",
+            )}
+          >
+            <Ikon className="h-3.5 w-3.5" />
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-1.5">
+        {HARI_VIDEO.map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setHari(k)}
+            aria-pressed={hari === k}
+            className={cn(
+              "btn-tekan rounded-full px-3 py-1 text-[10.5px] font-bold",
+              hari === k ? "bg-black/10 text-teks-utama dark:bg-white/15" : "glass text-teks-sekunder",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {!data ? (
+        <div className="mt-3 flex flex-col gap-2">
+          <GlassSkeleton className="h-16 rounded-2xl" />
+          <GlassSkeleton className="h-16 rounded-2xl" />
+          <GlassSkeleton className="h-16 rounded-2xl" />
+        </div>
+      ) : data.daftar.length === 0 ? (
+        <p className="glass mt-3 rounded-2xl px-4 py-5 text-center text-[12px] text-teks-sekunder">
+          Belum ada video dengan angka {metrik} di {platform === "tiktok" ? "TikTok" : "Instagram"}
+          {hari > 0 ? ` (${hari} hari terakhir)` : ""}. Angka dikumpulkan bertahap — coba lagi nanti.
+        </p>
+      ) : (
+        <div className={cn("mt-3 flex flex-col gap-1.5", !cocok && "opacity-60")}>
+          {data.daftar.map((v, i) => (
+            <a
+              key={v.kode}
+              href={v.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn("btn-tekan flex items-center gap-2.5 rounded-xl p-2", i < 3 && "glass")}
+            >
+              <span
+                className={cn(
+                  "angka-tab w-5 shrink-0 text-center text-[12px] font-extrabold",
+                  i === 0
+                    ? "text-amber-500"
+                    : i === 1
+                      ? "text-slate-400"
+                      : i === 2
+                        ? "text-orange-500"
+                        : "text-teks-sekunder",
+                )}
+              >
+                {i + 1}
+              </span>
+              {v.thumbnail_url ? (
+                <img
+                  src={v.thumbnail_url}
+                  alt=""
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                  className="h-14 w-11 shrink-0 rounded-lg bg-black/10 object-cover"
+                />
+              ) : (
+                <span className="flex h-14 w-11 shrink-0 items-center justify-center rounded-lg bg-black/10 dark:bg-white/10">
+                  <Play className="h-4 w-4 text-teks-sekunder" />
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="line-clamp-2 text-[11.5px] leading-snug font-semibold text-teks-utama">
+                  {v.judul || "(tanpa judul)"}
+                </p>
+                <p className="mt-0.5 flex items-center gap-1 text-[10px] text-teks-sekunder">
+                  {v.avatar_url ? (
+                    <FotoBulat src={v.avatar_url} ukuran={14} />
+                  ) : (
+                    <AvatarInisial nama={v.nama_akun || v.akun_username} ukuran={14} />
+                  )}
+                  <span className="truncate">{v.nama_akun || v.akun_username}</span>
+                  {v.user_id === null && (
+                    <span className="shrink-0 rounded bg-pri/12 px-1 text-[9px] font-bold text-pri">Resmi</span>
+                  )}
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="angka-tab flex items-center justify-end gap-1 text-[13px] font-extrabold text-teks-utama">
+                  <IkonMetrik className="h-3.5 w-3.5 text-pri" />
+                  {formatAngkaRingkas(v[metrik])}
+                </p>
+                <p className="angka-tab text-[9.5px] text-teks-sekunder">
+                  {metrik !== "tayangan" ? `${formatAngkaRingkas(v.tayangan)} tayang` : `${formatAngkaRingkas(v.suka)} suka`}
+                  {" · "}
+                  {metrik !== "komentar" ? `${formatAngkaRingkas(v.komentar)} komen` : `${formatAngkaRingkas(v.suka)} suka`}
+                </p>
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+
+      {data && (
+        <p className="mt-3 text-center text-[10px] leading-relaxed text-teks-sekunder">
+          Angka tayangan/suka/komentar dibaca langsung dari TikTok & Instagram, disegarkan
+          bertahap tiap 12 jam per akun · cakupan {data.cakupan.akun_tersapu}/{data.cakupan.akun_total}{" "}
+          akun anggota{data.cakupan.terakhir ? ` · terakhir ${jamWIB(data.cakupan.terakhir)}` : ""} ·
+          YouTube/Facebook/Threads/X belum tersedia
+        </p>
+      )}
+    </>
+  );
+}
+
 function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
-  const [mode, setMode] = useState<"tvr" | "komen">("tvr");
+  const [mode, setMode] = useState<"tvr" | "komen" | "video">("tvr");
   const [komen, setKomen] = useState<KepatuhanKomenLeaderboard | null>(null);
   const [data, setData] = useState<PeringkatTvr | null>(null);
   const [platformPilih, setPlatformPilih] = useState("instagram");
@@ -256,7 +448,11 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
         <div className="flex items-center gap-2 px-4 pt-4 pb-2">
           <Crown className="h-5 w-5 text-amber-500" fill="#F59E0B" />
           <p className="font-heading text-[16px] font-extrabold text-teks-utama">
-            {mode === "komen" ? "Leaderboard Kepatuhan Komen" : "Leaderboard TV Rakyat"}
+            {mode === "komen"
+              ? "Leaderboard Kepatuhan Komen"
+              : mode === "video"
+                ? "Top Video Terbaik"
+                : "Leaderboard TV Rakyat"}
           </p>
           <button
             type="button"
@@ -269,11 +465,12 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
         </div>
 
         {/* Mode: TV Rakyat | Kepatuhan Komen (2 Sep 2026) */}
-        <div className="mx-4 mb-1 grid grid-cols-2 gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10">
+        <div className="mx-4 mb-1 grid grid-cols-3 gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10">
           {(
             [
               ["tvr", "TV Rakyat"],
               ["komen", "Kepatuhan Komen"],
+              ["video", "Video Terbaik"],
             ] as const
           ).map(([k, label]) => (
             <button
@@ -294,6 +491,8 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
         <div className="scrollbar-tipis flex-1 overflow-y-auto px-4 pb-6">
           {mode === "komen" ? (
             <PanelKomen data={komen} />
+          ) : mode === "video" ? (
+            <PanelVideo />
           ) : !data ? (
             <div className="flex flex-col gap-3 pt-2">
               <GlassSkeleton className="h-40 rounded-2xl" />

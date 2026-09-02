@@ -12,6 +12,7 @@
 // Skor 0-100; urutan skor desc → detail desc → nama. Peringkat 1 emas,
 // 2 perak, 3 perunggu di layar. Akses: siapa pun yang punya >= 1
 // sub-dashboard (atau HR/master/super) — konsisten dengan tab Dashboard.
+import { semuaBarisData } from "@/lib/semua-baris";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
@@ -103,11 +104,13 @@ export async function GET(request: Request) {
         .neq("role", "master")
         .limit(500),
       // Kategori KOMEN: agregat per kader per periode (view DB).
-      db
-        .from("v_app_kepatuhan_kader")
-        .select("nama_kader, periode, total, sudah")
-        .in("periode", daftarPeriode)
-        .range(0, 9999),
+      semuaBarisData((a, b) =>
+        db
+          .from("v_app_kepatuhan_kader")
+          .select("nama_kader, periode, total, sudah")
+          .in("periode", daftarPeriode)
+          .range(a, b),
+      ),
       // Kategori VIDEO: video resmi yang tayang pada jendela.
       db
         .from("video_antrian")
@@ -119,22 +122,27 @@ export async function GET(request: Request) {
         .from("interaksi_video")
         .select("user_id, video_kode, jenis")
         .gte("pada", `${awal}T00:00:00+07:00`)
-        .range(0, 9999),
+        .range(0, 999),
       // Kategori ABSENSI: hari hadir per user.
-      db
-        .from("absensi")
-        .select("user_id, tanggal_wib")
-        .eq("jenis", "masuk")
-        .gte("tanggal_wib", awal)
-        .lte("tanggal_wib", hariIni)
-        .range(0, 9999),
+      semuaBarisData((a, b) =>
+        db
+          .from("absensi")
+          .select("user_id, tanggal_wib")
+          .eq("jenis", "masuk")
+          .gte("tanggal_wib", awal)
+          .lte("tanggal_wib", hariIni)
+          .range(a, b),
+      ),
       // Kategori KPI: laporan video per platform per hari.
-      db
-        .from("laporan_video")
-        .select("user_id, platform, tanggal_wib")
-        .gte("tanggal_wib", awal)
-        .lte("tanggal_wib", hariIni)
-        .range(0, 19999),
+      // Anti-batas-1000 (2 Sep 2026): 30 hari x ±1.000/hari.
+      semuaBarisData((a, b) =>
+        db
+          .from("laporan_video")
+          .select("user_id, platform, tanggal_wib")
+          .gte("tanggal_wib", awal)
+          .lte("tanggal_wib", hariIni)
+          .range(a, b),
+      ),
       bannedAktifPerUser(),
       db.from("app_user").select("id, kpi_video").not("kpi_video", "is", null),
     ]);

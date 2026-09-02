@@ -45,6 +45,13 @@ export type HasilKpi = {
   target_total: number;
   /** Tercapai KETAT: tiap platform aktif >= target per platform. */
   tercapai: boolean;
+  /**
+   * Persen KETAT (2 Sep 2026): kelebihan di satu platform TIDAK menutup
+   * kekurangan di platform lain — sum(min(jumlah, target)) / target_total.
+   * Akibatnya 100% <=> tercapai (dulu 31 link IG saja bisa tampil 100%
+   * tapi "belum tercapai" — membingungkan).
+   */
+  persen: number;
   per_platform: RincianPlatform[];
 };
 
@@ -91,9 +98,12 @@ export function hitungKpi(
   }));
   const aktif = per.filter((r) => !r.banned);
   const jumlah = per.reduce((a, r) => a + r.jumlah, 0);
+  const target_total = aktif.reduce((a, r) => a + r.target, 0);
+  const capai = aktif.reduce((a, r) => a + Math.min(r.jumlah, r.target), 0);
   return {
     jumlah,
-    target_total: aktif.reduce((a, r) => a + r.target, 0),
+    target_total,
+    persen: target_total > 0 ? Math.round((100 * capai) / target_total) : 100,
     // Semua platform aktif harus memenuhi targetnya. Target 0 (kpi_video
     // = 0, dibebaskan penuh) otomatis tercapai.
     tercapai: aktif.every((r) => r.jumlah >= r.target),

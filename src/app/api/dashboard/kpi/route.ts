@@ -17,6 +17,7 @@
 //
 // Aturan KPI 31 Agu 2026: KETAT PER PLATFORM (5 video x 6 platform;
 // platform banned dikecualikan) — lihat lib/kpi-video.
+import { semuaBarisData } from "@/lib/semua-baris";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
@@ -174,6 +175,7 @@ export async function GET(request: Request) {
         per_platform: kpi.per_platform,
         target_total: kpi.target_total,
         tercapai: kpi.tercapai,
+        persen: kpi.persen,
         banned: [...(bannedPer.get(id) ?? [])],
       };
     }
@@ -183,12 +185,16 @@ export async function GET(request: Request) {
       const awal = tanggalMundur(tanggal, 29);
       const [{ data: baris }, { data: roster }, bannedPer, { data: targetRows }] =
         await Promise.all([
-          db
-            .from("laporan_video")
-            .select("user_id, platform, tanggal_wib")
-            .gte("tanggal_wib", awal)
-            .lte("tanggal_wib", tanggal)
-            .range(0, 19999),
+          // Anti-batas-1000 (2 Sep 2026): PostgREST memotong tiap jawaban
+          // di 1000 baris apa pun range-nya — baca per halaman.
+          semuaBarisData((a, b) =>
+            db
+              .from("laporan_video")
+              .select("user_id, platform, tanggal_wib")
+              .gte("tanggal_wib", awal)
+              .lte("tanggal_wib", tanggal)
+              .range(a, b),
+          ),
           db
             .from("app_user")
             .select("id")
@@ -273,11 +279,15 @@ export async function GET(request: Request) {
         .limit(500),
       // Baris mentah hari itu (~ratusan) — perlu kolom platform untuk
       // aturan 5x6; view agregat tidak memuat platform.
-      db
-        .from("laporan_video")
-        .select("user_id, platform")
-        .eq("tanggal_wib", tanggal)
-        .range(0, 4999),
+      // Hari ini bisa >1000 baris (2 Sep 2026: 1.053) — baca per halaman,
+      // kalau tidak angka KPI seluruh dashboard macet di 1000.
+      semuaBarisData((a, b) =>
+        db
+          .from("laporan_video")
+          .select("user_id, platform")
+          .eq("tanggal_wib", tanggal)
+          .range(a, b),
+      ),
       db
         .from("v_app_video_harian")
         .select("tanggal_wib, jumlah")
@@ -326,6 +336,8 @@ export async function GET(request: Request) {
         // dan % di tabel langsung benar tanpa mengubah komponennya.
         target: kpi.target_total,
         tercapai: kpi.tercapai,
+        // Persen KETAT per platform — 100% hanya bila semua platform terpenuhi.
+        persen: kpi.persen,
         dibebaskan: bebasPer.get(Number(u.id)) ?? null,
         banned: [...(bannedPer.get(Number(u.id)) ?? [])],
       };
