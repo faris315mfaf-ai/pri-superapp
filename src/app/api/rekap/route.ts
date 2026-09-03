@@ -3,6 +3,7 @@
 // Bila ?id_postingan diberikan, respons menyertakan ringkasan
 // { sudah, belum, persen } untuk postingan tersebut.
 // Sumber: Supabase (view v_app_rekap).
+import { waktuAmbilKomentarTerakhir } from "@/lib/kepatuhan";
 import { supabase } from "@/lib/supabase";
 import { bungkus, pastikanSukses } from "@/lib/api-helper";
 import { adalahPengurus, pastikanMasuk } from "@/lib/sesi";
@@ -48,15 +49,20 @@ export async function GET(request: Request) {
       // Tanpa ?periode = jendela QC yang SEDANG berjalan (17:00-16:59,
       // dihitung server — klien tak perlu tahu aturan jendelanya).
       const p = periode || periodeSaatIni();
-      const { data } = await supabase()
-        .from("v_app_kepatuhan_kader")
-        .select("total, sudah")
-        .eq("periode", p)
-        .eq("nama_kader", user.nama)
-        .maybeSingle();
+      const [{ data }, diperbarui] = await Promise.all([
+        supabase()
+          .from("v_app_kepatuhan_kader")
+          .select("total, sudah")
+          .eq("periode", p)
+          .eq("nama_kader", user.nama)
+          .maybeSingle(),
+        waktuAmbilKomentarTerakhir(p),
+      ]);
       return {
         total: Number(data?.total ?? 0),
         sudah: Number(data?.sudah ?? 0),
+        // Kapan komentar terakhir diambil (label jelas di Beranda, 3 Sep 2026).
+        diperbarui,
       };
     }
 

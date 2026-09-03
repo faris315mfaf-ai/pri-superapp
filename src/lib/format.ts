@@ -185,3 +185,21 @@ export function urlProfilSosmed(platform: string, username: string): string {
       return `https://${platform}.com/${u}`;
   }
 }
+
+/**
+ * Waktu yang SANGAT jelas untuk label "terakhir diambil": "Rab, 3 Sep 14:20 WIB"
+ * plus selisih ("12 menit lalu"). null → "belum pernah".
+ */
+export function waktuJelasWIB(iso: string | null | undefined): string {
+  if (!iso) return "belum pernah";
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "belum pernah";
+  const d = new Date(t + 7 * 3600_000);
+  const dua = (n: number) => String(n).padStart(2, "0");
+  const hari = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"][d.getUTCDay()];
+  const bulan = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"][d.getUTCMonth()];
+  const selisihMnt = Math.max(0, Math.round((Date.now() - t) / 60_000));
+  const lalu =
+    selisihMnt < 1 ? "baru saja" : selisihMnt < 60 ? `${selisihMnt} menit lalu` : selisihMnt < 48 * 60 ? `${Math.floor(selisihMnt / 60)} jam lalu` : `${Math.floor(selisihMnt / 1440)} hari lalu`;
+  return `${hari}, ${d.getUTCDate()} ${bulan} ${dua(d.getUTCHours())}:${dua(d.getUTCMinutes())} WIB (${lalu})`;
+}

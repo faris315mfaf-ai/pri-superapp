@@ -49,7 +49,7 @@ import {
   getStreakSaya,
 } from "@/services";
 import { bolehFitur } from "@/lib/fitur";
-import { jamWIB, sapaanHari, tanggalIndonesia } from "@/lib/format";
+import { jamWIB, sapaanHari, tanggalIndonesia, waktuJelasWIB } from "@/lib/format";
 import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 import type { KomponenIkon, User } from "@/types";
 
@@ -108,7 +108,7 @@ export function BerandaScreen({
 
   const [kpiKerja, setKpiKerja] = useState<KerjaKpi | null>(null);
   const [video, setVideo] = useState<{ jumlah: number; target: number; persen: number | null } | null>(null);
-  const [komentar, setKomentar] = useState<{ total: number; sudah: number } | null>(null);
+  const [komentar, setKomentar] = useState<{ total: number; sudah: number; diperbarui?: string | null } | null>(null);
   const [absen, setAbsen] = useState<{ masuk: string | null; pulang: string | null } | null>(
     null,
   );
@@ -228,6 +228,22 @@ export function BerandaScreen({
       {/* Ulang tahun hari ini */}
       <KartuUltah idKu={user.id} />
 
+      {/* CHAT NAKA (3 Sep 2026): untuk anggota TANPA jabatan — tombol WhatsApp
+          langsung ke NAKA. Pemegang jabatan / pengurus tidak melihatnya. */}
+      {!(user.jabatan ?? "").trim() && user.role !== "master" && user.role !== "super_admin" && (
+        <a
+          href="https://wa.me/62882007525790?text=Halo%20NAKA%2C%20saya%20anggota%20PRI%20SuperApp."
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-tekan mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[14px] font-extrabold tracking-wide text-white shadow-lg"
+          style={{ background: "linear-gradient(135deg, #25D366, #128C7E)" }}
+          aria-label="Chat NAKA lewat WhatsApp"
+        >
+          <MessageCircle className="h-5 w-5" aria-hidden="true" />
+          CHAT NAKA
+        </a>
+      )}
+
       {/* Seksi-seksi Beranda dalam kerangka TATA LETAK (fitur 1.20/1&2):
           semua bisa dilipat, diurutkan ulang, dan disembunyikan lewat
           tombol "Atur Tata Letak" — pilihannya milik tiap pengguna.
@@ -320,8 +336,8 @@ export function BerandaScreen({
                             nilai={komentar ? `${komentar.sudah}/${komentar.total}` : "…"}
                             keterangan={
                               komentar && komentar.total === 0
-                                ? "Menunggu konten hari ini"
-                                : "postingan dikomentari"
+                                ? `Menunggu konten hari ini · komentar terakhir diambil ${waktuJelasWIB(komentar.diperbarui)}`
+                                : `postingan dikomentari · komentar terakhir diambil ${waktuJelasWIB(komentar?.diperbarui)}`
                             }
                             persen={persenKomentar}
                             Ikon={MessageCircle}

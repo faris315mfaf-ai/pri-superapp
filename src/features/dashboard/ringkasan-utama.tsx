@@ -19,7 +19,7 @@ import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
 import { getRingkasUtama, type RingkasUtama } from "@/services";
 import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
-import { warnaKepatuhan } from "@/lib/format";
+import { waktuJelasWIB, warnaKepatuhan } from "@/lib/format";
 
 type Props = {
   onBukaKomen?: () => void;
@@ -77,7 +77,7 @@ export function RingkasanUtama({
       label: "Kepatuhan Komen",
       angka: `${data.komen.persen}%`,
       warna: warnaKepatuhan(data.komen.persen),
-      sub: `${data.komen.kader_aktif}/${data.komen.total_kader} kader aktif komen`,
+      sub: `${data.komen.kader_aktif}/${data.komen.total_kader} kader aktif · komentar diambil ${waktuJelasWIB(data.komen.diperbarui)}`,
       Ikon: MessageCircle,
       onKlik: onBukaKomen,
     },

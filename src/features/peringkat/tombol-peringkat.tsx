@@ -30,7 +30,7 @@ import {
   type PeringkatTvr,
   type VideoTerbaikBalasan,
 } from "@/services";
-import { formatAngkaRingkas, jamWIB, urlProfilSosmed } from "@/lib/format";
+import { formatAngkaRingkas, jamWIB, urlProfilSosmed, waktuJelasWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { CincinMythic, FITUR_PERINGKAT_AKTIF, LabelMythic } from "./cincin-mythic";
 
@@ -101,7 +101,10 @@ function PanelKomen({ data }: { data: KepatuhanKomenLeaderboard | null }) {
   return (
     <>
       <div className="mt-2 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3 text-[11px] leading-relaxed text-teks-utama">
-        <p className="font-bold">Cara penilaian kepatuhan komen</p>
+        <p className="rounded-lg bg-black/5 px-2 py-1.5 text-[11.5px] font-extrabold text-teks-utama dark:bg-white/10">
+          Komentar terakhir diambil: {waktuJelasWIB(data.diperbarui)}
+        </p>
+        <p className="mt-2 font-bold">Cara penilaian kepatuhan komen</p>
         <ul className="mt-1 list-disc space-y-0.5 pl-4 text-teks-sekunder">
           <li>
             Dihitung berdasarkan <b>jam postingan</b>: periode <b>17.00 WIB</b> sampai{" "}

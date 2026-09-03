@@ -1139,7 +1139,7 @@ export async function getDashboard(): Promise<DashboardData> {
 export type RingkasUtama = {
   periode: string;
   tanggal: string;
-  komen: { persen: number; kader_aktif: number; total_kader: number };
+  komen: { persen: number; kader_aktif: number; total_kader: number; diperbarui?: string | null };
   absensi: { hadir: number; total: number };
   kerja: { sudah_lapor: number; total: number; rata: number };
   video: { tercapai: number; total: number; video_hari_ini: number };
@@ -3539,7 +3539,7 @@ export async function getRekapPeriode(
 export async function getKomentarSaya(
   /** Kosong = jendela QC yang sedang berjalan (server yang menghitung). */
   periode?: string,
-): Promise<{ total: number; sudah: number } | null> {
+): Promise<{ total: number; sudah: number; diperbarui?: string | null } | null> {
   try {
     const p = periode ? `&periode=${encodeURIComponent(periode)}` : "";
     const json = await fetchJson(`/api/rekap?saya=1${p}`, {
@@ -4547,6 +4547,8 @@ export async function putusPersetujuanKpi(data: {
 export type KepatuhanKomenLeaderboard = {
   periode: string;
   jendela: string;
+  /** ISO kapan komentar terakhir diambil dari sosmed (null = belum pernah). */
+  diperbarui?: string | null;
   daftar: { nama: string; avatar_url: string; total: number; sudah: number; persen: number }[];
 };
 

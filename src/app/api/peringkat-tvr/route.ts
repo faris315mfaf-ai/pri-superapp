@@ -10,6 +10,7 @@
 //
 // Tiga besar (dasar badge "Mythical"): TOTAL PENGIKUT gabungan seluruh
 // sosmed. Data ikut segar bertahap lewat penyapu profil basi (after()).
+import { waktuAmbilKomentarTerakhir } from "@/lib/kepatuhan";
 import { after } from "next/server";
 import { bungkus } from "@/lib/api-helper";
 import { supabase } from "@/lib/supabase";
@@ -52,11 +53,12 @@ async function leaderboardKomen() {
   if (cacheKomen && Date.now() - cacheKomen.pada < TTL_CACHE_MS) return cacheKomen.isi;
   const db = supabase();
   const periode = periodeSaatIni();
-  const [{ data: baris }, { data: roster }] = await Promise.all([
+  const [{ data: baris }, { data: roster }, diperbarui] = await Promise.all([
     // v_app_kepatuhan_kader: periode, nama_kader, total, sudah (+nomor_wa —
     // SENGAJA tidak dibaca: endpoint ini untuk semua pengguna).
     db.from("v_app_kepatuhan_kader").select("nama_kader, total, sudah").eq("periode", periode),
     db.from("app_user").select("nama, avatar_url").eq("aktif", true).eq("status", "aktif").limit(500),
+    waktuAmbilKomentarTerakhir(periode),
   ]);
   const avatarPer = new Map((roster ?? []).map((r) => [String(r.nama), String(r.avatar_url ?? "")]));
   const daftar = (baris ?? [])
@@ -77,6 +79,8 @@ async function leaderboardKomen() {
     periode,
     // Jendela penilaian mengikuti lib/periode-qc (17.00 → 16.59 WIB).
     jendela: "17.00 WIB – 16.59 WIB hari berikutnya",
+    // Kapan komentar terakhir diambil dari sosmed (label jelas, 3 Sep 2026).
+    diperbarui,
     daftar,
   };
   cacheKomen = { isi, pada: Date.now() };

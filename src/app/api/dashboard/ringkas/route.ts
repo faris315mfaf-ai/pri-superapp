@@ -6,6 +6,7 @@
 //
 // Akses: pengurus / Divisi HR / jabatan yang diberi akses dashboard
 // apa pun oleh master — sama dengan siapa yang melihat dashboard.
+import { waktuAmbilKomentarTerakhir } from "@/lib/kepatuhan";
 import { semuaBarisData } from "@/lib/semua-baris";
 import { supabase } from "@/lib/supabase";
 import { bungkus, pastikanSukses } from "@/lib/api-helper";
@@ -115,6 +116,7 @@ export async function GET(request: Request) {
 
     // --- 1. Kepatuhan komen: % (orang x postingan) + kader yang aktif ---
     const barisQc = kepatuhan;
+    const komenDiperbarui = await waktuAmbilKomentarTerakhir(periode);
     const totalUnit = barisQc.reduce((a, b) => a + Number(b.total ?? 0), 0);
     const sudahUnit = barisQc.reduce((a, b) => a + Number(b.sudah ?? 0), 0);
     const kaderAktifKomen = barisQc.filter((b) => Number(b.sudah ?? 0) > 0).length;
@@ -165,6 +167,7 @@ export async function GET(request: Request) {
         persen: totalUnit > 0 ? Math.round((sudahUnit / totalUnit) * 100) : 0,
         kader_aktif: kaderAktifKomen,
         total_kader: barisQc.length,
+        diperbarui: komenDiperbarui,
       },
       absensi: { hadir: hadir.size, total: totalAnggota },
       kerja: { sudah_lapor: barisKerja.length, total: totalAnggota, rata: rataKerja },
