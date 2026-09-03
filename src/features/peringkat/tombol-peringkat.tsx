@@ -87,7 +87,7 @@ function Avatar({ src, nama, ukuran }: { src: string; nama: string; ukuran: numb
 }
 
 // ===== Mode KEPATUHAN KOMEN (2 Sep 2026): peringkat kepatuhan komentar
-// periode berjalan + penjelasan aturan (jam postingan 17.00–16.59 WIB &
+// periode berjalan + penjelasan aturan (jam postingan 19.00–18.59 WIB &
 // wajib pakai akun yang sudah didaftarkan).
 function PanelKomen({ data }: { data: KepatuhanKomenLeaderboard | null }) {
   if (!data) {
@@ -107,8 +107,9 @@ function PanelKomen({ data }: { data: KepatuhanKomenLeaderboard | null }) {
         <p className="mt-2 font-bold">Cara penilaian kepatuhan komen</p>
         <ul className="mt-1 list-disc space-y-0.5 pl-4 text-teks-sekunder">
           <li>
-            Dihitung berdasarkan <b>jam postingan</b>: periode <b>17.00 WIB</b> sampai{" "}
-            <b>16.59 WIB</b> hari berikutnya (periode ini: {data.periode}).
+            Dihitung berdasarkan <b>jam postingan</b>: periode <b>19.00 WIB</b> sampai{" "}
+            <b>18.59 WIB</b> hari berikutnya (periode ini: {data.periode}). Komentar yang dihitung
+            hanya yang ditulis di dalam jendela itu.
           </li>
           <li>Wajib berkomentar di <b>setiap</b> postingan akun wajib dalam periode itu.</li>
           <li>
@@ -362,6 +363,14 @@ function PanelVideo() {
   );
 }
 
+/** Mode "Video Terbaik" disembunyikan dulu (permintaan user 3 Sep 2026); kode tetap ada. */
+const FITUR_VIDEO_TERBAIK = false;
+const MODE_LEADERBOARD: ["tvr" | "komen" | "video", string][] = [
+  ["tvr", "TV Rakyat"],
+  ["komen", "Kepatuhan Komen"],
+  ...(FITUR_VIDEO_TERBAIK ? ([["video", "Video Terbaik"]] as ["video", string][]) : []),
+];
+
 function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
   const [mode, setMode] = useState<"tvr" | "komen" | "video">("tvr");
   const [komen, setKomen] = useState<KepatuhanKomenLeaderboard | null>(null);
@@ -468,14 +477,13 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
         </div>
 
         {/* Mode: TV Rakyat | Kepatuhan Komen (2 Sep 2026) */}
-        <div className="mx-4 mb-1 grid grid-cols-3 gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10">
-          {(
-            [
-              ["tvr", "TV Rakyat"],
-              ["komen", "Kepatuhan Komen"],
-              ["video", "Video Terbaik"],
-            ] as const
-          ).map(([k, label]) => (
+        <div
+          className={cn(
+            "mx-4 mb-1 grid gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10",
+            MODE_LEADERBOARD.length === 3 ? "grid-cols-3" : "grid-cols-2",
+          )}
+        >
+          {MODE_LEADERBOARD.map(([k, label]) => (
             <button
               key={k}
               type="button"

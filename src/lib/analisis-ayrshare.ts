@@ -56,7 +56,7 @@ const AWALAN_ID: Record<string, string> = {
   youtube: "yt",
 };
 
-// Jendela periode kini 17:00→16:59 WIB (permintaan user 31 Agu 2026) —
+// Jendela periode kini 19:00→18:59 WIB (3 Sep 2026; sebelumnya 17:00→16:59) —
 // SATU sumber kebenaran di lib/periode-qc. Nama lama dipertahankan agar
 // pemanggil (rute wajib-komen dll.) tidak perlu berubah.
 export function periodeHariIni(): string {
@@ -210,7 +210,7 @@ export async function jalankanAnalisisAyrshare(opsi: {
   const db = supabase();
   const periode = periodeHariIni();
   // Jendela KETAT dua sisi (fix "hanya postingan hari ini"): hanya
-  // postingan yang terbit DI DALAM jendela 17:00→16:59 yang diambil;
+  // postingan yang terbit DI DALAM jendela 19:00→18:59 yang diambil;
   // postingan jendela kemarin dianggap lewat — beku sebagai riwayat.
   const batasMs = awalPeriodeMsDari(periode);
   const batasAkhirMs = akhirPeriodeMsDari(periode);
@@ -507,9 +507,15 @@ export async function jalankanAnalisisAyrshare(opsi: {
       // 3. Rekap: SEMUA anggota aktif × postingan ini. Cocok = Comply.
       const jumlahPer = new Map<string, number>();
       for (const b of barisKomentar) {
-        if (b.nama_kader) {
-          jumlahPer.set(b.nama_kader, (jumlahPer.get(b.nama_kader) ?? 0) + 1);
-        }
+        if (!b.nama_kader) continue;
+        // ATURAN 3 Sep 2026: hanya komentar yang DITULIS di dalam jendela
+        // periode (19:00 kemarin s.d. 18:59 hari ini) yang dihitung;
+        // komentar di luar jendela tetap tersimpan sebagai arsip tapi
+        // tidak menambah kepatuhan. Waktu yang tak diketahui tetap dihitung
+        // (tak ada dasar untuk menghukum).
+        const tKomen = b.waktu_komentar ? new Date(b.waktu_komentar).getTime() : NaN;
+        if (Number.isFinite(tKomen) && (tKomen < batasMs || tKomen >= batasAkhirMs)) continue;
+        jumlahPer.set(b.nama_kader, (jumlahPer.get(b.nama_kader) ?? 0) + 1);
       }
       const barisRekap = (roster ?? []).map((r) => {
         const jumlah = jumlahPer.get(r.nama) ?? 0;

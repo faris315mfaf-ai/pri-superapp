@@ -4,7 +4,7 @@
 // Sumbernya view `v_app_feed_konten` (tabel `feed_konten`), BUKAN tabel
 // `postingan`. Alasannya: `postingan` dipakai menghitung kepatuhan —
 // setiap baris di sana melahirkan kewajiban komentar bagi tiap kader —
-// dan isinya sengaja dibatasi jendela sesi QC 17:00–16:00 WIB. Feed anggota
+// dan isinya sengaja dibatasi jendela sesi QC 19:00–18:59 WIB. Feed anggota
 // butuh postingan terbaru apa adanya. Rinciannya di sql/08_feed_konten.sql.
 //
 // Tabel feed diisi workflow n8n kira-kira 1 jam sekali; membuka halaman

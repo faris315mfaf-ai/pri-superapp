@@ -181,3 +181,67 @@ export async function daftarkanVideoUnggahan(opsi: {
     console.error("[sinkron-konten] daftar unggahan gagal:", e);
   }
 }
+
+/**
+ * Sinkron PAKSA untuk Vercel Cron (3 Sep 2026): tidak bergantung pada
+ * pembukaan aplikasi. Dijaga klaim atomik per 30 menit sendiri
+ * (`sinkron_cron_bucket`) agar dua pemicu cron yang tumpang tindih tak
+ * berjalan dobel, lalu menulis jejak hasil ke pengaturan_sistem:
+ * `sinkron_komen_cron_terakhir` (ISO) & `sinkron_komen_cron_status`.
+ * Mesin analisisnya idempoten (upsert) — aman dijalankan berulang.
+ */
+export async function sinkronKontenTvPaksa(
+  pemicu: string,
+): Promise<{ jalan: boolean; alasan?: string; ringkas?: Record<string, unknown> }> {
+  const db = supabase();
+  const kini = new Date().toISOString();
+  try {
+    if (!ayrshareSiap()) return { jalan: false, alasan: "Ayrshare belum tersambung." };
+    const bucket = String(Math.floor(Date.now() / (30 * 60_000)));
+    await db
+      .from("pengaturan_sistem")
+      .upsert({ kunci: "sinkron_cron_bucket", nilai: "" }, { onConflict: "kunci", ignoreDuplicates: true });
+    const { data: klaim } = await db
+      .from("pengaturan_sistem")
+      .update({ nilai: bucket })
+      .eq("kunci", "sinkron_cron_bucket")
+      .neq("nilai", bucket)
+      .select("kunci");
+    if (!klaim || klaim.length === 0) {
+      return { jalan: false, alasan: "Jendela 30 menit ini sudah dikerjakan." };
+    }
+    const hasil = await jalankanAnalisisAyrshare({ olehUserId: null });
+    const ringkas = {
+      periode: hasil.periode,
+      postingan: hasil.postingan,
+      komentar: hasil.komentar,
+      comply: hasil.comply,
+      gagal_cek: hasil.gagal_cek,
+      sisa: hasil.sisa,
+      selesai: hasil.selesai,
+      peringatan: hasil.peringatan.length,
+    };
+    await db.from("pengaturan_sistem").upsert(
+      [
+        { kunci: "sinkron_komen_cron_terakhir", nilai: kini },
+        { kunci: "sinkron_komen_cron_status", nilai: `ok ${pemicu} ${JSON.stringify(ringkas)}`.slice(0, 500) },
+      ],
+      { onConflict: "kunci" },
+    );
+    return { jalan: true, ringkas };
+  } catch (e) {
+    const pesan = e instanceof Error ? e.message : String(e);
+    console.error("[sinkron-konten] cron gagal:", pesan);
+    await db
+      .from("pengaturan_sistem")
+      .upsert(
+        [
+          { kunci: "sinkron_komen_cron_terakhir", nilai: kini },
+          { kunci: "sinkron_komen_cron_status", nilai: `gagal ${pemicu} ${pesan}`.slice(0, 500) },
+        ],
+        { onConflict: "kunci" },
+      )
+      .then(() => undefined, () => undefined);
+    return { jalan: false, alasan: pesan };
+  }
+}

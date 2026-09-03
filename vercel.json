@@ -1,5 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "next build",
-  "regions": ["sin1"]
+  "regions": [
+    "sin1"
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/sinkron-komen",
+      "schedule": "*/30 * * * *"
+    }
+  ]
 }

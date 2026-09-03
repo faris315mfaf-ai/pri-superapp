@@ -77,8 +77,8 @@ async function leaderboardKomen() {
     .sort((x, y) => y.persen - x.persen || y.sudah - x.sudah || x.nama.localeCompare(y.nama));
   const isi = {
     periode,
-    // Jendela penilaian mengikuti lib/periode-qc (17.00 → 16.59 WIB).
-    jendela: "17.00 WIB – 16.59 WIB hari berikutnya",
+    // Jendela penilaian mengikuti lib/periode-qc (19.00 → 18.59 WIB, 3 Sep 2026).
+    jendela: "19.00 WIB – 18.59 WIB hari berikutnya",
     // Kapan komentar terakhir diambil dari sosmed (label jelas, 3 Sep 2026).
     diperbarui,
     daftar,

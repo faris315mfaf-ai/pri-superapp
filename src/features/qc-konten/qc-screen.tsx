@@ -117,7 +117,7 @@ export function QcScreen({
 }) {
   // PERIODE TERPILIH — jantung fitur Riwayat: semua data layar mengikuti
   // label periode ini. Bawaan = jendela QC yang SEDANG berjalan
-  // (17:00→16:59 WIB, lib/periode-qc). Diubah lewat pemilih tanggal ATAU
+  // (19:00→18:59 WIB, lib/periode-qc). Diubah lewat pemilih tanggal ATAU
   // dengan mengeklik entri riwayat (memakai label PERSIS entri itu, jadi
   // data berlabel lama 00:00-23:59 pun tetap terbuka).
   const [periodePilih, setPeriodePilih] = useState<string>(() => periodeSaatIni());

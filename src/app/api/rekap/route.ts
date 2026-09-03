@@ -46,7 +46,7 @@ export async function GET(request: Request) {
     // terpangkas cap 1000 PostgREST (urut nama) sehingga pengguna
     // berabjad belakang kebagian 0 baris. Cabang ini menutup keduanya.
     if (searchParams.get("saya") === "1") {
-      // Tanpa ?periode = jendela QC yang SEDANG berjalan (17:00-16:59,
+      // Tanpa ?periode = jendela QC yang SEDANG berjalan (19:00-18:59,
       // dihitung server — klien tak perlu tahu aturan jendelanya).
       const p = periode || periodeSaatIni();
       const [{ data }, diperbarui] = await Promise.all([
