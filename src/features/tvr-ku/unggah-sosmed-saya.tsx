@@ -206,7 +206,15 @@ export function UnggahSosmedSaya() {
         xhr.onload = () =>
           xhr.status >= 200 && xhr.status < 300
             ? selesai()
-            : gagal(new Error("Penyimpanan video menolak berkas ini. Coba lagi."));
+            : gagal(
+                new Error(
+                  xhr.status === 413
+                    ? // Supabase punya batas GLOBAL per proyek (bawaan 50 MB) di luar batas
+                      // aplikasi — hanya bisa dinaikkan admin di Dashboard Supabase → Storage → Settings.
+                      "Penyimpanan menolak: ukuran video melebihi batas server saat ini. Kompres sampai di bawah 50 MB, atau minta admin menaikkan batas unggah di Supabase."
+                    : "Penyimpanan video menolak berkas ini. Coba lagi.",
+                ),
+              );
         xhr.onerror = () =>
           gagal(new Error("Koneksi terputus saat mengunggah video. Coba lagi."));
         xhr.send(berkas);

@@ -4824,7 +4824,10 @@ export type KepatuhanDetail = {
   periode: string;
   nama: string;
   milik_sendiri: boolean;
-  akun_saya: { platform: string; username: string }[];
+  /** false bila nama itu tidak cocok dengan pengguna aktif mana pun. */
+  terdaftar: boolean;
+  /** Username terdaftar ORANG ITU — ditampilkan di atas pop-up & pilihan saat Ajukan. */
+  akun: { platform: string; username: string }[];
   total: number;
   sudah: number;
   daftar: KepatuhanDetailPost[];
@@ -4841,6 +4844,8 @@ export async function ajukanKomentar(data: {
   periode?: string;
   username_komentar: string;
   catatan?: string;
+  /** Atas nama orang lain (3 Sep 2026); kosong = diri sendiri. */
+  nama?: string;
 }): Promise<void> {
   await fetchJson("/api/kepatuhan", {
     method: "POST",
@@ -4864,6 +4869,8 @@ export type AjuanKomentar = {
   status: string;
   catatan_putusan: string;
   diputus_oleh: string | null;
+  /** Terisi bila diajukan pengguna lain atas nama nama_kader. */
+  diajukan_oleh: string;
   dibuat_pada: string;
   waktu_posting: string | null;
   caption: string;

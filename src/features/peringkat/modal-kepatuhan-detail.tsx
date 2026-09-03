@@ -4,9 +4,11 @@
 // ModalKepatuhanDetail (3 Sep 2026) — dibuka dari leaderboard "Kepatuhan
 // Komen" saat nama diketuk: semua postingan wajib periode berjalan untuk
 // orang itu — sudah/belum komen, sosmed & akun, jam unggah, tombol "mata"
-// untuk membuka postingannya. Untuk diri sendiri ada tombol AJUKAN:
-// "saya sudah komen tapi sistem belum mencatat" → pilih username yang
-// dipakai → masuk antrean QC Divisi PALUGODAM.
+// untuk membuka postingannya. Di atas daftar tampil USERNAME TERDAFTAR orang
+// itu (akun yang dipakai berkomentar). Tombol AJUKAN berlaku untuk SEMUA
+// pengguna (3 Sep 2026): "sudah komen tapi sistem belum mencatat" → pilih
+// username terdaftar milik orang itu → masuk antrean QC Divisi PALUGODAM;
+// bila diajukan orang lain, pengajunya ikut tercatat.
 // ============================================================
 
 import { useEffect, useState } from "react";
@@ -47,7 +49,7 @@ export function ModalKepatuhanDetail({ nama, onTutup }: { nama: string; onTutup:
   }, [nama]);
 
   function bukaAjuan(d: KepatuhanDetailPost) {
-    const cocok = (data?.akun_saya ?? []).filter((a) => a.platform === d.platform);
+    const cocok = (data?.akun ?? []).filter((a) => a.platform === d.platform);
     setAjukanUntuk(d.id_postingan);
     setUsername(cocok[0]?.username ?? "");
     setCatatan("");
@@ -56,13 +58,25 @@ export function ModalKepatuhanDetail({ nama, onTutup }: { nama: string; onTutup:
   async function kirimAjuan(d: KepatuhanDetailPost) {
     if (!data || sibuk) return;
     if (!username) {
-      toast("peringatan", "Pilih username yang Anda pakai berkomentar");
+      toast("peringatan", `Pilih username yang ${data.milik_sendiri ? "Anda" : nama} pakai berkomentar`);
       return;
     }
     setSibuk(true);
     try {
-      await ajukanKomentar({ id_postingan: d.id_postingan, periode: data.periode, username_komentar: username, catatan });
-      toast("sukses", "Ajuan terkirim", "Divisi PALUGODAM akan memeriksa komentar Anda.");
+      await ajukanKomentar({
+        id_postingan: d.id_postingan,
+        periode: data.periode,
+        username_komentar: username,
+        catatan,
+        ...(data.milik_sendiri ? {} : { nama: data.nama }),
+      });
+      toast(
+        "sukses",
+        "Ajuan terkirim",
+        data.milik_sendiri
+          ? "Divisi PALUGODAM akan memeriksa komentar Anda."
+          : `Divisi PALUGODAM akan memeriksa komentar ${nama}.`,
+      );
       setAjukanUntuk(null);
       await muat();
     } catch (e) {
@@ -106,6 +120,31 @@ export function ModalKepatuhanDetail({ nama, onTutup }: { nama: string; onTutup:
           </button>
         </div>
 
+        {/* Profil / username yang dipakai berkomentar (3 Sep 2026) */}
+        {data ? (
+          <div className="px-4 pb-2">
+            {data.akun.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="text-[10.5px] font-bold text-teks-sekunder">Akun untuk komen:</span>
+                {data.akun.map((a) => (
+                  <span
+                    key={`${a.platform}-${a.username}`}
+                    className="glass-soft flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold text-teks-utama"
+                  >
+                    <PlatformIcon platform={a.platform} size={10} />@{a.username}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-xl bg-red-500/10 px-3 py-2 text-[10.5px] leading-relaxed text-gagal">
+                {data.terdaftar
+                  ? `Belum ada akun media sosial terdaftar atas nama ${data.milik_sendiri ? "Anda" : nama} — komentar dari akun yang tidak terdaftar tidak bisa dihitung.`
+                  : `${nama} tidak ditemukan sebagai pengguna aktif aplikasi.`}
+              </p>
+            )}
+          </div>
+        ) : null}
+
         <div className="scrollbar-tipis flex-1 overflow-y-auto px-4 pb-6">
           {!data ? (
             <div className="flex flex-col gap-2 pt-1">
@@ -119,18 +158,25 @@ export function ModalKepatuhanDetail({ nama, onTutup }: { nama: string; onTutup:
             </p>
           ) : (
             <>
-              {data.milik_sendiri && (
-                <p className="mt-1 rounded-xl bg-amber-400/10 px-3 py-2 text-[10.5px] leading-relaxed text-teks-sekunder">
-                  Sudah komen tapi belum tercatat? Tekan <b>Ajukan</b> di postingan itu, pilih username
-                  yang Anda pakai — Divisi PALUGODAM akan memeriksa dan menyetujuinya.
-                </p>
-              )}
+              <p className="mt-1 rounded-xl bg-amber-400/10 px-3 py-2 text-[10.5px] leading-relaxed text-teks-sekunder">
+                {data.milik_sendiri ? (
+                  <>
+                    Sudah komen tapi belum tercatat? Tekan <b>Ajukan</b> di postingan itu, pilih username yang
+                    Anda pakai — Divisi PALUGODAM akan memeriksa dan menyetujuinya.
+                  </>
+                ) : (
+                  <>
+                    {nama} sudah komen tapi belum tercatat? Tekan <b>Ajukan</b> di postingan itu, pilih username
+                    miliknya — Divisi PALUGODAM akan memeriksa dan menyetujuinya. Nama Anda tercatat sebagai pengaju.
+                  </>
+                )}
+              </p>
               <div className="mt-2 flex flex-col gap-1.5">
                 {data.daftar.map((d) => {
-                  const bolehAjukan =
-                    data.milik_sendiri && !d.sudah && (!d.ajuan || d.ajuan.status === "ditolak");
+                  // Berlaku untuk semua pengguna (3 Sep 2026), bukan hanya diri sendiri.
+                  const bolehAjukan = !d.sudah && (!d.ajuan || d.ajuan.status === "ditolak");
                   const membuka = ajukanUntuk === d.id_postingan;
-                  const akunCocok = data.akun_saya.filter((a) => a.platform === d.platform);
+                  const akunCocok = data.akun.filter((a) => a.platform === d.platform);
                   return (
                     <div key={d.id_postingan} className="glass-soft rounded-xl p-2">
                       <div className="flex items-center gap-2">
@@ -196,12 +242,13 @@ export function ModalKepatuhanDetail({ nama, onTutup }: { nama: string; onTutup:
                       {membuka && (
                         <div className="mt-2 rounded-xl border border-amber-400/40 bg-amber-400/10 p-2.5">
                           <p className="text-[11px] font-bold text-teks-utama">
-                            Saya sudah berkomentar memakai username:
+                            {data.milik_sendiri ? "Saya" : nama} sudah berkomentar memakai username:
                           </p>
                           {akunCocok.length === 0 ? (
                             <p className="mt-1 text-[10.5px] leading-relaxed text-gagal">
-                              Belum ada akun {labelPlatform(d.platform)} terdaftar atas nama Anda. Daftarkan dulu di
-                              Profil → Akun Media Sosial, lalu ajukan lagi.
+                              {data.milik_sendiri
+                                ? `Belum ada akun ${labelPlatform(d.platform)} terdaftar atas nama Anda. Daftarkan dulu di Profil → Akun Media Sosial, lalu ajukan lagi.`
+                                : `Belum ada akun ${labelPlatform(d.platform)} terdaftar atas nama ${nama}. Minta yang bersangkutan mendaftarkannya di Profil → Akun Media Sosial.`}
                             </p>
                           ) : (
                             <div className="mt-1.5 flex flex-wrap gap-1.5">

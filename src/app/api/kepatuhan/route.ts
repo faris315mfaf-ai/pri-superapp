@@ -2,11 +2,14 @@
 // (3 Sep 2026). Dipakai pop-up di leaderboard "Kepatuhan Komen".
 //
 // GET  ?nama=<nama>[&periode=]  → semua postingan wajib periode itu untuk
-//        orang tsb: sudah/belum komen, link, jam unggah, sosmed, akun; bila
-//        milik sendiri ikut daftar username terdaftar (untuk "Ajukan").
+//        orang tsb: sudah/belum komen, link, jam unggah, sosmed, akun; plus
+//        daftar username terdaftar ORANG ITU (ditampilkan di atas pop-up dan
+//        jadi pilihan saat "Ajukan") — berlaku untuk siapa pun yang membuka.
 // GET  ?ajuan=1                  → (Divisi PALUGODAM / pengurus) antrean ajuan.
-// POST { id_postingan, periode?, username_komentar, catatan? }
-//        → anggota mengajukan "sudah komen tapi belum tercatat".
+// POST { id_postingan, periode?, username_komentar, catatan?, nama? }
+//        → mengajukan "sudah komen tapi belum tercatat". `nama` kosong =
+//        diri sendiri; terisi = atas nama orang lain (3 Sep 2026: fitur
+//        berlaku untuk semua pengguna; pengaju dicatat di diajukan_oleh).
 // PATCH { id, aksi: setuju|tolak, catatan? }
 //        → PALUGODAM memutuskan; setuju = rekap dipaksa Comply.
 import { supabase } from "@/lib/supabase";
@@ -22,6 +25,24 @@ const PLATFORM_SAH = new Set(["instagram", "tiktok", "youtube", "facebook", "thr
 
 function bersihUsername(u: string): string {
   return u.trim().toLowerCase().replace(/^@+/, "");
+}
+
+/** id app_user aktif berdasarkan nama (nama = kunci yang dipakai rekap.nama_kader). */
+async function idUserDariNama(db: ReturnType<typeof supabase>, nama: string): Promise<number | null> {
+  const { data } = await db.from("app_user").select("id").eq("nama", nama).eq("aktif", true).limit(1).maybeSingle();
+  return data ? Number(data.id) : null;
+}
+
+/** Username terdaftar (aktif) milik satu pengguna, urut platform. */
+async function akunTerdaftar(db: ReturnType<typeof supabase>, userId: number | null) {
+  if (!userId) return [] as { platform: string; username: string }[];
+  const { data } = await db
+    .from("akun_sosmed_user")
+    .select("platform, username")
+    .eq("user_id", userId)
+    .eq("aktif", true)
+    .order("platform");
+  return (data ?? []).map((a) => ({ platform: String(a.platform), username: String(a.username) }));
 }
 
 export async function GET(request: Request) {
@@ -75,6 +96,7 @@ export async function GET(request: Request) {
         status: String(a.status),
         catatan_putusan: String(a.catatan_putusan ?? ""),
         diputus_oleh: a.diputus_oleh == null ? null : String(a.diputus_oleh),
+        diajukan_oleh: String(a.diajukan_oleh ?? ""),
         dibuat_pada: String(a.dibuat_pada),
         waktu_posting: postPer.get(String(a.id_postingan))?.waktu_posting ?? null,
         caption: String(postPer.get(String(a.id_postingan))?.caption_asli ?? "").slice(0, 160),
@@ -86,7 +108,10 @@ export async function GET(request: Request) {
     const nama = (url.searchParams.get("nama") ?? "").trim() || user.nama;
     const periode = (url.searchParams.get("periode") ?? "").trim() || periodeSaatIni();
     const milikSendiri = nama === user.nama;
-    const [{ data: rekap }, { data: ajuan }, akunSaya] = await Promise.all([
+    // Akun terdaftar ORANG ITU — siapa pun yang membuka pop-up melihatnya dan
+    // bisa memakainya untuk mengajukan atas nama orang tersebut.
+    const targetId = milikSendiri ? Number(user.id) : await idUserDariNama(db, nama);
+    const [{ data: rekap }, { data: ajuan }, akun] = await Promise.all([
       db
         .from("rekap")
         .select("id_postingan, platform, akun_wajib, url_postingan, jumlah_komentar, status, keterangan")
@@ -98,14 +123,7 @@ export async function GET(request: Request) {
         .select("id, id_postingan, status, username_komentar, catatan_putusan")
         .eq("periode", periode)
         .eq("nama_kader", nama),
-      milikSendiri
-        ? db
-            .from("akun_sosmed_user")
-            .select("platform, username")
-            .eq("user_id", Number(user.id))
-            .eq("aktif", true)
-            .then((r) => (r.data ?? []).map((a) => ({ platform: String(a.platform), username: String(a.username) })))
-        : Promise.resolve([] as { platform: string; username: string }[]),
+      akunTerdaftar(db, targetId),
     ]);
     const postIds = [...new Set((rekap ?? []).map((r) => String(r.id_postingan)))];
     const { data: post } = postIds.length
@@ -147,7 +165,8 @@ export async function GET(request: Request) {
       periode,
       nama,
       milik_sendiri: milikSendiri,
-      akun_saya: akunSaya,
+      terdaftar: targetId != null,
+      akun,
       total: daftar.length,
       sudah: daftar.filter((d) => d.sudah).length,
       daftar,
@@ -164,42 +183,54 @@ export async function POST(request: Request) {
       periode?: string;
       username_komentar?: string;
       catatan?: string;
+      nama?: string;
     };
     const idPost = String(body.id_postingan ?? "").trim();
     const periode = String(body.periode ?? "").trim() || periodeSaatIni();
     const username = bersihUsername(String(body.username_komentar ?? ""));
     const catatan = String(body.catatan ?? "").trim().slice(0, 300);
+    // Atas nama siapa: kosong / sama dengan diri sendiri = diri sendiri.
+    const namaTarget = String(body.nama ?? "").trim() || user.nama;
+    const atasNamaLain = namaTarget !== user.nama;
+    const sebutan = atasNamaLain ? namaTarget : "Anda";
     if (!idPost) throw Object.assign(new Error("Postingan tidak disebutkan."), { status: 400 });
-    if (!username) throw Object.assign(new Error("Pilih username yang Anda pakai berkomentar."), { status: 400 });
+    if (!username) throw Object.assign(new Error(`Pilih username yang ${sebutan} pakai berkomentar.`), { status: 400 });
     if (!periodeMasihBerjalan(periode)) {
       throw Object.assign(new Error("Periode itu sudah lewat — ajuan hanya untuk periode berjalan."), { status: 400 });
     }
+    const targetId = atasNamaLain ? await idUserDariNama(db, namaTarget) : Number(user.id);
+    if (!targetId) throw Object.assign(new Error(`Pengguna "${namaTarget}" tidak ditemukan / tidak aktif.`), { status: 404 });
 
     const { data: baris } = await db
       .from("rekap")
       .select("platform, akun_wajib, url_postingan, status")
       .eq("periode", periode)
-      .eq("nama_kader", user.nama)
+      .eq("nama_kader", namaTarget)
       .eq("id_postingan", idPost)
       .maybeSingle();
-    if (!baris) throw Object.assign(new Error("Postingan ini tidak ada dalam kewajiban Anda."), { status: 404 });
+    if (!baris) throw Object.assign(new Error(`Postingan ini tidak ada dalam kewajiban ${sebutan}.`), { status: 404 });
     if (String(baris.status) === "Comply") {
-      throw Object.assign(new Error("Komentar Anda di postingan ini sudah tercatat."), { status: 409 });
+      throw Object.assign(new Error(`Komentar ${sebutan} di postingan ini sudah tercatat.`), { status: 409 });
     }
     const platform = String(baris.platform);
     if (!PLATFORM_SAH.has(platform)) throw Object.assign(new Error("Platform tidak dikenal."), { status: 400 });
 
-    // Username harus salah satu akun sosmed terdaftar milik pengaju di platform itu.
+    // Username harus salah satu akun sosmed terdaftar milik ORANG YANG DIAJUKAN
+    // di platform itu (bukan milik pengaju bila atas nama orang lain).
     const { data: akun } = await db
       .from("akun_sosmed_user")
       .select("username")
-      .eq("user_id", Number(user.id))
+      .eq("user_id", targetId)
       .eq("platform", platform)
       .eq("aktif", true);
     const terdaftar = (akun ?? []).map((a) => bersihUsername(String(a.username)));
     if (!terdaftar.includes(username)) {
       throw Object.assign(
-        new Error(`@${username} belum terdaftar sebagai akun ${platform} Anda. Daftarkan dulu di Profil → Akun Media Sosial.`),
+        new Error(
+          atasNamaLain
+            ? `@${username} belum terdaftar sebagai akun ${platform} ${namaTarget}. Minta yang bersangkutan mendaftarkannya di Profil → Akun Media Sosial.`
+            : `@${username} belum terdaftar sebagai akun ${platform} Anda. Daftarkan dulu di Profil → Akun Media Sosial.`,
+        ),
         { status: 400 },
       );
     }
@@ -208,7 +239,7 @@ export async function POST(request: Request) {
       .from("komentar_ajuan")
       .select("id, status")
       .eq("periode", periode)
-      .eq("user_id", Number(user.id))
+      .eq("user_id", targetId)
       .eq("id_postingan", idPost)
       .maybeSingle();
     if (lama && String(lama.status) === "menunggu") {
@@ -219,8 +250,9 @@ export async function POST(request: Request) {
     }
     const kolom = {
       periode,
-      user_id: Number(user.id),
-      nama_kader: user.nama,
+      user_id: targetId,
+      nama_kader: namaTarget,
+      diajukan_oleh: atasNamaLain ? user.nama : "",
       id_postingan: idPost,
       platform,
       akun_wajib: String(baris.akun_wajib ?? ""),
@@ -249,10 +281,22 @@ export async function POST(request: Request) {
     if (ids.length > 0) {
       await kirimKabar({
         judul: "Ajuan komentar menunggu QC",
-        isi: `${user.nama} mengajukan sudah berkomentar (@${username}) di ${platform} ${baris.akun_wajib}. Periksa di TV Rakyat Saya → ACC Ajuan Komentar.`,
+        isi: atasNamaLain
+          ? `${user.nama} mengajukan atas nama ${namaTarget}: sudah berkomentar (@${username}) di ${platform} ${baris.akun_wajib}. Periksa di TV Rakyat Saya → ACC Ajuan Komentar.`
+          : `${user.nama} mengajukan sudah berkomentar (@${username}) di ${platform} ${baris.akun_wajib}. Periksa di TV Rakyat Saya → ACC Ajuan Komentar.`,
         kategori: "info",
         jenis_peristiwa: "komentar_ajuan",
         untukUserIds: ids,
+      });
+    }
+    // Orang yang diajukan ikut diberi tahu supaya tidak kaget saat ada putusan.
+    if (atasNamaLain) {
+      await kirimKabar({
+        judul: "Ajuan komentar atas nama Anda",
+        isi: `${user.nama} mengajukan bahwa Anda sudah berkomentar (@${username}) di ${platform} ${baris.akun_wajib}. Menunggu pemeriksaan Divisi PALUGODAM.`,
+        kategori: "info",
+        jenis_peristiwa: "komentar_ajuan",
+        untukUserIds: [targetId],
       });
     }
     return { sukses: true };

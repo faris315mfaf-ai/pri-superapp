@@ -88,6 +88,11 @@ export function AccAjuanKomen() {
         {a.caption ? <p className="mt-1.5 line-clamp-2 text-[11px] text-teks-sekunder">{a.caption}</p> : null}
         <p className="mt-1 text-[10px] text-teks-sekunder">
           diunggah {a.waktu_posting ? `${tanggalIndonesia(a.waktu_posting)} ${jamWIB(a.waktu_posting)}` : "-"} · diajukan{" "}
+          {a.diajukan_oleh ? (
+            <>
+              oleh <b className="text-teks-utama">{a.diajukan_oleh}</b>{" "}
+            </>
+          ) : null}
           {jamWIB(a.dibuat_pada)}
           {a.catatan ? ` · catatan: ${a.catatan}` : ""}
         </p>
