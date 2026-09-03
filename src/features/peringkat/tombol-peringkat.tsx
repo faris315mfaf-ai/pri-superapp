@@ -33,6 +33,7 @@ import {
 import { formatAngkaRingkas, jamWIB, urlProfilSosmed, waktuJelasWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { CincinMythic, FITUR_PERINGKAT_AKTIF, LabelMythic } from "./cincin-mythic";
+import { ModalKepatuhanDetail } from "./modal-kepatuhan-detail";
 
 const LABEL_INDIKATOR: Record<keyof MetrikNasional, string> = {
   pengikut: "Pengikut",
@@ -89,7 +90,14 @@ function Avatar({ src, nama, ukuran }: { src: string; nama: string; ukuran: numb
 // ===== Mode KEPATUHAN KOMEN (2 Sep 2026): peringkat kepatuhan komentar
 // periode berjalan + penjelasan aturan (jam postingan 19.00–18.59 WIB &
 // wajib pakai akun yang sudah didaftarkan).
-function PanelKomen({ data }: { data: KepatuhanKomenLeaderboard | null }) {
+function PanelKomen({
+  data,
+  onBukaDetail,
+}: {
+  data: KepatuhanKomenLeaderboard | null;
+  /** Nama diketuk → pop-up rincian postingan (3 Sep 2026). */
+  onBukaDetail: (nama: string) => void;
+}) {
   if (!data) {
     return (
       <div className="flex flex-col gap-3 pt-2">
@@ -125,9 +133,15 @@ function PanelKomen({ data }: { data: KepatuhanKomenLeaderboard | null }) {
       ) : (
         <div className="mt-3 flex flex-col gap-1.5">
           {data.daftar.map((a, i) => (
-            <div
+            <button
               key={a.nama}
-              className={cn("flex items-center gap-2.5 rounded-xl px-2.5 py-2", i < 3 && "glass")}
+              type="button"
+              onClick={() => onBukaDetail(a.nama)}
+              aria-label={`Rincian kepatuhan ${a.nama}`}
+              className={cn(
+                "btn-tekan flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left",
+                i < 3 && "glass",
+              )}
             >
               <span
                 className={cn(
@@ -162,12 +176,13 @@ function PanelKomen({ data }: { data: KepatuhanKomenLeaderboard | null }) {
               >
                 {a.persen}%
               </span>
-            </div>
+            </button>
           ))}
         </div>
       )}
       <p className="mt-3 text-center text-[10px] text-teks-sekunder">
-        Urutan: persentase tertinggi, lalu jumlah komentar · menyegar otomatis
+        Ketuk nama untuk melihat postingan mana yang sudah dikomentari · Urutan: persentase
+        tertinggi, lalu jumlah komentar · menyegar otomatis
       </p>
     </>
   );
@@ -374,6 +389,7 @@ const MODE_LEADERBOARD: ["tvr" | "komen" | "video", string][] = [
 function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
   const [mode, setMode] = useState<"tvr" | "komen" | "video">("tvr");
   const [komen, setKomen] = useState<KepatuhanKomenLeaderboard | null>(null);
+  const [detailNama, setDetailNama] = useState<string | null>(null);
   const [data, setData] = useState<PeringkatTvr | null>(null);
   const [platformPilih, setPlatformPilih] = useState("instagram");
   const [indikatorPilih, setIndikatorPilih] = useState<keyof MetrikNasional>("pengikut");
@@ -501,7 +517,7 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
 
         <div className="scrollbar-tipis flex-1 overflow-y-auto px-4 pb-6">
           {mode === "komen" ? (
-            <PanelKomen data={komen} />
+            <PanelKomen data={komen} onBukaDetail={setDetailNama} />
           ) : mode === "video" ? (
             <PanelVideo />
           ) : !data ? (
@@ -658,6 +674,7 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
           )}
         </div>
       </motion.div>
+      {detailNama && <ModalKepatuhanDetail nama={detailNama} onTutup={() => setDetailNama(null)} />}
     </motion.div>
   );
 }

@@ -325,6 +325,16 @@ export async function jalankanAnalisisAyrshare(opsi: {
   const mulaiPada = Date.now();
   const peringatan: string[] = [];
 
+  // AJUAN DISETUJUI (3 Sep 2026): komentar yang diakui Divisi PALUGODAM
+  // lewat ajuan tetap dihitung Comply walau scraper tidak menemukannya —
+  // tanpa ini sinkron realtime menimpa keputusan itu tiap beberapa menit.
+  const { data: ajuanRows } = await db
+    .from("komentar_ajuan")
+    .select("nama_kader, id_postingan")
+    .eq("periode", periode)
+    .eq("status", "disetujui");
+  const ajuanDisetujui = new Set((ajuanRows ?? []).map((a) => `${a.nama_kader}|${a.id_postingan}`));
+
   // Postingan yang komentarnya BARU SAJA diperiksa (< SEGAR_MS) → dilewati
   // agar rantai panggilan lanjutan tetap hemat, tetapi run baru membaca
   // ULANG semua postingan periode (komentar baru ikut terhitung).
@@ -533,7 +543,8 @@ export async function jalankanAnalisisAyrshare(opsi: {
         jumlahPer.set(b.nama_kader, (jumlahPer.get(b.nama_kader) ?? 0) + 1);
       }
       const barisRekap = (roster ?? []).map((r) => {
-        const jumlah = jumlahPer.get(r.nama) ?? 0;
+        const adaAjuan = ajuanDisetujui.has(`${r.nama}|${idPost}`);
+        const jumlah = Math.max(jumlahPer.get(r.nama) ?? 0, adaAjuan ? 1 : 0);
         if (jumlah > 0) totalComply += 1;
         return {
           id_unik: `${periode}|||${r.nama}|||${akun.platform}|||${akun.username}|||${idPost}`,
@@ -547,7 +558,7 @@ export async function jalankanAnalisisAyrshare(opsi: {
           jumlah_komentar: jumlah,
           target: 1,
           status: jumlah > 0 ? "Comply" : "Belum Komen",
-          keterangan: "analisis ulang Ayrshare",
+          keterangan: adaAjuan && !(jumlahPer.get(r.nama) ?? 0) ? "ACC ajuan komentar" : "analisis ulang Ayrshare",
           updated_at: new Date().toISOString(),
         };
       });

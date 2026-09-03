@@ -1,6 +1,7 @@
 "use client";
 import { adalahKetum } from "@/lib/jabatan";
-import { adalahAdminStudio } from "@/lib/struktur";
+import { adalahAdminStudio, adalahPalugodam } from "@/lib/struktur";
+import { AccAjuanKomen } from "./acc-ajuan-komen";
 
 // ============================================================
 // TvrKuScreen — halaman TV Rakyat MILIK ANGGOTA.
@@ -34,6 +35,7 @@ import {
   Ban,
   Hourglass,
   Radio,
+  ShieldCheck,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { EmptyState, FadeInUp, GlassSkeleton, SectionTitle, StatusBadge, ThemeToggle } from "@/components/pri-ui";
@@ -511,6 +513,8 @@ export function TvrKuScreen({
   const bolehSiaran = _user.role === "master" || _user.role === "super_admin";
   // Studio PALUGODAM (3 Sep 2026): master/super_admin + kepala Divisi PALUGODAM.
   const bolehStudio = adalahAdminStudio(_user);
+  // ACC ajuan komentar (3 Sep 2026): seluruh anggota Divisi PALUGODAM + pengurus.
+  const bolehAccKomen = adalahPalugodam(_user);
   const [akun, setAkun] = useState<AkunTvr[] | null>(null);
   const [laporan, setLaporan] = useState<LaporanVideo[]>([]);
   const [menunggu, setMenunggu] = useState<LaporanPending[]>([]);
@@ -857,6 +861,23 @@ export function TvrKuScreen({
         </div>
       </FadeInUp>
         ) },
+        ...(bolehAccKomen
+          ? [
+              {
+                id: "acc-ajuan-komen",
+                judul: "ACC Ajuan Komentar",
+                ikon: ShieldCheck,
+                render: () => (
+                  <FadeInUp delay={0.1}>
+                    <SectionTitle judul="ACC Ajuan Komentar" />
+                    <div className="mt-2.5">
+                      <AccAjuanKomen />
+                    </div>
+                  </FadeInUp>
+                ),
+              },
+            ]
+          : []),
         ...(bolehStudio
           ? [
               {

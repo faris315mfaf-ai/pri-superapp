@@ -4801,3 +4801,82 @@ export async function studioPost(aksi: string, data: Record<string, unknown>): P
   });
   return (json ?? {}) as Record<string, unknown>;
 }
+
+// ---- Rincian kepatuhan komen per orang + AJUAN komentar (3 Sep 2026) ----
+export type KepatuhanDetailPost = {
+  id_postingan: string;
+  platform: string;
+  akun_wajib: string;
+  url_postingan: string;
+  waktu_posting: string | null;
+  caption: string;
+  thumbnail_url: string;
+  sudah: boolean;
+  jumlah: number;
+  keterangan: string;
+  ajuan: { id: string; status: string; username_komentar: string; catatan_putusan: string } | null;
+};
+export type KepatuhanDetail = {
+  periode: string;
+  nama: string;
+  milik_sendiri: boolean;
+  akun_saya: { platform: string; username: string }[];
+  total: number;
+  sudah: number;
+  daftar: KepatuhanDetailPost[];
+};
+
+export async function getKepatuhanDetail(nama: string, periode?: string): Promise<KepatuhanDetail> {
+  const p = periode ? `&periode=${encodeURIComponent(periode)}` : "";
+  const json = await fetchJson(`/api/kepatuhan?nama=${encodeURIComponent(nama)}${p}`);
+  return json as KepatuhanDetail;
+}
+
+export async function ajukanKomentar(data: {
+  id_postingan: string;
+  periode?: string;
+  username_komentar: string;
+  catatan?: string;
+}): Promise<void> {
+  await fetchJson("/api/kepatuhan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export type AjuanKomentar = {
+  id: string;
+  periode: string;
+  nama_kader: string;
+  user_id: string;
+  avatar_url: string;
+  id_postingan: string;
+  platform: string;
+  akun_wajib: string;
+  url_postingan: string;
+  username_komentar: string;
+  catatan: string;
+  status: string;
+  catatan_putusan: string;
+  diputus_oleh: string | null;
+  dibuat_pada: string;
+  waktu_posting: string | null;
+  caption: string;
+};
+
+export async function getAjuanKomentar(): Promise<{ menunggu: AjuanKomentar[]; terakhir: AjuanKomentar[] }> {
+  const json = await fetchJson("/api/kepatuhan?ajuan=1");
+  return {
+    menunggu: (json?.menunggu ?? []) as AjuanKomentar[],
+    terakhir: (json?.terakhir ?? []) as AjuanKomentar[],
+  };
+}
+
+export async function putusAjuanKomentar(data: { id: string; aksi: "setuju" | "tolak"; catatan?: string }): Promise<void> {
+  await fetchJson("/api/kepatuhan", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
