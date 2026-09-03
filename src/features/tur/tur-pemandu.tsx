@@ -9,9 +9,12 @@
 // mengetuk bagian itu; kalau target hilang (jendela ditutup, dsb.), tur
 // mundur ke langkah terdekat yang masih terlihat.
 //
-// Mulai otomatis SEKALI untuk pengguna yang belum punya akun terdaftar;
-// bisa dimulai lagi kapan saja dari Profil → "Tutorial daftar akun".
-// Status selesai/lewati disimpan di localStorage per pengguna.
+// Aturan kemunculan (permintaan user, 3 Sep 2026):
+//   • BELUM punya akun sosmed tertaut → muncul otomatis, dan MUNCUL LAGI
+//     tiap 5 menit setelah ditutup/dilewati, sampai ada akun terdaftar.
+//   • SUDAH punya akun → muncul SEKALI saja (penanda localStorage per
+//     pengguna), setelah itu tidak lagi.
+// Bisa dimulai manual kapan saja dari Profil → "Tutorial daftar akun".
 // ============================================================
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -19,20 +22,17 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, GraduationCap, X } from "lucide-react";
 import { useAppStore } from "@/hooks/use-app-store";
 import { getAkunSosmed } from "@/services";
-import {
-  elemenTur,
-  LANGKAH_TUR,
-  mulaiTur,
-  PERISTIWA_TUR,
-  tandaiTurSelesai,
-  turSudahSelesai,
-} from "@/lib/tur";
+import { elemenTur, LANGKAH_TUR, PERISTIWA_TUR, tandaiTurSelesai, turSudahSelesai } from "@/lib/tur";
 
 type Kotak = { top: number; left: number; width: number; height: number };
 const PADDING = 6;
 const TINGGI_KARTU_KIRA = 170;
 const LEBAR_KARTU = 340;
 const JEDA_POLL_MS = 120;
+/** Jeda sebelum pemeriksaan pertama setelah aplikasi aktif. */
+const JEDA_AWAL_MS = 1800;
+/** Belum punya akun: tagih lagi selang ini setelah tur ditutup/dilewati. */
+const JEDA_ULANG_MS = 5 * 60_000;
 /** Target tak terlihat selama ini → cari langkah lain yang terlihat. */
 const TOLERANSI_HILANG_MS = 1200;
 /** Target tidak ada sama sekali di DOM selama ini → tur diakhiri. */
@@ -76,11 +76,15 @@ export function TurPemandu() {
   const [langkah, setLangkah] = useState(-1);
   const [kotak, setKotak] = useState<Kotak | null>(null);
   const [posKartu, setPosKartu] = useState<{ top: number; left: number; atas: boolean } | null>(null);
+  // true = pengguna belum punya akun tertaut (kartu memberi tahu tur akan
+  // muncul lagi tiap 5 menit).
+  const [belumPunyaAkun, setBelumPunyaAkun] = useState(false);
   const langkahRef = useRef(-1);
   const menungguHilangRef = useRef(false);
   const hilangSejakRef = useRef<number | null>(null);
   const tidakAdaSejakRef = useRef<number | null>(null);
   const sudahGulirRef = useRef(-1);
+  const jadwalUlangRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const aktif = langkah >= 0;
   const selesai = langkah >= LANGKAH_TUR.length;
@@ -94,41 +98,72 @@ export function TurPemandu() {
     setLangkah(ke);
   }, []);
 
+  /**
+   * Periksa akun tertaut lalu putuskan: belum punya → mulai (mode "ulang"
+   * mengabaikan penanda pernah-lihat); sudah punya → mulai hanya bila belum
+   * pernah lihat (mode "awal"). Gagal membaca = jangan ganggu pengguna.
+   */
+  const periksaLaluMulai = useCallback(
+    async (mode: "awal" | "ulang") => {
+      if (!userId || langkahRef.current >= 0) return;
+      let jumlah: number | null = null;
+      try {
+        jumlah = (await getAkunSosmed()).length;
+      } catch {
+        jumlah = null;
+      }
+      if (jumlah == null || langkahRef.current >= 0) return;
+      setBelumPunyaAkun(jumlah === 0);
+      if (jumlah === 0) {
+        pindah(0);
+        return;
+      }
+      if (mode === "awal" && !turSudahSelesai(userId)) pindah(0);
+    },
+    [userId, pindah],
+  );
+
   const akhiri = useCallback(
     (cara: "selesai" | "lewati") => {
       if (userId) tandaiTurSelesai(userId, cara);
       pindah(-1);
       setKotak(null);
       setPosKartu(null);
+      // Belum punya akun? Tagih lagi 5 menit setelah ditutup. Pemeriksaan
+      // ulang membaca jumlah akun saat itu, jadi begitu akun terdaftar
+      // (lewat tur atau manual) tagihan berhenti sendiri.
+      if (jadwalUlangRef.current) clearTimeout(jadwalUlangRef.current);
+      jadwalUlangRef.current = setTimeout(() => void periksaLaluMulai("ulang"), JEDA_ULANG_MS);
     },
-    [pindah, userId],
+    [pindah, userId, periksaLaluMulai],
   );
 
   // Mulai dari peristiwa global (baris "Tutorial" di Profil).
   useEffect(() => {
-    const mulai = () => pindah(0);
+    const mulai = () => {
+      if (jadwalUlangRef.current) clearTimeout(jadwalUlangRef.current);
+      getAkunSosmed()
+        .then((d) => setBelumPunyaAkun(d.length === 0))
+        .catch(() => setBelumPunyaAkun(false));
+      pindah(0);
+    };
     window.addEventListener(PERISTIWA_TUR, mulai);
     return () => window.removeEventListener(PERISTIWA_TUR, mulai);
   }, [pindah]);
 
-  // Mulai otomatis sekali: pengguna belum punya akun sosmed terdaftar.
+  // Pemeriksaan pertama setelah aplikasi aktif.
   useEffect(() => {
-    if (!userId || turSudahSelesai(userId)) return;
+    if (!userId) return;
     let hidup = true;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    getAkunSosmed()
-      .then((d) => {
-        if (!hidup || d.length > 0 || langkahRef.current >= 0) return;
-        timer = setTimeout(() => hidup && mulaiTur(), 1800);
-      })
-      .catch(() => {
-        // gagal baca = jangan ganggu; tutorial tetap bisa dibuka manual
-      });
+    const timer = setTimeout(() => {
+      if (hidup) void periksaLaluMulai("awal");
+    }, JEDA_AWAL_MS);
     return () => {
       hidup = false;
-      if (timer) clearTimeout(timer);
+      clearTimeout(timer);
+      if (jadwalUlangRef.current) clearTimeout(jadwalUlangRef.current);
     };
-  }, [userId]);
+  }, [userId, periksaLaluMulai]);
 
   // Ketukan pada target = maju.
   useEffect(() => {
@@ -339,6 +374,11 @@ export function TurPemandu() {
                   {!kotak ? (
                     <p className="mt-1 text-[11px] text-amber-500">Mencari bagian yang harus diketuk…</p>
                   ) : null}
+                  {belumPunyaAkun ? (
+                    <p className="mt-1 text-[10.5px] text-amber-500">
+                      Tutorial ini muncul lagi tiap 5 menit sampai akun media sosial Anda terdaftar.
+                    </p>
+                  ) : null}
                 </div>
                 <button
                   type="button"
@@ -392,9 +432,9 @@ export function TurPemandu() {
               </span>
               <p className="mt-3 font-heading text-[17px] font-extrabold text-teks-utama">Tutorial selesai!</p>
               <p className="mt-1 text-[12.5px] leading-relaxed text-teks-sekunder">
-                Akun Anda sudah terdaftar dan Anda tahu cara mengecek Kepatuhan Komen. Komentar dihitung hanya bila
-                ditulis memakai akun terdaftar dalam jendela 19.00–18.59 WIB. Tutorial ini bisa dibuka lagi dari
-                Profil → Profil & Keamanan.
+                Anda tahu cara mendaftarkan akun dan mengecek Kepatuhan Komen. Komentar dihitung hanya bila ditulis
+                memakai akun terdaftar dalam jendela 19.00–18.59 WIB. Tutorial ini bisa dibuka lagi dari Profil →
+                Profil & Keamanan.
               </p>
               <button
                 type="button"
