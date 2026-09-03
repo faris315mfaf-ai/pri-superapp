@@ -12,7 +12,7 @@ import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
-import { adalahAdminStudio } from "@/lib/struktur";
+import { adalahAdminStudio, DIVISI_PALUGODAM } from "@/lib/struktur";
 import { daftarProfilUp, uploadPostSiap } from "@/lib/upload-post";
 import { deepseekSiap, generateCaption, generateHighlight, generateJudul } from "@/lib/deepseek";
 import { creatomateSiap } from "@/lib/creatomate";
@@ -50,23 +50,48 @@ function kesiapan() {
   return { deepseek: deepseekSiap(), creatomate: creatomateSiap(), uploadpost: uploadPostSiap(), r2: r2Siap() };
 }
 
-async function daftarProfilStudio() {
+/**
+ * ISOLASI (3 Sep 2026): Studio hanya mengenal profil upload-post milik
+ * anggota Divisi PALUGODAM — ditambah profil yang sudah punya template
+ * PALUGODAM (mis. profil yang belum sempat ditautkan ke anggota).
+ * Dipakai untuk daftar tampil DAN penolakan di teks_simpan.
+ */
+async function profilPalugodam(): Promise<{
+  boleh: Set<string>;
+  userPer: Map<string, number>;
+  namaPer: Map<number, string>;
+  tpl: Map<string, Record<string, unknown>>;
+}> {
   const db = supabase();
-  const [{ profil: diUp }, { data: baris }, { data: tpl }] = await Promise.all([
-    uploadPostSiap() ? daftarProfilUp() : Promise.resolve({ profil: [], kuota: 0, paket: "" }),
-    db.from("sosmed_profile").select("profile_key, user_id").eq("penyedia", "upload-post").eq("jenis", "pengguna"),
+  const [{ data: baris }, { data: tplRows }] = await Promise.all([
+    db
+      .from("sosmed_profile")
+      .select("profile_key, user_id, app_user!inner(id, nama, divisi)")
+      .eq("penyedia", "upload-post")
+      .eq("jenis", "pengguna")
+      .eq("app_user.divisi", DIVISI_PALUGODAM),
     db.from("palugodam_template").select("profil, template_id, label, elemen_video, elemen_judul, elemen_highlight, elemen_sumber, aktif"),
   ]);
-  const userPer = new Map((baris ?? []).map((b) => [String(b.profile_key), Number(b.user_id)]));
-  const ids = [...new Set([...userPer.values()])];
+  const userPer = new Map<string, number>();
   const namaPer = new Map<number, string>();
-  if (ids.length > 0) {
-    const { data: u } = await db.from("app_user").select("id, nama").in("id", ids);
-    for (const x of u ?? []) namaPer.set(Number(x.id), String(x.nama ?? ""));
+  for (const b of baris ?? []) {
+    const u = (Array.isArray(b.app_user) ? b.app_user[0] : b.app_user) as { id?: number; nama?: string } | null;
+    userPer.set(String(b.profile_key), Number(b.user_id));
+    if (u) namaPer.set(Number(b.user_id), String(u.nama ?? ""));
   }
-  const tplPer = new Map((tpl ?? []).map((t) => [String(t.profil), t]));
+  const tpl = new Map<string, Record<string, unknown>>((tplRows ?? []).map((t) => [String(t.profil), t as Record<string, unknown>]));
+  const boleh = new Set<string>([...userPer.keys(), ...tpl.keys()]);
+  return { boleh, userPer, namaPer, tpl };
+}
+
+async function daftarProfilStudio() {
+  const [{ profil: diUpSemua }, { boleh, userPer, namaPer, tpl: tplPer }] = await Promise.all([
+    uploadPostSiap() ? daftarProfilUp() : Promise.resolve({ profil: [], kuota: 0, paket: "" }),
+    profilPalugodam(),
+  ]);
+  const diUp = diUpSemua.filter((p) => boleh.has(p.username));
   return {
-    template: (tpl ?? []).map((t) => ({ ...t, profil: String(t.profil) })),
+    template: [...tplPer.values()].map((t) => ({ ...t, profil: String(t.profil) })),
     profil: diUp
       .map((p) => {
         const uid = userPer.get(p.username);
@@ -81,9 +106,9 @@ async function daftarProfilStudio() {
             ? {
                 template_id: String(t.template_id),
                 label: String(t.label ?? ""),
-                elemen_video: String(t.elemen_video),
-                elemen_judul: String(t.elemen_judul),
-                elemen_highlight: String(t.elemen_highlight),
+                elemen_video: String(t.elemen_video ?? "video-1"),
+                elemen_judul: String(t.elemen_judul ?? "judul"),
+                elemen_highlight: String(t.elemen_highlight ?? "highlight"),
                 elemen_sumber: String(t.elemen_sumber ?? "sumber"),
                 aktif: t.aktif === true,
               }
@@ -232,6 +257,19 @@ export async function POST(request: Request) {
       if (!profil || !templateId) {
         throw Object.assign(new Error("Profil dan ID template wajib diisi."), { status: 400 });
       }
+      {
+        // Template hanya untuk profil milik anggota Divisi PALUGODAM.
+        const { userPer } = await profilPalugodam();
+        if (!userPer.has(profil)) {
+          const { data: adaTpl } = await db.from("palugodam_template").select("profil").eq("profil", profil).maybeSingle();
+          if (!adaTpl) {
+            throw Object.assign(
+              new Error("Profil ini bukan milik anggota Divisi PALUGODAM — tautkan dulu ke anggota divisi itu."),
+              { status: 400 },
+            );
+          }
+        }
+      }
       const { error } = await db.from("palugodam_template").upsert(
         {
           profil,
@@ -331,12 +369,15 @@ export async function POST(request: Request) {
       if (profilDipilih.length === 0) {
         throw Object.assign(new Error("Pilih minimal satu profil."), { status: 400 });
       }
-      const [{ data: baris }, { data: tpl }] = await Promise.all([
-        db.from("sosmed_profile").select("profile_key, user_id").eq("penyedia", "upload-post").in("profile_key", profilDipilih),
-        db.from("palugodam_template").select("profil, template_id").in("profil", profilDipilih),
-      ]);
-      const userPer = new Map((baris ?? []).map((b) => [String(b.profile_key), Number(b.user_id)]));
-      const tplPer = new Map((tpl ?? []).map((t) => [String(t.profil), String(t.template_id)]));
+      const { boleh, userPer, tpl } = await profilPalugodam();
+      const asing = profilDipilih.filter((p) => !boleh.has(p));
+      if (asing.length > 0) {
+        throw Object.assign(
+          new Error(`Bukan profil Divisi PALUGODAM: ${asing.slice(0, 5).join(", ")}${asing.length > 5 ? "…" : ""}`),
+          { status: 400 },
+        );
+      }
+      const tplPer = new Map([...tpl.entries()].map(([k, t]) => [k, String(t.template_id ?? "")]));
       // Item yang tidak dipilih lagi & belum dirender dibuang.
       await db
         .from("studio_proyek_item")
