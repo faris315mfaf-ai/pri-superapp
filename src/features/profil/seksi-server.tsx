@@ -110,7 +110,10 @@ export function SeksiServer() {
             </div>
             <p className="mt-2 flex items-center gap-1.5 text-[11px] text-teks-sekunder">
               <Database className="h-3.5 w-3.5" /> Ukuran database: <b className="text-teks-utama">{gb(s.db_ukuran)}</b> · dibaca{" "}
-              {jamWIB(s.diambil_pada)} (CPU = rata-rata 3 detik terakhir)
+              {jamWIB(s.diambil_pada)}{" "}
+              {s.cpu_sumber === "laju"
+                ? "(CPU = pemakaian sejak pembacaan sebelumnya)"
+                : "(CPU = perkiraan dari beban 1 menit ÷ inti; tekan segarkan lagi untuk angka pemakaian sebenarnya)"}
             </p>
           </>
         )}

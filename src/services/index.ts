@@ -4890,6 +4890,8 @@ export type RingkasAiKlien = { penyedia: string; panggilan: number; token_masuk:
 export type ServerMaster = {
   server: {
     cpu_persen: number | null;
+    /** "laju" = selisih counter CPU sejak pembacaan sebelumnya; "beban" = perkiraan beban 1 menit ÷ inti. */
+    cpu_sumber: "laju" | "beban";
     cpu_inti: number;
     beban_1m: number | null;
     beban_5m: number | null;

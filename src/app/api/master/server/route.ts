@@ -13,7 +13,7 @@ import { deepseekSiap } from "@/lib/deepseek";
 import { ringkasPemakaianAi } from "@/lib/ai-pemakaian";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 20;
 
 const PENGELOLA = new Set(["master", "super_admin"]);
 
@@ -22,7 +22,14 @@ function tokenDari(request: Request): string {
   return h.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : "";
 }
 
-type Sampel = { idle: number; total: number };
+type Sampel = { idle: number; total: number; waktu: number };
+
+// Cache antar-permintaan (per instance server): endpoint metrik Supabase
+// diperbarui BERKALA, bukan realtime — diuji 3 Sep 2026: dua cuplikan berjarak
+// 3 detik identik (laju = 0). Maka laju CPU dihitung dari cuplikan permintaan
+// SEBELUMNYA yang counter-nya sudah maju; bila belum ada, perkiraan dari beban
+// 1 menit ÷ jumlah inti (cara umum menaksir kesibukan CPU di Linux).
+let sampelTerakhir: Sampel | null = null;
 
 /** Ambil teks metrik Prometheus dari Supabase. */
 async function ambilMetrik(): Promise<string> {
@@ -57,7 +64,12 @@ function cuplikanCpu(teks: string): Sampel {
   return {
     idle: jumlah(teks, "node_cpu_seconds_total", 'mode="idle"'),
     total: jumlah(teks, "node_cpu_seconds_total"),
+    waktu: Date.now(),
   };
+}
+
+function persen(n: number): number {
+  return Math.max(0, Math.min(100, Math.round(n)));
 }
 
 async function saldoDeepseek(): Promise<{ tersedia: boolean; saldo: string } | null> {
@@ -96,14 +108,20 @@ export async function GET(request: Request) {
   let server: Record<string, unknown> | null = null;
   let galat = "";
   if (teks1.includes("node_memory_MemTotal_bytes")) {
-    // Cuplikan kedua untuk laju CPU.
-    await new Promise((r) => setTimeout(r, 3000));
-    const teks2 = await ambilMetrik().catch(() => "");
-    const c1 = cuplikanCpu(teks1);
-    const c2 = teks2 ? cuplikanCpu(teks2) : c1;
-    const dTotal = c2.total - c1.total;
-    const dIdle = c2.idle - c1.idle;
-    const cpuPersen = dTotal > 0 ? Math.max(0, Math.min(100, Math.round((1 - dIdle / dTotal) * 100))) : null;
+    const inti = new Set([...teks1.matchAll(/^node_cpu_seconds_total\{[^}]*cpu="(\d+)"/gm)].map((m) => m[1])).size;
+    const beban1 = nilai(teks1, "node_load1");
+    const c = cuplikanCpu(teks1);
+    let cpuPersen: number | null = null;
+    let cpuSumber: "laju" | "beban" = "beban";
+    if (sampelTerakhir && c.total > sampelTerakhir.total) {
+      // Counter sudah maju sejak permintaan sebelumnya → laju sesungguhnya.
+      cpuPersen = persen((1 - (c.idle - sampelTerakhir.idle) / (c.total - sampelTerakhir.total)) * 100);
+      cpuSumber = "laju";
+    }
+    // Simpan sebagai patokan HANYA bila counter maju (cuplikan identik jangan
+    // menimpa patokan, supaya permintaan berikutnya tetap punya selisih).
+    if (c.total > 0 && (!sampelTerakhir || c.total > sampelTerakhir.total)) sampelTerakhir = c;
+    if (cpuPersen == null && beban1 != null && inti > 0) cpuPersen = persen((beban1 / inti) * 100);
 
     const memTotal = nilai(teks1, "node_memory_MemTotal_bytes");
     const memAvail = nilai(teks1, "node_memory_MemAvailable_bytes");
@@ -112,8 +130,9 @@ export async function GET(request: Request) {
     const dbSize = jumlah(teks1, "pg_database_size_bytes");
     server = {
       cpu_persen: cpuPersen,
-      cpu_inti: new Set([...teks1.matchAll(/^node_cpu_seconds_total\{[^}]*cpu="(\d+)"/gm)].map((m) => m[1])).size,
-      beban_1m: nilai(teks1, "node_load1"),
+      cpu_sumber: cpuSumber,
+      cpu_inti: inti,
+      beban_1m: beban1,
       beban_5m: nilai(teks1, "node_load5"),
       beban_15m: nilai(teks1, "node_load15"),
       ram_total: memTotal,
