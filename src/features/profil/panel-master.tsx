@@ -20,6 +20,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { SeksiKuota } from "./seksi-kuota";
+import { SeksiServer } from "./seksi-server";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -428,6 +429,7 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
           <FadeInUp delay={0.2}>
             <SeksiKuota />
             <SeksiEksporData />
+            <SeksiServer />
           </FadeInUp>
         </>
       )}

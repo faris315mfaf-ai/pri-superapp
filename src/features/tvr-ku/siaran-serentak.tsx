@@ -28,7 +28,7 @@ import { jamWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const PLATFORM6 = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"] as const;
-const MAKS_MB = 50;
+const MAKS_MB = 75;
 
 type ProfilPilihan = { profil: string; nama: string; akun: Record<string, string> };
 

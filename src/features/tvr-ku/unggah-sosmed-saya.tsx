@@ -45,7 +45,7 @@ const LABEL: Record<string, string> = {
 };
 
 /** Batas ukuran video (2 Sep 2026) — sama dengan bucket & pengaturan server. */
-const MAKS_MB = 50;
+const MAKS_MB = 75;
 
 function jamWib(iso: string): string {
   const t = Date.parse(iso);

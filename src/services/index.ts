@@ -4549,11 +4549,15 @@ export type KepatuhanKomenLeaderboard = {
   jendela: string;
   /** ISO kapan komentar terakhir diambil dari sosmed (null = belum pernah). */
   diperbarui?: string | null;
+  /** "" = semua sosmed; terisi = hanya sosmed itu. */
+  platform?: string;
   daftar: { nama: string; avatar_url: string; total: number; sudah: number; persen: number }[];
 };
 
-export async function getKepatuhanKomenLeaderboard(): Promise<KepatuhanKomenLeaderboard> {
-  const json = await fetchJson("/api/peringkat-tvr?komen=1");
+export async function getKepatuhanKomenLeaderboard(platform = ""): Promise<KepatuhanKomenLeaderboard> {
+  const json = await fetchJson(
+    `/api/peringkat-tvr?komen=1${platform ? `&platform=${encodeURIComponent(platform)}` : ""}`,
+  );
   return json as KepatuhanKomenLeaderboard;
 }
 
@@ -4879,4 +4883,32 @@ export async function putusAjuanKomentar(data: { id: string; aksi: "setuju" | "t
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
+}
+
+// ---- Panel Master: pemakaian server Supabase + token AI (3 Sep 2026) ----
+export type RingkasAiKlien = { penyedia: string; panggilan: number; token_masuk: number; token_keluar: number; token_total: number };
+export type ServerMaster = {
+  server: {
+    cpu_persen: number | null;
+    cpu_inti: number;
+    beban_1m: number | null;
+    beban_5m: number | null;
+    beban_15m: number | null;
+    ram_total: number | null;
+    ram_terpakai: number | null;
+    ram_persen: number | null;
+    disk_total: number | null;
+    disk_terpakai: number | null;
+    disk_persen: number | null;
+    db_ukuran: number | null;
+    diambil_pada: string;
+  } | null;
+  galat_server: string | null;
+  ai: { hari_ini: RingkasAiKlien[]; tujuh_hari: RingkasAiKlien[]; tiga_puluh_hari: RingkasAiKlien[] };
+  deepseek: { siap: boolean; tersedia?: boolean; saldo?: string };
+};
+
+export async function getServerMaster(): Promise<ServerMaster> {
+  const json = await fetchJson("/api/master/server");
+  return json as ServerMaster;
 }

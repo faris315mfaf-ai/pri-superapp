@@ -10,6 +10,7 @@
 // 3. Akses per jabatan (tabel chatbot_access) diperiksa di endpoint,
 //    bukan di layar.
 // ============================================================
+import { catatPemakaianAi } from "@/lib/ai-pemakaian";
 import { supabase } from "@/lib/supabase";
 import { kirimKabar } from "@/lib/notifikasi";
 import { DIVISI } from "@/lib/struktur";
@@ -722,7 +723,15 @@ export async function tanyaGemini(
     }
     const json = (await res.json()) as {
       candidates?: { content?: IsiGemini }[];
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
     };
+    catatPemakaianAi({
+      penyedia: "gemini",
+      model: MODEL_TEKS,
+      fitur: "asisten",
+      tokenMasuk: Number(json.usageMetadata?.promptTokenCount ?? 0),
+      tokenKeluar: Number(json.usageMetadata?.candidatesTokenCount ?? 0),
+    });
     const konten = json.candidates?.[0]?.content;
     const bagian = konten?.parts ?? [];
 

@@ -9,6 +9,8 @@
 // Semua jawaban diminta JSON supaya bisa diurai tanpa tebak-tebakan.
 // ============================================================
 
+import { catatPemakaianAi } from "@/lib/ai-pemakaian";
+
 const BASE = "https://api.deepseek.com";
 const MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 
@@ -16,7 +18,7 @@ export function deepseekSiap(): boolean {
   return Boolean(process.env.DEEPSEEK_API_KEY);
 }
 
-async function tanyaJson<T>(system: string, user: string, timeoutMs = 60_000): Promise<T> {
+async function tanyaJson<T>(system: string, user: string, timeoutMs = 60_000, fitur = "studio"): Promise<T> {
   const key = process.env.DEEPSEEK_API_KEY;
   if (!key) throw new Error("DeepSeek belum diatur (DEEPSEEK_API_KEY kosong).");
   const kendali = new AbortController();
@@ -49,7 +51,18 @@ async function tanyaJson<T>(system: string, user: string, timeoutMs = 60_000): P
       }
       throw Object.assign(new Error(pesan), { status: 502 });
     }
-    const j = JSON.parse(teks) as { choices?: { message?: { content?: string } }[] };
+    const j = JSON.parse(teks) as {
+      choices?: { message?: { content?: string } }[];
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+    // Catat pemakaian token (Panel Master → Pemakaian Server & Token AI).
+    catatPemakaianAi({
+      penyedia: "deepseek",
+      model: MODEL,
+      fitur,
+      tokenMasuk: Number(j.usage?.prompt_tokens ?? 0),
+      tokenKeluar: Number(j.usage?.completion_tokens ?? 0),
+    });
     const isi = j.choices?.[0]?.message?.content ?? "";
     return JSON.parse(isi) as T;
   } catch (e) {
@@ -93,6 +106,8 @@ export async function generateJudul(bahan: {
       `gaya headline TV yang memancing rasa ingin tahu tapi tetap faktual.\n` +
       `Bahan:\nCaption asli: ${bahan.caption || "-"}\nPenjelasan: ${bahan.penjelasan || "-"}\n` +
       `Format jawaban: {"judul": ["...", "..."]}`,
+    60_000,
+    "studio-judul",
   );
   const hasil = bersihkanDaftar(j.judul, n, 60);
   if (hasil.length === 0) throw new Error("DeepSeek tidak menghasilkan judul.");
@@ -109,6 +124,8 @@ export async function generateHighlight(bahan: { caption: string; penjelasan: st
       `TEGAS, GEGER, BANGGA, WASPADA. Semua berbeda, jangan mengulang contoh mentah-mentah bila tidak cocok.\n` +
       `Bahan:\nCaption asli: ${bahan.caption || "-"}\nPenjelasan: ${bahan.penjelasan || "-"}\n` +
       `Format jawaban: {"highlight": ["...", "..."]}`,
+    60_000,
+    "studio-highlight",
   );
   const hasil = bersihkanDaftar(j.highlight, n, 24).map((x) => x.toUpperCase());
   if (hasil.length === 0) throw new Error("DeepSeek tidak menghasilkan highlight.");
@@ -126,6 +143,7 @@ export async function generateCaption(bahan: { captionInti: string; n: number })
       `Caption inti: ${bahan.captionInti}\n` +
       `Format jawaban: {"caption": ["...", "..."]}`,
     90_000,
+    "studio-caption",
   );
   const hasil = bersihkanDaftar(j.caption, n, 2200);
   if (hasil.length === 0) throw new Error("DeepSeek tidak menghasilkan caption.");

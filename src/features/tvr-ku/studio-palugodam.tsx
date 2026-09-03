@@ -48,7 +48,7 @@ import { jamWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const PLATFORM6 = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"] as const;
-const MAKS_MB = 50;
+const MAKS_MB = 75;
 const MERAH = "linear-gradient(135deg, #DC2626, #B91C1C)";
 const UNGU = "linear-gradient(135deg, #7C3AED, #4F46E5)";
 

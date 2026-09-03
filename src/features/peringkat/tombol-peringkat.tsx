@@ -90,13 +90,28 @@ function Avatar({ src, nama, ukuran }: { src: string; nama: string; ukuran: numb
 // ===== Mode KEPATUHAN KOMEN (2 Sep 2026): peringkat kepatuhan komentar
 // periode berjalan + penjelasan aturan (jam postingan 19.00–18.59 WIB &
 // wajib pakai akun yang sudah didaftarkan).
+const PLATFORM_KOMEN_CHIP: [string, string][] = [
+  ["", "Semua"],
+  ["instagram", "Instagram"],
+  ["tiktok", "TikTok"],
+  ["youtube", "YouTube"],
+  ["facebook", "Facebook"],
+  ["threads", "Threads"],
+  ["twitter", "X"],
+];
+
 function PanelKomen({
   data,
   onBukaDetail,
+  platform,
+  onPlatform,
 }: {
   data: KepatuhanKomenLeaderboard | null;
   /** Nama diketuk → pop-up rincian postingan (3 Sep 2026). */
   onBukaDetail: (nama: string) => void;
+  /** Saringan sosmed ("" = semua). */
+  platform: string;
+  onPlatform: (p: string) => void;
 }) {
   if (!data) {
     return (
@@ -126,9 +141,28 @@ function PanelKomen({
           </li>
         </ul>
       </div>
+      {/* Saringan per sosial media (3 Sep 2026) */}
+      <div className="scrollbar-tipis mt-3 flex gap-1.5 overflow-x-auto pb-1">
+        {PLATFORM_KOMEN_CHIP.map(([k, label]) => (
+          <button
+            key={k || "semua"}
+            type="button"
+            onClick={() => onPlatform(k)}
+            aria-pressed={platform === k}
+            className={cn(
+              "btn-tekan flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold",
+              platform === k ? "text-white" : "glass text-teks-sekunder",
+            )}
+            style={platform === k ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" } : undefined}
+          >
+            {k ? <PlatformIcon platform={k} size={11} /> : null}
+            {label}
+          </button>
+        ))}
+      </div>
       {data.daftar.length === 0 ? (
         <p className="mt-5 text-center text-[12px] text-teks-sekunder">
-          Belum ada postingan wajib di periode ini.
+          {platform ? `Belum ada postingan wajib ${platform} di periode ini.` : "Belum ada postingan wajib di periode ini."}
         </p>
       ) : (
         <div className="mt-3 flex flex-col gap-1.5">
@@ -390,6 +424,7 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
   const [mode, setMode] = useState<"tvr" | "komen" | "video">("tvr");
   const [komen, setKomen] = useState<KepatuhanKomenLeaderboard | null>(null);
   const [detailNama, setDetailNama] = useState<string | null>(null);
+  const [platformKomen, setPlatformKomen] = useState("");
   const [data, setData] = useState<PeringkatTvr | null>(null);
   const [platformPilih, setPlatformPilih] = useState("instagram");
   const [indikatorPilih, setIndikatorPilih] = useState<keyof MetrikNasional>("pengikut");
@@ -408,7 +443,7 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
       .then(setData)
       .catch(() => {});
     if (mode === "komen") {
-      void getKepatuhanKomenLeaderboard()
+      void getKepatuhanKomenLeaderboard(platformKomen)
         .then(setKomen)
         .catch(() => {});
     }
@@ -418,13 +453,13 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
   useEffect(() => {
     if (mode !== "komen") return;
     let hidup = true;
-    void getKepatuhanKomenLeaderboard()
+    void getKepatuhanKomenLeaderboard(platformKomen)
       .then((r) => hidup && setKomen(r))
       .catch(() => hidup && toast("error", "Gagal memuat kepatuhan", "Coba lagi sebentar."));
     return () => {
       hidup = false;
     };
-  }, [mode]);
+  }, [mode, platformKomen]);
 
   const baris = useMemo(() => {
     if (!data) return [];
@@ -517,7 +552,12 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
 
         <div className="scrollbar-tipis flex-1 overflow-y-auto px-4 pb-6">
           {mode === "komen" ? (
-            <PanelKomen data={komen} onBukaDetail={setDetailNama} />
+            <PanelKomen
+              data={komen}
+              onBukaDetail={setDetailNama}
+              platform={platformKomen}
+              onPlatform={setPlatformKomen}
+            />
           ) : mode === "video" ? (
             <PanelVideo />
           ) : !data ? (

@@ -47,16 +47,26 @@ let hasilCache: {
 const TTL_CACHE_MS = 30_000;
 
 // Leaderboard KEPATUHAN KOMEN (2 Sep 2026) — cache mikro 30 dtk.
-let cacheKomen: { isi: Record<string, unknown>; pada: number } | null = null;
+const cacheKomen = new Map<string, { isi: Record<string, unknown>; pada: number }>();
+const PLATFORM_KOMEN = new Set(["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"]);
 
-async function leaderboardKomen() {
-  if (cacheKomen && Date.now() - cacheKomen.pada < TTL_CACHE_MS) return cacheKomen.isi;
+/** platformKomen kosong = semua sosmed; terisi = hanya postingan sosmed itu (3 Sep 2026). */
+async function leaderboardKomen(platformKomen = "") {
+  const kunciCache = platformKomen || "semua";
+  const ada = cacheKomen.get(kunciCache);
+  if (ada && Date.now() - ada.pada < TTL_CACHE_MS) return ada.isi;
   const db = supabase();
   const periode = periodeSaatIni();
   const [{ data: baris }, { data: roster }, diperbarui] = await Promise.all([
     // v_app_kepatuhan_kader: periode, nama_kader, total, sudah (+nomor_wa —
     // SENGAJA tidak dibaca: endpoint ini untuk semua pengguna).
-    db.from("v_app_kepatuhan_kader").select("nama_kader, total, sudah").eq("periode", periode),
+    platformKomen
+      ? db
+          .from("v_app_kepatuhan_kader_platform")
+          .select("nama_kader, total, sudah")
+          .eq("periode", periode)
+          .eq("platform", platformKomen)
+      : db.from("v_app_kepatuhan_kader").select("nama_kader, total, sudah").eq("periode", periode),
     db.from("app_user").select("nama, avatar_url").eq("aktif", true).eq("status", "aktif").limit(500),
     waktuAmbilKomentarTerakhir(periode),
   ]);
@@ -81,9 +91,10 @@ async function leaderboardKomen() {
     jendela: "19.00 WIB – 18.59 WIB hari berikutnya",
     // Kapan komentar terakhir diambil dari sosmed (label jelas, 3 Sep 2026).
     diperbarui,
+    platform: platformKomen,
     daftar,
   };
-  cacheKomen = { isi, pada: Date.now() };
+  cacheKomen.set(kunciCache, { isi, pada: Date.now() });
   return isi;
 }
 
@@ -92,7 +103,8 @@ export async function GET(request: Request) {
     await pastikanMasuk(request);
     // Kategori KEPATUHAN KOMEN — jalur ringan terpisah dari data TVR.
     if (new URL(request.url).searchParams.get("komen") === "1") {
-      return leaderboardKomen();
+      const pf = (new URL(request.url).searchParams.get("platform") ?? "").toLowerCase();
+      return leaderboardKomen(PLATFORM_KOMEN.has(pf) ? pf : "");
     }
     // Kategori VIDEO TERBAIK (2 Sep 2026): top video per sosmed berdasarkan
     // tayangan/suka/komentar. Membuka mode ini juga memicu sapuan metrik

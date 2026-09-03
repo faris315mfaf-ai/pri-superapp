@@ -30,7 +30,7 @@ import {
   YAxis,
 } from "recharts";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ExternalLink, Users, X } from "lucide-react";
+import { ArrowUpDown, Check, ExternalLink, Search, Users, X } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { AvatarInisial, EmptyState, GlassSkeleton } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
@@ -179,6 +179,10 @@ export function AnggotaKelengkapanDashboard() {
   const [gagal, setGagal] = useState(false);
   const [dibuka, setDibuka] = useState<KelengkapanAnggota | null>(null);
   const [tab, setTab] = useState<TabKategori>("semua");
+  // Cari, saring divisi, urutkan (3 Sep 2026).
+  const [cari, setCari] = useState("");
+  const [divisiPilih, setDivisiPilih] = useState("semua");
+  const [urutPilih, setUrutPilih] = useState<"bawaan" | "nama" | "persen_naik" | "persen_turun" | "tvr" | "divisi">("bawaan");
 
   useEffect(() => {
     let hidup = true;
@@ -245,23 +249,41 @@ export function AnggotaKelengkapanDashboard() {
     [dataDimensi],
   );
 
+  const daftarDivisi = useMemo(
+    () => [...new Set(anggota.map((a) => (a.divisi || "").trim()).filter(Boolean))].sort(),
+    [anggota],
+  );
+
   const tersaring = useMemo(() => {
+    const q = cari.trim().toLowerCase();
     const daftar = anggota.filter((a) => {
-      if (tab === "lengkap") return a.terpenuhi === 5;
-      if (tab === "akun") return true;
-      if (tab !== "semua") return !a.dimensi[tab];
+      if (tab === "lengkap" && a.terpenuhi !== 5) return false;
+      if (tab !== "semua" && tab !== "lengkap" && tab !== "akun" && a.dimensi[tab]) return false;
+      if (divisiPilih !== "semua" && (a.divisi || "").trim() !== divisiPilih) return false;
+      if (q && !a.nama.toLowerCase().includes(q) && !(a.email ?? "").toLowerCase().includes(q)) return false;
       return true;
     });
-    // Tab akun: yang paling banyak menautkan di atas (apresiasi), sisanya menyusul.
-    if (tab === "akun") {
-      return daftar.sort(
-        (x, y) =>
-          (y.tvr_akun?.length ?? 0) - (x.tvr_akun?.length ?? 0) || x.nama.localeCompare(y.nama),
-      );
+    const tvr = (a: KelengkapanAnggota) => a.tvr_akun?.length ?? 0;
+    const namaAsc = (x: KelengkapanAnggota, y: KelengkapanAnggota) => x.nama.localeCompare(y.nama);
+    switch (urutPilih) {
+      case "nama":
+        return daftar.sort(namaAsc);
+      case "persen_naik":
+        return daftar.sort((x, y) => x.persen - y.persen || namaAsc(x, y));
+      case "persen_turun":
+        return daftar.sort((x, y) => y.persen - x.persen || namaAsc(x, y));
+      case "tvr":
+        return daftar.sort((x, y) => tvr(y) - tvr(x) || namaAsc(x, y));
+      case "divisi":
+        return daftar.sort((x, y) => (x.divisi || "").localeCompare(y.divisi || "") || namaAsc(x, y));
+      default:
+        // Bawaan: tab akun = paling banyak menautkan di atas; lainnya =
+        // paling belum lengkap di atas (itulah yang butuh ditagih).
+        return tab === "akun"
+          ? daftar.sort((x, y) => tvr(y) - tvr(x) || namaAsc(x, y))
+          : daftar.sort((x, y) => x.terpenuhi - y.terpenuhi || namaAsc(x, y));
     }
-    // Paling belum lengkap di atas — itulah yang butuh ditagih.
-    return daftar.sort((x, y) => x.terpenuhi - y.terpenuhi || x.nama.localeCompare(y.nama));
-  }, [anggota, tab]);
+  }, [anggota, tab, cari, divisiPilih, urutPilih]);
 
   if (gagal) {
     return (
@@ -415,6 +437,53 @@ export function AnggotaKelengkapanDashboard() {
           </button>
         ))}
       </div>
+
+      {/* Cari · saring divisi · urutkan (3 Sep 2026) */}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="glass-input flex h-10 items-center gap-2 rounded-xl px-3">
+          <Search className="h-4 w-4 shrink-0 text-teks-sekunder" aria-hidden="true" />
+          <input
+            value={cari}
+            onChange={(e) => setCari(e.target.value)}
+            placeholder="Cari nama / email…"
+            className="h-full w-full bg-transparent text-[12.5px] text-teks-utama outline-none"
+          />
+        </div>
+        <select
+          value={divisiPilih}
+          onChange={(e) => setDivisiPilih(e.target.value)}
+          aria-label="Saring divisi"
+          className="glass-input h-10 rounded-xl px-3 text-[12.5px] text-teks-utama"
+        >
+          <option value="semua">Semua divisi</option>
+          {daftarDivisi.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+        <div className="glass-input flex h-10 items-center gap-2 rounded-xl px-3">
+          <ArrowUpDown className="h-4 w-4 shrink-0 text-teks-sekunder" aria-hidden="true" />
+          <select
+            value={urutPilih}
+            onChange={(e) => setUrutPilih(e.target.value as typeof urutPilih)}
+            aria-label="Urutkan"
+            className="h-full w-full bg-transparent text-[12.5px] text-teks-utama outline-none"
+          >
+            <option value="bawaan">Urut: paling perlu ditagih</option>
+            <option value="nama">Urut: nama A–Z</option>
+            <option value="persen_turun">Urut: kelengkapan tertinggi</option>
+            <option value="persen_naik">Urut: kelengkapan terendah</option>
+            <option value="tvr">Urut: akun TVR terbanyak</option>
+            <option value="divisi">Urut: divisi</option>
+          </select>
+        </div>
+      </div>
+      <p className="-mt-1 text-[10.5px] text-teks-sekunder">
+        Menampilkan {tersaring.length} dari {anggota.length} anggota
+        {divisiPilih !== "semua" ? ` · ${divisiPilih}` : ""}
+        {cari.trim() ? ` · "${cari.trim()}"` : ""}
+      </p>
 
       {/* Tabel detail: matriks akun tertaut (tab "akun") atau ✓/✗ per dimensi */}
       {tab === "akun" ? (

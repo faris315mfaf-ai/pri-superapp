@@ -14,7 +14,7 @@
 // ============================================================
 import { supabase } from "@/lib/supabase";
 
-export const MAKS_UPLOAD_MB_BAWAAN = 50; // 2 Sep 2026: bucket tvrku 50 MiB
+export const MAKS_UPLOAD_MB_BAWAAN = 75; // 3 Sep 2026: bucket tvrku 75 MiB
 export const RETENSI_JAM_BAWAAN = 24;
 
 /**
