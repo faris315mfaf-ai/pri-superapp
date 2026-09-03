@@ -1,4 +1,4 @@
-// /api/pet — MODUL PET ROBOT (percobaan; kelola KHUSUS MASTER; 3 Sep 2026).
+// /api/pet — MODUL PET ROBOT (3 Sep 2026; TERBUKA untuk semua pengguna yang login).
 // Terinspirasi POU: satu robot per pengguna yang dirawat (makan dari inventori,
 // main, mandi, tidur), naik level dari XP, dan didandani dengan aksesoris /
 // sparepart yang dibeli memakai koin. Aturan permainannya ada di lib/pet.ts
@@ -266,8 +266,6 @@ export async function GET(request: Request) {
       return keState(segar, 0, String(orang?.nama ?? ""), true);
     }
 
-    if (user.role !== "master")
-      galat("Modul Pet Robot masih percobaan — khusus master.", 403);
     const uid = Number(user.id);
     let b = await bacaBaris(db, uid);
     if (b) b = await segarkan(db, b);
@@ -278,8 +276,6 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
-    if (user.role !== "master")
-      galat("Modul Pet Robot masih percobaan — khusus master.", 403);
     const db = supabase();
     const uid = Number(user.id);
     const body = (await request.json().catch(() => ({}))) as Record<
@@ -378,17 +374,15 @@ export async function POST(request: Request) {
     // Hadiah koin harian: aktivitas pertama tiap hari WIB (idempoten lewat referensi tanggal).
     async function hadiahHarian(): Promise<boolean> {
       if (!b || b.hadiah_terakhir === hariIni) return false;
-      const { error } = await db
-        .from("koin_transaksi")
-        .upsert(
-          {
-            user_id: uid,
-            jumlah: HADIAH_HARIAN_KOIN,
-            aktivitas: "pet_harian",
-            referensi: hariIni,
-          },
-          { onConflict: "user_id,aktivitas,referensi", ignoreDuplicates: true },
-        );
+      const { error } = await db.from("koin_transaksi").upsert(
+        {
+          user_id: uid,
+          jumlah: HADIAH_HARIAN_KOIN,
+          aktivitas: "pet_harian",
+          referensi: hariIni,
+        },
+        { onConflict: "user_id,aktivitas,referensi", ignoreDuplicates: true },
+      );
       return !error;
     }
     const aktivitasBaru = aktivitasHariIni(b) + 1;
@@ -539,14 +533,12 @@ export async function POST(request: Request) {
       // Buku besar koin: baris negatif. Aksesoris/sparepart/skin/warna unik per kode
       // (anti dobel); makanan boleh berkali-kali → referensi memuat waktu.
       const referensi = mkn ? `${kode}-${Date.now()}` : kode;
-      const { error: eKoin } = await db
-        .from("koin_transaksi")
-        .insert({
-          user_id: uid,
-          jumlah: -item.harga,
-          aktivitas: "pet_beli",
-          referensi,
-        });
+      const { error: eKoin } = await db.from("koin_transaksi").insert({
+        user_id: uid,
+        jumlah: -item.harga,
+        aktivitas: "pet_beli",
+        referensi,
+      });
       if (eKoin) {
         if (eKoin.code === "23505")
           galat(`${item.nama} sudah pernah dibeli.`, 409);

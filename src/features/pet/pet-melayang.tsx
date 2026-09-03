@@ -5,7 +5,7 @@
 // bisa diseret ke mana saja (posisi diingat per perangkat), bergoyang
 // pelan, berkedip, dan memberi tanda bila butuh dirawat. Ketuk → buka
 // modul Pet Robot. Hanya tampil bila pengguna sudah mengadopsi robot
-// (pemanggil menyaring peran master).
+// (tampil untuk semua pengguna di tab Beranda).
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";

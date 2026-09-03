@@ -1,14 +1,15 @@
-// /api/ludo — LUDO ROBOT multipemain (percobaan, 3 Sep 2026).
+// /api/ludo — LUDO ROBOT multipemain (3 Sep 2026; TERBUKA untuk semua pengguna).
 // Server OTORITATIF: dadu diacak di sini, setiap langkah divalidasi mesin
 // aturan lib/ludo.ts, dan pembaruan memakai `versi` (optimistic) supaya dua
 // permintaan bersamaan tidak saling menimpa. Klien hanya polling GET ?id=.
 //
 // Siapa boleh apa:
-//   • BUAT ruang: master saja (modul percobaan).
+//   • BUAT ruang: siapa pun yang login.
 //   • GABUNG lewat kode / undangan: siapa pun yang login (2–4 pemain).
 //   • Karakter tiap pemain = robot pet-nya (fallback robot bawaan bila belum punya).
 //
 // GET ?daftar=1          → ruang saya (host / ikut / diundang), 10 terakhir
+// GET ?cari=<nama>        → calon pemain untuk diundang (maks 20; semua yang login)
 // GET ?id=<id>           → satu ruang (giliran kedaluwarsa → langkah otomatis)
 // POST { aksi, ... }     → buat | undang | gabung | keluar | mulai | lempar | gerak | batalkan
 import { randomInt, randomBytes } from "node:crypto";
@@ -216,6 +217,33 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const id = Number(url.searchParams.get("id") ?? 0);
 
+    // Cari calon pemain untuk diundang. Hanya data tampilan (nama, jabatan,
+    // divisi, avatar) — tidak ada nomor WA / email — supaya aman dibuka untuk
+    // semua pengguna, bukan hanya pengelola.
+    const cari = (url.searchParams.get("cari") ?? "").trim().slice(0, 60);
+    if (cari.length > 0) {
+      if (cari.length < 2) return { hasil: [] };
+      const pola = `%${cari.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+      const { data } = await db
+        .from("app_user")
+        .select("id, nama, username, jabatan, divisi, avatar_url")
+        .eq("aktif", true)
+        .eq("status", "aktif")
+        .neq("id", uid)
+        .or(`nama.ilike.${pola},username.ilike.${pola}`)
+        .order("nama", { ascending: true })
+        .limit(20);
+      const hasil = ((data ?? []) as Record<string, unknown>[]).map((o) => ({
+        id: String(o.id),
+        nama: String(o.nama ?? ""),
+        username: String(o.username ?? ""),
+        jabatan: String(o.jabatan ?? ""),
+        divisi: String(o.divisi ?? ""),
+        avatar_url: String(o.avatar_url ?? ""),
+      }));
+      return { hasil };
+    }
+
     if (id > 0) {
       let b = await bacaRuang(db, id);
       if (!b) galat("Ruang tidak ditemukan.", 404);
@@ -237,7 +265,7 @@ export async function GET(request: Request) {
     );
     const daftar: RuangLudo[] = [];
     for (const b of milik.slice(0, 10)) daftar.push(await keRuang(db, b, uid));
-    return { boleh_buat: user.role === "master", daftar };
+    return { boleh_buat: true, daftar };
   });
 }
 
@@ -284,11 +312,6 @@ export async function POST(request: Request) {
     const aksi = String(body.aksi ?? "");
 
     if (aksi === "buat") {
-      if (user.role !== "master")
-        galat(
-          "Ludo Robot masih percobaan — hanya master yang bisa membuat ruang.",
-          403,
-        );
       const robot = await robotPemain(db, uid, user.nama);
       const pemain: Pemain[] = [
         {

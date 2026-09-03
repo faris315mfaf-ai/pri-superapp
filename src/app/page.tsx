@@ -1186,7 +1186,7 @@ export default function Page() {
           suaranya sendiri sedang terbuka. */}
       {/* Pet Robot melayang (percobaan, khusus master; 3 Sep 2026) — hanya di
           tab Beranda (dashboard master), tanpa sub-layar terbuka. */}
-      {user && user.role === "master" && tabEfektif === "beranda" && !subLayar && (
+      {user && tabEfektif === "beranda" && !subLayar && (
         <PetMelayang onBuka={() => setSubLayar({ nama: "pet" })} versi={versiPet} />
       )}
       {user && (user.role === "super_admin" || user.role === "master") && !suaraRobotBuka && (

@@ -87,7 +87,10 @@ async function fetchJson(path: string, init?: RequestInit): Promise<any> {
   // terbuka tanpa login. Sekarang kebalikannya: aman secara bawaan.
   const res = await fetch(path, {
     ...init,
-    headers: { ...headerToken(), ...((init?.headers ?? {}) as Record<string, string>) },
+    headers: {
+      ...headerToken(),
+      ...((init?.headers ?? {}) as Record<string, string>),
+    },
   });
 
   let json: any = null;
@@ -197,7 +200,9 @@ export async function login(
  * Coba masuk otomatis dengan token tersimpan.
  * Mengembalikan null bila belum pernah masuk atau tokennya sudah dicabut.
  */
-export async function masukOtomatis(): Promise<UserLengkap | null | "perbaikan"> {
+export async function masukOtomatis(): Promise<
+  UserLengkap | null | "perbaikan"
+> {
   if (!ambilToken()) return null;
   try {
     const res = await fetch("/api/sesi", { headers: headerToken() });
@@ -351,8 +356,12 @@ export async function getKonten(): Promise<FeedKonten> {
  * Feed SATU akun hingga 1000 postingan (fitur 1.22/bug 5) — dipakai
  * tampilan "expand" saat pengguna membuka arsip penuh sebuah akun.
  */
-export async function getKontenAkun(username: string): Promise<AkunKonten | null> {
-  const json = await fetchJson(`/api/konten?akun=${encodeURIComponent(username)}`);
+export async function getKontenAkun(
+  username: string,
+): Promise<AkunKonten | null> {
+  const json = await fetchJson(
+    `/api/konten?akun=${encodeURIComponent(username)}`,
+  );
   const daftar = (json?.data ?? []) as AkunKonten[];
   return daftar[0] ?? null;
 }
@@ -363,7 +372,8 @@ export async function getKontenAkun(username: string): Promise<AkunKonten | null
 
 // QC multi-platform (fitur 1.22.x/2): kader mendaftarkan username untuk
 // lima platform. Facebook tak termasuk — komentarnya tak bisa dicocokkan.
-export type PlatformSosmed = "instagram" | "tiktok" | "twitter" | "threads" | "youtube";
+export type PlatformSosmed =
+  "instagram" | "tiktok" | "twitter" | "threads" | "youtube";
 
 export type AkunSosmed = {
   id: string;
@@ -516,7 +526,14 @@ export async function ubahPengguna(
   await fetchJson("/api/pengguna", {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ id, tindakan, role, jabatan, bidang, ...(divisiInfo ?? {}) }),
+    body: JSON.stringify({
+      id,
+      tindakan,
+      role,
+      jabatan,
+      bidang,
+      ...(divisiInfo ?? {}),
+    }),
   });
 }
 
@@ -531,7 +548,9 @@ export async function ubahPengguna(
  * Dipakai fitur Riwayat HR Center: memilih tanggal mengganti SELURUH
  * data layar ke periode itu.
  */
-export async function getAkunWajib(periode?: string): Promise<AkunWajibWithStats[]> {
+export async function getAkunWajib(
+  periode?: string,
+): Promise<AkunWajibWithStats[]> {
   const q = periode ? `?periode=${encodeURIComponent(periode)}` : "";
   return ambilData<AkunWajibWithStats[]>(`/api/akun-wajib${q}`);
 }
@@ -548,11 +567,15 @@ export async function getPostinganByAkun(
 ): Promise<PostinganWithKepatuhan[]> {
   const params = new URLSearchParams({ akun_wajib });
   if (periode) params.set("periode", periode);
-  return ambilData<PostinganWithKepatuhan[]>(`/api/postingan?${params.toString()}`);
+  return ambilData<PostinganWithKepatuhan[]>(
+    `/api/postingan?${params.toString()}`,
+  );
 }
 
 /** Komentar tertangkap sebuah postingan (nama_kader null = warga) */
-export async function getKomentarByPostingan(id_postingan: string): Promise<Komentar[]> {
+export async function getKomentarByPostingan(
+  id_postingan: string,
+): Promise<Komentar[]> {
   return ambilData<Komentar[]>(
     `/api/komentar?id_postingan=${encodeURIComponent(id_postingan)}`,
   );
@@ -941,7 +964,9 @@ export type DaftarSumberBerita = {
 };
 
 export async function getSumberBerita(): Promise<DaftarSumberBerita> {
-  const json = await fetchJson("/api/tv/sumber-berita", { headers: headerToken() });
+  const json = await fetchJson("/api/tv/sumber-berita", {
+    headers: headerToken(),
+  });
   return {
     data: (json?.data ?? []) as SumberBerita[],
     interval_menit: Number(json?.interval_menit ?? 60),
@@ -995,9 +1020,15 @@ export async function setIntervalBerita(menit: number): Promise<number> {
 
 export type KeywordWajib = { id: string; keyword: string; aktif: boolean };
 
-export async function getKeywordWajib(): Promise<{ data: KeywordWajib[]; pimred: boolean }> {
+export async function getKeywordWajib(): Promise<{
+  data: KeywordWajib[];
+  pimred: boolean;
+}> {
   const json = await fetchJson("/api/tv/keyword", { headers: headerToken() });
-  return { data: (json.data ?? []) as KeywordWajib[], pimred: json.pimred === true };
+  return {
+    data: (json.data ?? []) as KeywordWajib[],
+    pimred: json.pimred === true,
+  };
 }
 
 export async function tambahKeyword(keyword: string): Promise<void> {
@@ -1139,7 +1170,12 @@ export async function getDashboard(): Promise<DashboardData> {
 export type RingkasUtama = {
   periode: string;
   tanggal: string;
-  komen: { persen: number; kader_aktif: number; total_kader: number; diperbarui?: string | null };
+  komen: {
+    persen: number;
+    kader_aktif: number;
+    total_kader: number;
+    diperbarui?: string | null;
+  };
   absensi: { hadir: number; total: number };
   kerja: { sudah_lapor: number; total: number; rata: number };
   video: { tercapai: number; total: number; video_hari_ini: number };
@@ -1341,14 +1377,24 @@ export async function getLaporanKerja(
   tanggal?: string,
   userId?: string,
   kategori: "harian" | "besar" = "harian",
-): Promise<{ tanggal: string; hari_ini: string; data: KerjaItem[]; kpi: KerjaKpi }> {
+): Promise<{
+  tanggal: string;
+  hari_ini: string;
+  data: KerjaItem[];
+  kpi: KerjaKpi;
+}> {
   const params = new URLSearchParams({ kategori });
   if (tanggal) params.set("tanggal", tanggal);
   if (userId) params.set("user", userId);
   const json = await fetchJson(`/api/laporan-kerja?${params.toString()}`, {
     headers: headerToken(),
   });
-  return json as { tanggal: string; hari_ini: string; data: KerjaItem[]; kpi: KerjaKpi };
+  return json as {
+    tanggal: string;
+    hari_ini: string;
+    data: KerjaItem[];
+    kpi: KerjaKpi;
+  };
 }
 
 export async function getKpiSemua(
@@ -1375,7 +1421,9 @@ export async function tambahRencanaKerja(
   return json.data as KerjaItem[];
 }
 
-export async function tambahAktivitasKerja(deskripsi: string): Promise<KerjaItem> {
+export async function tambahAktivitasKerja(
+  deskripsi: string,
+): Promise<KerjaItem> {
   const json = await fetchJson("/api/laporan-kerja", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -1440,7 +1488,11 @@ export type BalasanInsight = {
   dariCache?: boolean;
   kedaluwarsa?: boolean;
   insight: InsightProfil | null;
-  akun: { platformAktif: string[]; akun: AkunTertaut[]; postBulanIni: number } | null;
+  akun: {
+    platformAktif: string[];
+    akun: AkunTertaut[];
+    postBulanIni: number;
+  } | null;
 };
 
 /** Insight profil sosmed. `paksa` melewati cache — pakai hemat, kuota API terbatas. */
@@ -1506,7 +1558,10 @@ export async function getAkunTvr(): Promise<AkunTvr[]> {
   return json.data as AkunTvr[];
 }
 
-export async function tambahAkunTvr(platform: string, username: string): Promise<AkunTvr> {
+export async function tambahAkunTvr(
+  platform: string,
+  username: string,
+): Promise<AkunTvr> {
   const json = await fetchJson("/api/tvr/akun", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -1567,7 +1622,9 @@ export type LaporanPending = {
   catatan: string;
 };
 
-export async function getLaporanVideo(tanggal?: string): Promise<BalasanLaporanVideo> {
+export async function getLaporanVideo(
+  tanggal?: string,
+): Promise<BalasanLaporanVideo> {
   const params = new URLSearchParams();
   if (tanggal) params.set("tanggal", tanggal);
   const json = await fetchJson(`/api/tvr/laporan?${params.toString()}`, {
@@ -1600,7 +1657,10 @@ export async function getRekapVideoSemua(tanggal?: string): Promise<{
     tanggal: json.tanggal as string,
     kpi_target: Number(json.kpi_target ?? 30),
     data: (json.data ?? []) as RekapVideoBaris[],
-    target_khusus: (json.target_khusus ?? []) as { user_id: string; kpi: number }[],
+    target_khusus: (json.target_khusus ?? []) as {
+      user_id: string;
+      kpi: number;
+    }[],
   };
 }
 
@@ -1627,7 +1687,9 @@ export async function getBannedKu(): Promise<BannedKu[]> {
 export async function getBannedSemua(): Promise<
   (BannedKu & { user_id: string; nama: string })[]
 > {
-  const json = await fetchJson("/api/tvr/banned?semua=1", { headers: headerToken() });
+  const json = await fetchJson("/api/tvr/banned?semua=1", {
+    headers: headerToken(),
+  });
   return (json.data ?? []) as (BannedKu & { user_id: string; nama: string })[];
 }
 
@@ -1666,7 +1728,10 @@ export async function tambahLaporanVideo(
   return json.data as LaporanVideo;
 }
 
-export async function hapusLaporanVideo(id: string, pending = false): Promise<void> {
+export async function hapusLaporanVideo(
+  id: string,
+  pending = false,
+): Promise<void> {
   await fetchJson("/api/tvr/laporan", {
     method: "DELETE",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -1835,8 +1900,13 @@ export async function getRiwayatVideo7Hari(): Promise<{
   data: { tanggal: string; jumlah: number }[];
   kpi_target: number;
 }> {
-  const json = await fetchJson("/api/tvr/laporan?riwayat=1", { headers: headerToken() });
-  return json as { data: { tanggal: string; jumlah: number }[]; kpi_target: number };
+  const json = await fetchJson("/api/tvr/laporan?riwayat=1", {
+    headers: headerToken(),
+  });
+  return json as {
+    data: { tanggal: string; jumlah: number }[];
+    kpi_target: number;
+  };
 }
 
 /** Rencana besar SEMUA anggota (pantauan admin) — belum tuntas dulu. */
@@ -1874,7 +1944,9 @@ export type KonfigUploadVideo = {
 };
 
 export async function getKonfigUploadVideo(): Promise<KonfigUploadVideo> {
-  const json = await fetchJson("/api/tv/manual?konfig=1", { headers: headerToken() });
+  const json = await fetchJson("/api/tv/manual?konfig=1", {
+    headers: headerToken(),
+  });
   return json as KonfigUploadVideo;
 }
 
@@ -1892,7 +1964,10 @@ export type KirimanManual = {
   platform_terunggah: string[] | null;
 };
 
-export async function getKirimanManual(): Promise<{ data: KirimanManual[]; retensi_jam: number }> {
+export async function getKirimanManual(): Promise<{
+  data: KirimanManual[];
+  retensi_jam: number;
+}> {
   const json = await fetchJson("/api/tv/manual", { headers: headerToken() });
   return json as { data: KirimanManual[]; retensi_jam: number };
 }
@@ -2023,7 +2098,9 @@ export type KandidatChat = {
 };
 
 export async function getKandidatChat(): Promise<KandidatChat[]> {
-  const json = await fetchJson("/api/chat?kandidat=1", { headers: headerToken() });
+  const json = await fetchJson("/api/chat?kandidat=1", {
+    headers: headerToken(),
+  });
   return json.data as KandidatChat[];
 }
 
@@ -2039,7 +2116,9 @@ export async function getPesanChat(
 }> {
   const params = new URLSearchParams({ kontak: kontakId });
   if (sejak) params.set("sejak", sejak);
-  const json = await fetchJson(`/api/chat?${params.toString()}`, { headers: headerToken() });
+  const json = await fetchJson(`/api/chat?${params.toString()}`, {
+    headers: headerToken(),
+  });
   return {
     status: json.status as string,
     diminta_oleh: json.diminta_oleh as string,
@@ -2048,7 +2127,10 @@ export async function getPesanChat(
   };
 }
 
-export async function mulaiChat(targetId: string, isi?: string): Promise<string> {
+export async function mulaiChat(
+  targetId: string,
+  isi?: string,
+): Promise<string> {
   const json = await fetchJson("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -2072,11 +2154,17 @@ export async function mulaiChatLengkap(
   };
 }
 
-export async function jawabChat(kontakId: string, terima: boolean): Promise<void> {
+export async function jawabChat(
+  kontakId: string,
+  terima: boolean,
+): Promise<void> {
   await fetchJson("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ aksi: terima ? "terima" : "tolak", kontak_id: kontakId }),
+    body: JSON.stringify({
+      aksi: terima ? "terima" : "tolak",
+      kontak_id: kontakId,
+    }),
   });
 }
 
@@ -2110,7 +2198,9 @@ export async function hapusPesanChat(pesanId: string): Promise<void> {
 }
 
 /** Master mengubah mode chat: terbuka (bebas) vs persetujuan (lama). */
-export async function setModeChat(mode: "terbuka" | "persetujuan"): Promise<void> {
+export async function setModeChat(
+  mode: "terbuka" | "persetujuan",
+): Promise<void> {
   await fetchJson("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -2163,7 +2253,11 @@ export async function kirimPengumuman(data: {
   kecuali?: string[];
   /** true = kirim juga isi pengumuman ke WhatsApp semua penerima */
   kirim_wa?: boolean;
-}): Promise<{ jumlah_penerima: number; wa_diminta: boolean; wa_aktif: boolean }> {
+}): Promise<{
+  jumlah_penerima: number;
+  wa_diminta: boolean;
+  wa_aktif: boolean;
+}> {
   const json = await fetchJson("/api/pengumuman", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -2195,11 +2289,17 @@ export async function getPengajuanTim(): Promise<PengajuanTim[]> {
   return json.data as PengajuanTim[];
 }
 
-export async function putuskanPengajuanTim(id: string, setuju: boolean): Promise<void> {
+export async function putuskanPengajuanTim(
+  id: string,
+  setuju: boolean,
+): Promise<void> {
   await fetchJson("/api/tim", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ aksi: setuju ? "acc" : "tolak_acc", anggota_id: id }),
+    body: JSON.stringify({
+      aksi: setuju ? "acc" : "tolak_acc",
+      anggota_id: id,
+    }),
   });
 }
 
@@ -2274,7 +2374,9 @@ export async function getPantauChat(): Promise<{
   chat_mode: "terbuka" | "persetujuan";
   data: ChatPantau[];
 }> {
-  const json = await fetchJson("/api/chat?pantau=1", { headers: headerToken() });
+  const json = await fetchJson("/api/chat?pantau=1", {
+    headers: headerToken(),
+  });
   return {
     chat_aktif: json.chat_aktif !== false,
     chat_mode: json.chat_mode === "persetujuan" ? "persetujuan" : "terbuka",
@@ -2284,9 +2386,12 @@ export async function getPantauChat(): Promise<{
 
 /** Isi satu percakapan milik orang lain (pemantauan). */
 export async function getPesanPantau(kontakId: string): Promise<ChatPesan[]> {
-  const json = await fetchJson(`/api/chat?pantau=1&kontak=${encodeURIComponent(kontakId)}`, {
-    headers: headerToken(),
-  });
+  const json = await fetchJson(
+    `/api/chat?pantau=1&kontak=${encodeURIComponent(kontakId)}`,
+    {
+      headers: headerToken(),
+    },
+  );
   return (json.data ?? []) as ChatPesan[];
 }
 
@@ -2325,7 +2430,12 @@ export type PostinganInsight = {
 export async function getInsightDetail(
   platform: string,
   paksa = false,
-): Promise<{ siap: boolean; pesan?: string; dariCache?: boolean; data: PostinganInsight[] }> {
+): Promise<{
+  siap: boolean;
+  pesan?: string;
+  dariCache?: boolean;
+  data: PostinganInsight[];
+}> {
   const params = new URLSearchParams({ platform });
   if (paksa) params.set("paksa", "1");
   const json = await fetchJson(`/api/tv/insight/detail?${params.toString()}`, {
@@ -2340,7 +2450,10 @@ export async function getInsightDetail(
 }
 
 /** Hapus video dari antrian TV Rakyat (belum tayang saja). */
-export async function hapusVideoAntrian(kode: string, paksa = false): Promise<void> {
+export async function hapusVideoAntrian(
+  kode: string,
+  paksa = false,
+): Promise<void> {
   // paksa=true (fitur 1.22/bug 3): hapus juga catatan video yang SUDAH
   // tayang di sosmed — dipakai gestur swipe-ke-kanan. Postingannya di
   // sosmed tidak ikut turun; yang dihapus hanya catatan di aplikasi.
@@ -2356,7 +2469,12 @@ export async function hapusVideoAntrian(kode: string, paksa = false): Promise<vo
 // ------------------------------------------------------------
 
 export type DataMaster = {
-  ringkasan: { pengguna_aktif: number; percakapan: number; video: number; galat: number };
+  ringkasan: {
+    pengguna_aktif: number;
+    percakapan: number;
+    video: number;
+    galat: number;
+  };
   log: {
     id: string;
     waktu: string;
@@ -2418,7 +2536,9 @@ export type MatriksFitur = {
 };
 
 export async function getMatriksFitur(): Promise<MatriksFitur> {
-  const json = await fetchJson("/api/fitur?matriks=1", { headers: headerToken() });
+  const json = await fetchJson("/api/fitur?matriks=1", {
+    headers: headerToken(),
+  });
   return json as MatriksFitur;
 }
 
@@ -2441,7 +2561,9 @@ export async function setIzinFitur(
 /** Kunci sub-dashboard yang boleh dibuka jabatan saya. */
 export async function getAksesDashboard(): Promise<string[]> {
   try {
-    const json = await fetchJson("/api/dashboard/akses", { headers: headerToken() });
+    const json = await fetchJson("/api/dashboard/akses", {
+      headers: headerToken(),
+    });
     return (json?.boleh ?? []) as string[];
   } catch {
     // Gagal memuat akses tidak boleh merusak boot aplikasi.
@@ -2516,9 +2638,13 @@ export type KpiDashboardData = {
 };
 
 /** Data sub-dashboard KPI Anggota (fitur 3.3.b, baca-saja). */
-export async function getDashboardKpi(tanggal?: string): Promise<KpiDashboardData> {
+export async function getDashboardKpi(
+  tanggal?: string,
+): Promise<KpiDashboardData> {
   const q = tanggal ? `?tanggal=${encodeURIComponent(tanggal)}` : "";
-  const json = await fetchJson(`/api/dashboard/kpi${q}`, { headers: headerToken() });
+  const json = await fetchJson(`/api/dashboard/kpi${q}`, {
+    headers: headerToken(),
+  });
   return json as KpiDashboardData;
 }
 
@@ -2563,7 +2689,9 @@ export async function getDashboardTv(hari = 7): Promise<TvDashboardData> {
 }
 
 /** Umpan aktivitas TV terbaru saja — polling ringan 30 detik. */
-export async function getDashboardTvAktivitas(): Promise<TvDashboardData["aktivitas"]> {
+export async function getDashboardTvAktivitas(): Promise<
+  TvDashboardData["aktivitas"]
+> {
   const json = await fetchJson("/api/dashboard/tv?aktivitas=1", {
     headers: headerToken(),
   });
@@ -2581,14 +2709,25 @@ export type KelengkapanAnggota = {
   /** Tanggal akun dibuat (grafik pertumbuhan) */
   bergabung?: string | null;
   /** Fitur login yang aktif untuk akun ini (31 Agu 2026) */
-  login_aktif?: { email: boolean; google: boolean; wajah: boolean; sidik_jari: boolean };
+  login_aktif?: {
+    email: boolean;
+    google: boolean;
+    wajah: boolean;
+    sidik_jari: boolean;
+  };
   /** Akun TV Rakyat pribadi yang sudah login (upload-post) */
   tvr_akun?: { platform: string; username: string }[];
   /** Akun TV Rakyat tertaut via upload-post (target 6 platform) */
   tvr_tertaut?: number;
   /** Username sosmed yang dipakai berkomentar (QC) */
   qc_akun?: { platform: string; username: string }[];
-  dimensi: { login: boolean; sosmed: boolean; google: boolean; email: boolean; wa: boolean };
+  dimensi: {
+    login: boolean;
+    sosmed: boolean;
+    google: boolean;
+    email: boolean;
+    wa: boolean;
+  };
   terpenuhi: number;
   persen: number;
 };
@@ -2620,13 +2759,23 @@ export async function getRiwayatTvrkuPost(): Promise<TvrkuPost[]> {
 export async function siapkanUnggahTvrku(
   nama: string,
   ukuran: number,
-): Promise<{ cara: "r2" | "supabase"; url: string; r2_key?: string; path?: string }> {
+): Promise<{
+  cara: "r2" | "supabase";
+  url: string;
+  r2_key?: string;
+  path?: string;
+}> {
   const json = await fetchJson("/api/tvr/unggah", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ aksi: "siapkan", nama, ukuran }),
   });
-  return json as { cara: "r2" | "supabase"; url: string; r2_key?: string; path?: string };
+  return json as {
+    cara: "r2" | "supabase";
+    url: string;
+    r2_key?: string;
+    path?: string;
+  };
 }
 
 /**
@@ -2650,13 +2799,21 @@ export async function postTvrku(data: {
   caption?: string;
   platforms: string[];
   jadwal?: string;
-}): Promise<{ sukses: boolean; terjadwal: boolean; hasil: Record<string, unknown> }> {
+}): Promise<{
+  sukses: boolean;
+  terjadwal: boolean;
+  hasil: Record<string, unknown>;
+}> {
   const json = await fetchJson("/api/tvr/unggah", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ aksi: "post", ...data }),
   });
-  return json as { sukses: boolean; terjadwal: boolean; hasil: Record<string, unknown> };
+  return json as {
+    sukses: boolean;
+    terjadwal: boolean;
+    hasil: Record<string, unknown>;
+  };
 }
 
 /** Insight akun sosmed pribadi saya (per platform, cache 15 menit). */
@@ -2666,9 +2823,12 @@ export async function getInsightSaya(paksa = false): Promise<{
   insight: Record<string, unknown> | null;
   diperbarui_pada?: string | null;
 }> {
-  const json = await fetchJson(`/api/tvr/insight-saya${paksa ? "?paksa=1" : ""}`, {
-    headers: headerToken(),
-  });
+  const json = await fetchJson(
+    `/api/tvr/insight-saya${paksa ? "?paksa=1" : ""}`,
+    {
+      headers: headerToken(),
+    },
+  );
   return json as {
     siap: boolean;
     profil: string | null;
@@ -2690,7 +2850,11 @@ export type ProfilTvAnggota = {
 };
 
 /** Profil upload-post yang belum dikenal aplikasi (dibuat di dashboard upload-post). */
-export type ProfilBelumTertaut = { profil: string; akun: Record<string, string>; tertaut: number };
+export type ProfilBelumTertaut = {
+  profil: string;
+  akun: Record<string, string>;
+  tertaut: number;
+};
 
 /** Pengendali akun TV Rakyat anggota (dashboard TV, admin). */
 export async function getTvAnggotaDashboard(): Promise<{
@@ -2700,9 +2864,16 @@ export async function getTvAnggotaDashboard(): Promise<{
   profil: ProfilTvAnggota[];
   belum_tertaut: ProfilBelumTertaut[];
 }> {
-  const json = await fetchJson("/api/dashboard/tv-anggota", { headers: headerToken() });
+  const json = await fetchJson("/api/dashboard/tv-anggota", {
+    headers: headerToken(),
+  });
   return {
-    ...(json as { siap: boolean; kuota: number; terpakai: number; profil: ProfilTvAnggota[] }),
+    ...(json as {
+      siap: boolean;
+      kuota: number;
+      terpakai: number;
+      profil: ProfilTvAnggota[];
+    }),
     belum_tertaut: (json?.belum_tertaut ?? []) as ProfilBelumTertaut[],
   };
 }
@@ -2718,7 +2889,12 @@ export async function tautkanProfilTv(data: {
   username?: string;
   user_id: string;
   ganti?: boolean;
-}): Promise<{ profil: string; tersinkron: number; konflik: string[]; dibuat?: boolean }> {
+}): Promise<{
+  profil: string;
+  tersinkron: number;
+  konflik: string[];
+  dibuat?: boolean;
+}> {
   const json = await fetchJson("/api/dashboard/tv-anggota", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -2746,12 +2922,18 @@ export async function tautanProfilTv(profil: string): Promise<string> {
 export async function getTvAnggotaProfil(
   profil: string,
   paksa = false,
-): Promise<{ insight: Record<string, unknown>; diperbarui_pada: string | null }> {
+): Promise<{
+  insight: Record<string, unknown>;
+  diperbarui_pada: string | null;
+}> {
   const json = await fetchJson(
     `/api/dashboard/tv-anggota?profil=${encodeURIComponent(profil)}${paksa ? "&paksa=1" : ""}`,
     { headers: headerToken() },
   );
-  return json as { insight: Record<string, unknown>; diperbarui_pada: string | null };
+  return json as {
+    insight: Record<string, unknown>;
+    diperbarui_pada: string | null;
+  };
 }
 
 // ------------------------------------------------------------
@@ -2761,7 +2943,10 @@ export async function getTvAnggotaProfil(
 export type PesanAsisten = { peran: "pengguna" | "asisten"; teks: string };
 
 /** Status asisten: boleh dipakai jabatan saya? kuncinya terpasang? */
-export async function getStatusAsisten(): Promise<{ boleh: boolean; siap: boolean }> {
+export async function getStatusAsisten(): Promise<{
+  boleh: boolean;
+  siap: boolean;
+}> {
   try {
     const json = await fetchJson("/api/asisten", { headers: headerToken() });
     return { boleh: json?.boleh === true, siap: json?.siap === true };
@@ -2788,14 +2973,19 @@ export async function getAksesAsisten(): Promise<{
   peran: { id: string; label: string }[];
   nyala: string[];
 }> {
-  const json = await fetchJson("/api/asisten/akses", { headers: headerToken() });
+  const json = await fetchJson("/api/asisten/akses", {
+    headers: headerToken(),
+  });
   return {
     peran: (json?.peran ?? []) as { id: string; label: string }[],
     nyala: (json?.nyala ?? []) as string[],
   };
 }
 
-export async function setAksesAsisten(role: string, aktif: boolean): Promise<void> {
+export async function setAksesAsisten(
+  role: string,
+  aktif: boolean,
+): Promise<void> {
   await fetchJson("/api/asisten/akses", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -2810,7 +3000,8 @@ export async function setAksesAsisten(role: string, aktif: boolean): Promise<voi
 /** Apakah perangkat ini punya biometrik (sidik jari/Face ID)? */
 export async function perangkatDukungSidikJari(): Promise<boolean> {
   try {
-    if (typeof window === "undefined" || !window.PublicKeyCredential) return false;
+    if (typeof window === "undefined" || !window.PublicKeyCredential)
+      return false;
     return await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
   } catch {
     return false;
@@ -2898,10 +3089,16 @@ export async function masukWajah(image: string): Promise<UserLengkap> {
 }
 
 /** Status sidik jari akun saya (untuk toggle di Profil). */
-export async function getStatusSidikJari(): Promise<{ aktif: boolean; jumlah_perangkat: number }> {
+export async function getStatusSidikJari(): Promise<{
+  aktif: boolean;
+  jumlah_perangkat: number;
+}> {
   try {
     const json = await fetchJson("/api/webauthn", { headers: headerToken() });
-    return { aktif: json?.aktif === true, jumlah_perangkat: Number(json?.jumlah_perangkat ?? 0) };
+    return {
+      aktif: json?.aktif === true,
+      jumlah_perangkat: Number(json?.jumlah_perangkat ?? 0),
+    };
   } catch {
     return { aktif: false, jumlah_perangkat: 0 };
   }
@@ -2910,7 +3107,9 @@ export async function getStatusSidikJari(): Promise<{ aktif: boolean; jumlah_per
 /** Daftarkan sidik jari perangkat ini (harus sudah login). */
 export async function daftarkanSidikJari(): Promise<void> {
   const { startRegistration } = await import("@simplewebauthn/browser");
-  const opsi = await fetchJson("/api/webauthn/daftar", { headers: headerToken() });
+  const opsi = await fetchJson("/api/webauthn/daftar", {
+    headers: headerToken(),
+  });
   const respons = await startRegistration({ optionsJSON: opsi });
   await fetchJson("/api/webauthn/daftar", {
     method: "POST",
@@ -2921,7 +3120,10 @@ export async function daftarkanSidikJari(): Promise<void> {
 
 /** Nonaktifkan sidik jari (hapus semua kredensial akun ini). */
 export async function matikanSidikJari(): Promise<void> {
-  await fetchJson("/api/webauthn", { method: "DELETE", headers: headerToken() });
+  await fetchJson("/api/webauthn", {
+    method: "DELETE",
+    headers: headerToken(),
+  });
 }
 
 /**
@@ -2930,8 +3132,16 @@ export async function matikanSidikJari(): Promise<void> {
  * Mengembalikan { dibatalkan } supaya pemanggil bisa DIAM saat pengguna
  * sekadar membatalkan prompt.
  */
-export function bacaGalatSidikJari(err: unknown): { pesan: string; dibatalkan: boolean } {
-  const e = err as { name?: string; code?: string; cause?: { name?: string }; message?: string };
+export function bacaGalatSidikJari(err: unknown): {
+  pesan: string;
+  dibatalkan: boolean;
+} {
+  const e = err as {
+    name?: string;
+    code?: string;
+    cause?: { name?: string };
+    message?: string;
+  };
   const namaAsli = e?.cause?.name ?? e?.name ?? "";
   const kode = e?.code ?? "";
   // Pengguna menutup/menolak prompt, atau tak ada passkey yang cocok.
@@ -2947,12 +3157,16 @@ export function bacaGalatSidikJari(err: unknown): { pesan: string; dibatalkan: b
     };
   }
   if (namaAsli === "InvalidStateError") {
-    return { dibatalkan: false, pesan: "Perangkat ini sudah terdaftar untuk akun tersebut." };
+    return {
+      dibatalkan: false,
+      pesan: "Perangkat ini sudah terdaftar untuk akun tersebut.",
+    };
   }
   if (namaAsli === "SecurityError") {
     return {
       dibatalkan: false,
-      pesan: "Sidik jari hanya bisa dipakai lewat koneksi aman (HTTPS) di aplikasi resmi.",
+      pesan:
+        "Sidik jari hanya bisa dipakai lewat koneksi aman (HTTPS) di aplikasi resmi.",
     };
   }
   return {
@@ -2998,7 +3212,9 @@ export type StatusBasisAI = {
 
 /** Status + isi Basis Pengetahuan AI (master). */
 export async function getBasisAI(): Promise<StatusBasisAI> {
-  const json = await fetchJson("/api/asisten/basis", { headers: headerToken() });
+  const json = await fetchJson("/api/asisten/basis", {
+    headers: headerToken(),
+  });
   return json as StatusBasisAI;
 }
 
@@ -3044,9 +3260,17 @@ export async function hapusBahanAjarAI(id: string): Promise<void> {
 }
 
 /** Instruksi pelatihan Asisten AI saat ini (master). */
-export async function getLatihAsisten(): Promise<{ instruksi: string; maks: number }> {
-  const json = await fetchJson("/api/asisten/latih", { headers: headerToken() });
-  return { instruksi: (json?.instruksi ?? "") as string, maks: Number(json?.maks ?? 6000) };
+export async function getLatihAsisten(): Promise<{
+  instruksi: string;
+  maks: number;
+}> {
+  const json = await fetchJson("/api/asisten/latih", {
+    headers: headerToken(),
+  });
+  return {
+    instruksi: (json?.instruksi ?? "") as string,
+    maks: Number(json?.maks ?? 6000),
+  };
 }
 
 /** Simpan instruksi pelatihan Asisten AI (master) — berlaku seketika. */
@@ -3059,7 +3283,10 @@ export async function simpanLatihAsisten(instruksi: string): Promise<void> {
 }
 
 /** Token sementara untuk sesi suara Gemini Live. */
-export async function mintaTokenSuara(): Promise<{ token: string; model: string }> {
+export async function mintaTokenSuara(): Promise<{
+  token: string;
+  model: string;
+}> {
   const json = await fetchJson("/api/asisten/suara", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -3104,7 +3331,10 @@ export async function getPreferensi(): Promise<Record<string, unknown>> {
 }
 
 /** Simpan satu preferensi tampilan (footer / layout:<modul>). */
-export async function simpanPreferensi(kunci: string, nilai: unknown): Promise<void> {
+export async function simpanPreferensi(
+  kunci: string,
+  nilai: unknown,
+): Promise<void> {
   await fetchJson("/api/preferensi", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -3116,7 +3346,9 @@ export async function simpanPreferensi(kunci: string, nilai: unknown): Promise<v
 
 /** Kelengkapan data anggota (fitur 3.3.e, baca-saja). */
 export async function getDashboardAnggota(): Promise<KelengkapanAnggota[]> {
-  const json = await fetchJson("/api/dashboard/anggota", { headers: headerToken() });
+  const json = await fetchJson("/api/dashboard/anggota", {
+    headers: headerToken(),
+  });
   return (json?.anggota ?? []) as KelengkapanAnggota[];
 }
 
@@ -3137,9 +3369,12 @@ export async function getDashboardKpiAnggota(
   tanggal?: string,
 ): Promise<DetailKpiAnggota> {
   const t = tanggal ? `&tanggal=${encodeURIComponent(tanggal)}` : "";
-  const json = await fetchJson(`/api/dashboard/kpi?user=${encodeURIComponent(userId)}${t}`, {
-    headers: headerToken(),
-  });
+  const json = await fetchJson(
+    `/api/dashboard/kpi?user=${encodeURIComponent(userId)}${t}`,
+    {
+      headers: headerToken(),
+    },
+  );
   return {
     riwayat: (json?.riwayat ?? []) as { tanggal: string; jumlah: number }[],
     links: (json?.links ?? []) as LaporanVideo[],
@@ -3176,26 +3411,41 @@ export type TrenKpi30 = {
   per_platform: Record<string, number>;
 };
 export async function getDashboardKpiTren(): Promise<TrenKpi30[]> {
-  const json = await fetchJson("/api/dashboard/kpi?tren=30", { headers: headerToken() });
+  const json = await fetchJson("/api/dashboard/kpi?tren=30", {
+    headers: headerToken(),
+  });
   return (json?.tren ?? []) as TrenKpi30[];
 }
 
 // --- Tren dashboard (grafik absensi & kepatuhan) ---
 
-export type TrenAbsensi = { tanggal: string; hadir: number; telat: number; izin: number };
+export type TrenAbsensi = {
+  tanggal: string;
+  hadir: number;
+  telat: number;
+  izin: number;
+};
 export async function getTrenAbsensi(
   hari: 7 | 30,
 ): Promise<{ tren: TrenAbsensi[]; total_anggota: number }> {
-  const json = await fetchJson(`/api/dashboard/tren?jenis=absensi&hari=${hari}`, {
-    headers: headerToken(),
-  });
+  const json = await fetchJson(
+    `/api/dashboard/tren?jenis=absensi&hari=${hari}`,
+    {
+      headers: headerToken(),
+    },
+  );
   return {
     tren: (json?.tren ?? []) as TrenAbsensi[],
     total_anggota: Number(json?.total_anggota ?? 0),
   };
 }
 
-export type TrenKepatuhan = { tanggal: string; persen: number; sudah: number; total: number };
+export type TrenKepatuhan = {
+  tanggal: string;
+  persen: number;
+  sudah: number;
+  total: number;
+};
 export type KepatuhanPerAkun = {
   akun: string;
   platform: string;
@@ -3208,9 +3458,12 @@ export async function getTrenKepatuhan(hari: 7 | 30): Promise<{
   hari_ini: { patuh_penuh: number; belum_penuh: number };
   per_akun_wajib: KepatuhanPerAkun[];
 }> {
-  const json = await fetchJson(`/api/dashboard/tren?jenis=kepatuhan&hari=${hari}`, {
-    headers: headerToken(),
-  });
+  const json = await fetchJson(
+    `/api/dashboard/tren?jenis=kepatuhan&hari=${hari}`,
+    {
+      headers: headerToken(),
+    },
+  );
   return {
     tren: (json?.tren ?? []) as TrenKepatuhan[],
     hari_ini: (json?.hari_ini ?? { patuh_penuh: 0, belum_penuh: 0 }) as {
@@ -3238,7 +3491,9 @@ export type PeringkatDashboard = {
   absensi: BarisPeringkat[];
   kpi: BarisPeringkat[];
 };
-export async function getPeringkatDashboard(hari: 7 | 30): Promise<PeringkatDashboard> {
+export async function getPeringkatDashboard(
+  hari: 7 | 30,
+): Promise<PeringkatDashboard> {
   const json = await fetchJson(`/api/dashboard/peringkat?hari=${hari}`, {
     headers: headerToken(),
   });
@@ -3341,7 +3596,9 @@ export type KandidatTugasTv = { id: string; nama: string; jabatan: string };
  * server juga menolak target di luar divisi ini.
  */
 export async function getKandidatTugasTv(): Promise<KandidatTugasTv[]> {
-  const json = await fetchJson("/api/tv/tugas?kandidat=1", { headers: headerToken() });
+  const json = await fetchJson("/api/tv/tugas?kandidat=1", {
+    headers: headerToken(),
+  });
   return (json.data ?? []) as KandidatTugasTv[];
 }
 
@@ -3403,7 +3660,9 @@ export type WajibKomen = {
 
 /** Daftar postingan wajib komen hari ini + status komentar saya (verified). */
 export async function getWajibKomen(): Promise<WajibKomen> {
-  const json = await fetchJson("/api/tv/wajib-komen", { headers: headerToken() });
+  const json = await fetchJson("/api/tv/wajib-komen", {
+    headers: headerToken(),
+  });
   return json as WajibKomen;
 }
 
@@ -3450,7 +3709,13 @@ export type DbRingkasPengguna = {
 };
 
 export type DbDetailPengguna = {
-  pengguna: { id: string; nama: string; avatar_url: string; struktur: string; nomor_wa: string };
+  pengguna: {
+    id: string;
+    nama: string;
+    avatar_url: string;
+    struktur: string;
+    nomor_wa: string;
+  };
   hari_ini: string;
   komentar: {
     periode: string;
@@ -3459,7 +3724,12 @@ export type DbDetailPengguna = {
     per_akun: { akun: string; total: number; sudah: number }[];
   };
   kerja: { tanggal: string; total: number; selesai: number; persen: number }[];
-  absensi: { tanggal_wib: string; jenis: string; waktu: string; alamat: string | null }[];
+  absensi: {
+    tanggal_wib: string;
+    jenis: string;
+    waktu: string;
+    alamat: string | null;
+  }[];
   video: {
     total: number;
     hari_ini: number;
@@ -3506,7 +3776,10 @@ export async function kirimKodeWaBaru(nomor: string): Promise<void> {
   });
 }
 
-export async function verifikasiWaBaru(nomor: string, kode: string): Promise<UserLengkap> {
+export async function verifikasiWaBaru(
+  nomor: string,
+  kode: string,
+): Promise<UserLengkap> {
   const json = await fetchJson("/api/verifikasi/wa-nomor", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -3524,8 +3797,13 @@ export async function getRekapPeriode(
   periode: string,
 ): Promise<{ nama_kader: string; sudah_komentar: boolean }[]> {
   try {
-    const json = await fetchJson(`/api/rekap?periode=${encodeURIComponent(periode)}`);
-    return (json.data ?? []) as { nama_kader: string; sudah_komentar: boolean }[];
+    const json = await fetchJson(
+      `/api/rekap?periode=${encodeURIComponent(periode)}`,
+    );
+    return (json.data ?? []) as {
+      nama_kader: string;
+      sudah_komentar: boolean;
+    }[];
   } catch {
     // Kartu KPI bersifat pelengkap — kegagalannya tidak boleh
     // menggagalkan seluruh beranda.
@@ -3541,7 +3819,11 @@ export async function getRekapPeriode(
 export async function getKomentarSaya(
   /** Kosong = jendela QC yang sedang berjalan (server yang menghitung). */
   periode?: string,
-): Promise<{ total: number; sudah: number; diperbarui?: string | null } | null> {
+): Promise<{
+  total: number;
+  sudah: number;
+  diperbarui?: string | null;
+} | null> {
   try {
     const p = periode ? `&periode=${encodeURIComponent(periode)}` : "";
     const json = await fetchJson(`/api/rekap?saya=1${p}`, {
@@ -3562,7 +3844,9 @@ export type CakupanAyrshare = {
 
 export async function getCakupanAyrshare(): Promise<CakupanAyrshare> {
   try {
-    const json = await fetchJson("/api/analisis/ayrshare", { headers: headerToken() });
+    const json = await fetchJson("/api/analisis/ayrshare", {
+      headers: headerToken(),
+    });
     return json as CakupanAyrshare;
   } catch {
     // Cakupan hanya penjelas di layar — kegagalannya tidak boleh
@@ -3584,7 +3868,9 @@ export type RiwayatUpdateKomentar = {
   selesai: boolean;
 };
 
-export async function getRiwayatUpdateKomentar(): Promise<RiwayatUpdateKomentar[]> {
+export async function getRiwayatUpdateKomentar(): Promise<
+  RiwayatUpdateKomentar[]
+> {
   try {
     const json = await fetchJson("/api/analisis/ayrshare?riwayat=1", {
       headers: headerToken(),
@@ -3627,7 +3913,12 @@ export type KandidatTv = {
 export async function getWewenangTv(): Promise<WewenangTv> {
   try {
     const json = await fetchJson("/api/tv/tim", { headers: headerToken() });
-    return (json.wewenang ?? { anggota: false, acc: false, upload: false, proses: false }) as WewenangTv;
+    return (json.wewenang ?? {
+      anggota: false,
+      acc: false,
+      upload: false,
+      proses: false,
+    }) as WewenangTv;
   } catch {
     return { anggota: false, acc: false, upload: false, proses: false };
   }
@@ -3642,7 +3933,9 @@ export async function getKelolaTimTv(): Promise<{
   retensi_jam: number;
   video_baru_tampil: boolean;
 }> {
-  const json = await fetchJson("/api/tv/tim?kelola=1", { headers: headerToken() });
+  const json = await fetchJson("/api/tv/tim?kelola=1", {
+    headers: headerToken(),
+  });
   return {
     tim: (json.tim ?? []) as AnggotaTv[],
     kandidat: (json.kandidat ?? []) as KandidatTv[],
@@ -3762,7 +4055,10 @@ export async function setujuiSemuaPendaftar(): Promise<number> {
 }
 
 /** Task streak (ala Duolingo) milikku — utk Beranda & Profil. */
-export async function getStreakSaya(): Promise<{ hari: number; restore_tersedia: boolean }> {
+export async function getStreakSaya(): Promise<{
+  hari: number;
+  restore_tersedia: boolean;
+}> {
   try {
     const json = await fetchJson("/api/streak", { headers: headerToken() });
     return {
@@ -3829,7 +4125,9 @@ export async function getGrupDivisiku(): Promise<InfoGrupDivisi | null> {
 
 /** Daftar anggota grup divisiku (kepala duluan). */
 export async function getAnggotaGrup(): Promise<AnggotaGrup[]> {
-  const json = await fetchJson("/api/chat/grup?anggota=1", { headers: headerToken() });
+  const json = await fetchJson("/api/chat/grup?anggota=1", {
+    headers: headerToken(),
+  });
   return (json.data ?? []) as AnggotaGrup[];
 }
 
@@ -3911,7 +4209,10 @@ export async function kirimLaporanBatch(
 }
 
 /** HR/QC/Pengawas menyetel target KPI video per akun (null = bawaan 5). */
-export async function setKpiVideo(userId: string, kpi: number | null): Promise<number> {
+export async function setKpiVideo(
+  userId: string,
+  kpi: number | null,
+): Promise<number> {
   const json = await fetchJson("/api/tvr/laporan", {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -3933,7 +4234,10 @@ export type AcaraPenting = {
   pembuat_nama: string;
 };
 
-export async function getAcara(): Promise<{ boleh_kelola: boolean; data: AcaraPenting[] }> {
+export async function getAcara(): Promise<{
+  boleh_kelola: boolean;
+  data: AcaraPenting[];
+}> {
   const json = await fetchJson("/api/acara", { headers: headerToken() });
   return {
     boleh_kelola: json.boleh_kelola === true,
@@ -3998,7 +4302,9 @@ export type ProfilMomen = {
 /** Profil momen + like — tanpa userId = milik sendiri. */
 export async function getProfilMomen(userId?: string): Promise<ProfilMomen> {
   const params = userId ? `?user=${encodeURIComponent(userId)}` : "";
-  const json = await fetchJson(`/api/profil/momen${params}`, { headers: headerToken() });
+  const json = await fetchJson(`/api/profil/momen${params}`, {
+    headers: headerToken(),
+  });
   return json as ProfilMomen;
 }
 
@@ -4051,11 +4357,20 @@ export async function buatRekapAbsensiPdf(opsi: {
   dari: string;
   sampai: string;
   nomorWa?: string;
-}): Promise<{ url: string; baris: number; terkirim_wa: boolean; pesan_wa: string }> {
+}): Promise<{
+  url: string;
+  baris: number;
+  terkirim_wa: boolean;
+  pesan_wa: string;
+}> {
   const json = await fetchJson("/api/absensi/rekap", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ dari: opsi.dari, sampai: opsi.sampai, nomor_wa: opsi.nomorWa }),
+    body: JSON.stringify({
+      dari: opsi.dari,
+      sampai: opsi.sampai,
+      nomor_wa: opsi.nomorWa,
+    }),
   });
   return {
     url: (json.url as string) ?? "",
@@ -4079,10 +4394,15 @@ export type BarisKepatuhan = {
 };
 
 /** Rekap kepatuhan LENGKAP per baris (kader x postingan) satu periode. */
-export async function getRekapKepatuhan(periode: string): Promise<BarisKepatuhan[]> {
-  const json = await fetchJson(`/api/rekap?periode=${encodeURIComponent(periode)}`, {
-    headers: headerToken(),
-  });
+export async function getRekapKepatuhan(
+  periode: string,
+): Promise<BarisKepatuhan[]> {
+  const json = await fetchJson(
+    `/api/rekap?periode=${encodeURIComponent(periode)}`,
+    {
+      headers: headerToken(),
+    },
+  );
   return (json.data ?? []) as BarisKepatuhan[];
 }
 
@@ -4157,7 +4477,9 @@ export type AnggotaTanpaAkun = { id: string; nama: string; divisi: string };
 
 /** Anggota yang BELUM menautkan akun sosmed (pengurus, spek 1.18). */
 export async function getAnggotaTanpaAkun(): Promise<AnggotaTanpaAkun[]> {
-  const json = await fetchJson("/api/akun-sosmed?tanpa=1", { headers: headerToken() });
+  const json = await fetchJson("/api/akun-sosmed?tanpa=1", {
+    headers: headerToken(),
+  });
   return (json.data ?? []) as AnggotaTanpaAkun[];
 }
 
@@ -4179,7 +4501,12 @@ export type FotoMaster = { path: string; dibuat: string; url: string };
 export async function getFotoMaster(
   bucket: string,
   halaman: number,
-): Promise<{ total: number; halaman: number; per_halaman: number; data: FotoMaster[] }> {
+): Promise<{
+  total: number;
+  halaman: number;
+  per_halaman: number;
+  data: FotoMaster[];
+}> {
   const json = await fetchJson(
     `/api/master?foto=${encodeURIComponent(bucket)}&halaman=${halaman}`,
     { headers: headerToken() },
@@ -4217,11 +4544,18 @@ export async function getBonusKoin(): Promise<Record<string, number>> {
 }
 
 /** Master mengubah bonus koin satu aktivitas. */
-export async function setBonusKoin(aktivitas: string, nilai: number): Promise<void> {
+export async function setBonusKoin(
+  aktivitas: string,
+  nilai: number,
+): Promise<void> {
   await fetchJson("/api/master", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ aksi: "koin_bonus", username: aktivitas, nilai: String(nilai) }),
+    body: JSON.stringify({
+      aksi: "koin_bonus",
+      username: aktivitas,
+      nilai: String(nilai),
+    }),
   });
 }
 
@@ -4242,7 +4576,9 @@ export async function getProfilAnalisis(): Promise<{
   penautan_siap: boolean;
   data: ProfilAnalisis[];
 }> {
-  const json = await fetchJson("/api/analisis/profil", { headers: headerToken() });
+  const json = await fetchJson("/api/analisis/profil", {
+    headers: headerToken(),
+  });
   return {
     penyedia: (json.penyedia as string) ?? "ayrshare",
     penautan_siap: json.penautan_siap === true,
@@ -4290,9 +4626,14 @@ export async function sinkronSosmedTvr(): Promise<{
   tersinkron: number;
   konflik: string[];
 }> {
-  const json = await fetchJson("/api/tvr/hubungkan", { headers: headerToken() });
+  const json = await fetchJson("/api/tvr/hubungkan", {
+    headers: headerToken(),
+  });
   return {
-    terhubung: (json.terhubung ?? []) as { platform: string; username: string }[],
+    terhubung: (json.terhubung ?? []) as {
+      platform: string;
+      username: string;
+    }[],
     tersinkron: Number(json.tersinkron ?? 0),
     konflik: (json.konflik ?? []) as string[],
   };
@@ -4309,7 +4650,10 @@ export async function getZona(): Promise<Zona[]> {
   return (json.data ?? []) as Zona[];
 }
 
-export async function tambahZona(nama: string, parentId?: string): Promise<void> {
+export async function tambahZona(
+  nama: string,
+  parentId?: string,
+): Promise<void> {
   await fetchJson("/api/zona", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -4317,7 +4661,10 @@ export async function tambahZona(nama: string, parentId?: string): Promise<void>
   });
 }
 
-export async function tetapkanZonaAnggota(userId: string, zonaId: string | null): Promise<void> {
+export async function tetapkanZonaAnggota(
+  userId: string,
+  zonaId: string | null,
+): Promise<void> {
   await fetchJson("/api/zona", {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -4346,9 +4693,12 @@ export async function getKpiTugas(status = "semua"): Promise<{
   kelola_semua: boolean;
   data: KpiTugas[];
 }> {
-  const json = await fetchJson(`/api/kpi?status=${encodeURIComponent(status)}`, {
-    headers: headerToken(),
-  });
+  const json = await fetchJson(
+    `/api/kpi?status=${encodeURIComponent(status)}`,
+    {
+      headers: headerToken(),
+    },
+  );
   return {
     boleh_kelola: json.boleh_kelola === true,
     kelola_semua: json.kelola_semua === true,
@@ -4424,7 +4774,9 @@ export type KuotaSistem = {
         bandwidth_gb: number;
         simpan_gb: number;
       };
-  uploadpost: { siap: false } | { siap: true; paket: string; profil: number; limit: number };
+  uploadpost:
+    | { siap: false }
+    | { siap: true; paket: string; profil: number; limit: number };
   r2_aktif: boolean;
 };
 
@@ -4445,11 +4797,15 @@ export type JadwalTvrku = {
 };
 
 export async function getJadwalTvrku(): Promise<JadwalTvrku[]> {
-  const json = await fetchJson("/api/tvr/jadwal-saya", { headers: headerToken() });
+  const json = await fetchJson("/api/tvr/jadwal-saya", {
+    headers: headerToken(),
+  });
   return (json.data ?? []) as JadwalTvrku[];
 }
 
-export async function batalkanJadwalTvrku(job_id: string): Promise<{ pesan: string }> {
+export async function batalkanJadwalTvrku(
+  job_id: string,
+): Promise<{ pesan: string }> {
   const json = await fetchJson("/api/tvr/jadwal-saya", {
     method: "DELETE",
     headers: { "Content-Type": "application/json", ...headerToken() },
@@ -4474,7 +4830,9 @@ export type PesananPalugodam = {
 };
 
 export async function getPesananPalugodam(): Promise<PesananPalugodam[]> {
-  const json = await fetchJson("/api/tvr/edit-otomatis", { headers: headerToken() });
+  const json = await fetchJson("/api/tvr/edit-otomatis", {
+    headers: headerToken(),
+  });
   return (json.data ?? []) as PesananPalugodam[];
 }
 
@@ -4522,7 +4880,9 @@ export type PersetujuanKpi = {
 };
 
 export async function getPersetujuanKpi(): Promise<PersetujuanKpi> {
-  const json = await fetchJson("/api/tvr/persetujuan", { headers: headerToken() });
+  const json = await fetchJson("/api/tvr/persetujuan", {
+    headers: headerToken(),
+  });
   return {
     laporan: (json.laporan ?? []) as PersetujuanKpi["laporan"],
     banned: (json.banned ?? []) as PersetujuanKpi["banned"],
@@ -4542,7 +4902,9 @@ export async function putusPersetujuanKpi(data: {
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify(data),
   });
-  return { disetujui: typeof json?.disetujui === "number" ? json.disetujui : undefined };
+  return {
+    disetujui: typeof json?.disetujui === "number" ? json.disetujui : undefined,
+  };
 }
 
 // ---- Leaderboard kepatuhan komen (semua pengguna, 2 Sep 2026) ----
@@ -4553,10 +4915,18 @@ export type KepatuhanKomenLeaderboard = {
   diperbarui?: string | null;
   /** "" = semua sosmed; terisi = hanya sosmed itu. */
   platform?: string;
-  daftar: { nama: string; avatar_url: string; total: number; sudah: number; persen: number }[];
+  daftar: {
+    nama: string;
+    avatar_url: string;
+    total: number;
+    sudah: number;
+    persen: number;
+  }[];
 };
 
-export async function getKepatuhanKomenLeaderboard(platform = ""): Promise<KepatuhanKomenLeaderboard> {
+export async function getKepatuhanKomenLeaderboard(
+  platform = "",
+): Promise<KepatuhanKomenLeaderboard> {
   const json = await fetchJson(
     `/api/peringkat-tvr?komen=1${platform ? `&platform=${encodeURIComponent(platform)}` : ""}`,
   );
@@ -4596,7 +4966,9 @@ export async function getGaleriKonten(): Promise<{
 }
 
 export async function getVideoGaleri(siapa: string): Promise<VideoGaleri[]> {
-  const json = await fetchJson(`/api/konten/galeri?siapa=${encodeURIComponent(siapa)}`);
+  const json = await fetchJson(
+    `/api/konten/galeri?siapa=${encodeURIComponent(siapa)}`,
+  );
   return (json?.data ?? []) as VideoGaleri[];
 }
 
@@ -4643,7 +5015,11 @@ export type VideoTerbaikBalasan = {
   metrik: "tayangan" | "suka" | "komentar";
   hari: number;
   daftar: VideoTerbaik[];
-  cakupan: { akun_total: number; akun_tersapu: number; terakhir: string | null };
+  cakupan: {
+    akun_total: number;
+    akun_tersapu: number;
+    terakhir: string | null;
+  };
 };
 
 export async function getVideoTerbaik(opsi: {
@@ -4664,7 +5040,8 @@ export type SiaranItem = {
   user_id: string | null;
   nama: string;
   platforms: string[];
-  status: "menunggu" | "diproses" | "terkirim" | "gagal" | "dibatalkan" | string;
+  status:
+    "menunggu" | "diproses" | "terkirim" | "gagal" | "dibatalkan" | string;
   pesan: string;
   request_id: string | null;
   selesai_pada: string | null;
@@ -4680,7 +5057,13 @@ export type Siaran = {
   dibuat_pada: string;
   berkas_ada: boolean;
   item: SiaranItem[];
-  ringkas: { total: number; terkirim: number; gagal: number; menunggu: number; dibatalkan: number };
+  ringkas: {
+    total: number;
+    terkirim: number;
+    gagal: number;
+    menunggu: number;
+    dibatalkan: number;
+  };
 };
 
 export async function getSiaran(): Promise<Siaran[]> {
@@ -4697,7 +5080,12 @@ export async function buatSiaran(data: {
   platforms: string[];
   profil: string[];
   jadwal?: string;
-}): Promise<{ id: string; jumlah: number; langsung_gagal: number; terjadwal: boolean }> {
+}): Promise<{
+  id: string;
+  jumlah: number;
+  langsung_gagal: number;
+  terjadwal: boolean;
+}> {
   const json = await fetchJson("/api/tvr/siaran", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -4721,7 +5109,12 @@ export async function batalSiaran(id: string): Promise<{ dibatalkan: number }> {
 }
 
 // ---- STUDIO PALUGODAM (3 Sep 2026) ----
-export type StudioSiap = { deepseek: boolean; creatomate: boolean; uploadpost: boolean; r2: boolean };
+export type StudioSiap = {
+  deepseek: boolean;
+  creatomate: boolean;
+  uploadpost: boolean;
+  r2: boolean;
+};
 export type StudioTemplate = {
   template_id: string;
   label: string;
@@ -4778,8 +5171,20 @@ export type StudioProyek = {
   item: StudioItem[];
   siaran: {
     id: string;
-    item: { id: string; profil: string; platforms: string[]; status: string; pesan: string }[];
-    ringkas: { total: number; terkirim: number; gagal: number; menunggu: number; dibatalkan: number };
+    item: {
+      id: string;
+      profil: string;
+      platforms: string[];
+      status: string;
+      pesan: string;
+    }[];
+    ringkas: {
+      total: number;
+      terkirim: number;
+      gagal: number;
+      menunggu: number;
+      dibatalkan: number;
+    };
   } | null;
 };
 
@@ -4819,15 +5224,22 @@ export async function getStudioPengaturan(): Promise<StudioPengaturan> {
     profil: (json.profil ?? []) as StudioProfil[],
     anggota: (json.anggota ?? []) as StudioAnggota[],
     profil_bebas: (json.profil_bebas ?? []) as StudioPengaturan["profil_bebas"],
-    template_yatim: (json.template_yatim ?? []) as StudioPengaturan["template_yatim"],
+    template_yatim: (json.template_yatim ??
+      []) as StudioPengaturan["template_yatim"],
     kuota: Number(json.kuota ?? 0),
     paket: String(json.paket ?? ""),
   };
 }
 
-export async function getStudioProyekList(): Promise<{ siap: StudioSiap; data: StudioProyekRingkas[] }> {
+export async function getStudioProyekList(): Promise<{
+  siap: StudioSiap;
+  data: StudioProyekRingkas[];
+}> {
   const json = await fetchJson("/api/studio?bagian=proyek");
-  return { siap: json.siap as StudioSiap, data: (json.data ?? []) as StudioProyekRingkas[] };
+  return {
+    siap: json.siap as StudioSiap,
+    data: (json.data ?? []) as StudioProyekRingkas[],
+  };
 }
 
 export async function getStudioProyek(id: string): Promise<StudioProyek> {
@@ -4836,7 +5248,10 @@ export async function getStudioProyek(id: string): Promise<StudioProyek> {
 }
 
 /** Aksi Studio (template_simpan/hapus, sumber_link/berkas, teks_simpan, generate, item_simpan, render, siaran, hapus). */
-export async function studioPost(aksi: string, data: Record<string, unknown>): Promise<Record<string, unknown>> {
+export async function studioPost(
+  aksi: string,
+  data: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   const json = await fetchJson("/api/studio", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -4857,7 +5272,12 @@ export type KepatuhanDetailPost = {
   sudah: boolean;
   jumlah: number;
   keterangan: string;
-  ajuan: { id: string; status: string; username_komentar: string; catatan_putusan: string } | null;
+  ajuan: {
+    id: string;
+    status: string;
+    username_komentar: string;
+    catatan_putusan: string;
+  } | null;
 };
 export type KepatuhanDetail = {
   periode: string;
@@ -4872,9 +5292,14 @@ export type KepatuhanDetail = {
   daftar: KepatuhanDetailPost[];
 };
 
-export async function getKepatuhanDetail(nama: string, periode?: string): Promise<KepatuhanDetail> {
+export async function getKepatuhanDetail(
+  nama: string,
+  periode?: string,
+): Promise<KepatuhanDetail> {
   const p = periode ? `&periode=${encodeURIComponent(periode)}` : "";
-  const json = await fetchJson(`/api/kepatuhan?nama=${encodeURIComponent(nama)}${p}`);
+  const json = await fetchJson(
+    `/api/kepatuhan?nama=${encodeURIComponent(nama)}${p}`,
+  );
   return json as KepatuhanDetail;
 }
 
@@ -4915,7 +5340,10 @@ export type AjuanKomentar = {
   caption: string;
 };
 
-export async function getAjuanKomentar(): Promise<{ menunggu: AjuanKomentar[]; terakhir: AjuanKomentar[] }> {
+export async function getAjuanKomentar(): Promise<{
+  menunggu: AjuanKomentar[];
+  terakhir: AjuanKomentar[];
+}> {
   const json = await fetchJson("/api/kepatuhan?ajuan=1");
   return {
     menunggu: (json?.menunggu ?? []) as AjuanKomentar[],
@@ -4923,7 +5351,11 @@ export async function getAjuanKomentar(): Promise<{ menunggu: AjuanKomentar[]; t
   };
 }
 
-export async function putusAjuanKomentar(data: { id: string; aksi: "setuju" | "tolak"; catatan?: string }): Promise<void> {
+export async function putusAjuanKomentar(data: {
+  id: string;
+  aksi: "setuju" | "tolak";
+  catatan?: string;
+}): Promise<void> {
   await fetchJson("/api/kepatuhan", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -4932,7 +5364,13 @@ export async function putusAjuanKomentar(data: { id: string; aksi: "setuju" | "t
 }
 
 // ---- Panel Master: pemakaian server Supabase + token AI (3 Sep 2026) ----
-export type RingkasAiKlien = { penyedia: string; panggilan: number; token_masuk: number; token_keluar: number; token_total: number };
+export type RingkasAiKlien = {
+  penyedia: string;
+  panggilan: number;
+  token_masuk: number;
+  token_keluar: number;
+  token_total: number;
+};
 export type ServerMaster = {
   server: {
     cpu_persen: number | null;
@@ -4952,7 +5390,11 @@ export type ServerMaster = {
     diambil_pada: string;
   } | null;
   galat_server: string | null;
-  ai: { hari_ini: RingkasAiKlien[]; tujuh_hari: RingkasAiKlien[]; tiga_puluh_hari: RingkasAiKlien[] };
+  ai: {
+    hari_ini: RingkasAiKlien[];
+    tujuh_hari: RingkasAiKlien[];
+    tiga_puluh_hari: RingkasAiKlien[];
+  };
   deepseek: { siap: boolean; tersedia?: boolean; saldo?: string };
 };
 
@@ -4972,15 +5414,22 @@ export type PenggunaKewajiban = {
   sembunyi: boolean;
 };
 
-export async function cariKewajiban(cari: string): Promise<{ hasil: PenggunaKewajiban[]; dibebaskan: PenggunaKewajiban[] }> {
-  const json = await fetchJson(`/api/master/kewajiban?cari=${encodeURIComponent(cari)}`);
+export async function cariKewajiban(
+  cari: string,
+): Promise<{ hasil: PenggunaKewajiban[]; dibebaskan: PenggunaKewajiban[] }> {
+  const json = await fetchJson(
+    `/api/master/kewajiban?cari=${encodeURIComponent(cari)}`,
+  );
   return {
     hasil: (json.hasil ?? []) as PenggunaKewajiban[],
     dibebaskan: (json.dibebaskan ?? []) as PenggunaKewajiban[],
   };
 }
 
-export async function setSembunyiKewajiban(userId: string, sembunyi: boolean): Promise<PenggunaKewajiban> {
+export async function setSembunyiKewajiban(
+  userId: string,
+  sembunyi: boolean,
+): Promise<PenggunaKewajiban> {
   const json = await fetchJson("/api/master/kewajiban", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -4990,8 +5439,19 @@ export async function setSembunyiKewajiban(userId: string, sembunyi: boolean): P
 }
 
 // ---- Juara komentar periode selesai terakhir (3 Sep 2026) ----
-export type JuaraKomen = { peringkat: number; nama: string; avatar_url: string; total_komentar: number; postingan: number };
-export type HasilJuaraKomen = { periode: string | null; tanggal: string | null; periode_kini: string; juara: JuaraKomen[] };
+export type JuaraKomen = {
+  peringkat: number;
+  nama: string;
+  avatar_url: string;
+  total_komentar: number;
+  postingan: number;
+};
+export type HasilJuaraKomen = {
+  periode: string | null;
+  tanggal: string | null;
+  periode_kini: string;
+  juara: JuaraKomen[];
+};
 
 export async function getJuaraKomen(): Promise<HasilJuaraKomen> {
   const json = await fetchJson("/api/juara-komen");
@@ -5024,8 +5484,12 @@ export async function petAksi(
 }
 
 /** Robot peliharaan orang lain — tampilan saja (profil publik di chat, 3 Sep 2026). */
-export async function getPetPublik(userId: string): Promise<import("@/lib/pet").PetState> {
-  const json = await fetchJson(`/api/pet?user_id=${encodeURIComponent(userId)}`);
+export async function getPetPublik(
+  userId: string,
+): Promise<import("@/lib/pet").PetState> {
+  const json = await fetchJson(
+    `/api/pet?user_id=${encodeURIComponent(userId)}`,
+  );
   return json as import("@/lib/pet").PetState;
 }
 
@@ -5038,7 +5502,9 @@ export type RangkumanLink = {
   menunggu: { platform: string; url: string }[];
 };
 
-export async function getRangkumanLink(tanggal?: string): Promise<RangkumanLink> {
+export async function getRangkumanLink(
+  tanggal?: string,
+): Promise<RangkumanLink> {
   const q = tanggal ? `?tanggal=${encodeURIComponent(tanggal)}` : "";
   const json = await fetchJson(`/api/tvr/rangkuman${q}`);
   return json as RangkumanLink;
@@ -5047,21 +5513,52 @@ export async function getRangkumanLink(tanggal?: string): Promise<RangkumanLink>
 // ---- LUDO ROBOT multipemain (percobaan, 3 Sep 2026) ----
 export type { RuangLudo } from "@/lib/ludo";
 
-export async function getLudoDaftar(): Promise<{ boleh_buat: boolean; daftar: import("@/lib/ludo").RuangLudo[] }> {
+export async function getLudoDaftar(): Promise<{
+  boleh_buat: boolean;
+  daftar: import("@/lib/ludo").RuangLudo[];
+}> {
   const json = await fetchJson("/api/ludo?daftar=1");
-  return { boleh_buat: json.boleh_buat === true, daftar: (json.daftar ?? []) as import("@/lib/ludo").RuangLudo[] };
+  return {
+    boleh_buat: json.boleh_buat === true,
+    daftar: (json.daftar ?? []) as import("@/lib/ludo").RuangLudo[],
+  };
 }
 
-export async function getLudoRuang(id: string): Promise<import("@/lib/ludo").RuangLudo> {
+export type CalonPemainLudo = {
+  id: string;
+  nama: string;
+  username: string;
+  jabatan: string;
+  divisi: string;
+  avatar_url: string;
+};
+
+/** Cari calon pemain untuk diundang ke ruang Ludo (terbuka untuk semua pengguna). */
+export async function cariPemainLudo(cari: string): Promise<CalonPemainLudo[]> {
+  const json = await fetchJson(`/api/ludo?cari=${encodeURIComponent(cari)}`);
+  return (json.hasil ?? []) as CalonPemainLudo[];
+}
+
+export async function getLudoRuang(
+  id: string,
+): Promise<import("@/lib/ludo").RuangLudo> {
   const json = await fetchJson(`/api/ludo?id=${encodeURIComponent(id)}`);
   return json as import("@/lib/ludo").RuangLudo;
 }
 
-export async function ludoAksi(aksi: string, data: Record<string, unknown> = {}): Promise<import("@/lib/ludo").RuangLudo & { sukses?: boolean; dihapus?: boolean }> {
+export async function ludoAksi(
+  aksi: string,
+  data: Record<string, unknown> = {},
+): Promise<
+  import("@/lib/ludo").RuangLudo & { sukses?: boolean; dihapus?: boolean }
+> {
   const json = await fetchJson("/api/ludo", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ aksi, ...data }),
   });
-  return json as import("@/lib/ludo").RuangLudo & { sukses?: boolean; dihapus?: boolean };
+  return json as import("@/lib/ludo").RuangLudo & {
+    sukses?: boolean;
+    dihapus?: boolean;
+  };
 }

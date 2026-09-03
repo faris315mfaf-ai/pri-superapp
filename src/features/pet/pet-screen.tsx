@@ -1,7 +1,7 @@
 "use client";
 
 // ============================================================
-// PetScreen (percobaan master, 3 Sep 2026) — modul PET ROBOT ala POU, v2.
+// PetScreen (3 Sep 2026, terbuka untuk semua) — modul PET ROBOT ala POU, v3.
 //   • Belum punya robot → pilih pria (biru-hitam) / wanita (pink-putih) + nama.
 //   • Punya robot → panggung robot (animasi mengikuti energi & kenyang),
 //     4 kebutuhan, XP/level, rawat (makan DARI INVENTORI, main, mandi, tidur),
@@ -330,7 +330,7 @@ export function PetScreen({
       <div className="kolom-aplikasi px-4 pb-32">
         <ScreenHeader judul="Pet Robot" onKembali={onKembali} />
         <p className="mb-3 text-[11px] text-teks-sekunder">
-          Modul percobaan — khusus master.
+          Robot peliharaan Anda sendiri.
         </p>
         <PilihRobot onSelesai={(d, pesan) => terima(d, pesan)} />
       </div>

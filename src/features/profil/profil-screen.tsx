@@ -28,7 +28,18 @@ import {
   User as UserIcon,
   Zap,
   Sparkles,
-  Heart, ExternalLink, Pencil, Check, X, Loader2, PanelBottom, Fingerprint, GraduationCap, Bot, Dice5 } from "lucide-react";
+  Heart,
+  ExternalLink,
+  Pencil,
+  Check,
+  X,
+  Loader2,
+  PanelBottom,
+  Fingerprint,
+  GraduationCap,
+  Bot,
+  Dice5,
+} from "lucide-react";
 import { mulaiTur } from "@/lib/tur";
 import { LogoPri } from "@/components/logo-pri";
 import {
@@ -42,7 +53,11 @@ import {
 import { toast, useAppStore } from "@/hooks/use-app-store";
 import { FotoBulat } from "@/components/foto-bulat";
 import { CincinJuara } from "@/features/peringkat/cincin-mythic";
-import { ConfettiUltah, TopiUltah, ulangTahunHariIni } from "@/components/ultah";
+import {
+  ConfettiUltah,
+  TopiUltah,
+  ulangTahunHariIni,
+} from "@/components/ultah";
 import { KartuLengkapiData } from "./lengkapi-data";
 import { GaleriMomen } from "./galeri-momen";
 import { PlatformIcon } from "@/components/platform-icon";
@@ -57,7 +72,6 @@ import {
   getProfilMomen,
   getStatusSidikJari,
   getStreakSaya,
-  getLudoDaftar,
   matikanSidikJari,
   perangkatDukungSidikJari,
   ubahProfilSaya,
@@ -100,9 +114,9 @@ type ProfilScreenProps = {
   onBukaLaporanKerja?: () => void;
   onBukaNotifikasi?: () => void;
   onBukaPanelMaster?: () => void;
-  /** Pet Robot (percobaan master, 3 Sep 2026) */
+  /** Pet Robot (3 Sep 2026, terbuka untuk semua) */
   onBukaPet?: () => void;
-  /** Ludo Robot multipemain (percobaan, 3 Sep 2026) */
+  /** Ludo Robot multipemain (3 Sep 2026, terbuka untuk semua) */
   onBukaLudo?: () => void;
   onBukaPengaturanFitur?: () => void;
   /** Buka layar Atur Menu Bawah (fitur 1.20/4) */
@@ -126,7 +140,8 @@ const KONFIG_ROLE: Record<
   master: {
     label: "Super Admin",
     ikon: Zap,
-    latar: "linear-gradient(135deg, rgba(220,38,38,0.16), rgba(245,158,11,0.22))",
+    latar:
+      "linear-gradient(135deg, rgba(220,38,38,0.16), rgba(245,158,11,0.22))",
     tepi: "rgba(220, 38, 38, 0.32)",
     kelasTeks: "text-pri",
     warnaIkon: "#DC2626",
@@ -134,7 +149,8 @@ const KONFIG_ROLE: Record<
   ketua: {
     label: "Ketua",
     ikon: ShieldCheck,
-    latar: "linear-gradient(135deg, rgba(245,158,11,0.20), rgba(217,119,6,0.14))",
+    latar:
+      "linear-gradient(135deg, rgba(245,158,11,0.20), rgba(217,119,6,0.14))",
     tepi: "rgba(245, 158, 11, 0.38)",
     kelasTeks: "text-emas",
     warnaIkon: "#F59E0B",
@@ -142,7 +158,8 @@ const KONFIG_ROLE: Record<
   anggota: {
     label: "Anggota",
     ikon: UserIcon,
-    latar: "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(37,99,235,0.14))",
+    latar:
+      "linear-gradient(135deg, rgba(59,130,246,0.18), rgba(37,99,235,0.14))",
     tepi: "rgba(59, 130, 246, 0.34)",
     kelasTeks: "text-blue-500",
     warnaIkon: "#3B82F6",
@@ -150,7 +167,8 @@ const KONFIG_ROLE: Record<
   super_admin: {
     label: "Super Admin",
     ikon: Zap,
-    latar: "linear-gradient(135deg, rgba(220,38,38,0.16), rgba(245,158,11,0.22))",
+    latar:
+      "linear-gradient(135deg, rgba(220,38,38,0.16), rgba(245,158,11,0.22))",
     tepi: "rgba(220, 38, 38, 0.32)",
     kelasTeks: "text-pri",
     warnaIkon: "#DC2626",
@@ -158,7 +176,8 @@ const KONFIG_ROLE: Record<
   admin_hr: {
     label: "Admin HR",
     ikon: ShieldCheck,
-    latar: "linear-gradient(135deg, rgba(245,158,11,0.20), rgba(217,119,6,0.14))",
+    latar:
+      "linear-gradient(135deg, rgba(245,158,11,0.20), rgba(217,119,6,0.14))",
     tepi: "rgba(245, 158, 11, 0.38)",
     kelasTeks: "text-emas",
     warnaIkon: "#F59E0B",
@@ -166,7 +185,8 @@ const KONFIG_ROLE: Record<
   admin_tv: {
     label: "Admin TV",
     ikon: Tv,
-    latar: "linear-gradient(135deg, rgba(16,185,129,0.18), rgba(5,150,105,0.14))",
+    latar:
+      "linear-gradient(135deg, rgba(16,185,129,0.18), rgba(5,150,105,0.14))",
     tepi: "rgba(16, 185, 129, 0.34)",
     kelasTeks: "text-sukses",
     warnaIkon: "#10B981",
@@ -348,9 +368,17 @@ export function ProfilScreen({
       const segar = await ubahProfilSaya({ nama: n });
       setUser(segar);
       setEditNama(false);
-      toast("sukses", "Nama diperbarui", `Sekarang tercatat sebagai ${segar.nama}.`);
+      toast(
+        "sukses",
+        "Nama diperbarui",
+        `Sekarang tercatat sebagai ${segar.nama}.`,
+      );
     } catch (e) {
-      toast("error", "Gagal menyimpan nama", e instanceof Error ? e.message : undefined);
+      toast(
+        "error",
+        "Gagal menyimpan nama",
+        e instanceof Error ? e.message : undefined,
+      );
     } finally {
       setMenyimpanNama(false);
     }
@@ -371,7 +399,9 @@ export function ProfilScreen({
   // supaya sakelarnya langsung bergerak begitu ditekan.
   const [statusManual, setStatusManual] = useState<StatusPush | null>(null);
   // Pengaturan 2 tab (spek 1.2): Display vs Profil & Keamanan
-  const [tabPengaturan, setTabPengaturan] = useState<"display" | "keamanan">("display");
+  const [tabPengaturan, setTabPengaturan] = useState<"display" | "keamanan">(
+    "display",
+  );
   // Profil ala ML (spek 4.3): galeri momen + skor suka + streak
   const [momen, setMomen] = useState<ProfilMomen | null>(null);
   const [streakku, setStreakku] = useState(0);
@@ -388,12 +418,20 @@ export function ProfilScreen({
       if (pushAktif) {
         await matikanPush();
         setStatusNotifikasi("belum-diminta");
-        toast("info", "Notifikasi push dimatikan", "Perangkat ini tidak akan dibunyikan lagi.");
+        toast(
+          "info",
+          "Notifikasi push dimatikan",
+          "Perangkat ini tidak akan dibunyikan lagi.",
+        );
       } else {
         const hasil = await aktifkanPush(user.email);
         setStatusNotifikasi(hasil);
         if (hasil === "aktif") {
-          toast("sukses", "Notifikasi push aktif", "Perangkat ini akan menerima kabar dari sistem.");
+          toast(
+            "sukses",
+            "Notifikasi push aktif",
+            "Perangkat ini akan menerima kabar dari sistem.",
+          );
         } else if (hasil === "ditolak") {
           // Sekali ditolak, dialog izin tidak akan muncul lagi — satu-satunya
           // jalan adalah lewat pengaturan sistem. Katakan apa adanya.
@@ -403,7 +441,11 @@ export function ProfilScreen({
             "Aktifkan lewat Pengaturan ponsel → Aplikasi → PRI SuperApp → Notifikasi.",
           );
         } else if (hasil === "tidak-didukung") {
-          toast("info", "Tidak didukung di perangkat ini", "Coba buka lewat aplikasi atau Chrome Android.");
+          toast(
+            "info",
+            "Tidak didukung di perangkat ini",
+            "Coba buka lewat aplikasi atau Chrome Android.",
+          );
         }
       }
     } catch (err) {
@@ -430,20 +472,6 @@ export function ProfilScreen({
   const [modalTentang, setModalTentang] = useState(false);
   const [modalChangelog, setModalChangelog] = useState(false);
   const [modalKeluar, setModalKeluar] = useState(false);
-  // Ludo Robot (3 Sep 2026): anggota non-master melihat pintunya hanya bila
-  // punya ruang / undangan aktif.
-  const [adaLudo, setAdaLudo] = useState(false);
-  useEffect(() => {
-    if (user.role === "master" || !onBukaLudo) return;
-    let hidup = true;
-    getLudoDaftar()
-      .then((d) => hidup && setAdaLudo(d.daftar.some((r) => r.status !== "selesai")))
-      .catch(() => {});
-    return () => {
-      hidup = false;
-    };
-  }, [user.role, onBukaLudo]);
-
   const gelap = tema === "dark";
   const peran = KONFIG_ROLE[user.role];
   // Efek meriah + topi avatar khusus di hari ulang tahun pemilik profil.
@@ -455,7 +483,10 @@ export function ProfilScreen({
   useEffect(() => {
     let hidup = true;
     void (async () => {
-      const [mm, st] = await Promise.allSettled([getProfilMomen(), getStreakSaya()]);
+      const [mm, st] = await Promise.allSettled([
+        getProfilMomen(),
+        getStreakSaya(),
+      ]);
       if (!hidup) return;
       if (mm.status === "fulfilled") setMomen(mm.value);
       if (st.status === "fulfilled") setStreakku(st.value.hari);
@@ -501,26 +532,28 @@ export function ProfilScreen({
           {/* Cincin Mythical (1 Sep 2026): mengikuti pemilik peringkat
               1-3 leaderboard TVR sampai ke halaman profilnya. */}
           <CincinJuara userId={user.id} ukuran={120}>
-          <button
-            type="button"
-            onClick={() => setModalFoto(true)}
-            className="btn-tekan avatar-denyut relative rounded-full border-4 border-white/90 shadow-2xl"
-            aria-label="Ganti foto profil"
-          >
-            {avatarBaru || user.avatar_url ? (
-              <FotoBulat src={avatarBaru || user.avatar_url} ukuran={112} />
-            ) : (
-              <AvatarInisial nama={user.nama} ukuran={112} />
-            )}
-            {ultah && <TopiUltah />}
-            <span
-              className="absolute right-1 bottom-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white/90 text-white"
-              style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
-              aria-hidden="true"
+            <button
+              type="button"
+              onClick={() => setModalFoto(true)}
+              className="btn-tekan avatar-denyut relative rounded-full border-4 border-white/90 shadow-2xl"
+              aria-label="Ganti foto profil"
             >
-              <Camera className="h-3 w-3" />
-            </span>
-          </button>
+              {avatarBaru || user.avatar_url ? (
+                <FotoBulat src={avatarBaru || user.avatar_url} ukuran={112} />
+              ) : (
+                <AvatarInisial nama={user.nama} ukuran={112} />
+              )}
+              {ultah && <TopiUltah />}
+              <span
+                className="absolute right-1 bottom-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white/90 text-white"
+                style={{
+                  background: "linear-gradient(135deg, #DC2626, #B91C1C)",
+                }}
+                aria-hidden="true"
+              >
+                <Camera className="h-3 w-3" />
+              </span>
+            </button>
           </CincinJuara>
           {/* Nama + edit inline (fitur 1.19/3.2): ikon pensil membuka
               input di tempat; Simpan memanggil PATCH /api/profil dan
@@ -548,7 +581,10 @@ export function ProfilScreen({
                   className="btn-tekan flex h-9 items-center gap-1.5 rounded-full bg-white px-4 text-[12px] font-bold text-pri disabled:opacity-60"
                 >
                   {menyimpanNama ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    <Loader2
+                      className="h-3.5 w-3.5 animate-spin"
+                      aria-hidden="true"
+                    />
                   ) : (
                     <Check className="h-3.5 w-3.5" aria-hidden="true" />
                   )}
@@ -629,7 +665,8 @@ export function ProfilScreen({
             </div>
             {ultah && (
               <p className="mt-1 text-[12px] font-bold text-amber-600 dark:text-amber-400">
-                🎂 Selamat ulang tahun{user.nama_panggilan ? `, ${user.nama_panggilan}` : ""}!
+                🎂 Selamat ulang tahun
+                {user.nama_panggilan ? `, ${user.nama_panggilan}` : ""}!
               </p>
             )}
           </div>
@@ -640,39 +677,43 @@ export function ProfilScreen({
       <KartuLengkapiData user={user} />
 
       {/* TV Rakyat Saya di profil (spek 1.15): username + video embed */}
-      {momen && (momen.akun_tvr.length > 0 || momen.video_terbaru.length > 0) && (
-        <FadeInUp delay={0.05}>
-          {momen.akun_tvr.length > 0 && (
-            <>
-              <SectionTitle judul="Akun TV Rakyat Saya" className="mt-6" />
-              <div className="flex flex-wrap gap-1.5">
-                {momen.akun_tvr.map((a) => (
-                  /* Bisa DIKLIK menuju profil akunnya (spek 1.16) */
-                  <a
-                    key={`${a.platform}-${a.username}`}
-                    href={urlProfilSosmed(a.platform, a.username)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="glass-soft btn-tekan flex items-center gap-1.5 rounded-full px-3 py-1.5"
-                  >
-                    <PlatformIcon platform={a.platform} size={14} />
-                    <span className="text-[11.5px] font-bold text-teks-utama">
-                      @{a.username}
-                    </span>
-                    <ExternalLink className="h-3 w-3 text-teks-sekunder" aria-hidden="true" />
-                  </a>
-                ))}
-              </div>
-            </>
-          )}
-          {momen.video_terbaru.length > 0 && (
-            <>
-              <SectionTitle judul="Video Saya" className="mt-5" />
-              <VideoEmbedMini video={momen.video_terbaru} />
-            </>
-          )}
-        </FadeInUp>
-      )}
+      {momen &&
+        (momen.akun_tvr.length > 0 || momen.video_terbaru.length > 0) && (
+          <FadeInUp delay={0.05}>
+            {momen.akun_tvr.length > 0 && (
+              <>
+                <SectionTitle judul="Akun TV Rakyat Saya" className="mt-6" />
+                <div className="flex flex-wrap gap-1.5">
+                  {momen.akun_tvr.map((a) => (
+                    /* Bisa DIKLIK menuju profil akunnya (spek 1.16) */
+                    <a
+                      key={`${a.platform}-${a.username}`}
+                      href={urlProfilSosmed(a.platform, a.username)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="glass-soft btn-tekan flex items-center gap-1.5 rounded-full px-3 py-1.5"
+                    >
+                      <PlatformIcon platform={a.platform} size={14} />
+                      <span className="text-[11.5px] font-bold text-teks-utama">
+                        @{a.username}
+                      </span>
+                      <ExternalLink
+                        className="h-3 w-3 text-teks-sekunder"
+                        aria-hidden="true"
+                      />
+                    </a>
+                  ))}
+                </div>
+              </>
+            )}
+            {momen.video_terbaru.length > 0 && (
+              <>
+                <SectionTitle judul="Video Saya" className="mt-5" />
+                <VideoEmbedMini video={momen.video_terbaru} />
+              </>
+            )}
+          </FadeInUp>
+        )}
 
       {/* Momen Terbaik PRI (spek 4.3) */}
       <FadeInUp delay={0.06}>
@@ -688,8 +729,8 @@ export function ProfilScreen({
         )}
       </FadeInUp>
 
-      {/* Pet Robot — modul percobaan, hanya master (3 Sep 2026) */}
-      {user.role === "master" && onBukaPet && (
+      {/* Pet Robot — terbuka untuk semua pengguna (3 Sep 2026) */}
+      {onBukaPet && (
         <FadeInUp delay={0.02}>
           <button
             type="button"
@@ -698,13 +739,17 @@ export function ProfilScreen({
           >
             <span
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
-              style={{ background: "linear-gradient(135deg, #EC4899, #3B82F6)" }}
+              style={{
+                background: "linear-gradient(135deg, #EC4899, #3B82F6)",
+              }}
               aria-hidden="true"
             >
               <Bot className="h-4.5 w-4.5" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold text-teks-utama">Pet Robot (percobaan)</span>
+              <span className="block text-sm font-bold text-teks-utama">
+                Pet Robot
+              </span>
               <span className="block text-[11px] text-teks-sekunder">
                 Rawat robot peliharaan, beli aksesoris dengan koin
               </span>
@@ -713,8 +758,8 @@ export function ProfilScreen({
         </FadeInUp>
       )}
 
-      {/* Ludo Robot — master selalu; anggota lain bila punya ruang/undangan (3 Sep 2026) */}
-      {onBukaLudo && (user.role === "master" || adaLudo) && (
+      {/* Ludo Robot — terbuka untuk semua pengguna (3 Sep 2026) */}
+      {onBukaLudo && (
         <FadeInUp delay={0.025}>
           <button
             type="button"
@@ -723,15 +768,19 @@ export function ProfilScreen({
           >
             <span
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
-              style={{ background: "linear-gradient(135deg, #F59E0B, #EF4444)" }}
+              style={{
+                background: "linear-gradient(135deg, #F59E0B, #EF4444)",
+              }}
               aria-hidden="true"
             >
               <Dice5 className="h-4.5 w-4.5" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold text-teks-utama">Ludo Robot (percobaan)</span>
+              <span className="block text-sm font-bold text-teks-utama">
+                Ludo Robot
+              </span>
               <span className="block text-[11px] text-teks-sekunder">
-                {user.role === "master" ? "Buat ruang, undang pemain, main bersama robot pet" : "Ada ruang / undangan Ludo untuk Anda"}
+                Buat ruang, undang pemain, main bersama robot pet
               </span>
             </span>
           </button>
@@ -748,13 +797,17 @@ export function ProfilScreen({
           >
             <span
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
-              style={{ background: "linear-gradient(135deg, #F59E0B, #D97706)" }}
+              style={{
+                background: "linear-gradient(135deg, #F59E0B, #D97706)",
+              }}
               aria-hidden="true"
             >
               <Crown className="h-4.5 w-4.5" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold text-teks-utama">Panel Master</span>
+              <span className="block text-sm font-bold text-teks-utama">
+                Panel Master
+              </span>
               <span className="block text-[11px] text-teks-sekunder">
                 Peran istimewa, akun wajib QC, log galat
               </span>
@@ -775,29 +828,33 @@ export function ProfilScreen({
 
       {/* Kehadiran & kinerja harian — Ketua Umum bukan objek absensi/KPI (2 Sep 2026) */}
       {!bebasKewajiban(user) && (
-      <FadeInUp delay={0.06}>
-        <SectionTitle judul="Kehadiran & Kinerja" className="mt-6" />
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-          <BarisPengaturan
-            ikon={CalendarCheck}
-            warnaIkon="#10B981"
-            label="Absensi"
-            onClick={onBukaAbsensi}
-            kanan={
-              <span className="text-xs font-medium text-teks-sekunder">Kamera + GPS</span>
-            }
-          />
-          <BarisPengaturan
-            ikon={ClipboardList}
-            warnaIkon="#3B82F6"
-            label="Laporan Kerja"
-            onClick={onBukaLaporanKerja}
-            kanan={
-              <span className="text-xs font-medium text-teks-sekunder">Rencana & KPI</span>
-            }
-          />
-        </div>
-      </FadeInUp>
+        <FadeInUp delay={0.06}>
+          <SectionTitle judul="Kehadiran & Kinerja" className="mt-6" />
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+            <BarisPengaturan
+              ikon={CalendarCheck}
+              warnaIkon="#10B981"
+              label="Absensi"
+              onClick={onBukaAbsensi}
+              kanan={
+                <span className="text-xs font-medium text-teks-sekunder">
+                  Kamera + GPS
+                </span>
+              }
+            />
+            <BarisPengaturan
+              ikon={ClipboardList}
+              warnaIkon="#3B82F6"
+              label="Laporan Kerja"
+              onClick={onBukaLaporanKerja}
+              kanan={
+                <span className="text-xs font-medium text-teks-sekunder">
+                  Rencana & KPI
+                </span>
+              }
+            />
+          </div>
+        </FadeInUp>
       )}
 
       {/* Daftar pengaturan */}
@@ -833,170 +890,188 @@ export function ProfilScreen({
         </div>
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:items-start">
           {tabPengaturan === "display" && (
-          <>
-          {/* 1. Mode Tema — sinkron dengan store global */}
-          <BarisPengaturan
-            ikon={IkonTema}
-            warnaIkon={warnaIkonTema}
-            label="Mode Tema"
-            kanan={
-              <SwitchKaca aktif={gelap} onUbah={toggleTema} labelAria="Mode gelap" />
-            }
-          />
-
-          {/* 2. Notifikasi Push */}
-          <BarisPengaturan
-            ikon={Bell}
-            warnaIkon="#DC2626"
-            label="Notifikasi Push"
-            kanan={
-              <SwitchKaca
-                aktif={pushAktif}
-                disabled={sedangUbahPush || statusNotifikasi === "tidak-didukung"}
-                onUbah={() => void ubahPush()}
-                labelAria="Notifikasi push"
+            <>
+              {/* 1. Mode Tema — sinkron dengan store global */}
+              <BarisPengaturan
+                ikon={IkonTema}
+                warnaIkon={warnaIkonTema}
+                label="Mode Tema"
+                kanan={
+                  <SwitchKaca
+                    aktif={gelap}
+                    onUbah={toggleTema}
+                    labelAria="Mode gelap"
+                  />
+                }
               />
-            }
-          />
 
-          {/* Ukuran teks aplikasi (kecil / normal / besar) */}
-          <BarisUkuranTeks />
-
-          {/* Susunan modul footer (fitur 1.20/4) */}
-          {onBukaAturMenu && (
-            <BarisPengaturan
-              ikon={PanelBottom}
-              warnaIkon="#0EA5E9"
-              label="Atur Menu Bawah"
-              onClick={onBukaAturMenu}
-              kanan={
-                <span className="text-xs font-medium text-teks-sekunder">Pilih modul</span>
-              }
-            />
-          )}
-
-          {/* 3. Notifikasi WhatsApp */}
-          <BarisPengaturan
-            ikon={MessageCircle}
-            warnaIkon="#10B981"
-            label="Notifikasi WhatsApp"
-            kanan={
-              <SwitchKaca
-                aktif={waAktif}
-                onUbah={() => setWaAktif((v) => !v)}
-                labelAria="Notifikasi WhatsApp"
+              {/* 2. Notifikasi Push */}
+              <BarisPengaturan
+                ikon={Bell}
+                warnaIkon="#DC2626"
+                label="Notifikasi Push"
+                kanan={
+                  <SwitchKaca
+                    aktif={pushAktif}
+                    disabled={
+                      sedangUbahPush || statusNotifikasi === "tidak-didukung"
+                    }
+                    onUbah={() => void ubahPush()}
+                    labelAria="Notifikasi push"
+                  />
+                }
               />
-            }
-          />
 
-          {/* 4. Bahasa — belum bisa diubah */}
-          <BarisPengaturan
-            ikon={Globe}
-            warnaIkon="#F59E0B"
-            label="Bahasa"
-            onClick={() => toast("info", "Bahasa lain segera hadir")}
-            redup
-            kanan={
-              <span className="flex items-center gap-2">
-                <span className="text-xs font-medium text-teks-sekunder">Indonesia</span>
-                <StatusBadge label="nonaktif" warna="netral" />
-              </span>
-            }
-          />
-          </>
+              {/* Ukuran teks aplikasi (kecil / normal / besar) */}
+              <BarisUkuranTeks />
+
+              {/* Susunan modul footer (fitur 1.20/4) */}
+              {onBukaAturMenu && (
+                <BarisPengaturan
+                  ikon={PanelBottom}
+                  warnaIkon="#0EA5E9"
+                  label="Atur Menu Bawah"
+                  onClick={onBukaAturMenu}
+                  kanan={
+                    <span className="text-xs font-medium text-teks-sekunder">
+                      Pilih modul
+                    </span>
+                  }
+                />
+              )}
+
+              {/* 3. Notifikasi WhatsApp */}
+              <BarisPengaturan
+                ikon={MessageCircle}
+                warnaIkon="#10B981"
+                label="Notifikasi WhatsApp"
+                kanan={
+                  <SwitchKaca
+                    aktif={waAktif}
+                    onUbah={() => setWaAktif((v) => !v)}
+                    labelAria="Notifikasi WhatsApp"
+                  />
+                }
+              />
+
+              {/* 4. Bahasa — belum bisa diubah */}
+              <BarisPengaturan
+                ikon={Globe}
+                warnaIkon="#F59E0B"
+                label="Bahasa"
+                onClick={() => toast("info", "Bahasa lain segera hadir")}
+                redup
+                kanan={
+                  <span className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-teks-sekunder">
+                      Indonesia
+                    </span>
+                    <StatusBadge label="nonaktif" warna="netral" />
+                  </span>
+                }
+              />
+            </>
           )}
 
           {tabPengaturan === "keamanan" && (
-          <>
-          {/* Ganti kata sandi lewat OTP WhatsApp */}
-          <BarisPengaturan
-            ikon={KeyRound}
-            warnaIkon="#3B82F6"
-            label="Ganti Kata Sandi"
-            onClick={() => setModalSandi(true)}
-          />
-
-          {/* Verifikasi nomor WhatsApp akun (≈ "tautkan WhatsApp") */}
-          <BarisPengaturan
-            ikon={ShieldCheck}
-            warnaIkon="#10B981"
-            label="Verifikasi WhatsApp"
-            onClick={user.wa_terverifikasi ? undefined : () => setModalVerifWa(true)}
-            kanan={
-              user.wa_terverifikasi ? (
-                <StatusBadge label="terverifikasi" warna="hijau" />
-              ) : (
-                <StatusBadge label="belum" warna="kuning" />
-              )
-            }
-          />
-
-          {/* Akun Google (fitur 1.19/3.1): terhubung = badge hijau;
-              belum = klik memulai alur tautkan lewat state bertanda
-              tangan (bukan token sesi telanjang di URL Google). */}
-          <BarisPengaturan
-            ikon={IkonGoogle}
-            warnaIkon="#4285F4"
-            label="Akun Google"
-            onClick={
-              user.google_linked
-                ? undefined
-                : () => {
-                    // Navigasi dokumen penuh — route API akan 302 ke
-                    // halaman izin Google (router Next tak bisa).
-                    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- tujuan akhirnya situs Google, bukan halaman Next
-                    window.location.href = `${window.location.origin}/api/login/google?mode=tautkan&t=${encodeURIComponent(ambilToken())}`;
-                  }
-            }
-            kanan={
-              user.google_linked ? (
-                <StatusBadge label="terhubung" warna="hijau" />
-              ) : (
-                <span className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-pri">Hubungkan</span>
-                  <StatusBadge label="belum" warna="kuning" />
-                </span>
-              )
-            }
-          />
-
-          {/* Masuk dengan Sidik Jari (fitur 1.21) — toggle aktif/nonaktif */}
-          <BarisSidikJari />
-
-          {/* Verifikasi Wajah (fitur 1.22/3) — daftar wajah untuk absen & login */}
-          <BarisWajah />
-
-          {/* Akun sosmed — tombol pembuka pop-up kelola */}
-          <TombolAkunSosmed
-            onBuka={() => setModalSosmed(true)}
-            versiData={versiSosmed}
-          />
-
-          {/* Tutorial interaktif daftar akun → cek Kepatuhan Komen (3 Sep 2026) */}
-          <BarisPengaturan
-            ikon={GraduationCap}
-            warnaIkon="#F59E0B"
-            label="Tutorial daftar akun & cek kepatuhan"
-            onClick={mulaiTur}
-          />
-
-          {/* Bug / kritik / saran → pengembang; SA juga punya kotak masuk */}
-          <SeksiMasukan user={user} />
-
-          {/* Pengaturan fitur per peran — super admin & master */}
-          {(user.role === "super_admin" || user.role === "master") &&
-            onBukaPengaturanFitur && (
+            <>
+              {/* Ganti kata sandi lewat OTP WhatsApp */}
               <BarisPengaturan
-                ikon={SlidersHorizontal}
-                warnaIkon="#8B5CF6"
-                label="Pengaturan Fitur"
-                onClick={onBukaPengaturanFitur}
+                ikon={KeyRound}
+                warnaIkon="#3B82F6"
+                label="Ganti Kata Sandi"
+                onClick={() => setModalSandi(true)}
+              />
+
+              {/* Verifikasi nomor WhatsApp akun (≈ "tautkan WhatsApp") */}
+              <BarisPengaturan
+                ikon={ShieldCheck}
+                warnaIkon="#10B981"
+                label="Verifikasi WhatsApp"
+                onClick={
+                  user.wa_terverifikasi
+                    ? undefined
+                    : () => setModalVerifWa(true)
+                }
                 kanan={
-                  <span className="text-xs font-medium text-teks-sekunder">Per peran</span>
+                  user.wa_terverifikasi ? (
+                    <StatusBadge label="terverifikasi" warna="hijau" />
+                  ) : (
+                    <StatusBadge label="belum" warna="kuning" />
+                  )
                 }
               />
-            )}
-          </>
+
+              {/* Akun Google (fitur 1.19/3.1): terhubung = badge hijau;
+              belum = klik memulai alur tautkan lewat state bertanda
+              tangan (bukan token sesi telanjang di URL Google). */}
+              <BarisPengaturan
+                ikon={IkonGoogle}
+                warnaIkon="#4285F4"
+                label="Akun Google"
+                onClick={
+                  user.google_linked
+                    ? undefined
+                    : () => {
+                        // Navigasi dokumen penuh — route API akan 302 ke
+                        // halaman izin Google (router Next tak bisa).
+                        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- tujuan akhirnya situs Google, bukan halaman Next
+                        window.location.href = `${window.location.origin}/api/login/google?mode=tautkan&t=${encodeURIComponent(ambilToken())}`;
+                      }
+                }
+                kanan={
+                  user.google_linked ? (
+                    <StatusBadge label="terhubung" warna="hijau" />
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-pri">
+                        Hubungkan
+                      </span>
+                      <StatusBadge label="belum" warna="kuning" />
+                    </span>
+                  )
+                }
+              />
+
+              {/* Masuk dengan Sidik Jari (fitur 1.21) — toggle aktif/nonaktif */}
+              <BarisSidikJari />
+
+              {/* Verifikasi Wajah (fitur 1.22/3) — daftar wajah untuk absen & login */}
+              <BarisWajah />
+
+              {/* Akun sosmed — tombol pembuka pop-up kelola */}
+              <TombolAkunSosmed
+                onBuka={() => setModalSosmed(true)}
+                versiData={versiSosmed}
+              />
+
+              {/* Tutorial interaktif daftar akun → cek Kepatuhan Komen (3 Sep 2026) */}
+              <BarisPengaturan
+                ikon={GraduationCap}
+                warnaIkon="#F59E0B"
+                label="Tutorial daftar akun & cek kepatuhan"
+                onClick={mulaiTur}
+              />
+
+              {/* Bug / kritik / saran → pengembang; SA juga punya kotak masuk */}
+              <SeksiMasukan user={user} />
+
+              {/* Pengaturan fitur per peran — super admin & master */}
+              {(user.role === "super_admin" || user.role === "master") &&
+                onBukaPengaturanFitur && (
+                  <BarisPengaturan
+                    ikon={SlidersHorizontal}
+                    warnaIkon="#8B5CF6"
+                    label="Pengaturan Fitur"
+                    onClick={onBukaPengaturanFitur}
+                    kanan={
+                      <span className="text-xs font-medium text-teks-sekunder">
+                        Per peran
+                      </span>
+                    }
+                  />
+                )}
+            </>
           )}
 
           {/* Baris umum — tampil di kedua tab */}
@@ -1007,7 +1082,9 @@ export function ProfilScreen({
             label="Apa yang Baru"
             onClick={() => setModalChangelog(true)}
             kanan={
-              <span className="text-xs font-medium text-teks-sekunder">v{VERSI_APLIKASI}</span>
+              <span className="text-xs font-medium text-teks-sekunder">
+                v{VERSI_APLIKASI}
+              </span>
             }
           />
 
@@ -1018,7 +1095,9 @@ export function ProfilScreen({
             label="Tentang Aplikasi"
             onClick={() => setModalTentang(true)}
             kanan={
-              <span className="text-xs font-medium text-teks-sekunder">Versi {VERSI_APLIKASI}</span>
+              <span className="text-xs font-medium text-teks-sekunder">
+                Versi {VERSI_APLIKASI}
+              </span>
             }
           />
 
@@ -1040,7 +1119,9 @@ export function ProfilScreen({
         </p>
       </FadeInUp>
 
-      {modalChangelog && <ModalChangelog onTutup={() => setModalChangelog(false)} />}
+      {modalChangelog && (
+        <ModalChangelog onTutup={() => setModalChangelog(false)} />
+      )}
 
       {/* Modal Tentang Aplikasi */}
       {modalSosmed && (
@@ -1062,7 +1143,9 @@ export function ProfilScreen({
         />
       )}
 
-      {modalVerifWa && <ModalVerifikasiWa onTutup={() => setModalVerifWa(false)} />}
+      {modalVerifWa && (
+        <ModalVerifikasiWa onTutup={() => setModalVerifWa(false)} />
+      )}
 
       {modalSandi && <ModalGantiSandi onTutup={() => setModalSandi(false)} />}
 
@@ -1197,7 +1280,11 @@ function BarisSidikJari() {
       } else {
         await daftarkanSidikJari();
         setAktif(true);
-        toast("sukses", "Sidik jari aktif", "Kini Anda bisa masuk dengan sidik jari.");
+        toast(
+          "sukses",
+          "Sidik jari aktif",
+          "Kini Anda bisa masuk dengan sidik jari.",
+        );
       }
     } catch (e) {
       // Pesan ramah (bug 1.22) — pembatalan tak ditampilkan sebagai galat.
@@ -1215,7 +1302,12 @@ function BarisSidikJari() {
       label="Masuk dengan Sidik Jari"
       kanan={
         <span className="flex items-center gap-2">
-          {sibuk && <Loader2 className="h-3.5 w-3.5 animate-spin text-teks-sekunder" aria-hidden="true" />}
+          {sibuk && (
+            <Loader2
+              className="h-3.5 w-3.5 animate-spin text-teks-sekunder"
+              aria-hidden="true"
+            />
+          )}
           <SwitchKaca
             aktif={aktif}
             disabled={sibuk}
