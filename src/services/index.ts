@@ -4781,9 +4781,46 @@ export type StudioProyek = {
   } | null;
 };
 
-export async function getStudioPengaturan(): Promise<{ siap: StudioSiap; profil: StudioProfil[] }> {
+/** Satu anggota Divisi PALUGODAM + profil upload-post + template Creatomate-nya (aturan 1:1:1, 3 Sep 2026). */
+export type StudioAnggota = {
+  user_id: string;
+  nama: string;
+  username: string;
+  posisi: string;
+  avatar_url: string;
+  /** Profil upload-post yang tertaut; "" = belum ada. */
+  profil: string;
+  /** Tercatat di aplikasi tapi sudah tidak ada di upload-post. */
+  profil_hilang: boolean;
+  akun: Record<string, string>;
+  tertaut: number;
+  template: StudioTemplate | null;
+  /** Usulan nama profil bila admin memilih "Buat profil". */
+  usulan_profil: string;
+};
+export type StudioPengaturan = {
+  siap: StudioSiap;
+  profil: StudioProfil[];
+  anggota: StudioAnggota[];
+  /** Profil upload-post yang belum tertaut ke siapa pun. */
+  profil_bebas: { profil: string; tertaut: number }[];
+  /** Template yang profilnya tidak tertaut ke anggota mana pun. */
+  template_yatim: { profil: string; template_id: string; label: string }[];
+  kuota: number;
+  paket: string;
+};
+
+export async function getStudioPengaturan(): Promise<StudioPengaturan> {
   const json = await fetchJson("/api/studio?bagian=template");
-  return { siap: json.siap as StudioSiap, profil: (json.profil ?? []) as StudioProfil[] };
+  return {
+    siap: json.siap as StudioSiap,
+    profil: (json.profil ?? []) as StudioProfil[],
+    anggota: (json.anggota ?? []) as StudioAnggota[],
+    profil_bebas: (json.profil_bebas ?? []) as StudioPengaturan["profil_bebas"],
+    template_yatim: (json.template_yatim ?? []) as StudioPengaturan["template_yatim"],
+    kuota: Number(json.kuota ?? 0),
+    paket: String(json.paket ?? ""),
+  };
 }
 
 export async function getStudioProyekList(): Promise<{ siap: StudioSiap; data: StudioProyekRingkas[] }> {

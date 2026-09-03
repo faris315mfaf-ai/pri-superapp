@@ -18,7 +18,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { adalahAdminStudio, DIVISI_PALUGODAM } from "@/lib/struktur";
-import { daftarProfilUp, uploadPostSiap } from "@/lib/upload-post";
+import { buatProfilUp, daftarProfilUp, hapusProfilUp, tautanHubungkanUp, uploadPostSiap, type ProfilUp } from "@/lib/upload-post";
 import { deepseekSiap, generateCaption, generateHighlight, generateJudul } from "@/lib/deepseek";
 import { creatomateSiap } from "@/lib/creatomate";
 import { MAKS_UMUR_URL_DETIK, presignR2, r2Siap, hapusVideoR2, dariR2 } from "@/lib/r2";
@@ -70,25 +70,126 @@ async function profilPalugodam(): Promise<{
   tpl: Map<string, Record<string, unknown>>;
 }> {
   const db = supabase();
-  const [{ data: baris }, { data: tplRows }] = await Promise.all([
-    db
-      .from("sosmed_profile")
-      .select("profile_key, user_id, app_user!inner(id, nama, divisi)")
-      .eq("penyedia", "upload-post")
-      .eq("jenis", "pengguna")
-      .eq("app_user.divisi", DIVISI_PALUGODAM),
+  // Dua kueri terpisah lalu dicocokkan di sini — BUKAN embed PostgREST
+  // (`app_user!inner(...)`): tabel sosmed_profile tidak punya foreign key ke
+  // app_user, jadi embed itu gagal diam-diam (data kosong) dan Studio tidak
+  // mengenal satu pun profil anggota (bug nyata, ditemukan 3 Sep 2026).
+  const [{ data: anggotaRows }, { data: profilRows }, { data: tplRows }] = await Promise.all([
+    db.from("app_user").select("id, nama").eq("divisi", DIVISI_PALUGODAM).eq("aktif", true),
+    db.from("sosmed_profile").select("profile_key, user_id").eq("penyedia", "upload-post").eq("jenis", "pengguna").not("user_id", "is", null),
     db.from("palugodam_template").select("profil, template_id, label, elemen_video, elemen_judul, elemen_highlight, elemen_sumber, aktif"),
   ]);
+  const namaPer = new Map<number, string>((anggotaRows ?? []).map((u) => [Number(u.id), String(u.nama ?? "")]));
   const userPer = new Map<string, number>();
-  const namaPer = new Map<number, string>();
-  for (const b of baris ?? []) {
-    const u = (Array.isArray(b.app_user) ? b.app_user[0] : b.app_user) as { id?: number; nama?: string } | null;
-    userPer.set(String(b.profile_key), Number(b.user_id));
-    if (u) namaPer.set(Number(b.user_id), String(u.nama ?? ""));
+  for (const b of profilRows ?? []) {
+    const uid = Number(b.user_id);
+    if (namaPer.has(uid)) userPer.set(String(b.profile_key), uid);
   }
   const tpl = new Map<string, Record<string, unknown>>((tplRows ?? []).map((t) => [String(t.profil), t as Record<string, unknown>]));
-  const boleh = new Set<string>([...userPer.keys(), ...tpl.keys()]);
+  // ATURAN (3 Sep 2026): 1 anggota = 1 profil upload-post + 1 template. Yang
+  // "boleh" dipakai Studio hanya profil yang TERTAUT ke anggota PALUGODAM;
+  // template yang profilnya tidak tertaut ke siapa pun = "yatim" (hanya bisa
+  // dihapus di tab Anggota & Template).
+  const boleh = new Set<string>([...userPer.keys()]);
   return { boleh, userPer, namaPer, tpl };
+}
+
+const PLATFORM6_SET = new Set(["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"]);
+const POLA_USERNAME_UP = /^[a-z0-9][a-z0-9-]{2,39}$/;
+
+/** Usulan nama profil upload-post dari username/nama anggota. */
+function usulanProfil(username: string, nama: string, id: number): string {
+  const dasar = (username || nama).toLowerCase().replace(/@.*$/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const inti = dasar.length >= 3 ? dasar.slice(0, 40) : `${dasar || "anggota"}-pri-${id}`.slice(0, 40);
+  return POLA_USERNAME_UP.test(inti) ? inti : `anggota-pri-${id}`;
+}
+
+/** Sinkron akun tertaut profil → akun_tvr_user (pola sama dengan dashboard tv-anggota). */
+async function sinkronAkunTertautStudio(db: ReturnType<typeof supabase>, userId: number, akun: Record<string, string>): Promise<number> {
+  let tersinkron = 0;
+  for (const [platform, mentah] of Object.entries(akun)) {
+    if (!PLATFORM6_SET.has(platform)) continue;
+    const username = String(mentah).toLowerCase().replace(/^@+/, "");
+    if (!username) continue;
+    const { data: ada } = await db.from("akun_tvr_user").select("id, user_id").eq("platform", platform).ilike("username", username).maybeSingle();
+    if (!ada) {
+      const { error } = await db.from("akun_tvr_user").insert({ user_id: userId, platform, username, terhubung: true });
+      if (!error) tersinkron += 1;
+    } else if (Number(ada.user_id) === userId) {
+      await db.from("akun_tvr_user").update({ terhubung: true }).eq("id", ada.id);
+    }
+  }
+  return tersinkron;
+}
+
+/**
+ * Tab "Anggota & Template" (3 Sep 2026): SEMUA anggota aktif Divisi PALUGODAM
+ * beserta profil upload-post-nya (kalau ada) dan template Creatomate-nya —
+ * satu tempat untuk admin menautkan keduanya. Juga: profil upload-post yang
+ * belum tertaut ke siapa pun (untuk "Tautkan yang ada") dan template yatim.
+ */
+async function daftarAnggotaStudio() {
+  const db = supabase();
+  const kosong: { profil: ProfilUp[]; kuota: number; paket: string } = { profil: [], kuota: 0, paket: "" };
+  const [{ data: orang }, { userPer, tpl }, up, { data: semuaTertaut }] = await Promise.all([
+    db
+      .from("app_user")
+      .select("id, nama, username, posisi_divisi, avatar_url")
+      .eq("divisi", DIVISI_PALUGODAM)
+      .eq("aktif", true)
+      .eq("status", "aktif")
+      .order("nama", { ascending: true }),
+    profilPalugodam(),
+    uploadPostSiap() ? daftarProfilUp().catch(() => kosong) : Promise.resolve(kosong),
+    db.from("sosmed_profile").select("profile_key").eq("penyedia", "upload-post"),
+  ]);
+  const akunPer = new Map<string, Record<string, string>>(up.profil.map((p) => [p.username, p.akun]));
+  const adaDiUp = new Set(up.profil.map((p) => p.username));
+  const profilPerUser = new Map<number, string>();
+  for (const [profil, uid] of userPer) profilPerUser.set(uid, profil);
+  const bentukTemplate = (t: Record<string, unknown> | undefined) =>
+    t
+      ? {
+          template_id: String(t.template_id ?? ""),
+          label: String(t.label ?? ""),
+          elemen_video: String(t.elemen_video ?? "video-1"),
+          elemen_judul: String(t.elemen_judul ?? "judul"),
+          elemen_highlight: String(t.elemen_highlight ?? "highlight"),
+          elemen_sumber: String(t.elemen_sumber ?? "sumber"),
+          aktif: t.aktif === true,
+        }
+      : null;
+  const anggota = (orang ?? [])
+    .map((o) => {
+      const id = Number(o.id);
+      const profil = profilPerUser.get(id) ?? "";
+      const akun = profil ? (akunPer.get(profil) ?? {}) : {};
+      return {
+        user_id: String(id),
+        nama: String(o.nama ?? ""),
+        username: String(o.username ?? ""),
+        posisi: String(o.posisi_divisi ?? "anggota"),
+        avatar_url: String(o.avatar_url ?? ""),
+        profil,
+        // Profil tercatat di aplikasi tapi tidak ada lagi di upload-post.
+        profil_hilang: Boolean(profil) && uploadPostSiap() && up.profil.length > 0 && !adaDiUp.has(profil),
+        akun,
+        tertaut: Object.keys(akun).length,
+        template: bentukTemplate(profil ? tpl.get(profil) : undefined),
+        usulan_profil: usulanProfil(String(o.username ?? ""), String(o.nama ?? ""), id),
+      };
+    })
+    // Kepala dulu, lalu nama.
+    .sort((a, b) => Number(b.posisi === "kepala") - Number(a.posisi === "kepala") || a.nama.localeCompare(b.nama));
+  const tertautSet = new Set((semuaTertaut ?? []).map((s) => String(s.profile_key)));
+  const profil_bebas = up.profil
+    .filter((p) => !tertautSet.has(p.username))
+    .map((p) => ({ profil: p.username, tertaut: Object.keys(p.akun).length }))
+    .sort((a, b) => a.profil.localeCompare(b.profil));
+  const template_yatim = [...tpl.values()]
+    .filter((t) => !userPer.has(String(t.profil)))
+    .map((t) => ({ profil: String(t.profil), template_id: String(t.template_id ?? ""), label: String(t.label ?? "") }));
+  return { anggota, profil_bebas, template_yatim, kuota: up.kuota, paket: up.paket };
 }
 
 async function daftarProfilStudio() {
@@ -214,8 +315,8 @@ export async function GET(request: Request) {
     const id = Number(url.searchParams.get("id") ?? 0);
 
     if (bagian === "template") {
-      const d = await daftarProfilStudio();
-      return { siap: kesiapan(), ...d };
+      const [d, a] = await Promise.all([daftarProfilStudio(), daftarAnggotaStudio()]);
+      return { siap: kesiapan(), ...d, ...a };
     }
     if (id > 0) {
       // Segarkan status render yang masih berjalan sebelum dibaca.
@@ -265,16 +366,14 @@ export async function POST(request: Request) {
         throw Object.assign(new Error("Profil dan ID template wajib diisi."), { status: 400 });
       }
       {
-        // Template hanya untuk profil milik anggota Divisi PALUGODAM.
+        // Aturan 1 anggota = 1 profil + 1 template: template HANYA untuk profil
+        // yang sudah tertaut ke anggota Divisi PALUGODAM.
         const { userPer } = await profilPalugodam();
         if (!userPer.has(profil)) {
-          const { data: adaTpl } = await db.from("palugodam_template").select("profil").eq("profil", profil).maybeSingle();
-          if (!adaTpl) {
-            throw Object.assign(
-              new Error("Profil ini bukan milik anggota Divisi PALUGODAM — tautkan dulu ke anggota divisi itu."),
-              { status: 400 },
-            );
-          }
+          throw Object.assign(
+            new Error("Profil ini belum tertaut ke anggota Divisi PALUGODAM — tautkan dulu di tab Anggota & Template."),
+            { status: 400 },
+          );
         }
       }
       const { error } = await db.from("palugodam_template").upsert(
@@ -301,6 +400,93 @@ export async function POST(request: Request) {
     }
 
     // ---------- Sumber ----------
+    // ---------- Anggota ↔ profil upload-post (3 Sep 2026) ----------
+    // Aturan: 1 anggota PALUGODAM = 1 profil upload-post + 1 template, semua
+    // diatur admin Studio di satu tempat.
+    if (aksi === "anggota_tautan" || aksi === "anggota_profil_lepas" || aksi === "anggota_profil_tautkan" || aksi === "anggota_profil_buat") {
+      const uid = Number(body.user_id);
+      if (!Number.isFinite(uid) || uid <= 0) throw Object.assign(new Error("Anggota tidak disebutkan."), { status: 400 });
+      const { data: orang } = await db
+        .from("app_user")
+        .select("id, nama, username, divisi, aktif, status")
+        .eq("id", uid)
+        .maybeSingle();
+      if (!orang || orang.aktif !== true || orang.status !== "aktif" || String(orang.divisi ?? "") !== DIVISI_PALUGODAM) {
+        throw Object.assign(new Error("Anggota tidak ditemukan / bukan anggota aktif Divisi PALUGODAM."), { status: 404 });
+      }
+      const { data: milik } = await db
+        .from("sosmed_profile")
+        .select("id, profile_key")
+        .eq("penyedia", "upload-post")
+        .eq("jenis", "pengguna")
+        .eq("user_id", uid)
+        .maybeSingle();
+
+      if (aksi === "anggota_tautan") {
+        if (!uploadPostSiap()) throw new Error("upload-post belum tersambung.");
+        if (!milik) throw Object.assign(new Error(`${orang.nama} belum punya profil upload-post.`), { status: 400 });
+        return { url: await tautanHubungkanUp(String(milik.profile_key)), profil: String(milik.profile_key) };
+      }
+      if (aksi === "anggota_profil_lepas") {
+        if (!milik) return { sukses: true };
+        // Baris penautan dihapus; profil di upload-post dan template-nya TIDAK
+        // dihapus (template jadi "yatim", bisa dihapus/ditautkan lagi).
+        const { error } = await db.from("sosmed_profile").delete().eq("id", milik.id);
+        if (error) throw new Error("Gagal melepas profil.");
+        return { sukses: true, profil: String(milik.profile_key) };
+      }
+
+      if (!uploadPostSiap()) throw new Error("upload-post belum tersambung (kunci API kosong).");
+      if (milik) {
+        throw Object.assign(
+          new Error(`${orang.nama} sudah punya profil "${milik.profile_key}". Lepas dulu bila mau menggantinya.`),
+          { status: 409 },
+        );
+      }
+      const { profil: diUp } = await daftarProfilUp();
+      let profil = "";
+      let akun: Record<string, string> = {};
+      let dibuatBaru = false;
+      if (aksi === "anggota_profil_tautkan") {
+        profil = String(body.profil ?? "").trim();
+        const ada = diUp.find((p) => p.username === profil);
+        if (!ada) throw Object.assign(new Error(`Profil "${profil}" tidak ada di upload-post.`), { status: 404 });
+        const { data: pemilikLain } = await db.from("sosmed_profile").select("user_id").eq("profile_key", profil).maybeSingle();
+        if (pemilikLain && Number(pemilikLain.user_id) !== uid) {
+          throw Object.assign(new Error(`Profil "${profil}" sudah tertaut ke anggota lain.`), { status: 409 });
+        }
+        akun = ada.akun;
+      } else {
+        profil = String(body.username ?? "").trim().toLowerCase();
+        if (!POLA_USERNAME_UP.test(profil)) {
+          throw Object.assign(new Error("Nama profil: huruf kecil, angka, strip; 3–40 karakter."), { status: 400 });
+        }
+        if (diUp.some((p) => p.username === profil)) {
+          throw Object.assign(new Error(`Profil "${profil}" sudah ada di upload-post — pakai "Tautkan yang ada".`), { status: 409 });
+        }
+        await buatProfilUp(profil);
+        dibuatBaru = true;
+      }
+      const { error } = await db.from("sosmed_profile").insert({
+        penyedia: "upload-post",
+        jenis: "pengguna",
+        judul: profil,
+        profile_key: profil,
+        ref_id: profil,
+        user_id: uid,
+        dibuat_oleh: userId,
+        insight_cache: null,
+        insight_pada: null,
+      });
+      if (error) {
+        if (dibuatBaru) await hapusProfilUp(profil).catch(() => {});
+        console.error("[studio] tautkan profil:", error.message);
+        throw new Error("Gagal menyimpan penautan profil.");
+      }
+      const tersinkron = await sinkronAkunTertautStudio(db, uid, akun);
+      return { sukses: true, profil, dibuat: dibuatBaru, tersinkron };
+    }
+
     if (aksi === "sumber_link") {
       const link = String(body.link ?? "").trim();
       if (!/^https?:\/\/(www\.|vm\.|vt\.|m\.)?(tiktok\.com|instagram\.com)\//i.test(link)) {
@@ -514,12 +700,14 @@ export async function POST(request: Request) {
       if (!urlSumber(String(proyek.sumber_path ?? ""), String(proyek.sumber_url ?? ""))) {
         throw Object.assign(new Error("Video sumber belum ada / sudah disapu. Buat proyek baru."), { status: 400 });
       }
+      // Target = profil yang TERTAUT ke anggota PALUGODAM dan punya template aktif
+      // (1 anggota = 1 profil = 1 template).
       const { boleh, userPer, tpl } = await profilPalugodam();
       const target = [...boleh].filter((p) => tpl.get(p)?.aktif === true).sort();
       const tanpaTemplate = [...boleh].filter((p) => tpl.get(p)?.aktif !== true).sort();
       if (target.length === 0) {
         throw Object.assign(
-          new Error("Belum ada profil PALUGODAM yang punya template aktif. Isi dulu di tab Template."),
+          new Error("Belum ada anggota PALUGODAM yang lengkap (profil tertaut + template aktif). Atur di tab Anggota & Template."),
           { status: 400 },
         );
       }

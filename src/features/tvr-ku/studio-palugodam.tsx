@@ -53,6 +53,7 @@ import {
   type StudioSiap,
 } from "@/services";
 import { jamWIB } from "@/lib/format";
+import { TabAnggota } from "./studio-anggota";
 import { cn } from "@/lib/utils";
 
 const PLATFORM6 = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"] as const;
@@ -132,172 +133,6 @@ function PenunjukFase({
           </div>
         );
       })}
-    </div>
-  );
-}
-
-// ------------------------------------------------------------
-// Tab TEMPLATE
-// ------------------------------------------------------------
-function TabTemplate() {
-  const [siap, setSiap] = useState<StudioSiap | null>(null);
-  const [profil, setProfil] = useState<StudioProfil[] | null>(null);
-  const [edit, setEdit] = useState<
-    Record<string, { template_id: string; label: string; elemen_video: string; elemen_judul: string; elemen_highlight: string; elemen_sumber: string }>
-  >({});
-  const [sibuk, setSibuk] = useState("");
-
-  function muat() {
-    return getStudioPengaturan()
-      .then((d) => {
-        setSiap(d.siap);
-        setProfil(d.profil);
-        const e: typeof edit = {};
-        for (const p of d.profil) {
-          e[p.profil] = {
-            template_id: p.template?.template_id ?? "",
-            label: p.template?.label ?? "",
-            elemen_video: p.template?.elemen_video ?? "video-1",
-            elemen_judul: p.template?.elemen_judul ?? "judul",
-            elemen_highlight: p.template?.elemen_highlight ?? "highlight",
-            elemen_sumber: p.template?.elemen_sumber ?? "sumber",
-          };
-        }
-        setEdit(e);
-      })
-      .catch((e) => toast("error", "Gagal memuat pengaturan", e instanceof Error ? e.message : ""));
-  }
-  useEffect(() => {
-    void muat();
-  }, []);
-
-  async function simpan(p: string) {
-    const d = edit[p];
-    if (!d?.template_id.trim()) {
-      toast("peringatan", "Isi ID template Creatomate dulu");
-      return;
-    }
-    setSibuk(p);
-    try {
-      await studioPost("template_simpan", { profil: p, ...d, aktif: true });
-      toast("sukses", "Template tersimpan", p);
-      await muat();
-    } catch (e) {
-      toast("error", "Gagal", e instanceof Error ? e.message : "");
-    } finally {
-      setSibuk("");
-    }
-  }
-  async function hapus(p: string) {
-    setSibuk(p);
-    try {
-      await studioPost("template_hapus", { profil: p });
-      toast("sukses", "Template dilepas", p);
-      await muat();
-    } catch (e) {
-      toast("error", "Gagal", e instanceof Error ? e.message : "");
-    } finally {
-      setSibuk("");
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      <KartuSiap siap={siap} />
-      <GlassCard className="p-4">
-        <p className="text-[12.5px] font-bold text-teks-utama">Peta profil ↔ template Creatomate</p>
-        <p className="mt-1 text-[11px] leading-relaxed text-teks-sekunder">
-          Hanya profil milik anggota <b>Divisi PALUGODAM</b> yang tampil. Tempel <b>ID template</b> dari
-          Creatomate; nama elemen bawaan: <b>video-1</b> (klip), <b>judul</b>, <b>highlight</b>,{" "}
-          <b>sumber</b> (teks) — kosongkan elemen sumber bila template tidak punya.
-        </p>
-        {profil === null ? (
-          <GlassSkeleton className="mt-3 h-24 rounded-xl" />
-        ) : (
-          <div className="mt-3 flex flex-col gap-2">
-            {profil.map((p) => {
-              const d = edit[p.profil];
-              if (!d) return null;
-              return (
-                <div key={p.profil} className="glass-soft rounded-xl p-3">
-                  <div className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12px] font-bold text-teks-utama">{p.profil}</span>
-                      <span className="flex items-center gap-1">
-                        {PLATFORM6.map((pf) => (
-                          <PlatformIcon key={pf} platform={pf} className={cn("h-3 w-3", p.akun[pf] ? "text-emerald-500" : "text-teks-sekunder/30")} />
-                        ))}
-                        <span className="ml-1 truncate text-[10px] text-teks-sekunder">{p.nama || "belum ditautkan ke anggota"}</span>
-                      </span>
-                    </span>
-                    {p.template ? <StatusBadge label="ada template" warna="hijau" /> : <StatusBadge label="belum" warna="kuning" />}
-                  </div>
-                  <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                    <input
-                      value={d.template_id}
-                      onChange={(e) => setEdit((s) => ({ ...s, [p.profil]: { ...d, template_id: e.target.value } }))}
-                      placeholder="ID template Creatomate"
-                      className="glass-input h-10 rounded-xl px-3 text-[12px] text-teks-utama"
-                    />
-                    <input
-                      value={d.label}
-                      onChange={(e) => setEdit((s) => ({ ...s, [p.profil]: { ...d, label: e.target.value } }))}
-                      placeholder="Label (opsional)"
-                      className="glass-input h-10 rounded-xl px-3 text-[12px] text-teks-utama"
-                    />
-                  </div>
-                  <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-                    {(
-                      [
-                        ["elemen_video", "Elemen video"],
-                        ["elemen_judul", "Elemen judul"],
-                        ["elemen_highlight", "Elemen highlight"],
-                        ["elemen_sumber", "Elemen sumber"],
-                      ] as const
-                    ).map(([k, ph]) => (
-                      <input
-                        key={k}
-                        value={d[k]}
-                        onChange={(e) => setEdit((s) => ({ ...s, [p.profil]: { ...d, [k]: e.target.value } }))}
-                        placeholder={ph}
-                        className="glass-input h-9 rounded-xl px-2 text-[11px] text-teks-utama"
-                      />
-                    ))}
-                  </div>
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void simpan(p.profil)}
-                      disabled={Boolean(sibuk)}
-                      className="btn-tekan flex flex-1 items-center justify-center gap-1 rounded-xl py-2 text-[12px] font-bold text-white disabled:opacity-50"
-                      style={{ background: MERAH }}
-                    >
-                      {sibuk === p.profil ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                      Simpan
-                    </button>
-                    {p.template ? (
-                      <button
-                        type="button"
-                        onClick={() => void hapus(p.profil)}
-                        disabled={Boolean(sibuk)}
-                        aria-label="Lepas template"
-                        className="btn-tekan rounded-xl bg-gagal/12 px-3 text-[12px] font-bold text-gagal disabled:opacity-50"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
-            {profil.length === 0 && (
-              <p className="text-[12px] text-teks-sekunder">
-                Belum ada profil upload-post milik anggota Divisi PALUGODAM. Tautkan dulu di Dashboard TV → Profil belum ditautkan.
-              </p>
-            )}
-          </div>
-        )}
-      </GlassCard>
     </div>
   );
 }
@@ -1046,7 +881,7 @@ export function StudioPalugodam() {
         {(
           [
             ["proyek", "Proyek", Radio],
-            ["template", "Template Creatomate", Settings2],
+            ["template", "Anggota & Template", Settings2],
           ] as const
         ).map(([k, label, Ikon]) => (
           <button
@@ -1062,7 +897,7 @@ export function StudioPalugodam() {
         ))}
       </div>
       {tab === "template" ? (
-        <TabTemplate />
+        <TabAnggota />
       ) : pengaturan ? (
         <TabProyek profilSemua={pengaturan.profil} siap={pengaturan.siap} />
       ) : (
