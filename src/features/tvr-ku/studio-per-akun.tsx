@@ -5,8 +5,8 @@
 // Satu baris untuk tiap akun anggota PALUGODAM, masing-masing punya:
 // LINK sendiri (diambil lewat TikHub), CAPTION sendiri, JUDUL sendiri, dan
 // HIGHLIGHT sendiri (bisa digenerate DeepSeek per akun atau sekaligus).
-// Tombol RENDER baru hidup setelah SEMUA akun lengkap — penjaga yang sama
-// juga ada di server (/api/studio aksi "render").
+// Tombol RENDER jalan dengan akun yang SUDAH siap saja; akun yang belum
+// lengkap dilewati dan bisa dirender menyusul (server memakai aturan sama).
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
@@ -276,9 +276,16 @@ export function StudioPerAkun({
   onRender: () => Promise<void>;
 }) {
   const item = data.item;
-  const siapSemua =
-    item.length > 0 && item.every((i) => (i.kurang ?? []).length === 0);
-  const jumlahSiap = item.filter((i) => (i.kurang ?? []).length === 0).length;
+  // "Bisa dirender sekarang" = datanya lengkap DAN videonya belum jadi.
+  const belumJadi = (i: StudioItem) =>
+    i.render_status === "belum" || i.render_status === "gagal";
+  const jumlahLengkap = item.filter(
+    (i) => (i.kurang ?? []).length === 0,
+  ).length;
+  const jumlahSiap = item.filter(
+    (i) => (i.kurang ?? []).length === 0 && belumJadi(i),
+  ).length;
+  const jumlahJadi = item.filter((i) => i.render_status === "sukses").length;
   const adaRendering = item.some((i) => i.render_status === "rendering");
   const proyekId = data.proyek.id;
 
@@ -387,17 +394,18 @@ export function StudioPerAkun({
           <span
             className={cn(
               "rounded-full px-2 py-0.5 text-[10px] font-extrabold",
-              siapSemua
+              jumlahLengkap > 0
                 ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                 : "bg-amber-500/15 text-amber-600 dark:text-amber-400",
             )}
           >
-            {jumlahSiap}/{item.length} siap
+            {jumlahLengkap}/{item.length} siap
           </span>
         </div>
         <p className="mt-1 text-[10.5px] leading-relaxed text-teks-sekunder">
           Tiap akun mengisi link, caption, judul, dan highlight-nya sendiri.
-          Tombol RENDER hidup setelah semuanya lengkap.
+          Tidak perlu menunggu semua akun — render jalan dengan yang sudah siap,
+          sisanya bisa menyusul kapan saja.
         </p>
         <button
           type="button"
@@ -444,31 +452,46 @@ export function StudioPerAkun({
         </div>
       </GlassCard>
 
-      <button
-        type="button"
-        onClick={() => void onRender()}
-        disabled={!siapSemua || Boolean(sibuk) || adaRendering}
-        className="btn-tekan flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[13.5px] font-bold text-white disabled:opacity-50"
-        style={{ background: MERAH }}
-        title={
-          siapSemua
-            ? "Render semua video"
-            : `Masih ada ${item.length - jumlahSiap} akun yang belum lengkap`
-        }
-      >
-        {sibuk === "render" ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : siapSemua ? (
-          <Check className="h-4 w-4" />
-        ) : (
-          <Wand2 className="h-4 w-4" />
-        )}
-        {adaRendering
-          ? "Sedang merender…"
-          : siapSemua
-            ? `RENDER ${item.length} VIDEO`
-            : `Lengkapi dulu ${item.length - jumlahSiap} akun`}
-      </button>
+      <div>
+        <button
+          type="button"
+          onClick={() => void onRender()}
+          disabled={jumlahSiap === 0 || Boolean(sibuk) || adaRendering}
+          className="btn-tekan flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[13.5px] font-bold text-white disabled:opacity-50"
+          style={{ background: MERAH }}
+          title={
+            jumlahSiap > 0
+              ? `Render ${jumlahSiap} akun yang sudah siap; sisanya dilewati dan bisa menyusul`
+              : "Isi minimal satu akun sampai lengkap"
+          }
+        >
+          {sibuk === "render" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : jumlahSiap > 0 ? (
+            <Check className="h-4 w-4" />
+          ) : (
+            <Wand2 className="h-4 w-4" />
+          )}
+          {adaRendering
+            ? "Sedang merender…"
+            : jumlahSiap > 0
+              ? `RENDER ${jumlahSiap} VIDEO YANG SIAP`
+              : "Isi minimal satu akun dulu"}
+        </button>
+        {/* Yang belum lengkap tidak menghalangi: cukup dilengkapi lalu render lagi. */}
+        {jumlahSiap > 0 && item.length - jumlahLengkap > 0 ? (
+          <p className="mt-1.5 text-center text-[10.5px] text-teks-sekunder">
+            {item.length - jumlahLengkap} akun belum lengkap — dilewati dulu,
+            bisa dirender menyusul.
+          </p>
+        ) : null}
+        {jumlahJadi > 0 ? (
+          <p className="mt-1 text-center text-[10.5px] text-teks-sekunder">
+            {jumlahJadi} video sudah jadi · lanjut ke fase Siaran untuk
+            mengunggahnya.
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -574,12 +574,27 @@ function EditorProyek({
             const g =
               (r.gagal as { profil: string; pesan: string }[] | undefined) ??
               [];
+            const dilewati =
+              (r.dilewati as
+                { profil: string; kurang: string[] }[] | undefined) ?? [];
             toast(
               g.length ? "peringatan" : "sukses",
               `${r.dimulai ?? 0} video mulai dirender`,
-              g.length
-                ? `${g.length} gagal: ${g.map((x) => x.profil).join(", ")}`
-                : "Status diperbarui otomatis tiap 8 detik.",
+              [
+                g.length
+                  ? `${g.length} gagal: ${g.map((x) => x.profil).join(", ")}`
+                  : "",
+                // Akun yang belum lengkap TIDAK menghalangi — cukup dilengkapi lalu render lagi.
+                dilewati.length
+                  ? `${dilewati.length} akun dilewati karena belum lengkap: ${dilewati
+                      .slice(0, 3)
+                      .map((x) => x.profil)
+                      .join(", ")}${dilewati.length > 3 ? "…" : ""}`
+                  : "",
+                "Status diperbarui otomatis tiap 8 detik.",
+              ]
+                .filter(Boolean)
+                .join(" · "),
             );
             setFase(2);
           }}

@@ -1230,14 +1230,14 @@ export async function POST(request: Request) {
           { status: 503 },
         );
       }
-      // Mode per akun: render hanya boleh jalan bila SEMUA akun sudah lengkap
-      // (link + judul + caption + highlight + template) — permintaan admin
-      // PALUGODAM, 4 Sep 2026.
+      // Mode per akun (aturan 4 Sep 2026): TIDAK menunggu semua akun. Yang
+      // sudah lengkap langsung dirender; yang belum dilewati dan bisa menyusul.
+      // Ditolak hanya bila belum ada satu pun yang siap.
       if (String(proyek.mode ?? "bersama") === "per_akun") {
         const { data: semua } = await db
           .from("studio_proyek_item")
           .select(
-            "profil, judul, caption, highlight, template_id, sumber_url, sumber_path",
+            "profil, judul, caption, highlight, template_id, sumber_url, sumber_path, render_status",
           )
           .eq("proyek_id", proyekId)
           .order("profil", { ascending: true });
@@ -1246,21 +1246,31 @@ export async function POST(request: Request) {
             status: 400,
           });
         }
-        const belum = semua
-          .map((i) => ({
-            profil: String(i.profil),
-            kurang: kurangnyaItem(i as Record<string, string>),
-          }))
-          .filter((x) => x.kurang.length > 0);
-        if (belum.length > 0) {
+        const bisa = semua.filter(
+          (i) =>
+            kurangnyaItem(i as Record<string, string>).length === 0 &&
+            ["belum", "gagal"].includes(String(i.render_status)),
+        );
+        if (bisa.length === 0) {
+          const belum = semua
+            .map((i) => ({
+              profil: String(i.profil),
+              kurang: kurangnyaItem(i as Record<string, string>),
+            }))
+            .filter((x) => x.kurang.length > 0);
+          const sudah = semua.filter((i) =>
+            ["sukses", "rendering"].includes(String(i.render_status)),
+          ).length;
           throw Object.assign(
             new Error(
-              `${belum.length} akun belum lengkap: ` +
-                belum
-                  .slice(0, 4)
-                  .map((b) => `${b.profil} (${b.kurang.join(", ")})`)
-                  .join("; ") +
-                (belum.length > 4 ? "…" : ""),
+              belum.length === 0 && sudah > 0
+                ? "Semua akun yang siap sudah dirender."
+                : `Belum ada akun yang siap. ${belum.length} akun masih kurang: ` +
+                    belum
+                      .slice(0, 3)
+                      .map((b) => `${b.profil} (${b.kurang.join(", ")})`)
+                      .join("; ") +
+                    (belum.length > 3 ? "…" : ""),
             ),
             { status: 400 },
           );

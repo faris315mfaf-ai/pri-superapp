@@ -8,8 +8,9 @@
 //
 // DUA MODE (4 Sep 2026):
 //   • "bersama"  — satu video sumber dipakai semua profil (mode lama).
-//   • "per_akun" — TIAP AKUN punya link, caption, judul, dan highlight sendiri;
-//                  render baru boleh jalan setelah SEMUA akun lengkap.
+//   • "per_akun" — TIAP AKUN punya link, caption, judul, dan highlight sendiri.
+//                  Render TIDAK menunggu semua akun: yang sudah lengkap langsung
+//                  dirender, yang belum dilewati dan bisa menyusul kapan saja.
 // ============================================================
 import { supabase } from "@/lib/supabase";
 import { mediaDariLink } from "@/lib/tikhub";
@@ -109,6 +110,7 @@ type ItemRender = {
   template_id: string;
   judul: string;
   highlight: string;
+  caption: string;
   render_id: string | null;
   render_status: string;
   /** Mode per_akun: sumber milik item ini sendiri. */
@@ -139,10 +141,16 @@ export function kurangnyaItem(it: {
   return kurang;
 }
 
-/** Mulai render untuk item yang belum/gagal — satu panggilan per item. */
-export async function mulaiRenderProyek(
-  proyekId: number,
-): Promise<{ dimulai: number; gagal: { profil: string; pesan: string }[] }> {
+/**
+ * Mulai render untuk item yang belum/gagal — satu panggilan per item.
+ * Mode per_akun: akun yang datanya belum lengkap DILEWATI (bukan digagalkan),
+ * supaya sisanya tetap bisa jalan dan yang tertinggal bisa menyusul.
+ */
+export async function mulaiRenderProyek(proyekId: number): Promise<{
+  dimulai: number;
+  gagal: { profil: string; pesan: string }[];
+  dilewati: { profil: string; kurang: string[] }[];
+}> {
   const db = supabase();
   const { data: proyek } = await db
     .from("studio_proyek")
@@ -164,7 +172,7 @@ export async function mulaiRenderProyek(
     db
       .from("studio_proyek_item")
       .select(
-        "id, profil, template_id, judul, highlight, render_id, render_status, sumber_path, sumber_url, sumber_akun",
+        "id, profil, template_id, judul, highlight, caption, render_id, render_status, sumber_path, sumber_url, sumber_akun",
       )
       .eq("proyek_id", proyekId)
       .in("render_status", ["belum", "gagal"]),
@@ -177,8 +185,21 @@ export async function mulaiRenderProyek(
   const tpl = new Map((templates ?? []).map((t) => [String(t.profil), t]));
   let dimulai = 0;
   const gagal: { profil: string; pesan: string }[] = [];
+  const dilewati: { profil: string; kurang: string[] }[] = [];
   for (const it of (items ?? []) as ItemRender[]) {
     const t = tpl.get(it.profil);
+    // Mode per akun: yang belum lengkap cukup DILEWATI (status tetap "belum")
+    // supaya gampang dilanjutkan setelah datanya diisi.
+    if (perAkun) {
+      const kurang = kurangnyaItem({
+        ...it,
+        template_id: String(it.template_id || t?.template_id || ""),
+      });
+      if (kurang.length > 0) {
+        dilewati.push({ profil: it.profil, kurang });
+        continue;
+      }
+    }
     const templateId = String(it.template_id || t?.template_id || "");
     if (!templateId) {
       gagal.push({
@@ -257,7 +278,7 @@ export async function mulaiRenderProyek(
       .from("studio_proyek")
       .update({ status: "render" })
       .eq("id", proyekId);
-  return { dimulai, gagal };
+  return { dimulai, gagal, dilewati };
 }
 
 /** Tanya Creatomate status item yang masih rendering; simpan hasilnya. */
