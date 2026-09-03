@@ -44,7 +44,7 @@ export function PetSapaan({ userId, namaPemilik }: { userId: string; namaPemilik
       style={{ background: latar }}
       aria-label={`Robot peliharaan ${pemilik}: ${st.nama}`}
     >
-      <RobotSvg jenis={st.jenis} suasana={st.suasana} vitalitas={st.vitalitas} terpasang={st.terpasang} sparepart={st.sparepart_terpasang} ukuran={92} menyapa />
+      <RobotSvg jenis={st.jenis} suasana={st.suasana} vitalitas={st.vitalitas} terpasang={st.terpasang} sparepart={st.sparepart_terpasang} skin={st.skin_terpasang} warna={st.warna_custom} ukuran={92} menyapa />
       <div className="min-w-0 flex-1">
         <motion.div
           initial={{ opacity: 0, x: -8 }}

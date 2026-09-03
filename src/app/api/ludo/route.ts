@@ -44,7 +44,8 @@ type Baris = {
   dibuat_pada: string;
   diperbarui_pada: string;
 };
-const KOLOM = "id, kode, host_id, status, pemain, undangan, state, versi, pemenang_id, dibuat_pada, diperbarui_pada";
+const KOLOM =
+  "id, kode, host_id, status, pemain, undangan, state, versi, pemenang_id, dibuat_pada, diperbarui_pada";
 
 function galat(pesan: string, status = 400): never {
   throw Object.assign(new Error(pesan), { status });
@@ -59,29 +60,63 @@ function buatKode(): string {
 }
 
 /** Robot pet pemain sebagai karakter; bila belum punya → robot bawaan. */
-async function robotPemain(db: ReturnType<typeof supabase>, userId: number, nama: string): Promise<RobotPemain> {
-  const { data } = await db.from("pet_robot").select("jenis, nama, aksesoris_terpasang, sparepart_terpasang").eq("user_id", userId).maybeSingle();
+async function robotPemain(
+  db: ReturnType<typeof supabase>,
+  userId: number,
+  nama: string,
+): Promise<RobotPemain> {
+  const { data } = await db
+    .from("pet_robot")
+    .select(
+      "jenis, nama, aksesoris_terpasang, sparepart_terpasang, skin_terpasang, warna_custom",
+    )
+    .eq("user_id", userId)
+    .maybeSingle();
   if (data) {
     return {
       jenis: data.jenis === "wanita" ? "wanita" : "pria",
       nama: String(data.nama ?? "Robo"),
       terpasang: (data.aksesoris_terpasang as Record<string, string>) ?? {},
       sparepart: (data.sparepart_terpasang as Record<string, string>) ?? {},
+      skin: (data.skin_terpasang as string | null) ?? null,
+      warna: (data.warna_custom as string | null) ?? null,
     };
   }
-  return { jenis: userId % 2 === 0 ? "pria" : "wanita", nama: `Robo ${nama.split(" ")[0] || ""}`.trim(), terpasang: {}, sparepart: {} };
+  return {
+    jenis: userId % 2 === 0 ? "pria" : "wanita",
+    nama: `Robo ${nama.split(" ")[0] || ""}`.trim(),
+    terpasang: {},
+    sparepart: {},
+    skin: null,
+    warna: null,
+  };
 }
 
-async function bacaRuang(db: ReturnType<typeof supabase>, id: number): Promise<Baris | null> {
-  const { data } = await db.from("ludo_game").select(KOLOM).eq("id", id).maybeSingle();
+async function bacaRuang(
+  db: ReturnType<typeof supabase>,
+  id: number,
+): Promise<Baris | null> {
+  const { data } = await db
+    .from("ludo_game")
+    .select(KOLOM)
+    .eq("id", id)
+    .maybeSingle();
   return (data as Baris | null) ?? null;
 }
 
 /** Simpan dengan pemeriksaan versi; gagal = ada pembaruan lain barusan. */
-async function simpan(db: ReturnType<typeof supabase>, b: Baris, patch: Partial<Baris>): Promise<Baris> {
+async function simpan(
+  db: ReturnType<typeof supabase>,
+  b: Baris,
+  patch: Partial<Baris>,
+): Promise<Baris> {
   const { data, error } = await db
     .from("ludo_game")
-    .update({ ...patch, versi: b.versi + 1, diperbarui_pada: new Date().toISOString() })
+    .update({
+      ...patch,
+      versi: b.versi + 1,
+      diperbarui_pada: new Date().toISOString(),
+    })
     .eq("id", b.id)
     .eq("versi", b.versi)
     .select(KOLOM)
@@ -91,13 +126,25 @@ async function simpan(db: ReturnType<typeof supabase>, b: Baris, patch: Partial<
   return data as Baris;
 }
 
-async function keRuang(db: ReturnType<typeof supabase>, b: Baris, uid: number): Promise<RuangLudo> {
+async function keRuang(
+  db: ReturnType<typeof supabase>,
+  b: Baris,
+  uid: number,
+): Promise<RuangLudo> {
   const pemain = b.pemain ?? [];
-  const undanganIds = (b.undangan ?? []).filter((x) => !pemain.some((p) => Number(p.user_id) === Number(x)));
+  const undanganIds = (b.undangan ?? []).filter(
+    (x) => !pemain.some((p) => Number(p.user_id) === Number(x)),
+  );
   let undangan: { user_id: string; nama: string }[] = [];
   if (undanganIds.length > 0) {
-    const { data } = await db.from("app_user").select("id, nama").in("id", undanganIds);
-    undangan = (data ?? []).map((u) => ({ user_id: String(u.id), nama: String(u.nama ?? "") }));
+    const { data } = await db
+      .from("app_user")
+      .select("id, nama")
+      .in("id", undanganIds);
+    undangan = (data ?? []).map((u) => ({
+      user_id: String(u.id),
+      nama: String(u.nama ?? ""),
+    }));
   }
   return {
     id: String(b.id),
@@ -119,13 +166,20 @@ async function keRuang(db: ReturnType<typeof supabase>, b: Baris, uid: number): 
 function patchState(b: Baris, st: StateLudo): Partial<Baris> {
   const pemain = b.pemain ?? [];
   if (st.pemenang !== null) {
-    return { state: st, status: "selesai", pemenang_id: Number(pemain[st.pemenang]?.user_id ?? 0) || null };
+    return {
+      state: st,
+      status: "selesai",
+      pemenang_id: Number(pemain[st.pemenang]?.user_id ?? 0) || null,
+    };
   }
   return { state: st };
 }
 
 /** Giliran kedaluwarsa → langkah otomatis (dipanggil saat GET). */
-async function langkahOtomatisBilaPerlu(db: ReturnType<typeof supabase>, b: Baris): Promise<Baris> {
+async function langkahOtomatisBilaPerlu(
+  db: ReturnType<typeof supabase>,
+  b: Baris,
+): Promise<Baris> {
   if (b.status !== "berjalan" || !b.state) return b;
   const st = b.state;
   if (Date.now() < Date.parse(st.batas)) return b;
@@ -134,11 +188,15 @@ async function langkahOtomatisBilaPerlu(db: ReturnType<typeof supabase>, b: Bari
     let baru: StateLudo;
     if (st.fase === "lempar") {
       baru = terapkanLemparan(st, pemain, randomInt(1, 7));
-      if (baru.fase === "pilih" && baru.pemenang === null) baru = terapkanGerak(baru, pemain, pilihanOtomatis(baru));
+      if (baru.fase === "pilih" && baru.pemenang === null)
+        baru = terapkanGerak(baru, pemain, pilihanOtomatis(baru));
     } else {
       baru = terapkanGerak(st, pemain, pilihanOtomatis(st));
     }
-    baru.log = [...baru.log.slice(-29), "(waktu habis — langkah dijalankan otomatis)"];
+    baru.log = [
+      ...baru.log.slice(-29),
+      "(waktu habis — langkah dijalankan otomatis)",
+    ];
     return await simpan(db, b, patchState(b, baru));
   } catch {
     // konflik versi = orang lain sudah bergerak; kirim data yang ada
@@ -183,12 +241,25 @@ export async function GET(request: Request) {
   });
 }
 
-async function undangPemain(db: ReturnType<typeof supabase>, b: Baris, host: UserPublik, targetId: number): Promise<Baris> {
-  if (!Number.isFinite(targetId) || targetId <= 0) galat("Pemain tidak disebutkan.");
-  if (targetId === Number(host.id)) galat("Tidak bisa mengundang diri sendiri.");
-  const { data: orang } = await db.from("app_user").select("id, nama, aktif, status").eq("id", targetId).maybeSingle();
-  if (!orang || orang.aktif !== true || orang.status !== "aktif") galat("Pengguna tidak ditemukan / tidak aktif.", 404);
-  if ((b.pemain ?? []).some((p) => Number(p.user_id) === targetId)) galat(`${orang.nama} sudah ada di ruang.`, 409);
+async function undangPemain(
+  db: ReturnType<typeof supabase>,
+  b: Baris,
+  host: UserPublik,
+  targetId: number,
+): Promise<Baris> {
+  if (!Number.isFinite(targetId) || targetId <= 0)
+    galat("Pemain tidak disebutkan.");
+  if (targetId === Number(host.id))
+    galat("Tidak bisa mengundang diri sendiri.");
+  const { data: orang } = await db
+    .from("app_user")
+    .select("id, nama, aktif, status")
+    .eq("id", targetId)
+    .maybeSingle();
+  if (!orang || orang.aktif !== true || orang.status !== "aktif")
+    galat("Pengguna tidak ditemukan / tidak aktif.", 404);
+  if ((b.pemain ?? []).some((p) => Number(p.user_id) === targetId))
+    galat(`${orang.nama} sudah ada di ruang.`, 409);
   const undangan = [...new Set([...(b.undangan ?? []).map(Number), targetId])];
   const baru = await simpan(db, b, { undangan });
   await kirimKabar({
@@ -206,41 +277,82 @@ export async function POST(request: Request) {
     const user = await pastikanMasuk(request);
     const db = supabase();
     const uid = Number(user.id);
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const body = (await request.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >;
     const aksi = String(body.aksi ?? "");
 
     if (aksi === "buat") {
-      if (user.role !== "master") galat("Ludo Robot masih percobaan — hanya master yang bisa membuat ruang.", 403);
+      if (user.role !== "master")
+        galat(
+          "Ludo Robot masih percobaan — hanya master yang bisa membuat ruang.",
+          403,
+        );
       const robot = await robotPemain(db, uid, user.nama);
-      const pemain: Pemain[] = [{ user_id: uid, nama: user.nama, avatar_url: user.avatar_url ?? "", warna: 0, robot }];
+      const pemain: Pemain[] = [
+        {
+          user_id: uid,
+          nama: user.nama,
+          avatar_url: user.avatar_url ?? "",
+          warna: 0,
+          robot,
+        },
+      ];
       for (let coba = 0; coba < 5; coba++) {
         const { data, error } = await db
           .from("ludo_game")
-          .insert({ kode: buatKode(), host_id: uid, status: "menunggu", pemain, undangan: [], state: {} })
+          .insert({
+            kode: buatKode(),
+            host_id: uid,
+            status: "menunggu",
+            pemain,
+            undangan: [],
+            state: {},
+          })
           .select(KOLOM)
           .maybeSingle();
         if (!error && data) return keRuang(db, data as Baris, uid);
-        if (error && error.code !== "23505") throw new Error("Gagal membuat ruang.");
+        if (error && error.code !== "23505")
+          throw new Error("Gagal membuat ruang.");
       }
       throw new Error("Gagal membuat kode ruang unik.");
     }
 
     if (aksi === "gabung") {
-      const kode = String(body.kode ?? "").trim().toUpperCase();
+      const kode = String(body.kode ?? "")
+        .trim()
+        .toUpperCase();
       if (kode.length !== 6) galat("Kode ruang harus 6 karakter.");
-      const { data } = await db.from("ludo_game").select(KOLOM).eq("kode", kode).maybeSingle();
+      const { data } = await db
+        .from("ludo_game")
+        .select(KOLOM)
+        .eq("kode", kode)
+        .maybeSingle();
       const b = (data as Baris | null) ?? null;
       if (!b) galat("Ruang dengan kode itu tidak ada.", 404);
       const pemain = b.pemain ?? [];
       // Sudah jadi pemain → langsung diantar ke ruangnya (idempoten), apa pun statusnya.
-      if (pemain.some((p) => Number(p.user_id) === uid)) return keRuang(db, b, uid);
-      if (b.status !== "menunggu") galat("Permainan di ruang itu sudah dimulai / selesai.", 409);
-      if (pemain.length >= MAKS_PEMAIN) galat("Ruang sudah penuh (4 pemain).", 409);
+      if (pemain.some((p) => Number(p.user_id) === uid))
+        return keRuang(db, b, uid);
+      if (b.status !== "menunggu")
+        galat("Permainan di ruang itu sudah dimulai / selesai.", 409);
+      if (pemain.length >= MAKS_PEMAIN)
+        galat("Ruang sudah penuh (4 pemain).", 409);
       const terpakai = new Set(pemain.map((p) => p.warna));
       const warna = [0, 1, 2, 3].find((w) => !terpakai.has(w)) ?? pemain.length;
       const robot = await robotPemain(db, uid, user.nama);
       const baru = await simpan(db, b, {
-        pemain: [...pemain, { user_id: uid, nama: user.nama, avatar_url: user.avatar_url ?? "", warna, robot }],
+        pemain: [
+          ...pemain,
+          {
+            user_id: uid,
+            nama: user.nama,
+            avatar_url: user.avatar_url ?? "",
+            warna,
+            robot,
+          },
+        ],
         undangan: (b.undangan ?? []).filter((x) => Number(x) !== uid),
       });
       return keRuang(db, baru, uid);
@@ -255,7 +367,8 @@ export async function POST(request: Request) {
 
     if (aksi === "undang") {
       if (!sayaHost) galat("Hanya host yang bisa mengundang.", 403);
-      if (b.status !== "menunggu") galat("Undangan hanya sebelum permainan dimulai.");
+      if (b.status !== "menunggu")
+        galat("Undangan hanya sebelum permainan dimulai.");
       if (pemain.length >= MAKS_PEMAIN) galat("Ruang sudah penuh (4 pemain).");
       const baru = await undangPemain(db, b, user, Number(body.user_id));
       return keRuang(db, baru, uid);
@@ -263,7 +376,8 @@ export async function POST(request: Request) {
 
     if (aksi === "batalkan") {
       if (!sayaHost) galat("Hanya host yang bisa membatalkan.", 403);
-      if (b.status === "berjalan") galat("Permainan sedang berjalan — pakai Keluar.");
+      if (b.status === "berjalan")
+        galat("Permainan sedang berjalan — pakai Keluar.");
       await db.from("ludo_game").delete().eq("id", id);
       return { sukses: true };
     }
@@ -276,7 +390,9 @@ export async function POST(request: Request) {
           await db.from("ludo_game").delete().eq("id", id);
           return { sukses: true, dihapus: true };
         }
-        const baru = await simpan(db, b, { pemain: pemain.filter((p) => Number(p.user_id) !== uid) });
+        const baru = await simpan(db, b, {
+          pemain: pemain.filter((p) => Number(p.user_id) !== uid),
+        });
         return keRuang(db, baru, uid);
       }
       if (b.status === "berjalan" && b.state) {
@@ -284,7 +400,12 @@ export async function POST(request: Request) {
         const st: StateLudo = structuredClone(b.state);
         const sisa = pemain.filter((p) => Number(p.user_id) !== uid);
         st.log = [...st.log.slice(-29), `${user.nama} keluar dari permainan.`];
-        st.pemenang = sisa.length === 1 ? pemain.findIndex((p) => Number(p.user_id) === Number(sisa[0].user_id)) : null;
+        st.pemenang =
+          sisa.length === 1
+            ? pemain.findIndex(
+                (p) => Number(p.user_id) === Number(sisa[0].user_id),
+              )
+            : null;
         st.fase = "lempar";
         st.boleh = [];
         const baru = await simpan(db, b, {
@@ -303,13 +424,23 @@ export async function POST(request: Request) {
       if (pemain.length < 2) galat("Butuh minimal 2 pemain.");
       // Segarkan karakter robot tiap pemain (bisa berubah sejak bergabung).
       const segar: Pemain[] = [];
-      for (const p of pemain) segar.push({ ...p, robot: await robotPemain(db, Number(p.user_id), p.nama) });
-      const baru = await simpan(db, b, { pemain: segar, status: "berjalan", state: stateAwal(segar.length), undangan: [] });
+      for (const p of pemain)
+        segar.push({
+          ...p,
+          robot: await robotPemain(db, Number(p.user_id), p.nama),
+        });
+      const baru = await simpan(db, b, {
+        pemain: segar,
+        status: "berjalan",
+        state: stateAwal(segar.length),
+        undangan: [],
+      });
       return keRuang(db, baru, uid);
     }
 
     if (aksi === "lempar" || aksi === "gerak") {
-      if (b.status !== "berjalan" || !b.state) galat("Permainan tidak sedang berjalan.");
+      if (b.status !== "berjalan" || !b.state)
+        galat("Permainan tidak sedang berjalan.");
       const saya = indeksSaya(b, uid);
       if (saya < 0) galat("Anda bukan pemain di ruang ini.", 403);
       const st = b.state;
@@ -321,7 +452,8 @@ export async function POST(request: Request) {
       } else {
         if (st.fase !== "pilih") galat("Lempar dadu dulu.");
         const token = Number(body.token);
-        if (!st.boleh.includes(token)) galat("Token itu tidak bisa digerakkan.");
+        if (!st.boleh.includes(token))
+          galat("Token itu tidak bisa digerakkan.");
         baru = terapkanGerak(st, pemain, token);
       }
       const disimpan = await simpan(db, b, patchState(b, baru));

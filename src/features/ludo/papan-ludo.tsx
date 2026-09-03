@@ -764,6 +764,8 @@ export function PapanLudo({
                       suasana="senang"
                       terpasang={p.robot.terpasang}
                       sparepart={p.robot.sparepart}
+                      skin={p.robot.skin ?? null}
+                      warna={p.robot.warna ?? null}
                       ukuran={lebar}
                       animasi={t.boleh}
                       vitalitas={t.boleh ? "semangat" : "normal"}

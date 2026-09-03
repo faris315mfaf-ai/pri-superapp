@@ -87,6 +87,9 @@ export type RobotPemain = {
   terpasang: Record<string, string>;
   sparepart: Record<string, string>;
   nama: string;
+  /** Skin eksklusif & warna custom (Pet v3, 3 Sep 2026); opsional agar ruang lama tetap terbaca. */
+  skin?: string | null;
+  warna?: string | null;
 };
 
 export type Pemain = {

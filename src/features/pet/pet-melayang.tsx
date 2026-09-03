@@ -144,6 +144,8 @@ export function PetMelayang({ onBuka, versi = 0 }: { onBuka: () => void; versi?:
         vitalitas={seret ? "semangat" : st.vitalitas}
         terpasang={st.terpasang}
         sparepart={st.sparepart_terpasang}
+        skin={st.skin_terpasang}
+        warna={st.warna_custom}
         ukuran={88}
         animasi={!seret}
       />

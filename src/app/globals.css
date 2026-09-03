@@ -946,3 +946,38 @@
 .ludo-markas-giliran {
   animation: ludo-markas-giliran 1.2s ease-in-out infinite;
 }
+
+/* Pet v3 — skin eksklusif: sayap mengepak dari pangkalnya; api pedang menyala dari bawah. */
+@keyframes pet-kepak {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-7deg);
+  }
+}
+@keyframes pet-kepak-kanan {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(7deg);
+  }
+}
+.pet-kepak {
+  animation: pet-kepak 1.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: 100% 25%;
+}
+.pet-kepak-kanan {
+  animation: pet-kepak-kanan 1.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: 0% 25%;
+}
+.pet-api-atas {
+  animation: pet-api 0.35s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: bottom;
+}

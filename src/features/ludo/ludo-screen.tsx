@@ -31,7 +31,7 @@ function KartuPemain({ p, giliran, sisaDetik, rumah, saya }: { p: Pemain; gilira
   return (
     <div className={cn("flex items-center gap-2 rounded-xl border-2 px-2 py-1.5", giliran ? "ludo-giliran" : "")} style={{ borderColor: w.utama, background: `${w.utama}14` }}>
       <div className="h-11 w-9 shrink-0 overflow-hidden">
-        <RobotSvg jenis={p.robot.jenis} suasana="senang" terpasang={p.robot.terpasang} sparepart={p.robot.sparepart} ukuran={36} animasi={giliran} />
+        <RobotSvg jenis={p.robot.jenis} suasana="senang" terpasang={p.robot.terpasang} sparepart={p.robot.sparepart} skin={p.robot.skin ?? null} warna={p.robot.warna ?? null} ukuran={36} animasi={giliran} />
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[11.5px] font-bold text-teks-utama">
@@ -288,7 +288,7 @@ export function LudoScreen({ onKembali }: { onKembali: () => void }) {
           <div className="mt-2 grid grid-cols-2 gap-2">
             {ruang.pemain.map((p) => (
               <div key={p.user_id} className="flex flex-col items-center rounded-xl border-2 p-2" style={{ borderColor: WARNA[p.warna].utama, background: `${WARNA[p.warna].utama}14` }}>
-                <RobotSvg jenis={p.robot.jenis} suasana="senang" terpasang={p.robot.terpasang} sparepart={p.robot.sparepart} ukuran={64} />
+                <RobotSvg jenis={p.robot.jenis} suasana="senang" terpasang={p.robot.terpasang} sparepart={p.robot.sparepart} skin={p.robot.skin ?? null} warna={p.robot.warna ?? null} ukuran={64} />
                 <p className="mt-1 truncate text-[11.5px] font-bold text-teks-utama">{p.nama}</p>
                 <p className="text-[10px] text-teks-sekunder">
                   {WARNA[p.warna].nama} · {p.robot.nama}
@@ -463,7 +463,7 @@ export function LudoScreen({ onKembali }: { onKembali: () => void }) {
                   </span>
                   <p className="mt-2 text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">Pemenang</p>
                   <div className="mx-auto mt-1 w-fit">
-                    <RobotSvg jenis={pemenang.robot.jenis} suasana="senang" vitalitas="semangat" terpasang={pemenang.robot.terpasang} sparepart={pemenang.robot.sparepart} ukuran={120} />
+                    <RobotSvg jenis={pemenang.robot.jenis} suasana="senang" vitalitas="semangat" terpasang={pemenang.robot.terpasang} sparepart={pemenang.robot.sparepart} skin={pemenang.robot.skin ?? null} warna={pemenang.robot.warna ?? null} ukuran={120} />
                   </div>
                   <p className="font-heading text-[20px] font-extrabold text-teks-utama">
                     {pemenang.nama} <Crown className="inline h-5 w-5 text-amber-500" />
