@@ -43,6 +43,7 @@ import { LayarPerbaikan } from "@/features/perbaikan/layar-perbaikan";
 import { PilihUcapanUltah } from "@/features/notifikasi/pilih-ucapan-ultah";
 import { ModalChangelog } from "@/features/profil/modal-changelog";
 import { TurPemandu } from "@/features/tur/tur-pemandu";
+import { ModalKembangApi } from "@/features/beranda/modal-kembang-api";
 import { AcaraScreen } from "@/features/acara/acara-screen";
 import { TabelAnggotaScreen } from "@/features/pengguna/tabel-anggota-screen";
 import { AbsensiHariIniScreen } from "@/features/pengguna/absensi-hari-ini-screen";
@@ -988,6 +989,8 @@ export default function Page() {
 
       {/* Tutorial interaktif daftar akun → Kepatuhan Komen (3 Sep 2026);
           menunggu changelog ditutup dulu supaya tidak bertumpuk. */}
+      {/* Perayaan reset periode + juara komentar (3 Sep 2026) */}
+      {aplikasiAktif && !changelogBuka && <ModalKembangApi />}
       {aplikasiAktif && !changelogBuka && <TurPemandu />}
 
       {/* Pemilih ucapan ulang tahun (dari notifikasi ultah yang diklik) */}

@@ -582,3 +582,20 @@
   will-change: opacity, transform;
   pointer-events: none;
 }
+
+/* Running text juara komentar (features/beranda/running-text-juara) —
+   hanya transform, ringan untuk compositor. */
+@keyframes teks-berjalan {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+.teks-berjalan {
+  display: inline-block;
+  padding-left: 100%;
+  animation: teks-berjalan 24s linear infinite;
+  will-change: transform;
+}

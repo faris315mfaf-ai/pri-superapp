@@ -16,7 +16,7 @@
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
-import { CalendarClock, Check, Link2, Loader2, Send, UploadCloud, Wand2, X } from "lucide-react";
+import { CalendarClock, Check, Link2, Loader2, Send, Share2, UploadCloud, Wand2, X } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
 import { toast, useAppStore } from "@/hooks/use-app-store";
@@ -32,7 +32,7 @@ import {
   type JadwalTvrku,
   type TvrkuPost,
 } from "@/services";
-import { PlatformIcon } from "@/components/platform-icon";
+import { PlatformIcon, labelPlatform } from "@/components/platform-icon";
 import { cn } from "@/lib/utils";
 
 const LABEL: Record<string, string> = {
@@ -58,6 +58,54 @@ function jamWib(iso: string): string {
 export function UnggahSosmedSaya() {
   const [tertaut, setTertaut] = useState<string[] | null>(null);
   const [riwayat, setRiwayat] = useState<TvrkuPost[] | null>(null);
+  // TOMBOL BAGIKAN (3 Sep 2026): setelah unggah, URL postingan per platform
+  // terbit beberapa saat kemudian → riwayat dipantau tiap 15 dtk (maks 4 mnt)
+  // sampai tautannya ada, lalu tombol Bagikan muncul di riwayat.
+  const [pantauSejak, setPantauSejak] = useState<number | null>(null);
+  useEffect(() => {
+    if (pantauSejak === null) return;
+    let hidup = true;
+    const t = setInterval(() => {
+      if (Date.now() - pantauSejak > 4 * 60_000) {
+        setPantauSejak(null);
+        return;
+      }
+      getRiwayatTvrkuPost()
+        .then((posts) => {
+          if (!hidup) return;
+          setRiwayat(posts);
+          const terbaru = posts[0];
+          if (terbaru && Object.keys(terbaru.tautan ?? {}).length >= terbaru.platforms.length) {
+            setPantauSejak(null);
+            toast("sukses", "Tautan siap dibagikan", "Tekan Bagikan di Riwayat Post Saya.");
+          }
+        })
+        .catch(() => {
+          // coba lagi pada detik berikutnya
+        });
+    }, 15_000);
+    return () => {
+      hidup = false;
+      clearInterval(t);
+    };
+  }, [pantauSejak]);
+
+  async function bagikan(r: TvrkuPost) {
+    const entri = Object.entries(r.tautan ?? {});
+    if (entri.length === 0) return;
+    const teks = `${r.judul}\n` + entri.map(([p, u]) => `${labelPlatform(p)}: ${u}`).join("\n");
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ title: r.judul, text: teks });
+        return;
+      }
+      await navigator.clipboard.writeText(teks);
+      toast("sukses", "Tautan disalin", `${entri.length} tautan siap ditempel ke mana saja.`);
+    } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
+      toast("peringatan", "Tidak bisa membagikan otomatis", "Salin tautannya dari daftar di bawah judul.");
+    }
+  }
 
   const [berkas, setBerkas] = useState<File | null>(null);
   // Berkas yang ditolak karena > MAKS_MB — dipakai kartu arahan kompres.
@@ -251,6 +299,8 @@ export function UnggahSosmedSaya() {
       if (inputRef.current) inputRef.current.value = "";
       setRiwayat(await getRiwayatTvrkuPost().catch(() => riwayat ?? []));
       setJadwalAntre(await getJadwalTvrku().catch(() => jadwalAntre ?? []));
+      // Tautan hasil terbit beberapa saat lagi → pantau supaya tombol Bagikan muncul.
+      if (!hasil.terjadwal) setPantauSejak(Date.now());
     } catch (e) {
       toast("error", "Gagal", e instanceof Error ? e.message : "Coba lagi sebentar.");
     } finally {
@@ -632,6 +682,35 @@ export function UnggahSosmedSaya() {
                     </span>
                   )}
                 </div>
+                {/* Tautan hasil per platform + tombol Bagikan (3 Sep 2026) */}
+                {Object.keys(r.tautan ?? {}).length > 0 ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {Object.entries(r.tautan).map(([p, u]) => (
+                      <a
+                        key={p}
+                        href={u}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="glass btn-tekan flex items-center gap-1 rounded-full px-2 py-1 text-[10.5px] font-bold text-teks-utama"
+                      >
+                        <PlatformIcon platform={p} className="h-3 w-3" />
+                        {labelPlatform(p)}
+                      </a>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => void bagikan(r)}
+                      className="btn-tekan ml-auto flex h-8 items-center gap-1 rounded-lg px-2.5 text-[11px] font-bold text-white"
+                      style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+                    >
+                      <Share2 className="h-3.5 w-3.5" /> Bagikan
+                    </button>
+                  </div>
+                ) : pantauSejak !== null && r.id === riwayat[0]?.id ? (
+                  <p className="mt-1.5 flex items-center gap-1 text-[10.5px] text-teks-sekunder">
+                    <Loader2 className="h-3 w-3 animate-spin" /> menunggu tautan postingan terbit…
+                  </p>
+                ) : null}
               </div>
             ))}
           </div>

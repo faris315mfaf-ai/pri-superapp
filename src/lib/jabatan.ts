@@ -140,3 +140,16 @@ export function adalahKetum(u: { role: string; jabatan?: string | null } | null 
   if (!u) return false;
   return u.role === "super_admin" || (u.jabatan ?? "").trim() === "Ketua Umum";
 }
+
+/**
+ * Bebas kewajiban (3 Sep 2026): KPI, absensi, kepatuhan komentar, dan
+ * kewajiban upload video TIDAK ditampilkan untuk orang ini — Ketua Umum
+ * secara bawaan, plus siapa pun yang dibebaskan lewat Panel Master
+ * (kolom app_user.sembunyi_kewajiban).
+ */
+export function bebasKewajiban(
+  u: { role: string; jabatan?: string | null; sembunyi_kewajiban?: boolean | null } | null | undefined,
+): boolean {
+  if (!u) return false;
+  return adalahKetum(u) || u.sembunyi_kewajiban === true;
+}

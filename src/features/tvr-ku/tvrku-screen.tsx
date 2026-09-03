@@ -1,5 +1,5 @@
 "use client";
-import { adalahKetum } from "@/lib/jabatan";
+import { bebasKewajiban } from "@/lib/jabatan";
 import { adalahAdminStudio, adalahPalugodam } from "@/lib/struktur";
 import { AccAjuanKomen } from "./acc-ajuan-komen";
 
@@ -508,7 +508,8 @@ export function TvrKuScreen({
   user: User;
   onBukaNotifikasi?: () => void;
 }) {
-  const ketum = adalahKetum(_user);
+  // Bebas kewajiban (3 Sep 2026): Ketua Umum ATAU yang dibebaskan Panel Master.
+  const ketum = bebasKewajiban(_user);
   // Siaran Serentak (3 Sep 2026): khusus master / Ketua Umum.
   const bolehSiaran = _user.role === "master" || _user.role === "super_admin";
   // Studio PALUGODAM (3 Sep 2026): master/super_admin + kepala Divisi PALUGODAM.

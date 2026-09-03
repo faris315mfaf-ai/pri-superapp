@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 // pintasan Laporan Kerja tetap ada di tab Profil. Kode dibiarkan supaya
 // tinggal membalik konstanta bila ingin ditampilkan lagi.
 const TAMPILKAN_KERJA_HARI_INI = false;
+import { bebasKewajiban } from "@/lib/jabatan";
 import type { User } from "@/types";
 
 function tanggalWibPerangkat(): string {
@@ -190,6 +191,9 @@ export function BerandaAnggotaPanel({
     komentar && komentar.total > 0
       ? Math.round((100 * komentar.sudah) / komentar.total)
       : 0;
+
+  // Bebas kewajiban (Panel Master, 3 Sep 2026): hanya pengumuman, tanpa kartu KPI/komentar.
+  if (bebasKewajiban(user)) return <KartuPengumumanTerbaru />;
 
   return (
     <>

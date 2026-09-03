@@ -192,6 +192,11 @@ export async function POST(request: Request) {
     // Atas nama siapa: kosong / sama dengan diri sendiri = diri sendiri.
     const namaTarget = String(body.nama ?? "").trim() || user.nama;
     const atasNamaLain = namaTarget !== user.nama;
+    // ATURAN (fix 3 Sep 2026): ajuan komentar manual HANYA boleh dilakukan
+    // oleh yang bersangkutan — bukan orang lain atas namanya.
+    if (atasNamaLain) {
+      throw Object.assign(new Error("Ajuan komentar hanya bisa dilakukan oleh yang bersangkutan sendiri."), { status: 403 });
+    }
     const sebutan = atasNamaLain ? namaTarget : "Anda";
     if (!idPost) throw Object.assign(new Error("Postingan tidak disebutkan."), { status: 400 });
     if (!username) throw Object.assign(new Error(`Pilih username yang ${sebutan} pakai berkomentar.`), { status: 400 });

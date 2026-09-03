@@ -166,15 +166,15 @@ export function ModalKepatuhanDetail({ nama, onTutup }: { nama: string; onTutup:
                   </>
                 ) : (
                   <>
-                    {nama} sudah komen tapi belum tercatat? Tekan <b>Ajukan</b> di postingan itu, pilih username
-                    miliknya — Divisi PALUGODAM akan memeriksa dan menyetujuinya. Nama Anda tercatat sebagai pengaju.
+                    Ajuan &quot;sudah komen tapi belum tercatat&quot; hanya bisa dilakukan oleh {nama} sendiri dari akunnya.
+                    Di sini Anda bisa melihat postingan mana yang sudah/belum dikomentarinya.
                   </>
                 )}
               </p>
               <div className="mt-2 flex flex-col gap-1.5">
                 {data.daftar.map((d) => {
-                  // Berlaku untuk semua pengguna (3 Sep 2026), bukan hanya diri sendiri.
-                  const bolehAjukan = !d.sudah && (!d.ajuan || d.ajuan.status === "ditolak");
+                  // Ajukan HANYA untuk diri sendiri (fix 3 Sep 2026); melihat boleh siapa saja.
+                  const bolehAjukan = data.milik_sendiri && !d.sudah && (!d.ajuan || d.ajuan.status === "ditolak");
                   const membuka = ajukanUntuk === d.id_postingan;
                   const akunCocok = data.akun.filter((a) => a.platform === d.platform);
                   return (

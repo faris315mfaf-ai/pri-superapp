@@ -64,6 +64,8 @@ export type User = {
   google_linked?: boolean;
   /** Foto profil dari Google (bisa beda dgn avatar_url aplikasi) */
   google_avatar?: string;
+  /** true = dibebaskan Panel Master dari KPI/absensi/kepatuhan komentar/kewajiban upload (3 Sep 2026) */
+  sembunyi_kewajiban?: boolean;
 };
 
 // Akun sosmed yang wajib dikomentari

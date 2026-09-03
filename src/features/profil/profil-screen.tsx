@@ -1,5 +1,5 @@
 "use client";
-import { adalahKetum } from "@/lib/jabatan";
+import { bebasKewajiban } from "@/lib/jabatan";
 
 // ============================================================
 // ProfilScreen — tab utama profil pengguna & pengaturan.
@@ -704,7 +704,7 @@ export function ProfilScreen({
       <KartuTim user={user} />
 
       {/* Kehadiran & kinerja harian — Ketua Umum bukan objek absensi/KPI (2 Sep 2026) */}
-      {!adalahKetum(user) && (
+      {!bebasKewajiban(user) && (
       <FadeInUp delay={0.06}>
         <SectionTitle judul="Kehadiran & Kinerja" className="mt-6" />
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">

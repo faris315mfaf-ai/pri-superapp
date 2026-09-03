@@ -42,6 +42,12 @@ const ANGGARAN_MS = 40_000;
 
 /** Postingan yang komentarnya baru diperiksa < 10 mnt → dilewati (hemat). */
 const SEGAR_MS = 10 * 60 * 1000;
+/**
+ * Postingan yang tidak muncul lagi di riwayat akun (diarsipkan/dihapus di
+ * sosmednya) baru DIKELUARKAN dari kewajiban bila tetap hilang selama ini —
+ * mencegah salah hapus karena riwayat sesaat tidak lengkap (3 Sep 2026).
+ */
+const HILANG_KONFIRMASI_MS = 15 * 60_000;
 
 /**
  * Awalan id_komentar per platform. WAJIB berbeda tiap platform: tanpa
@@ -377,6 +383,40 @@ export async function jalankanAnalisisAyrshare(opsi: {
       );
     }
 
+    // POSTINGAN HILANG (bug fix 3 Sep 2026): postingan periode ini yang
+    // tersimpan di DB tetapi TIDAK ADA lagi di riwayat akunnya (diarsipkan /
+    // dihapus) → setelah ≥15 menit tetap hilang: status 'dihapus' dan baris
+    // rekapnya dibuang, jadi angka kewajiban komentar anggota ikut berkurang.
+    // Hanya bila riwayat terbaca LENGKAP (< batas ambil), supaya potongan
+    // riwayat tidak disalahartikan sebagai penghapusan.
+    if (riwayat.length > 0 && riwayat.length < AMBIL_RIWAYAT) {
+      const adaSekarang = new Set(postPeriode.map((p) => idPostinganKanonik(akun.platform, p.id, p.url)));
+      const { data: tersimpan } = await db
+        .from("postingan")
+        .select("id_postingan, hilang_sejak, komentar_status")
+        .eq("periode", periode)
+        .eq("platform", akun.platform)
+        .eq("akun_wajib", akun.username);
+      const kiniIso = new Date().toISOString();
+      for (const t of tersimpan ?? []) {
+        const id = String(t.id_postingan);
+        if (adaSekarang.has(id) || t.komentar_status === "dihapus") continue;
+        if (!t.hilang_sejak) {
+          await db.from("postingan").update({ hilang_sejak: kiniIso }).eq("id_postingan", id);
+          continue;
+        }
+        if (Date.now() - new Date(String(t.hilang_sejak)).getTime() < HILANG_KONFIRMASI_MS) continue;
+        await db.from("rekap").delete().eq("periode", periode).eq("id_postingan", id);
+        await db
+          .from("postingan")
+          .update({ komentar_status: "dihapus", komentar_diperiksa_pada: kiniIso })
+          .eq("id_postingan", id);
+        peringatan.push(
+          `${akun.username} (${akun.platform}): postingan ${id} sudah tidak ada di akunnya (diarsipkan/dihapus) — dikeluarkan dari kewajiban komentar.`,
+        );
+      }
+    }
+
     if (postPeriode.length === 0) continue;
     totalPost += postPeriode.length;
 
@@ -405,6 +445,8 @@ export async function jalankanAnalisisAyrshare(opsi: {
             // (di bawah), supaya panggilan lanjutan tak melewati postingan
             // yang sebenarnya belum diperiksa.
             updated_at: new Date().toISOString(),
+            // Terlihat lagi di riwayat → bukan postingan hilang.
+            hilang_sejak: null,
           };
         }),
         (b) => b.id_postingan,
@@ -530,17 +572,42 @@ export async function jalankanAnalisisAyrshare(opsi: {
       }
 
       // 3. Rekap: SEMUA anggota aktif × postingan ini. Cocok = Comply.
+      //
+      // BUG FIX 3 Sep 2026 ("username benar tapi tidak masuk"): Ayrshare
+      // hanya mengembalikan MAKSIMAL 50 komentar per postingan (terbukti:
+      // 50 dari 105), dan 50 yang mana berubah-ubah tiap panggilan. Dulu
+      // rekap dihitung dari hasil panggilan INI saja → komentar anggota
+      // yang sempat terbaca lalu tergeser keluar dari 50 itu membuat status
+      // Comply DITIMPA jadi "Belum Komen". Kini rekap dihitung dari SEMUA
+      // komentar postingan ini yang pernah tersimpan (akumulasi tiap
+      // putaran), dan username dicocokkan ulang ke akun yang mungkin baru
+      // didaftarkan setelah komentarnya tersimpan.
+      const { data: semuaKomen } = await db
+        .from("komentar")
+        .select("id, username_komentator, nama_kader, waktu_komentar")
+        .eq("id_postingan", idPost)
+        .eq("periode", periode)
+        .range(0, 999);
       const jumlahPer = new Map<string, number>();
-      for (const b of barisKomentar) {
-        if (!b.nama_kader) continue;
+      const perbaikiNama: { id: number; nama: string }[] = [];
+      for (const b of semuaKomen ?? []) {
+        const uname = String(b.username_komentator ?? "").toLowerCase().replace(/^@/, "");
+        const pemilik = pemilikAkun.get(`${akun.platform}|${uname}`);
+        const nama = pemilik?.nama ?? (b.nama_kader ? String(b.nama_kader) : null);
+        if (!nama) continue;
+        if (pemilik && b.nama_kader !== pemilik.nama) perbaikiNama.push({ id: Number(b.id), nama: pemilik.nama });
         // ATURAN 3 Sep 2026: hanya komentar yang DITULIS di dalam jendela
         // periode (19:00 kemarin s.d. 18:59 hari ini) yang dihitung;
         // komentar di luar jendela tetap tersimpan sebagai arsip tapi
         // tidak menambah kepatuhan. Waktu yang tak diketahui tetap dihitung
         // (tak ada dasar untuk menghukum).
-        const tKomen = b.waktu_komentar ? new Date(b.waktu_komentar).getTime() : NaN;
+        const tKomen = b.waktu_komentar ? new Date(String(b.waktu_komentar)).getTime() : NaN;
         if (Number.isFinite(tKomen) && (tKomen < batasMs || tKomen >= batasAkhirMs)) continue;
-        jumlahPer.set(b.nama_kader, (jumlahPer.get(b.nama_kader) ?? 0) + 1);
+        jumlahPer.set(nama, (jumlahPer.get(nama) ?? 0) + 1);
+      }
+      // Komentar lama yang usernamenya baru cocok sekarang → nama kadernya dilengkapi.
+      for (const pb of perbaikiNama.slice(0, 200)) {
+        await db.from("komentar").update({ nama_kader: pb.nama }).eq("id", pb.id);
       }
       const barisRekap = (roster ?? []).map((r) => {
         const adaAjuan = ajuanDisetujui.has(`${r.nama}|${idPost}`);

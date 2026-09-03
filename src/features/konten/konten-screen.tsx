@@ -25,6 +25,7 @@ import { KartuWajibKomen } from "@/features/konten/kartu-wajib-komen";
 import { GaleriLingkaran } from "@/features/konten/galeri-akun";
 import { BerandaAnggotaPanel } from "./beranda-anggota";
 import { TombolLonceng } from "@/components/tombol-lonceng";
+import { bebasKewajiban } from "@/lib/jabatan";
 import type { User } from "@/types";
 
 export function KontenScreen({
@@ -69,8 +70,9 @@ export function KontenScreen({
       <KartuVideoBaru />
 
       {/* Postingan wajib dikomentari kader hari ini — status DIVERIFIKASI
-          dari komentar asli (rekap QC), hasil sinkron otomatis Ayrshare. */}
-      <KartuWajibKomen />
+          dari komentar asli (rekap QC), hasil sinkron otomatis Ayrshare.
+          Disembunyikan untuk yang bebas kewajiban (Panel Master, 3 Sep 2026). */}
+      {!bebasKewajiban(user) && <KartuWajibKomen />}
 
       {/* Lingkaran akun TV Rakyat (official + anggota) → galeri video */}
       <GaleriLingkaran />

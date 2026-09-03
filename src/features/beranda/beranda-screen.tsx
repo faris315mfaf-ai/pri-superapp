@@ -1,5 +1,5 @@
 "use client";
-import { adalahKetum } from "@/lib/jabatan";
+import { bebasKewajiban } from "@/lib/jabatan";
 
 // ============================================================
 // BerandaScreen — halaman pertama untuk Ketua & Anggota.
@@ -39,6 +39,7 @@ import { KontenScreen } from "@/features/konten/konten-screen";
 import { SeksiLipat } from "@/components/seksi-lipat";
 import { TataLetakModul } from "@/components/tata-letak-modul";
 import { KartuUltah } from "@/components/ultah";
+import { RunningTextJuara } from "./running-text-juara";
 import { JamDigital } from "@/components/jam-digital";
 import {
   getAbsensi,
@@ -119,7 +120,8 @@ export function BerandaScreen({
   // dimatikan tidak boleh diam-diam tetap memanggil server.
   // Ketua Umum (2 Sep 2026): bukan objek KPI/absensi — kartu-kartunya
   // tidak dirender dan datanya tidak ditarik.
-  const ketum = adalahKetum(user);
+  // Bebas kewajiban (3 Sep 2026): Ketua Umum ATAU yang dibebaskan Panel Master.
+  const ketum = bebasKewajiban(user);
   const mauKerja = boleh("beranda.kpi_kerja") && !ketum;
   const mauVideo = boleh("beranda.kpi_video") && !ketum;
   const mauKomentar = boleh("beranda.kpi_komentar") && !ketum;
@@ -227,6 +229,9 @@ export function BerandaScreen({
 
       {/* Ulang tahun hari ini */}
       <KartuUltah idKu={user.id} />
+
+      {/* Running text juara komentar periode terakhir (3 Sep 2026) */}
+      <RunningTextJuara />
 
       {/* CHAT NAKA (3 Sep 2026): untuk anggota TANPA jabatan — tombol WhatsApp
           langsung ke NAKA. Pemegang jabatan / pengurus tidak melihatnya. */}

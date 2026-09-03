@@ -131,12 +131,30 @@ export async function GET(request: Request) {
     after(bersihkanVideoKedaluwarsa);
     // PALUGODAM: pesanan yang rendernya sudah selesai ikut diposting.
     if (adalahPalugodam(user)) after(() => prosesPesananPalugodam(Number(user.id)));
+    // TAUTAN HASIL (3 Sep 2026): URL postingan per platform yang sudah terbit
+    // (dicatat rekonsiliasi KPI otomatis di laporan_video) → tombol Bagikan.
+    const ids = (data ?? []).map((b) => Number(b.id));
+    const { data: tautanRows } = ids.length
+      ? await supabase()
+          .from("laporan_video")
+          .select("tvrku_post_id, platform, url_video")
+          .eq("user_id", Number(user.id))
+          .in("tvrku_post_id", ids)
+      : { data: [] as { tvrku_post_id: unknown; platform: unknown; url_video: unknown }[] };
+    const tautanPer = new Map<number, Record<string, string>>();
+    for (const t of tautanRows ?? []) {
+      const id = Number(t.tvrku_post_id);
+      const peta = tautanPer.get(id) ?? {};
+      peta[String(t.platform)] = String(t.url_video ?? "");
+      tautanPer.set(id, peta);
+    }
     return {
       data: (data ?? []).map((b) => ({
         ...b,
         id: String(b.id),
         // Berkas yang sudah disapu → video_url tak berlaku lagi.
         video_url: b.video_path ? b.video_url : "",
+        tautan: tautanPer.get(Number(b.id)) ?? {},
       })),
     };
   });

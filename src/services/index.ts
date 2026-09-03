@@ -2606,6 +2606,8 @@ export type TvrkuPost = {
   jadwal: string | null;
   hasil: Record<string, unknown> | null;
   dibuat_pada: string;
+  /** platform → URL postingan yang sudah terbit (untuk tombol Bagikan, 3 Sep 2026). */
+  tautan: Record<string, string>;
 };
 
 /** Riwayat unggahan sosmed pribadi saya (30 terakhir). */
@@ -4957,4 +4959,46 @@ export type ServerMaster = {
 export async function getServerMaster(): Promise<ServerMaster> {
   const json = await fetchJson("/api/master/server");
   return json as ServerMaster;
+}
+
+// ---- Panel Master: BEBAS KEWAJIBAN (3 Sep 2026) ----
+export type PenggunaKewajiban = {
+  id: string;
+  nama: string;
+  username: string;
+  jabatan: string;
+  divisi: string;
+  avatar_url: string;
+  sembunyi: boolean;
+};
+
+export async function cariKewajiban(cari: string): Promise<{ hasil: PenggunaKewajiban[]; dibebaskan: PenggunaKewajiban[] }> {
+  const json = await fetchJson(`/api/master/kewajiban?cari=${encodeURIComponent(cari)}`);
+  return {
+    hasil: (json.hasil ?? []) as PenggunaKewajiban[],
+    dibebaskan: (json.dibebaskan ?? []) as PenggunaKewajiban[],
+  };
+}
+
+export async function setSembunyiKewajiban(userId: string, sembunyi: boolean): Promise<PenggunaKewajiban> {
+  const json = await fetchJson("/api/master/kewajiban", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: userId, sembunyi }),
+  });
+  return json.pengguna as PenggunaKewajiban;
+}
+
+// ---- Juara komentar periode selesai terakhir (3 Sep 2026) ----
+export type JuaraKomen = { peringkat: number; nama: string; avatar_url: string; total_komentar: number; postingan: number };
+export type HasilJuaraKomen = { periode: string | null; tanggal: string | null; periode_kini: string; juara: JuaraKomen[] };
+
+export async function getJuaraKomen(): Promise<HasilJuaraKomen> {
+  const json = await fetchJson("/api/juara-komen");
+  return {
+    periode: (json.periode as string | null) ?? null,
+    tanggal: (json.tanggal as string | null) ?? null,
+    periode_kini: String(json.periode_kini ?? ""),
+    juara: (json.juara ?? []) as JuaraKomen[],
+  };
 }
