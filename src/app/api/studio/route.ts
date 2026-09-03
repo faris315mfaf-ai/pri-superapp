@@ -8,6 +8,11 @@
 // POST { aksi, ... }   → template_simpan | template_hapus | sumber_link |
 //                        sumber_berkas | teks_simpan | generate | item_simpan |
 //                        render | siaran | hapus
+//                        auto_edit   (3 Sep 2026: 1 klik = pilih SEMUA profil
+//                                     PALUGODAM bertemplate → DeepSeek judul/
+//                                     highlight/caption → render semua)
+//                        auto_upload (1 klik = tunggu render selesai → siaran
+//                                     ke semua sosmed tertaut tiap profil)
 import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
@@ -31,6 +36,8 @@ import {
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 const ANGGARAN_SIARAN_MS = 240_000;
+/** auto_upload: batas menunggu render yang masih berjalan (di bawah maxDuration). */
+const ANGGARAN_TUNGGU_RENDER_MS = 200_000;
 
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
@@ -489,6 +496,135 @@ export async function POST(request: Request) {
         jadwal = new Date(t).toISOString();
       }
       const r = await buatSiaranDariProyek({ proyekId, userId, platforms, jadwal });
+      after(() => prosesSiaranSerentak(ANGGARAN_SIARAN_MS));
+      return { sukses: true, siaran_id: String(r.siaranId), jumlah: r.jumlah };
+    }
+
+    // ---------- AUTO EDIT (1 klik, 3 Sep 2026) ----------
+    // Seluruh profil anggota Divisi PALUGODAM yang punya template aktif
+    // dipilih otomatis → DeepSeek membuat judul/highlight/caption berbeda
+    // per profil (tiga permintaan berjalan bersamaan) → semua versi dirender.
+    if (aksi === "auto_edit") {
+      if (!deepseekSiap()) {
+        throw Object.assign(new Error("DeepSeek belum diatur — isi DEEPSEEK_API_KEY di Vercel."), { status: 503 });
+      }
+      if (!creatomateSiap()) {
+        throw Object.assign(new Error("Creatomate belum diatur — isi CREATOMATE_API_KEY di Vercel."), { status: 503 });
+      }
+      if (!urlSumber(String(proyek.sumber_path ?? ""), String(proyek.sumber_url ?? ""))) {
+        throw Object.assign(new Error("Video sumber belum ada / sudah disapu. Buat proyek baru."), { status: 400 });
+      }
+      const { boleh, userPer, tpl } = await profilPalugodam();
+      const target = [...boleh].filter((p) => tpl.get(p)?.aktif === true).sort();
+      const tanpaTemplate = [...boleh].filter((p) => tpl.get(p)?.aktif !== true).sort();
+      if (target.length === 0) {
+        throw Object.assign(
+          new Error("Belum ada profil PALUGODAM yang punya template aktif. Isi dulu di tab Template."),
+          { status: 400 },
+        );
+      }
+      // Bahan: kiriman UI (bila ada) menimpa yang tersimpan; kosong → caption asli video.
+      const captionInti = (String(body.caption_inti ?? "").trim() || String(proyek.caption_inti || proyek.sumber_caption || "")).slice(0, 2200);
+      const penjelasan = (String(body.penjelasan ?? "").trim() || String(proyek.penjelasan ?? "")).slice(0, 1000);
+      const sumberAkun = (String(body.sumber_akun ?? "").trim() || String(proyek.sumber_akun ?? "")).replace(/^@+/, "").slice(0, 80);
+      if (!captionInti) {
+        throw Object.assign(new Error("Caption inti kosong — tulis caption dulu sebagai bahan judul & caption."), { status: 400 });
+      }
+      // Item yang bukan target & belum jadi videonya dibuang; target di-upsert.
+      await db
+        .from("studio_proyek_item")
+        .delete()
+        .eq("proyek_id", proyekId)
+        .not("profil", "in", `(${target.map((p) => `"${p}"`).join(",")})`)
+        .in("render_status", ["belum", "gagal"]);
+      const { error: eItem } = await db.from("studio_proyek_item").upsert(
+        target.map((p) => ({
+          proyek_id: proyekId,
+          profil: p,
+          user_id: userPer.get(p) ?? null,
+          template_id: String(tpl.get(p)?.template_id ?? ""),
+        })),
+        { onConflict: "proyek_id,profil", ignoreDuplicates: true },
+      );
+      if (eItem) throw new Error("Gagal menyiapkan daftar profil.");
+      await db
+        .from("studio_proyek")
+        .update({ caption_inti: captionInti, penjelasan, sumber_akun: sumberAkun, status: "teks" })
+        .eq("id", proyekId);
+
+      const n = target.length;
+      const [judul, highlight, caption] = await Promise.all([
+        generateJudul({ caption: captionInti, penjelasan, n }),
+        generateHighlight({ caption: captionInti, penjelasan, n }),
+        generateCaption({ captionInti, n }),
+      ]);
+      // Teks hanya ditulis ke item yang belum punya video jadi (sukses/rendering
+      // dibiarkan — supaya auto edit ulang tidak merusak hasil yang sudah ada).
+      const { data: items } = await db
+        .from("studio_proyek_item")
+        .select("id, profil, render_status")
+        .eq("proyek_id", proyekId)
+        .order("profil", { ascending: true });
+      let i = 0;
+      let ditulis = 0;
+      for (const it of items ?? []) {
+        const idx = i++;
+        if (it.render_status === "sukses" || it.render_status === "rendering") continue;
+        await db
+          .from("studio_proyek_item")
+          .update({
+            judul: judul[idx % judul.length],
+            highlight: highlight[idx % highlight.length],
+            caption: caption[idx % caption.length],
+            diperbarui_pada: new Date().toISOString(),
+          })
+          .eq("id", it.id);
+        ditulis += 1;
+      }
+      const r = await mulaiRenderProyek(proyekId);
+      return {
+        sukses: true,
+        profil: n,
+        teks_ditulis: ditulis,
+        dimulai: r.dimulai,
+        gagal: r.gagal,
+        tanpa_template: tanpaTemplate,
+      };
+    }
+
+    // ---------- AUTO UPLOAD (1 klik, 3 Sep 2026) ----------
+    // Tunggu render yang masih berjalan (maks ±200 dtk), lalu siaran ke SEMUA
+    // sosmed yang tertaut di tiap profil, langsung (tanpa jadwal).
+    if (aksi === "auto_upload") {
+      if (!uploadPostSiap()) throw new Error("upload-post belum tersambung.");
+      const platforms = [...PLATFORM_KPI];
+      const batas = Date.now() + ANGGARAN_TUNGGU_RENDER_MS;
+      for (;;) {
+        if (creatomateSiap()) await segarkanRenderProyek(proyekId);
+        const { data: sisa } = await db
+          .from("studio_proyek_item")
+          .select("id")
+          .eq("proyek_id", proyekId)
+          .eq("render_status", "rendering")
+          .limit(1);
+        if (!sisa || sisa.length === 0) break;
+        if (Date.now() > batas) {
+          throw Object.assign(new Error("Render belum selesai — ketuk AUTO UPLOAD lagi sebentar lagi."), { status: 409 });
+        }
+        await new Promise((r) => setTimeout(r, 6_000));
+      }
+      if (proyek.siaran_id) {
+        const { data: berjalan } = await db
+          .from("tvr_siaran_item")
+          .select("id")
+          .eq("siaran_id", Number(proyek.siaran_id))
+          .in("status", ["menunggu", "diproses"])
+          .limit(1);
+        if (berjalan && berjalan.length > 0) {
+          throw Object.assign(new Error("Siaran sebelumnya masih berjalan — tunggu selesai dulu."), { status: 409 });
+        }
+      }
+      const r = await buatSiaranDariProyek({ proyekId, userId, platforms });
       after(() => prosesSiaranSerentak(ANGGARAN_SIARAN_MS));
       return { sukses: true, siaran_id: String(r.siaranId), jumlah: r.jumlah };
     }

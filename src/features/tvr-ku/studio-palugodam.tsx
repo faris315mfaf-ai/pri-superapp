@@ -10,6 +10,13 @@
 //               yang tertaut (Siaran Serentak)
 // Profil yang tampil HANYA milik anggota Divisi PALUGODAM (server juga
 // menolak profil lain). Tab "Template": peta profil ↔ ID template Creatomate.
+//
+// SATU KLIK (3 Sep 2026):
+//   AUTO EDIT   → server memilih SEMUA profil PALUGODAM bertemplate, DeepSeek
+//                 membuat teksnya, Creatomate merender semuanya.
+//   AUTO UPLOAD → server menunggu render selesai lalu menyiarkan ke semua
+//                 sosmed tertaut tiap profil, langsung.
+//   Sakelar "lanjut otomatis": begitu render selesai, AUTO UPLOAD dipicu sendiri.
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
@@ -22,6 +29,7 @@ import {
   Loader2,
   Radio,
   RefreshCw,
+  Rocket,
   Send,
   Settings2,
   Sparkles,
@@ -483,7 +491,90 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
     return jumlahSukses > 0;
   }
 
+  // ---- SATU KLIK: auto edit / auto upload (3 Sep 2026) ----
+  const [autoLanjut, setAutoLanjut] = useState(false);
+  // true hanya setelah AUTO EDIT ditekan di sesi ini — supaya sakelar
+  // "lanjut otomatis" tidak pernah mengunggah proyek lama tanpa sengaja.
+  const autoEditBaruSajaRef = useRef(false);
+
+  async function autoEdit() {
+    autoEditBaruSajaRef.current = true;
+    const r = await jalankan("auto edit", "auto_edit", { caption_inti: captionInti, penjelasan, sumber_akun: sumberAkun });
+    if (!r) {
+      autoEditBaruSajaRef.current = false;
+      return;
+    }
+    const g = (r.gagal as { profil: string; pesan: string }[] | undefined) ?? [];
+    const tanpa = (r.tanpa_template as string[] | undefined) ?? [];
+    toast(
+      g.length ? "peringatan" : "sukses",
+      `Auto edit: ${r.dimulai ?? 0} video dirender untuk ${r.profil ?? 0} profil PALUGODAM`,
+      [
+        g.length ? `${g.length} gagal: ${g.map((x) => x.profil).join(", ")}` : "",
+        tanpa.length ? `${tanpa.length} profil dilewati (tanpa template): ${tanpa.slice(0, 4).join(", ")}${tanpa.length > 4 ? "…" : ""}` : "",
+        "Status render diperbarui tiap 8 detik.",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    );
+    setFase(2);
+  }
+
+  async function autoUpload() {
+    const r = await jalankan("auto upload", "auto_upload", {});
+    if (!r) return;
+    toast("sukses", `Auto upload: ${r.jumlah ?? 0} profil`, "Tiap profil mengunggah versinya ke semua sosmed yang tertaut. Status per profil di fase Siaran.");
+    setFase(3);
+  }
+
+  const bolehAutoUpload = jumlahSukses > 0 && !adaRendering && !adaSiaranMenunggu && !sibuk;
+  // Lanjut otomatis: render baru saja selesai (setelah AUTO EDIT) → AUTO UPLOAD.
+  useEffect(() => {
+    if (!autoLanjut || !autoEditBaruSajaRef.current) return;
+    if (adaRendering || jumlahSukses === 0 || sibuk || data?.siaran) return;
+    autoEditBaruSajaRef.current = false;
+    // Ditunda satu tick supaya tidak mengubah state langsung di dalam effect.
+    const t = setTimeout(() => void autoUpload(), 0);
+    return () => clearTimeout(t);
+  }, [autoLanjut, adaRendering, jumlahSukses, sibuk, data?.siaran]);
+
   if (!data) return <GlassSkeleton className="h-40 rounded-2xl" />;
+
+  const tombolAutoEdit = (
+    <>
+      <button
+        type="button"
+        onClick={() => void autoEdit()}
+        disabled={!bolehKe(2) || Boolean(sibuk) || adaRendering}
+        className="btn-tekan mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[13.5px] font-bold text-white disabled:opacity-50"
+        style={{ background: UNGU }}
+      >
+        {sibuk === "auto edit" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+        AUTO EDIT · 1 klik untuk seluruh profil PALUGODAM
+      </button>
+      <label className="mt-2 flex items-center gap-2 text-[11.5px] text-teks-utama">
+        <input type="checkbox" checked={autoLanjut} onChange={(e) => setAutoLanjut(e.target.checked)} className="h-4 w-4 accent-[#7C3AED]" />
+        Setelah render selesai, langsung AUTO UPLOAD ke semua sosmed
+      </label>
+      <p className="mt-1 text-[10.5px] leading-relaxed text-teks-sekunder">
+        Semua profil anggota Divisi PALUGODAM yang punya template dipilih otomatis; DeepSeek membuat judul, highlight &
+        caption berbeda untuk tiap profil; Creatomate merender semuanya. Butuh sekitar 1 menit.
+      </p>
+    </>
+  );
+
+  const tombolAutoUpload = (
+    <button
+      type="button"
+      onClick={() => void autoUpload()}
+      disabled={!bolehAutoUpload}
+      className="btn-tekan mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[13.5px] font-bold text-white disabled:opacity-50"
+      style={{ background: MERAH }}
+    >
+      {sibuk === "auto upload" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+      AUTO UPLOAD · 1 klik ke {jumlahSukses} profil × semua sosmed tertaut
+    </button>
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -515,14 +606,14 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
               {data.proyek.sumber_caption}
             </p>
           ) : null}
+          {tombolAutoEdit}
           <button
             type="button"
             onClick={() => setFase(2)}
             disabled={!bolehKe(2)}
-            className="btn-tekan mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-white disabled:opacity-50"
-            style={{ background: MERAH }}
+            className="glass btn-tekan mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-teks-utama disabled:opacity-50"
           >
-            Lanjut ke fase Render <ChevronRight className="h-4 w-4" />
+            Atau atur manual di fase Render <ChevronRight className="h-4 w-4" />
           </button>
         </GlassCard>
       )}
@@ -598,14 +689,15 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
                 <p className="px-2 py-3 text-[11px] text-teks-sekunder">Belum ada profil milik anggota Divisi PALUGODAM.</p>
               )}
             </div>
+            {tombolAutoEdit}
             <button
               type="button"
               onClick={() => void jalankan("simpan", "teks_simpan", { caption_inti: captionInti, penjelasan, sumber_akun: sumberAkun, profil: [...pilih] }, "Bahan & profil tersimpan")}
               disabled={Boolean(sibuk) || pilih.size === 0}
-              className="glass btn-tekan mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl text-[12.5px] font-bold text-teks-utama disabled:opacity-50"
+              className="glass btn-tekan mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-xl text-[12.5px] font-bold text-teks-utama disabled:opacity-50"
             >
               {sibuk === "simpan" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 text-pri" />}
-              Simpan bahan & {pilih.size} profil
+              Manual: simpan bahan & {pilih.size} profil
             </button>
           </GlassCard>
 
@@ -708,14 +800,14 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
                 {adaRendering ? "Sedang merender…" : `Render ${item.filter((i) => i.render_status !== "sukses").length} versi video`}
               </button>
               <p className="mt-2 text-center text-[10.5px] text-teks-sekunder">{jumlahSukses}/{item.length} versi siap</p>
+              {tombolAutoUpload}
               <button
                 type="button"
                 onClick={() => setFase(3)}
                 disabled={jumlahSukses === 0}
-                className="btn-tekan mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-white disabled:opacity-50"
-                style={{ background: MERAH }}
+                className="glass btn-tekan mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-teks-utama disabled:opacity-50"
               >
-                Lanjut ke fase Siaran <ChevronRight className="h-4 w-4" />
+                Atau atur sosmed & jadwal di fase Siaran <ChevronRight className="h-4 w-4" />
               </button>
             </GlassCard>
           )}
@@ -727,6 +819,8 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
         <GlassCard className="p-4">
           <p className="text-[12.5px] font-bold text-teks-utama">Fase 3 · Siaran ke {jumlahSukses} profil</p>
           <p className="mt-1 text-[11px] text-teks-sekunder">Tiap profil mengunggah versinya sendiri ke sosmed yang tertaut di profil itu.</p>
+          {!data.siaran ? tombolAutoUpload : null}
+          <p className="mt-3 text-[11px] font-semibold text-teks-sekunder">Atau atur manual: pilih sosmed & jadwal</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {PLATFORM6.map((p) => (
               <button
@@ -812,6 +906,7 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
 function TabProyek({ profilSemua, siap }: { profilSemua: StudioProfil[]; siap: StudioSiap | null }) {
   const [daftar, setDaftar] = useState<StudioProyekRingkas[] | null>(null);
   const [buka, setBuka] = useState<string | null>(null);
+  const [sibukCepat, setSibukCepat] = useState("");
 
   function muat() {
     return getStudioProyekList()
@@ -821,6 +916,25 @@ function TabProyek({ profilSemua, siap }: { profilSemua: StudioProfil[]; siap: S
   useEffect(() => {
     void muat();
   }, []);
+
+  /** Satu klik dari daftar proyek, tanpa membuka editor dulu. */
+  async function cepat(id: string, aksi: "auto_edit" | "auto_upload") {
+    if (sibukCepat) return;
+    setSibukCepat(`${id}:${aksi}`);
+    try {
+      const r = await studioPost(aksi, { proyek_id: id });
+      if (aksi === "auto_edit") {
+        toast("sukses", `Auto edit: ${r.dimulai ?? 0} video dirender untuk ${r.profil ?? 0} profil PALUGODAM`, "Pantau status render di proyek ini.");
+      } else {
+        toast("sukses", `Auto upload: ${r.jumlah ?? 0} profil`, "Status per profil ada di fase Siaran.");
+      }
+      setBuka(id);
+    } catch (e) {
+      toast("error", aksi === "auto_edit" ? "Auto edit gagal" : "Auto upload gagal", e instanceof Error ? e.message : "");
+    } finally {
+      setSibukCepat("");
+    }
+  }
 
   async function hapus(id: string) {
     try {
@@ -875,6 +989,30 @@ function TabProyek({ profilSemua, siap }: { profilSemua: StudioProfil[]; siap: S
                     {p.status === "siaran" ? "3 siaran" : p.status === "sumber" ? "1 unggah" : "2 render"}
                   </span>
                 </button>
+                {/* Satu klik langsung dari daftar (3 Sep 2026) */}
+                {p.status === "sumber" || p.status === "teks" ? (
+                  <button
+                    type="button"
+                    onClick={() => void cepat(p.id, "auto_edit")}
+                    disabled={Boolean(sibukCepat)}
+                    className="btn-tekan flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-[10.5px] font-bold text-white disabled:opacity-50"
+                    style={{ background: UNGU }}
+                  >
+                    {sibukCepat === `${p.id}:auto_edit` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />}
+                    Auto edit
+                  </button>
+                ) : p.status === "render" ? (
+                  <button
+                    type="button"
+                    onClick={() => void cepat(p.id, "auto_upload")}
+                    disabled={Boolean(sibukCepat)}
+                    className="btn-tekan flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-[10.5px] font-bold text-white disabled:opacity-50"
+                    style={{ background: MERAH }}
+                  >
+                    {sibukCepat === `${p.id}:auto_upload` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Rocket className="h-3 w-3" />}
+                    Auto upload
+                  </button>
+                ) : null}
                 <button type="button" onClick={() => void hapus(p.id)} aria-label="Hapus proyek" className="btn-tekan p-1.5 text-teks-sekunder/70">
                   <Trash2 className="h-4 w-4" />
                 </button>
