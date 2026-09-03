@@ -564,3 +564,21 @@
   border: 2px solid rgba(196, 181, 253, 0.6);
   animation: orb-cincin-anim 1.5s ease-out infinite;
 }
+/* Denyut cincin tutorial (features/tur) — hanya opacity & transform
+   supaya ditangani compositor, tidak melukis ulang lapisan buram. */
+@keyframes tur-denyut {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.035);
+  }
+}
+.tur-denyut {
+  animation: tur-denyut 1.6s ease-in-out infinite;
+  will-change: opacity, transform;
+  pointer-events: none;
+}

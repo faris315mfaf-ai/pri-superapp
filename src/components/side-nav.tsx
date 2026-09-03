@@ -58,6 +58,7 @@ export function SideNav({ role, tabAktif, onTab, belumBaca = 0, tabs: tabsProp }
               type="button"
               onClick={() => onTab(kunci)}
               aria-current={aktif ? "page" : undefined}
+              data-tur={`nav-${kunci}`}
               className={cn(
                 "btn-tekan relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left",
                 aktif ? "text-white" : "text-teks-sekunder hover:text-teks-utama",

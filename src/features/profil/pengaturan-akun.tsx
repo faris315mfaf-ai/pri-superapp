@@ -112,6 +112,7 @@ export function TombolAkunSosmed({
     <button
       type="button"
       onClick={onBuka}
+      data-tur="akun-sosmed"
       className="glass btn-tekan flex min-h-[54px] w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left"
     >
       <span
@@ -290,7 +291,7 @@ export function ModalAkunSosmed({ onTutup }: { onTutup: () => void }) {
           <p className="mb-2 text-[12px] font-semibold text-teks-sekunder">
             {sunting.id ? "Ubah akun" : "Tambah akun"}
           </p>
-          <div className="mb-2 flex gap-2">
+          <div className="mb-2 flex gap-2" data-tur="pilih-platform">
             {PLATFORM.map((p) => (
               <button
                 key={p.id}
@@ -319,6 +320,7 @@ export function ModalAkunSosmed({ onTutup }: { onTutup: () => void }) {
               autoCorrect="off"
               spellCheck={false}
               disabled={sibuk}
+              data-tur="isi-username"
               className="glass-soft h-11 w-full rounded-xl pr-3 pl-7 text-[14px] text-teks-utama outline-none focus:ring-2 focus:ring-pri/50 disabled:opacity-60"
             />
           </div>
@@ -338,6 +340,7 @@ export function ModalAkunSosmed({ onTutup }: { onTutup: () => void }) {
               type="button"
               disabled={sibuk}
               onClick={() => void simpan()}
+              data-tur="simpan-akun"
               className="btn-tekan flex h-10 items-center justify-center gap-1.5 rounded-xl text-[13px] font-bold text-white disabled:opacity-50"
               style={{ background: "linear-gradient(135deg, #10B981, #059669)" }}
             >
@@ -349,6 +352,7 @@ export function ModalAkunSosmed({ onTutup }: { onTutup: () => void }) {
         <button
           type="button"
           onClick={() => setSunting({ platform: "instagram", username: "" })}
+          data-tur="tambah-akun"
           className="btn-tekan mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[14px] font-bold text-white"
           style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
         >
@@ -838,6 +842,7 @@ function Sheet({
                 type="button"
                 onClick={onTutup}
                 aria-label="Tutup"
+                data-tur={judul === "Akun Media Sosial Saya" ? "tutup-akun-sosmed" : undefined}
                 className="glass btn-tekan flex h-9 w-9 items-center justify-center rounded-full text-teks-utama"
               >
                 <X className="h-4.5 w-4.5" />

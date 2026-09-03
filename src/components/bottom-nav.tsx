@@ -107,6 +107,7 @@ export function BottomNav({ role, tabAktif, onTab, belumBaca = 0, tabs: tabsProp
               onClick={() => onTab(kunci)}
               aria-label={label}
               aria-current={aktif ? "page" : undefined}
+              data-tur={`nav-${kunci}`}
               className={cn(
                 "btn-tekan relative flex min-h-[44px] grow shrink-0 basis-[58px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5",
                 aktif ? "text-white" : "text-teks-sekunder",

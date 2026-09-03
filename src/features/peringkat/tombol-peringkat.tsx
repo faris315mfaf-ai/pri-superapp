@@ -68,6 +68,7 @@ export function TombolPeringkat() {
         type="button"
         onClick={() => setBuka(true)}
         aria-label="Buka leaderboard TV Rakyat"
+        data-tur="tombol-leaderboard"
         className="glass btn-tekan relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
       >
         {/* Mahkota STATIS (mode ringan 1 Sep 2026 — animasi api dicabut
@@ -540,6 +541,7 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
               type="button"
               onClick={() => setMode(k)}
               aria-pressed={mode === k}
+              data-tur={k === "komen" ? "mode-komen" : undefined}
               className={cn(
                 "btn-tekan rounded-lg py-1.5 text-[12px] font-bold",
                 mode === k ? "bg-white text-teks-utama shadow-sm dark:bg-white/15" : "text-teks-sekunder",

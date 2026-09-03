@@ -28,7 +28,8 @@ import {
   User as UserIcon,
   Zap,
   Sparkles,
-  Heart, ExternalLink, Pencil, Check, X, Loader2, PanelBottom, Fingerprint } from "lucide-react";
+  Heart, ExternalLink, Pencil, Check, X, Loader2, PanelBottom, Fingerprint, GraduationCap } from "lucide-react";
+import { mulaiTur } from "@/lib/tur";
 import { LogoPri } from "@/components/logo-pri";
 import {
   AvatarInisial,
@@ -745,6 +746,7 @@ export function ProfilScreen({
               type="button"
               onClick={() => setTabPengaturan(t.id)}
               aria-pressed={tabPengaturan === t.id}
+              data-tur={t.id === "keamanan" ? "tab-keamanan" : undefined}
               className={cn(
                 "btn-tekan flex-1 rounded-lg py-2 text-[12.5px] font-bold transition-colors",
                 tabPengaturan === t.id ? "text-white" : "text-teks-sekunder",
@@ -898,6 +900,14 @@ export function ProfilScreen({
           <TombolAkunSosmed
             onBuka={() => setModalSosmed(true)}
             versiData={versiSosmed}
+          />
+
+          {/* Tutorial interaktif daftar akun → cek Kepatuhan Komen (3 Sep 2026) */}
+          <BarisPengaturan
+            ikon={GraduationCap}
+            warnaIkon="#F59E0B"
+            label="Tutorial daftar akun & cek kepatuhan"
+            onClick={mulaiTur}
           />
 
           {/* Bug / kritik / saran → pengembang; SA juga punya kotak masuk */}
