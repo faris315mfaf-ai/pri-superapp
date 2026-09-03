@@ -599,3 +599,74 @@
   animation: teks-berjalan 24s linear infinite;
   will-change: transform;
 }
+
+/* Pet Robot (features/pet): goyang melayang, kedip, denyut inti — hanya
+   transform/opacity supaya ringan. */
+@keyframes pet-goyang {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+.pet-goyang {
+  animation: pet-goyang 3.2s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes pet-kedip {
+  0%,
+  91%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.06);
+  }
+}
+.pet-kedip {
+  animation: pet-kedip 4.6s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes pet-denyut {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.pet-denyut {
+  animation: pet-denyut 1.9s ease-in-out infinite;
+}
+@keyframes pet-api {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.35);
+  }
+}
+.pet-api {
+  animation: pet-api 0.35s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: top;
+}
+@keyframes pet-putar {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.pet-putar {
+  animation: pet-putar 14s linear infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}

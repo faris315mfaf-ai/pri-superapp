@@ -44,6 +44,8 @@ import { PilihUcapanUltah } from "@/features/notifikasi/pilih-ucapan-ultah";
 import { ModalChangelog } from "@/features/profil/modal-changelog";
 import { TurPemandu } from "@/features/tur/tur-pemandu";
 import { ModalKembangApi } from "@/features/beranda/modal-kembang-api";
+import { PetScreen } from "@/features/pet/pet-screen";
+import { PetMelayang } from "@/features/pet/pet-melayang";
 import { AcaraScreen } from "@/features/acara/acara-screen";
 import { TabelAnggotaScreen } from "@/features/pengguna/tabel-anggota-screen";
 import { AbsensiHariIniScreen } from "@/features/pengguna/absensi-hari-ini-screen";
@@ -139,6 +141,8 @@ type SubLayar =
   | { nama: "notifikasi" }
   // Panel Master — kewenangan tertinggi, hanya peran master
   | { nama: "panel-master" }
+  // Pet Robot (percobaan master, 3 Sep 2026)
+  | { nama: "pet" }
   // Matriks izin fitur per peran (super admin)
   | { nama: "pengaturan-fitur" }
   // Matriks akses dashboard per jabatan (fitur 1.19/3.3, master/super)
@@ -610,6 +614,8 @@ export default function Page() {
   // Changelog "Apa yang Baru" (spek 1.4): tampil otomatis SEKALI
   // begitu pengguna pertama membuka aplikasi setelah update.
   const [changelogBuka, setChangelogBuka] = useState(false);
+  // Pet Robot (3 Sep 2026): naik tiap kali robot dirawat → robot melayang di beranda ikut segar.
+  const [versiPet, setVersiPet] = useState(0);
 
   useEffect(() => {
     if (!aplikasiAktif) return;
@@ -928,6 +934,7 @@ export default function Page() {
           onBukaLaporanKerja={() => setSubLayar({ nama: "laporan-kerja" })}
           onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           onBukaPanelMaster={() => setSubLayar({ nama: "panel-master" })}
+          onBukaPet={() => setSubLayar({ nama: "pet" })}
           onBukaPengaturanFitur={() => setSubLayar({ nama: "pengaturan-fitur" })}
           onBukaAturMenu={() => setSubLayar({ nama: "atur-menu" })}
         />
@@ -1077,6 +1084,8 @@ export default function Page() {
                   />
                 ) : subLayar.nama === "panel-master" ? (
                   <PanelMasterScreen onKembali={() => setSubLayar(null)} />
+                ) : subLayar.nama === "pet" ? (
+                  <PetScreen onKembali={() => setSubLayar(null)} onBerubah={() => setVersiPet((v) => v + 1)} />
                 ) : subLayar.nama === "tabel-anggota" ? (
                   <TabelAnggotaScreen onKembali={() => setSubLayar(null)} />
                 ) : subLayar.nama === "absensi-hari-ini" ? (
@@ -1169,6 +1178,11 @@ export default function Page() {
       {/* Robot AI Ketua Umum (fitur 1 Sep 2026) — melayang di SEMUA
           layar khusus super admin/master. Disembunyikan saat mode
           suaranya sendiri sedang terbuka. */}
+      {/* Pet Robot melayang (percobaan, khusus master; 3 Sep 2026) — hanya di
+          tab Beranda (dashboard master), tanpa sub-layar terbuka. */}
+      {user && user.role === "master" && tabEfektif === "beranda" && !subLayar && (
+        <PetMelayang onBuka={() => setSubLayar({ nama: "pet" })} versi={versiPet} />
+      )}
       {user && (user.role === "super_admin" || user.role === "master") && !suaraRobotBuka && (
         <RobotMelayang onBuka={() => setSuaraRobotBuka(true)} />
       )}

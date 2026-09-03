@@ -28,7 +28,7 @@ import {
   User as UserIcon,
   Zap,
   Sparkles,
-  Heart, ExternalLink, Pencil, Check, X, Loader2, PanelBottom, Fingerprint, GraduationCap } from "lucide-react";
+  Heart, ExternalLink, Pencil, Check, X, Loader2, PanelBottom, Fingerprint, GraduationCap, Bot } from "lucide-react";
 import { mulaiTur } from "@/lib/tur";
 import { LogoPri } from "@/components/logo-pri";
 import {
@@ -99,6 +99,8 @@ type ProfilScreenProps = {
   onBukaLaporanKerja?: () => void;
   onBukaNotifikasi?: () => void;
   onBukaPanelMaster?: () => void;
+  /** Pet Robot (percobaan master, 3 Sep 2026) */
+  onBukaPet?: () => void;
   onBukaPengaturanFitur?: () => void;
   /** Buka layar Atur Menu Bawah (fitur 1.20/4) */
   onBukaAturMenu?: () => void;
@@ -311,6 +313,7 @@ export function ProfilScreen({
   onBukaLaporanKerja,
   onBukaNotifikasi,
   onBukaPanelMaster,
+  onBukaPet,
   onBukaPengaturanFitur,
   onBukaAturMenu,
 }: ProfilScreenProps) {
@@ -667,6 +670,31 @@ export function ProfilScreen({
           />
         )}
       </FadeInUp>
+
+      {/* Pet Robot — modul percobaan, hanya master (3 Sep 2026) */}
+      {user.role === "master" && onBukaPet && (
+        <FadeInUp delay={0.02}>
+          <button
+            type="button"
+            onClick={onBukaPet}
+            className="btn-tekan mt-6 flex w-full items-center gap-3 rounded-2xl border border-pink-400/40 bg-pink-400/10 px-4 py-3 text-left"
+          >
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
+              style={{ background: "linear-gradient(135deg, #EC4899, #3B82F6)" }}
+              aria-hidden="true"
+            >
+              <Bot className="h-4.5 w-4.5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold text-teks-utama">Pet Robot (percobaan)</span>
+              <span className="block text-[11px] text-teks-sekunder">
+                Rawat robot peliharaan, beli aksesoris dengan koin
+              </span>
+            </span>
+          </button>
+        </FadeInUp>
+      )}
 
       {/* Panel Master — hanya untuk peran master, tidak untuk yang lain */}
       {user.role === "master" && onBukaPanelMaster && (

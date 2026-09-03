@@ -5002,3 +5002,23 @@ export async function getJuaraKomen(): Promise<HasilJuaraKomen> {
     juara: (json.juara ?? []) as JuaraKomen[],
   };
 }
+
+// ---- PET ROBOT (percobaan master, 3 Sep 2026) ----
+export type { PetState } from "@/lib/pet";
+
+export async function getPet(): Promise<import("@/lib/pet").PetState> {
+  const json = await fetchJson("/api/pet");
+  return json as import("@/lib/pet").PetState;
+}
+
+export async function petAksi(
+  aksi: string,
+  data: Record<string, unknown> = {},
+): Promise<import("@/lib/pet").PetState & { pesan?: string }> {
+  const json = await fetchJson("/api/pet", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ aksi, ...data }),
+  });
+  return json as import("@/lib/pet").PetState & { pesan?: string };
+}
