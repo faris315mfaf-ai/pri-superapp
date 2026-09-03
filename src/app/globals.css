@@ -670,3 +670,174 @@
   transform-box: fill-box;
   transform-origin: center;
 }
+
+/* Pet Robot v2 — animasi kondisi (lib/pet vitalitasDari): lemas, lapar,
+   lelah, keroncongan, semangat, tidur; plus makan & melambai. */
+@keyframes pet-lemas {
+  0%,
+  100% {
+    transform: translateY(6px) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(9px) rotate(-5deg);
+  }
+}
+.pet-lemas {
+  animation: pet-lemas 5.5s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+@keyframes pet-lapar {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  10% {
+    transform: translate(-2px, 1px);
+  }
+  20% {
+    transform: translate(2px, -1px);
+  }
+  30% {
+    transform: translate(-2px, 0);
+  }
+  40% {
+    transform: translate(2px, 1px);
+  }
+  50% {
+    transform: translate(0, 0);
+  }
+}
+.pet-lapar {
+  animation: pet-lapar 2.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes pet-lelah {
+  0%,
+  100% {
+    transform: translateY(2px);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+.pet-lelah {
+  animation: pet-lelah 4.8s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes pet-keroncongan {
+  0%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  40% {
+    transform: translateY(-4px) scale(1, 1);
+  }
+  55% {
+    transform: translateY(-4px) scale(1.03, 0.97);
+  }
+  70% {
+    transform: translateY(-4px) scale(1, 1);
+  }
+}
+.pet-keroncongan {
+  animation: pet-keroncongan 3.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+@keyframes pet-semangat {
+  0%,
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+  30% {
+    transform: translateY(-14px) scale(0.98, 1.03);
+  }
+  50% {
+    transform: translateY(0) scale(1.03, 0.97);
+  }
+}
+.pet-semangat {
+  animation: pet-semangat 1.5s cubic-bezier(0.34, 1.2, 0.64, 1) infinite;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+@keyframes pet-tidur {
+  0%,
+  100% {
+    transform: translateY(4px) scale(1, 1);
+  }
+  50% {
+    transform: translateY(4px) scale(1.02, 0.985);
+  }
+}
+.pet-tidur {
+  animation: pet-tidur 4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+@keyframes pet-lambai {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-38deg);
+  }
+  50% {
+    transform: rotate(-12deg);
+  }
+  75% {
+    transform: rotate(-40deg);
+  }
+}
+.pet-lambai {
+  animation: pet-lambai 1.3s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: 20% 12%;
+}
+@keyframes pet-makan-mulut {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.pet-makan-mulut {
+  animation: pet-makan-mulut 0.32s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes pet-kilau {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+.pet-kilau {
+  animation: pet-kilau 1.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes pet-roda {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.pet-roda {
+  animation: pet-roda 2.2s linear infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}

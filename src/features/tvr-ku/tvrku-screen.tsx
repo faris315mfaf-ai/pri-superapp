@@ -2,6 +2,7 @@
 import { bebasKewajiban } from "@/lib/jabatan";
 import { adalahAdminStudio, adalahPalugodam } from "@/lib/struktur";
 import { AccAjuanKomen } from "./acc-ajuan-komen";
+import { RangkumanLink } from "./rangkuman-link";
 
 // ============================================================
 // TvrKuScreen — halaman TV Rakyat MILIK ANGGOTA.
@@ -36,6 +37,7 @@ import {
   Hourglass,
   Radio,
   ShieldCheck,
+  FileText,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { EmptyState, FadeInUp, GlassSkeleton, SectionTitle, StatusBadge, ThemeToggle } from "@/components/pri-ui";
@@ -1105,6 +1107,13 @@ export function TvrKuScreen({
             </div>
           </div>
         )}
+      </FadeInUp>
+        ) },
+        { id: "rangkuman", judul: "Rangkuman Link Harian", ikon: FileText, keterangan: "Laporan link video per sosmed siap kirim ke WhatsApp", render: () => (
+      <FadeInUp delay={0.15}>
+        <div className="mt-5 md:mt-0">
+          <RangkumanLink />
+        </div>
       </FadeInUp>
         ) },
         { id: "sosmed-terblokir", judul: "Sosmed Terblokir (KPI)", ikon: Ban, render: () => (

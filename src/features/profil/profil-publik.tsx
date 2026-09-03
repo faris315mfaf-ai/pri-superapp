@@ -23,6 +23,7 @@ import {
   type ProfilMomen,
 } from "@/services";
 import { GaleriMomen } from "./galeri-momen";
+import { PetSapaan } from "@/features/pet/pet-sapaan";
 import { PlatformIcon } from "@/components/platform-icon";
 import { VideoEmbedMini } from "@/components/video-embed-mini";
 import { KoinChip } from "@/components/koin-chip";
@@ -184,6 +185,9 @@ export function ProfilPublikModal({
                 </div>
               </>
             )}
+
+            {/* Robot peliharaan pemilik profil menyapa (Pet Robot, 3 Sep 2026) */}
+            <PetSapaan userId={userId} namaPemilik={pemilik?.nama ?? namaAwal} />
 
             {/* Insight seluruh akun sosmed TV Rakyat miliknya
                 (1 Sep 2026 — tampil saat profil dilihat lewat chat) */}

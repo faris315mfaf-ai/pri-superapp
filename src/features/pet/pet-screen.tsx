@@ -1,26 +1,28 @@
 "use client";
 
 // ============================================================
-// PetScreen (percobaan master, 3 Sep 2026) — modul PET ROBOT ala POU.
+// PetScreen (percobaan master, 3 Sep 2026) — modul PET ROBOT ala POU, v2.
 //   • Belum punya robot → pilih pria (biru-hitam) / wanita (pink-putih) + nama.
-//   • Punya robot → panggung robot + suasana hati, 4 kebutuhan, XP/level,
-//     tombol rawat (makan, main, mandi, tidur), toko aksesoris (koin),
-//     lemari (pasang/lepas), ganti nama, ganti jenis, mulai ulang.
+//   • Punya robot → panggung robot (animasi mengikuti energi & kenyang),
+//     4 kebutuhan, XP/level, rawat (makan DARI INVENTORI, main, mandi, tidur),
+//     TOKO tiga bagian (aksesoris / makanan / sparepart), LEMARI (aksesoris &
+//     sparepart), ganti nama, ganti jenis, mulai ulang.
 // Semua aturan angka ada di lib/pet.ts; server (/api/pet) yang memutuskan.
 // ============================================================
 
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   BatteryCharging,
   Check,
+  Cog,
   Droplets,
   Gamepad2,
   Moon,
   Pencil,
   RefreshCw,
-  ShoppingBag,
   Shirt,
+  ShoppingBag,
   Smile,
   Sparkles,
   Sun,
@@ -33,13 +35,20 @@ import { KoinChip } from "@/components/koin-chip";
 import { toast } from "@/hooks/use-app-store";
 import { getPet, petAksi, type PetState } from "@/services";
 import {
+  BAGIAN_LABEL,
   EFEK_PERAWATAN,
   HADIAH_HARIAN_KOIN,
   KATALOG_AKSESORIS,
+  KATALOG_MAKANAN,
+  KATALOG_SPAREPART,
   LABEL_SUASANA,
+  LABEL_VITALITAS,
+  makananDariKode,
   NAMA_MAKS,
   PALET,
   SLOT_LABEL,
+  XP_MAKAN,
+  type BagianSparepart,
   type JenisRobot,
   type Perawatan,
   type SlotAksesoris,
@@ -50,6 +59,7 @@ import { RobotSvg } from "./robot-svg";
 const MERAH = "linear-gradient(135deg, #DC2626, #B91C1C)";
 const SEGAR_MS = 60_000;
 const SLOT_URUT: SlotAksesoris[] = ["kepala", "mata", "leher", "badan", "tangan", "punggung", "aura"];
+const BAGIAN_URUT: BagianSparepart[] = ["kepala", "mata", "tubuh", "kaki", "tangan"];
 
 function warnaNilai(n: number): string {
   if (n < 25) return "#DC2626";
@@ -81,6 +91,13 @@ function latarJenis(jenis: JenisRobot): string {
     : "linear-gradient(160deg, rgba(236,72,153,0.22), rgba(255,255,255,0.35))";
 }
 
+function teksEfek(e: { kenyang?: number; energi?: number; senang?: number }): string {
+  return Object.entries(e)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${(v as number) > 0 ? "+" : ""}${v} ${k}`)
+    .join(" · ");
+}
+
 // ------------------------------------------------------------
 // Pemilihan robot (adopsi)
 // ------------------------------------------------------------
@@ -103,54 +120,49 @@ function PilihRobot({ onSelesai }: { onSelesai: (st: PetState, pesan?: string) =
   }
 
   return (
-    <>
-      <GlassCard className="p-4">
-        <p className="text-[13px] font-bold text-teks-utama">Pilih robot peliharaan Anda</p>
-        <p className="mt-1 text-[11.5px] leading-relaxed text-teks-sekunder">
-          Rawat robotnya setiap hari: beri makan, ajak main, mandikan, dan biarkan tidur. Robot yang bahagia naik level,
-          dan Anda bisa mendandaninya dengan aksesoris dari toko memakai koin.
-        </p>
-        <div className="mt-3 grid grid-cols-2 gap-2.5">
-          {(["pria", "wanita"] as JenisRobot[]).map((j) => {
-            const aktif = jenis === j;
-            return (
-              <button
-                key={j}
-                type="button"
-                onClick={() => setJenis(j)}
-                aria-pressed={aktif}
-                className={cn(
-                  "btn-tekan flex flex-col items-center rounded-2xl border-2 p-3 transition-colors",
-                  aktif ? "border-pri" : "border-transparent",
-                )}
-                style={{ background: latarJenis(j) }}
-              >
-                <RobotSvg jenis={j} suasana="senang" ukuran={120} />
-                <span className="mt-1 text-[12.5px] font-extrabold text-teks-utama">{j === "pria" ? "Robot Pria" : "Robot Wanita"}</span>
-                <span className="text-[10.5px] text-teks-sekunder">{j === "pria" ? "aksen biru–hitam" : "aksen pink–putih"}</span>
-                {aktif ? <StatusBadge label="dipilih" warna="hijau" /> : null}
-              </button>
-            );
-          })}
-        </div>
-        <input
-          value={nama}
-          onChange={(e) => setNama(e.target.value)}
-          maxLength={NAMA_MAKS}
-          placeholder={jenis === "pria" ? "Nama robot (bawaan: Robi)" : "Nama robot (bawaan: Rina)"}
-          className="glass-input mt-3 h-11 w-full rounded-xl px-3 text-[13px] text-teks-utama"
-        />
-        <button
-          type="button"
-          onClick={() => void adopsi()}
-          disabled={sibuk}
-          className="btn-tekan mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[13.5px] font-bold text-white disabled:opacity-50"
-          style={{ background: MERAH }}
-        >
-          <Sparkles className="h-4 w-4" /> Adopsi robot ini
-        </button>
-      </GlassCard>
-    </>
+    <GlassCard className="p-4">
+      <p className="text-[13px] font-bold text-teks-utama">Pilih robot peliharaan Anda</p>
+      <p className="mt-1 text-[11.5px] leading-relaxed text-teks-sekunder">
+        Rawat robotnya setiap hari: beri makanan dari toko, ajak main, mandikan, dan biarkan tidur. Robot yang bahagia
+        naik level, dan Anda bisa mendandaninya dengan aksesoris & sparepart memakai koin.
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2.5">
+        {(["pria", "wanita"] as JenisRobot[]).map((j) => {
+          const aktif = jenis === j;
+          return (
+            <button
+              key={j}
+              type="button"
+              onClick={() => setJenis(j)}
+              aria-pressed={aktif}
+              className={cn("btn-tekan flex flex-col items-center rounded-2xl border-2 p-3 transition-colors", aktif ? "border-pri" : "border-transparent")}
+              style={{ background: latarJenis(j) }}
+            >
+              <RobotSvg jenis={j} suasana="senang" vitalitas="semangat" ukuran={120} />
+              <span className="mt-1 text-[12.5px] font-extrabold text-teks-utama">{j === "pria" ? "Robot Pria" : "Robot Wanita"}</span>
+              <span className="text-[10.5px] text-teks-sekunder">{j === "pria" ? "aksen biru–hitam" : "aksen pink–putih"}</span>
+              {aktif ? <StatusBadge label="dipilih" warna="hijau" /> : null}
+            </button>
+          );
+        })}
+      </div>
+      <input
+        value={nama}
+        onChange={(e) => setNama(e.target.value)}
+        maxLength={NAMA_MAKS}
+        placeholder={jenis === "pria" ? "Nama robot (bawaan: Robi)" : "Nama robot (bawaan: Rina)"}
+        className="glass-input mt-3 h-11 w-full rounded-xl px-3 text-[13px] text-teks-utama"
+      />
+      <button
+        type="button"
+        onClick={() => void adopsi()}
+        disabled={sibuk}
+        className="btn-tekan mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[13.5px] font-bold text-white disabled:opacity-50"
+        style={{ background: MERAH }}
+      >
+        <Sparkles className="h-4 w-4" /> Adopsi robot ini
+      </button>
+    </GlassCard>
   );
 }
 
@@ -160,13 +172,19 @@ function PilihRobot({ onSelesai }: { onSelesai: (st: PetState, pesan?: string) =
 export function PetScreen({ onKembali, onBerubah }: { onKembali: () => void; onBerubah?: () => void }) {
   const [st, setSt] = useState<PetState | null>(null);
   const [tab, setTab] = useState<"rawat" | "toko" | "lemari">("rawat");
+  const [toko, setToko] = useState<"aksesoris" | "makanan" | "sparepart">("aksesoris");
+  const [lemari, setLemari] = useState<"aksesoris" | "sparepart">("aksesoris");
   const [sibuk, setSibuk] = useState("");
   const [editNama, setEditNama] = useState(false);
   const [namaBaru, setNamaBaru] = useState("");
+  const [pilihMakanan, setPilihMakanan] = useState(false);
+  // Animasi makan: emoji terbang ke mulut + mulut mengunyah ±1,4 dtk.
+  const [emojiMakan, setEmojiMakan] = useState<string | null>(null);
+  const timerMakan = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function terima(d: PetState, pesan?: string, jenisToast: "sukses" | "info" = "sukses") {
+  function terima(d: PetState, pesan?: string) {
     setSt(d);
-    if (pesan) toast(jenisToast, pesan);
+    if (pesan) toast("sukses", pesan);
     onBerubah?.();
   }
 
@@ -181,20 +199,34 @@ export function PetScreen({ onKembali, onBerubah }: { onKembali: () => void; onB
     return () => {
       hidup = false;
       clearInterval(t);
+      if (timerMakan.current) clearTimeout(timerMakan.current);
     };
   }, []);
 
   async function jalankan(kunci: string, aksi: string, data: Record<string, unknown> = {}) {
-    if (sibuk) return;
+    if (sibuk) return null;
     setSibuk(kunci);
     try {
       const r = await petAksi(aksi, data);
       terima(r, r.pesan);
+      return r;
     } catch (e) {
       toast("peringatan", "Tidak bisa", e instanceof Error ? e.message : "");
+      return null;
     } finally {
       setSibuk("");
     }
+  }
+
+  async function beriMakan(kode: string) {
+    const item = makananDariKode(kode);
+    if (!item) return;
+    setPilihMakanan(false);
+    const r = await jalankan(`makan:${kode}`, "makan", { kode });
+    if (!r) return;
+    setEmojiMakan(item.emoji);
+    if (timerMakan.current) clearTimeout(timerMakan.current);
+    timerMakan.current = setTimeout(() => setEmojiMakan(null), 1400);
   }
 
   if (!st) {
@@ -220,7 +252,10 @@ export function PetScreen({ onKembali, onBerubah }: { onKembali: () => void; onB
   const p = PALET[jenis];
   const tidur = st.tidur;
   const dimiliki = new Set(st.dimiliki);
+  const spDimiliki = new Set(st.sparepart_dimiliki);
   const persenXp = Math.round((100 * st.xp_di_level) / st.xp_berikut);
+  const inventori = Object.entries(st.makanan).filter(([, n]) => n > 0);
+  const totalMakanan = inventori.reduce((a, [, n]) => a + n, 0);
 
   return (
     <div className="kolom-aplikasi px-4 pb-32">
@@ -280,17 +315,35 @@ export function PetScreen({ onKembali, onBerubah }: { onKembali: () => void; onB
             </div>
           </div>
 
-          {/* Gelembung suasana */}
+          {/* Gelembung suasana + kondisi */}
           <motion.div
-            key={st.suasana}
+            key={`${st.suasana}-${st.vitalitas}`}
             initial={{ opacity: 0, y: 6, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-            className="glass-strong mt-3 rounded-2xl px-3 py-1.5 text-[12px] font-bold text-teks-utama"
+            className="glass-strong mt-3 rounded-2xl px-3 py-1.5 text-center text-[12px] font-bold text-teks-utama"
           >
             {LABEL_SUASANA[st.suasana]}
+            <span className="block text-[10px] font-semibold text-teks-sekunder">kondisi: {LABEL_VITALITAS[st.vitalitas]}</span>
           </motion.div>
-          <RobotSvg jenis={jenis} suasana={st.suasana} terpasang={st.terpasang} ukuran={200} className="mt-1" />
+
+          <div className="relative mt-1">
+            <RobotSvg jenis={jenis} suasana={st.suasana} vitalitas={st.vitalitas} terpasang={st.terpasang} sparepart={st.sparepart_terpasang} ukuran={200} makan={Boolean(emojiMakan)} />
+            <AnimatePresence>
+              {emojiMakan ? (
+                <motion.span
+                  key={emojiMakan + String(Date.now())}
+                  initial={{ opacity: 0, y: 120, x: -10, scale: 0.6, rotate: -20 }}
+                  animate={{ opacity: [0, 1, 1, 0], y: [120, 40, 60, 62], x: [-10, -6, 0, 0], scale: [0.6, 1.1, 0.9, 0.2], rotate: [-20, 0, 8, 0] }}
+                  transition={{ duration: 1.3, times: [0, 0.4, 0.8, 1], ease: "easeInOut" }}
+                  className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 text-[40px] leading-none drop-shadow"
+                  aria-hidden="true"
+                >
+                  {emojiMakan}
+                </motion.span>
+              ) : null}
+            </AnimatePresence>
+          </div>
 
           {/* XP */}
           <div className="mt-1 w-full">
@@ -315,7 +368,7 @@ export function PetScreen({ onKembali, onBerubah }: { onKembali: () => void; onB
         </div>
       </GlassCard>
 
-      {/* Tab */}
+      {/* Tab utama */}
       <div className="glass mt-3 grid grid-cols-3 rounded-xl p-1">
         {(
           [
@@ -342,15 +395,30 @@ export function PetScreen({ onKembali, onBerubah }: { onKembali: () => void; onB
         <GlassCard className="mt-3 p-4">
           <p className="text-[12.5px] font-bold text-teks-utama">Rawat {st.nama}</p>
           <p className="mt-1 text-[11px] leading-relaxed text-teks-sekunder">
-            Kebutuhan turun perlahan seiring waktu. Perawatan pertama tiap hari memberi hadiah{" "}
+            Kebutuhan turun perlahan seiring waktu; energi turun lebih cepat bila robot banyak beraktivitas (hari ini{" "}
+            <b className="text-teks-utama">{st.aktivitas_hari_ini}</b> aktivitas). Perawatan pertama tiap hari memberi{" "}
             <b className="text-teks-utama">+{HADIAH_HARIAN_KOIN} koin</b>
             {st.hadiah_hari_ini ? " — sudah diambil hari ini." : " — belum diambil hari ini!"}
           </p>
+
           <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setPilihMakanan((v) => !v)}
+              disabled={Boolean(sibuk) || tidur}
+              aria-expanded={pilihMakanan}
+              className={cn("btn-tekan flex flex-col items-start rounded-xl px-3 py-2.5 text-left disabled:opacity-50", pilihMakanan ? "bg-pri/12" : "glass")}
+            >
+              <span className="flex items-center gap-1.5 text-[12.5px] font-bold text-teks-utama">
+                <Utensils className="h-4 w-4 text-pri" /> Beri makan
+              </span>
+              <span className="text-[10.5px] text-teks-sekunder">
+                {totalMakanan > 0 ? `${totalMakanan} makanan di inventori · +${XP_MAKAN} XP` : "inventori kosong — beli di Toko Makanan"}
+              </span>
+            </button>
             {(
               [
-                ["makan", Utensils, "+30 kenyang"],
-                ["main", Gamepad2, "+25 senang · −10 energi"],
+                ["main", Gamepad2, "+25 senang · −12 energi"],
                 ["mandi", Droplets, "+40 bersih"],
               ] as [Perawatan, typeof Utensils, string][]
             ).map(([k, Ikon, ket]) => (
@@ -382,6 +450,49 @@ export function PetScreen({ onKembali, onBerubah }: { onKembali: () => void; onB
               <span className="text-[10.5px] opacity-85">{tidur ? "energi pulih +15/jam saat tidur" : "isi ulang energi"}</span>
             </button>
           </div>
+
+          {/* Pemilih makanan dari inventori */}
+          <AnimatePresence>
+            {pilihMakanan && !tidur ? (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-2 rounded-xl border border-pri/30 bg-pri/5 p-2.5">
+                  <p className="text-[11px] font-bold text-teks-utama">Pilih makanan dari inventori:</p>
+                  {inventori.length === 0 ? (
+                    <p className="mt-1 text-[11px] text-teks-sekunder">
+                      Kosong. Buka <b>Toko → Makanan</b> untuk membeli.
+                    </p>
+                  ) : (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {inventori.map(([kode, n]) => {
+                        const m = makananDariKode(kode);
+                        if (!m) return null;
+                        return (
+                          <button
+                            key={kode}
+                            type="button"
+                            onClick={() => void beriMakan(kode)}
+                            disabled={Boolean(sibuk)}
+                            title={teksEfek(m.efek)}
+                            className="glass btn-tekan flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11px] font-bold text-teks-utama disabled:opacity-50"
+                          >
+                            <span className="text-[16px] leading-none">{m.emoji}</span>
+                            {m.nama}
+                            <span className="rounded-full bg-pri/15 px-1.5 text-[10px] text-pri">×{n}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
           {tidur ? <p className="mt-2 text-[11px] text-teks-sekunder">Saat tidur, {st.nama} tidak bisa dirawat — bangunkan dulu.</p> : null}
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -396,7 +507,7 @@ export function PetScreen({ onKembali, onBerubah }: { onKembali: () => void; onB
             <button
               type="button"
               onClick={() => {
-                if (window.confirm(`Lepas ${st.nama}? Level dan semua aksesorisnya hilang; koin yang sudah dibelanjakan tidak kembali.`)) {
+                if (window.confirm(`Lepas ${st.nama}? Level, aksesoris, sparepart, dan makanannya hilang; koin yang sudah dibelanjakan tidak kembali.`)) {
                   void jalankan("reset", "reset");
                 }
               }}
@@ -413,40 +524,135 @@ export function PetScreen({ onKembali, onBerubah }: { onKembali: () => void; onB
       {tab === "toko" ? (
         <GlassCard className="mt-3 p-4">
           <div className="flex items-center justify-between">
-            <p className="text-[12.5px] font-bold text-teks-utama">Toko aksesoris</p>
+            <p className="text-[12.5px] font-bold text-teks-utama">Toko</p>
             <KoinChip saldo={st.saldo_koin} />
           </div>
-          <p className="mt-1 text-[11px] text-teks-sekunder">Dibeli dengan koin, langsung dipasang. Satu aksesoris per slot.</p>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {KATALOG_AKSESORIS.map((a) => {
-              const punya = dimiliki.has(a.kode);
-              const mampu = st.saldo_koin >= a.harga;
-              return (
-                <div key={a.kode} className="glass-soft flex flex-col items-center rounded-xl p-2.5 text-center">
-                  <RobotSvg jenis={jenis} suasana="senang" terpasang={{ [a.slot]: a.kode }} ukuran={76} animasi={false} />
-                  <p className="mt-1 text-[11.5px] font-bold leading-tight text-teks-utama">{a.nama}</p>
-                  <p className="text-[9.5px] text-teks-sekunder">{SLOT_LABEL[a.slot]}</p>
-                  <p className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
-                    <img src="/KMP.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5" /> {a.harga}
-                  </p>
-                  {punya ? (
-                    <StatusBadge label="dimiliki" warna="hijau" />
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => void jalankan(`beli:${a.kode}`, "beli", { kode: a.kode })}
-                      disabled={Boolean(sibuk) || !mampu}
-                      title={mampu ? a.keterangan : `Kurang ${a.harga - st.saldo_koin} koin`}
-                      className="btn-tekan mt-1 h-8 w-full rounded-lg text-[11px] font-bold text-white disabled:opacity-40"
-                      style={{ background: MERAH }}
-                    >
-                      {sibuk === `beli:${a.kode}` ? "…" : mampu ? "Beli" : "Koin kurang"}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+          <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10">
+            {(
+              [
+                ["aksesoris", "Aksesoris", Shirt],
+                ["makanan", "Makanan", Utensils],
+                ["sparepart", "Sparepart", Cog],
+              ] as const
+            ).map(([k, label, Ikon]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setToko(k)}
+                aria-pressed={toko === k}
+                className={cn("btn-tekan flex items-center justify-center gap-1 rounded-lg py-1.5 text-[11.5px] font-bold", toko === k ? "bg-white text-teks-utama shadow-sm dark:bg-white/15" : "text-teks-sekunder")}
+              >
+                <Ikon className="h-3.5 w-3.5" /> {label}
+              </button>
+            ))}
           </div>
+
+          {toko === "aksesoris" ? (
+            <>
+              <p className="mt-2 text-[11px] text-teks-sekunder">30 aksesoris · dibeli sekali, langsung dipasang · satu per slot.</p>
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {KATALOG_AKSESORIS.map((a) => {
+                  const punya = dimiliki.has(a.kode);
+                  const mampu = st.saldo_koin >= a.harga;
+                  return (
+                    <div key={a.kode} className="glass-soft flex flex-col items-center rounded-xl p-2.5 text-center">
+                      <RobotSvg jenis={jenis} suasana="senang" terpasang={{ [a.slot]: a.kode }} sparepart={st.sparepart_terpasang} ukuran={72} animasi={false} />
+                      <p className="mt-1 text-[11.5px] font-bold leading-tight text-teks-utama">{a.nama}</p>
+                      <p className="text-[9.5px] text-teks-sekunder">{SLOT_LABEL[a.slot]}</p>
+                      <p className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
+                        <img src="/KMP.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5" /> {a.harga}
+                      </p>
+                      {punya ? (
+                        <StatusBadge label="dimiliki" warna="hijau" />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void jalankan(`beli:${a.kode}`, "beli", { kode: a.kode })}
+                          disabled={Boolean(sibuk) || !mampu}
+                          title={mampu ? a.keterangan : `Kurang ${a.harga - st.saldo_koin} koin`}
+                          className="btn-tekan mt-1 h-8 w-full rounded-lg text-[11px] font-bold text-white disabled:opacity-40"
+                          style={{ background: MERAH }}
+                        >
+                          {sibuk === `beli:${a.kode}` ? "…" : mampu ? "Beli" : "Koin kurang"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
+
+          {toko === "makanan" ? (
+            <>
+              <p className="mt-2 text-[11px] text-teks-sekunder">30 makanan · masuk inventori, boleh beli berkali-kali · dimakan lewat Rawat → Beri makan.</p>
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {KATALOG_MAKANAN.map((m) => {
+                  const punya = st.makanan[m.kode] ?? 0;
+                  const mampu = st.saldo_koin >= m.harga;
+                  return (
+                    <div key={m.kode} className="glass-soft flex flex-col items-center rounded-xl p-2.5 text-center">
+                      <span className="text-[34px] leading-none" aria-hidden="true">
+                        {m.emoji}
+                      </span>
+                      <p className="mt-1 text-[11.5px] font-bold leading-tight text-teks-utama">{m.nama}</p>
+                      <p className="text-[9.5px] text-teks-sekunder">{teksEfek(m.efek)}</p>
+                      <p className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
+                        <img src="/KMP.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5" /> {m.harga}
+                        {punya > 0 ? <span className="ml-1 rounded-full bg-pri/15 px-1.5 text-[10px] text-pri">punya ×{punya}</span> : null}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void jalankan(`beli:${m.kode}`, "beli", { kode: m.kode })}
+                        disabled={Boolean(sibuk) || !mampu}
+                        title={mampu ? m.keterangan : `Kurang ${m.harga - st.saldo_koin} koin`}
+                        className="btn-tekan mt-1 h-8 w-full rounded-lg text-[11px] font-bold text-white disabled:opacity-40"
+                        style={{ background: "linear-gradient(135deg, #10B981, #059669)" }}
+                      >
+                        {sibuk === `beli:${m.kode}` ? "…" : mampu ? "Beli" : "Koin kurang"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
+
+          {toko === "sparepart" ? (
+            <>
+              <p className="mt-2 text-[11px] text-teks-sekunder">30 sparepart · mengubah bentuk kepala, mata, tubuh, kaki, tangan · dibeli sekali, langsung dipasang.</p>
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {KATALOG_SPAREPART.map((s) => {
+                  const punya = spDimiliki.has(s.kode);
+                  const mampu = st.saldo_koin >= s.harga;
+                  return (
+                    <div key={s.kode} className="glass-soft flex flex-col items-center rounded-xl p-2.5 text-center">
+                      <RobotSvg jenis={jenis} suasana="senang" sparepart={{ ...st.sparepart_terpasang, [s.bagian]: s.kode }} ukuran={72} animasi={false} />
+                      <p className="mt-1 text-[11.5px] font-bold leading-tight text-teks-utama">{s.nama}</p>
+                      <p className="text-[9.5px] text-teks-sekunder">{BAGIAN_LABEL[s.bagian]}</p>
+                      <p className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
+                        <img src="/KMP.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5" /> {s.harga}
+                      </p>
+                      {punya ? (
+                        <StatusBadge label="dimiliki" warna="hijau" />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void jalankan(`beli:${s.kode}`, "beli", { kode: s.kode })}
+                          disabled={Boolean(sibuk) || !mampu}
+                          title={mampu ? s.keterangan : `Kurang ${s.harga - st.saldo_koin} koin`}
+                          className="btn-tekan mt-1 h-8 w-full rounded-lg text-[11px] font-bold text-white disabled:opacity-40"
+                          style={{ background: "linear-gradient(135deg, #7C3AED, #4F46E5)" }}
+                        >
+                          {sibuk === `beli:${s.kode}` ? "…" : mampu ? "Beli" : "Koin kurang"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
         </GlassCard>
       ) : null}
 
@@ -454,47 +660,108 @@ export function PetScreen({ onKembali, onBerubah }: { onKembali: () => void; onB
       {tab === "lemari" ? (
         <GlassCard className="mt-3 p-4">
           <p className="text-[12.5px] font-bold text-teks-utama">Lemari {st.nama}</p>
-          <p className="mt-1 text-[11px] text-teks-sekunder">Pasang atau lepas aksesoris yang sudah dimiliki, per slot.</p>
-          {st.dimiliki.length === 0 ? (
+          <div className="mt-2 grid grid-cols-2 gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10">
+            {(
+              [
+                ["aksesoris", "Aksesoris", Shirt],
+                ["sparepart", "Sparepart", Cog],
+              ] as const
+            ).map(([k, label, Ikon]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setLemari(k)}
+                aria-pressed={lemari === k}
+                className={cn("btn-tekan flex items-center justify-center gap-1 rounded-lg py-1.5 text-[11.5px] font-bold", lemari === k ? "bg-white text-teks-utama shadow-sm dark:bg-white/15" : "text-teks-sekunder")}
+              >
+                <Ikon className="h-3.5 w-3.5" /> {label}
+              </button>
+            ))}
+          </div>
+
+          {lemari === "aksesoris" ? (
+            st.dimiliki.length === 0 ? (
+              <p className="mt-3 rounded-xl border border-dashed border-teks-sekunder/30 py-4 text-center text-[11.5px] text-teks-sekunder">
+                Belum ada aksesoris. Kunjungi Toko → Aksesoris.
+              </p>
+            ) : (
+              <div className="mt-3 flex flex-col gap-2.5">
+                {SLOT_URUT.map((slot) => {
+                  const milik = KATALOG_AKSESORIS.filter((a) => a.slot === slot && dimiliki.has(a.kode));
+                  if (milik.length === 0) return null;
+                  const terpasang = st.terpasang[slot];
+                  return (
+                    <div key={slot}>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10.5px] font-bold tracking-wide text-teks-sekunder uppercase">{SLOT_LABEL[slot]}</p>
+                        {terpasang ? (
+                          <button type="button" onClick={() => void jalankan(`lepas:${slot}`, "lepas", { slot })} disabled={Boolean(sibuk)} className="btn-tekan text-[10.5px] font-bold text-gagal disabled:opacity-50">
+                            Lepas
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {milik.map((a) => {
+                          const aktif = terpasang === a.kode;
+                          return (
+                            <button
+                              key={a.kode}
+                              type="button"
+                              onClick={() => (aktif ? void jalankan(`lepas:${slot}`, "lepas", { slot }) : void jalankan(`pasang:${a.kode}`, "pasang", { kode: a.kode }))}
+                              disabled={Boolean(sibuk)}
+                              aria-pressed={aktif}
+                              className={cn("btn-tekan rounded-full px-3 py-1.5 text-[11px] font-bold disabled:opacity-50", aktif ? "text-white" : "glass text-teks-utama")}
+                              style={aktif ? { background: MERAH } : undefined}
+                            >
+                              {aktif ? "✓ " : ""}
+                              {a.nama}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : st.sparepart_dimiliki.length === 0 ? (
             <p className="mt-3 rounded-xl border border-dashed border-teks-sekunder/30 py-4 text-center text-[11.5px] text-teks-sekunder">
-              Belum ada aksesoris. Kunjungi Toko dulu.
+              Belum ada sparepart. Kunjungi Toko → Sparepart.
             </p>
           ) : (
             <div className="mt-3 flex flex-col gap-2.5">
-              {SLOT_URUT.map((slot) => {
-                const milik = KATALOG_AKSESORIS.filter((a) => a.slot === slot && dimiliki.has(a.kode));
+              {BAGIAN_URUT.map((bagian) => {
+                const milik = KATALOG_SPAREPART.filter((s) => s.bagian === bagian && spDimiliki.has(s.kode));
                 if (milik.length === 0) return null;
-                const terpasang = st.terpasang[slot];
+                const terpasang = st.sparepart_terpasang[bagian];
                 return (
-                  <div key={slot}>
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10.5px] font-bold tracking-wide text-teks-sekunder uppercase">{SLOT_LABEL[slot]}</p>
-                      {terpasang ? (
-                        <button
-                          type="button"
-                          onClick={() => void jalankan(`lepas:${slot}`, "lepas", { slot })}
-                          disabled={Boolean(sibuk)}
-                          className="btn-tekan text-[10.5px] font-bold text-gagal disabled:opacity-50"
-                        >
-                          Lepas
-                        </button>
-                      ) : null}
-                    </div>
+                  <div key={bagian}>
+                    <p className="text-[10.5px] font-bold tracking-wide text-teks-sekunder uppercase">{BAGIAN_LABEL[bagian]}</p>
                     <div className="mt-1 flex flex-wrap gap-1.5">
-                      {milik.map((a) => {
-                        const aktif = terpasang === a.kode;
+                      <button
+                        type="button"
+                        onClick={() => void jalankan(`lepas_sp:${bagian}`, "lepas_sparepart", { bagian })}
+                        disabled={Boolean(sibuk) || !terpasang}
+                        aria-pressed={!terpasang}
+                        className={cn("btn-tekan rounded-full px-3 py-1.5 text-[11px] font-bold disabled:opacity-60", !terpasang ? "text-white" : "glass text-teks-utama")}
+                        style={!terpasang ? { background: "linear-gradient(135deg, #6B7280, #374151)" } : undefined}
+                      >
+                        {!terpasang ? "✓ " : ""}Bawaan
+                      </button>
+                      {milik.map((s) => {
+                        const aktif = terpasang === s.kode;
                         return (
                           <button
-                            key={a.kode}
+                            key={s.kode}
                             type="button"
-                            onClick={() => (aktif ? void jalankan(`lepas:${slot}`, "lepas", { slot }) : void jalankan(`pasang:${a.kode}`, "pasang", { kode: a.kode }))}
+                            onClick={() => (aktif ? void jalankan(`lepas_sp:${bagian}`, "lepas_sparepart", { bagian }) : void jalankan(`pasang_sp:${s.kode}`, "pasang_sparepart", { kode: s.kode }))}
                             disabled={Boolean(sibuk)}
                             aria-pressed={aktif}
                             className={cn("btn-tekan rounded-full px-3 py-1.5 text-[11px] font-bold disabled:opacity-50", aktif ? "text-white" : "glass text-teks-utama")}
-                            style={aktif ? { background: MERAH } : undefined}
+                            style={aktif ? { background: "linear-gradient(135deg, #7C3AED, #4F46E5)" } : undefined}
                           >
                             {aktif ? "✓ " : ""}
-                            {a.nama}
+                            {s.nama}
                           </button>
                         );
                       })}

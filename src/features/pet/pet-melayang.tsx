@@ -138,7 +138,15 @@ export function PetMelayang({ onBuka, versi = 0 }: { onBuka: () => void; versi?:
           {seret ? "wheee~" : `${EMOJI_SUASANA[st.suasana] ?? ""} ${LABEL_SUASANA[st.suasana]}`}
         </span>
       ) : null}
-      <RobotSvg jenis={st.jenis} suasana={seret ? "senang" : st.suasana} terpasang={st.terpasang} ukuran={88} animasi={!seret} />
+      <RobotSvg
+        jenis={st.jenis}
+        suasana={seret ? "senang" : st.suasana}
+        vitalitas={seret ? "semangat" : st.vitalitas}
+        terpasang={st.terpasang}
+        sparepart={st.sparepart_terpasang}
+        ukuran={88}
+        animasi={!seret}
+      />
       {perlu ? <span className="absolute top-6 right-3 h-3.5 w-3.5 rounded-full bg-pri ring-2 ring-white" aria-hidden="true" /> : null}
     </motion.button>
   );

@@ -5022,3 +5022,24 @@ export async function petAksi(
   });
   return json as import("@/lib/pet").PetState & { pesan?: string };
 }
+
+/** Robot peliharaan orang lain — tampilan saja (profil publik di chat, 3 Sep 2026). */
+export async function getPetPublik(userId: string): Promise<import("@/lib/pet").PetState> {
+  const json = await fetchJson(`/api/pet?user_id=${encodeURIComponent(userId)}`);
+  return json as import("@/lib/pet").PetState;
+}
+
+// ---- Rangkuman link harian TVR Saya (3 Sep 2026) ----
+export type RangkumanLink = {
+  nama: string;
+  tanggal: string;
+  per_platform: Record<string, string[]>;
+  jumlah: number;
+  menunggu: { platform: string; url: string }[];
+};
+
+export async function getRangkumanLink(tanggal?: string): Promise<RangkumanLink> {
+  const q = tanggal ? `?tanggal=${encodeURIComponent(tanggal)}` : "";
+  const json = await fetchJson(`/api/tvr/rangkuman${q}`);
+  return json as RangkumanLink;
+}
