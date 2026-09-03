@@ -892,3 +892,57 @@
 .ludo-giliran {
   animation: ludo-giliran 1.6s ease-out infinite;
 }
+
+/* Ludo 2,5D — kubus dadu berguling & bidak boleh jalan memantul. */
+@keyframes ludo-kubus {
+  0% {
+    transform: rotateX(0deg) rotateY(0deg);
+  }
+  50% {
+    transform: rotateX(200deg) rotateY(160deg);
+  }
+  100% {
+    transform: rotateX(360deg) rotateY(360deg);
+  }
+}
+.ludo-kubus-putar {
+  animation: ludo-kubus 0.55s linear infinite;
+}
+@keyframes ludo-token-boleh {
+  0%,
+  100% {
+    transform: rotateX(-52deg) translateY(0);
+  }
+  50% {
+    transform: rotateX(-52deg) translateY(-7px);
+  }
+}
+.ludo-token-boleh {
+  animation: ludo-token-boleh 0.9s ease-in-out infinite;
+}
+@keyframes ludo-lompat {
+  0% {
+    transform: translateZ(0);
+  }
+  45% {
+    transform: translateZ(44px);
+  }
+  100% {
+    transform: translateZ(0);
+  }
+}
+.ludo-lompat {
+  animation: ludo-lompat 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes ludo-markas-giliran {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.ludo-markas-giliran {
+  animation: ludo-markas-giliran 1.2s ease-in-out infinite;
+}
