@@ -5153,10 +5153,20 @@ export type StudioItem = {
   render_status: "belum" | "rendering" | "sukses" | "gagal" | string;
   render_url: string;
   pesan: string;
+  /** Mode per akun (4 Sep 2026): sumber & kesiapan milik akun ini sendiri. */
+  sumber_link: string;
+  sumber_platform: string;
+  sumber_url: string;
+  sumber_caption: string;
+  sumber_akun: string;
+  /** Yang masih kurang: link | judul | caption | highlight | template (kosong = siap). */
+  kurang: string[];
 };
 export type StudioProyek = {
   proyek: {
     id: string;
+    /** "bersama" = satu video untuk semua profil; "per_akun" = tiap akun punya videonya sendiri. */
+    mode: "bersama" | "per_akun" | string;
     sumber_link: string;
     sumber_platform: string;
     sumber_url: string;

@@ -35,6 +35,7 @@ import {
   Sparkles,
   Trash2,
   UploadCloud,
+  Users,
   Wand2,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
@@ -54,15 +55,26 @@ import {
 } from "@/services";
 import { jamWIB } from "@/lib/format";
 import { TabAnggota } from "./studio-anggota";
+import { StudioPerAkun } from "./studio-per-akun";
 import { cn } from "@/lib/utils";
 
-const PLATFORM6 = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"] as const;
+const PLATFORM6 = [
+  "instagram",
+  "tiktok",
+  "youtube",
+  "facebook",
+  "threads",
+  "twitter",
+] as const;
 const MAKS_MB = 75;
 const MERAH = "linear-gradient(135deg, #DC2626, #B91C1C)";
 const UNGU = "linear-gradient(135deg, #7C3AED, #4F46E5)";
 
 type Fase = 1 | 2 | 3;
-type Draft = Record<string, { judul: string; highlight: string; caption: string }>;
+type Draft = Record<
+  string,
+  { judul: string; highlight: string; caption: string }
+>;
 
 // ------------------------------------------------------------
 // Kesiapan layanan (hanya tampil bila ada yang belum siap)
@@ -79,11 +91,24 @@ function KartuSiap({ siap }: { siap: StudioSiap | null }) {
   return (
     <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
       {baris.map(([nama, ok, env]) => (
-        <div key={nama} className={cn("rounded-xl px-2.5 py-2 text-[11px]", ok ? "bg-sukses/12" : "bg-gagal/10")}>
-          <p className={cn("font-bold", ok ? "text-emerald-600 dark:text-emerald-400" : "text-gagal")}>
+        <div
+          key={nama}
+          className={cn(
+            "rounded-xl px-2.5 py-2 text-[11px]",
+            ok ? "bg-sukses/12" : "bg-gagal/10",
+          )}
+        >
+          <p
+            className={cn(
+              "font-bold",
+              ok ? "text-emerald-600 dark:text-emerald-400" : "text-gagal",
+            )}
+          >
             {ok ? "✓" : "✗"} {nama}
           </p>
-          <p className="text-[9.5px] text-teks-sekunder">{ok ? "siap" : `isi ${env}`}</p>
+          <p className="text-[9.5px] text-teks-sekunder">
+            {ok ? "siap" : `isi ${env}`}
+          </p>
         </div>
       ))}
     </div>
@@ -122,14 +147,24 @@ function PenunjukFase({
               aria-current={aktif ? "step" : undefined}
               className={cn(
                 "btn-tekan flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-[11.5px] font-bold disabled:cursor-not-allowed disabled:opacity-40",
-                aktif ? "text-white" : lewat ? "bg-sukses/12 text-emerald-600 dark:text-emerald-400" : "glass text-teks-sekunder",
+                aktif
+                  ? "text-white"
+                  : lewat
+                    ? "bg-sukses/12 text-emerald-600 dark:text-emerald-400"
+                    : "glass text-teks-sekunder",
               )}
               style={aktif ? { background: MERAH } : undefined}
             >
-              {lewat ? <Check className="h-3.5 w-3.5" /> : <Ikon className="h-3.5 w-3.5" />}
+              {lewat ? (
+                <Check className="h-3.5 w-3.5" />
+              ) : (
+                <Ikon className="h-3.5 w-3.5" />
+              )}
               {f} · {label}
             </button>
-            {i < daftar.length - 1 && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-teks-sekunder/50" />}
+            {i < daftar.length - 1 && (
+              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-teks-sekunder/50" />
+            )}
           </div>
         );
       })}
@@ -152,11 +187,19 @@ function FormSumber({ onSelesai }: { onSelesai: (id: string) => void }) {
     setTahap("link");
     try {
       const r = await studioPost("sumber_link", { link: link.trim() });
-      toast("sukses", "Video diambil", "Tonton dulu, lalu lanjut ke fase Render.");
+      toast(
+        "sukses",
+        "Video diambil",
+        "Tonton dulu, lalu lanjut ke fase Render.",
+      );
       setLink("");
       onSelesai(String(r.id));
     } catch (e) {
-      toast("error", "Gagal mengambil video", e instanceof Error ? e.message : "");
+      toast(
+        "error",
+        "Gagal mengambil video",
+        e instanceof Error ? e.message : "",
+      );
     } finally {
       setTahap("");
     }
@@ -177,14 +220,21 @@ function FormSumber({ onSelesai }: { onSelesai: (id: string) => void }) {
         xhr.open("PUT", siapU.url);
         xhr.setRequestHeader("content-type", berkas.type || "video/mp4");
         xhr.upload.onprogress = (ev) => {
-          if (ev.lengthComputable) setPersen(Math.round((100 * ev.loaded) / ev.total));
+          if (ev.lengthComputable)
+            setPersen(Math.round((100 * ev.loaded) / ev.total));
         };
-        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? selesai() : gagal(new Error("Penyimpanan menolak berkas.")));
-        xhr.onerror = () => gagal(new Error("Koneksi terputus saat mengunggah."));
+        xhr.onload = () =>
+          xhr.status >= 200 && xhr.status < 300
+            ? selesai()
+            : gagal(new Error("Penyimpanan menolak berkas."));
+        xhr.onerror = () =>
+          gagal(new Error("Koneksi terputus saat mengunggah."));
         xhr.send(berkas);
       });
       const r = await studioPost("sumber_berkas", {
-        ...(siapU.cara === "r2" ? { r2_key: siapU.r2_key } : { path: siapU.path }),
+        ...(siapU.cara === "r2"
+          ? { r2_key: siapU.r2_key }
+          : { path: siapU.path }),
         ukuran: berkas.size,
       });
       toast("sukses", "Berkas tersimpan");
@@ -200,10 +250,13 @@ function FormSumber({ onSelesai }: { onSelesai: (id: string) => void }) {
 
   return (
     <GlassCard className="p-4">
-      <p className="text-[12.5px] font-bold text-teks-utama">Fase 1 · Unggah video sumber</p>
+      <p className="text-[12.5px] font-bold text-teks-utama">
+        Fase 1 · Unggah video sumber
+      </p>
       <p className="mt-1 text-[11px] leading-relaxed text-teks-sekunder">
-        Tempel link video (TikTok/Instagram) — video asli diambil otomatis tanpa watermark beserta
-        caption aslinya — atau unggah berkas video sendiri (maks {MAKS_MB} MB).
+        Tempel link video (TikTok/Instagram) — video asli diambil otomatis tanpa
+        watermark beserta caption aslinya — atau unggah berkas video sendiri
+        (maks {MAKS_MB} MB).
       </p>
       <div className="glass-input mt-3 flex h-11 items-center gap-2 rounded-xl px-3">
         <Link2 className="h-4 w-4 text-teks-sekunder" />
@@ -223,11 +276,23 @@ function FormSumber({ onSelesai }: { onSelesai: (id: string) => void }) {
         className="btn-tekan mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-white disabled:opacity-50"
         style={{ background: MERAH }}
       >
-        {tahap === "link" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+        {tahap === "link" ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Wand2 className="h-4 w-4" />
+        )}
         {tahap === "link" ? "Mengambil video…" : "Ambil video dari link"}
       </button>
-      <p className="my-2 text-center text-[10.5px] text-teks-sekunder">— atau —</p>
-      <input ref={inputRef} type="file" accept="video/mp4,video/quicktime,video/webm" className="hidden" onChange={(e) => setBerkas(e.target.files?.[0] ?? null)} />
+      <p className="my-2 text-center text-[10.5px] text-teks-sekunder">
+        — atau —
+      </p>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/mp4,video/quicktime,video/webm"
+        className="hidden"
+        onChange={(e) => setBerkas(e.target.files?.[0] ?? null)}
+      />
       <div className="flex gap-2">
         <button
           type="button"
@@ -236,7 +301,9 @@ function FormSumber({ onSelesai }: { onSelesai: (id: string) => void }) {
           className="glass btn-tekan flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-bold text-teks-utama disabled:opacity-60"
         >
           <UploadCloud className="h-4 w-4 text-pri" />
-          {berkas ? `${berkas.name} (${Math.round(berkas.size / 1_048_576)} MB)` : "Pilih berkas video"}
+          {berkas
+            ? `${berkas.name} (${Math.round(berkas.size / 1_048_576)} MB)`
+            : "Pilih berkas video"}
         </button>
         <button
           type="button"
@@ -254,7 +321,15 @@ function FormSumber({ onSelesai }: { onSelesai: (id: string) => void }) {
 // ------------------------------------------------------------
 // Editor proyek (fase 1 review → 2 render → 3 siaran)
 // ------------------------------------------------------------
-function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: StudioProfil[]; onTutup: () => void }) {
+function EditorProyek({
+  id,
+  profilSemua,
+  onTutup,
+}: {
+  id: string;
+  profilSemua: StudioProfil[];
+  onTutup: () => void;
+}) {
   const [data, setData] = useState<StudioProyek | null>(null);
   const [fase, setFase] = useState<Fase>(1);
   const [captionInti, setCaptionInti] = useState("");
@@ -273,20 +348,42 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
       .then((d) => {
         setData(d);
         const dr: Draft = {};
-        for (const it of d.item) dr[it.profil] = { judul: it.judul, highlight: it.highlight, caption: it.caption };
+        for (const it of d.item)
+          dr[it.profil] = {
+            judul: it.judul,
+            highlight: it.highlight,
+            caption: it.caption,
+          };
         setDraft(dr);
         if (!terisi.current) {
           terisi.current = true;
           setCaptionInti(d.proyek.caption_inti || d.proyek.sumber_caption);
           setPenjelasan(d.proyek.penjelasan);
           setSumberAkun(d.proyek.sumber_akun);
-          const awal = d.item.length > 0 ? d.item.map((i) => i.profil) : profilSemua.filter((p) => p.template?.aktif).map((p) => p.profil);
+          const awal =
+            d.item.length > 0
+              ? d.item.map((i) => i.profil)
+              : profilSemua
+                  .filter((p) => p.template?.aktif)
+                  .map((p) => p.profil);
           setPilih(new Set(awal));
           // Fase awal mengikuti kemajuan proyek.
-          setFase(d.proyek.status === "siaran" ? 3 : d.proyek.status === "sumber" ? 1 : 2);
+          setFase(
+            d.proyek.status === "siaran"
+              ? 3
+              : d.proyek.status === "sumber"
+                ? 1
+                : 2,
+          );
         }
       })
-      .catch((e) => toast("error", "Gagal memuat proyek", e instanceof Error ? e.message : ""));
+      .catch((e) =>
+        toast(
+          "error",
+          "Gagal memuat proyek",
+          e instanceof Error ? e.message : "",
+        ),
+      );
   }
   useEffect(() => {
     void muat();
@@ -304,7 +401,12 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
     return () => clearInterval(t);
   }, [adaRendering, adaSiaranMenunggu]);
 
-  async function jalankan(label: string, aksi: string, body: Record<string, unknown>, pesanSukses?: string) {
+  async function jalankan(
+    label: string,
+    aksi: string,
+    body: Record<string, unknown>,
+    pesanSukses?: string,
+  ) {
     if (sibuk) return null;
     setSibuk(label);
     try {
@@ -322,7 +424,11 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
 
   function bolehKe(f: Fase): boolean {
     if (f === 1) return true;
-    if (f === 2) return Boolean(data?.proyek.sumber_url);
+    // Mode per akun: video ada di tiap baris akun, bukan di induk proyek.
+    if (f === 2)
+      return (
+        data?.proyek.mode === "per_akun" || Boolean(data?.proyek.sumber_url)
+      );
     return jumlahSukses > 0;
   }
 
@@ -334,19 +440,28 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
 
   async function autoEdit() {
     autoEditBaruSajaRef.current = true;
-    const r = await jalankan("auto edit", "auto_edit", { caption_inti: captionInti, penjelasan, sumber_akun: sumberAkun });
+    const r = await jalankan("auto edit", "auto_edit", {
+      caption_inti: captionInti,
+      penjelasan,
+      sumber_akun: sumberAkun,
+    });
     if (!r) {
       autoEditBaruSajaRef.current = false;
       return;
     }
-    const g = (r.gagal as { profil: string; pesan: string }[] | undefined) ?? [];
+    const g =
+      (r.gagal as { profil: string; pesan: string }[] | undefined) ?? [];
     const tanpa = (r.tanpa_template as string[] | undefined) ?? [];
     toast(
       g.length ? "peringatan" : "sukses",
       `Auto edit: ${r.dimulai ?? 0} video dirender untuk ${r.profil ?? 0} profil PALUGODAM`,
       [
-        g.length ? `${g.length} gagal: ${g.map((x) => x.profil).join(", ")}` : "",
-        tanpa.length ? `${tanpa.length} profil dilewati (tanpa template): ${tanpa.slice(0, 4).join(", ")}${tanpa.length > 4 ? "…" : ""}` : "",
+        g.length
+          ? `${g.length} gagal: ${g.map((x) => x.profil).join(", ")}`
+          : "",
+        tanpa.length
+          ? `${tanpa.length} profil dilewati (tanpa template): ${tanpa.slice(0, 4).join(", ")}${tanpa.length > 4 ? "…" : ""}`
+          : "",
         "Status render diperbarui tiap 8 detik.",
       ]
         .filter(Boolean)
@@ -358,11 +473,16 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
   async function autoUpload() {
     const r = await jalankan("auto upload", "auto_upload", {});
     if (!r) return;
-    toast("sukses", `Auto upload: ${r.jumlah ?? 0} profil`, "Tiap profil mengunggah versinya ke semua sosmed yang tertaut. Status per profil di fase Siaran.");
+    toast(
+      "sukses",
+      `Auto upload: ${r.jumlah ?? 0} profil`,
+      "Tiap profil mengunggah versinya ke semua sosmed yang tertaut. Status per profil di fase Siaran.",
+    );
     setFase(3);
   }
 
-  const bolehAutoUpload = jumlahSukses > 0 && !adaRendering && !adaSiaranMenunggu && !sibuk;
+  const bolehAutoUpload =
+    jumlahSukses > 0 && !adaRendering && !adaSiaranMenunggu && !sibuk;
   // Lanjut otomatis: render baru saja selesai (setelah AUTO EDIT) → AUTO UPLOAD.
   useEffect(() => {
     if (!autoLanjut || !autoEditBaruSajaRef.current) return;
@@ -384,16 +504,26 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
         className="btn-tekan mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[13.5px] font-bold text-white disabled:opacity-50"
         style={{ background: UNGU }}
       >
-        {sibuk === "auto edit" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+        {sibuk === "auto edit" ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Wand2 className="h-4 w-4" />
+        )}
         AUTO EDIT · 1 klik untuk seluruh profil PALUGODAM
       </button>
       <label className="mt-2 flex items-center gap-2 text-[11.5px] text-teks-utama">
-        <input type="checkbox" checked={autoLanjut} onChange={(e) => setAutoLanjut(e.target.checked)} className="h-4 w-4 accent-[#7C3AED]" />
+        <input
+          type="checkbox"
+          checked={autoLanjut}
+          onChange={(e) => setAutoLanjut(e.target.checked)}
+          className="h-4 w-4 accent-[#7C3AED]"
+        />
         Setelah render selesai, langsung AUTO UPLOAD ke semua sosmed
       </label>
       <p className="mt-1 text-[10.5px] leading-relaxed text-teks-sekunder">
-        Semua profil anggota Divisi PALUGODAM yang punya template dipilih otomatis; DeepSeek membuat judul, highlight &
-        caption berbeda untuk tiap profil; Creatomate merender semuanya. Butuh sekitar 1 menit.
+        Semua profil anggota Divisi PALUGODAM yang punya template dipilih
+        otomatis; DeepSeek membuat judul, highlight & caption berbeda untuk tiap
+        profil; Creatomate merender semuanya. Butuh sekitar 1 menit.
       </p>
     </>
   );
@@ -406,7 +536,11 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
       className="btn-tekan mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[13.5px] font-bold text-white disabled:opacity-50"
       style={{ background: MERAH }}
     >
-      {sibuk === "auto upload" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+      {sibuk === "auto upload" ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <Rocket className="h-4 w-4" />
+      )}
       AUTO UPLOAD · 1 klik ke {jumlahSukses} profil × semua sosmed tertaut
     </button>
   );
@@ -414,24 +548,69 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
-        <button type="button" onClick={onTutup} className="btn-tekan text-[11px] font-bold text-pri">
+        <button
+          type="button"
+          onClick={onTutup}
+          className="btn-tekan text-[11px] font-bold text-pri"
+        >
           ← Daftar proyek
         </button>
-        <p className="truncate text-[10.5px] text-teks-sekunder">Proyek #{data.proyek.id} · {jamWIB(data.proyek.dibuat_pada)}</p>
+        <p className="truncate text-[10.5px] text-teks-sekunder">
+          Proyek #{data.proyek.id} · {jamWIB(data.proyek.dibuat_pada)}
+        </p>
       </div>
       <PenunjukFase fase={fase} bolehKe={bolehKe} onPilih={setFase} />
 
-      {/* ===== FASE 1: review sumber ===== */}
-      {fase === 1 && (
+      {/* ===== MODE PER AKUN (4 Sep 2026): tiap akun punya link & teksnya sendiri ===== */}
+      {data.proyek.mode === "per_akun" && (fase === 1 || fase === 2) && (
+        <StudioPerAkun
+          data={data}
+          sibuk={sibuk}
+          setSibuk={setSibuk}
+          onSegarkan={() => void muat()}
+          onRender={async () => {
+            const r = await jalankan("render", "render", {});
+            if (!r) return;
+            const g =
+              (r.gagal as { profil: string; pesan: string }[] | undefined) ??
+              [];
+            toast(
+              g.length ? "peringatan" : "sukses",
+              `${r.dimulai ?? 0} video mulai dirender`,
+              g.length
+                ? `${g.length} gagal: ${g.map((x) => x.profil).join(", ")}`
+                : "Status diperbarui otomatis tiap 8 detik.",
+            );
+            setFase(2);
+          }}
+        />
+      )}
+
+      {/* ===== FASE 1: review sumber (mode bersama) ===== */}
+      {fase === 1 && data.proyek.mode !== "per_akun" && (
         <GlassCard className="p-4">
-          <p className="text-[12.5px] font-bold text-teks-utama">Fase 1 · Video sumber</p>
+          <p className="text-[12.5px] font-bold text-teks-utama">
+            Fase 1 · Video sumber
+          </p>
           {data.proyek.sumber_url ? (
-            <video src={data.proyek.sumber_url} controls playsInline className="mt-2 max-h-80 w-full rounded-xl bg-black" />
+            <video
+              src={data.proyek.sumber_url}
+              controls
+              playsInline
+              className="mt-2 max-h-80 w-full rounded-xl bg-black"
+            />
           ) : (
-            <p className="mt-2 text-[11px] text-gagal">Berkas sumber sudah disapu (umur 3 hari). Buat proyek baru.</p>
+            <p className="mt-2 text-[11px] text-gagal">
+              Berkas sumber sudah disapu (umur 3 hari). Buat proyek baru.
+            </p>
           )}
           {data.proyek.sumber_link ? (
-            <a href={data.proyek.sumber_link} target="_blank" rel="noopener noreferrer" className="mt-1.5 flex items-center gap-1 text-[10.5px] text-teks-sekunder">
+            <a
+              href={data.proyek.sumber_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1.5 flex items-center gap-1 text-[10.5px] text-teks-sekunder"
+            >
               <ExternalLink className="h-3 w-3" /> {data.proyek.sumber_link}
             </a>
           ) : null}
@@ -453,11 +632,13 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
         </GlassCard>
       )}
 
-      {/* ===== FASE 2: teks per profil + render ===== */}
-      {fase === 2 && (
+      {/* ===== FASE 2: teks per profil + render (mode bersama) ===== */}
+      {fase === 2 && data.proyek.mode !== "per_akun" && (
         <>
           <GlassCard className="p-4">
-            <p className="text-[12.5px] font-bold text-teks-utama">Fase 2 · Bahan teks & profil PALUGODAM</p>
+            <p className="text-[12.5px] font-bold text-teks-utama">
+              Fase 2 · Bahan teks & profil PALUGODAM
+            </p>
             <textarea
               value={captionInti}
               onChange={(e) => setCaptionInti(e.target.value)}
@@ -482,10 +663,20 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
               className="glass-input mt-2 h-10 w-full rounded-xl px-3 text-[12.5px] text-teks-utama"
             />
             <div className="mt-3 flex items-center justify-between">
-              <p className="text-[11px] font-semibold text-teks-sekunder">Profil PALUGODAM tujuan ({pilih.size}):</p>
+              <p className="text-[11px] font-semibold text-teks-sekunder">
+                Profil PALUGODAM tujuan ({pilih.size}):
+              </p>
               <button
                 type="button"
-                onClick={() => setPilih(new Set(profilSemua.filter((p) => p.template?.aktif).map((p) => p.profil)))}
+                onClick={() =>
+                  setPilih(
+                    new Set(
+                      profilSemua
+                        .filter((p) => p.template?.aktif)
+                        .map((p) => p.profil),
+                    ),
+                  )
+                }
                 className="btn-tekan text-[11px] font-bold text-pri"
               >
                 Pilih semua yang punya template
@@ -506,39 +697,83 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
                         return n;
                       })
                     }
-                    className={cn("btn-tekan flex items-center gap-2 rounded-xl px-2 py-1.5 text-left", aktif ? "bg-pri/10" : "")}
+                    className={cn(
+                      "btn-tekan flex items-center gap-2 rounded-xl px-2 py-1.5 text-left",
+                      aktif ? "bg-pri/10" : "",
+                    )}
                   >
-                    <span className={cn("flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-md border", aktif ? "border-pri bg-pri text-white" : "border-black/20 dark:border-white/25")}>
+                    <span
+                      className={cn(
+                        "flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-md border",
+                        aktif
+                          ? "border-pri bg-pri text-white"
+                          : "border-black/20 dark:border-white/25",
+                      )}
+                    >
                       {aktif && <Check className="h-3 w-3" />}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12px] font-semibold text-teks-utama">{p.profil}</span>
-                      <span className="block truncate text-[10px] text-teks-sekunder">{p.nama || "belum ditautkan ke anggota"}</span>
+                      <span className="block truncate text-[12px] font-semibold text-teks-utama">
+                        {p.profil}
+                      </span>
+                      <span className="block truncate text-[10px] text-teks-sekunder">
+                        {p.nama || "belum ditautkan ke anggota"}
+                      </span>
                     </span>
-                    {p.template ? <span className="text-[9.5px] text-emerald-600 dark:text-emerald-400">template ✓</span> : <span className="text-[9.5px] text-gagal">tanpa template</span>}
-                    <span className="angka-tab text-[10px] text-teks-sekunder">{p.tertaut}/6</span>
+                    {p.template ? (
+                      <span className="text-[9.5px] text-emerald-600 dark:text-emerald-400">
+                        template ✓
+                      </span>
+                    ) : (
+                      <span className="text-[9.5px] text-gagal">
+                        tanpa template
+                      </span>
+                    )}
+                    <span className="angka-tab text-[10px] text-teks-sekunder">
+                      {p.tertaut}/6
+                    </span>
                   </button>
                 );
               })}
               {profilSemua.length === 0 && (
-                <p className="px-2 py-3 text-[11px] text-teks-sekunder">Belum ada profil milik anggota Divisi PALUGODAM.</p>
+                <p className="px-2 py-3 text-[11px] text-teks-sekunder">
+                  Belum ada profil milik anggota Divisi PALUGODAM.
+                </p>
               )}
             </div>
             {tombolAutoEdit}
             <button
               type="button"
-              onClick={() => void jalankan("simpan", "teks_simpan", { caption_inti: captionInti, penjelasan, sumber_akun: sumberAkun, profil: [...pilih] }, "Bahan & profil tersimpan")}
+              onClick={() =>
+                void jalankan(
+                  "simpan",
+                  "teks_simpan",
+                  {
+                    caption_inti: captionInti,
+                    penjelasan,
+                    sumber_akun: sumberAkun,
+                    profil: [...pilih],
+                  },
+                  "Bahan & profil tersimpan",
+                )
+              }
               disabled={Boolean(sibuk) || pilih.size === 0}
               className="glass btn-tekan mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-xl text-[12.5px] font-bold text-teks-utama disabled:opacity-50"
             >
-              {sibuk === "simpan" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 text-pri" />}
+              {sibuk === "simpan" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4 text-pri" />
+              )}
               Manual: simpan bahan & {pilih.size} profil
             </button>
           </GlassCard>
 
           {item.length > 0 && (
             <GlassCard className="p-4">
-              <p className="text-[12.5px] font-bold text-teks-utama">Judul, highlight & caption per profil</p>
+              <p className="text-[12.5px] font-bold text-teks-utama">
+                Judul, highlight & caption per profil
+              </p>
               <div className="mt-2 grid grid-cols-3 gap-1.5">
                 {(
                   [
@@ -550,57 +785,121 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
                   <button
                     key={jenis}
                     type="button"
-                    onClick={() => void jalankan(label, "generate", { jenis }, `${label}: ${item.length} profil`)}
+                    onClick={() =>
+                      void jalankan(
+                        label,
+                        "generate",
+                        { jenis },
+                        `${label}: ${item.length} profil`,
+                      )
+                    }
                     disabled={Boolean(sibuk)}
                     className="btn-tekan flex items-center justify-center gap-1 rounded-xl bg-pri/12 py-2 text-[11px] font-bold text-pri disabled:opacity-50"
                   >
-                    {sibuk === label ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                    {sibuk === label ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    )}
                     {label}
                   </button>
                 ))}
               </div>
               <div className="mt-3 flex flex-col gap-2">
                 {item.map((it) => {
-                  const d = draft[it.profil] ?? { judul: "", highlight: "", caption: "" };
+                  const d = draft[it.profil] ?? {
+                    judul: "",
+                    highlight: "",
+                    caption: "",
+                  };
                   return (
                     <div key={it.id} className="glass-soft rounded-xl p-2.5">
                       <div className="flex items-center gap-2">
                         <p className="min-w-0 flex-1 truncate text-[12px] font-bold text-teks-utama">
                           {it.profil}
-                          {it.nama ? <span className="font-normal text-teks-sekunder"> · {it.nama}</span> : null}
+                          {it.nama ? (
+                            <span className="font-normal text-teks-sekunder">
+                              {" "}
+                              · {it.nama}
+                            </span>
+                          ) : null}
                         </p>
                         <StatusBadge
-                          label={it.render_status === "sukses" ? "render ✓" : it.render_status === "rendering" ? "merender…" : it.render_status === "gagal" ? "render gagal" : "belum render"}
-                          warna={it.render_status === "sukses" ? "hijau" : it.render_status === "rendering" ? "kuning" : it.render_status === "gagal" ? "merah" : "netral"}
+                          label={
+                            it.render_status === "sukses"
+                              ? "render ✓"
+                              : it.render_status === "rendering"
+                                ? "merender…"
+                                : it.render_status === "gagal"
+                                  ? "render gagal"
+                                  : "belum render"
+                          }
+                          warna={
+                            it.render_status === "sukses"
+                              ? "hijau"
+                              : it.render_status === "rendering"
+                                ? "kuning"
+                                : it.render_status === "gagal"
+                                  ? "merah"
+                                  : "netral"
+                          }
                           berkedip={it.render_status === "rendering"}
                         />
                       </div>
                       <input
                         value={d.judul}
-                        onChange={(e) => setDraft((s) => ({ ...s, [it.profil]: { ...d, judul: e.target.value } }))}
+                        onChange={(e) =>
+                          setDraft((s) => ({
+                            ...s,
+                            [it.profil]: { ...d, judul: e.target.value },
+                          }))
+                        }
                         maxLength={100}
                         placeholder="Judul overlay"
                         className="glass-input mt-1.5 h-9 w-full rounded-xl px-2.5 text-[12px] text-teks-utama"
                       />
                       <input
                         value={d.highlight}
-                        onChange={(e) => setDraft((s) => ({ ...s, [it.profil]: { ...d, highlight: e.target.value.toUpperCase() } }))}
+                        onChange={(e) =>
+                          setDraft((s) => ({
+                            ...s,
+                            [it.profil]: {
+                              ...d,
+                              highlight: e.target.value.toUpperCase(),
+                            },
+                          }))
+                        }
                         maxLength={40}
                         placeholder="HIGHLIGHT (mis. VIRAL, HARU)"
                         className="glass-input mt-1.5 h-9 w-full rounded-xl px-2.5 text-[12px] text-teks-utama"
                       />
                       <textarea
                         value={d.caption}
-                        onChange={(e) => setDraft((s) => ({ ...s, [it.profil]: { ...d, caption: e.target.value } }))}
+                        onChange={(e) =>
+                          setDraft((s) => ({
+                            ...s,
+                            [it.profil]: { ...d, caption: e.target.value },
+                          }))
+                        }
                         rows={2}
                         maxLength={2200}
                         placeholder="Caption untuk profil ini"
                         className="glass-input mt-1.5 w-full rounded-xl px-2.5 py-1.5 text-[12px] text-teks-utama"
                       />
-                      {it.pesan && it.render_status === "gagal" ? <p className="mt-1 text-[10.5px] text-gagal">{it.pesan}</p> : null}
+                      {it.pesan && it.render_status === "gagal" ? (
+                        <p className="mt-1 text-[10.5px] text-gagal">
+                          {it.pesan}
+                        </p>
+                      ) : null}
                       {it.render_url ? (
-                        <a href={it.render_url} target="_blank" rel="noopener noreferrer" className="mt-1 flex items-center gap-1 text-[10.5px] font-bold text-pri">
-                          <ExternalLink className="h-3 w-3" /> Lihat hasil render
+                        <a
+                          href={it.render_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 flex items-center gap-1 text-[10.5px] font-bold text-pri"
+                        >
+                          <ExternalLink className="h-3 w-3" /> Lihat hasil
+                          render
                         </a>
                       ) : null}
                     </div>
@@ -609,32 +908,69 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
               </div>
               <button
                 type="button"
-                onClick={() => void jalankan("simpan teks", "item_simpan", { item: Object.entries(draft).map(([profil, d]) => ({ profil, ...d })) }, "Teks per profil tersimpan")}
+                onClick={() =>
+                  void jalankan(
+                    "simpan teks",
+                    "item_simpan",
+                    {
+                      item: Object.entries(draft).map(([profil, d]) => ({
+                        profil,
+                        ...d,
+                      })),
+                    },
+                    "Teks per profil tersimpan",
+                  )
+                }
                 disabled={Boolean(sibuk)}
                 className="glass btn-tekan mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-xl text-[12.5px] font-bold text-teks-utama disabled:opacity-50"
               >
-                {sibuk === "simpan teks" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 text-pri" />}
+                {sibuk === "simpan teks" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4 text-pri" />
+                )}
                 Simpan teks per profil
               </button>
               <button
                 type="button"
                 onClick={() =>
-                  void jalankan("simpan teks", "item_simpan", { item: Object.entries(draft).map(([profil, d]) => ({ profil, ...d })) }).then(async (ok) => {
+                  void jalankan("simpan teks", "item_simpan", {
+                    item: Object.entries(draft).map(([profil, d]) => ({
+                      profil,
+                      ...d,
+                    })),
+                  }).then(async (ok) => {
                     if (!ok) return;
                     const r = await jalankan("render", "render", {});
                     if (!r) return;
-                    const g = (r.gagal as { profil: string; pesan: string }[] | undefined) ?? [];
-                    toast(g.length ? "peringatan" : "sukses", `${r.dimulai ?? 0} render dimulai`, g.length ? `${g.length} gagal: ${g.map((x) => x.profil).join(", ")}` : "Status diperbarui otomatis tiap 8 detik.");
+                    const g =
+                      (r.gagal as
+                        { profil: string; pesan: string }[] | undefined) ?? [];
+                    toast(
+                      g.length ? "peringatan" : "sukses",
+                      `${r.dimulai ?? 0} render dimulai`,
+                      g.length
+                        ? `${g.length} gagal: ${g.map((x) => x.profil).join(", ")}`
+                        : "Status diperbarui otomatis tiap 8 detik.",
+                    );
                   })
                 }
                 disabled={Boolean(sibuk) || adaRendering}
                 className="btn-tekan mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[13.5px] font-bold text-white disabled:opacity-50"
                 style={{ background: UNGU }}
               >
-                {sibuk === "render" || adaRendering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clapperboard className="h-4 w-4" />}
-                {adaRendering ? "Sedang merender…" : `Render ${item.filter((i) => i.render_status !== "sukses").length} versi video`}
+                {sibuk === "render" || adaRendering ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Clapperboard className="h-4 w-4" />
+                )}
+                {adaRendering
+                  ? "Sedang merender…"
+                  : `Render ${item.filter((i) => i.render_status !== "sukses").length} versi video`}
               </button>
-              <p className="mt-2 text-center text-[10.5px] text-teks-sekunder">{jumlahSukses}/{item.length} versi siap</p>
+              <p className="mt-2 text-center text-[10.5px] text-teks-sekunder">
+                {jumlahSukses}/{item.length} versi siap
+              </p>
               {tombolAutoUpload}
               <button
                 type="button"
@@ -642,7 +978,8 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
                 disabled={jumlahSukses === 0}
                 className="glass btn-tekan mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-teks-utama disabled:opacity-50"
               >
-                Atau atur sosmed & jadwal di fase Siaran <ChevronRight className="h-4 w-4" />
+                Atau atur sosmed & jadwal di fase Siaran{" "}
+                <ChevronRight className="h-4 w-4" />
               </button>
             </GlassCard>
           )}
@@ -652,10 +989,17 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
       {/* ===== FASE 3: siaran ===== */}
       {fase === 3 && (
         <GlassCard className="p-4">
-          <p className="text-[12.5px] font-bold text-teks-utama">Fase 3 · Siaran ke {jumlahSukses} profil</p>
-          <p className="mt-1 text-[11px] text-teks-sekunder">Tiap profil mengunggah versinya sendiri ke sosmed yang tertaut di profil itu.</p>
+          <p className="text-[12.5px] font-bold text-teks-utama">
+            Fase 3 · Siaran ke {jumlahSukses} profil
+          </p>
+          <p className="mt-1 text-[11px] text-teks-sekunder">
+            Tiap profil mengunggah versinya sendiri ke sosmed yang tertaut di
+            profil itu.
+          </p>
           {!data.siaran ? tombolAutoUpload : null}
-          <p className="mt-3 text-[11px] font-semibold text-teks-sekunder">Atau atur manual: pilih sosmed & jadwal</p>
+          <p className="mt-3 text-[11px] font-semibold text-teks-sekunder">
+            Atau atur manual: pilih sosmed & jadwal
+          </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {PLATFORM6.map((p) => (
               <button
@@ -670,7 +1014,10 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
                   })
                 }
                 aria-pressed={platform.has(p)}
-                className={cn("btn-tekan flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-bold", platform.has(p) ? "text-white" : "glass text-teks-sekunder")}
+                className={cn(
+                  "btn-tekan flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11.5px] font-bold",
+                  platform.has(p) ? "text-white" : "glass text-teks-sekunder",
+                )}
                 style={platform.has(p) ? { background: MERAH } : undefined}
               >
                 <PlatformIcon platform={p} size={12} />
@@ -679,19 +1026,39 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
             ))}
           </div>
           <label className="mt-3 flex items-center gap-2 text-[12px] text-teks-utama">
-            <input type="checkbox" checked={pakaiJadwal} onChange={(e) => setPakaiJadwal(e.target.checked)} className="h-4 w-4 accent-[#DC2626]" />
+            <input
+              type="checkbox"
+              checked={pakaiJadwal}
+              onChange={(e) => setPakaiJadwal(e.target.checked)}
+              className="h-4 w-4 accent-[#DC2626]"
+            />
             Jadwalkan (5 menit – 7 hari)
           </label>
           {pakaiJadwal && (
-            <input type="datetime-local" value={jadwal} onChange={(e) => setJadwal(e.target.value)} className="glass-input mt-2 h-11 w-full rounded-xl px-3 text-sm text-teks-utama" />
+            <input
+              type="datetime-local"
+              value={jadwal}
+              onChange={(e) => setJadwal(e.target.value)}
+              className="glass-input mt-2 h-11 w-full rounded-xl px-3 text-sm text-teks-utama"
+            />
           )}
           <div className="mt-3 flex flex-col gap-1">
             {item
               .filter((i) => i.render_status === "sukses")
               .map((i) => (
-                <div key={i.id} className="flex items-center gap-2 rounded-lg bg-black/[0.03] px-2 py-1.5 dark:bg-white/[0.05]">
-                  <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-teks-utama">{i.profil}</span>
-                  <a href={i.render_url} target="_blank" rel="noopener noreferrer" className="text-[10.5px] font-bold text-pri">
+                <div
+                  key={i.id}
+                  className="flex items-center gap-2 rounded-lg bg-black/[0.03] px-2 py-1.5 dark:bg-white/[0.05]"
+                >
+                  <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-teks-utama">
+                    {i.profil}
+                  </span>
+                  <a
+                    href={i.render_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10.5px] font-bold text-pri"
+                  >
                     tonton
                   </a>
                 </div>
@@ -700,18 +1067,40 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
           {data.siaran ? (
             <div className="mt-3">
               <p className="text-[11px] font-semibold text-teks-sekunder">
-                Siaran #{data.siaran.id}: {data.siaran.ringkas.terkirim}/{data.siaran.ringkas.total} terkirim
-                {data.siaran.ringkas.gagal ? ` · ${data.siaran.ringkas.gagal} gagal` : ""}
-                {data.siaran.ringkas.menunggu ? ` · ${data.siaran.ringkas.menunggu} menunggu` : ""}
+                Siaran #{data.siaran.id}: {data.siaran.ringkas.terkirim}/
+                {data.siaran.ringkas.total} terkirim
+                {data.siaran.ringkas.gagal
+                  ? ` · ${data.siaran.ringkas.gagal} gagal`
+                  : ""}
+                {data.siaran.ringkas.menunggu
+                  ? ` · ${data.siaran.ringkas.menunggu} menunggu`
+                  : ""}
               </p>
               <div className="mt-1.5 flex flex-col gap-1">
                 {data.siaran.item.map((it) => (
-                  <div key={it.id} className="flex items-center gap-2 rounded-lg bg-black/[0.03] px-2 py-1.5 dark:bg-white/[0.05]">
-                    <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-teks-utama">{it.profil}</span>
-                    {it.pesan && it.status !== "terkirim" ? <span className="truncate text-[10px] text-gagal">{it.pesan}</span> : null}
+                  <div
+                    key={it.id}
+                    className="flex items-center gap-2 rounded-lg bg-black/[0.03] px-2 py-1.5 dark:bg-white/[0.05]"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-teks-utama">
+                      {it.profil}
+                    </span>
+                    {it.pesan && it.status !== "terkirim" ? (
+                      <span className="truncate text-[10px] text-gagal">
+                        {it.pesan}
+                      </span>
+                    ) : null}
                     <StatusBadge
                       label={it.status === "diproses" ? "mengirim…" : it.status}
-                      warna={it.status === "terkirim" ? "hijau" : it.status === "gagal" ? "merah" : it.status === "dibatalkan" ? "netral" : "kuning"}
+                      warna={
+                        it.status === "terkirim"
+                          ? "hijau"
+                          : it.status === "gagal"
+                            ? "merah"
+                            : it.status === "dibatalkan"
+                              ? "netral"
+                              : "kuning"
+                      }
                       berkedip={it.status === "diproses"}
                     />
                   </div>
@@ -721,13 +1110,34 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
           ) : null}
           <button
             type="button"
-            onClick={() => void jalankan("siaran", "siaran", { platforms: [...platform], jadwal: pakaiJadwal && jadwal ? new Date(jadwal).toISOString() : undefined }, "Siaran dimulai — status per profil di bawah")}
-            disabled={Boolean(sibuk) || platform.size === 0 || adaSiaranMenunggu}
+            onClick={() =>
+              void jalankan(
+                "siaran",
+                "siaran",
+                {
+                  platforms: [...platform],
+                  jadwal:
+                    pakaiJadwal && jadwal
+                      ? new Date(jadwal).toISOString()
+                      : undefined,
+                },
+                "Siaran dimulai — status per profil di bawah",
+              )
+            }
+            disabled={
+              Boolean(sibuk) || platform.size === 0 || adaSiaranMenunggu
+            }
             className="btn-tekan mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[13.5px] font-bold text-white disabled:opacity-50"
             style={{ background: MERAH }}
           >
-            {sibuk === "siaran" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            {data.siaran ? "Kirim ulang ke semua profil" : `Upload ke ${jumlahSukses} profil × sosmed tertaut`}
+            {sibuk === "siaran" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            {data.siaran
+              ? "Kirim ulang ke semua profil"
+              : `Upload ke ${jumlahSukses} profil × sosmed tertaut`}
           </button>
         </GlassCard>
       )}
@@ -738,7 +1148,13 @@ function EditorProyek({ id, profilSemua, onTutup }: { id: string; profilSemua: S
 // ------------------------------------------------------------
 // Tab PROYEK: fase 1 (sumber baru) + daftar proyek
 // ------------------------------------------------------------
-function TabProyek({ profilSemua, siap }: { profilSemua: StudioProfil[]; siap: StudioSiap | null }) {
+function TabProyek({
+  profilSemua,
+  siap,
+}: {
+  profilSemua: StudioProfil[];
+  siap: StudioSiap | null;
+}) {
   const [daftar, setDaftar] = useState<StudioProyekRingkas[] | null>(null);
   const [buka, setBuka] = useState<string | null>(null);
   const [sibukCepat, setSibukCepat] = useState("");
@@ -759,13 +1175,52 @@ function TabProyek({ profilSemua, siap }: { profilSemua: StudioProfil[]; siap: S
     try {
       const r = await studioPost(aksi, { proyek_id: id });
       if (aksi === "auto_edit") {
-        toast("sukses", `Auto edit: ${r.dimulai ?? 0} video dirender untuk ${r.profil ?? 0} profil PALUGODAM`, "Pantau status render di proyek ini.");
+        toast(
+          "sukses",
+          `Auto edit: ${r.dimulai ?? 0} video dirender untuk ${r.profil ?? 0} profil PALUGODAM`,
+          "Pantau status render di proyek ini.",
+        );
       } else {
-        toast("sukses", `Auto upload: ${r.jumlah ?? 0} profil`, "Status per profil ada di fase Siaran.");
+        toast(
+          "sukses",
+          `Auto upload: ${r.jumlah ?? 0} profil`,
+          "Status per profil ada di fase Siaran.",
+        );
       }
       setBuka(id);
     } catch (e) {
-      toast("error", aksi === "auto_edit" ? "Auto edit gagal" : "Auto upload gagal", e instanceof Error ? e.message : "");
+      toast(
+        "error",
+        aksi === "auto_edit" ? "Auto edit gagal" : "Auto upload gagal",
+        e instanceof Error ? e.message : "",
+      );
+    } finally {
+      setSibukCepat("");
+    }
+  }
+
+  /** Proyek mode per akun: langsung berisi semua akun PALUGODAM yang siap. */
+  async function buatPerAkun() {
+    if (sibukCepat) return;
+    setSibukCepat("per-akun");
+    try {
+      const r = await studioPost("proyek_per_akun", {});
+      const tanpa = (r.tanpa_template as string[] | undefined) ?? [];
+      toast(
+        "sukses",
+        `Proyek per akun dibuat · ${r.akun ?? 0} akun`,
+        tanpa.length
+          ? `${tanpa.length} profil dilewati (tanpa template aktif)`
+          : "Isi link tiap akun, lalu render.",
+      );
+      await muat();
+      setBuka(String(r.id));
+    } catch (e) {
+      toast(
+        "error",
+        "Gagal membuat proyek per akun",
+        e instanceof Error ? e.message : "",
+      );
     } finally {
       setSibukCepat("");
     }
@@ -804,24 +1259,73 @@ function TabProyek({ profilSemua, siap }: { profilSemua: StudioProfil[]; siap: S
           setBuka(id);
         }}
       />
+      {/* Proyek MODE PER AKUN (4 Sep 2026): tiap akun punya link, caption,
+          judul & highlight sendiri; render menunggu semuanya lengkap. */}
+      <GlassCard className="p-4">
+        <p className="text-[12.5px] font-bold text-teks-utama">
+          Atau: satu akun satu video
+        </p>
+        <p className="mt-1 text-[10.5px] leading-relaxed text-teks-sekunder">
+          Tiap akun PALUGODAM mengisi link videonya sendiri, plus caption,
+          judul, dan highlight sendiri. Render jalan setelah semua akun lengkap.
+        </p>
+        <button
+          type="button"
+          onClick={() => void buatPerAkun()}
+          disabled={Boolean(sibukCepat)}
+          className="btn-tekan mt-2.5 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[12.5px] font-bold text-white disabled:opacity-50"
+          style={{ background: UNGU }}
+        >
+          {sibukCepat === "per-akun" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Users className="h-4 w-4" />
+          )}
+          Buat proyek per akun
+        </button>
+      </GlassCard>
       {daftar === null ? (
         <GlassSkeleton className="h-20 rounded-2xl" />
       ) : daftar.length > 0 ? (
         <GlassCard className="p-4">
           <div className="flex items-center justify-between">
-            <p className="text-[12.5px] font-bold text-teks-utama">Proyek terakhir</p>
-            <button type="button" onClick={() => void muat()} aria-label="Segarkan" className="btn-tekan p-1 text-teks-sekunder">
+            <p className="text-[12.5px] font-bold text-teks-utama">
+              Proyek terakhir
+            </p>
+            <button
+              type="button"
+              onClick={() => void muat()}
+              aria-label="Segarkan"
+              className="btn-tekan p-1 text-teks-sekunder"
+            >
               <RefreshCw className="h-4 w-4" />
             </button>
           </div>
           <div className="mt-2 flex flex-col gap-1.5">
             {daftar.map((p) => (
-              <div key={p.id} className="flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-black/[0.03] dark:hover:bg-white/[0.05]">
-                <button type="button" onClick={() => setBuka(p.id)} className="btn-tekan min-w-0 flex-1 text-left">
-                  <span className="block truncate text-[12px] font-semibold text-teks-utama">{p.ringkas}</span>
+              <div
+                key={p.id}
+                className="flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-black/[0.03] dark:hover:bg-white/[0.05]"
+              >
+                <button
+                  type="button"
+                  onClick={() => setBuka(p.id)}
+                  className="btn-tekan min-w-0 flex-1 text-left"
+                >
+                  <span className="block truncate text-[12px] font-semibold text-teks-utama">
+                    {p.ringkas}
+                  </span>
                   <span className="block text-[10px] text-teks-sekunder">
-                    {jamWIB(p.dibuat_pada)} · {p.sumber_platform || "?"} · {p.jumlah_item} profil · fase{" "}
-                    {p.status === "siaran" ? "3 siaran" : p.status === "sumber" ? "1 unggah" : "2 render"}
+                    {jamWIB(p.dibuat_pada)} ·{" "}
+                    {p.sumber_platform === "per-akun"
+                      ? "per akun"
+                      : p.sumber_platform || "?"}{" "}
+                    · {p.jumlah_item} profil · fase{" "}
+                    {p.status === "siaran"
+                      ? "3 siaran"
+                      : p.status === "sumber"
+                        ? "1 unggah"
+                        : "2 render"}
                   </span>
                 </button>
                 {/* Satu klik langsung dari daftar (3 Sep 2026) */}
@@ -833,7 +1337,11 @@ function TabProyek({ profilSemua, siap }: { profilSemua: StudioProfil[]; siap: S
                     className="btn-tekan flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-[10.5px] font-bold text-white disabled:opacity-50"
                     style={{ background: UNGU }}
                   >
-                    {sibukCepat === `${p.id}:auto_edit` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Wand2 className="h-3 w-3" />}
+                    {sibukCepat === `${p.id}:auto_edit` ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Wand2 className="h-3 w-3" />
+                    )}
                     Auto edit
                   </button>
                 ) : p.status === "render" ? (
@@ -844,11 +1352,20 @@ function TabProyek({ profilSemua, siap }: { profilSemua: StudioProfil[]; siap: S
                     className="btn-tekan flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-[10.5px] font-bold text-white disabled:opacity-50"
                     style={{ background: MERAH }}
                   >
-                    {sibukCepat === `${p.id}:auto_upload` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Rocket className="h-3 w-3" />}
+                    {sibukCepat === `${p.id}:auto_upload` ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Rocket className="h-3 w-3" />
+                    )}
                     Auto upload
                   </button>
                 ) : null}
-                <button type="button" onClick={() => void hapus(p.id)} aria-label="Hapus proyek" className="btn-tekan p-1.5 text-teks-sekunder/70">
+                <button
+                  type="button"
+                  onClick={() => void hapus(p.id)}
+                  aria-label="Hapus proyek"
+                  className="btn-tekan p-1.5 text-teks-sekunder/70"
+                >
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
@@ -863,13 +1380,24 @@ function TabProyek({ profilSemua, siap }: { profilSemua: StudioProfil[]; siap: S
 // ------------------------------------------------------------
 export function StudioPalugodam() {
   const [tab, setTab] = useState<"proyek" | "template">("proyek");
-  const [pengaturan, setPengaturan] = useState<{ siap: StudioSiap; profil: StudioProfil[] } | null>(null);
+  const [pengaturan, setPengaturan] = useState<{
+    siap: StudioSiap;
+    profil: StudioProfil[];
+  } | null>(null);
 
   useEffect(() => {
     let hidup = true;
     getStudioPengaturan()
       .then((d) => hidup && setPengaturan({ siap: d.siap, profil: d.profil }))
-      .catch((e) => hidup && toast("error", "Studio gagal dimuat", e instanceof Error ? e.message : ""));
+      .catch(
+        (e) =>
+          hidup &&
+          toast(
+            "error",
+            "Studio gagal dimuat",
+            e instanceof Error ? e.message : "",
+          ),
+      );
     return () => {
       hidup = false;
     };
@@ -889,7 +1417,12 @@ export function StudioPalugodam() {
             type="button"
             onClick={() => setTab(k)}
             aria-pressed={tab === k}
-            className={cn("btn-tekan flex items-center justify-center gap-1.5 rounded-lg py-2 text-[12px] font-bold", tab === k ? "bg-white text-teks-utama shadow-sm dark:bg-white/15" : "text-teks-sekunder")}
+            className={cn(
+              "btn-tekan flex items-center justify-center gap-1.5 rounded-lg py-2 text-[12px] font-bold",
+              tab === k
+                ? "bg-white text-teks-utama shadow-sm dark:bg-white/15"
+                : "text-teks-sekunder",
+            )}
           >
             <Ikon className="h-3.5 w-3.5" />
             {label}
