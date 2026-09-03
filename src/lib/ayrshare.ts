@@ -133,7 +133,9 @@ export async function ambilAkunTertaut(kunciProfil?: string): Promise<{
 }> {
   const d = await panggil<BalasanUser>("/user", {
     method: "GET",
-    timeoutMs: 20000,
+    // 45 dtk (dulu 20): dari Vercel, /user Ayrshare kadang lambat saat
+    // cold start — timeout terlalu pendek membuat sinkron menyerah (3 Sep 2026).
+    timeoutMs: 45000,
     ...(kunciProfil !== undefined ? { kunciProfil } : {}),
   });
   return {

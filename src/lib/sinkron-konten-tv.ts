@@ -87,10 +87,29 @@ export async function sinkronKontenTvTerjadwal(): Promise<void> {
 
     // Mesin melempar 409 bila tak ada akun tertaut — itu normal (belum
     // ditautkan), cukup dicatat, bukan alasan menggagalkan apa pun.
-    await jalankanAnalisisAyrshare({ olehUserId: null });
+    try {
+      await jalankanAnalisisAyrshare({ olehUserId: null });
+    } catch (e) {
+      // GAGAL → LEPASKAN klaim jendela ini (3 Sep 2026) supaya permintaan
+      // berikutnya di jendela yang sama boleh mencoba lagi; tanpa ini satu
+      // kegagalan sesaat memadamkan sinkron sampai 30 menit berikutnya.
+      await lepasKlaim(db, KUNCI_KLAIM, bucket);
+      bucketSelesaiInstance = "";
+      throw e;
+    }
   } catch (e) {
     console.error("[sinkron-konten] berkala gagal:", e);
   }
+}
+
+/** Lepaskan klaim jendela HANYA bila nilainya masih milik kita. */
+async function lepasKlaim(db: ReturnType<typeof supabase>, kunci: string, bucket: string) {
+  await db
+    .from("pengaturan_sistem")
+    .update({ nilai: "" })
+    .eq("kunci", kunci)
+    .eq("nilai", bucket)
+    .then(() => undefined, () => undefined);
 }
 
 /**
@@ -210,7 +229,23 @@ export async function sinkronKontenTvPaksa(
     if (!klaim || klaim.length === 0) {
       return { jalan: false, alasan: "Jendela 30 menit ini sudah dikerjakan." };
     }
-    const hasil = await jalankanAnalisisAyrshare({ olehUserId: null });
+    // Dua percobaan dalam satu panggilan cron (jeda 5 dtk) — kegagalan
+    // sesaat (timeout/429 Ayrshare) tidak boleh membuang jendela ini.
+    let hasil: Awaited<ReturnType<typeof jalankanAnalisisAyrshare>>;
+    try {
+      hasil = await jalankanAnalisisAyrshare({ olehUserId: null });
+    } catch (e1) {
+      console.error("[sinkron-konten] cron percobaan 1 gagal, ulang 5 dtk:", e1 instanceof Error ? e1.message : e1);
+      await new Promise((r) => setTimeout(r, 5000));
+      try {
+        hasil = await jalankanAnalisisAyrshare({ olehUserId: null });
+      } catch (e2) {
+        // Gagal dua kali → lepaskan klaim agar percobaan berikutnya
+        // (pemicu after() / cron berikut) tidak terhalang.
+        await lepasKlaim(db, "sinkron_cron_bucket", bucket);
+        throw e2;
+      }
+    }
     const ringkas = {
       periode: hasil.periode,
       postingan: hasil.postingan,

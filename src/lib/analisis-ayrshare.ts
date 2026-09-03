@@ -159,19 +159,28 @@ export async function kumpulkanAkunTertaut(): Promise<
   for (const p of profilQc ?? []) sumber.push({ kunci: p.profile_key as string });
 
   const hasil: { platform: string; username: string; kunci: string | undefined }[] = [];
+  // RETRY (3 Sep 2026): pembacaan /user Ayrshare bisa gagal sesaat (timeout
+  // saat cold start / 429). Tanpa retry, satu kegagalan membuat seluruh
+  // putaran sinkron menyerah ("tidak ada akun wajib tertaut") — padahal
+  // akunnya ada. Tiga percobaan dengan jeda bertambah.
+  const PERCOBAAN_AKUN = 3;
   for (const src of sumber) {
-    try {
-      const t = await ambilAkunTertaut(src.kunci);
-      for (const a of t.akun) {
-        hasil.push({
-          platform: a.platform,
-          username: a.username.toLowerCase().replace(/^@/, ""),
-          kunci: src.kunci,
-        });
+    for (let ke = 1; ke <= PERCOBAAN_AKUN; ke++) {
+      try {
+        const t = await ambilAkunTertaut(src.kunci);
+        for (const a of t.akun) {
+          hasil.push({
+            platform: a.platform,
+            username: a.username.toLowerCase().replace(/^@/, ""),
+            kunci: src.kunci,
+          });
+        }
+        break;
+      } catch (e) {
+        // Satu profil gagal dibaca tidak boleh mengosongkan yang lain.
+        console.error(`[analisis/ayrshare] profil gagal dibaca (percobaan ${ke}/${PERCOBAAN_AKUN}):`, e);
+        if (ke < PERCOBAAN_AKUN) await new Promise((r) => setTimeout(r, 2000 * ke));
       }
-    } catch (e) {
-      // Satu profil gagal dibaca tidak boleh mengosongkan yang lain.
-      console.error("[analisis/ayrshare] profil gagal dibaca:", e);
     }
   }
   return hasil;
