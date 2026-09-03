@@ -40,20 +40,33 @@ function tanggalWibDari(iso: string | null): string {
 
 /**
  * Rekonsiliasi unggahan seorang anggota → laporan_video otomatis.
- * TIDAK melempar (dipanggil lewat after()); mengembalikan jumlah
- * laporan baru yang tercatat.
+ * TIDAK melempar (aman dipanggil lewat after() maupun ditunggu langsung);
+ * mengembalikan jumlah laporan baru yang tercatat.
+ *
+ * `anggaranMs` (4 Sep 2026): batas waktu supaya bisa DITUNGGU sebelum
+ * menyusun Rangkuman Link — sisa unggahan yang belum sempat diperiksa
+ * menyusul pada pemanggilan berikutnya (fungsinya idempoten).
  */
-export async function rekonsiliasiKpiOtomatis(userId: number): Promise<number> {
+export async function rekonsiliasiKpiOtomatis(
+  userId: number,
+  opsi: { anggaranMs?: number } = {},
+): Promise<number> {
   if (!uploadPostSiap()) return 0;
+  const tenggat = opsi.anggaranMs ? Date.now() + opsi.anggaranMs : Infinity;
   try {
     const db = supabase();
 
+    // limit(1): seorang anggota semestinya punya SATU profil upload-post,
+    // tetapi bila datanya sempat dobel, maybeSingle() tanpa limit akan
+    // error dan rekonsiliasi berhenti diam-diam (laporan jadi kosong).
     const { data: profilBaris } = await db
       .from("sosmed_profile")
       .select("profile_key")
       .eq("jenis", "pengguna")
       .eq("penyedia", "upload-post")
       .eq("user_id", userId)
+      .order("id", { ascending: true })
+      .limit(1)
       .maybeSingle();
     const profil = (profilBaris?.profile_key as string) ?? "";
     if (!profil) return 0;
@@ -61,7 +74,9 @@ export async function rekonsiliasiKpiOtomatis(userId: number): Promise<number> {
     // Unggahan yang masih mungkin menghasilkan URL baru: <= 72 jam, dan
     // belum semua platformnya tercatat. Post terjadwal ikut (jadwalnya
     // bisa saja baru lewat).
-    const batas = new Date(Date.now() - BATAS_UMUR_JAM * 3600_000).toISOString();
+    const batas = new Date(
+      Date.now() - BATAS_UMUR_JAM * 3600_000,
+    ).toISOString();
     const { data: posts } = await db
       .from("tvrku_post")
       .select("id, platforms, kpi_tercatat, jadwal, dibuat_pada")
@@ -73,6 +88,7 @@ export async function rekonsiliasiKpiOtomatis(userId: number): Promise<number> {
 
     let baru = 0;
     for (const p of posts) {
+      if (Date.now() > tenggat) break;
       const diminta = (p.platforms ?? []) as string[];
       const sudah = new Set((p.kpi_tercatat ?? []) as string[]);
       const sisa = diminta.filter((x) => !sudah.has(x));
@@ -80,18 +96,23 @@ export async function rekonsiliasiKpiOtomatis(userId: number): Promise<number> {
 
       // Patokan waktu: post terjadwal dihitung dari jadwalnya.
       const acuanMs =
-        (p.jadwal ? Date.parse(String(p.jadwal)) : Date.parse(String(p.dibuat_pada))) -
+        (p.jadwal
+          ? Date.parse(String(p.jadwal))
+          : Date.parse(String(p.dibuat_pada))) -
         TOLERANSI_MENIT * 60_000;
       // Jadwal belum tiba → belum ada apa pun untuk dicatat.
       if (p.jadwal && Date.parse(String(p.jadwal)) > Date.now()) continue;
 
       const tercatatBaru: string[] = [];
       for (const platform of sisa) {
+        if (Date.now() > tenggat) break;
         try {
           const daftar = await postinganTerbaruUp(profil, platform, 5);
           // Ambil postingan TERBARU yang terbit setelah unggahan kita.
           const cocok = daftar
-            .filter((m) => m.permalink && m.waktu && Date.parse(m.waktu) >= acuanMs)
+            .filter(
+              (m) => m.permalink && m.waktu && Date.parse(m.waktu) >= acuanMs,
+            )
             .sort((a, b) => Date.parse(b.waktu!) - Date.parse(a.waktu!))[0];
           if (!cocok) continue;
 
@@ -127,7 +148,10 @@ export async function rekonsiliasiKpiOtomatis(userId: number): Promise<number> {
         } catch (e) {
           // Satu platform gagal dibaca tidak boleh menggagalkan sisanya;
           // percobaan berikutnya menyusul saat layar dibuka lagi.
-          console.error(`[kpi-otomatis] ${platform}:`, e instanceof Error ? e.message : e);
+          console.error(
+            `[kpi-otomatis] ${platform}:`,
+            e instanceof Error ? e.message : e,
+          );
         }
       }
 

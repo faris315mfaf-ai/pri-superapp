@@ -53,7 +53,8 @@ function tokenDari(request: Request): string {
 
 async function pastikanMasuk(request: Request) {
   const user = await userDariToken(tokenDari(request));
-  if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
+  if (!user)
+    throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
   return user;
 }
 
@@ -107,7 +108,10 @@ async function bersihkanVideoKedaluwarsa(): Promise<void> {
     await db
       .from("tvrku_post")
       .update({ hapus_media_pada: null, video_path: "" })
-      .in("id", data.map((b) => b.id));
+      .in(
+        "id",
+        data.map((b) => b.id),
+      );
   } catch (e) {
     console.error("[tvrku/unggah] penyapu:", e);
   }
@@ -121,16 +125,23 @@ export async function GET(request: Request) {
     const user = await pastikanMasuk(request);
     const { data } = await supabase()
       .from("tvrku_post")
-      .select("id, judul, caption, platforms, video_url, video_path, jadwal, hasil, dibuat_pada")
+      .select(
+        "id, judul, caption, platforms, video_url, video_path, jadwal, hasil, dibuat_pada",
+      )
       .eq("user_id", Number(user.id))
       .order("id", { ascending: false })
       .limit(30);
     // KPI OTOMATIS: tiap membuka riwayat, unggahan yang URL postingannya
     // sudah terbit dicatat jadi laporan_video — tanpa lapor manual.
+    // 4 Sep 2026: sebagian DITUNGGU (anggaran 12 dtk) supaya tautan "Bagikan"
+    // sudah tampil pada pembukaan PERTAMA, bukan baru saat layar dibuka lagi;
+    // sisanya diteruskan di latar belakang.
+    await rekonsiliasiKpiOtomatis(Number(user.id), { anggaranMs: 12_000 });
     after(() => rekonsiliasiKpiOtomatis(Number(user.id)));
     after(bersihkanVideoKedaluwarsa);
     // PALUGODAM: pesanan yang rendernya sudah selesai ikut diposting.
-    if (adalahPalugodam(user)) after(() => prosesPesananPalugodam(Number(user.id)));
+    if (adalahPalugodam(user))
+      after(() => prosesPesananPalugodam(Number(user.id)));
     // TAUTAN HASIL (3 Sep 2026): URL postingan per platform yang sudah terbit
     // (dicatat rekonsiliasi KPI otomatis di laporan_video) → tombol Bagikan.
     const ids = (data ?? []).map((b) => Number(b.id));
@@ -140,7 +151,13 @@ export async function GET(request: Request) {
           .select("tvrku_post_id, platform, url_video")
           .eq("user_id", Number(user.id))
           .in("tvrku_post_id", ids)
-      : { data: [] as { tvrku_post_id: unknown; platform: unknown; url_video: unknown }[] };
+      : {
+          data: [] as {
+            tvrku_post_id: unknown;
+            platform: unknown;
+            url_video: unknown;
+          }[],
+        };
     const tautanPer = new Map<number, Record<string, string>>();
     for (const t of tautanRows ?? []) {
       const id = Number(t.tvrku_post_id);
@@ -163,10 +180,16 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
-    await pastikanFiturAktif(user, "tvrku", "TV Rakyat Saya sedang dimatikan untuk peran Anda.");
+    await pastikanFiturAktif(
+      user,
+      "tvrku",
+      "TV Rakyat Saya sedang dimatikan untuk peran Anda.",
+    );
     if (!uploadPostSiap()) {
       throw Object.assign(
-        new Error("upload-post belum diatur (UPLOAD_POST_API_KEY kosong). Hubungi pengelola."),
+        new Error(
+          "upload-post belum diatur (UPLOAD_POST_API_KEY kosong). Hubungi pengelola.",
+        ),
         { status: 503 },
       );
     }
@@ -193,7 +216,9 @@ export async function POST(request: Request) {
       const maksMb = await maksUploadMb();
       const ukuran = Number(body.ukuran ?? 0);
       if (!Number.isFinite(ukuran) || ukuran <= 0) {
-        throw Object.assign(new Error("Ukuran berkas tidak dikenal."), { status: 400 });
+        throw Object.assign(new Error("Ukuran berkas tidak dikenal."), {
+          status: 400,
+        });
       }
       if (ukuran > maksMb * 1024 * 1024) {
         throw Object.assign(
@@ -201,7 +226,9 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-      const ext = /\.(mp4|mov|m4v|webm)$/i.exec(body.nama ?? "")?.[1]?.toLowerCase() ?? "mp4";
+      const ext =
+        /\.(mp4|mov|m4v|webm)$/i.exec(body.nama ?? "")?.[1]?.toLowerCase() ??
+        "mp4";
       const path = `${user.id}/${Date.now()}.${ext}`;
 
       // JALUR UTAMA (1 Sep 2026): Cloudflare R2 — bandwidth keluar
@@ -223,7 +250,13 @@ export async function POST(request: Request) {
         console.error("[tvrku/unggah] siapkan:", error?.message);
         throw new Error("Gagal menyiapkan unggahan. Coba lagi.");
       }
-      return { sukses: true, cara: "supabase" as const, path, url: data.signedUrl, token: data.token };
+      return {
+        sukses: true,
+        cara: "supabase" as const,
+        path,
+        url: data.signedUrl,
+        token: data.token,
+      };
     }
 
     // ---- Langkah 2: post ke sosmed via upload-post ----
@@ -265,18 +298,24 @@ export async function POST(request: Request) {
         }
         if (!sah) {
           throw Object.assign(
-            new Error("Tautan video harus alamat https yang bisa diakses publik."),
+            new Error(
+              "Tautan video harus alamat https yang bisa diakses publik.",
+            ),
             { status: 400 },
           );
         }
       } else if (pakaiR2) {
         // Jalur milik user ini (anti memposting berkas orang lain).
         if (!r2Key.startsWith(`${user.id}/`) || !/^[\w./-]+$/.test(r2Key)) {
-          throw Object.assign(new Error("Berkas video tidak dikenal."), { status: 400 });
+          throw Object.assign(new Error("Berkas video tidak dikenal."), {
+            status: 400,
+          });
         }
         if (!r2Siap()) {
           throw Object.assign(
-            new Error("Penyimpanan video (R2) belum diatur. Hubungi pengelola."),
+            new Error(
+              "Penyimpanan video (R2) belum diatur. Hubungi pengelola.",
+            ),
             { status: 503 },
           );
         }
@@ -284,39 +323,55 @@ export async function POST(request: Request) {
         const konfig = konfigUploadCloudinary();
         if (!konfig) {
           throw Object.assign(
-            new Error("Penyimpanan video (Cloudinary) belum diatur. Hubungi pengelola."),
+            new Error(
+              "Penyimpanan video (Cloudinary) belum diatur. Hubungi pengelola.",
+            ),
             { status: 503 },
           );
         }
         // URL wajib milik cloud KITA — mencegah orang menyodorkan URL
         // sembarangan untuk diposting lewat kuota upload-post partai.
         if (
-          !videoUrlCloud.startsWith(`https://res.cloudinary.com/${konfig.cloudName}/`)
+          !videoUrlCloud.startsWith(
+            `https://res.cloudinary.com/${konfig.cloudName}/`,
+          )
         ) {
-          throw Object.assign(new Error("URL video tidak dikenal."), { status: 400 });
+          throw Object.assign(new Error("URL video tidak dikenal."), {
+            status: 400,
+          });
         }
         if (!publicId || !/^[\w/-]+$/.test(publicId)) {
-          throw Object.assign(new Error("Berkas video tidak dikenal."), { status: 400 });
+          throw Object.assign(new Error("Berkas video tidak dikenal."), {
+            status: 400,
+          });
         }
       } else if (!path.startsWith(`${user.id}/`)) {
         // Jalur lama: harus milik user ini (anti memposting berkas orang lain).
-        throw Object.assign(new Error("Berkas video tidak dikenal."), { status: 400 });
+        throw Object.assign(new Error("Berkas video tidak dikenal."), {
+          status: 400,
+        });
       }
       const judul = (body.judul ?? "").trim();
       if (judul.length < 3) {
-        throw Object.assign(new Error("Judul video wajib diisi."), { status: 400 });
+        throw Object.assign(new Error("Judul video wajib diisi."), {
+          status: 400,
+        });
       }
       const platforms = (body.platforms ?? [])
         .map((p) => String(p).toLowerCase())
         .filter((p) => (PLATFORM_KPI as readonly string[]).includes(p));
       if (platforms.length === 0) {
-        throw Object.assign(new Error("Pilih minimal satu platform tujuan."), { status: 400 });
+        throw Object.assign(new Error("Pilih minimal satu platform tujuan."), {
+          status: 400,
+        });
       }
 
       const profil = await profilUp(Number(user.id));
       if (!profil) {
         throw Object.assign(
-          new Error("Hubungkan akun sosmed Anda dulu (tombol Hubungkan di Akun TV Rakyat)."),
+          new Error(
+            "Hubungkan akun sosmed Anda dulu (tombol Hubungkan di Akun TV Rakyat).",
+          ),
           { status: 409 },
         );
       }
@@ -334,7 +389,9 @@ export async function POST(request: Request) {
         // Maksimal 7 hari: URL video bertanda tangan R2 juga berumur
         // 7 hari (batas SigV4), jadi jadwal tak boleh melewatinya.
         if (t > Date.now() + 7 * 86_400_000) {
-          throw Object.assign(new Error("Jadwal maksimal 7 hari ke depan."), { status: 400 });
+          throw Object.assign(new Error("Jadwal maksimal 7 hari ke depan."), {
+            status: 400,
+          });
         }
         jadwal = new Date(t).toISOString();
       }
@@ -362,7 +419,9 @@ export async function POST(request: Request) {
       // terjadwal = jadwal+2j (upload-post butuh URL-nya masih hidup
       // saat menerbitkan).
       const dasarMs = jadwal ? Date.parse(jadwal) : Date.now();
-      const hapusPada = new Date(dasarMs + UMUR_MEDIA_JAM * 3600_000).toISOString();
+      const hapusPada = new Date(
+        dasarMs + UMUR_MEDIA_JAM * 3600_000,
+      ).toISOString();
 
       const { data: baris, error } = await db
         .from("tvrku_post")
@@ -374,12 +433,19 @@ export async function POST(request: Request) {
           // video_path menampung penunjuk berkas sesuai generasinya:
           // R2 → key objek, Cloudinary → public_id, lama → path bucket.
           // Kiriman TAUTAN tidak punya berkas milik kita → kosong.
-          video_path: pakaiLink ? "" : pakaiR2 ? r2Key : pakaiCloudinary ? publicId : path,
+          video_path: pakaiLink
+            ? ""
+            : pakaiR2
+              ? r2Key
+              : pakaiCloudinary
+                ? publicId
+                : path,
           video_url: videoUrl,
           // Ukuran berkas dicatat untuk pantauan kuota Panel Master.
-          ukuran_byte: Number.isFinite(Number(body.ukuran)) && Number(body.ukuran) > 0
-            ? Math.floor(Number(body.ukuran))
-            : null,
+          ukuran_byte:
+            Number.isFinite(Number(body.ukuran)) && Number(body.ukuran) > 0
+              ? Math.floor(Number(body.ukuran))
+              : null,
           jadwal: jadwal ?? null,
           hasil: hasil.mentah,
           request_id: hasil.request_id,
@@ -403,6 +469,8 @@ export async function POST(request: Request) {
       };
     }
 
-    throw Object.assign(new Error("aksi harus 'siapkan' atau 'post'."), { status: 400 });
+    throw Object.assign(new Error("aksi harus 'siapkan' atau 'post'."), {
+      status: 400,
+    });
   });
 }
