@@ -5043,3 +5043,25 @@ export async function getRangkumanLink(tanggal?: string): Promise<RangkumanLink>
   const json = await fetchJson(`/api/tvr/rangkuman${q}`);
   return json as RangkumanLink;
 }
+
+// ---- LUDO ROBOT multipemain (percobaan, 3 Sep 2026) ----
+export type { RuangLudo } from "@/lib/ludo";
+
+export async function getLudoDaftar(): Promise<{ boleh_buat: boolean; daftar: import("@/lib/ludo").RuangLudo[] }> {
+  const json = await fetchJson("/api/ludo?daftar=1");
+  return { boleh_buat: json.boleh_buat === true, daftar: (json.daftar ?? []) as import("@/lib/ludo").RuangLudo[] };
+}
+
+export async function getLudoRuang(id: string): Promise<import("@/lib/ludo").RuangLudo> {
+  const json = await fetchJson(`/api/ludo?id=${encodeURIComponent(id)}`);
+  return json as import("@/lib/ludo").RuangLudo;
+}
+
+export async function ludoAksi(aksi: string, data: Record<string, unknown> = {}): Promise<import("@/lib/ludo").RuangLudo & { sukses?: boolean; dihapus?: boolean }> {
+  const json = await fetchJson("/api/ludo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ aksi, ...data }),
+  });
+  return json as import("@/lib/ludo").RuangLudo & { sukses?: boolean; dihapus?: boolean };
+}

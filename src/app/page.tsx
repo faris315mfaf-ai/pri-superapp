@@ -46,6 +46,7 @@ import { TurPemandu } from "@/features/tur/tur-pemandu";
 import { ModalKembangApi } from "@/features/beranda/modal-kembang-api";
 import { PetScreen } from "@/features/pet/pet-screen";
 import { PetMelayang } from "@/features/pet/pet-melayang";
+import { LudoScreen } from "@/features/ludo/ludo-screen";
 import { AcaraScreen } from "@/features/acara/acara-screen";
 import { TabelAnggotaScreen } from "@/features/pengguna/tabel-anggota-screen";
 import { AbsensiHariIniScreen } from "@/features/pengguna/absensi-hari-ini-screen";
@@ -143,6 +144,8 @@ type SubLayar =
   | { nama: "panel-master" }
   // Pet Robot (percobaan master, 3 Sep 2026)
   | { nama: "pet" }
+  // Ludo Robot multipemain (percobaan, 3 Sep 2026)
+  | { nama: "ludo" }
   // Matriks izin fitur per peran (super admin)
   | { nama: "pengaturan-fitur" }
   // Matriks akses dashboard per jabatan (fitur 1.19/3.3, master/super)
@@ -935,6 +938,7 @@ export default function Page() {
           onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           onBukaPanelMaster={() => setSubLayar({ nama: "panel-master" })}
           onBukaPet={() => setSubLayar({ nama: "pet" })}
+          onBukaLudo={() => setSubLayar({ nama: "ludo" })}
           onBukaPengaturanFitur={() => setSubLayar({ nama: "pengaturan-fitur" })}
           onBukaAturMenu={() => setSubLayar({ nama: "atur-menu" })}
         />
@@ -1084,6 +1088,8 @@ export default function Page() {
                   />
                 ) : subLayar.nama === "panel-master" ? (
                   <PanelMasterScreen onKembali={() => setSubLayar(null)} />
+                ) : subLayar.nama === "ludo" ? (
+                  <LudoScreen onKembali={() => setSubLayar(null)} />
                 ) : subLayar.nama === "pet" ? (
                   <PetScreen onKembali={() => setSubLayar(null)} onBerubah={() => setVersiPet((v) => v + 1)} />
                 ) : subLayar.nama === "tabel-anggota" ? (

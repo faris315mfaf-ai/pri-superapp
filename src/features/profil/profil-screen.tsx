@@ -28,7 +28,7 @@ import {
   User as UserIcon,
   Zap,
   Sparkles,
-  Heart, ExternalLink, Pencil, Check, X, Loader2, PanelBottom, Fingerprint, GraduationCap, Bot } from "lucide-react";
+  Heart, ExternalLink, Pencil, Check, X, Loader2, PanelBottom, Fingerprint, GraduationCap, Bot, Dice5 } from "lucide-react";
 import { mulaiTur } from "@/lib/tur";
 import { LogoPri } from "@/components/logo-pri";
 import {
@@ -57,6 +57,7 @@ import {
   getProfilMomen,
   getStatusSidikJari,
   getStreakSaya,
+  getLudoDaftar,
   matikanSidikJari,
   perangkatDukungSidikJari,
   ubahProfilSaya,
@@ -101,6 +102,8 @@ type ProfilScreenProps = {
   onBukaPanelMaster?: () => void;
   /** Pet Robot (percobaan master, 3 Sep 2026) */
   onBukaPet?: () => void;
+  /** Ludo Robot multipemain (percobaan, 3 Sep 2026) */
+  onBukaLudo?: () => void;
   onBukaPengaturanFitur?: () => void;
   /** Buka layar Atur Menu Bawah (fitur 1.20/4) */
   onBukaAturMenu?: () => void;
@@ -314,6 +317,7 @@ export function ProfilScreen({
   onBukaNotifikasi,
   onBukaPanelMaster,
   onBukaPet,
+  onBukaLudo,
   onBukaPengaturanFitur,
   onBukaAturMenu,
 }: ProfilScreenProps) {
@@ -426,6 +430,19 @@ export function ProfilScreen({
   const [modalTentang, setModalTentang] = useState(false);
   const [modalChangelog, setModalChangelog] = useState(false);
   const [modalKeluar, setModalKeluar] = useState(false);
+  // Ludo Robot (3 Sep 2026): anggota non-master melihat pintunya hanya bila
+  // punya ruang / undangan aktif.
+  const [adaLudo, setAdaLudo] = useState(false);
+  useEffect(() => {
+    if (user.role === "master" || !onBukaLudo) return;
+    let hidup = true;
+    getLudoDaftar()
+      .then((d) => hidup && setAdaLudo(d.daftar.some((r) => r.status !== "selesai")))
+      .catch(() => {});
+    return () => {
+      hidup = false;
+    };
+  }, [user.role, onBukaLudo]);
 
   const gelap = tema === "dark";
   const peran = KONFIG_ROLE[user.role];
@@ -690,6 +707,31 @@ export function ProfilScreen({
               <span className="block text-sm font-bold text-teks-utama">Pet Robot (percobaan)</span>
               <span className="block text-[11px] text-teks-sekunder">
                 Rawat robot peliharaan, beli aksesoris dengan koin
+              </span>
+            </span>
+          </button>
+        </FadeInUp>
+      )}
+
+      {/* Ludo Robot — master selalu; anggota lain bila punya ruang/undangan (3 Sep 2026) */}
+      {onBukaLudo && (user.role === "master" || adaLudo) && (
+        <FadeInUp delay={0.025}>
+          <button
+            type="button"
+            onClick={onBukaLudo}
+            className="btn-tekan mt-2 flex w-full items-center gap-3 rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-left"
+          >
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
+              style={{ background: "linear-gradient(135deg, #F59E0B, #EF4444)" }}
+              aria-hidden="true"
+            >
+              <Dice5 className="h-4.5 w-4.5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold text-teks-utama">Ludo Robot (percobaan)</span>
+              <span className="block text-[11px] text-teks-sekunder">
+                {user.role === "master" ? "Buat ruang, undang pemain, main bersama robot pet" : "Ada ruang / undangan Ludo untuk Anda"}
               </span>
             </span>
           </button>
