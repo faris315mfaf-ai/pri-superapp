@@ -7,7 +7,7 @@
   "crons": [
     {
       "path": "/api/cron/sinkron-komen",
-      "schedule": "*/15 * * * *"
+      "schedule": "*/5 * * * *"
     }
   ]
 }

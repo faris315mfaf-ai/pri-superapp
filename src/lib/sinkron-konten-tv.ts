@@ -85,6 +85,13 @@ export async function sinkronKontenTvTerjadwal(): Promise<void> {
     bucketSelesaiInstance = bucket;
     if (!klaim || klaim.length === 0) return; // jendela ini sudah dikerjakan
 
+    // Bila pekerja cron sedang memegang lease, jalur ini mengalah
+    // (dua pembaca Ayrshare bersamaan hanya memicu rate-limit).
+    if (await leaseAktif(db)) {
+      await lepasKlaim(db, KUNCI_KLAIM, bucket);
+      bucketSelesaiInstance = "";
+      return;
+    }
     // Mesin melempar 409 bila tak ada akun tertaut — itu normal (belum
     // ditautkan), cukup dicatat, bukan alasan menggagalkan apa pun.
     try {
@@ -201,82 +208,145 @@ export async function daftarkanVideoUnggahan(opsi: {
   }
 }
 
+const KUNCI_LEASE = "sinkron_lease";
+const KUNCI_MENIT = "sinkron_komen_menit";
+/** Umur lease pekerja (ms) — sedikit di atas maxDuration route cron. */
+const UMUR_LEASE_MS = 320_000;
+/** Postingan yang diperiksa < ini dilewati pada mode realtime (ms). */
+const SEGAR_REALTIME_MS = 3 * 60_000;
+
+/** true bila ada pekerja lain yang masih memegang lease. */
+export async function leaseAktif(db: ReturnType<typeof supabase>): Promise<boolean> {
+  const { data } = await db.from("pengaturan_sistem").select("nilai").eq("kunci", KUNCI_LEASE).maybeSingle();
+  const nilai = String(data?.nilai ?? "");
+  return Boolean(nilai) && nilai > new Date().toISOString();
+}
+
+/** Ambil lease secara atomik; null bila sedang dipegang pekerja lain. */
+async function ambilLease(db: ReturnType<typeof supabase>): Promise<string | null> {
+  const kini = new Date().toISOString();
+  const sampai = new Date(Date.now() + UMUR_LEASE_MS).toISOString();
+  await db
+    .from("pengaturan_sistem")
+    .upsert({ kunci: KUNCI_LEASE, nilai: "" }, { onConflict: "kunci", ignoreDuplicates: true });
+  // Menang hanya bila lease kosong ATAU sudah kedaluwarsa (ISO dibanding leksikal).
+  const { data } = await db
+    .from("pengaturan_sistem")
+    .update({ nilai: sampai })
+    .eq("kunci", KUNCI_LEASE)
+    .lt("nilai", kini)
+    .select("kunci");
+  return data && data.length > 0 ? sampai : null;
+}
+
+async function lepasLease(db: ReturnType<typeof supabase>, lease: string) {
+  await db
+    .from("pengaturan_sistem")
+    .update({ nilai: "" })
+    .eq("kunci", KUNCI_LEASE)
+    .eq("nilai", lease)
+    .then(() => undefined, () => undefined);
+}
+
+/** Jeda minimal antar putaran penuh (menit), bisa diubah tanpa deploy. */
+async function bacaMenitRealtime(db: ReturnType<typeof supabase>): Promise<number> {
+  const { data } = await db.from("pengaturan_sistem").select("nilai").eq("kunci", KUNCI_MENIT).maybeSingle();
+  const n = Number(data?.nilai ?? 5);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 5;
+}
+
+export type HasilPaksa = {
+  jalan: boolean;
+  alasan?: string;
+  putaran?: number;
+  sisa?: number;
+  selesai?: boolean;
+  ringkas?: Record<string, unknown>;
+};
+
 /**
- * Sinkron PAKSA untuk Vercel Cron (3 Sep 2026): tidak bergantung pada
- * pembukaan aplikasi. Dijaga klaim atomik per 30 menit sendiri
- * (`sinkron_cron_bucket`) agar dua pemicu cron yang tumpang tindih tak
- * berjalan dobel, lalu menulis jejak hasil ke pengaturan_sistem:
- * `sinkron_komen_cron_terakhir` (ISO) & `sinkron_komen_cron_status`.
- * Mesin analisisnya idempoten (upsert) — aman dijalankan berulang.
+ * Sinkron REALTIME untuk Vercel Cron (3 Sep 2026): dipanggil tiap 5 menit,
+ * lalu MENGULANG penarikan di dalam satu panggilan sampai semua postingan
+ * periode selesai diperiksa atau anggaran waktu habis (`anggaranTotalMs`).
+ * Bila masih ada sisa saat anggaran habis, pemanggil (route) menyambung ke
+ * panggilan berikutnya ("rantai"). Satu lease atomik menjamin hanya SATU
+ * pekerja Ayrshare pada satu waktu. Jejak ke pengaturan_sistem
+ * `sinkron_komen_cron_terakhir` & `sinkron_komen_cron_status`.
  */
 export async function sinkronKontenTvPaksa(
   pemicu: string,
-): Promise<{ jalan: boolean; alasan?: string; ringkas?: Record<string, unknown> }> {
+  anggaranTotalMs = 250_000,
+): Promise<HasilPaksa> {
   const db = supabase();
-  const kini = new Date().toISOString();
+  const mulai = Date.now();
+  if (!ayrshareSiap()) return { jalan: false, alasan: "Ayrshare belum tersambung." };
+  const lease = await ambilLease(db);
+  if (!lease) return { jalan: false, alasan: "Pekerja lain sedang menarik komentar (lease aktif)." };
+
+  let putaran = 0;
+  let terakhir: Awaited<ReturnType<typeof jalankanAnalisisAyrshare>> | null = null;
+  let galatTerakhir = "";
   try {
-    if (!ayrshareSiap()) return { jalan: false, alasan: "Ayrshare belum tersambung." };
-    const bucket = String(Math.floor(Date.now() / (30 * 60_000)));
-    await db
-      .from("pengaturan_sistem")
-      .upsert({ kunci: "sinkron_cron_bucket", nilai: "" }, { onConflict: "kunci", ignoreDuplicates: true });
-    const { data: klaim } = await db
-      .from("pengaturan_sistem")
-      .update({ nilai: bucket })
-      .eq("kunci", "sinkron_cron_bucket")
-      .neq("nilai", bucket)
-      .select("kunci");
-    if (!klaim || klaim.length === 0) {
-      return { jalan: false, alasan: "Jendela 30 menit ini sudah dikerjakan." };
-    }
-    // Dua percobaan dalam satu panggilan cron (jeda 5 dtk) — kegagalan
-    // sesaat (timeout/429 Ayrshare) tidak boleh membuang jendela ini.
-    let hasil: Awaited<ReturnType<typeof jalankanAnalisisAyrshare>>;
-    try {
-      hasil = await jalankanAnalisisAyrshare({ olehUserId: null });
-    } catch (e1) {
-      console.error("[sinkron-konten] cron percobaan 1 gagal, ulang 5 dtk:", e1 instanceof Error ? e1.message : e1);
-      await new Promise((r) => setTimeout(r, 5000));
+    // Ulangi sampai tuntas atau anggaran habis. Tiap putaran hanya menyentuh
+    // postingan yang BELUM diperiksa dalam 3 menit terakhir, jadi putaran
+    // lanjutan langsung ke sisa yang belum sempat, bukan mengulang dari awal.
+    while (Date.now() - mulai < anggaranTotalMs) {
+      const sisaWaktu = anggaranTotalMs - (Date.now() - mulai);
+      if (sisaWaktu < 15_000) break;
+      putaran += 1;
       try {
-        hasil = await jalankanAnalisisAyrshare({ olehUserId: null });
-      } catch (e2) {
-        // Gagal dua kali → lepaskan klaim agar percobaan berikutnya
-        // (pemicu after() / cron berikut) tidak terhalang.
-        await lepasKlaim(db, "sinkron_cron_bucket", bucket);
-        throw e2;
+        terakhir = await jalankanAnalisisAyrshare({
+          olehUserId: null,
+          anggaranMs: Math.min(sisaWaktu - 10_000, 120_000),
+          segarMs: SEGAR_REALTIME_MS,
+        });
+        galatTerakhir = "";
+        if (terakhir.selesai || terakhir.sisa === 0) break;
+      } catch (e) {
+        galatTerakhir = e instanceof Error ? e.message : String(e);
+        console.error(`[sinkron-konten] realtime putaran ${putaran} gagal:`, galatTerakhir);
+        // Gagal sesaat → jeda 5 dtk lalu coba lagi selama anggaran masih ada.
+        await new Promise((r) => setTimeout(r, 5000));
       }
     }
-    const ringkas = {
-      periode: hasil.periode,
-      postingan: hasil.postingan,
-      komentar: hasil.komentar,
-      comply: hasil.comply,
-      gagal_cek: hasil.gagal_cek,
-      sisa: hasil.sisa,
-      selesai: hasil.selesai,
-      peringatan: hasil.peringatan.length,
-    };
+  } finally {
+    await lepasLease(db, lease);
+  }
+
+  const kini = new Date().toISOString();
+  if (!terakhir) {
     await db.from("pengaturan_sistem").upsert(
       [
         { kunci: "sinkron_komen_cron_terakhir", nilai: kini },
-        { kunci: "sinkron_komen_cron_status", nilai: `ok ${pemicu} ${JSON.stringify(ringkas)}`.slice(0, 500) },
+        { kunci: "sinkron_komen_cron_status", nilai: `gagal ${pemicu} ${galatTerakhir}`.slice(0, 500) },
       ],
       { onConflict: "kunci" },
     );
-    return { jalan: true, ringkas };
-  } catch (e) {
-    const pesan = e instanceof Error ? e.message : String(e);
-    console.error("[sinkron-konten] cron gagal:", pesan);
-    await db
-      .from("pengaturan_sistem")
-      .upsert(
-        [
-          { kunci: "sinkron_komen_cron_terakhir", nilai: kini },
-          { kunci: "sinkron_komen_cron_status", nilai: `gagal ${pemicu} ${pesan}`.slice(0, 500) },
-        ],
-        { onConflict: "kunci" },
-      )
-      .then(() => undefined, () => undefined);
-    return { jalan: false, alasan: pesan };
+    return { jalan: false, alasan: galatTerakhir || "Tidak ada putaran yang berhasil.", putaran };
   }
+  const ringkas = {
+    periode: terakhir.periode,
+    postingan: terakhir.postingan,
+    komentar: terakhir.komentar,
+    comply: terakhir.comply,
+    gagal_cek: terakhir.gagal_cek,
+    sisa: terakhir.sisa,
+    selesai: terakhir.selesai,
+    putaran,
+    detik: Math.round((Date.now() - mulai) / 1000),
+    peringatan: terakhir.peringatan.length,
+  };
+  await db.from("pengaturan_sistem").upsert(
+    [
+      { kunci: "sinkron_komen_cron_terakhir", nilai: kini },
+      { kunci: "sinkron_komen_cron_status", nilai: `ok ${pemicu} ${JSON.stringify(ringkas)}`.slice(0, 500) },
+    ],
+    { onConflict: "kunci" },
+  );
+  return { jalan: true, putaran, sisa: terakhir.sisa, selesai: terakhir.selesai, ringkas };
+}
+
+/** Menit jeda realtime (untuk route cron yang ingin mengecek tanpa menjalankan). */
+export async function menitRealtime(): Promise<number> {
+  return bacaMenitRealtime(supabase());
 }

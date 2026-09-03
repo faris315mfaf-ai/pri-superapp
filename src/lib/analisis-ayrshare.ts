@@ -215,8 +215,14 @@ export type HasilAnalisisAyrshare = {
  */
 export async function jalankanAnalisisAyrshare(opsi: {
   olehUserId: number | null;
+  /** Anggaran waktu putaran ini (ms); bawaan 40 dtk (jalur tombol/after). */
+  anggaranMs?: number;
+  /** Postingan yang diperiksa < ini dilewati (ms); bawaan 10 menit. */
+  segarMs?: number;
 }): Promise<HasilAnalisisAyrshare> {
   const db = supabase();
+  const anggaranMs = opsi.anggaranMs ?? ANGGARAN_MS;
+  const segarMs = opsi.segarMs ?? SEGAR_MS;
   const periode = periodeHariIni();
   // Jendela KETAT dua sisi (fix "hanya postingan hari ini"): hanya
   // postingan yang terbit DI DALAM jendela 19:00→18:59 yang diambil;
@@ -333,7 +339,7 @@ export async function jalankanAnalisisAyrshare(opsi: {
       .filter(
         (p) =>
           p.komentar_diperiksa_pada &&
-          kini - new Date(p.komentar_diperiksa_pada as string).getTime() < SEGAR_MS,
+          kini - new Date(p.komentar_diperiksa_pada as string).getTime() < segarMs,
       )
       .map((p) => String(p.id_postingan)),
   );
@@ -432,7 +438,7 @@ export async function jalankanAnalisisAyrshare(opsi: {
       if (selesaiSebelumnya.has(idKanonik)) continue;
 
       // Anggaran habis → sisanya diserahkan ke panggilan berikutnya.
-      if (Date.now() - mulaiPada > ANGGARAN_MS) {
+      if (Date.now() - mulaiPada > anggaranMs) {
         sisaBelumDiperiksa += 1;
         continue;
       }
