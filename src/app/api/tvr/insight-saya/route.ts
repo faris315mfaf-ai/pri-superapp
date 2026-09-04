@@ -7,6 +7,7 @@
 // enam platform butuh beberapa detik; tanpa cache tiap buka layar
 // membakar kuota API.
 import { supabase } from "@/lib/supabase";
+import { userEfektifTvr } from "@/lib/sebagai";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { analitikProfilUp, uploadPostSiap } from "@/lib/upload-post";
@@ -23,8 +24,8 @@ function tokenDari(request: Request): string {
 
 export async function GET(request: Request) {
   return bungkus(async () => {
-    const user = await userDariToken(tokenDari(request));
-    if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
+    // 4 Sep 2026: admin PALUGODAM bisa mengendalikan akun anggota (header X-Sebagai).
+    const user = await userEfektifTvr(request);
     if (!uploadPostSiap()) return { siap: false, profil: null, insight: null };
 
     const db = supabase();

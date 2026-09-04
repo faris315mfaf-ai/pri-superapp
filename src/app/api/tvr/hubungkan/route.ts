@@ -8,6 +8,7 @@
 //        akun_tvr_user (terhubung=true). Akun yang sudah diklaim
 //        anggota lain dilaporkan, bukan direbut.
 import { supabase } from "@/lib/supabase";
+import { userEfektifTvr } from "@/lib/sebagai";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { penyediaAnggota } from "@/lib/sosmed-penyedia";
@@ -24,11 +25,8 @@ const PLATFORM_TVR = new Set([
 ]);
 
 async function pastikanMasuk(request: Request) {
-  const h = request.headers.get("authorization") ?? "";
-  const token = h.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : "";
-  const user = await userDariToken(token);
-  if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
-  return user;
+  // 4 Sep 2026: admin PALUGODAM bisa mengendalikan akun anggota (header X-Sebagai).
+  return userEfektifTvr(request);
 }
 
 /** Profil penyedia milik user ini (baris database), atau null. */

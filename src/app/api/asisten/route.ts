@@ -7,6 +7,7 @@
 // - model hanya bisa memanggil alat daftar-putih (lihat lib/gemini) —
 //   tidak ada SQL bebas, tidak ada kolom sensitif.
 import { bungkus } from "@/lib/api-helper";
+import { fiturBeratAktif } from "@/lib/sakelar";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import { aksesPenuhAsisten, bolehChatbotRole, geminiSiap, tanyaGemini } from "@/lib/gemini";
@@ -35,6 +36,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  // Sakelar fitur berat (4 Sep 2026): asisten AI bisa dimatikan master / mode hemat.
+  if (!(await fiturBeratAktif("asisten"))) {
+    return Response.json({ error: "Asisten AI sedang dinonaktifkan sementara oleh master (mode hemat server). Coba lagi nanti." }, { status: 503 });
+  }
   return bungkus(async () => {
     const user = await userDariToken(tokenDari(request));
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });

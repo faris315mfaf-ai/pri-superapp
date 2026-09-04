@@ -19,6 +19,7 @@
 //                        proyek_per_akun | item_sumber_link | item_generate |
 //                        item_hapus
 import { after } from "next/server";
+import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
@@ -402,14 +403,44 @@ async function muatProyekLengkap(id: number, userId: number) {
   if (p.siaran_id) {
     const { data: si } = await db
       .from("tvr_siaran_item")
-      .select("id, profil, platforms, status, pesan")
+      .select("id, profil, user_id, request_id, platforms, status, pesan")
       .eq("siaran_id", Number(p.siaran_id))
       .order("id", { ascending: true });
     const daftar = si ?? [];
+    // TAUTAN HASIL per profil (4 Sep 2026): item siaran → tvrku_post (request_id
+    // yang sama) → laporan_video (URL postingan yang sudah terbit).
+    const reqIds = daftar.map((d) => String(d.request_id ?? "")).filter(Boolean);
+    const postPerReq = new Map<string, number>();
+    if (reqIds.length > 0) {
+      const { data: posts } = await db.from("tvrku_post").select("id, request_id").in("request_id", reqIds);
+      for (const x of posts ?? []) postPerReq.set(String(x.request_id), Number(x.id));
+    }
+    const tautanPerPost = new Map<number, Record<string, string>>();
+    if (postPerReq.size > 0) {
+      const { data: lv } = await db.from("laporan_video").select("tvrku_post_id, platform, url_video").in("tvrku_post_id", [...postPerReq.values()]);
+      for (const x of lv ?? []) {
+        const id = Number(x.tvrku_post_id);
+        const peta = tautanPerPost.get(id) ?? {};
+        peta[String(x.platform)] = String(x.url_video ?? "");
+        tautanPerPost.set(id, peta);
+      }
+    }
+    const namaSiaranPer = new Map<number, string>();
+    const idUser = [...new Set(daftar.map((d) => Number(d.user_id)).filter((x) => x > 0))];
+    if (idUser.length > 0) {
+      const { data: u } = await db.from("app_user").select("id, nama").in("id", idUser);
+      for (const x of u ?? []) namaSiaranPer.set(Number(x.id), String(x.nama ?? ""));
+    }
     const hitung = (st: string) => daftar.filter((d) => d.status === st).length;
     siaran = {
       id: String(p.siaran_id),
-      item: daftar.map((d) => ({ ...d, id: String(d.id) })),
+      item: daftar.map((d) => ({
+        ...d,
+        id: String(d.id),
+        user_id: d.user_id == null ? null : String(d.user_id),
+        nama: d.user_id == null ? "" : (namaSiaranPer.get(Number(d.user_id)) ?? ""),
+        tautan: tautanPerPost.get(postPerReq.get(String(d.request_id ?? "")) ?? -1) ?? {},
+      })),
       ringkas: {
         total: daftar.length,
         terkirim: hitung("terkirim"),
@@ -846,6 +877,24 @@ export async function POST(request: Request) {
         status: 400,
       });
     const proyek = await bacaProyek(proyekId, userId);
+
+    // Segarkan TAUTAN hasil unggahan siaran proyek ini: rekonsiliasi KPI tiap
+    // pemilik profil (bounded) supaya URL postingan yang baru terbit ikut tercatat
+    // — juga menjadikan KPI mereka naik tanpa menunggu mereka membuka aplikasi.
+    if (aksi === "tautan_segarkan") {
+      if (!proyek.siaran_id) throw Object.assign(new Error("Proyek ini belum disiarkan."), { status: 400 });
+      const { data: si } = await db.from("tvr_siaran_item").select("user_id").eq("siaran_id", Number(proyek.siaran_id));
+      const ids = [...new Set((si ?? []).map((x) => Number(x.user_id)).filter((x) => x > 0))];
+      const mulai = Date.now();
+      let baru = 0;
+      let diproses = 0;
+      for (const uid of ids) {
+        if (Date.now() - mulai > 150_000) break;
+        baru += await rekonsiliasiKpiOtomatis(uid, { anggaranMs: 8_000 });
+        diproses += 1;
+      }
+      return { sukses: true, diproses, baru, sisa: ids.length - diproses, ...(await muatProyekLengkap(proyekId, userId)) };
+    }
 
     if (aksi === "hapus") {
       const path = String(proyek.sumber_path ?? "");

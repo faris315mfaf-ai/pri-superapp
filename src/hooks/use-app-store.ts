@@ -80,6 +80,14 @@ type AppState = {
   izinFitur: PetaIzin;
   setIzinFitur: (izin: PetaIzin) => void;
 
+  /**
+   * Sakelar fitur berat (Panel Master / mode hemat, 4 Sep 2026): kunci
+   * ludo / pet_beranda / juara_efek / asisten. Kunci yang tidak ada = nyala.
+   * `hemat` = mode hemat server sedang menyala.
+   */
+  sakelar: { fitur: Record<string, boolean>; hemat: boolean };
+  setSakelar: (s: { fitur: Record<string, boolean>; hemat: boolean }) => void;
+
   /** true bila pengguna anggota tim TV Rakyat (buka modul TV) */
   tvAnggota: boolean;
   setTvAnggota: (v: boolean) => void;
@@ -176,6 +184,8 @@ export const useAppStore = create<AppState>()(
       setNotifikasiSiap: () => set({ notifikasiSiap: true }),
       izinFitur: {},
       setIzinFitur: (izinFitur) => set({ izinFitur }),
+      sakelar: { fitur: {}, hemat: false },
+      setSakelar: (sakelar) => set({ sakelar }),
       tvAnggota: false,
       setTvAnggota: (tvAnggota) => set({ tvAnggota }),
       wewenangTv: { anggota: false, acc: false, upload: false, proses: false },

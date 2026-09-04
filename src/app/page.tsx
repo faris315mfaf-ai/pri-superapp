@@ -107,6 +107,7 @@ import {
   getStatusPerbaikan,
   getNotifikasi,
   getAksesDashboard,
+  getSakelar,
   getPreferensi,
   getStatusAsisten,
   keluar as keluarService,
@@ -240,6 +241,8 @@ const berlanggananKosong = () => () => {};
 export default function Page() {
   const user = useAppStore((s) => s.user);
   const setUser = useAppStore((s) => s.setUser);
+  const sakelar = useAppStore((s) => s.sakelar);
+  const setSakelar = useAppStore((s) => s.setSakelar);
   const tema = useAppStore((s) => s.tema);
   const skalaFont = useAppStore((s) => s.skalaFont);
   const tvAnggota = useAppStore((s) => s.tvAnggota);
@@ -504,14 +507,18 @@ export default function Page() {
     if (!aplikasiAktif) return;
     let hidup = true;
     async function muatAkses() {
-      const [boleh, pref, asisten] = await Promise.all([
+      const [boleh, pref, asisten, sakelar] = await Promise.all([
         getAksesDashboard(),
         getPreferensi(),
         getStatusAsisten(),
+        // Sakelar fitur berat (4 Sep 2026) — gagal = anggap semua nyala.
+        getSakelar().catch(() => null),
       ]);
       if (!hidup) return;
       setAksesDashboard(boleh);
-      setBolehAsisten(asisten.boleh);
+      if (sakelar) setSakelar({ fitur: sakelar.fitur, hemat: sakelar.hemat });
+      // Asisten AI ikut sakelar fitur berat.
+      setBolehAsisten(asisten.boleh && (sakelar ? sakelar.fitur.asisten !== false : true));
       // Susunan footer pilihan pengguna (fitur 1.20/4)
       const footer = pref["footer"] as { sembunyi?: unknown } | undefined;
       const sembunyi = Array.isArray(footer?.sembunyi)
@@ -1012,7 +1019,7 @@ export default function Page() {
           onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           onBukaPanelMaster={() => setSubLayar({ nama: "panel-master" })}
           onBukaPet={() => setSubLayar({ nama: "pet" })}
-          onBukaLudo={() => setSubLayar({ nama: "ludo" })}
+          onBukaLudo={sakelar.fitur.ludo === false ? undefined : () => setSubLayar({ nama: "ludo" })}
           onBukaPengaturanFitur={() =>
             setSubLayar({ nama: "pengaturan-fitur" })
           }
@@ -1085,7 +1092,7 @@ export default function Page() {
       {/* Tutorial interaktif daftar akun → Kepatuhan Komen (3 Sep 2026);
           menunggu changelog ditutup dulu supaya tidak bertumpuk. */}
       {/* Perayaan reset periode + juara komentar (3 Sep 2026) */}
-      {aplikasiAktif && !changelogBuka && <ModalKembangApi />}
+      {aplikasiAktif && !changelogBuka && sakelar.fitur.juara_efek !== false && <ModalKembangApi />}
       {aplikasiAktif && !changelogBuka && <TurPemandu />}
 
       {/* Pemilih ucapan ulang tahun (dari notifikasi ultah yang diklik) */}
@@ -1289,13 +1296,13 @@ export default function Page() {
           suaranya sendiri sedang terbuka. */}
       {/* Pet Robot melayang (percobaan, khusus master; 3 Sep 2026) — hanya di
           tab Beranda (dashboard master), tanpa sub-layar terbuka. */}
-      {user && tabEfektif === "beranda" && !subLayar && (
+      {user && tabEfektif === "beranda" && !subLayar && sakelar.fitur.pet_beranda !== false && (
         <PetMelayang
           onBuka={() => setSubLayar({ nama: "pet" })}
           versi={versiPet}
         />
       )}
-      {user && tabEfektif === "beranda" && !subLayar && (
+      {user && tabEfektif === "beranda" && !subLayar && sakelar.fitur.pet_beranda !== false && (
         <HewanMelayang
           onBuka={() => setSubLayar({ nama: "pet" })}
           versi={versiPet}

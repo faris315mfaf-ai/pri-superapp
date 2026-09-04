@@ -24,7 +24,9 @@ import {
   Check,
   ChevronRight,
   Clapperboard,
+  Copy,
   ExternalLink,
+  FileText,
   Link2,
   Loader2,
   Radio,
@@ -56,6 +58,7 @@ import {
 import { jamWIB } from "@/lib/format";
 import { TabAnggota } from "./studio-anggota";
 import { StudioPerAkun } from "./studio-per-akun";
+import { LaporanHarianPanel } from "./laporan-harian";
 import { cn } from "@/lib/utils";
 
 const PLATFORM6 = [
@@ -421,6 +424,32 @@ function EditorProyek({
       setSibuk("");
     }
   }
+
+  // ---- Tautan hasil unggahan siaran (4 Sep 2026) ----
+  async function salinTeks(teks: string, pesan: string) {
+    try {
+      await navigator.clipboard.writeText(teks);
+      toast("sukses", pesan);
+    } catch {
+      toast("error", "Gagal menyalin", "Peramban menolak akses papan klip.");
+    }
+  }
+  const itemSiaran = data?.siaran?.item ?? [];
+  const jumlahTautanSiaran = itemSiaran.reduce(
+    (n, it) => n + Object.values(it.tautan ?? {}).filter(Boolean).length,
+    0,
+  );
+  // Dikelompokkan per profil/pengguna: nama profil, lalu link tiap sosmed.
+  const teksSemuaTautan = itemSiaran
+    .filter((it) => Object.values(it.tautan ?? {}).some(Boolean))
+    .map((it) => {
+      const judul = it.nama ? `${it.profil} · ${it.nama}` : it.profil;
+      const baris = Object.entries(it.tautan ?? {})
+        .filter(([, u]) => Boolean(u))
+        .map(([pf, u]) => `${labelPlatform(pf)}: ${u}`);
+      return [judul, ...baris].join("\n");
+    })
+    .join("\n\n");
 
   function bolehKe(f: Fase): boolean {
     if (f === 1) return true;
@@ -1092,34 +1121,117 @@ function EditorProyek({
                   : ""}
               </p>
               <div className="mt-1.5 flex flex-col gap-1">
-                {data.siaran.item.map((it) => (
-                  <div
-                    key={it.id}
-                    className="flex items-center gap-2 rounded-lg bg-black/[0.03] px-2 py-1.5 dark:bg-white/[0.05]"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-teks-utama">
-                      {it.profil}
-                    </span>
-                    {it.pesan && it.status !== "terkirim" ? (
-                      <span className="truncate text-[10px] text-gagal">
-                        {it.pesan}
-                      </span>
-                    ) : null}
-                    <StatusBadge
-                      label={it.status === "diproses" ? "mengirim…" : it.status}
-                      warna={
-                        it.status === "terkirim"
-                          ? "hijau"
-                          : it.status === "gagal"
-                            ? "merah"
-                            : it.status === "dibatalkan"
-                              ? "netral"
-                              : "kuning"
-                      }
-                      berkedip={it.status === "diproses"}
-                    />
-                  </div>
-                ))}
+                {data.siaran.item.map((it) => {
+                  const daftarTautan = Object.entries(it.tautan ?? {}).filter(
+                    ([, u]) => Boolean(u),
+                  );
+                  return (
+                    <div
+                      key={it.id}
+                      className="rounded-lg bg-black/[0.03] px-2 py-1.5 dark:bg-white/[0.05]"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold text-teks-utama">
+                          {it.profil}
+                          {it.nama ? (
+                            <span className="font-normal text-teks-sekunder">
+                              {" "}
+                              · {it.nama}
+                            </span>
+                          ) : null}
+                        </span>
+                        {it.pesan && it.status !== "terkirim" ? (
+                          <span className="truncate text-[10px] text-gagal">
+                            {it.pesan}
+                          </span>
+                        ) : null}
+                        <StatusBadge
+                          label={
+                            it.status === "diproses" ? "mengirim…" : it.status
+                          }
+                          warna={
+                            it.status === "terkirim"
+                              ? "hijau"
+                              : it.status === "gagal"
+                                ? "merah"
+                                : it.status === "dibatalkan"
+                                  ? "netral"
+                                  : "kuning"
+                          }
+                          berkedip={it.status === "diproses"}
+                        />
+                      </div>
+                      {/* Tautan hasil unggahan per sosmed (4 Sep 2026) */}
+                      {daftarTautan.length > 0 ? (
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          {daftarTautan.map(([pf, u]) => (
+                            <a
+                              key={pf}
+                              href={u}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-bold text-pri dark:bg-white/10"
+                            >
+                              <PlatformIcon platform={pf} size={10} />
+                              {labelPlatform(pf)}
+                            </a>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void salinTeks(
+                                daftarTautan.map(([, u]) => u).join("\n"),
+                                `${daftarTautan.length} link ${it.profil} disalin`,
+                              )
+                            }
+                            className="btn-tekan ml-auto flex items-center gap-1 rounded-full bg-black/[0.06] px-2 py-0.5 text-[10px] font-bold text-teks-utama dark:bg-white/10"
+                          >
+                            <Copy className="h-3 w-3" aria-hidden="true" />
+                            Salin
+                          </button>
+                        </div>
+                      ) : it.status === "terkirim" ? (
+                        <p className="mt-0.5 text-[10px] text-teks-sekunder">
+                          Link belum tercatat — tekan &quot;Segarkan tautan&quot;
+                          beberapa menit setelah terkirim.
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+              {/* SALIN SEMUA LINK per profil/pengguna + segarkan (4 Sep 2026) */}
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  disabled={jumlahTautanSiaran === 0}
+                  onClick={() => void salinTeks(teksSemuaTautan, `${jumlahTautanSiaran} link dari ${data.siaran?.item.filter((x) => Object.keys(x.tautan ?? {}).length > 0).length ?? 0} profil disalin`)}
+                  className="btn-tekan flex h-10 items-center justify-center gap-1.5 rounded-xl text-[11.5px] font-bold text-white disabled:opacity-50"
+                  style={{ background: MERAH }}
+                >
+                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  Salin semua link ({jumlahTautanSiaran})
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(sibuk)}
+                  onClick={() =>
+                    void jalankan(
+                      "Segarkan tautan",
+                      "tautan_segarkan",
+                      {},
+                      "Tautan & KPI pemilik profil disegarkan",
+                    )
+                  }
+                  className="btn-tekan glass flex h-10 items-center justify-center gap-1.5 rounded-xl text-[11.5px] font-bold text-teks-utama disabled:opacity-50"
+                >
+                  {sibuk === "Segarkan tautan" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  Segarkan tautan
+                </button>
               </div>
             </div>
           ) : null}
@@ -1394,7 +1506,7 @@ function TabProyek({
 
 // ------------------------------------------------------------
 export function StudioPalugodam() {
-  const [tab, setTab] = useState<"proyek" | "template">("proyek");
+  const [tab, setTab] = useState<"proyek" | "template" | "laporan">("proyek");
   const [pengaturan, setPengaturan] = useState<{
     siap: StudioSiap;
     profil: StudioProfil[];
@@ -1420,11 +1532,12 @@ export function StudioPalugodam() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10">
+      <div className="grid grid-cols-3 gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10">
         {(
           [
             ["proyek", "Proyek", Radio],
             ["template", "Anggota & Template", Settings2],
+            ["laporan", "Laporan Harian", FileText],
           ] as const
         ).map(([k, label, Ikon]) => (
           <button
@@ -1444,7 +1557,9 @@ export function StudioPalugodam() {
           </button>
         ))}
       </div>
-      {tab === "template" ? (
+      {tab === "laporan" ? (
+        <LaporanHarianPanel />
+      ) : tab === "template" ? (
         <TabAnggota />
       ) : pengaturan ? (
         <TabProyek profilSemua={pengaturan.profil} siap={pengaturan.siap} />

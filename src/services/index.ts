@@ -150,10 +150,25 @@ export function simpanToken(token: string): void {
   }
 }
 
+// ---- KENDALI AKUN (4 Sep 2026): admin PALUGODAM beralih menjadi anggota ----
+// Disimpan di memori saja (bukan localStorage) supaya hilang saat aplikasi
+// dimuat ulang — admin tidak pernah "terjebak" sebagai orang lain.
+let sebagaiUserId: string | null = null;
+/** Atur akun yang sedang dikendalikan (null = akun sendiri). */
+export function setSebagai(id: string | null): void {
+  sebagaiUserId = id;
+}
+export function ambilSebagai(): string | null {
+  return sebagaiUserId;
+}
+
 /** Header Authorization bila ada token; kosong bila belum masuk. */
 function headerToken(): Record<string, string> {
   const t = ambilToken();
-  return t ? { Authorization: `Bearer ${t}` } : {};
+  if (!t) return {};
+  // Header X-Sebagai hanya dihormati endpoint /api/tvr/* (lib/sebagai) —
+  // aman ikut terkirim ke endpoint lain (diabaikan).
+  return sebagaiUserId ? { Authorization: `Bearer ${t}`, "X-Sebagai": sebagaiUserId } : { Authorization: `Bearer ${t}` };
 }
 
 /** Label perangkat sederhana untuk daftar sesi di profil */
@@ -388,6 +403,17 @@ export type AkunSosmed = {
 export async function getTurAktif(): Promise<boolean> {
   const json = await fetchJson("/api/tur");
   return json.aktif !== false;
+}
+
+/** Sakelar fitur berat (Panel Master / mode hemat, 4 Sep 2026). */
+export type SakelarFitur = { fitur: Record<string, boolean>; hemat: boolean; tur: boolean };
+export async function getSakelar(): Promise<SakelarFitur> {
+  const json = await fetchJson("/api/sakelar");
+  return {
+    fitur: (json.fitur ?? {}) as Record<string, boolean>,
+    hemat: json.hemat === true,
+    tur: json.tur !== false,
+  };
 }
 
 export async function getAkunSosmed(): Promise<AkunSosmed[]> {
@@ -2513,6 +2539,19 @@ export async function aksiMaster(
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ aksi, ...data }),
   });
+}
+
+/** Sama seperti aksiMaster, tetapi mengembalikan jawaban server (mis. hasil pantau server). */
+export async function aksiMasterHasil(
+  aksi: string,
+  data: Record<string, string | boolean> = {},
+): Promise<Record<string, unknown>> {
+  const json = await fetchJson("/api/master", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi, ...data }),
+  });
+  return (json ?? {}) as Record<string, unknown>;
 }
 
 // ------------------------------------------------------------
@@ -5193,6 +5232,11 @@ export type StudioProyek = {
       platforms: string[];
       status: string;
       pesan: string;
+      /** Pemilik profil (4 Sep 2026) — untuk "salin semua link per pengguna". */
+      user_id: string | null;
+      nama: string;
+      /** platform → URL postingan yang sudah terbit (dari laporan_video). */
+      tautan: Record<string, string>;
     }[];
     ringkas: {
       total: number;
@@ -5527,6 +5571,65 @@ export async function getRangkumanLink(
   const q = tanggal ? `?tanggal=${encodeURIComponent(tanggal)}` : "";
   const json = await fetchJson(`/api/tvr/rangkuman${q}`);
   return json as RangkumanLink;
+}
+
+// ---- KENDALI AKUN PALUGODAM + LAPORAN HARIAN (4 Sep 2026) ----
+export type AnggotaKendali = {
+  id: string;
+  nama: string;
+  username: string;
+  avatar_url: string;
+  posisi: string;
+  profil: string;
+  tertaut: number;
+};
+export async function getKendaliAkun(): Promise<AnggotaKendali[]> {
+  const json = await fetchJson("/api/tvr/kendali");
+  return (json.anggota ?? []) as AnggotaKendali[];
+}
+
+export type LaporanHarian = {
+  tanggal: string;
+  tanggal_panjang: string;
+  jam: string;
+  dibuat_oleh: string;
+  jumlah_orang: number;
+  jumlah_link: number;
+  orang: {
+    nama: string;
+    username: string;
+    divisi: string;
+    jumlah: number;
+    platform: { platform: string; PLATFORM: string; jumlah: number; link: { url: string }[] }[];
+  }[];
+  teks: string;
+  template_bawaan: boolean;
+};
+export async function getLaporanHarian(tanggal: string): Promise<LaporanHarian> {
+  const json = await fetchJson(`/api/tvr/laporan-harian?tanggal=${encodeURIComponent(tanggal)}`);
+  return {
+    tanggal: String(json.tanggal ?? tanggal),
+    tanggal_panjang: String(json.tanggal_panjang ?? ""),
+    jam: String(json.jam ?? ""),
+    dibuat_oleh: String(json.dibuat_oleh ?? ""),
+    jumlah_orang: Number(json.jumlah_orang ?? 0),
+    jumlah_link: Number(json.jumlah_link ?? 0),
+    orang: (json.orang ?? []) as LaporanHarian["orang"],
+    teks: String(json.teks ?? ""),
+    template_bawaan: json.template_bawaan !== false,
+  };
+}
+export async function unduhLaporanHarian(
+  tanggal: string,
+  format: "csv" | "pdf",
+): Promise<{ url: string; nama_file: string; jumlah_orang: number; jumlah_link: number }> {
+  const json = await fetchJson(`/api/tvr/laporan-harian?tanggal=${encodeURIComponent(tanggal)}&format=${format}`);
+  return {
+    url: String(json.url ?? ""),
+    nama_file: String(json.nama_file ?? ""),
+    jumlah_orang: Number(json.jumlah_orang ?? 0),
+    jumlah_link: Number(json.jumlah_link ?? 0),
+  };
 }
 
 // ---- LUDO ROBOT multipemain (percobaan, 3 Sep 2026) ----

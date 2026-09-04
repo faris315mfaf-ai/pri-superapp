@@ -15,6 +15,9 @@
 // bisa diberikan — tetapi hanya oleh master, dan lewat pintu sendiri
 // yang jelas terlihat di kode maupun di layar.
 import { supabase } from "@/lib/supabase";
+import { adalahKunciFiturBerat, resetCacheSakelar, simpanSakelar } from "@/lib/sakelar";
+import { pantauServer } from "@/lib/pantau-server";
+import { KUNCI_FORMAT_LAPORAN, validasiTemplate } from "@/lib/template-laporan";
 import { bungkus } from "@/lib/api-helper";
 import { hapusCacheUser, userDariToken, cabutSemuaSesi } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
@@ -200,6 +203,8 @@ export async function POST(request: Request) {
       username?: string;
       platform?: string;
       id?: string;
+      /** sakelar_fitur: kunci fitur berat (4 Sep 2026) */
+      kunci?: string;
     };
     const db = supabase();
 
@@ -336,6 +341,42 @@ export async function POST(request: Request) {
     // pengirim email sudah diatur. Default: mati (perlu persetujuan).
     // Tutorial interaktif (4 Sep 2026): master bisa mematikannya untuk semua
     // pengguna. Default: nyala. Dibaca klien lewat /api/tur (cache 60 dtk).
+    // ---- SAKELAR FITUR BERAT & MODE HEMAT (4 Sep 2026) ----
+    if (body.aksi === "sakelar_fitur") {
+      const kunci = String(body.kunci ?? "");
+      if (!adalahKunciFiturBerat(kunci)) throw Object.assign(new Error("Fitur tidak dikenal."), { status: 400 });
+      await simpanSakelar(`fitur_${kunci}`, body.nilai === true);
+      return { sukses: true, kunci, nyala: body.nilai === true };
+    }
+    if (body.aksi === "mode_hemat") {
+      await simpanSakelar("mode_hemat", body.nilai === true);
+      return { sukses: true, mode_hemat: body.nilai === true };
+    }
+    if (body.aksi === "hemat_otomatis") {
+      await simpanSakelar("hemat_otomatis", body.nilai === true);
+      return { sukses: true, hemat_otomatis: body.nilai === true };
+    }
+    // Periksa server sekarang juga (sama dengan cron 10 menit) — hasilnya
+    // langsung dikembalikan; notifikasi/mode hemat mengikuti aturan pemantau.
+    if (body.aksi === "pantau_sekarang") {
+      return { sukses: true, hasil: await pantauServer() };
+    }
+    // Format laporan upload harian (template, lihat lib/template-laporan).
+    if (body.aksi === "format_laporan") {
+      const nilai = String(body.nilai ?? "");
+      if (nilai.trim() === "") {
+        await db.from("pengaturan_sistem").delete().eq("kunci", KUNCI_FORMAT_LAPORAN);
+        return { sukses: true, bawaan: true };
+      }
+      const galat = validasiTemplate(nilai);
+      if (galat) throw Object.assign(new Error(`Template tidak sah: ${galat}`), { status: 400 });
+      const { error } = await db
+        .from("pengaturan_sistem")
+        .upsert({ kunci: KUNCI_FORMAT_LAPORAN, nilai, diubah_pada: new Date().toISOString() }, { onConflict: "kunci" });
+      if (error) throw new Error("Gagal menyimpan format laporan.");
+      return { sukses: true, bawaan: false };
+    }
+
     if (body.aksi === "tur_aktif") {
       const nyala = body.nilai === true;
       const { error } = await db
@@ -345,6 +386,7 @@ export async function POST(request: Request) {
           { onConflict: "kunci" },
         );
       if (error) throw new Error("Gagal menyimpan pengaturan tutorial.");
+      resetCacheSakelar();
       return { sukses: true, tur_aktif: nyala };
     }
 

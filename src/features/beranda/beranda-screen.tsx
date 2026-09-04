@@ -105,6 +105,7 @@ export function BerandaScreen({
   onBukaTvrKu?: () => void;
 }) {
   const izin = useAppStore((s) => s.izinFitur);
+  const sakelarFitur = useAppStore((s) => s.sakelar.fitur);
   const boleh = (k: Parameters<typeof bolehFitur>[1]) => bolehFitur(izin, k, user.role);
 
   const [kpiKerja, setKpiKerja] = useState<KerjaKpi | null>(null);
@@ -231,7 +232,7 @@ export function BerandaScreen({
       <KartuUltah idKu={user.id} />
 
       {/* Running text juara komentar periode terakhir (3 Sep 2026) */}
-      <RunningTextJuara />
+      {sakelarFitur.juara_efek !== false && <RunningTextJuara />}
 
       {/* CHAT NAKA (3 Sep 2026): untuk anggota TANPA jabatan — tombol WhatsApp
           langsung ke NAKA. Pemegang jabatan / pengurus tidak melihatnya. */}

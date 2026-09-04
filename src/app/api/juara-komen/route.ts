@@ -12,6 +12,7 @@
 // leaderboard (/api/peringkat-tvr?komen=1), hanya untuk periode yang sudah
 // selesai; total komentar tetap ditampilkan sebagai info.
 import { supabase } from "@/lib/supabase";
+import { fiturBeratAktif } from "@/lib/sakelar";
 import { bungkus } from "@/lib/api-helper";
 import { pastikanMasuk } from "@/lib/sesi";
 import { periodeSaatIni } from "@/lib/periode-qc";
@@ -121,6 +122,11 @@ async function hitung(): Promise<Hasil> {
 export async function GET(request: Request) {
   return bungkus(async () => {
     await pastikanMasuk(request);
+    // Sakelar fitur berat (4 Sep 2026): efek juara dimatikan → tidak ada juara
+    // yang dikirim, jadi running text & kembang api tidak tampil.
+    if (!(await fiturBeratAktif("juara_efek"))) {
+      return { periode: null, tanggal: null, periode_kini: periodeSaatIni(), juara: [], nonaktif: true };
+    }
     if (cache && Date.now() - cache.pada < TTL_MS) return cache.isi;
     const isi = await hitung();
     cache = { isi, pada: Date.now() };

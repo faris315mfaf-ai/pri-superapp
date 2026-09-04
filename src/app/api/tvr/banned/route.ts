@@ -9,6 +9,7 @@
 // 'disetujui'). Persetujuan/penolakan lewat /api/tvr/persetujuan;
 // PATCH di sini tetap untuk MENCABUT (akun pulih / HR).
 import { supabase } from "@/lib/supabase";
+import { userEfektifTvr } from "@/lib/sebagai";
 import { bungkus } from "@/lib/api-helper";
 import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
@@ -26,9 +27,8 @@ function tokenDari(request: Request): string {
 }
 
 async function pastikanMasuk(request: Request) {
-  const user = await userDariToken(tokenDari(request));
-  if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
-  return user;
+  // 4 Sep 2026: admin PALUGODAM bisa mengendalikan akun anggota (header X-Sebagai).
+  return userEfektifTvr(request);
 }
 
 export async function GET(request: Request) {

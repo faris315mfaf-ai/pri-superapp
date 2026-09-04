@@ -13,6 +13,7 @@
 // GET ?id=<id>           → satu ruang (giliran kedaluwarsa → langkah otomatis)
 // POST { aksi, ... }     → buat | undang | gabung | keluar | mulai | lempar | gerak | batalkan
 import { randomInt, randomBytes } from "node:crypto";
+import { fiturBeratAktif, galatFiturMati } from "@/lib/sakelar";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { pastikanMasuk, type UserPublik } from "@/lib/sesi";
@@ -212,6 +213,7 @@ function indeksSaya(b: Baris, uid: number): number {
 export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
+    if (!(await fiturBeratAktif("ludo"))) galatFiturMati("Ludo Robot");
     const db = supabase();
     const uid = Number(user.id);
     const url = new URL(request.url);
@@ -303,6 +305,7 @@ async function undangPemain(
 export async function POST(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
+    if (!(await fiturBeratAktif("ludo"))) galatFiturMati("Ludo Robot");
     const db = supabase();
     const uid = Number(user.id);
     const body = (await request.json().catch(() => ({}))) as Record<

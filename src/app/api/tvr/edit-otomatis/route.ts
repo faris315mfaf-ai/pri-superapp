@@ -14,6 +14,7 @@
 //
 // GET → daftar pesanan saya + status render/posting.
 import { after } from "next/server";
+import { userEfektifTvr } from "@/lib/sebagai";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
@@ -32,8 +33,7 @@ function tokenDari(request: Request): string {
 }
 
 async function pastikanPalugodam(request: Request) {
-  const user = await userDariToken(tokenDari(request));
-  if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
+  const user = await userEfektifTvr(request); // 4 Sep 2026: kendali akun (X-Sebagai)
   if (!adalahPalugodam(user)) {
     throw Object.assign(
       new Error("Fitur edit otomatis khusus anggota Divisi PALUGODAM."),

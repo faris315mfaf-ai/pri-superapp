@@ -1,6 +1,7 @@
 "use client";
 import { bebasKewajiban } from "@/lib/jabatan";
-import { adalahAdminStudio, adalahPalugodam } from "@/lib/struktur";
+import { adalahAdminStudio, adalahPalugodam, DIVISI_PALUGODAM } from "@/lib/struktur";
+import { KendaliAkun } from "./kendali-akun";
 import { AccAjuanKomen } from "./acc-ajuan-komen";
 import { RangkumanLink } from "./rangkuman-link";
 
@@ -66,6 +67,8 @@ import {
   getKeywordWajib,
   hubungkanSosmedTvr,
   sinkronSosmedTvr,
+  setSebagai,
+  type AnggotaKendali,
 } from "@/services";
 import { jamWIB, urlProfilSosmed } from "@/lib/format";
 import type { KomponenIkon, User } from "@/types";
@@ -504,20 +507,50 @@ function ModalLaporanBatch({
 const SEKSI_KPI_TVRKU = new Set(["kpi", "tugas", "grafik", "laporan", "sosmed-terblokir"]);
 
 export function TvrKuScreen({
-  user: _user,
+  user: userAsli,
   onBukaNotifikasi,
 }: {
   user: User;
   onBukaNotifikasi?: () => void;
 }) {
+  // KENDALI AKUN (4 Sep 2026): admin PALUGODAM boleh beralih menjadi anggota
+  // divisinya — hanya di modul ini. Saat mengendalikan, seluruh permintaan
+  // /api/tvr/* membawa header X-Sebagai (services.setSebagai) dan layar
+  // memakai identitas anggota itu (KPI, akun, laporan, unggah, jadwal).
+  const bolehKendali = adalahAdminStudio(userAsli);
+  const [kendali, setKendali] = useState<AnggotaKendali | null>(null);
+  const _user: User = kendali
+    ? {
+        ...userAsli,
+        id: kendali.id,
+        nama: kendali.nama,
+        avatar_url: kendali.avatar_url,
+        role: "anggota",
+        jabatan: "",
+        divisi: DIVISI_PALUGODAM,
+        posisi_divisi: kendali.posisi === "kepala" ? "kepala" : "anggota",
+        sembunyi_kewajiban: false,
+      }
+    : userAsli;
+  // Saat layar ditutup, kembalikan identitas ke akun sendiri — modul lain
+  // tidak boleh pernah membawa X-Sebagai.
+  useEffect(() => {
+    return () => setSebagai(null);
+  }, []);
+  function pilihKendali(a: AnggotaKendali | null) {
+    setSebagai(a ? a.id : null);
+    setKendali(a);
+    setMuatUlang((n) => n + 1);
+    toast("info", a ? `Mengendalikan akun ${a.nama}` : "Kembali ke akun sendiri", a ? "Semua kerja TV Rakyat Saya sekarang atas nama akun itu." : "");
+  }
   // Bebas kewajiban (3 Sep 2026): Ketua Umum ATAU yang dibebaskan Panel Master.
   const ketum = bebasKewajiban(_user);
-  // Siaran Serentak (3 Sep 2026): khusus master / Ketua Umum.
-  const bolehSiaran = _user.role === "master" || _user.role === "super_admin";
-  // Studio PALUGODAM (3 Sep 2026): master/super_admin + kepala Divisi PALUGODAM.
-  const bolehStudio = adalahAdminStudio(_user);
+  // Siaran Serentak (3 Sep 2026): khusus master / Ketua Umum — tidak saat mengendalikan.
+  const bolehSiaran = !kendali && (userAsli.role === "master" || userAsli.role === "super_admin");
+  // Studio PALUGODAM (3 Sep 2026): master/super_admin + kepala Divisi PALUGODAM — tidak saat mengendalikan.
+  const bolehStudio = !kendali && adalahAdminStudio(userAsli);
   // ACC ajuan komentar (3 Sep 2026): seluruh anggota Divisi PALUGODAM + pengurus.
-  const bolehAccKomen = adalahPalugodam(_user);
+  const bolehAccKomen = !kendali && adalahPalugodam(userAsli);
   const [akun, setAkun] = useState<AkunTvr[] | null>(null);
   const [laporan, setLaporan] = useState<LaporanVideo[]>([]);
   const [menunggu, setMenunggu] = useState<LaporanPending[]>([]);
@@ -670,7 +703,13 @@ export function TvrKuScreen({
             <h1 className="font-heading text-2xl font-extrabold tracking-tight text-teks-utama">
               TV Rakyat Saya
             </h1>
-            <p className="text-xs text-teks-sekunder">Akun, laporan video, dan KPI Anda</p>
+            <p className="text-xs text-teks-sekunder">
+              {kendali ? (
+                <span className="font-bold text-amber-600 dark:text-amber-400">Mengendalikan akun {kendali.nama}</span>
+              ) : (
+                "Akun, laporan video, dan KPI Anda"
+              )}
+            </p>
           </div>
         </div>
         <TombolLonceng onBuka={onBukaNotifikasi} />
@@ -680,9 +719,27 @@ export function TvrKuScreen({
       {/* Atur Tata Letak (fitur 1.22.x): semua seksi bisa diseret/
           disembunyikan/dilipat — satu kolom. */}
       <TataLetakModul
+        // Ganti kunci saat beralih akun (kendali): semua seksi anak dimuat
+        // ulang dari nol dengan identitas baru — bukan sisa data akun lama.
+        key={kendali ? `kendali-${kendali.id}` : "sendiri"}
         modul="tvrku"
         bungkusSeksi={false}
         seksi={([
+        ...(bolehKendali
+          ? [
+              {
+                id: "kendali-akun",
+                judul: "Kendali Akun PALUGODAM",
+                ikon: ShieldCheck,
+                keterangan: "Beralih menjadi akun anggota Divisi PALUGODAM (khusus modul ini)",
+                render: () => (
+                  <FadeInUp>
+                    <KendaliAkun aktif={kendali} onPilih={pilihKendali} />
+                  </FadeInUp>
+                ),
+              },
+            ]
+          : []),
         { id: "kpi", judul: "KPI Video Hari Ini", ikon: Video, render: () => (
       <FadeInUp>
         <GlassCard className="flex items-center gap-4 p-4">

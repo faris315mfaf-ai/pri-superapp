@@ -9,6 +9,7 @@
 // banned (tabel tvr_banned, dengan bukti) otomatis dikecualikan.
 // Kewajiban DIBEBASKAN bila izin/sakit hari itu disetujui.
 import { after } from "next/server";
+import { userEfektifTvr } from "@/lib/sebagai";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { adalahHR } from "@/lib/hr";
@@ -50,6 +51,10 @@ function tokenDari(request: Request): string {
 }
 
 async function pastikanMasuk(request: Request) {
+  // 4 Sep 2026: admin PALUGODAM bisa mengendalikan akun anggota (header X-Sebagai).
+  return userEfektifTvr(request);
+}
+async function pastikanMasukLama(request: Request) {
   const user = await userDariToken(tokenDari(request));
   if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
   return user;

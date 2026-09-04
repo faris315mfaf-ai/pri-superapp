@@ -22,6 +22,8 @@ import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { SeksiKuota } from "./seksi-kuota";
 import { SeksiServer } from "./seksi-server";
 import { SeksiBebasKewajiban } from "./seksi-bebas-kewajiban";
+import { SeksiSakelarBerat } from "./seksi-sakelar-berat";
+import { SeksiFormatLaporan } from "./seksi-format-laporan";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -496,6 +498,23 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
             <SeksiKuota />
             <SeksiEksporData />
             <SeksiServer />
+            {/* Fitur berat & mode hemat + format laporan upload (4 Sep 2026) */}
+            <SeksiSakelarBerat
+              pengaturan={data.pengaturan}
+              sedangProses={sedangProses}
+              onJalankan={jalankan}
+            />
+            <SeksiFormatLaporan
+              nilaiTersimpan={data.pengaturan.format_laporan_upload ?? ""}
+              sedangProses={sedangProses}
+              onSimpan={(nilai) =>
+                jalankan(
+                  "format_laporan",
+                  { nilai },
+                  nilai ? "Format laporan disimpan" : "Format laporan dikembalikan ke bawaan",
+                )
+              }
+            />
             <SeksiBebasKewajiban />
           </FadeInUp>
         </>

@@ -123,16 +123,23 @@ export function LudoScreen({ onKembali }: { onKembali: () => void }) {
     ruangRef.current = ruang;
   }, [ruang]);
 
+  // Ludo dimatikan master / mode hemat (4 Sep 2026) → tampilkan pemberitahuan.
+  const [nonaktif, setNonaktif] = useState(false);
   const muatLobi = useCallback(() => {
     return getLudoDaftar()
-      .then(setLobi)
-      .catch((e) =>
-        toast(
-          "error",
-          "Gagal memuat lobi",
-          e instanceof Error ? e.message : "",
-        ),
-      );
+      .then((d) => {
+        setNonaktif(false);
+        setLobi(d);
+      })
+      .catch((e) => {
+        const pesan = e instanceof Error ? e.message : "";
+        if (/dinonaktifkan/i.test(pesan)) {
+          setNonaktif(true);
+          setLobi({ boleh_buat: false, daftar: [] });
+          return;
+        }
+        toast("error", "Gagal memuat lobi", pesan);
+      });
   }, []);
 
   // Lobi: muat + polling pelan (undangan baru masuk).
@@ -252,6 +259,26 @@ export function LudoScreen({ onKembali }: { onKembali: () => void }) {
   const saya = ruang?.pemain.findIndex((p) => p.user_id === Number(uid)) ?? -1;
 
   // ==================== LOBI ====================
+  if (!ruang && nonaktif) {
+    return (
+      <div className="kolom-aplikasi px-4 pb-32">
+        <ScreenHeader judul="Ludo Robot" onKembali={onKembali} />
+        <GlassCard className="mt-2 p-5 text-center">
+          <p className="text-3xl" aria-hidden="true">
+            🎲
+          </p>
+          <p className="mt-2 text-sm font-bold text-teks-utama">
+            Ludo sedang dinonaktifkan sementara
+          </p>
+          <p className="mt-1 text-[11.5px] leading-relaxed text-teks-sekunder">
+            Master mematikannya untuk menjaga server tetap ringan (mode
+            hemat). Coba lagi nanti.
+          </p>
+        </GlassCard>
+      </div>
+    );
+  }
+
   if (!ruang) {
     return (
       <div className="kolom-aplikasi px-4 pb-32">
