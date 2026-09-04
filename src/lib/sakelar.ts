@@ -106,10 +106,16 @@ export function adalahKunciFiturBerat(k: string): k is KunciFiturBerat {
   return DAFTAR_FITUR_BERAT.some((f) => f.kunci === k);
 }
 
-/** Galat 503 seragam untuk endpoint fitur yang sedang dimatikan. */
+/**
+ * Galat seragam untuk endpoint fitur yang sedang dimatikan.
+ * Status 423 (Locked), BUKAN 5xx: `bungkus()` menyamarkan pesan galat 5xx di
+ * produksi menjadi "Terjadi kesalahan di server", padahal layar Ludo mengenali
+ * keadaan ini dari kata "dinonaktifkan" di pesan (temuan smoke test produksi
+ * 4 Sep 2026). 423 tetap gagal bagi klien lama, tetapi pesannya utuh.
+ */
 export function galatFiturMati(label: string): never {
   throw Object.assign(
     new Error(`${label} sedang dinonaktifkan sementara oleh master (mode hemat server). Coba lagi nanti.`),
-    { status: 503 },
+    { status: 423 },
   );
 }
