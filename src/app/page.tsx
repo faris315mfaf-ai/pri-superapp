@@ -14,6 +14,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { modeSimpelAktif } from "@/lib/mode-simpel";
 import { MeshBackground } from "@/components/mesh-background";
 import { ToastViewport } from "@/components/toast-viewport";
 import { PushBannerStack } from "@/components/push-banner";
@@ -113,6 +114,7 @@ import {
   keluar as keluarService,
   masukOtomatis,
   simpanToken,
+  ambilToken,
   type UserLengkap,
 } from "@/services";
 import type { Role, User } from "@/types";
@@ -287,6 +289,12 @@ export default function Page() {
   // sebagai banner) dari yang memang sudah ada sejak awal.
   const idPernahDilihat = useRef<Set<string> | null>(null);
 
+  // Mode Simpel (4 Sep 2026): cadangan skrip inline layout — bila
+  // penanda perangkat ada dan token tersimpan, pindah ke /simpel.
+  useEffect(() => {
+    if (modeSimpelAktif() && ambilToken()) window.location.replace("/simpel");
+  }, []);
+
   // ------------------------------------------------------------
   // Sinkronisasi tema → class .dark pada <html>
   // ------------------------------------------------------------
@@ -372,6 +380,12 @@ export default function Page() {
           // pengurus menekan Setujui (fitur 1.19.1).
           setMenungguUser(tersimpan);
         } else if (tersimpan) {
+          // Mode Simpel (4 Sep 2026): perangkat ini memilih versi ringan →
+          // pindah sebelum satu pun modul berat dimuat.
+          if (modeSimpelAktif()) {
+            window.location.replace("/simpel");
+            return;
+          }
           setUser(tersimpan);
           // Hormati posisi navigasi tersimpan (refresh ≠ lempar ke awal).
           setTab(tabAwalDenganRestor(tersimpan.role, tersimpan.id));
@@ -637,6 +651,12 @@ export default function Page() {
   // ------------------------------------------------------------
 
   function loginBerhasil(userBaru: User) {
+    // Mode Simpel (4 Sep 2026): perangkat ini memilih versi ringan.
+    if (modeSimpelAktif()) {
+      setUser(userBaru);
+      window.location.replace("/simpel");
+      return;
+    }
     // Bila datang dari halaman tunggu (baru disetujui), tandanya dibuang.
     setMenungguUser(null);
     setUser(userBaru);

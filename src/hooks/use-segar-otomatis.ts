@@ -46,6 +46,9 @@ export function useSegarOtomatis(segarkan: () => void, jedaDetik = 60) {
     }
 
     const interval = setInterval(() => {
+      // Mode Simpel (4 Sep 2026): tidak ada penyegaran berkala — hemat
+      // baterai/kuota; tombol muat ulang & kembali dari latar tetap jalan.
+      if (document.documentElement.dataset.modeSimpel === "1") return;
       if (document.visibilityState === "visible") jalan();
     }, jeda);
 

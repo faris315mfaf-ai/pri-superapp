@@ -509,9 +509,15 @@ const SEKSI_KPI_TVRKU = new Set(["kpi", "tugas", "grafik", "laporan", "sosmed-te
 export function TvrKuScreen({
   user: userAsli,
   onBukaNotifikasi,
+  hanyaSeksi,
+  tanpaHeader = false,
 }: {
   user: User;
   onBukaNotifikasi?: () => void;
+  /** Mode Simpel (4 Sep 2026): tampilkan seksi ini saja (id seksi). */
+  hanyaSeksi?: string[];
+  /** true = tanpa kepala "TV Rakyat Saya" (layar induk sudah punya kepala). */
+  tanpaHeader?: boolean;
 }) {
   // KENDALI AKUN (4 Sep 2026): admin PALUGODAM boleh beralih menjadi anggota
   // divisinya — hanya di modul ini. Saat mengendalikan, seluruh permintaan
@@ -687,6 +693,7 @@ export function TvrKuScreen({
   return (
     <div className="kolom-aplikasi px-4 pt-5 pb-32">
       {/* Header */}
+      {!tanpaHeader && (
       <header className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <span
@@ -715,6 +722,7 @@ export function TvrKuScreen({
         <TombolLonceng onBuka={onBukaNotifikasi} />
         <ThemeToggle />
       </header>
+      )}
 
       {/* Atur Tata Letak (fitur 1.22.x): semua seksi bisa diseret/
           disembunyikan/dilipat — satu kolom. */}
@@ -722,7 +730,9 @@ export function TvrKuScreen({
         // Ganti kunci saat beralih akun (kendali): semua seksi anak dimuat
         // ulang dari nol dengan identitas baru — bukan sisa data akun lama.
         key={kendali ? `kendali-${kendali.id}` : "sendiri"}
-        modul="tvrku"
+        // Mode Simpel memakai kunci preferensi sendiri: seksi yang
+        // disembunyikan pengguna di mode lengkap tidak ikut hilang di sini.
+        modul={hanyaSeksi ? "tvrku-simpel" : "tvrku"}
         bungkusSeksi={false}
         seksi={([
         ...(bolehKendali
@@ -1180,7 +1190,9 @@ export function TvrKuScreen({
         </div>
       </FadeInUp>
         ) },
-        ] as SeksiModul[]).filter((s) => !ketum || !SEKSI_KPI_TVRKU.has(s.id))}
+        ] as SeksiModul[]).filter(
+          (s) => (!ketum || !SEKSI_KPI_TVRKU.has(s.id)) && (!hanyaSeksi || hanyaSeksi.includes(s.id)),
+        )}
       />
 
       {/* Modal-modal */}

@@ -7,8 +7,9 @@ import type { KomponenIkon } from "@/types";
 // ThemeToggle, StatusBadge, FadeInUp, SectionTitle
 // ============================================================
 
-import { motion } from "framer-motion";
-import { ChevronLeft, Sun, Moon } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import { ChevronLeft, Sun, Moon, Zap } from "lucide-react";
+import { nyalakanModeSimpel } from "@/lib/mode-simpel";
 import { cn } from "@/lib/utils";
 import { inisial, warnaAvatar } from "@/lib/format";
 import { useAppStore } from "@/hooks/use-app-store";
@@ -161,10 +162,28 @@ export function ThemeToggle({
 }) {
   const tema = useAppStore((s) => s.tema);
   const toggleTema = useAppStore((s) => s.toggleTema);
+  const sudahMasuk = useAppStore((s) => Boolean(s.user));
   const gelap = tema === "dark";
 
   return (
     <>
+    {/* MODE SIMPEL (4 Sep 2026): tombol pengaktif ada di kepala SEMUA modul
+        (komponen ini dipakai tiap header) — versi ringan di /simpel. */}
+    {sudahMasuk && (
+      <button
+        type="button"
+        onClick={nyalakanModeSimpel}
+        aria-label="Aktifkan Mode Simpel (versi ringan)"
+        title="Mode Simpel — versi ringan & cepat"
+        className={cn(
+          "glass btn-tekan flex h-10 shrink-0 items-center gap-1 rounded-full px-2.5 text-[10.5px] font-extrabold uppercase tracking-wide text-teks-utama",
+          className,
+        )}
+      >
+        <Zap className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
+        Simpel
+      </button>
+    )}
     {!tanpaSegar && <TombolSegarSistem />}
     <button
       type="button"
@@ -250,6 +269,11 @@ export function FadeInUp({
   className?: string;
   children: React.ReactNode;
 }) {
+  // Mode Simpel (MotionConfig reducedMotion="always") & preferensi OS
+  // "kurangi gerakan": tanpa animasi masuk sama sekali — isi langsung
+  // tampil, tidak ada opacity 0 yang menunggu tick animasi.
+  const kurangiGerak = useReducedMotion();
+  if (kurangiGerak) return <div className={className}>{children}</div>;
   return (
     <motion.div
       initial={{ opacity: 0, y: 18 }}

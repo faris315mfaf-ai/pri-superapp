@@ -25,6 +25,22 @@ const SKRIP_PEMULIHAN = `
 (function () {
   var KUNCI = "pri-pulih-sekali";
 
+  // --- Mode Simpel (4 Sep 2026) ------------------------------------
+  // Perangkat yang memilih Mode Simpel langsung dialihkan ke /simpel
+  // SEBELUM aplikasi lengkap dimuat — hanya bila ada token perangkat
+  // (tanpa token, "/" tetap menampilkan layar masuk; /simpel juga
+  // mengembalikan ke "/" bila sesi tak ada, jadi tidak mungkin berputar).
+  try {
+    if (
+      location.pathname === "/" &&
+      localStorage.getItem("pri-mode-simpel") === "1" &&
+      localStorage.getItem("pri-token-perangkat")
+    ) {
+      location.replace("/simpel");
+      return;
+    }
+  } catch (e) {}
+
   // --- Telemetri crash -----------------------------------------
   // Setiap galat yang tidak tertangani dikirim ke server, karena
   // "This page couldn't load" di ponsel pengguna tidak terlihat
