@@ -384,6 +384,12 @@ export type AkunSosmed = {
 };
 
 /** Semua akun sosmed milik pengguna (boleh lebih dari satu per platform) */
+/** Sakelar tutorial interaktif (Panel Master, 4 Sep 2026). Bawaan: aktif. */
+export async function getTurAktif(): Promise<boolean> {
+  const json = await fetchJson("/api/tur");
+  return json.aktif !== false;
+}
+
 export async function getAkunSosmed(): Promise<AkunSosmed[]> {
   const res = await fetch("/api/akun-sosmed", { headers: headerToken() });
   const json = await res.json().catch(() => null);
@@ -5454,6 +5460,9 @@ export type JuaraKomen = {
   nama: string;
   avatar_url: string;
   total_komentar: number;
+  /** Dasar urutan juara = leaderboard Kepatuhan Komen (4 Sep 2026). */
+  persen: number;
+  total_wajib: number;
   postingan: number;
 };
 export type HasilJuaraKomen = {

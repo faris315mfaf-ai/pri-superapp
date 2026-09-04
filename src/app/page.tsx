@@ -6,7 +6,13 @@
 // Semua layar fitur digabung di sini.
 // ============================================================
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { MeshBackground } from "@/components/mesh-background";
 import { ToastViewport } from "@/components/toast-viewport";
@@ -46,6 +52,7 @@ import { TurPemandu } from "@/features/tur/tur-pemandu";
 import { ModalKembangApi } from "@/features/beranda/modal-kembang-api";
 import { PetScreen } from "@/features/pet/pet-screen";
 import { PetMelayang } from "@/features/pet/pet-melayang";
+import { HewanMelayang } from "@/features/pet/hewan-melayang";
 import { LudoScreen } from "@/features/ludo/ludo-screen";
 import { AcaraScreen } from "@/features/acara/acara-screen";
 import { TabelAnggotaScreen } from "@/features/pengguna/tabel-anggota-screen";
@@ -116,7 +123,12 @@ import { cn } from "@/lib/utils";
 
 type SubLayar =
   | { nama: "qc-akun"; akunWajib: string; periode?: string }
-  | { nama: "qc-postingan"; idPostingan: string; akunWajib: string; periode?: string }
+  | {
+      nama: "qc-postingan";
+      idPostingan: string;
+      akunWajib: string;
+      periode?: string;
+    }
   // Panel super admin: menyetujui pendaftar & menetapkan peran
   | { nama: "kelola-pengguna" }
   // Kehadiran & kinerja (dibuka dari tab Profil)
@@ -188,7 +200,9 @@ function bacaNavTersimpan(
     if (String(j.userId) !== String(userId)) return null;
     if (typeof j.tab !== "string") return null;
     const subLayar =
-      j.subLayar && typeof j.subLayar === "object" && typeof j.subLayar.nama === "string"
+      j.subLayar &&
+      typeof j.subLayar === "object" &&
+      typeof j.subLayar.nama === "string"
         ? (j.subLayar as SubLayar)
         : null;
     return { tab: j.tab as KunciTab, subLayar };
@@ -198,9 +212,13 @@ function bacaNavTersimpan(
 }
 
 /** Tab tersimpan hanya dipakai bila masih sah untuk peran ini. */
-function tabAwalDenganRestor(role: Role, userId: string | number | null | undefined): KunciTab {
+function tabAwalDenganRestor(
+  role: Role,
+  userId: string | number | null | undefined,
+): KunciTab {
   const tersimpan = bacaNavTersimpan(userId);
-  if (tersimpan && (TAB_ROLE[role] ?? []).includes(tersimpan.tab)) return tersimpan.tab;
+  if (tersimpan && (TAB_ROLE[role] ?? []).includes(tersimpan.tab))
+    return tersimpan.tab;
   return TAB_AWAL[role];
 }
 
@@ -237,12 +255,16 @@ export default function Page() {
   const [menyambut, setMenyambut] = useState(false);
   const [tab, setTab] = useState<KunciTab>(() => {
     const tersimpan = useAppStore.getState().user;
-    return tersimpan ? tabAwalDenganRestor(tersimpan.role, tersimpan.id) : "beranda";
+    return tersimpan
+      ? tabAwalDenganRestor(tersimpan.role, tersimpan.id)
+      : "beranda";
   });
   const [subLayar, setSubLayar] = useState<SubLayar | null>(() => {
     // Refresh peramban: buka lagi sub-layar terakhir (fitur 1 Sep 2026).
     const tersimpan = useAppStore.getState().user;
-    return tersimpan ? (bacaNavTersimpan(tersimpan.id)?.subLayar ?? null) : null;
+    return tersimpan
+      ? (bacaNavTersimpan(tersimpan.id)?.subLayar ?? null)
+      : null;
   });
   // Kunci sub-dashboard yang boleh dibuka jabatan ini (fitur 1.19/3.3).
   // Diisi effect di bawah; dipakai tabBoleh, jadi dideklarasikan di sini.
@@ -290,7 +312,10 @@ export default function Page() {
   const [memeriksaSesi, setMemeriksaSesi] = useState(true);
   // true = master menyalakan mode perbaikan; semua orang selain master
   // tertahan di layar khusus sampai perbaikan selesai.
-  const [infoPerbaikan, setInfoPerbaikan] = useState<{ sampai: string | null; pesan: string } | null>(null);
+  const [infoPerbaikan, setInfoPerbaikan] = useState<{
+    sampai: string | null;
+    pesan: string;
+  } | null>(null);
   useEffect(() => {
     if (!siap) return;
     let hidup = true;
@@ -379,27 +404,47 @@ export default function Page() {
     // Modul TV terbuka untuk Pimred (jabatan) ATAU anggota tim TV yang
     // ditunjuk Pimred (tvAnggota dari server).
     if ((adalahPimred(user) || tvAnggota) && !dasar.includes("tv")) {
-      dasar.splice(dasar.indexOf("tvrku") >= 0 ? dasar.indexOf("tvrku") : 1, 0, "tv");
+      dasar.splice(
+        dasar.indexOf("tvrku") >= 0 ? dasar.indexOf("tvrku") : 1,
+        0,
+        "tv",
+      );
     }
     // Modul per-divisi (spek 1.5): tiap divisi punya SATU modul
     // tambahan — daftarnya di lib/modul-divisi.ts, gampang diperluas.
     const modul = modulUntukDivisi(user.divisi);
     if (modul && !dasar.includes(modul)) {
-      dasar.splice(dasar.indexOf("chat") >= 0 ? dasar.indexOf("chat") : dasar.length - 1, 0, modul);
+      dasar.splice(
+        dasar.indexOf("chat") >= 0 ? dasar.indexOf("chat") : dasar.length - 1,
+        0,
+        modul,
+      );
     }
     // Orang HR (peran admin_hr ATAU Divisi HR — fitur 1.22.x/1) mendapat
     // modul HR Center (tab qc): tempat Kelola Pengguna & kirim pengumuman.
     if (adalahHR(user) && !dasar.includes("qc")) {
-      dasar.splice(dasar.indexOf("chat") >= 0 ? dasar.indexOf("chat") : dasar.length - 1, 0, "qc");
+      dasar.splice(
+        dasar.indexOf("chat") >= 0 ? dasar.indexOf("chat") : dasar.length - 1,
+        0,
+        "qc",
+      );
     }
     // Modul Dashboard (fitur 1.19/3.3): tampil hanya bila jabatan ini
     // diberi akses minimal satu sub-dashboard oleh master.
     if (aksesDashboard.length > 0 && !dasar.includes("dashboard")) {
-      dasar.splice(dasar.indexOf("chat") >= 0 ? dasar.indexOf("chat") : dasar.length - 1, 0, "dashboard");
+      dasar.splice(
+        dasar.indexOf("chat") >= 0 ? dasar.indexOf("chat") : dasar.length - 1,
+        0,
+        "dashboard",
+      );
     }
     // Asisten AI (fitur 1.20/3): tampil bila jabatannya dinyalakan.
     if (bolehAsisten && !dasar.includes("asisten")) {
-      dasar.splice(dasar.indexOf("chat") >= 0 ? dasar.indexOf("chat") : dasar.length - 1, 0, "asisten");
+      dasar.splice(
+        dasar.indexOf("chat") >= 0 ? dasar.indexOf("chat") : dasar.length - 1,
+        0,
+        "asisten",
+      );
     }
     return dasar;
   }, [user, tvAnggota, aksesDashboard, bolehAsisten]);
@@ -409,7 +454,9 @@ export default function Page() {
   // PROFIL (pintu pengaturan; tanpa ini pengguna mengunci dirinya).
   const tabBoleh = useMemo<KunciTab[]>(() => {
     const wajib = new Set<KunciTab>(["konten", "profil"]);
-    const tampil = tabPenuh.filter((t) => wajib.has(t) || !sembunyiTab.includes(t));
+    const tampil = tabPenuh.filter(
+      (t) => wajib.has(t) || !sembunyiTab.includes(t),
+    );
     // Pengaman: preferensi rusak tidak boleh mengosongkan navigasi.
     return tampil.length >= 2 ? tampil : tabPenuh;
   }, [tabPenuh, sembunyiTab]);
@@ -432,7 +479,10 @@ export default function Page() {
     if (!aplikasiAktif) return;
     let hidup = true;
     async function muatIzin() {
-      const [izin, wewenang] = await Promise.all([getIzinFitur(), getWewenangTv()]);
+      const [izin, wewenang] = await Promise.all([
+        getIzinFitur(),
+        getWewenangTv(),
+      ]);
       if (hidup) {
         useAppStore.getState().setIzinFitur(izin);
         useAppStore.getState().setTvAnggota(wewenang.anggota);
@@ -494,7 +544,11 @@ export default function Page() {
 
     async function muat() {
       // Jangan bekerja saat tab disembunyikan — hemat kuota & baterai.
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "hidden"
+      )
+        return;
       try {
         const items = await getNotifikasi();
         if (!hidup) return;
@@ -567,8 +621,8 @@ export default function Page() {
   // ikut dirender ulang tiap 30 detik walau tidak ada satu pun notifikasi
   // yang berubah. Dengan berlangganan angka, zustand hanya membangunkan
   // komponen ini ketika jumlah belum-dibaca benar-benar berganti.
-  const belumBaca = useAppStore(
-    (s) => s.notifikasi.reduce((n, item) => (item.dibaca ? n : n + 1), 0),
+  const belumBaca = useAppStore((s) =>
+    s.notifikasi.reduce((n, item) => (item.dibaca ? n : n + 1), 0),
   );
 
   // ------------------------------------------------------------
@@ -678,7 +732,9 @@ export default function Page() {
   // footer, kartu, notifikasi — tanpa perlu membungkus semua
   // pemanggil setTab/setSubLayar satu per satu.
   // ------------------------------------------------------------
-  const riwayatNavRef = useRef<{ tab: KunciTab; subLayar: SubLayar | null }[]>([]);
+  const riwayatNavRef = useRef<{ tab: KunciTab; subLayar: SubLayar | null }[]>(
+    [],
+  );
   const lewatiCatatRef = useRef(false);
   const posisiKiniRef = useRef<{ tab: KunciTab; subLayar: SubLayar | null }>({
     tab,
@@ -739,7 +795,8 @@ export default function Page() {
       }
       // 2. Riwayat kosong tapi sub-layar terbuka (mis. habis refresh
       //    langsung di sub-layar) → tutup sub-layarnya dulu.
-      const tabAwal = TAB_AWAL[useAppStore.getState().user?.role ?? "anggota"] ?? "beranda";
+      const tabAwal =
+        TAB_AWAL[useAppStore.getState().user?.role ?? "anggota"] ?? "beranda";
       if (subLayarRef.current) {
         setSubLayar(null);
         history.pushState({ pri: true }, "");
@@ -765,11 +822,19 @@ export default function Page() {
     return () => window.removeEventListener("popstate", saatBack);
   }, [user]);
 
-  function handleTarget(target: "qc" | "tv" | "dashboard" | "notifikasi" | null) {
+  function handleTarget(
+    target: "qc" | "tv" | "dashboard" | "notifikasi" | null,
+  ) {
     if (!user) return;
-    if (target === "qc" && (user.role === "super_admin" || user.role === "admin_hr")) {
+    if (
+      target === "qc" &&
+      (user.role === "super_admin" || user.role === "admin_hr")
+    ) {
       pilihTab("qc");
-    } else if (target === "tv" && (user.role === "super_admin" || user.role === "admin_tv")) {
+    } else if (
+      target === "tv" &&
+      (user.role === "super_admin" || user.role === "admin_tv")
+    ) {
       pilihTab("tv");
     } else if (target === "dashboard" && user.role === "super_admin") {
       pilihTab("beranda");
@@ -800,7 +865,10 @@ export default function Page() {
         ),
       });
     }
-    if (tabBoleh.includes("beranda") && (user.role === "ketua" || user.role === "anggota")) {
+    if (
+      tabBoleh.includes("beranda") &&
+      (user.role === "ketua" || user.role === "anggota")
+    ) {
       layarTab.push({
         kunci: "beranda",
         isi: (
@@ -825,7 +893,9 @@ export default function Page() {
                 : undefined
             }
             user={user}
-            onBukaKelolaPengguna={() => setSubLayar({ nama: "kelola-pengguna" })}
+            onBukaKelolaPengguna={() =>
+              setSubLayar({ nama: "kelola-pengguna" })
+            }
             onBukaModulQc={() => pilihTab("qc")}
             onBukaModulTv={() => pilihTab("tv")}
             onBukaAbsensi={() => setSubLayar({ nama: "absensi-hari-ini" })}
@@ -890,7 +960,11 @@ export default function Page() {
     if (tabBoleh.includes("asisten")) {
       layarTab.push({
         kunci: "asisten",
-        isi: <AsistenScreen onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })} />,
+        isi: (
+          <AsistenScreen
+            onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
+          />
+        ),
       });
     }
     if (tabBoleh.includes("tvrku")) {
@@ -939,7 +1013,9 @@ export default function Page() {
           onBukaPanelMaster={() => setSubLayar({ nama: "panel-master" })}
           onBukaPet={() => setSubLayar({ nama: "pet" })}
           onBukaLudo={() => setSubLayar({ nama: "ludo" })}
-          onBukaPengaturanFitur={() => setSubLayar({ nama: "pengaturan-fitur" })}
+          onBukaPengaturanFitur={() =>
+            setSubLayar({ nama: "pengaturan-fitur" })
+          }
           onBukaAturMenu={() => setSubLayar({ nama: "atur-menu" })}
         />
       ),
@@ -967,7 +1043,10 @@ export default function Page() {
 
       {/* Mode perbaikan: layar terkunci penuh (maskot + hitung mundur) */}
       {siap && infoPerbaikan && (
-        <LayarPerbaikan sampai={infoPerbaikan.sampai} pesan={infoPerbaikan.pesan} />
+        <LayarPerbaikan
+          sampai={infoPerbaikan.sampai}
+          pesan={infoPerbaikan.pesan}
+        />
       )}
 
       {/* Layar login */}
@@ -978,7 +1057,10 @@ export default function Page() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
         >
-          <AuthScreen onMasukBerhasil={loginBerhasil} awalMenunggu={menungguUser} />
+          <AuthScreen
+            onMasukBerhasil={loginBerhasil}
+            awalMenunggu={menungguUser}
+          />
         </motion.div>
       )}
 
@@ -996,7 +1078,9 @@ export default function Page() {
       )}
 
       {/* Changelog otomatis pasca-update (spek 1.4) */}
-      {aplikasiAktif && changelogBuka && <ModalChangelog onTutup={tutupChangelog} />}
+      {aplikasiAktif && changelogBuka && (
+        <ModalChangelog onTutup={tutupChangelog} />
+      )}
 
       {/* Tutorial interaktif daftar akun → Kepatuhan Komen (3 Sep 2026);
           menunggu changelog ditutup dulu supaya tidak bertumpuk. */}
@@ -1071,109 +1155,128 @@ export default function Page() {
               >
                 <MeshBackground />
                 <PagarGalat nama={subLayar.nama}>
-                {subLayar.nama === "kelola-pengguna" ? (
-                  <KelolaPenggunaScreen onKembali={() => setSubLayar(null)} />
-                ) : subLayar.nama === "database" ? (
-                  <DatabaseScreen onKembali={() => setSubLayar(null)} />
-                ) : subLayar.nama === "pengaturan-fitur" ? (
-                  <PengaturanFiturScreen onKembali={() => setSubLayar(null)} />
-                ) : subLayar.nama === "kelola-dashboard" ? (
-                  <KelolaAksesDashboardScreen onKembali={() => setSubLayar(null)} />
-                ) : subLayar.nama === "atur-menu" ? (
-                  <AturMenuScreen
-                    tabPenuh={tabPenuh}
-                    sembunyi={sembunyiTab}
-                    onUbah={setSembunyiTab}
-                    onKembali={() => setSubLayar(null)}
-                  />
-                ) : subLayar.nama === "panel-master" ? (
-                  <PanelMasterScreen onKembali={() => setSubLayar(null)} />
-                ) : subLayar.nama === "ludo" ? (
-                  <LudoScreen onKembali={() => setSubLayar(null)} />
-                ) : subLayar.nama === "pet" ? (
-                  <PetScreen onKembali={() => setSubLayar(null)} onBerubah={() => setVersiPet((v) => v + 1)} />
-                ) : subLayar.nama === "tabel-anggota" ? (
-                  <TabelAnggotaScreen onKembali={() => setSubLayar(null)} />
-                ) : subLayar.nama === "absensi-hari-ini" ? (
-                  <AbsensiHariIniScreen onKembali={() => setSubLayar(null)} />
-                ) : subLayar.nama === "dashboard-kpi" ? (
-                  <div className="kolom-aplikasi px-4 pb-32">
-                    <ScreenHeader
-                      judul="KPI Video Anggota"
+                  {subLayar.nama === "kelola-pengguna" ? (
+                    <KelolaPenggunaScreen onKembali={() => setSubLayar(null)} />
+                  ) : subLayar.nama === "database" ? (
+                    <DatabaseScreen onKembali={() => setSubLayar(null)} />
+                  ) : subLayar.nama === "pengaturan-fitur" ? (
+                    <PengaturanFiturScreen
                       onKembali={() => setSubLayar(null)}
                     />
-                    <KpiAnggotaDashboard />
-                  </div>
-                ) : subLayar.nama === "tv-nasional" ? (
-                  <div className="kolom-aplikasi px-4 pb-32">
-                    <ScreenHeader
-                      judul="TV Rakyat Nasional"
+                  ) : subLayar.nama === "kelola-dashboard" ? (
+                    <KelolaAksesDashboardScreen
                       onKembali={() => setSubLayar(null)}
                     />
-                    <TvNasionalDashboard />
-                  </div>
-                ) : subLayar.nama === "dashboard-kepatuhan" ? (
-                  <div className="kolom-aplikasi px-4 pb-32">
-                    <ScreenHeader
-                      judul="Kepatuhan Komen"
+                  ) : subLayar.nama === "atur-menu" ? (
+                    <AturMenuScreen
+                      tabPenuh={tabPenuh}
+                      sembunyi={sembunyiTab}
+                      onUbah={setSembunyiTab}
                       onKembali={() => setSubLayar(null)}
                     />
-                    {/* Baca-saja: dashboard tempat memantau, aksi WA-nya
+                  ) : subLayar.nama === "panel-master" ? (
+                    <PanelMasterScreen onKembali={() => setSubLayar(null)} />
+                  ) : subLayar.nama === "ludo" ? (
+                    <LudoScreen onKembali={() => setSubLayar(null)} />
+                  ) : subLayar.nama === "pet" ? (
+                    <PetScreen
+                      onKembali={() => setSubLayar(null)}
+                      onBerubah={() => setVersiPet((v) => v + 1)}
+                    />
+                  ) : subLayar.nama === "tabel-anggota" ? (
+                    <TabelAnggotaScreen onKembali={() => setSubLayar(null)} />
+                  ) : subLayar.nama === "absensi-hari-ini" ? (
+                    <AbsensiHariIniScreen onKembali={() => setSubLayar(null)} />
+                  ) : subLayar.nama === "dashboard-kpi" ? (
+                    <div className="kolom-aplikasi px-4 pb-32">
+                      <ScreenHeader
+                        judul="KPI Video Anggota"
+                        onKembali={() => setSubLayar(null)}
+                      />
+                      <KpiAnggotaDashboard />
+                    </div>
+                  ) : subLayar.nama === "tv-nasional" ? (
+                    <div className="kolom-aplikasi px-4 pb-32">
+                      <ScreenHeader
+                        judul="TV Rakyat Nasional"
+                        onKembali={() => setSubLayar(null)}
+                      />
+                      <TvNasionalDashboard />
+                    </div>
+                  ) : subLayar.nama === "dashboard-kepatuhan" ? (
+                    <div className="kolom-aplikasi px-4 pb-32">
+                      <ScreenHeader
+                        judul="Kepatuhan Komen"
+                        onKembali={() => setSubLayar(null)}
+                      />
+                      {/* Baca-saja: dashboard tempat memantau, aksi WA-nya
                         tetap di HR Center. */}
-                    <KepatuhanKaderPanelLayar editable={false} />
-                  </div>
-                ) : subLayar.nama === "dashboard-tv" ? (
-                  <div className="kolom-aplikasi px-4 pb-32">
-                    <ScreenHeader
-                      judul="Dashboard TV Rakyat"
+                      <KepatuhanKaderPanelLayar editable={false} />
+                    </div>
+                  ) : subLayar.nama === "dashboard-tv" ? (
+                    <div className="kolom-aplikasi px-4 pb-32">
+                      <ScreenHeader
+                        judul="Dashboard TV Rakyat"
+                        onKembali={() => setSubLayar(null)}
+                      />
+                      <TvAnalitikDashboardLayar />
+                    </div>
+                  ) : subLayar.nama === "setel-kpi" ? (
+                    <SetelKpiScreen
+                      user={user}
                       onKembali={() => setSubLayar(null)}
                     />
-                    <TvAnalitikDashboardLayar />
-                  </div>
-                ) : subLayar.nama === "setel-kpi" ? (
-                  <SetelKpiScreen user={user} onKembali={() => setSubLayar(null)} />
-                ) : subLayar.nama === "persetujuan-kpi" ? (
-                  <PersetujuanKpiScreen onKembali={() => setSubLayar(null)} />
-                ) : subLayar.nama === "pengumuman" ? (
-                  <PengumumanScreen user={user} onKembali={() => setSubLayar(null)} />
-                ) : subLayar.nama === "notifikasi" ? (
-                  <NotifikasiScreen
-                    onTarget={handleTarget}
-                    onUltah={() => setUltahBuka(true)}
-                    onKembali={() => setSubLayar(null)}
-                  />
-                ) : subLayar.nama === "absensi" ? (
-                  <AbsensiScreen user={user} onKembali={() => setSubLayar(null)} />
-                ) : subLayar.nama === "laporan-kerja" ? (
-                  <LaporanKerjaScreen user={user} onKembali={() => setSubLayar(null)} />
-                ) : subLayar.nama === "qc-akun" ? (
-                  <AccountDetailScreen
-                    akunWajib={subLayar.akunWajib}
-                    periode={subLayar.periode}
-                    onKembali={() => setSubLayar(null)}
-                    onBukaPostingan={(idPostingan) =>
-                      setSubLayar({
-                        nama: "qc-postingan",
-                        idPostingan,
-                        akunWajib: subLayar.akunWajib,
-                        periode: subLayar.periode,
-                      })
-                    }
-                  />
-                ) : (
-                  <PostDetailScreen
-                    idPostingan={subLayar.idPostingan}
-                    akunWajib={subLayar.akunWajib}
-                    periode={subLayar.periode}
-                    onKembali={() =>
-                      setSubLayar({
-                        nama: "qc-akun",
-                        akunWajib: subLayar.akunWajib,
-                        periode: subLayar.periode,
-                      })
-                    }
-                  />
-                )}
+                  ) : subLayar.nama === "persetujuan-kpi" ? (
+                    <PersetujuanKpiScreen onKembali={() => setSubLayar(null)} />
+                  ) : subLayar.nama === "pengumuman" ? (
+                    <PengumumanScreen
+                      user={user}
+                      onKembali={() => setSubLayar(null)}
+                    />
+                  ) : subLayar.nama === "notifikasi" ? (
+                    <NotifikasiScreen
+                      onTarget={handleTarget}
+                      onUltah={() => setUltahBuka(true)}
+                      onKembali={() => setSubLayar(null)}
+                    />
+                  ) : subLayar.nama === "absensi" ? (
+                    <AbsensiScreen
+                      user={user}
+                      onKembali={() => setSubLayar(null)}
+                    />
+                  ) : subLayar.nama === "laporan-kerja" ? (
+                    <LaporanKerjaScreen
+                      user={user}
+                      onKembali={() => setSubLayar(null)}
+                    />
+                  ) : subLayar.nama === "qc-akun" ? (
+                    <AccountDetailScreen
+                      akunWajib={subLayar.akunWajib}
+                      periode={subLayar.periode}
+                      onKembali={() => setSubLayar(null)}
+                      onBukaPostingan={(idPostingan) =>
+                        setSubLayar({
+                          nama: "qc-postingan",
+                          idPostingan,
+                          akunWajib: subLayar.akunWajib,
+                          periode: subLayar.periode,
+                        })
+                      }
+                    />
+                  ) : (
+                    <PostDetailScreen
+                      idPostingan={subLayar.idPostingan}
+                      akunWajib={subLayar.akunWajib}
+                      periode={subLayar.periode}
+                      onKembali={() =>
+                        setSubLayar({
+                          nama: "qc-akun",
+                          akunWajib: subLayar.akunWajib,
+                          periode: subLayar.periode,
+                        })
+                      }
+                    />
+                  )}
                 </PagarGalat>
               </motion.div>
             )}
@@ -1187,11 +1290,22 @@ export default function Page() {
       {/* Pet Robot melayang (percobaan, khusus master; 3 Sep 2026) — hanya di
           tab Beranda (dashboard master), tanpa sub-layar terbuka. */}
       {user && tabEfektif === "beranda" && !subLayar && (
-        <PetMelayang onBuka={() => setSubLayar({ nama: "pet" })} versi={versiPet} />
+        <PetMelayang
+          onBuka={() => setSubLayar({ nama: "pet" })}
+          versi={versiPet}
+        />
       )}
-      {user && (user.role === "super_admin" || user.role === "master") && !suaraRobotBuka && (
-        <RobotMelayang onBuka={() => setSuaraRobotBuka(true)} />
+      {user && tabEfektif === "beranda" && !subLayar && (
+        <HewanMelayang
+          onBuka={() => setSubLayar({ nama: "pet" })}
+          versi={versiPet}
+        />
       )}
+      {user &&
+        (user.role === "super_admin" || user.role === "master") &&
+        !suaraRobotBuka && (
+          <RobotMelayang onBuka={() => setSuaraRobotBuka(true)} />
+        )}
       {suaraRobotBuka && (
         <LayarSuara
           sapaan="Halo Pak Ketum, ada yang bisa dibantu?"

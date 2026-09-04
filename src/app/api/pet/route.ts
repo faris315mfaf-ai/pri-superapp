@@ -41,6 +41,16 @@ import {
   type Perawatan,
   type PetState,
   type SlotAksesoris,
+  gerakanDariKode,
+  hewanDariKode,
+  makananHewanDariKode,
+  xpMakanHewan,
+  hitungKenyangHewan,
+  progresHewan,
+  suasanaHewan,
+  type HewanDb,
+  type HewanState,
+  type HewanKlien,
 } from "@/lib/pet";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +74,9 @@ type Baris = {
   skin_terpasang: string | null;
   warna_terbuka: boolean | null;
   warna_custom: string | null;
+  gerakan_dimiliki: string[] | null;
+  hewan: HewanDb | null;
+  hewan_makanan: Record<string, number> | null;
   aktivitas_hari_ini: number | null;
   aktivitas_tanggal: string | null;
   hadiah_terakhir: string | null;
@@ -72,7 +85,7 @@ type Baris = {
 };
 
 const KOLOM =
-  "user_id, jenis, nama, kenyang, energi, senang, bersih, tidur, xp, aksesoris_dimiliki, aksesoris_terpasang, sparepart_dimiliki, sparepart_terpasang, makanan, skin_dimiliki, skin_terpasang, warna_terbuka, warna_custom, aktivitas_hari_ini, aktivitas_tanggal, hadiah_terakhir, terakhir_dihitung, dibuat_pada";
+  "user_id, jenis, nama, kenyang, energi, senang, bersih, tidur, xp, aksesoris_dimiliki, aksesoris_terpasang, sparepart_dimiliki, sparepart_terpasang, makanan, skin_dimiliki, skin_terpasang, warna_terbuka, warna_custom, gerakan_dimiliki, hewan, hewan_makanan, aktivitas_hari_ini, aktivitas_tanggal, hadiah_terakhir, terakhir_dihitung, dibuat_pada";
 const SLOT_SAH = new Set<string>([
   "kepala",
   "mata",
@@ -157,6 +170,39 @@ async function segarkan(
   return { ...b, ...k, tidur, terakhir_dihitung: kini };
 }
 
+/** Hewan peliharaan robot (kolom jsonb) → bentuk klien; kenyang dikurangi seiring waktu saat dibaca. */
+function hewanKeKlien(b: Baris): HewanState {
+  const h = (b.hewan ?? {}) as HewanDb;
+  const daftar: HewanKlien[] = [];
+  for (const [kode, d] of Object.entries(h.daftar ?? {})) {
+    const def = hewanDariKode(kode);
+    if (!def) continue;
+    const jam = (Date.now() - Date.parse(String(d?.terakhir ?? ""))) / 3600_000;
+    const kenyang = hitungKenyangHewan(
+      Number(d?.kenyang ?? 0),
+      Number.isFinite(jam) ? jam : 0,
+    );
+    const xp = Math.max(0, Math.floor(Number(d?.xp ?? 0)));
+    const pr = progresHewan(xp);
+    daftar.push({
+      kode,
+      jenis: def.jenis,
+      nama: String(d?.nama || def.namaBawaan).slice(0, NAMA_MAKS),
+      xp,
+      kenyang,
+      tahap: pr.tahap,
+      suasana: suasanaHewan(kenyang),
+      progres: { diTahap: pr.diTahap, butuh: pr.butuh },
+    });
+  }
+  daftar.sort((x, y) => x.kode.localeCompare(y.kode));
+  const aktifKode =
+    h.aktif && daftar.some((x) => x.kode === h.aktif)
+      ? h.aktif
+      : (daftar[0]?.kode ?? null);
+  return { aktif: daftar.find((x) => x.kode === aktifKode) ?? null, daftar };
+}
+
 function keState(
   b: Baris | null,
   saldo: number,
@@ -187,6 +233,9 @@ function keState(
       skin_terpasang: null,
       warna_terbuka: false,
       warna_custom: null,
+      gerakan_dimiliki: [],
+      hewan: { aktif: null, daftar: [] },
+      hewan_makanan: {},
       aktivitas_hari_ini: 0,
       saldo_koin: saldo,
       hadiah_hari_ini: false,
@@ -243,6 +292,17 @@ function keState(
         : null,
     warna_terbuka: publik ? false : Boolean(b.warna_terbuka),
     warna_custom: warnaSah(b.warna_custom),
+    gerakan_dimiliki: publik
+      ? []
+      : (b.gerakan_dimiliki ?? []).filter((x) => gerakanDariKode(x)),
+    hewan: hewanKeKlien(b),
+    hewan_makanan: publik
+      ? {}
+      : Object.fromEntries(
+          Object.entries(b.hewan_makanan ?? {})
+            .filter(([k, n]) => makananHewanDariKode(k) && Number(n) > 0)
+            .map(([k, n]) => [k, Math.floor(Number(n))]),
+        ),
     aktivitas_hari_ini: aktivitasHariIni(b),
     saldo_koin: publik ? 0 : saldo,
     hadiah_hari_ini: b.hadiah_terakhir === tanggalWib(),
@@ -500,10 +560,18 @@ export async function POST(request: Request) {
       const spr = sparepartDariKode(kode);
       const skn = skinDariKode(kode);
       const fiturWarna = kode === KODE_WARNA_CUSTOM;
+      // v4 (4 Sep 2026): gerakan/emot, hewan peliharaan robot, makanan hewan.
+      const grk = gerakanDariKode(kode);
+      const hwn = hewanDariKode(kode);
+      const mhw = makananHewanDariKode(kode);
+      const hewanDb = (b.hewan ?? {}) as HewanDb;
       const item =
         aks ??
         mkn ??
         spr ??
+        grk ??
+        hwn ??
+        mhw ??
         (skn
           ? { nama: skn.nama, harga: skn.harga }
           : fiturWarna
@@ -516,6 +584,10 @@ export async function POST(request: Request) {
         galat(`${spr.nama} sudah Anda miliki.`, 409);
       if (skn && (b.skin_dimiliki ?? []).includes(kode))
         galat(`${skn.nama} sudah Anda miliki.`, 409);
+      if (grk && (b.gerakan_dimiliki ?? []).includes(kode))
+        galat(`Gerakan ${grk.nama} sudah Anda miliki.`, 409);
+      if (hwn && hewanDb.daftar?.[kode])
+        galat(`${hwn.nama} sudah Anda pelihara.`, 409);
       // Skin eksklusif: hanya bisa dibeli saat musimnya (bulan WIB); setelah dimiliki tetap selamanya.
       if (skn && !skinTersedia(skn))
         galat(
@@ -532,7 +604,7 @@ export async function POST(request: Request) {
         galat(`Koin kurang: butuh ${item.harga}, saldo ${saldo}.`);
       // Buku besar koin: baris negatif. Aksesoris/sparepart/skin/warna unik per kode
       // (anti dobel); makanan boleh berkali-kali → referensi memuat waktu.
-      const referensi = mkn ? `${kode}-${Date.now()}` : kode;
+      const referensi = mkn || mhw ? `${kode}-${Date.now()}` : kode;
       const { error: eKoin } = await db.from("koin_transaksi").insert({
         user_id: uid,
         jumlah: -item.harga,
@@ -588,6 +660,29 @@ export async function POST(request: Request) {
         kolom = { warna_terbuka: true };
         sesudah = { ...b, warna_terbuka: true };
         pesan = `Warna custom terbuka (−${HARGA_WARNA_CUSTOM} koin). Pilih warna favorit Anda — bisa diganti kapan saja.`;
+      } else if (grk) {
+        const dimiliki = [...(b.gerakan_dimiliki ?? []), kode];
+        kolom = { gerakan_dimiliki: dimiliki };
+        sesudah = { ...b, gerakan_dimiliki: dimiliki };
+        pesan = `Gerakan ${grk.nama} ${grk.emoji} dibeli (−${grk.harga} koin). Ketuk robot di beranda untuk memainkannya.`;
+      } else if (hwn) {
+        const daftar = { ...(hewanDb.daftar ?? {}) };
+        daftar[kode] = {
+          nama: hwn.namaBawaan,
+          xp: 0,
+          kenyang: 80,
+          terakhir: kini,
+        };
+        const hewanBaru: HewanDb = { aktif: hewanDb.aktif ?? kode, daftar };
+        kolom = { hewan: hewanBaru };
+        sesudah = { ...b, hewan: hewanBaru };
+        pesan = `${hwn.nama} "${hwn.namaBawaan}" resmi jadi peliharaan ${b.nama} (−${hwn.harga} koin)! Beri makan supaya tumbuh.`;
+      } else if (mhw) {
+        const inv = { ...(b.hewan_makanan ?? {}) };
+        inv[kode] = Math.floor(Number(inv[kode] ?? 0)) + 1;
+        kolom = { hewan_makanan: inv };
+        sesudah = { ...b, hewan_makanan: inv };
+        pesan = `${mhw.nama} ${mhw.emoji} masuk inventori hewan (−${mhw.harga} koin). Sekarang ${inv[kode]}.`;
       } else {
         const inv = { ...(b.makanan ?? {}) };
         inv[kode] = Math.floor(Number(inv[kode] ?? 0)) + 1;
@@ -717,6 +812,104 @@ export async function POST(request: Request) {
       return balas(
         { ...b, warna_custom: w },
         w ? `Warna ${b.nama} diganti ke ${w}.` : "Warna kembali ke bawaan.",
+      );
+    }
+
+    // ---------- HEWAN PELIHARAAN ROBOT (4 Sep 2026) ----------
+    if (
+      aksi === "hewan_pilih" ||
+      aksi === "hewan_nama" ||
+      aksi === "hewan_makan"
+    ) {
+      const hewanDb = (b.hewan ?? {}) as HewanDb;
+      const daftar = { ...(hewanDb.daftar ?? {}) };
+      if (Object.keys(daftar).length === 0)
+        galat("Belum punya hewan peliharaan — beli dulu di Toko → Hewan.", 404);
+
+      if (aksi === "hewan_pilih") {
+        const kode = String(body.kode ?? "");
+        if (!daftar[kode]) galat("Hewan itu belum Anda pelihara.");
+        const hewanBaru: HewanDb = { aktif: kode, daftar };
+        await db
+          .from("pet_robot")
+          .update({ hewan: hewanBaru, diperbarui_pada: kini })
+          .eq("user_id", uid);
+        return balas(
+          { ...b, hewan: hewanBaru },
+          `${daftar[kode].nama} sekarang menemani ${b.nama}.`,
+        );
+      }
+
+      if (aksi === "hewan_nama") {
+        const kode = String(body.kode ?? "");
+        if (!daftar[kode]) galat("Hewan itu belum Anda pelihara.");
+        const def = hewanDariKode(kode);
+        const nama =
+          String(body.nama ?? "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, NAMA_MAKS) ||
+          def?.namaBawaan ||
+          "Peliharaan";
+        daftar[kode] = { ...daftar[kode], nama };
+        const hewanBaru: HewanDb = { aktif: hewanDb.aktif ?? kode, daftar };
+        await db
+          .from("pet_robot")
+          .update({ hewan: hewanBaru, diperbarui_pada: kini })
+          .eq("user_id", uid);
+        return balas(
+          { ...b, hewan: hewanBaru },
+          `Nama diganti menjadi ${nama}.`,
+        );
+      }
+
+      // hewan_makan: makanan hewan dari inventori → kenyang naik, XP naik (bonus 50% bila favorit).
+      const makanan = makananHewanDariKode(String(body.kode ?? ""));
+      if (!makanan) galat("Makanan hewan tidak dikenal.");
+      const kodeHewan = String(
+        body.hewan ?? hewanDb.aktif ?? Object.keys(daftar)[0],
+      );
+      const data = daftar[kodeHewan];
+      const def = hewanDariKode(kodeHewan);
+      if (!data || !def) galat("Hewan itu belum Anda pelihara.");
+      const inv = { ...(b.hewan_makanan ?? {}) };
+      const sisa = Math.floor(Number(inv[makanan.kode] ?? 0));
+      if (sisa <= 0)
+        galat(
+          `${makanan.nama} tidak ada di inventori — beli dulu di Toko → Hewan.`,
+        );
+      const jam =
+        (Date.now() - Date.parse(String(data.terakhir ?? ""))) / 3600_000;
+      const kenyangKini = hitungKenyangHewan(
+        Number(data.kenyang ?? 0),
+        Number.isFinite(jam) ? jam : 0,
+      );
+      if (kenyangKini >= 100) galat(`${data.nama} sudah kenyang penuh.`);
+      const tambahXp = xpMakanHewan(def, makanan);
+      const xpBaru = Math.max(0, Math.floor(Number(data.xp ?? 0))) + tambahXp;
+      const tahapLama = progresHewan(Math.floor(Number(data.xp ?? 0))).tahap;
+      const tahapBaru = progresHewan(xpBaru).tahap;
+      if (sisa - 1 > 0) inv[makanan.kode] = sisa - 1;
+      else delete inv[makanan.kode];
+      daftar[kodeHewan] = {
+        ...data,
+        xp: xpBaru,
+        kenyang: Math.min(100, kenyangKini + makanan.kenyang),
+        terakhir: kini,
+      };
+      const hewanBaru: HewanDb = { aktif: hewanDb.aktif ?? kodeHewan, daftar };
+      const { error } = await db
+        .from("pet_robot")
+        .update({ hewan: hewanBaru, hewan_makanan: inv, diperbarui_pada: kini })
+        .eq("user_id", uid);
+      if (error) throw new Error("Gagal menyimpan makan hewan.");
+      const favorit = def.favorit.includes(makanan.kode);
+      return balas(
+        { ...b, hewan: hewanBaru, hewan_makanan: inv },
+        `${data.nama} makan ${makanan.nama} ${makanan.emoji} (+${makanan.kenyang} kenyang, +${tambahXp} XP${favorit ? " · favorit!" : ""})` +
+          (tahapBaru !== tahapLama
+            ? ` · TUMBUH jadi ${tahapBaru.toUpperCase()}!`
+            : ""),
       );
     }
 

@@ -22,6 +22,9 @@ export type Aksesoris = {
   slot: SlotAksesoris;
   harga: number;
   keterangan: string;
+  /** Aksesoris generasi 2 (4 Sep 2026): digambar oleh keluarga bentuk `gambar` dengan warna `warna`. */
+  gambar?: string;
+  warna?: string;
 };
 export type Makanan = {
   kode: string;
@@ -37,6 +40,9 @@ export type Sparepart = {
   bagian: BagianSparepart;
   harga: number;
   keterangan: string;
+  /** Varian warna (4 Sep 2026): memakai bentuk `dasar` dengan warna `warna`. */
+  dasar?: string;
+  warna?: string;
 };
 /** Skin eksklusif musiman: hanya bisa DIBELI selama musimnya (bulan WIB), tetapi tetap dimiliki selamanya. */
 export type Skin = {
@@ -51,6 +57,8 @@ export type Skin = {
   warnaUtama: string;
   keterangan: string;
   fitur: string[];
+  /** true = tersedia sepanjang tahun (edisi khusus, bukan musiman). */
+  selalu?: boolean;
 };
 
 // ------------------------------------------------------------
@@ -273,6 +281,367 @@ export const KATALOG_AKSESORIS: readonly Aksesoris[] = [
     slot: "aura",
     harga: 320,
     keterangan: "Cincin warna-warni berputar.",
+  },
+  // ---- generasi 2 (4 Sep 2026): 40 aksesoris berbasis keluarga bentuk + warna ----
+  {
+    kode: "beanie_merah",
+    nama: "Kupluk Merah",
+    slot: "kepala",
+    harga: 35,
+    gambar: "beanie",
+    warna: "#DC2626",
+    keterangan: "Rajutan hangat warna merah.",
+  },
+  {
+    kode: "beanie_biru",
+    nama: "Kupluk Biru",
+    slot: "kepala",
+    harga: 35,
+    gambar: "beanie",
+    warna: "#2563EB",
+    keterangan: "Rajutan hangat warna biru.",
+  },
+  {
+    kode: "beanie_hijau",
+    nama: "Kupluk Hijau",
+    slot: "kepala",
+    harga: 35,
+    gambar: "beanie",
+    warna: "#16A34A",
+    keterangan: "Rajutan hangat warna hijau.",
+  },
+  {
+    kode: "topi_jerami",
+    nama: "Topi Jerami",
+    slot: "kepala",
+    harga: 45,
+    gambar: "jerami",
+    warna: "#F5D06F",
+    keterangan: "Adem di sawah, keren di kota.",
+  },
+  {
+    kode: "topi_koboi",
+    nama: "Topi Koboi",
+    slot: "kepala",
+    harga: 60,
+    gambar: "koboi",
+    warna: "#92400E",
+    keterangan: "Yeehaw, robot!",
+  },
+  {
+    kode: "mahkota_perak",
+    nama: "Mahkota Perak",
+    slot: "kepala",
+    harga: 150,
+    gambar: "mahkota2",
+    warna: "#CBD5E1",
+    keterangan: "Bangsawan perak berkilau.",
+  },
+  {
+    kode: "tanduk_merah",
+    nama: "Tanduk Merah",
+    slot: "kepala",
+    harga: 70,
+    gambar: "tanduk",
+    warna: "#DC2626",
+    keterangan: "Sedikit nakal, banyak gaya.",
+  },
+  {
+    kode: "headphone",
+    nama: "Headphone DJ",
+    slot: "kepala",
+    harga: 80,
+    gambar: "headphone",
+    warna: "#111827",
+    keterangan: "Beat-nya kerasa sampai baut.",
+  },
+  {
+    kode: "bando_kucing",
+    nama: "Bando Telinga Kucing",
+    slot: "kepala",
+    harga: 55,
+    gambar: "bando",
+    warna: "#F472B6",
+    keterangan: "Meong versi robot.",
+  },
+  {
+    kode: "ikat_merah_putih",
+    nama: "Ikat Kepala Merah Putih",
+    slot: "kepala",
+    harga: 40,
+    gambar: "ikat",
+    warna: "#DC2626",
+    keterangan: "Semangat kemerdekaan.",
+  },
+  {
+    kode: "kacamata_neon_biru",
+    nama: "Kacamata Neon Biru",
+    slot: "mata",
+    harga: 60,
+    gambar: "neon",
+    warna: "#22D3EE",
+    keterangan: "Menyala di kegelapan.",
+  },
+  {
+    kode: "kacamata_neon_merah",
+    nama: "Kacamata Neon Merah",
+    slot: "mata",
+    harga: 60,
+    gambar: "neon",
+    warna: "#F87171",
+    keterangan: "Menyala di kegelapan.",
+  },
+  {
+    kode: "kacamata_neon_ungu",
+    nama: "Kacamata Neon Ungu",
+    slot: "mata",
+    harga: 60,
+    gambar: "neon",
+    warna: "#C084FC",
+    keterangan: "Menyala di kegelapan.",
+  },
+  {
+    kode: "monokel_emas",
+    nama: "Monokel Emas",
+    slot: "mata",
+    harga: 90,
+    gambar: "monokel2",
+    warna: "#F59E0B",
+    keterangan: "Kelas atas, satu mata.",
+  },
+  {
+    kode: "kacamata_3d",
+    nama: "Kacamata 3D",
+    slot: "mata",
+    harga: 50,
+    gambar: "tigad",
+    warna: "#EF4444",
+    keterangan: "Merah-biru ala bioskop.",
+  },
+  {
+    kode: "kacamata_pilot",
+    nama: "Kacamata Pilot",
+    slot: "mata",
+    harga: 85,
+    gambar: "pilot",
+    warna: "#78716C",
+    keterangan: "Siap lepas landas.",
+  },
+  {
+    kode: "kalung_emas",
+    nama: "Kalung Emas",
+    slot: "leher",
+    harga: 120,
+    gambar: "kalung",
+    warna: "#F59E0B",
+    keterangan: "Bling-bling emas.",
+  },
+  {
+    kode: "kalung_perak",
+    nama: "Kalung Perak",
+    slot: "leher",
+    harga: 90,
+    gambar: "kalung",
+    warna: "#CBD5E1",
+    keterangan: "Berkilau lembut.",
+  },
+  {
+    kode: "dasi_merah_putih",
+    nama: "Dasi Merah Putih",
+    slot: "leher",
+    harga: 45,
+    gambar: "dasi2",
+    warna: "#DC2626",
+    keterangan: "Resmi dan nasionalis.",
+  },
+  {
+    kode: "syal_biru",
+    nama: "Syal Biru",
+    slot: "leher",
+    harga: 40,
+    gambar: "syal",
+    warna: "#2563EB",
+    keterangan: "Hangat di leher baja.",
+  },
+  {
+    kode: "syal_hijau",
+    nama: "Syal Hijau",
+    slot: "leher",
+    harga: 40,
+    gambar: "syal",
+    warna: "#16A34A",
+    keterangan: "Hangat di leher baja.",
+  },
+  {
+    kode: "kalung_mutiara",
+    nama: "Kalung Mutiara",
+    slot: "leher",
+    harga: 110,
+    gambar: "mutiara",
+    warna: "#F8FAFC",
+    keterangan: "Butiran mutiara elegan.",
+  },
+  {
+    kode: "kaos_merah",
+    nama: "Kaos Merah",
+    slot: "badan",
+    harga: 40,
+    gambar: "kaos",
+    warna: "#DC2626",
+    keterangan: "Kaos polos merah.",
+  },
+  {
+    kode: "kaos_biru",
+    nama: "Kaos Biru",
+    slot: "badan",
+    harga: 40,
+    gambar: "kaos",
+    warna: "#2563EB",
+    keterangan: "Kaos polos biru.",
+  },
+  {
+    kode: "kaos_hijau",
+    nama: "Kaos Hijau",
+    slot: "badan",
+    harga: 40,
+    gambar: "kaos",
+    warna: "#16A34A",
+    keterangan: "Kaos polos hijau.",
+  },
+  {
+    kode: "kaos_hitam",
+    nama: "Kaos Hitam",
+    slot: "badan",
+    harga: 40,
+    gambar: "kaos",
+    warna: "#111827",
+    keterangan: "Kaos polos hitam.",
+  },
+  {
+    kode: "jas_putih",
+    nama: "Jas Putih",
+    slot: "badan",
+    harga: 150,
+    gambar: "jas",
+    warna: "#F8FAFC",
+    keterangan: "Rapi seperti dokter robot.",
+  },
+  {
+    kode: "rompi_neon",
+    nama: "Rompi Neon",
+    slot: "badan",
+    harga: 70,
+    gambar: "rompi2",
+    warna: "#A3E635",
+    keterangan: "Terlihat dari jauh.",
+  },
+  {
+    kode: "kaos_pri_hitam",
+    nama: "Kaos PRI Hitam",
+    slot: "badan",
+    harga: 90,
+    gambar: "kaospri",
+    warna: "#111827",
+    keterangan: "Edisi hitam berlogo PRI.",
+  },
+  {
+    kode: "jaket_kulit",
+    nama: "Jaket Kulit",
+    slot: "badan",
+    harga: 130,
+    gambar: "jaket",
+    warna: "#292524",
+    keterangan: "Rocker sejati.",
+  },
+  {
+    kode: "sayap_api",
+    nama: "Sayap Api",
+    slot: "punggung",
+    harga: 200,
+    gambar: "sayap2",
+    warna: "#F97316",
+    keterangan: "Sayap membara.",
+  },
+  {
+    kode: "sayap_es",
+    nama: "Sayap Es",
+    slot: "punggung",
+    harga: 200,
+    gambar: "sayap2",
+    warna: "#7DD3FC",
+    keterangan: "Sayap kristal es.",
+  },
+  {
+    kode: "ransel",
+    nama: "Ransel Petualang",
+    slot: "punggung",
+    harga: 80,
+    gambar: "ransel",
+    warna: "#92400E",
+    keterangan: "Siap mendaki.",
+  },
+  {
+    kode: "tabung_oksigen",
+    nama: "Tabung Oksigen",
+    slot: "punggung",
+    harga: 90,
+    gambar: "tabung",
+    warna: "#9CA3AF",
+    keterangan: "Untuk menyelam ke laut data.",
+  },
+  {
+    kode: "bunga_mawar",
+    nama: "Bunga Mawar",
+    slot: "tangan",
+    harga: 35,
+    gambar: "bunga",
+    warna: "#EF4444",
+    keterangan: "Untuk yang tersayang.",
+  },
+  {
+    kode: "obor",
+    nama: "Obor",
+    slot: "tangan",
+    harga: 70,
+    gambar: "obor",
+    warna: "#F97316",
+    keterangan: "Semangat menyala.",
+  },
+  {
+    kode: "piala",
+    nama: "Piala Juara",
+    slot: "tangan",
+    harga: 160,
+    gambar: "piala",
+    warna: "#F59E0B",
+    keterangan: "Juara komentar sejati.",
+  },
+  {
+    kode: "gitar",
+    nama: "Gitar",
+    slot: "tangan",
+    harga: 140,
+    gambar: "gitar",
+    warna: "#92400E",
+    keterangan: "Jreng!",
+  },
+  {
+    kode: "aura_biru",
+    nama: "Aura Biru",
+    slot: "aura",
+    harga: 180,
+    gambar: "aura2",
+    warna: "#3B82F6",
+    keterangan: "Lingkaran cahaya biru.",
+  },
+  {
+    kode: "aura_ungu",
+    nama: "Aura Ungu",
+    slot: "aura",
+    harga: 180,
+    gambar: "aura2",
+    warna: "#A855F7",
+    keterangan: "Lingkaran cahaya ungu.",
   },
 ];
 
@@ -741,6 +1110,349 @@ export const KATALOG_SPAREPART: readonly Sparepart[] = [
     harga: 130,
     keterangan: "Otot hidrolik.",
   },
+  // ---- varian warna (4 Sep 2026): 38 sparepart memakai bentuk `dasar` + warna sendiri ----
+  {
+    kode: "kepala_kotak_emas",
+    nama: "Kepala Kotak Emas",
+    bagian: "kepala",
+    dasar: "kepala_kotak",
+    warna: "#F59E0B",
+    harga: 120,
+    keterangan: "Varian warna kepala kotak emas.",
+  },
+  {
+    kode: "kepala_kotak_hijau",
+    nama: "Kepala Kotak Hijau",
+    bagian: "kepala",
+    dasar: "kepala_kotak",
+    warna: "#16A34A",
+    harga: 100,
+    keterangan: "Varian warna kepala kotak hijau.",
+  },
+  {
+    kode: "kepala_bulat_merah",
+    nama: "Kepala Bulat Merah",
+    bagian: "kepala",
+    dasar: "kepala_bulat",
+    warna: "#DC2626",
+    harga: 100,
+    keterangan: "Varian warna kepala bulat merah.",
+  },
+  {
+    kode: "kepala_bulat_ungu",
+    nama: "Kepala Bulat Ungu",
+    bagian: "kepala",
+    dasar: "kepala_bulat",
+    warna: "#7C3AED",
+    harga: 100,
+    keterangan: "Varian warna kepala bulat ungu.",
+  },
+  {
+    kode: "kepala_kubah_biru",
+    nama: "Kepala Kubah Biru",
+    bagian: "kepala",
+    dasar: "kepala_kubah",
+    warna: "#0EA5E9",
+    harga: 110,
+    keterangan: "Varian warna kepala kubah biru.",
+  },
+  {
+    kode: "kepala_segi6_hitam",
+    nama: "Kepala Segi Enam Hitam",
+    bagian: "kepala",
+    dasar: "kepala_segi6",
+    warna: "#111827",
+    harga: 110,
+    keterangan: "Varian warna kepala segi enam hitam.",
+  },
+  {
+    kode: "kepala_tv_retro",
+    nama: "Kepala TV Retro",
+    bagian: "kepala",
+    dasar: "kepala_tv",
+    warna: "#92400E",
+    harga: 130,
+    keterangan: "Varian warna kepala tv retro.",
+  },
+  {
+    kode: "kepala_kucing_oranye",
+    nama: "Kepala Kucing Oranye",
+    bagian: "kepala",
+    dasar: "kepala_kucing",
+    warna: "#F97316",
+    harga: 120,
+    keterangan: "Varian warna kepala kucing oranye.",
+  },
+  {
+    kode: "mata_bulat_hijau",
+    nama: "Mata Bulat Hijau",
+    bagian: "mata",
+    dasar: "mata_bulat",
+    warna: "#4ADE80",
+    harga: 60,
+    keterangan: "Varian warna mata bulat hijau.",
+  },
+  {
+    kode: "mata_bulat_merah",
+    nama: "Mata Bulat Merah",
+    bagian: "mata",
+    dasar: "mata_bulat",
+    warna: "#F87171",
+    harga: 60,
+    keterangan: "Varian warna mata bulat merah.",
+  },
+  {
+    kode: "mata_kotak_kuning",
+    nama: "Mata Kotak Kuning",
+    bagian: "mata",
+    dasar: "mata_kotak",
+    warna: "#FDE047",
+    harga: 60,
+    keterangan: "Varian warna mata kotak kuning.",
+  },
+  {
+    kode: "mata_visor_ungu",
+    nama: "Visor Ungu",
+    bagian: "mata",
+    dasar: "mata_visor",
+    warna: "#C084FC",
+    harga: 80,
+    keterangan: "Varian warna visor ungu.",
+  },
+  {
+    kode: "mata_bintang_emas",
+    nama: "Mata Bintang Emas",
+    bagian: "mata",
+    dasar: "mata_bintang",
+    warna: "#FBBF24",
+    harga: 90,
+    keterangan: "Varian warna mata bintang emas.",
+  },
+  {
+    kode: "mata_hati_merah",
+    nama: "Mata Hati Merah",
+    bagian: "mata",
+    dasar: "mata_hati",
+    warna: "#F43F5E",
+    harga: 90,
+    keterangan: "Varian warna mata hati merah.",
+  },
+  {
+    kode: "mata_led_hijau",
+    nama: "Mata LED Hijau",
+    bagian: "mata",
+    dasar: "mata_led",
+    warna: "#4ADE80",
+    harga: 95,
+    keterangan: "Varian warna mata led hijau.",
+  },
+  {
+    kode: "mata_led_biru",
+    nama: "Mata LED Biru",
+    bagian: "mata",
+    dasar: "mata_led",
+    warna: "#60A5FA",
+    harga: 95,
+    keterangan: "Varian warna mata led biru.",
+  },
+  {
+    kode: "tubuh_kapsul_merah",
+    nama: "Tubuh Kapsul Merah",
+    bagian: "tubuh",
+    dasar: "tubuh_kapsul",
+    warna: "#DC2626",
+    harga: 110,
+    keterangan: "Varian warna tubuh kapsul merah.",
+  },
+  {
+    kode: "tubuh_kapsul_biru",
+    nama: "Tubuh Kapsul Biru",
+    bagian: "tubuh",
+    dasar: "tubuh_kapsul",
+    warna: "#2563EB",
+    harga: 110,
+    keterangan: "Varian warna tubuh kapsul biru.",
+  },
+  {
+    kode: "tubuh_kotak_emas",
+    nama: "Tubuh Kotak Emas",
+    bagian: "tubuh",
+    dasar: "tubuh_kotak",
+    warna: "#F59E0B",
+    harga: 140,
+    keterangan: "Varian warna tubuh kotak emas.",
+  },
+  {
+    kode: "tubuh_armor_hitam",
+    nama: "Armor Hitam",
+    bagian: "tubuh",
+    dasar: "tubuh_armor",
+    warna: "#111827",
+    harga: 160,
+    keterangan: "Varian warna armor hitam.",
+  },
+  {
+    kode: "tubuh_armor_perak",
+    nama: "Armor Perak",
+    bagian: "tubuh",
+    dasar: "tubuh_armor",
+    warna: "#CBD5E1",
+    harga: 160,
+    keterangan: "Varian warna armor perak.",
+  },
+  {
+    kode: "tubuh_bulat_hijau",
+    nama: "Tubuh Bulat Hijau",
+    bagian: "tubuh",
+    dasar: "tubuh_bulat",
+    warna: "#16A34A",
+    harga: 110,
+    keterangan: "Varian warna tubuh bulat hijau.",
+  },
+  {
+    kode: "tubuh_tabung_ungu",
+    nama: "Tubuh Tabung Ungu",
+    bagian: "tubuh",
+    dasar: "tubuh_tabung",
+    warna: "#7C3AED",
+    harga: 120,
+    keterangan: "Varian warna tubuh tabung ungu.",
+  },
+  {
+    kode: "tubuh_jelly_pink",
+    nama: "Tubuh Jelly Pink",
+    bagian: "tubuh",
+    dasar: "tubuh_jelly",
+    warna: "#F472B6",
+    harga: 130,
+    keterangan: "Varian warna tubuh jelly pink.",
+  },
+  {
+    kode: "kaki_roda_merah",
+    nama: "Roda Merah",
+    bagian: "kaki",
+    dasar: "kaki_roda",
+    warna: "#DC2626",
+    harga: 100,
+    keterangan: "Varian warna roda merah.",
+  },
+  {
+    kode: "kaki_roda_biru",
+    nama: "Roda Biru",
+    bagian: "kaki",
+    dasar: "kaki_roda",
+    warna: "#2563EB",
+    harga: 100,
+    keterangan: "Varian warna roda biru.",
+  },
+  {
+    kode: "kaki_roket_emas",
+    nama: "Roket Emas",
+    bagian: "kaki",
+    dasar: "kaki_roket",
+    warna: "#F59E0B",
+    harga: 170,
+    keterangan: "Varian warna roket emas.",
+  },
+  {
+    kode: "kaki_kucing_putih",
+    nama: "Kaki Kucing Putih",
+    bagian: "kaki",
+    dasar: "kaki_kucing",
+    warna: "#F8FAFC",
+    harga: 110,
+    keterangan: "Varian warna kaki kucing putih.",
+  },
+  {
+    kode: "kaki_tank_hijau",
+    nama: "Tank Hijau",
+    bagian: "kaki",
+    dasar: "kaki_tank",
+    warna: "#16A34A",
+    harga: 150,
+    keterangan: "Varian warna tank hijau.",
+  },
+  {
+    kode: "kaki_pegas_ungu",
+    nama: "Pegas Ungu",
+    bagian: "kaki",
+    dasar: "kaki_pegas",
+    warna: "#7C3AED",
+    harga: 110,
+    keterangan: "Varian warna pegas ungu.",
+  },
+  {
+    kode: "kaki_hover_merah",
+    nama: "Hover Merah",
+    bagian: "kaki",
+    dasar: "kaki_hover",
+    warna: "#DC2626",
+    harga: 160,
+    keterangan: "Varian warna hover merah.",
+  },
+  {
+    kode: "tangan_capit_emas",
+    nama: "Capit Emas",
+    bagian: "tangan",
+    dasar: "tangan_capit",
+    warna: "#F59E0B",
+    harga: 120,
+    keterangan: "Varian warna capit emas.",
+  },
+  {
+    kode: "tangan_tinju_biru",
+    nama: "Sarung Tinju Biru",
+    bagian: "tangan",
+    dasar: "tangan_tinju",
+    warna: "#2563EB",
+    harga: 100,
+    keterangan: "Varian warna sarung tinju biru.",
+  },
+  {
+    kode: "tangan_tentakel_ungu",
+    nama: "Tentakel Ungu",
+    bagian: "tangan",
+    dasar: "tangan_tentakel",
+    warna: "#7C3AED",
+    harga: 130,
+    keterangan: "Varian warna tentakel ungu.",
+  },
+  {
+    kode: "tangan_sayap_pink",
+    nama: "Tangan Sayap Pink",
+    bagian: "tangan",
+    dasar: "tangan_sayap",
+    warna: "#F472B6",
+    harga: 120,
+    keterangan: "Varian warna tangan sayap pink.",
+  },
+  {
+    kode: "tangan_laser_hijau",
+    nama: "Meriam Laser Hijau",
+    bagian: "tangan",
+    dasar: "tangan_laser",
+    warna: "#16A34A",
+    harga: 170,
+    keterangan: "Varian warna meriam laser hijau.",
+  },
+  {
+    kode: "tangan_kuat_merah",
+    nama: "Lengan Kekar Merah",
+    bagian: "tangan",
+    dasar: "tangan_kuat",
+    warna: "#DC2626",
+    harga: 140,
+    keterangan: "Varian warna lengan kekar merah.",
+  },
+  {
+    kode: "tangan_capit_hitam",
+    nama: "Capit Hitam",
+    bagian: "tangan",
+    dasar: "tangan_capit",
+    warna: "#111827",
+    harga: 120,
+    keterangan: "Varian warna capit hitam.",
+  },
 ];
 
 export const SLOT_LABEL: Record<SlotAksesoris, string> = {
@@ -867,6 +1579,64 @@ export const KATALOG_SKIN: readonly Skin[] = [
       "Jubah biru langit",
     ],
   },
+  // ---- EDISI KHUSUS PRI (4 Sep 2026): kaos PRI + topeng harimau putih, tersedia sepanjang tahun ----
+  {
+    kode: "skin_harimau_merah",
+    nama: "Harimau Putih · Kaos Merah",
+    musim: "Edisi Khusus PRI",
+    mulaiBulan: 1,
+    akhirBulan: 12,
+    selalu: true,
+    harga: 700,
+    warnaUtama: "#DC2626",
+    keterangan:
+      "Topeng harimau putih bergaris hitam, kaos PRI merah, sarung tangan cakar.",
+    fitur: [
+      "Topeng harimau putih (mata menyala)",
+      "Kaos PRI merah",
+      "Sarung tangan cakar",
+      "Ekor harimau",
+      "Aura loreng",
+    ],
+  },
+  {
+    kode: "skin_harimau_hitam",
+    nama: "Harimau Putih · Kaos Hitam",
+    musim: "Edisi Khusus PRI",
+    mulaiBulan: 1,
+    akhirBulan: 12,
+    selalu: true,
+    harga: 700,
+    warnaUtama: "#111827",
+    keterangan:
+      "Topeng harimau putih, kaos PRI hitam bergaris emas, jubah malam.",
+    fitur: [
+      "Topeng harimau putih (mata menyala)",
+      "Kaos PRI hitam",
+      "Jubah malam",
+      "Sarung tangan cakar",
+      "Ekor harimau",
+    ],
+  },
+  {
+    kode: "skin_harimau_emas",
+    nama: "Harimau Putih · Kaos Emas",
+    musim: "Edisi Khusus PRI",
+    mulaiBulan: 1,
+    akhirBulan: 12,
+    selalu: true,
+    harga: 900,
+    warnaUtama: "#F59E0B",
+    keterangan:
+      "Topeng harimau putih bermahkota, kaos PRI emas, aura raja hutan.",
+    fitur: [
+      "Topeng harimau putih bermahkota",
+      "Kaos PRI emas",
+      "Aura raja hutan",
+      "Sarung tangan cakar",
+      "Ekor harimau",
+    ],
+  },
 ];
 
 export function skinDariKode(kode: string): Skin | undefined {
@@ -896,6 +1666,7 @@ export function bulanWib(kini = Date.now()): number {
 
 /** Apakah skin sedang musimnya (bisa dibeli). Rentang boleh melewati tahun (12 → 1). */
 export function skinTersedia(skin: Skin, kini = Date.now()): boolean {
+  if (skin.selalu) return true;
   const b = bulanWib(kini);
   return skin.mulaiBulan <= skin.akhirBulan
     ? b >= skin.mulaiBulan && b <= skin.akhirBulan
@@ -1131,6 +1902,346 @@ export const PALET: Record<
   },
 };
 
+// ------------------------------------------------------------
+// TOKO 5 — GERAKAN / EMOT ROBOT (10, 4 Sep 2026). Dibeli sekali; setelah itu
+// bisa dimainkan kapan saja (robot melayang di beranda & layar Pet).
+// `kelas` = kelas animasi CSS (globals.css), `durasiMs` = lama sekali putar.
+// ------------------------------------------------------------
+export type Gerakan = {
+  kode: string;
+  nama: string;
+  emoji: string;
+  harga: number;
+  kelas: string;
+  durasiMs: number;
+  keterangan: string;
+};
+export const KATALOG_GERAKAN: readonly Gerakan[] = [
+  {
+    kode: "gerak_joget",
+    nama: "Joget",
+    emoji: "🕺",
+    harga: 60,
+    kelas: "pet-gerak-joget",
+    durasiMs: 2200,
+    keterangan: "Goyang kiri-kanan mengikuti irama.",
+  },
+  {
+    kode: "gerak_dab",
+    nama: "Dab",
+    emoji: "😎",
+    harga: 60,
+    kelas: "pet-gerak-dab",
+    durasiMs: 1400,
+    keterangan: "Gaya dab kilat.",
+  },
+  {
+    kode: "gerak_salto",
+    nama: "Salto",
+    emoji: "🤸",
+    harga: 120,
+    kelas: "pet-gerak-salto",
+    durasiMs: 1500,
+    keterangan: "Berputar satu putaran penuh di udara.",
+  },
+  {
+    kode: "gerak_lambai",
+    nama: "Lambai",
+    emoji: "👋",
+    harga: 40,
+    kelas: "pet-gerak-lambai",
+    durasiMs: 2000,
+    keterangan: "Melambaikan tangan ramah.",
+  },
+  {
+    kode: "gerak_hormat",
+    nama: "Hormat",
+    emoji: "🫡",
+    harga: 50,
+    kelas: "pet-gerak-hormat",
+    durasiMs: 1600,
+    keterangan: "Membungkuk hormat.",
+  },
+  {
+    kode: "gerak_tepuk",
+    nama: "Tepuk Tangan",
+    emoji: "👏",
+    harga: 50,
+    kelas: "pet-gerak-tepuk",
+    durasiMs: 1800,
+    keterangan: "Bersorak dan bertepuk.",
+  },
+  {
+    kode: "gerak_jempol",
+    nama: "Jempol",
+    emoji: "👍",
+    harga: 45,
+    kelas: "pet-gerak-jempol",
+    durasiMs: 1400,
+    keterangan: "Mantap!",
+  },
+  {
+    kode: "gerak_terbang",
+    nama: "Terbang",
+    emoji: "🚀",
+    harga: 150,
+    kelas: "pet-gerak-terbang",
+    durasiMs: 2400,
+    keterangan: "Melesat ke atas lalu mendarat.",
+  },
+  {
+    kode: "gerak_moonwalk",
+    nama: "Moonwalk",
+    emoji: "🌙",
+    harga: 130,
+    kelas: "pet-gerak-moonwalk",
+    durasiMs: 2200,
+    keterangan: "Meluncur mundur ala legenda.",
+  },
+  {
+    kode: "gerak_putar",
+    nama: "Putar 360",
+    emoji: "🔄",
+    harga: 90,
+    kelas: "pet-gerak-putar",
+    durasiMs: 1600,
+    keterangan: "Berputar satu lingkaran penuh.",
+  },
+];
+export function gerakanDariKode(kode: string): Gerakan | undefined {
+  return KATALOG_GERAKAN.find((a) => a.kode === kode);
+}
+
+// ------------------------------------------------------------
+// HEWAN PELIHARAAN ROBOT (3, 4 Sep 2026): kucing, anjing, kapibara — semuanya
+// robot. Dibeli di toko, tumbuh dari ANAK → REMAJA → DEWASA lewat XP yang
+// didapat dari makan (makanan hewan dibeli di toko). Kenyang turun 4/jam.
+// ------------------------------------------------------------
+export type JenisHewan = "kucing" | "anjing" | "kapibara";
+export type TahapHewan = "anak" | "remaja" | "dewasa";
+export type Hewan = {
+  kode: string;
+  jenis: JenisHewan;
+  nama: string;
+  namaBawaan: string;
+  harga: number;
+  keterangan: string;
+  favorit: string[];
+};
+export const KATALOG_HEWAN: readonly Hewan[] = [
+  {
+    kode: "hewan_kucing",
+    jenis: "kucing",
+    nama: "Kucing Robot",
+    namaBawaan: "Miko",
+    harga: 500,
+    keterangan: "Lincah, suka melompat, ekor LED berkedip.",
+    favorit: ["mh_ikan_led", "mh_susu_mini"],
+  },
+  {
+    kode: "hewan_anjing",
+    jenis: "anjing",
+    nama: "Anjing Robot",
+    namaBawaan: "Bolt",
+    harga: 500,
+    keterangan: "Setia, suka berlari, telinga antena.",
+    favorit: ["mh_tulang_baja", "mh_sosis_kabel"],
+  },
+  {
+    kode: "hewan_kapibara",
+    jenis: "kapibara",
+    nama: "Kapibara Robot",
+    namaBawaan: "Kapi",
+    harga: 650,
+    keterangan: "Santai, suka berendam, jeruk di kepala saat dewasa.",
+    favorit: ["mh_rumput_sirkuit", "mh_semangka_kapi"],
+  },
+];
+export function hewanDariKode(kode: string): Hewan | undefined {
+  return KATALOG_HEWAN.find((h) => h.kode === kode);
+}
+export const LABEL_TAHAP: Record<TahapHewan, string> = {
+  anak: "Anak",
+  remaja: "Remaja",
+  dewasa: "Dewasa",
+};
+export const XP_HEWAN_REMAJA = 100;
+export const XP_HEWAN_DEWASA = 300;
+export function tahapHewan(xp: number): TahapHewan {
+  return xp >= XP_HEWAN_DEWASA
+    ? "dewasa"
+    : xp >= XP_HEWAN_REMAJA
+      ? "remaja"
+      : "anak";
+}
+/** XP menuju tahap berikutnya (dewasa = penuh). */
+export function progresHewan(xp: number): {
+  tahap: TahapHewan;
+  diTahap: number;
+  butuh: number;
+} {
+  const tahap = tahapHewan(xp);
+  if (tahap === "anak") return { tahap, diTahap: xp, butuh: XP_HEWAN_REMAJA };
+  if (tahap === "remaja")
+    return {
+      tahap,
+      diTahap: xp - XP_HEWAN_REMAJA,
+      butuh: XP_HEWAN_DEWASA - XP_HEWAN_REMAJA,
+    };
+  return { tahap, diTahap: 1, butuh: 1 };
+}
+/** Kenyang hewan turun 4 per jam. */
+export function hitungKenyangHewan(
+  kenyang: number,
+  jamBerlalu: number,
+): number {
+  return jepitNilai(kenyang - 4 * Math.max(0, jamBerlalu));
+}
+export type SuasanaHewan = "lapar" | "biasa" | "senang";
+export function suasanaHewan(kenyang: number): SuasanaHewan {
+  return kenyang < 30 ? "lapar" : kenyang < 60 ? "biasa" : "senang";
+}
+export const LABEL_SUASANA_HEWAN: Record<SuasanaHewan, string> = {
+  lapar: "Lapar… kasih makan dong",
+  biasa: "Santai",
+  senang: "Senang sekali!",
+};
+
+export type MakananHewan = {
+  kode: string;
+  nama: string;
+  emoji: string;
+  harga: number;
+  kenyang: number;
+  xp: number;
+  keterangan: string;
+};
+export const KATALOG_MAKANAN_HEWAN: readonly MakananHewan[] = [
+  {
+    kode: "mh_ikan_led",
+    nama: "Ikan LED",
+    emoji: "🐟",
+    harga: 12,
+    kenyang: 25,
+    xp: 8,
+    keterangan: "Favorit kucing robot.",
+  },
+  {
+    kode: "mh_tulang_baja",
+    nama: "Tulang Baja",
+    emoji: "🦴",
+    harga: 12,
+    kenyang: 25,
+    xp: 8,
+    keterangan: "Favorit anjing robot.",
+  },
+  {
+    kode: "mh_rumput_sirkuit",
+    nama: "Rumput Sirkuit",
+    emoji: "🌿",
+    harga: 10,
+    kenyang: 22,
+    xp: 7,
+    keterangan: "Favorit kapibara robot.",
+  },
+  {
+    kode: "mh_susu_mini",
+    nama: "Susu Pelumas Mini",
+    emoji: "🥛",
+    harga: 10,
+    kenyang: 18,
+    xp: 6,
+    keterangan: "Menghangatkan mesin kecil.",
+  },
+  {
+    kode: "mh_biskuit_chip",
+    nama: "Biskuit Chip",
+    emoji: "🍪",
+    harga: 8,
+    kenyang: 14,
+    xp: 5,
+    keterangan: "Camilan renyah.",
+  },
+  {
+    kode: "mh_semangka_kapi",
+    nama: "Semangka Segar",
+    emoji: "🍉",
+    harga: 15,
+    kenyang: 30,
+    xp: 9,
+    keterangan: "Kapibara paling suka.",
+  },
+  {
+    kode: "mh_sosis_kabel",
+    nama: "Sosis Kabel",
+    emoji: "🌭",
+    harga: 14,
+    kenyang: 26,
+    xp: 8,
+    keterangan: "Gurih berlistrik.",
+  },
+  {
+    kode: "mh_wortel_neon",
+    nama: "Wortel Neon",
+    emoji: "🥕",
+    harga: 10,
+    kenyang: 18,
+    xp: 6,
+    keterangan: "Bagus untuk sensor mata.",
+  },
+  {
+    kode: "mh_kue_hewan",
+    nama: "Kue Ulang Tahun Hewan",
+    emoji: "🎂",
+    harga: 30,
+    kenyang: 60,
+    xp: 30,
+    keterangan: "Lonjakan pertumbuhan.",
+  },
+  {
+    kode: "mh_prasmanan_hewan",
+    nama: "Prasmanan Hewan",
+    emoji: "🍱",
+    harga: 45,
+    kenyang: 100,
+    xp: 50,
+    keterangan: "Kenyang penuh + tumbuh cepat.",
+  },
+];
+export function makananHewanDariKode(kode: string): MakananHewan | undefined {
+  return KATALOG_MAKANAN_HEWAN.find((m) => m.kode === kode);
+}
+/** Bonus XP 50% bila makanan itu favorit hewan tersebut. */
+export function xpMakanHewan(hewan: Hewan, makanan: MakananHewan): number {
+  return hewan.favorit.includes(makanan.kode)
+    ? Math.round(makanan.xp * 1.5)
+    : makanan.xp;
+}
+
+/** Bentuk yang tersimpan di kolom pet_robot.hewan (jsonb). */
+export type DataHewanDb = {
+  nama: string;
+  xp: number;
+  kenyang: number;
+  terakhir: string;
+};
+export type HewanDb = {
+  aktif?: string | null;
+  daftar?: Record<string, DataHewanDb>;
+};
+/** Bentuk yang dikirim ke klien. */
+export type HewanKlien = {
+  kode: string;
+  jenis: JenisHewan;
+  nama: string;
+  xp: number;
+  kenyang: number;
+  tahap: TahapHewan;
+  suasana: SuasanaHewan;
+  progres: { diTahap: number; butuh: number };
+};
+export type HewanState = { aktif: HewanKlien | null; daftar: HewanKlien[] };
+
 /** Palet turunan: warna utama diganti (warna custom / warna bawaan skin), sisanya menyesuaikan. */
 export function paletDenganWarna(
   jenis: JenisRobot,
@@ -1183,6 +2294,11 @@ export type PetState = {
   /** Fitur warna custom sudah dibuka (300 koin) dan warna yang dipilih (#RRGGBB / null = bawaan). */
   warna_terbuka: boolean;
   warna_custom: string | null;
+  /** Gerakan/emot yang sudah dibeli (4 Sep 2026). */
+  gerakan_dimiliki: string[];
+  /** Hewan peliharaan robot + inventori makanan hewan (4 Sep 2026). */
+  hewan: HewanState;
+  hewan_makanan: Record<string, number>;
   aktivitas_hari_ini: number;
   saldo_koin: number;
   hadiah_hari_ini: boolean;

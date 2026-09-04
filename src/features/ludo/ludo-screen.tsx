@@ -114,6 +114,8 @@ export function LudoScreen({ onKembali }: { onKembali: () => void }) {
   const [hasilCari, setHasilCari] = useState<CalonPemainLudo[]>([]);
   const [sibuk, setSibuk] = useState("");
   const [berputar, setBerputar] = useState(false);
+  // Naik tiap lempar → Dadu memutar ulang animasi melambung (4 Sep 2026).
+  const [lemparan, setLemparan] = useState(0);
   const [detik, setDetik] = useState<number | null>(null);
   // Salinan ruang untuk dibaca callback polling (tanpa memicu render ulang).
   const ruangRef = useRef<RuangLudo | null>(null);
@@ -221,10 +223,11 @@ export function LudoScreen({ onKembali }: { onKembali: () => void }) {
   async function lempar() {
     if (!ruang) return;
     setBerputar(true);
+    setLemparan((n) => n + 1);
     const mulai = Date.now();
     const r = await jalankan("lempar", "lempar", { id: ruang.id });
-    // Biar animasinya terlihat minimal 650 ms.
-    const sisa = Math.max(0, 650 - (Date.now() - mulai));
+    // Biar animasi melambung + berguling terlihat utuh (minimal 800 ms).
+    const sisa = Math.max(0, 800 - (Date.now() - mulai));
     setTimeout(() => {
       setBerputar(false);
       if (r) setRuang(r);
@@ -683,6 +686,7 @@ export function LudoScreen({ onKembali }: { onKembali: () => void }) {
         <Dadu
           nilai={st.dadu}
           berputar={berputar}
+          lemparan={lemparan}
           warna={WARNA[giliranPemain?.warna ?? 0].utama}
           onLempar={() => void lempar()}
           boleh={giliranSaya && st.fase === "lempar" && !sibuk}

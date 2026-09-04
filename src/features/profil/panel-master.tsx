@@ -40,6 +40,7 @@ import {
   Upload,
   UserCog,
   UserCheck,
+  GraduationCap,
   KeyRound,
   ScanFace,
 } from "lucide-react";
@@ -91,9 +92,13 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
   const [muatUlang, setMuatUlang] = useState(0);
   const versiSegar = useVersiSegar();
   const [sedangProses, setSedangProses] = useState(false);
-  const [pilihPeranUntuk, setPilihPeranUntuk] = useState<PenggunaAdmin | null>(null);
+  const [pilihPeranUntuk, setPilihPeranUntuk] = useState<PenggunaAdmin | null>(
+    null,
+  );
   const [akunBaru, setAkunBaru] = useState("");
-  const [platformBaru, setPlatformBaru] = useState<"instagram" | "tiktok">("instagram");
+  const [platformBaru, setPlatformBaru] = useState<"instagram" | "tiktok">(
+    "instagram",
+  );
   // Akun yang sedang di-reset sandinya (spek 1.15)
   const [resetUntuk, setResetUntuk] = useState<PenggunaAdmin | null>(null);
 
@@ -148,7 +153,9 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
           <h1 className="font-heading truncate text-xl font-extrabold tracking-tight text-teks-utama">
             Panel Master
           </h1>
-          <p className="text-xs text-teks-sekunder">Kewenangan tertinggi sistem</p>
+          <p className="text-xs text-teks-sekunder">
+            Kewenangan tertinggi sistem
+          </p>
         </div>
         <Crown className="h-5 w-5 shrink-0 text-emas" aria-hidden="true" />
       </header>
@@ -183,6 +190,44 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
             {/* Mode perbaikan: kontrol lengkap (jam selesai + pesan) */}
             <KontrolPerbaikan />
 
+            {/* Tutorial interaktif (4 Sep 2026): bisa dimatikan untuk semua pengguna. */}
+            <GlassCard className="mt-4 p-4">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-sky-500/12 text-sky-600 dark:text-sky-400">
+                  <GraduationCap className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-bold text-teks-utama">
+                      Tutorial interaktif
+                    </p>
+                    <SwitchKaca
+                      aktif={data.pengaturan.tur_aktif !== "false"}
+                      disabled={sedangProses}
+                      onUbah={() => {
+                        const nyala = data.pengaturan.tur_aktif !== "false";
+                        void jalankan(
+                          "tur_aktif",
+                          { nilai: !nyala },
+                          nyala
+                            ? "Tutorial DIMATIKAN untuk semua pengguna"
+                            : "Tutorial dinyalakan lagi",
+                        );
+                      }}
+                      labelAria="Tutorial interaktif"
+                    />
+                  </div>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-teks-sekunder">
+                    Panduan sorotan &quot;daftar akun sosmed → Kepatuhan
+                    Komen&quot; yang muncul otomatis (tiap 5 menit bagi yang
+                    belum punya akun tertaut). Bila dimatikan, tidak muncul
+                    untuk siapa pun; baris &quot;Tutorial&quot; di Profil tetap
+                    bisa dipakai manual.
+                  </p>
+                </div>
+              </div>
+            </GlassCard>
+
             {/* Bypass persetujuan pendaftaran: pengguna baru langsung aktif. */}
             <GlassCard className="mt-4 p-4">
               <div className="flex items-start gap-3">
@@ -198,7 +243,8 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                       aktif={data.pengaturan.daftar_auto_aktif === "true"}
                       disabled={sedangProses}
                       onUbah={() => {
-                        const nyala = data.pengaturan.daftar_auto_aktif === "true";
+                        const nyala =
+                          data.pengaturan.daftar_auto_aktif === "true";
                         void jalankan(
                           "daftar_auto_aktif",
                           { nilai: !nyala },
@@ -211,8 +257,9 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                     />
                   </div>
                   <p className="mt-0.5 text-[11px] leading-relaxed text-teks-sekunder">
-                    Bila nyala, pengguna baru langsung AKTIF tanpa menunggu persetujuan
-                    pengurus. Verifikasi email tetap berlaku bila pengirim email sudah diatur.
+                    Bila nyala, pengguna baru langsung AKTIF tanpa menunggu
+                    persetujuan pengurus. Verifikasi email tetap berlaku bila
+                    pengirim email sudah diatur.
                   </p>
                 </div>
               </div>
@@ -234,8 +281,8 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
 
             <SectionTitle judul="Peran Istimewa" className="mt-6" />
             <p className="mb-2 text-[11px] leading-relaxed text-teks-sekunder">
-              Panel super admin hanya bisa memberi Ketua/Anggota. Peran Super Admin,
-              Admin TV, dan Admin HR hanya bisa ditetapkan dari sini.
+              Panel super admin hanya bisa memberi Ketua/Anggota. Peran Super
+              Admin, Admin TV, dan Admin HR hanya bisa ditetapkan dari sini.
             </p>
             <div className="flex flex-col gap-2">
               {pengguna
@@ -248,9 +295,12 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                       <AvatarInisial nama={u.nama} ukuran={36} />
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-teks-utama">{u.nama}</p>
+                      <p className="truncate text-sm font-semibold text-teks-utama">
+                        {u.nama}
+                      </p>
                       <p className="text-[10.5px] text-teks-sekunder">
-                        {PERAN_PILIHAN.find((p) => p.id === u.role)?.label ?? u.role}
+                        {PERAN_PILIHAN.find((p) => p.id === u.role)?.label ??
+                          u.role}
                       </p>
                     </div>
                     <button
@@ -318,7 +368,11 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
               </div>
               <input
                 value={akunBaru}
-                onChange={(e) => setAkunBaru(e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, ""))}
+                onChange={(e) =>
+                  setAkunBaru(
+                    e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, ""),
+                  )
+                }
                 placeholder="username akun wajib"
                 className="glass min-w-0 flex-1 rounded-xl px-3.5 py-2.5 text-sm text-teks-utama placeholder:text-teks-sekunder/60 focus:outline-none"
               />
@@ -334,7 +388,9 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                 }
                 aria-label="Tambah akun wajib"
                 className="btn-tekan flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white disabled:opacity-50"
-                style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+                style={{
+                  background: "linear-gradient(135deg, #DC2626, #B91C1C)",
+                }}
               >
                 {sedangProses ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -348,8 +404,12 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                 <GlassCard key={a.id} className="flex items-center gap-3 p-3">
                   <PlatformIcon platform={a.platform} size={16} denganWadah />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-teks-utama">@{a.username}</p>
-                    <p className="text-[10.5px] text-teks-sekunder">{a.platform}</p>
+                    <p className="truncate text-sm font-bold text-teks-utama">
+                      @{a.username}
+                    </p>
+                    <p className="text-[10.5px] text-teks-sekunder">
+                      {a.platform}
+                    </p>
                   </div>
                   {!a.aktif && <StatusBadge label="nonaktif" warna="netral" />}
                   <button
@@ -380,7 +440,9 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                 <button
                   type="button"
                   disabled={sedangProses}
-                  onClick={() => void jalankan("bersihkan_log", {}, "Log dibersihkan")}
+                  onClick={() =>
+                    void jalankan("bersihkan_log", {}, "Log dibersihkan")
+                  }
                   className="btn-tekan rounded-full border border-gagal/40 bg-gagal/5 px-3 py-1.5 text-[11px] font-semibold text-gagal disabled:opacity-50"
                 >
                   Bersihkan
@@ -398,7 +460,10 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                 {data.log.map((l) => (
                   <GlassCard key={l.id} className="p-3">
                     <div className="flex items-start gap-2">
-                      <Bug className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gagal" aria-hidden="true" />
+                      <Bug
+                        className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gagal"
+                        aria-hidden="true"
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="text-[11.5px] leading-snug break-words text-teks-utama">
                           {l.pesan}
@@ -461,8 +526,8 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                 Peran untuk {pilihPeranUntuk.nama.split(" ")[0]}
               </h3>
               <p className="mt-1 text-xs leading-relaxed text-teks-sekunder">
-                Mengubah peran otomatis mengeluarkan yang bersangkutan dari semua
-                perangkat, supaya akses lamanya tidak terbawa.
+                Mengubah peran otomatis mengeluarkan yang bersangkutan dari
+                semua perangkat, supaya akses lamanya tidak terbawa.
               </p>
               <div className="mt-3.5 flex flex-col gap-2">
                 {PERAN_PILIHAN.map((p) => (
@@ -488,7 +553,9 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                     >
                       <ShieldCheck className="h-4.5 w-4.5" />
                     </span>
-                    <span className="flex-1 text-sm font-bold text-teks-utama">{p.label}</span>
+                    <span className="flex-1 text-sm font-bold text-teks-utama">
+                      {p.label}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -552,13 +619,18 @@ function ModalResetSandi({
       aria-modal="true"
       aria-label={`Reset sandi ${target.nama}`}
     >
-      <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={onTutup} />
+      <div
+        className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+        onClick={onTutup}
+      />
       <div className="glass-strong relative w-full max-w-[320px] rounded-2xl p-5">
-        <p className="text-sm font-bold text-teks-utama">Reset sandi {target.nama}</p>
+        <p className="text-sm font-bold text-teks-utama">
+          Reset sandi {target.nama}
+        </p>
         <p className="mt-1 text-[11.5px] leading-relaxed text-teks-sekunder">
-          Sandi lama tidak bisa dilihat (tersimpan terenkripsi satu arah).
-          Buat sandi baru lalu sampaikan ke orangnya — semua sesi lamanya
-          otomatis keluar.
+          Sandi lama tidak bisa dilihat (tersimpan terenkripsi satu arah). Buat
+          sandi baru lalu sampaikan ke orangnya — semua sesi lamanya otomatis
+          keluar.
         </p>
         <div className="mt-3 flex gap-2">
           <input
@@ -616,7 +688,10 @@ const BUCKET_GALERI = [
 function GaleriFotoMaster() {
   const [bucket, setBucket] = useState<string>("avatar");
   const [halaman, setHalaman] = useState(1);
-  const [hasil, setHasil] = useState<{ total: number; data: FotoMaster[] } | null>(null);
+  const [hasil, setHasil] = useState<{
+    total: number;
+    data: FotoMaster[];
+  } | null>(null);
   const [dibuka, setDibuka] = useState<FotoMaster | null>(null);
   const [terbuka, setTerbuka] = useState(false);
 
@@ -663,11 +738,16 @@ function GaleriFotoMaster() {
                   aria-pressed={bucket === b.id}
                   className={cn(
                     "btn-tekan rounded-full px-3 py-1.5 text-[11.5px] font-semibold",
-                    bucket === b.id ? "text-white" : "glass-soft text-teks-sekunder",
+                    bucket === b.id
+                      ? "text-white"
+                      : "glass-soft text-teks-sekunder",
                   )}
                   style={
                     bucket === b.id
-                      ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" }
+                      ? {
+                          background:
+                            "linear-gradient(135deg, #DC2626, #B91C1C)",
+                        }
                       : undefined
                   }
                 >
@@ -751,7 +831,9 @@ function GaleriFotoMaster() {
             alt={dibuka.path}
             className="max-h-[80dvh] max-w-full rounded-xl object-contain"
           />
-          <p className="mt-2 max-w-full truncate text-[11px] text-white/80">{dibuka.path}</p>
+          <p className="mt-2 max-w-full truncate text-[11px] text-white/80">
+            {dibuka.path}
+          </p>
         </div>
       )}
     </>
@@ -780,7 +862,12 @@ function SeksiLatihAsisten() {
         setInstruksi(hasil.instruksi);
         setMaks(hasil.maks);
       } catch (e) {
-        if (hidup) toast("error", "Gagal memuat pelatihan", e instanceof Error ? e.message : "");
+        if (hidup)
+          toast(
+            "error",
+            "Gagal memuat pelatihan",
+            e instanceof Error ? e.message : "",
+          );
       } finally {
         if (hidup) setMemuat(false);
       }
@@ -795,7 +882,11 @@ function SeksiLatihAsisten() {
     setMenyimpan(true);
     try {
       await simpanLatihAsisten(instruksi);
-      toast("sukses", "Pelatihan tersimpan", "Berlaku seketika di semua percakapan berikutnya.");
+      toast(
+        "sukses",
+        "Pelatihan tersimpan",
+        "Berlaku seketika di semua percakapan berikutnya.",
+      );
     } catch (e) {
       toast("error", "Gagal menyimpan", e instanceof Error ? e.message : "");
     } finally {
@@ -848,9 +939,16 @@ function SeksiLatihAsisten() {
                 onClick={() => void simpan()}
                 disabled={menyimpan}
                 className="btn-tekan flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold text-white disabled:opacity-60"
-                style={{ background: "linear-gradient(135deg, #8B5CF6, #6D28D9)" }}
+                style={{
+                  background: "linear-gradient(135deg, #8B5CF6, #6D28D9)",
+                }}
               >
-                {menyimpan && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                {menyimpan && (
+                  <Loader2
+                    className="h-4 w-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                )}
                 Simpan Pelatihan
               </button>
             </div>
@@ -913,7 +1011,11 @@ function SeksiBasisPengetahuan() {
     try {
       await refreshBasisAI();
       await muat();
-      toast("sukses", "Basis pengetahuan disegarkan", "AI kini melihat data terbaru.");
+      toast(
+        "sukses",
+        "Basis pengetahuan disegarkan",
+        "AI kini melihat data terbaru.",
+      );
     } catch (e) {
       toast("error", "Gagal menyegarkan", e instanceof Error ? e.message : "");
     } finally {
@@ -926,9 +1028,17 @@ function SeksiBasisPengetahuan() {
     setMenyimpan(true);
     try {
       await simpanCatatanBasisAI(catatan);
-      toast("sukses", "Catatan tersimpan", "Fakta ini kini dilihat AI di setiap percakapan.");
+      toast(
+        "sukses",
+        "Catatan tersimpan",
+        "Fakta ini kini dilihat AI di setiap percakapan.",
+      );
     } catch (e) {
-      toast("error", "Gagal menyimpan catatan", e instanceof Error ? e.message : "");
+      toast(
+        "error",
+        "Gagal menyimpan catatan",
+        e instanceof Error ? e.message : "",
+      );
     } finally {
       setMenyimpan(false);
     }
@@ -941,9 +1051,15 @@ function SeksiBasisPengetahuan() {
     if (!berkas || mengunggah) return;
     const namaKecil = berkas.name.toLowerCase();
     const tipeOk =
-      berkas.type.startsWith("text/") || namaKecil.endsWith(".txt") || namaKecil.endsWith(".md");
+      berkas.type.startsWith("text/") ||
+      namaKecil.endsWith(".txt") ||
+      namaKecil.endsWith(".md");
     if (!tipeOk) {
-      toast("peringatan", "Harus berkas teks", "Unggah berkas .txt (atau .md).");
+      toast(
+        "peringatan",
+        "Harus berkas teks",
+        "Unggah berkas .txt (atau .md).",
+      );
       return;
     }
     if (berkas.size > 2 * 1024 * 1024) {
@@ -979,10 +1095,20 @@ function SeksiBasisPengetahuan() {
     }
   }
 
-  const cakupan = basis ? Object.keys(basis.konten).filter((k) => k !== "dibuat_pada" && k !== "tanggal") : [];
+  const cakupan = basis
+    ? Object.keys(basis.konten).filter(
+        (k) => k !== "dibuat_pada" && k !== "tanggal",
+      )
+    : [];
   const umur = basis?.umur_menit;
   const umurTeks =
-    umur == null ? "belum pernah" : umur < 1 ? "baru saja" : umur < 60 ? `${umur} menit lalu` : `${Math.floor(umur / 60)} jam lalu`;
+    umur == null
+      ? "belum pernah"
+      : umur < 1
+        ? "baru saja"
+        : umur < 60
+          ? `${umur} menit lalu`
+          : `${Math.floor(umur / 60)} jam lalu`;
 
   return (
     <>
@@ -997,9 +1123,10 @@ function SeksiBasisPengetahuan() {
             <Database className="h-4.5 w-4.5" />
           </span>
           <p className="text-[11.5px] leading-relaxed text-teks-sekunder">
-            Satu ringkasan TERSTRUKTUR seluruh data partai (keanggotaan, absensi,
-            KPI, kepatuhan, TV Rakyat, koin, rencana, acara, dll) yang dilihat AI
-            secara utuh. Disegarkan otomatis tiap jam saat AI membacanya.
+            Satu ringkasan TERSTRUKTUR seluruh data partai (keanggotaan,
+            absensi, KPI, kepatuhan, TV Rakyat, koin, rencana, acara, dll) yang
+            dilihat AI secara utuh. Disegarkan otomatis tiap jam saat AI
+            membacanya.
           </p>
         </div>
 
@@ -1012,16 +1139,23 @@ function SeksiBasisPengetahuan() {
                 <p className="text-[12px] font-bold text-teks-utama">
                   {cakupan.length} kategori data
                 </p>
-                <p className="text-[10.5px] text-teks-sekunder">Diperbarui {umurTeks}</p>
+                <p className="text-[10.5px] text-teks-sekunder">
+                  Diperbarui {umurTeks}
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => void segarkan()}
                 disabled={menyegarkan}
                 className="btn-tekan flex h-9 items-center gap-1.5 rounded-xl px-3 text-[11.5px] font-bold text-white disabled:opacity-60"
-                style={{ background: "linear-gradient(135deg, #0EA5E9, #0369A1)" }}
+                style={{
+                  background: "linear-gradient(135deg, #0EA5E9, #0369A1)",
+                }}
               >
-                <RefreshCw className={cn("h-3.5 w-3.5", menyegarkan && "animate-spin")} aria-hidden="true" />
+                <RefreshCw
+                  className={cn("h-3.5 w-3.5", menyegarkan && "animate-spin")}
+                  aria-hidden="true"
+                />
                 Perbarui
               </button>
             </div>
@@ -1044,7 +1178,9 @@ function SeksiBasisPengetahuan() {
             </p>
             <textarea
               value={catatan}
-              onChange={(e) => setCatatan(e.target.value.slice(0, basis?.maks_catatan ?? 8000))}
+              onChange={(e) =>
+                setCatatan(e.target.value.slice(0, basis?.maks_catatan ?? 8000))
+              }
               rows={5}
               placeholder={
                 "Tulis fakta/pengetahuan yang tidak ada di database, mis:\n- Sekretariat DPP: Jl. Merdeka No. 1, Jakarta.\n- Target rekrutmen kuartal ini: 500 kader.\n- Narahubung media: 0812-xxxx."
@@ -1061,9 +1197,16 @@ function SeksiBasisPengetahuan() {
                 onClick={() => void simpanCatatan()}
                 disabled={menyimpan}
                 className="btn-tekan flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-bold text-white disabled:opacity-60"
-                style={{ background: "linear-gradient(135deg, #0EA5E9, #0369A1)" }}
+                style={{
+                  background: "linear-gradient(135deg, #0EA5E9, #0369A1)",
+                }}
               >
-                {menyimpan && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                {menyimpan && (
+                  <Loader2
+                    className="h-4 w-4 animate-spin"
+                    aria-hidden="true"
+                  />
+                )}
                 Simpan Catatan
               </button>
             </div>
@@ -1076,7 +1219,8 @@ function SeksiBasisPengetahuan() {
                   Bahan Belajar (TXT)
                 </p>
                 <span className="angka-tab text-[10px] text-teks-sekunder">
-                  {basis?.bahan_ajar.length ?? 0}/{basis?.maks_bahan_jumlah ?? 30}
+                  {basis?.bahan_ajar.length ?? 0}/
+                  {basis?.maks_bahan_jumlah ?? 30}
                 </span>
               </div>
               <p className="mt-0.5 mb-2 text-[10.5px] leading-relaxed text-teks-sekunder">
@@ -1098,7 +1242,10 @@ function SeksiBasisPengetahuan() {
                 className="glass btn-tekan flex h-10 w-full items-center justify-center gap-2 rounded-xl text-[12.5px] font-bold text-teks-utama disabled:opacity-60"
               >
                 {mengunggah ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <Loader2
+                    className="h-4 w-4 animate-spin"
+                    aria-hidden="true"
+                  />
                 ) : (
                   <Upload className="h-4 w-4" aria-hidden="true" />
                 )}
@@ -1112,7 +1259,10 @@ function SeksiBasisPengetahuan() {
                       key={b.id}
                       className="glass-soft flex items-center gap-2.5 rounded-xl px-3 py-2"
                     >
-                      <FileText className="h-4 w-4 shrink-0 text-sky-500" aria-hidden="true" />
+                      <FileText
+                        className="h-4 w-4 shrink-0 text-sky-500"
+                        aria-hidden="true"
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[12px] font-semibold text-teks-utama">
                           {b.nama}
@@ -1191,7 +1341,10 @@ function KontrolWajah({
     Object.fromEntries(
       BARIS.map((b) => {
         const d = Number(pengaturan[b.kunci]);
-        return [b.kunci, String(Number.isFinite(d) && d > 0 ? Math.round(d * 100) : b.bawaan)];
+        return [
+          b.kunci,
+          String(Number.isFinite(d) && d > 0 ? Math.round(d * 100) : b.bawaan),
+        ];
       }),
     ),
   );
@@ -1203,7 +1356,9 @@ function KontrolWajah({
           <ScanFace className="h-5 w-5" aria-hidden="true" />
         </span>
         <div>
-          <p className="text-sm font-bold text-teks-utama">Akurasi Face Recognition</p>
+          <p className="text-sm font-bold text-teks-utama">
+            Akurasi Face Recognition
+          </p>
           <p className="text-[11px] text-teks-sekunder">
             Semakin TINGGI semakin ketat — berlaku seketika tanpa deploy.
           </p>
@@ -1217,9 +1372,13 @@ function KontrolWajah({
               <div className="min-w-0 flex-1">
                 <p className="text-[12px] font-bold text-teks-utama">
                   {b.label}{" "}
-                  <span className="font-normal text-teks-sekunder">(bawaan {b.bawaan}%)</span>
+                  <span className="font-normal text-teks-sekunder">
+                    (bawaan {b.bawaan}%)
+                  </span>
                 </p>
-                <p className="text-[10px] leading-snug text-teks-sekunder">{b.ket}</p>
+                <p className="text-[10px] leading-snug text-teks-sekunder">
+                  {b.ket}
+                </p>
               </div>
               <input
                 type="number"
@@ -1268,7 +1427,9 @@ function SeksiEksporData() {
     setSibuk(true);
     unduhEksporData()
       .then(() => toast("sukses", "Berkas TXT diunduh"))
-      .catch((e) => toast("error", "Gagal mengekspor", e instanceof Error ? e.message : ""))
+      .catch((e) =>
+        toast("error", "Gagal mengekspor", e instanceof Error ? e.message : ""),
+      )
       .finally(() => setSibuk(false));
   }
 
@@ -1285,11 +1446,11 @@ function SeksiEksporData() {
             <FileText className="h-4.5 w-4.5" />
           </span>
           <p className="text-[11.5px] leading-relaxed text-teks-sekunder">
-            Satu berkas teks berisi SELURUH data yang dimasukkan di aplikasi: database
-            anggota (tanpa foto & kata sandi), akun sosmed, semua link video & laporan
-            KPI, video TV Rakyat, arsip postingan resmi, pengumuman, rencana kerja,
-            tugas, acara, tim, absensi, dan sosmed terblokir. Siap dijadikan basis
-            data AI.
+            Satu berkas teks berisi SELURUH data yang dimasukkan di aplikasi:
+            database anggota (tanpa foto & kata sandi), akun sosmed, semua link
+            video & laporan KPI, video TV Rakyat, arsip postingan resmi,
+            pengumuman, rencana kerja, tugas, acara, tim, absensi, dan sosmed
+            terblokir. Siap dijadikan basis data AI.
           </p>
         </div>
         <button
@@ -1299,7 +1460,11 @@ function SeksiEksporData() {
           className="btn-tekan mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-white disabled:opacity-60"
           style={{ background: "linear-gradient(135deg, #10B981, #047857)" }}
         >
-          {sibuk ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          {sibuk ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="h-4 w-4" />
+          )}
           {sibuk ? "Menyusun berkas…" : "Unduh TXT"}
         </button>
       </GlassCard>

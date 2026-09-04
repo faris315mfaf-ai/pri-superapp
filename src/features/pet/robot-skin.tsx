@@ -979,7 +979,302 @@ export function lapisanSkin(
         ),
       };
 
+    // ---------------- HARIMAU PUTIH × KAOS PRI (3 varian, 4 Sep 2026) ----------------
+    case "skin_harimau_merah":
+      return harimauPutih(
+        { g, kelas },
+        {
+          kaos: "#DC2626",
+          kaosGelap: "#991B1B",
+          teks: "#FFFFFF",
+          mahkota: false,
+          jubah: false,
+          aura: false,
+        },
+      );
+    case "skin_harimau_hitam":
+      return harimauPutih(
+        { g, kelas },
+        {
+          kaos: "#111827",
+          kaosGelap: "#000000",
+          teks: "#F59E0B",
+          mahkota: false,
+          jubah: true,
+          aura: false,
+        },
+      );
+    case "skin_harimau_emas":
+      return harimauPutih(
+        { g, kelas },
+        {
+          kaos: "#F59E0B",
+          kaosGelap: "#B45309",
+          teks: "#111827",
+          mahkota: true,
+          jubah: false,
+          aura: true,
+        },
+      );
+
     default:
       return null;
   }
+}
+
+/** Set Harimau Putih: topeng harimau putih bergaris hitam (mata menyala), kaos PRI, sarung tangan cakar, ekor loreng. */
+function harimauPutih(
+  { g, kelas }: Ctx,
+  v: {
+    kaos: string;
+    kaosGelap: string;
+    teks: string;
+    mahkota: boolean;
+    jubah: boolean;
+    aura: boolean;
+  },
+): LapisanSkin {
+  const garis = "#111827";
+  const putih = "#F8FAFC";
+  return {
+    aura: v.aura ? (
+      <g>
+        <circle cx="100" cy="130" r="120" fill={g("aura")} />
+        <circle
+          cx="100"
+          cy="130"
+          r="110"
+          fill="none"
+          stroke={garis}
+          strokeWidth="6"
+          strokeDasharray="10 22"
+          opacity="0.7"
+          className={kelas("pet-putar")}
+        />
+        <circle
+          cx="100"
+          cy="130"
+          r="110"
+          fill="none"
+          stroke={putih}
+          strokeWidth="6"
+          strokeDasharray="10 22"
+          strokeDashoffset="16"
+          opacity="0.9"
+          className={kelas("pet-putar")}
+        />
+      </g>
+    ) : undefined,
+    belakang: (
+      <g>
+        {v.jubah ? (
+          <Jubah
+            fill="#0F172A"
+            stroke="#1E293B"
+            garis={
+              <path
+                d="M62 122 Q100 150 138 122"
+                fill="none"
+                stroke="#F59E0B"
+                strokeWidth="2"
+                opacity="0.6"
+              />
+            }
+          />
+        ) : null}
+        {/* ekor loreng */}
+        <g
+          className={kelas("hewan-ekor")}
+          style={{ transformBox: "fill-box", transformOrigin: "0% 0%" }}
+        >
+          <path
+            d="M136 200 Q176 206 184 176 Q188 160 176 150"
+            fill="none"
+            stroke={garis}
+            strokeWidth="12"
+            strokeLinecap="round"
+          />
+          <path
+            d="M136 200 Q176 206 184 176 Q188 160 176 150"
+            fill="none"
+            stroke={putih}
+            strokeWidth="8"
+            strokeLinecap="round"
+          />
+          <path
+            d="M156 204 l4 -8 M170 198 l6 -6 M182 180 l6 -2 M182 164 l6 2"
+            stroke={garis}
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+        </g>
+      </g>
+    ),
+    badan: (
+      <g>
+        <rect x="60" y="122" width="80" height="64" rx="16" fill={v.kaos} />
+        <rect x="50" y="124" width="14" height="24" rx="6" fill={v.kaosGelap} />
+        <rect
+          x="136"
+          y="124"
+          width="14"
+          height="24"
+          rx="6"
+          fill={v.kaosGelap}
+        />
+        <path
+          d="M84 122 Q100 134 116 122"
+          fill="none"
+          stroke={v.kaosGelap}
+          strokeWidth="3"
+        />
+        <text
+          x="100"
+          y="162"
+          textAnchor="middle"
+          fontSize="20"
+          fontWeight="800"
+          fill={v.teks}
+          fontFamily="inherit"
+          letterSpacing="1"
+        >
+          PRI
+        </text>
+        <path
+          d="M74 174 h52"
+          stroke={v.teks}
+          strokeWidth="2"
+          opacity="0.5"
+          strokeLinecap="round"
+        />
+      </g>
+    ),
+    tanganKiri: (
+      <g>
+        <circle
+          cx="44"
+          cy="190"
+          r="12"
+          fill={putih}
+          stroke={garis}
+          strokeWidth="2"
+        />
+        <path
+          d="M34 196 l-6 10 M40 200 l-3 12 M48 200 l3 12"
+          stroke={garis}
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+        <path d="M38 184 h12" stroke={garis} strokeWidth="2" opacity="0.6" />
+      </g>
+    ),
+    tanganKanan: (
+      <g>
+        <circle
+          cx="156"
+          cy="190"
+          r="12"
+          fill={putih}
+          stroke={garis}
+          strokeWidth="2"
+        />
+        <path
+          d="M166 196 l6 10 M160 200 l3 12 M152 200 l-3 12"
+          stroke={garis}
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+        <path d="M150 184 h12" stroke={garis} strokeWidth="2" opacity="0.6" />
+      </g>
+    ),
+    kepala: (
+      <g>
+        {/* telinga */}
+        <path
+          d="M50 40 Q44 8 74 22 Z"
+          fill={putih}
+          stroke={garis}
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M150 40 Q156 8 126 22 Z"
+          fill={putih}
+          stroke={garis}
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+        <path d="M56 36 Q54 18 70 26 Z" fill="#F9A8D4" />
+        <path d="M144 36 Q146 18 130 26 Z" fill="#F9A8D4" />
+        {/* topeng */}
+        <rect
+          x="46"
+          y="24"
+          width="108"
+          height="78"
+          rx="34"
+          fill={putih}
+          stroke={garis}
+          strokeWidth="2.5"
+        />
+        {/* loreng */}
+        <g fill={garis}>
+          <path d="M100 26 q-8 12 0 22 q8 -10 0 -22 z" />
+          <path d="M78 28 q-10 12 -2 20 q6 -8 2 -20 z" />
+          <path d="M122 28 q10 12 2 20 q-6 -8 -2 -20 z" />
+          <path d="M48 62 q12 -4 20 4 q-10 4 -20 -4 z" />
+          <path d="M152 62 q-12 -4 -20 4 q10 4 20 -4 z" />
+          <path d="M50 78 q12 -2 18 6 q-10 2 -18 -6 z" />
+          <path d="M150 78 q-12 -2 -18 6 q10 2 18 -6 z" />
+        </g>
+        {/* mata menyala */}
+        <ellipse
+          cx="76"
+          cy="58"
+          rx="12"
+          ry="8"
+          fill="#F59E0B"
+          className={kelas("pet-denyut")}
+        />
+        <ellipse
+          cx="124"
+          cy="58"
+          rx="12"
+          ry="8"
+          fill="#F59E0B"
+          className={kelas("pet-denyut")}
+        />
+        <ellipse cx="76" cy="58" rx="4" ry="6" fill={garis} />
+        <ellipse cx="124" cy="58" rx="4" ry="6" fill={garis} />
+        {/* hidung, kumis, mulut */}
+        <polygon points="94,78 106,78 100,86" fill="#F472B6" />
+        <path
+          d="M100 86 v6 M92 94 q8 6 16 0"
+          fill="none"
+          stroke={garis}
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+        <path
+          d="M70 82 h20 M70 88 h18 M110 82 h20 M112 88 h18"
+          stroke={garis}
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          opacity="0.8"
+        />
+        {v.mahkota ? (
+          <g>
+            <polygon
+              points="66,24 66,-2 80,10 100,-14 120,10 134,-2 134,24"
+              fill="#F59E0B"
+              stroke="#B45309"
+              strokeWidth="2"
+              strokeLinejoin="round"
+            />
+            <circle cx="100" cy="-2" r="4" fill="#DC2626" />
+          </g>
+        ) : null}
+      </g>
+    ),
+  };
 }

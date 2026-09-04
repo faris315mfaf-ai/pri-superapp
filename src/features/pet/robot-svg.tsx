@@ -27,8 +27,12 @@ import {
   type SlotAksesoris,
   type Suasana,
   type Vitalitas,
+  gelapkan,
+  terangkan,
+  sparepartDariKode,
 } from "@/lib/pet";
 import { lapisanSkin } from "@/features/pet/robot-skin";
+import { gambarAksesorisBaru } from "@/features/pet/robot-aksesoris";
 
 type Props = {
   jenis: JenisRobot;
@@ -142,11 +146,50 @@ export function RobotSvg({
   const punggung = sk ? undefined : terpasang.punggung;
   const tangan = sk ? undefined : terpasang.tangan;
   const lapis = sk ? lapisanSkin(sk.kode, { g, kelas }) : null;
-  const spKepala = sparepart.kepala ?? "";
-  const spMata = sparepart.mata ?? "";
-  const spTubuh = sparepart.tubuh ?? "";
-  const spKaki = sparepart.kaki ?? "";
-  const spTangan = sparepart.tangan ?? "";
+  // Varian warna sparepart (4 Sep 2026): kode varian memakai BENTUK dasar
+  // dengan PALET bagian sendiri (pk/pt/pm/pkp/ptb) — bentuk lama tidak diubah.
+  const varian = (k: string | undefined) =>
+    k ? sparepartDariKode(k) : undefined;
+  const vKepala = varian(sparepart.kepala);
+  const vMata = varian(sparepart.mata);
+  const vTubuh = varian(sparepart.tubuh);
+  const vKaki = varian(sparepart.kaki);
+  const vTangan = varian(sparepart.tangan);
+  const spKepala = vKepala?.dasar ?? sparepart.kepala ?? "";
+  const spMata = vMata?.dasar ?? sparepart.mata ?? "";
+  const spTubuh = vTubuh?.dasar ?? sparepart.tubuh ?? "";
+  const spKaki = vKaki?.dasar ?? sparepart.kaki ?? "";
+  const spTangan = vTangan?.dasar ?? sparepart.tangan ?? "";
+  const paletBagian = (warna?: string) =>
+    warna
+      ? {
+          ...p,
+          utama: warna,
+          utamaGelap: gelapkan(warna, 0.32),
+          aksen: terangkan(warna, 0.15),
+          aksenTerang: terangkan(warna, 0.4),
+          badan: warna,
+          badanGelap: gelapkan(warna, 0.38),
+          mata: terangkan(warna, 0.45),
+        }
+      : p;
+  const pk = paletBagian(vKaki?.warna);
+  const pt = paletBagian(vTangan?.warna);
+  const pkp = paletBagian(vKepala?.warna);
+  const ptb = paletBagian(vTubuh?.warna);
+  const pm = vMata?.warna ? { ...p, mata: vMata.warna } : p;
+  const fillKepala = vKepala?.warna ? g("kepala-v") : g("kepala");
+  const fillTubuh = vTubuh?.warna ? g("badan-v") : g("badan");
+  // Aksesoris generasi 2 (keluarga bentuk + warna) — digambar robot-aksesoris.tsx.
+  const aksBaru = {
+    kepala: gambarAksesorisBaru(kepala, { kelas }),
+    mata: gambarAksesorisBaru(mata, { kelas }),
+    leher: gambarAksesorisBaru(leher, { kelas }),
+    badan: gambarAksesorisBaru(badan, { kelas }),
+    punggung: gambarAksesorisBaru(punggung, { kelas }),
+    tangan: gambarAksesorisBaru(tangan, { kelas }),
+    aura: gambarAksesorisBaru(aura, { kelas }),
+  };
   const kelasTubuh = kelas(
     tidur ? KELAS_VITALITAS.tidur : KELAS_VITALITAS[vitalitas],
   );
@@ -162,8 +205,8 @@ export function RobotSvg({
             width="84"
             height="92"
             rx="42"
-            fill={g("badan")}
-            stroke={p.utamaGelap}
+            fill={fillTubuh}
+            stroke={ptb.utamaGelap}
             strokeWidth="2"
           />
         );
@@ -176,8 +219,8 @@ export function RobotSvg({
               width="88"
               height="92"
               rx="8"
-              fill={g("badan")}
-              stroke={p.utamaGelap}
+              fill={fillTubuh}
+              stroke={ptb.utamaGelap}
               strokeWidth="2"
             />
             {[62, 138].map((x) =>
@@ -187,7 +230,7 @@ export function RobotSvg({
                   cx={x}
                   cy={y}
                   r="2.5"
-                  fill={p.aksenTerang}
+                  fill={ptb.aksenTerang}
                 />
               )),
             )}
@@ -202,25 +245,25 @@ export function RobotSvg({
               width="84"
               height="92"
               rx="16"
-              fill={g("badan")}
-              stroke={p.utamaGelap}
+              fill={fillTubuh}
+              stroke={ptb.utamaGelap}
               strokeWidth="2"
             />
             <polygon
               points="50,118 78,112 84,130 56,136"
-              fill={p.aksenTerang}
-              stroke={p.utamaGelap}
+              fill={ptb.aksenTerang}
+              stroke={ptb.utamaGelap}
               strokeWidth="1.5"
             />
             <polygon
               points="150,118 122,112 116,130 144,136"
-              fill={p.aksenTerang}
-              stroke={p.utamaGelap}
+              fill={ptb.aksenTerang}
+              stroke={ptb.utamaGelap}
               strokeWidth="1.5"
             />
             <polygon
               points="66,186 134,186 128,206 72,206"
-              fill={p.utama}
+              fill={ptb.utama}
               opacity="0.8"
             />
           </g>
@@ -232,8 +275,8 @@ export function RobotSvg({
             cy="164"
             rx="52"
             ry="48"
-            fill={g("badan")}
-            stroke={p.utamaGelap}
+            fill={fillTubuh}
+            stroke={ptb.utamaGelap}
             strokeWidth="2"
           />
         );
@@ -246,8 +289,8 @@ export function RobotSvg({
               width="80"
               height="92"
               rx="30"
-              fill={g("badan")}
-              stroke={p.utamaGelap}
+              fill={fillTubuh}
+              stroke={ptb.utamaGelap}
               strokeWidth="2"
             />
             {[132, 152, 172, 192].map((y) => (
@@ -257,7 +300,7 @@ export function RobotSvg({
                 y={y}
                 width="80"
                 height="4"
-                fill={p.utama}
+                fill={ptb.utama}
                 opacity="0.55"
               />
             ))}
@@ -272,9 +315,9 @@ export function RobotSvg({
               width="84"
               height="92"
               rx="30"
-              fill={p.mata}
+              fill={ptb.mata}
               opacity="0.35"
-              stroke={p.utamaGelap}
+              stroke={ptb.utamaGelap}
               strokeWidth="2"
             />
             <circle
@@ -311,8 +354,8 @@ export function RobotSvg({
               width="84"
               height="92"
               rx="24"
-              fill={g("badan")}
-              stroke={p.utamaGelap}
+              fill={fillTubuh}
+              stroke={ptb.utamaGelap}
               strokeWidth="2"
             />
             <rect
@@ -321,11 +364,11 @@ export function RobotSvg({
               width="84"
               height="16"
               rx="8"
-              fill={p.utama}
+              fill={ptb.utama}
               opacity="0.9"
             />
-            <circle cx="70" cy="202" r="3" fill={p.aksen} />
-            <circle cx="130" cy="202" r="3" fill={p.aksen} />
+            <circle cx="70" cy="202" r="3" fill={ptb.aksen} />
+            <circle cx="130" cy="202" r="3" fill={ptb.aksen} />
           </g>
         );
     }
@@ -343,7 +386,7 @@ export function RobotSvg({
               width="40"
               height="8"
               rx="4"
-              fill={p.badanGelap}
+              fill={pk.badanGelap}
             />
             {[86, 114].map((cx) => (
               <g key={cx} className={kelas("pet-roda")}>
@@ -351,14 +394,14 @@ export function RobotSvg({
                   cx={cx}
                   cy="224"
                   r="14"
-                  fill={p.aksen}
-                  stroke={p.utamaGelap}
+                  fill={pk.aksen}
+                  stroke={pk.utamaGelap}
                   strokeWidth="2"
                 />
-                <circle cx={cx} cy="224" r="5" fill={p.utama} />
+                <circle cx={cx} cy="224" r="5" fill={pk.utama} />
                 <path
                   d={`M${cx - 12} 224 H${cx + 12} M${cx} 212 V236`}
-                  stroke={p.utamaGelap}
+                  stroke={pk.utamaGelap}
                   strokeWidth="2"
                 />
               </g>
@@ -389,8 +432,8 @@ export function RobotSvg({
               width="14"
               height="22"
               rx="7"
-              fill={p.badanGelap}
-              stroke={p.utamaGelap}
+              fill={pk.badanGelap}
+              stroke={pk.utamaGelap}
               strokeWidth="1.5"
             />
             <rect
@@ -399,8 +442,8 @@ export function RobotSvg({
               width="14"
               height="22"
               rx="7"
-              fill={p.badanGelap}
-              stroke={p.utamaGelap}
+              fill={pk.badanGelap}
+              stroke={pk.utamaGelap}
               strokeWidth="1.5"
             />
             {[87, 113].map((cx) => (
@@ -410,8 +453,8 @@ export function RobotSvg({
                   cy="232"
                   rx="13"
                   ry="7"
-                  fill={p.aksen}
-                  stroke={p.utamaGelap}
+                  fill={pk.aksen}
+                  stroke={pk.utamaGelap}
                   strokeWidth="1.5"
                 />
                 <circle cx={cx - 6} cy="230" r="2" fill="#F472B6" />
@@ -452,14 +495,14 @@ export function RobotSvg({
         return (
           <g
             fill="none"
-            stroke={p.utamaGelap}
+            stroke={pk.utamaGelap}
             strokeWidth="3"
             strokeLinecap="round"
           >
             <path d="M87 206 l-6 5 l12 5 l-12 5 l12 5 l-6 5" />
             <path d="M113 206 l-6 5 l12 5 l-12 5 l12 5 l-6 5" />
-            <ellipse cx="87" cy="234" rx="12" ry="5" fill={p.aksen} />
-            <ellipse cx="113" cy="234" rx="12" ry="5" fill={p.aksen} />
+            <ellipse cx="87" cy="234" rx="12" ry="5" fill={pk.aksen} />
+            <ellipse cx="113" cy="234" rx="12" ry="5" fill={pk.aksen} />
           </g>
         );
       case "kaki_hover":
@@ -470,7 +513,7 @@ export function RobotSvg({
               cy="214"
               rx="34"
               ry="8"
-              fill={p.utama}
+              fill={pk.utama}
               opacity="0.85"
             />
             <ellipse
@@ -478,7 +521,7 @@ export function RobotSvg({
               cy="226"
               rx="26"
               ry="6"
-              fill={p.mata}
+              fill={pk.mata}
               opacity="0.55"
               className={kelas("pet-denyut")}
             />
@@ -493,8 +536,8 @@ export function RobotSvg({
               width="14"
               height="26"
               rx="7"
-              fill={p.badanGelap}
-              stroke={p.utamaGelap}
+              fill={pk.badanGelap}
+              stroke={pk.utamaGelap}
               strokeWidth="1.5"
             />
             <rect
@@ -503,8 +546,8 @@ export function RobotSvg({
               width="14"
               height="26"
               rx="7"
-              fill={p.badanGelap}
-              stroke={p.utamaGelap}
+              fill={pk.badanGelap}
+              stroke={pk.utamaGelap}
               strokeWidth="1.5"
             />
             <ellipse
@@ -512,8 +555,8 @@ export function RobotSvg({
               cy="234"
               rx="12"
               ry="5"
-              fill={p.aksen}
-              stroke={p.utamaGelap}
+              fill={pk.aksen}
+              stroke={pk.utamaGelap}
               strokeWidth="1.5"
             />
             <ellipse
@@ -521,8 +564,8 @@ export function RobotSvg({
               cy="234"
               rx="12"
               ry="5"
-              fill={p.aksen}
-              stroke={p.utamaGelap}
+              fill={pk.aksen}
+              stroke={pk.utamaGelap}
               strokeWidth="1.5"
             />
           </g>
@@ -542,20 +585,20 @@ export function RobotSvg({
               width="20"
               height="54"
               rx="10"
-              fill={p.badanGelap}
-              stroke={p.utamaGelap}
+              fill={pt.badanGelap}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
             <polygon
               points="36,178 52,178 44,200"
-              fill={p.utama}
-              stroke={p.utamaGelap}
+              fill={pt.utama}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
             <polygon
               points="30,176 40,176 34,196"
-              fill={p.utama}
-              stroke={p.utamaGelap}
+              fill={pt.utama}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
           </g>
@@ -569,8 +612,8 @@ export function RobotSvg({
               width="20"
               height="54"
               rx="10"
-              fill={p.badanGelap}
-              stroke={p.utamaGelap}
+              fill={pt.badanGelap}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
             <circle
@@ -588,7 +631,7 @@ export function RobotSvg({
           <path
             d="M44 128 q-20 16 -4 30 t-6 30 t8 24"
             fill="none"
-            stroke={p.utama}
+            stroke={pt.utama}
             strokeWidth="12"
             strokeLinecap="round"
           />
@@ -597,8 +640,8 @@ export function RobotSvg({
         return (
           <path
             d="M56 130 Q20 132 26 168 Q40 158 44 178 Q52 166 58 184 Z"
-            fill={p.aksen}
-            stroke={p.utamaGelap}
+            fill={pt.aksen}
+            stroke={pt.utamaGelap}
             strokeWidth="2"
           />
         );
@@ -611,16 +654,16 @@ export function RobotSvg({
               width="30"
               height="60"
               rx="15"
-              fill={p.badanGelap}
-              stroke={p.utamaGelap}
+              fill={pt.badanGelap}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
             <circle
               cx="41"
               cy="192"
               r="14"
-              fill={p.utama}
-              stroke={p.utamaGelap}
+              fill={pt.utama}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
           </g>
@@ -634,16 +677,16 @@ export function RobotSvg({
               width="20"
               height="58"
               rx="10"
-              fill={p.badanGelap}
-              stroke={p.utamaGelap}
+              fill={pt.badanGelap}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
             <circle
               cx="44"
               cy="190"
               r="10"
-              fill={p.utama}
-              stroke={p.utamaGelap}
+              fill={pt.utama}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
           </g>
@@ -661,20 +704,20 @@ export function RobotSvg({
               width="20"
               height="54"
               rx="10"
-              fill={p.badanGelap}
-              stroke={p.utamaGelap}
+              fill={pt.badanGelap}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
             <polygon
               points="148,178 164,178 156,200"
-              fill={p.utama}
-              stroke={p.utamaGelap}
+              fill={pt.utama}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
             <polygon
               points="160,176 170,176 166,196"
-              fill={p.utama}
-              stroke={p.utamaGelap}
+              fill={pt.utama}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
           </g>
@@ -688,8 +731,8 @@ export function RobotSvg({
               width="20"
               height="54"
               rx="10"
-              fill={p.badanGelap}
-              stroke={p.utamaGelap}
+              fill={pt.badanGelap}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
             <circle
@@ -707,7 +750,7 @@ export function RobotSvg({
           <path
             d="M156 128 q20 16 4 30 t6 30 t-8 24"
             fill="none"
-            stroke={p.utama}
+            stroke={pt.utama}
             strokeWidth="12"
             strokeLinecap="round"
           />
@@ -716,8 +759,8 @@ export function RobotSvg({
         return (
           <path
             d="M144 130 Q180 132 174 168 Q160 158 156 178 Q148 166 142 184 Z"
-            fill={p.aksen}
-            stroke={p.utamaGelap}
+            fill={pt.aksen}
+            stroke={pt.utamaGelap}
             strokeWidth="2"
           />
         );
@@ -730,8 +773,8 @@ export function RobotSvg({
               width="20"
               height="50"
               rx="10"
-              fill={p.badanGelap}
-              stroke={p.utamaGelap}
+              fill={pt.badanGelap}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
             <rect
@@ -762,16 +805,16 @@ export function RobotSvg({
               width="30"
               height="60"
               rx="15"
-              fill={p.badanGelap}
-              stroke={p.utamaGelap}
+              fill={pt.badanGelap}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
             <circle
               cx="159"
               cy="192"
               r="14"
-              fill={p.utama}
-              stroke={p.utamaGelap}
+              fill={pt.utama}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
           </g>
@@ -785,16 +828,16 @@ export function RobotSvg({
               width="20"
               height="58"
               rx="10"
-              fill={p.badanGelap}
-              stroke={p.utamaGelap}
+              fill={pt.badanGelap}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
             <circle
               cx="156"
               cy="190"
               r="10"
-              fill={p.utama}
-              stroke={p.utamaGelap}
+              fill={pt.utama}
+              stroke={pt.utamaGelap}
               strokeWidth="1.5"
             />
           </g>
@@ -814,8 +857,8 @@ export function RobotSvg({
             width="120"
             height="90"
             rx="8"
-            fill={g("kepala")}
-            stroke={p.utamaGelap}
+            fill={fillKepala}
+            stroke={pkp.utamaGelap}
             strokeWidth="2"
           />
         );
@@ -826,8 +869,8 @@ export function RobotSvg({
             cy="63"
             rx="62"
             ry="48"
-            fill={g("kepala")}
-            stroke={p.utamaGelap}
+            fill={fillKepala}
+            stroke={pkp.utamaGelap}
             strokeWidth="2"
           />
         );
@@ -836,15 +879,15 @@ export function RobotSvg({
           <g>
             <polygon
               points="48,34 56,-6 82,24"
-              fill={g("kepala")}
-              stroke={p.utamaGelap}
+              fill={fillKepala}
+              stroke={pkp.utamaGelap}
               strokeWidth="2"
               strokeLinejoin="round"
             />
             <polygon
               points="152,34 144,-6 118,24"
-              fill={g("kepala")}
-              stroke={p.utamaGelap}
+              fill={fillKepala}
+              stroke={pkp.utamaGelap}
               strokeWidth="2"
               strokeLinejoin="round"
             />
@@ -856,8 +899,8 @@ export function RobotSvg({
               width="120"
               height="90"
               rx="30"
-              fill={g("kepala")}
-              stroke={p.utamaGelap}
+              fill={fillKepala}
+              stroke={pkp.utamaGelap}
               strokeWidth="2"
             />
           </g>
@@ -867,8 +910,8 @@ export function RobotSvg({
           <g>
             <path
               d="M40 74 A60 56 0 0 1 160 74 V100 a8 8 0 0 1 -8 8 H48 a8 8 0 0 1 -8 -8 Z"
-              fill={g("kepala")}
-              stroke={p.utamaGelap}
+              fill={fillKepala}
+              stroke={pkp.utamaGelap}
               strokeWidth="2"
             />
             <path
@@ -885,8 +928,8 @@ export function RobotSvg({
         return (
           <polygon
             points="70,18 130,18 160,63 130,108 70,108 40,63"
-            fill={g("kepala")}
-            stroke={p.utamaGelap}
+            fill={fillKepala}
+            stroke={pkp.utamaGelap}
             strokeWidth="2"
             strokeLinejoin="round"
           />
@@ -899,7 +942,7 @@ export function RobotSvg({
               y1="18"
               x2="70"
               y2="-10"
-              stroke={p.aksen}
+              stroke={pkp.aksen}
               strokeWidth="3"
               strokeLinecap="round"
             />
@@ -908,7 +951,7 @@ export function RobotSvg({
               y1="18"
               x2="130"
               y2="-10"
-              stroke={p.aksen}
+              stroke={pkp.aksen}
               strokeWidth="3"
               strokeLinecap="round"
             />
@@ -918,12 +961,12 @@ export function RobotSvg({
               width="120"
               height="90"
               rx="10"
-              fill={g("kepala")}
-              stroke={p.utamaGelap}
+              fill={fillKepala}
+              stroke={pkp.utamaGelap}
               strokeWidth="2"
             />
-            <circle cx="150" cy="82" r="4" fill={p.aksen} />
-            <circle cx="150" cy="96" r="4" fill={p.aksen} />
+            <circle cx="150" cy="82" r="4" fill={pkp.aksen} />
+            <circle cx="150" cy="96" r="4" fill={pkp.aksen} />
           </g>
         );
       default:
@@ -935,8 +978,8 @@ export function RobotSvg({
               width="120"
               height="90"
               rx={rx}
-              fill={g("kepala")}
-              stroke={p.utamaGelap}
+              fill={fillKepala}
+              stroke={pkp.utamaGelap}
               strokeWidth="2"
             />
             <path
@@ -958,8 +1001,8 @@ export function RobotSvg({
       case "mata_bulat":
         return (
           <g>
-            <circle cx="75" cy="60" r="13" fill={p.mata} />
-            <circle cx="125" cy="60" r="13" fill={p.mata} />
+            <circle cx="75" cy="60" r="13" fill={pm.mata} />
+            <circle cx="125" cy="60" r="13" fill={pm.mata} />
             <circle cx="79" cy="56" r="4" fill="#FFFFFF" />
             <circle cx="129" cy="56" r="4" fill="#FFFFFF" />
           </g>
@@ -967,8 +1010,8 @@ export function RobotSvg({
       case "mata_kotak":
         return (
           <g>
-            <rect x="64" y="49" width="22" height="22" rx="2" fill={p.mata} />
-            <rect x="114" y="49" width="22" height="22" rx="2" fill={p.mata} />
+            <rect x="64" y="49" width="22" height="22" rx="2" fill={pm.mata} />
+            <rect x="114" y="49" width="22" height="22" rx="2" fill={pm.mata} />
             <rect x="68" y="53" width="6" height="6" fill="#FFFFFF" />
             <rect x="118" y="53" width="6" height="6" fill="#FFFFFF" />
           </g>
@@ -976,7 +1019,7 @@ export function RobotSvg({
       case "mata_visor":
         return (
           <g>
-            <rect x="60" y="52" width="80" height="14" rx="7" fill={p.mata} />
+            <rect x="60" y="52" width="80" height="14" rx="7" fill={pm.mata} />
             <rect
               x="66"
               y="55"
@@ -991,15 +1034,15 @@ export function RobotSvg({
       case "mata_bintang":
         return (
           <g>
-            <Bintang cx={75} cy={60} r={13} fill={p.mata} />
-            <Bintang cx={125} cy={60} r={13} fill={p.mata} />
+            <Bintang cx={75} cy={60} r={13} fill={pm.mata} />
+            <Bintang cx={125} cy={60} r={13} fill={pm.mata} />
           </g>
         );
       case "mata_hati":
         return (
           <g>
-            <Hati cx={75} cy={60} s={11} fill={p.mata} />
-            <Hati cx={125} cy={60} s={11} fill={p.mata} />
+            <Hati cx={75} cy={60} s={11} fill={pm.mata} />
+            <Hati cx={125} cy={60} s={11} fill={pm.mata} />
           </g>
         );
       case "mata_led":
@@ -1011,7 +1054,7 @@ export function RobotSvg({
                 cx={cx}
                 cy="60"
                 r="7"
-                fill={p.mata}
+                fill={pm.mata}
                 className={kelas("pet-denyut")}
                 style={{ animationDelay: `${i * 0.3}s` }}
               />
@@ -1021,11 +1064,11 @@ export function RobotSvg({
       default:
         return wanita ? (
           <g>
-            <circle cx="75" cy="60" r="9" fill={p.mata} />
-            <circle cx="125" cy="60" r="9" fill={p.mata} />
+            <circle cx="75" cy="60" r="9" fill={pm.mata} />
+            <circle cx="125" cy="60" r="9" fill={pm.mata} />
             <circle cx="78" cy="57" r="3" fill="#FFFFFF" />
             <circle cx="128" cy="57" r="3" fill="#FFFFFF" />
-            <g stroke={p.mata} strokeWidth="2" strokeLinecap="round">
+            <g stroke={pm.mata} strokeWidth="2" strokeLinecap="round">
               <line x1="66" y1="50" x2="63" y2="45" />
               <line x1="75" y1="48" x2="75" y2="43" />
               <line x1="84" y1="50" x2="87" y2="45" />
@@ -1036,8 +1079,8 @@ export function RobotSvg({
           </g>
         ) : (
           <g>
-            <rect x="64" y="50" width="22" height="16" rx="5" fill={p.mata} />
-            <rect x="114" y="50" width="22" height="16" rx="5" fill={p.mata} />
+            <rect x="64" y="50" width="22" height="16" rx="5" fill={pm.mata} />
+            <rect x="114" y="50" width="22" height="16" rx="5" fill={pm.mata} />
             <circle cx="71" cy="55" r="3" fill="#FFFFFF" opacity="0.9" />
             <circle cx="121" cy="55" r="3" fill="#FFFFFF" opacity="0.9" />
           </g>
@@ -1063,6 +1106,26 @@ export function RobotSvg({
         <linearGradient id={`${id}-badan`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor={p.badan} />
           <stop offset="1" stopColor={p.badanGelap} />
+        </linearGradient>
+        <linearGradient id={`${id}-kepala-v`} x1="0" y1="0" x2="0" y2="1">
+          <stop
+            offset="0"
+            stopColor={terangkan(vKepala?.warna ?? p.utama, 0.12)}
+          />
+          <stop
+            offset="1"
+            stopColor={gelapkan(vKepala?.warna ?? p.utama, 0.3)}
+          />
+        </linearGradient>
+        <linearGradient id={`${id}-badan-v`} x1="0" y1="0" x2="0" y2="1">
+          <stop
+            offset="0"
+            stopColor={terangkan(vTubuh?.warna ?? p.badan, 0.18)}
+          />
+          <stop
+            offset="1"
+            stopColor={gelapkan(vTubuh?.warna ?? p.badan, 0.3)}
+          />
         </linearGradient>
         <radialGradient id={`${id}-inti`} cx="0.5" cy="0.5" r="0.5">
           <stop offset="0" stopColor="#FFFFFF" />
@@ -1153,6 +1216,7 @@ export function RobotSvg({
       ) : null}
 
       {lapis?.aura}
+      {aksBaru.aura}
 
       {/* Piringan melayang (statis, robot bergoyang di atasnya) */}
       <ellipse cx="100" cy="250" rx="50" ry="11" fill={g("disc")} />
@@ -1168,6 +1232,7 @@ export function RobotSvg({
 
       <g className={kelasTubuh}>
         {lapis?.belakang}
+        {aksBaru.punggung}
         {/* Punggung: sayap / jetpack (di belakang badan) */}
         {punggung === "sayap" ? (
           <g>
@@ -1352,6 +1417,7 @@ export function RobotSvg({
           </g>
         ) : null}
 
+        {aksBaru.badan}
         {lapis?.badan}
 
         {/* Lengan */}
@@ -1359,6 +1425,7 @@ export function RobotSvg({
         <g className={menyapa ? kelas("pet-lambai") : undefined}>
           {lenganKanan}
         </g>
+        {aksBaru.tangan}
         {lapis?.tanganKiri}
         {lapis?.tanganKanan}
         {lapis?.bahu}
@@ -1506,6 +1573,7 @@ export function RobotSvg({
           </g>
         ) : null}
 
+        {aksBaru.leher}
         {/* Kepala */}
         {kepalaBentuk}
         {spKepala !== "kepala_bulat" && spKepala !== "kepala_segi6" ? (
@@ -1715,6 +1783,7 @@ export function RobotSvg({
           </g>
         ) : null}
 
+        {aksBaru.mata}
         {/* Antena */}
         {spKepala !== "kepala_tv" ? (
           <g>
@@ -1885,6 +1954,7 @@ export function RobotSvg({
             <circle cx="122" cy="8" r="3" fill="#10B981" />
           </g>
         ) : null}
+        {aksBaru.kepala}
         {lapis?.kepala}
       </g>
     </svg>

@@ -34,11 +34,17 @@ export function RunningTextJuara() {
     };
   }, []);
 
-  if (!data || !data.periode || !data.tanggal || data.juara.length === 0) return null;
+  if (!data || !data.periode || !data.tanggal || data.juara.length === 0)
+    return null;
 
   const teks =
     `🏆 Juara komentar periode ${tanggalIndonesia(`${data.tanggal}T00:00:00+07:00`)} (19.00–18.59 WIB): ` +
-    data.juara.map((j) => `${MEDALI[j.peringkat - 1] ?? "🏅"} ${j.nama} · ${j.total_komentar} komentar`).join("   •   ") +
+    data.juara
+      .map(
+        (j) =>
+          `${MEDALI[j.peringkat - 1] ?? "🏅"} ${j.nama} · ${j.persen}% patuh · ${j.total_komentar} komentar`,
+      )
+      .join("   •   ") +
     "   —   Terima kasih sudah menjaga TV Rakyat!";
   // Durasi mengikuti panjang teks supaya kecepatan bacanya tetap.
   const durasi = Math.max(18, Math.round(teks.length * 0.2));
@@ -51,7 +57,10 @@ export function RunningTextJuara() {
     >
       <Trophy className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
       <div className="min-w-0 flex-1 overflow-hidden">
-        <span className="teks-berjalan whitespace-nowrap text-[12px] font-bold text-teks-utama" style={{ animationDuration: `${durasi}s` }}>
+        <span
+          className="teks-berjalan whitespace-nowrap text-[12px] font-bold text-teks-utama"
+          style={{ animationDuration: `${durasi}s` }}
+        >
           {teks}
         </span>
       </div>

@@ -169,6 +169,72 @@ export function PapanLudo({
     state.giliran === sayaIndeks &&
     state.fase === "pilih" &&
     state.pemenang === null;
+
+  // ---- ANIMASI LANGKAH (4 Sep 2026) ----
+  // Server mengirim `state.terakhir` {pemain, token, dari, ke}. Bidak yang
+  // baru bergerak tidak langsung "meluncur" ke tujuan, tetapi MELOMPAT petak
+  // demi petak (170 ms/petak); bidak lawan yang tertangkap terlempar berputar
+  // kembali ke markas. Semua lewat state yang diubah dari timer (bukan di
+  // badan effect), sesuai aturan lint react-hooks.
+  const [langkahAnim, setLangkahAnim] = useState<{
+    kunci: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [tertangkap, setTertangkap] = useState<Set<string>>(() => new Set());
+  const tandaTerakhirRef = useRef("");
+  const tokenSebelumRef = useRef<number[][] | null>(null);
+  useEffect(() => {
+    const sebelum = tokenSebelumRef.current;
+    tokenSebelumRef.current = state.token.map((t) => [...t]);
+    const t = state.terakhir;
+    const tanda = t
+      ? `${t.pemain}-${t.token}-${t.dari}-${t.ke}-${state.log.length}`
+      : "";
+    if (!t || tanda === tandaTerakhirRef.current) return;
+    tandaTerakhirRef.current = tanda;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    // Bidak yang baru saja dimakan: sebelumnya di lintasan, kini di markas.
+    if (sebelum) {
+      const kena = new Set<string>();
+      state.token.forEach((baris, pj) =>
+        baris.forEach((pos, ti) => {
+          if (
+            pos === POS_MARKAS &&
+            (sebelum[pj]?.[ti] ?? POS_MARKAS) !== POS_MARKAS &&
+            !(pj === t.pemain && ti === t.token)
+          ) {
+            kena.add(`${pj}-${ti}`);
+          }
+        }),
+      );
+      if (kena.size > 0) {
+        timers.push(setTimeout(() => setTertangkap(kena), 0));
+        timers.push(setTimeout(() => setTertangkap(new Set()), 900));
+      }
+    }
+
+    // Melangkah petak demi petak (hanya gerak maju di lintasan/jalur rumah).
+    const p = pemain[t.pemain];
+    if (!p || t.dari < 0 || t.ke <= t.dari)
+      return () => timers.forEach(clearTimeout);
+    const kunci = `${t.pemain}-${t.token}`;
+    const daftar: number[] = [];
+    for (let pos = t.dari + 1; pos <= t.ke; pos++) daftar.push(pos);
+    daftar.forEach((pos, i) => {
+      timers.push(
+        setTimeout(() => {
+          const [kx, ky] = koordinatToken(p.warna, pos, t.token);
+          setLangkahAnim({ kunci, x: kx * SEL, y: ky * SEL });
+        }, i * 170),
+      );
+    });
+    timers.push(
+      setTimeout(() => setLangkahAnim(null), daftar.length * 170 + 220),
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [state.terakhir, state.token, state.log.length, pemain]);
   const warnaGiliran =
     state.pemenang === null ? (pemain[state.giliran]?.warna ?? -1) : -1;
   const daftar: TokenTampil[] = [];
@@ -657,7 +723,12 @@ export function PapanLudo({
           {/* Bidak robot: berdiri tegak di atas papan (kontra-rotasi) */}
           {urutan.map((t) => {
             const p = pemain[t.pemain];
-            const pos = posisiAkhir.get(t) ?? { x: t.x, y: t.y };
+            const kunciBidak = `${t.pemain}-${t.token}`;
+            const sedangMelangkah = langkahAnim?.kunci === kunciBidak;
+            const pos = sedangMelangkah
+              ? { x: langkahAnim!.x, y: langkahAnim!.y }
+              : (posisiAkhir.get(t) ?? { x: t.x, y: t.y });
+            const baruDimakan = tertangkap.has(kunciBidak);
             const w = WARNA[t.warna];
             const lebar = t.diMarkas ? 30 : 34;
             return (
@@ -670,8 +741,9 @@ export function PapanLudo({
                   width: 0,
                   height: 0,
                   transformStyle: "preserve-3d",
-                  transition:
-                    "left 460ms cubic-bezier(0.22, 1, 0.36, 1), top 460ms cubic-bezier(0.22, 1, 0.36, 1)",
+                  transition: sedangMelangkah
+                    ? "left 150ms cubic-bezier(0.4, 0, 0.2, 1), top 150ms cubic-bezier(0.4, 0, 0.2, 1)"
+                    : "left 460ms cubic-bezier(0.22, 1, 0.36, 1), top 460ms cubic-bezier(0.22, 1, 0.36, 1)",
                   zIndex: Math.round(pos.y),
                 }}
               >
@@ -744,6 +816,7 @@ export function PapanLudo({
                       "flex flex-col items-center",
                       t.boleh && !sibuk ? "cursor-pointer" : "cursor-default",
                       t.boleh ? "ludo-token-boleh" : "",
+                      baruDimakan ? "ludo-tertangkap" : "",
                     )}
                     style={{
                       position: "absolute",
@@ -888,12 +961,15 @@ export function Dadu({
   warna,
   onLempar,
   boleh,
+  lemparan = 0,
 }: {
   nilai: number | null;
   berputar: boolean;
   warna: string;
   onLempar: () => void;
   boleh: boolean;
+  /** Nomor lemparan (naik tiap lempar) → animasi melambung diputar ulang. */
+  lemparan?: number;
 }) {
   const akhir = ROTASI[nilai ?? 6] ?? ROTASI[6];
   return (
@@ -913,22 +989,53 @@ export function Dadu({
         boxShadow: "0 10px 24px rgba(15,23,42,0.22)",
       }}
     >
+      {/* Pembungkus "lemparan": melambung + memantul; di-key nomor lemparan supaya diputar ulang */}
       <div
-        className={cn("ludo-kubus", berputar && "ludo-kubus-putar")}
+        key={lemparan}
+        className={cn(lemparan > 0 && "ludo-dadu-lempar")}
         style={{
           position: "relative",
           width: 60,
           height: 60,
           transformStyle: "preserve-3d",
-          transform: berputar ? undefined : akhir,
-          transition: berputar
-            ? "none"
-            : "transform 700ms cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
-        {MUKA.map(([n, tr]) => (
-          <MukaDadu key={n} nilai={n} warna={warna} transform={tr} />
-        ))}
+        {/* bayangan di lantai — mengecil saat dadu di udara (ikut keyframe pembungkus lewat variabel) */}
+        <span
+          aria-hidden="true"
+          className={cn(
+            "ludo-dadu-bayang",
+            lemparan > 0 && "ludo-dadu-bayang-lempar",
+          )}
+          style={{
+            position: "absolute",
+            left: 4,
+            right: 4,
+            bottom: -14,
+            height: 10,
+            borderRadius: "50%",
+            background: "rgba(15,23,42,0.28)",
+            filter: "blur(3px)",
+            transform: "translateZ(-40px)",
+          }}
+        />
+        <div
+          className={cn("ludo-kubus", berputar && "ludo-kubus-putar")}
+          style={{
+            position: "relative",
+            width: 60,
+            height: 60,
+            transformStyle: "preserve-3d",
+            transform: berputar ? undefined : akhir,
+            transition: berputar
+              ? "none"
+              : "transform 700ms cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
+        >
+          {MUKA.map(([n, tr]) => (
+            <MukaDadu key={n} nilai={n} warna={warna} transform={tr} />
+          ))}
+        </div>
       </div>
       {boleh && !berputar ? (
         <span className="absolute -bottom-5 text-[10px] font-extrabold text-amber-500">

@@ -21,8 +21,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, GraduationCap, X } from "lucide-react";
 import { useAppStore } from "@/hooks/use-app-store";
-import { getAkunSosmed } from "@/services";
-import { elemenTur, LANGKAH_TUR, PERISTIWA_TUR, tandaiTurSelesai, turSudahSelesai } from "@/lib/tur";
+import { getAkunSosmed, getTurAktif } from "@/services";
+import {
+  elemenTur,
+  LANGKAH_TUR,
+  PERISTIWA_TUR,
+  tandaiTurSelesai,
+  turSudahSelesai,
+} from "@/lib/tur";
 
 type Kotak = { top: number; left: number; width: number; height: number };
 const PADDING = 6;
@@ -41,7 +47,10 @@ const TOLERANSI_TIDAK_ADA_MS = 6000;
 const MULUS = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 function gabungKotak(els: HTMLElement[]): Kotak {
-  let t = Infinity, l = Infinity, r = -Infinity, b = -Infinity;
+  let t = Infinity,
+    l = Infinity,
+    r = -Infinity,
+    b = -Infinity;
   for (const el of els) {
     const k = el.getBoundingClientRect();
     t = Math.min(t, k.top);
@@ -49,7 +58,12 @@ function gabungKotak(els: HTMLElement[]): Kotak {
     r = Math.max(r, k.right);
     b = Math.max(b, k.bottom);
   }
-  return { top: t - PADDING, left: l - PADDING, width: r - l + PADDING * 2, height: b - t + PADDING * 2 };
+  return {
+    top: t - PADDING,
+    left: l - PADDING,
+    width: r - l + PADDING * 2,
+    height: b - t + PADDING * 2,
+  };
 }
 
 function elemenLangkah(i: number): HTMLElement[] {
@@ -67,7 +81,9 @@ function elemenLangkah(i: number): HTMLElement[] {
 function adaDiDom(i: number): boolean {
   const langkah = LANGKAH_TUR[i];
   if (!langkah) return false;
-  return langkah.target.every((nama) => document.querySelector(`[data-tur="${nama}"]`) !== null);
+  return langkah.target.every(
+    (nama) => document.querySelector(`[data-tur="${nama}"]`) !== null,
+  );
 }
 
 export function TurPemandu() {
@@ -75,7 +91,11 @@ export function TurPemandu() {
   // -1 = tidak aktif; 0..n-1 = langkah; n = kartu selesai
   const [langkah, setLangkah] = useState(-1);
   const [kotak, setKotak] = useState<Kotak | null>(null);
-  const [posKartu, setPosKartu] = useState<{ top: number; left: number; atas: boolean } | null>(null);
+  const [posKartu, setPosKartu] = useState<{
+    top: number;
+    left: number;
+    atas: boolean;
+  } | null>(null);
   // true = pengguna belum punya akun tertaut (kartu memberi tahu tur akan
   // muncul lagi tiap 5 menit).
   const [belumPunyaAkun, setBelumPunyaAkun] = useState(false);
@@ -106,6 +126,13 @@ export function TurPemandu() {
   const periksaLaluMulai = useCallback(
     async (mode: "awal" | "ulang") => {
       if (!userId || langkahRef.current >= 0) return;
+      // Sakelar master (4 Sep 2026): tutorial otomatis bisa dimatikan untuk
+      // semua pengguna; gagal membaca sakelar = anggap nyala seperti biasa.
+      try {
+        if (!(await getTurAktif())) return;
+      } catch {
+        // abaikan — tetap lanjut
+      }
       let jumlah: number | null = null;
       try {
         jumlah = (await getAkunSosmed()).length;
@@ -133,7 +160,10 @@ export function TurPemandu() {
       // ulang membaca jumlah akun saat itu, jadi begitu akun terdaftar
       // (lewat tur atau manual) tagihan berhenti sendiri.
       if (jadwalUlangRef.current) clearTimeout(jadwalUlangRef.current);
-      jadwalUlangRef.current = setTimeout(() => void periksaLaluMulai("ulang"), JEDA_ULANG_MS);
+      jadwalUlangRef.current = setTimeout(
+        () => void periksaLaluMulai("ulang"),
+        JEDA_ULANG_MS,
+      );
     },
     [pindah, userId, periksaLaluMulai],
   );
@@ -253,7 +283,11 @@ export function TurPemandu() {
       if (sudahGulirRef.current !== i) {
         sudahGulirRef.current = i;
         try {
-          els[0].scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+          els[0].scrollIntoView({
+            block: "center",
+            inline: "nearest",
+            behavior: "smooth",
+          });
         } catch {
           // peramban lama
         }
@@ -273,9 +307,21 @@ export function TurPemandu() {
       const vh = window.innerHeight;
       const lebar = Math.min(LEBAR_KARTU, vw - 24);
       const bawahCukup = k.top + k.height + 12 + TINGGI_KARTU_KIRA < vh;
-      const top = bawahCukup ? k.top + k.height + 12 : Math.max(12, k.top - 12 - TINGGI_KARTU_KIRA);
-      const left = Math.min(Math.max(12, k.left + k.width / 2 - lebar / 2), vw - lebar - 12);
-      setPosKartu((lama) => (lama && lama.top === top && lama.left === left && lama.atas === !bawahCukup ? lama : { top, left, atas: !bawahCukup }));
+      const top = bawahCukup
+        ? k.top + k.height + 12
+        : Math.max(12, k.top - 12 - TINGGI_KARTU_KIRA);
+      const left = Math.min(
+        Math.max(12, k.left + k.width / 2 - lebar / 2),
+        vw - lebar - 12,
+      );
+      setPosKartu((lama) =>
+        lama &&
+        lama.top === top &&
+        lama.left === left &&
+        lama.atas === !bawahCukup
+          ? lama
+          : { top, left, atas: !bawahCukup },
+      );
     };
     hitung();
     const timer = window.setInterval(hitung, JEDA_POLL_MS);
@@ -292,7 +338,10 @@ export function TurPemandu() {
   if (!aktif) return null;
 
   const l = LANGKAH_TUR[langkah];
-  const lebarKartu = typeof window === "undefined" ? LEBAR_KARTU : Math.min(LEBAR_KARTU, window.innerWidth - 24);
+  const lebarKartu =
+    typeof window === "undefined"
+      ? LEBAR_KARTU
+      : Math.min(LEBAR_KARTU, window.innerWidth - 24);
   // Lubang sorotan: poligon evenodd (layar penuh dikurangi kotak target).
   const h = kotak ?? { top: 0, left: 0, width: 0, height: 0 };
   const L = `${Math.max(0, h.left)}px`;
@@ -341,7 +390,8 @@ export function TurPemandu() {
               width: kotak.width,
               height: kotak.height,
               border: "2px solid #F59E0B",
-              boxShadow: "0 0 0 3px rgba(245,158,11,0.3), 0 0 24px rgba(245,158,11,0.5)",
+              boxShadow:
+                "0 0 0 3px rgba(245,158,11,0.3), 0 0 24px rgba(245,158,11,0.5)",
               transition: `top 380ms ${MULUS}, left 380ms ${MULUS}, width 380ms ${MULUS}, height 380ms ${MULUS}`,
             }}
           >
@@ -369,14 +419,21 @@ export function TurPemandu() {
                   <p className="text-[10px] font-bold tracking-wide text-teks-sekunder uppercase">
                     Tutorial · langkah {langkah + 1} dari {LANGKAH_TUR.length}
                   </p>
-                  <p className="font-heading text-[14px] font-extrabold text-teks-utama">{l.judul}</p>
-                  <p className="mt-0.5 text-[12px] leading-relaxed text-teks-sekunder">{l.isi}</p>
+                  <p className="font-heading text-[14px] font-extrabold text-teks-utama">
+                    {l.judul}
+                  </p>
+                  <p className="mt-0.5 text-[12px] leading-relaxed text-teks-sekunder">
+                    {l.isi}
+                  </p>
                   {!kotak ? (
-                    <p className="mt-1 text-[11px] text-amber-500">Mencari bagian yang harus diketuk…</p>
+                    <p className="mt-1 text-[11px] text-amber-500">
+                      Mencari bagian yang harus diketuk…
+                    </p>
                   ) : null}
                   {belumPunyaAkun ? (
                     <p className="mt-1 text-[10.5px] text-amber-500">
-                      Tutorial ini muncul lagi tiap 5 menit sampai akun media sosial Anda terdaftar.
+                      Tutorial ini muncul lagi tiap 5 menit sampai akun media
+                      sosial Anda terdaftar.
                     </p>
                   ) : null}
                 </div>
@@ -397,7 +454,8 @@ export function TurPemandu() {
                       className="h-1.5 rounded-full"
                       style={{
                         width: i === langkah ? 16 : 6,
-                        background: i <= langkah ? "#F59E0B" : "rgba(148,163,184,0.45)",
+                        background:
+                          i <= langkah ? "#F59E0B" : "rgba(148,163,184,0.45)",
                         transition: `width 300ms ${MULUS}, background 300ms`,
                       }}
                     />
@@ -430,17 +488,22 @@ export function TurPemandu() {
               <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-500">
                 <CheckCircle2 className="h-8 w-8" />
               </span>
-              <p className="mt-3 font-heading text-[17px] font-extrabold text-teks-utama">Tutorial selesai!</p>
+              <p className="mt-3 font-heading text-[17px] font-extrabold text-teks-utama">
+                Tutorial selesai!
+              </p>
               <p className="mt-1 text-[12.5px] leading-relaxed text-teks-sekunder">
-                Anda tahu cara mendaftarkan akun dan mengecek Kepatuhan Komen. Komentar dihitung hanya bila ditulis
-                memakai akun terdaftar dalam jendela 19.00–18.59 WIB. Tutorial ini bisa dibuka lagi dari Profil →
-                Profil & Keamanan.
+                Anda tahu cara mendaftarkan akun dan mengecek Kepatuhan Komen.
+                Komentar dihitung hanya bila ditulis memakai akun terdaftar
+                dalam jendela 19.00–18.59 WIB. Tutorial ini bisa dibuka lagi
+                dari Profil → Profil & Keamanan.
               </p>
               <button
                 type="button"
                 onClick={() => akhiri("selesai")}
                 className="btn-tekan mt-4 h-11 w-full rounded-xl text-[13px] font-bold text-white"
-                style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+                style={{
+                  background: "linear-gradient(135deg, #DC2626, #B91C1C)",
+                }}
               >
                 Mengerti
               </button>

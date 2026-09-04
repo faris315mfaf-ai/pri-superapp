@@ -31,6 +31,8 @@ import {
   Sun,
   Utensils,
   X,
+  PartyPopper,
+  PawPrint,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton, ScreenHeader, StatusBadge } from "@/components/pri-ui";
@@ -61,9 +63,17 @@ import {
   type JenisRobot,
   type Perawatan,
   type SlotAksesoris,
+  KATALOG_GERAKAN,
+  KATALOG_HEWAN,
+  KATALOG_MAKANAN_HEWAN,
+  LABEL_TAHAP,
+  LABEL_SUASANA_HEWAN,
+  makananHewanDariKode,
+  type Gerakan,
 } from "@/lib/pet";
 import { cn } from "@/lib/utils";
 import { RobotSvg } from "./robot-svg";
+import { HewanSvg, type GerakHewan } from "./hewan-svg";
 
 const MERAH = "linear-gradient(135deg, #DC2626, #B91C1C)";
 const SEGAR_MS = 60_000;
@@ -244,8 +254,21 @@ export function PetScreen({
   const [st, setSt] = useState<PetState | null>(null);
   const [tab, setTab] = useState<"rawat" | "toko" | "lemari">("rawat");
   const [toko, setToko] = useState<
-    "aksesoris" | "makanan" | "sparepart" | "eksklusif"
+    "aksesoris" | "makanan" | "sparepart" | "eksklusif" | "gerakan" | "hewan"
   >("aksesoris");
+  // v4 (4 Sep 2026): pratinjau gerakan pada robot utama & animasi hewan di panel rawat.
+  const [gerakCoba, setGerakCoba] = useState<{
+    kelas: string;
+    ke: number;
+  } | null>(null);
+  const timerGerak = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [gerakHewan, setGerakHewan] = useState<{
+    kode: GerakHewan;
+    ke: number;
+  } | null>(null);
+  const timerHewan = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [editNamaHewan, setEditNamaHewan] = useState(false);
+  const [namaHewanBaru, setNamaHewanBaru] = useState("");
   // Warna yang sedang dipilih di panel Warna Custom ("" = ikut warna tersimpan).
   const [warnaPilih, setWarnaPilih] = useState("");
   const [lemari, setLemari] = useState<"aksesoris" | "sparepart">("aksesoris");
@@ -305,6 +328,20 @@ export function PetScreen({
     }
   }
 
+  /** Mainkan gerakan pada robot utama (pratinjau di layar Pet). */
+  function cobaGerak(g: Gerakan) {
+    if (timerGerak.current) clearTimeout(timerGerak.current);
+    setGerakCoba((c) => ({ kelas: g.kelas, ke: (c?.ke ?? 0) + 1 }));
+    timerGerak.current = setTimeout(() => setGerakCoba(null), g.durasiMs + 150);
+    if (typeof window !== "undefined")
+      window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function mainkanHewan(kode: GerakHewan, durasiMs = 2200) {
+    if (timerHewan.current) clearTimeout(timerHewan.current);
+    setGerakHewan((c) => ({ kode, ke: (c?.ke ?? 0) + 1 }));
+    timerHewan.current = setTimeout(() => setGerakHewan(null), durasiMs);
+  }
+
   async function beriMakan(kode: string) {
     const item = makananDariKode(kode);
     if (!item) return;
@@ -343,6 +380,11 @@ export function PetScreen({
   const dimiliki = new Set(st.dimiliki);
   const spDimiliki = new Set(st.sparepart_dimiliki);
   const skinDimiliki = new Set(st.skin_dimiliki);
+  const gerakanDimiliki = new Set(st.gerakan_dimiliki);
+  const hewanAktif = st.hewan.aktif;
+  const inventoriHewan = Object.entries(st.hewan_makanan).filter(
+    ([k, n]) => makananHewanDariKode(k) && n > 0,
+  );
   const warnaTampil = warnaPilih || st.warna_custom || PALET[jenis].utama;
   const persenXp = Math.round((100 * st.xp_di_level) / st.xp_berikut);
   const inventori = Object.entries(st.makanan).filter(([, n]) => n > 0);
@@ -434,17 +476,19 @@ export function PetScreen({
           </motion.div>
 
           <div className="relative mt-1">
-            <RobotSvg
-              jenis={jenis}
-              skin={st.skin_terpasang}
-              warna={st.warna_custom}
-              suasana={st.suasana}
-              vitalitas={st.vitalitas}
-              terpasang={st.terpasang}
-              sparepart={st.sparepart_terpasang}
-              ukuran={200}
-              makan={Boolean(emojiMakan)}
-            />
+            <div key={gerakCoba?.ke ?? 0} className={cn(gerakCoba?.kelas)}>
+              <RobotSvg
+                jenis={jenis}
+                skin={st.skin_terpasang}
+                warna={st.warna_custom}
+                suasana={st.suasana}
+                vitalitas={st.vitalitas}
+                terpasang={st.terpasang}
+                sparepart={st.sparepart_terpasang}
+                ukuran={200}
+                makan={Boolean(emojiMakan)}
+              />
+            </div>
             <AnimatePresence>
               {emojiMakan ? (
                 <motion.span
@@ -725,13 +769,15 @@ export function PetScreen({
             <p className="text-[12.5px] font-bold text-teks-utama">Toko</p>
             <KoinChip saldo={st.saldo_koin} />
           </div>
-          <div className="mt-2 grid grid-cols-4 gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10">
+          <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10">
             {(
               [
                 ["aksesoris", "Aksesoris", Shirt],
                 ["makanan", "Makanan", Utensils],
                 ["sparepart", "Sparepart", Cog],
                 ["eksklusif", "Eksklusif", Crown],
+                ["gerakan", "Gerakan", PartyPopper],
+                ["hewan", "Hewan", PawPrint],
               ] as const
             ).map(([k, label, Ikon]) => (
               <button
@@ -1265,6 +1311,408 @@ export function PetScreen({
                     </div>
                   </div>
                 )}
+              </div>
+            </>
+          ) : null}
+
+          {toko === "gerakan" ? (
+            <>
+              <p className="mt-2 text-[11px] text-teks-sekunder">
+                10 gerakan & emot robot · dibeli sekali · mainkan dari robot di
+                beranda (ketuk robotnya) atau tombol Coba di sini.
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {KATALOG_GERAKAN.map((g) => {
+                  const punya = gerakanDimiliki.has(g.kode);
+                  const mampu = st.saldo_koin >= g.harga;
+                  return (
+                    <div
+                      key={g.kode}
+                      className="glass-soft flex flex-col items-center rounded-xl p-2.5 text-center"
+                    >
+                      <span
+                        className="text-[34px] leading-none"
+                        aria-hidden="true"
+                      >
+                        {g.emoji}
+                      </span>
+                      <p className="mt-1 text-[11.5px] font-bold leading-tight text-teks-utama">
+                        {g.nama}
+                      </p>
+                      <p className="text-[9.5px] leading-tight text-teks-sekunder">
+                        {g.keterangan}
+                      </p>
+                      <p className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
+                        <img
+                          src="/KMP.svg"
+                          alt=""
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5"
+                        />{" "}
+                        {g.harga}
+                      </p>
+                      {punya ? (
+                        <button
+                          type="button"
+                          onClick={() => cobaGerak(g)}
+                          className="btn-tekan mt-1 h-8 w-full rounded-lg bg-pri/12 text-[11px] font-bold text-pri"
+                        >
+                          ▶ Coba
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void jalankan(`beli:${g.kode}`, "beli", {
+                              kode: g.kode,
+                            })
+                          }
+                          disabled={Boolean(sibuk) || !mampu}
+                          title={
+                            mampu
+                              ? g.keterangan
+                              : `Kurang ${g.harga - st.saldo_koin} koin`
+                          }
+                          className="btn-tekan mt-1 h-8 w-full rounded-lg text-[11px] font-bold text-white disabled:opacity-40"
+                          style={{
+                            background:
+                              "linear-gradient(135deg, #F59E0B, #EC4899)",
+                          }}
+                        >
+                          {sibuk === `beli:${g.kode}`
+                            ? "…"
+                            : mampu
+                              ? "Beli"
+                              : "Koin kurang"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
+
+          {toko === "hewan" ? (
+            <>
+              {hewanAktif ? (
+                <div className="glass-soft mt-2 rounded-xl p-3">
+                  <div className="flex items-start gap-3">
+                    <button
+                      type="button"
+                      onClick={() => mainkanHewan("senang")}
+                      className="btn-tekan shrink-0 rounded-xl bg-transparent"
+                      aria-label={`Ketuk ${hewanAktif.nama}`}
+                    >
+                      <HewanSvg
+                        key={gerakHewan?.ke ?? 0}
+                        jenis={hewanAktif.jenis}
+                        tahap={hewanAktif.tahap}
+                        suasana={hewanAktif.suasana}
+                        gerak={gerakHewan?.kode}
+                        ukuran={120}
+                      />
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      {editNamaHewan ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            value={namaHewanBaru}
+                            onChange={(e) => setNamaHewanBaru(e.target.value)}
+                            maxLength={NAMA_MAKS}
+                            placeholder="Nama hewan"
+                            className="glass-input h-8 min-w-0 flex-1 rounded-lg px-2 text-[12px] text-teks-utama"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditNamaHewan(false);
+                              void jalankan("hnama", "hewan_nama", {
+                                kode: hewanAktif.kode,
+                                nama: namaHewanBaru,
+                              });
+                            }}
+                            className="btn-tekan h-8 rounded-lg bg-pri px-2 text-[11px] font-bold text-white"
+                          >
+                            Simpan
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="flex items-center gap-1.5 text-[13px] font-extrabold text-teks-utama">
+                          {hewanAktif.nama}
+                          <span className="text-[10px] font-bold text-teks-sekunder">
+                            · {LABEL_TAHAP[hewanAktif.tahap]}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNamaHewanBaru(hewanAktif.nama);
+                              setEditNamaHewan(true);
+                            }}
+                            aria-label="Ganti nama hewan"
+                            className="btn-tekan text-teks-sekunder"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        </p>
+                      )}
+                      <p className="text-[10.5px] text-teks-sekunder">
+                        {LABEL_SUASANA_HEWAN[hewanAktif.suasana]}
+                      </p>
+                      <p className="mt-1.5 flex justify-between text-[10px] font-bold text-teks-utama">
+                        <span>Kenyang</span>
+                        <span>{hewanAktif.kenyang}</span>
+                      </p>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/15">
+                        <div
+                          className="h-full rounded-full bg-emerald-500 transition-[width] duration-500"
+                          style={{ width: `${hewanAktif.kenyang}%` }}
+                        />
+                      </div>
+                      <p className="mt-1.5 flex justify-between text-[10px] font-bold text-teks-utama">
+                        <span>
+                          {hewanAktif.tahap === "dewasa"
+                            ? "Sudah dewasa 🎉"
+                            : `Tumbuh ke ${hewanAktif.tahap === "anak" ? "remaja" : "dewasa"}`}
+                        </span>
+                        <span>
+                          {hewanAktif.tahap === "dewasa"
+                            ? ""
+                            : `${hewanAktif.progres.diTahap}/${hewanAktif.progres.butuh} XP`}
+                        </span>
+                      </p>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/15">
+                        <div
+                          className="h-full rounded-full bg-amber-500 transition-[width] duration-500"
+                          style={{
+                            width: `${Math.min(100, Math.round((hewanAktif.progres.diTahap / Math.max(1, hewanAktif.progres.butuh)) * 100))}%`,
+                          }}
+                        />
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {(
+                          [
+                            ["senang", "❤️ Senang", 2400],
+                            ["lompat", "🎉 Lompat", 1900],
+                            ["guling", "😹 Guling", 1300],
+                            ["tidur", "💤 Tidur", 4000],
+                            ["jalan", "🐾 Jalan", 2600],
+                          ] as const
+                        ).map(([kode, label, durasi]) => (
+                          <button
+                            key={kode}
+                            type="button"
+                            onClick={() => mainkanHewan(kode, durasi)}
+                            className="btn-tekan h-7 rounded-full bg-black/5 px-2 text-[10.5px] font-bold text-teks-utama dark:bg-white/10"
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  {st.hewan.daftar.length > 1 ? (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {st.hewan.daftar.map((h) => (
+                        <button
+                          key={h.kode}
+                          type="button"
+                          onClick={() =>
+                            h.kode !== hewanAktif.kode &&
+                            void jalankan(`hpilih:${h.kode}`, "hewan_pilih", {
+                              kode: h.kode,
+                            })
+                          }
+                          aria-pressed={h.kode === hewanAktif.kode}
+                          className={cn(
+                            "btn-tekan h-7 rounded-full px-2.5 text-[10.5px] font-bold",
+                            h.kode === hewanAktif.kode
+                              ? "bg-pri text-white"
+                              : "bg-black/5 text-teks-utama dark:bg-white/10",
+                          )}
+                        >
+                          {h.nama} · {LABEL_TAHAP[h.tahap]}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <p className="mt-2.5 text-[11px] font-bold text-teks-utama">
+                    Beri makan dari inventori
+                  </p>
+                  {inventoriHewan.length === 0 ? (
+                    <p className="text-[10.5px] text-teks-sekunder">
+                      Kosong — beli makanan hewan di bawah. Makan = kenyang naik
+                      + XP untuk tumbuh.
+                    </p>
+                  ) : (
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {inventoriHewan.map(([kode, n]) => {
+                        const m = makananHewanDariKode(kode)!;
+                        return (
+                          <button
+                            key={kode}
+                            type="button"
+                            onClick={() => {
+                              mainkanHewan("senang", 2000);
+                              void jalankan(`hmakan:${kode}`, "hewan_makan", {
+                                kode,
+                                hewan: hewanAktif.kode,
+                              });
+                            }}
+                            disabled={Boolean(sibuk)}
+                            title={`+${m.kenyang} kenyang · +${m.xp} XP`}
+                            className="btn-tekan flex h-9 items-center gap-1 rounded-xl bg-emerald-500/12 px-2.5 text-[11px] font-bold text-emerald-700 disabled:opacity-40 dark:text-emerald-300"
+                          >
+                            <span aria-hidden="true">{m.emoji}</span> {m.nama}{" "}
+                            <span className="text-[9.5px] opacity-70">
+                              ×{n}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-2 text-[11px] text-teks-sekunder">
+                  Belum punya hewan peliharaan. Adopsi satu di bawah — ia akan
+                  menemani robotmu di beranda, tumbuh dari anak sampai dewasa.
+                </p>
+              )}
+
+              <p className="mt-3 text-[11.5px] font-bold text-teks-utama">
+                Adopsi hewan robot
+              </p>
+              <div className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {KATALOG_HEWAN.map((h) => {
+                  const punya = st.hewan.daftar.some((x) => x.kode === h.kode);
+                  const mampu = st.saldo_koin >= h.harga;
+                  return (
+                    <div
+                      key={h.kode}
+                      className="glass-soft flex items-center gap-3 rounded-xl p-2.5"
+                    >
+                      <HewanSvg
+                        jenis={h.jenis}
+                        tahap="anak"
+                        ukuran={84}
+                        animasi={false}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[12px] font-bold text-teks-utama">
+                          {h.nama}
+                        </p>
+                        <p className="text-[9.5px] leading-tight text-teks-sekunder">
+                          {h.keterangan}
+                        </p>
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                          <p className="flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
+                            <img
+                              src="/KMP.svg"
+                              alt=""
+                              aria-hidden="true"
+                              className="h-3.5 w-3.5"
+                            />{" "}
+                            {h.harga}
+                          </p>
+                          {punya ? (
+                            <StatusBadge label="dipelihara" warna="hijau" />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void jalankan(`beli:${h.kode}`, "beli", {
+                                  kode: h.kode,
+                                })
+                              }
+                              disabled={Boolean(sibuk) || !mampu}
+                              className="btn-tekan h-8 rounded-lg px-3 text-[11px] font-bold text-white disabled:opacity-40"
+                              style={{
+                                background:
+                                  "linear-gradient(135deg, #F59E0B, #B45309)",
+                              }}
+                            >
+                              {sibuk === `beli:${h.kode}`
+                                ? "…"
+                                : mampu
+                                  ? "Adopsi"
+                                  : "Koin kurang"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <p className="mt-3 text-[11.5px] font-bold text-teks-utama">
+                Makanan hewan
+              </p>
+              <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {KATALOG_MAKANAN_HEWAN.map((m) => {
+                  const punya = st.hewan_makanan[m.kode] ?? 0;
+                  const mampu = st.saldo_koin >= m.harga;
+                  const favorit = KATALOG_HEWAN.filter((h) =>
+                    h.favorit.includes(m.kode),
+                  ).map((h) => h.nama.replace(" Robot", ""));
+                  return (
+                    <div
+                      key={m.kode}
+                      className="glass-soft flex flex-col items-center rounded-xl p-2.5 text-center"
+                    >
+                      <span
+                        className="text-[30px] leading-none"
+                        aria-hidden="true"
+                      >
+                        {m.emoji}
+                      </span>
+                      <p className="mt-1 text-[11.5px] font-bold leading-tight text-teks-utama">
+                        {m.nama}
+                      </p>
+                      <p className="text-[9.5px] text-teks-sekunder">
+                        +{m.kenyang} kenyang · +{m.xp} XP
+                        {favorit.length
+                          ? ` · favorit ${favorit.join(", ")}`
+                          : ""}
+                      </p>
+                      <p className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
+                        <img
+                          src="/KMP.svg"
+                          alt=""
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5"
+                        />{" "}
+                        {m.harga}
+                        {punya > 0 ? (
+                          <span className="ml-1 rounded-full bg-pri/15 px-1.5 text-[10px] text-pri">
+                            punya ×{punya}
+                          </span>
+                        ) : null}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void jalankan(`beli:${m.kode}`, "beli", {
+                            kode: m.kode,
+                          })
+                        }
+                        disabled={Boolean(sibuk) || !mampu}
+                        className="btn-tekan mt-1 h-8 w-full rounded-lg text-[11px] font-bold text-white disabled:opacity-40"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #10B981, #059669)",
+                        }}
+                      >
+                        {sibuk === `beli:${m.kode}`
+                          ? "…"
+                          : mampu
+                            ? "Beli"
+                            : "Koin kurang"}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </>
           ) : null}

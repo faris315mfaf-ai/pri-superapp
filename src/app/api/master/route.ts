@@ -23,7 +23,13 @@ import { AKTIVITAS_KOIN } from "@/lib/koin";
 
 export const dynamic = "force-dynamic";
 
-const PERAN_KHUSUS = ["super_admin", "admin_tv", "admin_hr", "ketua", "anggota"] as const;
+const PERAN_KHUSUS = [
+  "super_admin",
+  "admin_tv",
+  "admin_hr",
+  "ketua",
+  "anggota",
+] as const;
 const PLATFORM_QC = new Set(["instagram", "tiktok"]);
 
 function tokenDari(request: Request): string {
@@ -34,7 +40,8 @@ function tokenDari(request: Request): string {
 /** Hanya master. Bukan super admin, bukan siapa pun yang lain. */
 async function pastikanMaster(request: Request) {
   const user = await userDariToken(tokenDari(request));
-  if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
+  if (!user)
+    throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
   if (user.role !== "master") {
     // Pesan sengaja netral: keberadaan panel ini tidak perlu
     // diiklankan kepada peran lain.
@@ -58,7 +65,9 @@ export async function GET(request: Request) {
     const bucketFoto = url.searchParams.get("foto");
     if (bucketFoto) {
       if (!(BUCKET_FOTO as readonly string[]).includes(bucketFoto)) {
-        throw Object.assign(new Error("Bucket tidak dikenal."), { status: 400 });
+        throw Object.assign(new Error("Bucket tidak dikenal."), {
+          status: 400,
+        });
       }
       const halaman = Math.max(1, Number(url.searchParams.get("halaman") ?? 1));
       const PER_HALAMAN = 24;
@@ -68,7 +77,10 @@ export async function GET(request: Request) {
       // (mis. avatar/<user_id>/x.jpg) ikut terlihat.
       const { data: level1 } = await db.storage
         .from(bucketFoto)
-        .list("", { limit: 200, sortBy: { column: "created_at", order: "desc" } });
+        .list("", {
+          limit: 200,
+          sortBy: { column: "created_at", order: "desc" },
+        });
       const jalurSemua: { path: string; dibuat: string }[] = [];
       const folder: string[] = [];
       for (const o of level1 ?? []) {
@@ -80,17 +92,30 @@ export async function GET(request: Request) {
       for (const f of folder.slice(0, 40)) {
         const { data: isi } = await db.storage
           .from(bucketFoto)
-          .list(f, { limit: 100, sortBy: { column: "created_at", order: "desc" } });
+          .list(f, {
+            limit: 100,
+            sortBy: { column: "created_at", order: "desc" },
+          });
         for (const o of isi ?? []) {
-          if (o.id) jalurSemua.push({ path: `${f}/${o.name}`, dibuat: o.created_at ?? "" });
+          if (o.id)
+            jalurSemua.push({
+              path: `${f}/${o.name}`,
+              dibuat: o.created_at ?? "",
+            });
         }
       }
       jalurSemua.sort((a, b) => b.dibuat.localeCompare(a.dibuat));
 
-      const potongan = jalurSemua.slice((halaman - 1) * PER_HALAMAN, halaman * PER_HALAMAN);
+      const potongan = jalurSemua.slice(
+        (halaman - 1) * PER_HALAMAN,
+        halaman * PER_HALAMAN,
+      );
       const { data: tanda } = await db.storage
         .from(bucketFoto)
-        .createSignedUrls(potongan.map((p) => p.path), 3600);
+        .createSignedUrls(
+          potongan.map((p) => p.path),
+          3600,
+        );
       const urlPer = new Map((tanda ?? []).map((t) => [t.path, t.signedUrl]));
 
       return {
@@ -124,7 +149,10 @@ export async function GET(request: Request) {
         .select("id, username, platform, nama_tampilan, aktif")
         .order("platform")
         .order("username"),
-      db.from("app_user").select("id", { count: "exact", head: true }).eq("aktif", true),
+      db
+        .from("app_user")
+        .select("id", { count: "exact", head: true })
+        .eq("aktif", true),
       db.from("chat_kontak").select("id", { count: "exact", head: true }),
       db.from("video_antrian").select("kode", { count: "exact", head: true }),
       db.from("pengaturan_sistem").select("kunci, nilai"),
@@ -179,14 +207,20 @@ export async function POST(request: Request) {
     if (body.aksi === "beri_peran_khusus") {
       const id = Number(body.user_id);
       const peran = String(body.role ?? "");
-      if (!id) throw Object.assign(new Error("Akun tidak disebutkan."), { status: 400 });
+      if (!id)
+        throw Object.assign(new Error("Akun tidak disebutkan."), {
+          status: 400,
+        });
       if (!(PERAN_KHUSUS as readonly string[]).includes(peran)) {
         throw Object.assign(new Error("Peran tidak dikenal."), { status: 400 });
       }
       if (String(id) === master.id) {
-        throw Object.assign(new Error("Peran akun master tidak bisa diubah dari sini."), {
-          status: 400,
-        });
+        throw Object.assign(
+          new Error("Peran akun master tidak bisa diubah dari sini."),
+          {
+            status: 400,
+          },
+        );
       }
 
       const { data: target } = await db
@@ -195,7 +229,9 @@ export async function POST(request: Request) {
         .eq("id", id)
         .maybeSingle();
       if (!target || target.role === "master") {
-        throw Object.assign(new Error("Akun tidak ditemukan."), { status: 404 });
+        throw Object.assign(new Error("Akun tidak ditemukan."), {
+          status: 404,
+        });
       }
 
       const { error } = await db
@@ -231,19 +267,27 @@ export async function POST(request: Request) {
         .replace(/^@+/, "")
         .toLowerCase();
       if (!PLATFORM_QC.has(platform)) {
-        throw Object.assign(new Error("Platform QC hanya Instagram atau TikTok."), {
-          status: 400,
-        });
+        throw Object.assign(
+          new Error("Platform QC hanya Instagram atau TikTok."),
+          {
+            status: 400,
+          },
+        );
       }
       if (!/^[a-z0-9._]{2,30}$/.test(username)) {
-        throw Object.assign(new Error("Username tidak valid."), { status: 400 });
+        throw Object.assign(new Error("Username tidak valid."), {
+          status: 400,
+        });
       }
       const { error } = await db
         .from("akun_wajib")
         .insert({ username, platform, nama_tampilan: username, aktif: true });
       if (error) {
         if (error.code === "23505") {
-          throw Object.assign(new Error("Akun itu sudah ada di daftar wajib."), { status: 409 });
+          throw Object.assign(
+            new Error("Akun itu sudah ada di daftar wajib."),
+            { status: 409 },
+          );
         }
         console.error("[master] tambah akun wajib:", error.message);
         throw new Error("Gagal menambahkan akun wajib.");
@@ -253,7 +297,10 @@ export async function POST(request: Request) {
 
     if (body.aksi === "hapus_akun_wajib") {
       const id = Number(body.id);
-      if (!id) throw Object.assign(new Error("Akun tidak disebutkan."), { status: 400 });
+      if (!id)
+        throw Object.assign(new Error("Akun tidak disebutkan."), {
+          status: 400,
+        });
       const { error } = await db.from("akun_wajib").delete().eq("id", id);
       if (error) throw new Error("Gagal menghapus akun wajib.");
       return { sukses: true };
@@ -262,7 +309,10 @@ export async function POST(request: Request) {
     // --- Paksa keluar dari semua perangkat ---
     if (body.aksi === "cabut_sesi") {
       const id = Number(body.user_id);
-      if (!id) throw Object.assign(new Error("Akun tidak disebutkan."), { status: 400 });
+      if (!id)
+        throw Object.assign(new Error("Akun tidak disebutkan."), {
+          status: 400,
+        });
       await cabutSemuaSesi(id);
       return { sukses: true };
     }
@@ -270,10 +320,12 @@ export async function POST(request: Request) {
     // --- Sakelar mode perbaikan: hanya master yang bisa masuk ---
     if (body.aksi === "mode_perbaikan") {
       const nyala = body.nilai === true;
-      const { error } = await db.from("pengaturan_sistem").upsert(
-        { kunci: "mode_perbaikan", nilai: nyala ? "true" : "false" },
-        { onConflict: "kunci" },
-      );
+      const { error } = await db
+        .from("pengaturan_sistem")
+        .upsert(
+          { kunci: "mode_perbaikan", nilai: nyala ? "true" : "false" },
+          { onConflict: "kunci" },
+        );
       if (error) throw new Error("Gagal menyimpan mode perbaikan.");
       return { sukses: true, mode_perbaikan: nyala };
     }
@@ -282,12 +334,28 @@ export async function POST(request: Request) {
     // Bila nyala, pendaftaran baru langsung berstatus 'aktif' (tanpa
     // menunggu persetujuan pengurus). Verifikasi email tetap berlaku bila
     // pengirim email sudah diatur. Default: mati (perlu persetujuan).
+    // Tutorial interaktif (4 Sep 2026): master bisa mematikannya untuk semua
+    // pengguna. Default: nyala. Dibaca klien lewat /api/tur (cache 60 dtk).
+    if (body.aksi === "tur_aktif") {
+      const nyala = body.nilai === true;
+      const { error } = await db
+        .from("pengaturan_sistem")
+        .upsert(
+          { kunci: "tur_aktif", nilai: nyala ? "true" : "false" },
+          { onConflict: "kunci" },
+        );
+      if (error) throw new Error("Gagal menyimpan pengaturan tutorial.");
+      return { sukses: true, tur_aktif: nyala };
+    }
+
     if (body.aksi === "daftar_auto_aktif") {
       const nyala = body.nilai === true;
-      const { error } = await db.from("pengaturan_sistem").upsert(
-        { kunci: "daftar_auto_aktif", nilai: nyala ? "true" : "false" },
-        { onConflict: "kunci" },
-      );
+      const { error } = await db
+        .from("pengaturan_sistem")
+        .upsert(
+          { kunci: "daftar_auto_aktif", nilai: nyala ? "true" : "false" },
+          { onConflict: "kunci" },
+        );
       if (error) throw new Error("Gagal menyimpan pengaturan pendaftaran.");
       return { sukses: true, daftar_auto_aktif: nyala };
     }
@@ -300,22 +368,33 @@ export async function POST(request: Request) {
     if (body.aksi === "reset_sandi") {
       const id = Number(body.user_id);
       const sandiBaru = String(body.nilai ?? "");
-      if (!id) throw Object.assign(new Error("Akun tidak disebutkan."), { status: 400 });
+      if (!id)
+        throw Object.assign(new Error("Akun tidak disebutkan."), {
+          status: 400,
+        });
       if (sandiBaru.length < 8) {
-        throw Object.assign(new Error("Sandi baru minimal 8 karakter."), { status: 400 });
+        throw Object.assign(new Error("Sandi baru minimal 8 karakter."), {
+          status: 400,
+        });
       }
       const { data: target } = await db
         .from("app_user")
         .select("id, nama, role")
         .eq("id", id)
         .maybeSingle();
-      if (!target) throw Object.assign(new Error("Akun tidak ditemukan."), { status: 404 });
+      if (!target)
+        throw Object.assign(new Error("Akun tidak ditemukan."), {
+          status: 404,
+        });
       // Master tidak bisa me-reset master lain lewat jalur ini —
       // mencegah pengambilalihan akun tertinggi secara diam-diam.
       if (target.role === "master" && String(id) !== String(master.id)) {
-        throw Object.assign(new Error("Sandi sesama master tidak bisa di-reset."), {
-          status: 403,
-        });
+        throw Object.assign(
+          new Error("Sandi sesama master tidak bisa di-reset."),
+          {
+            status: 403,
+          },
+        );
       }
 
       const { error } = await db
@@ -338,16 +417,29 @@ export async function POST(request: Request) {
     // --- Bonus koin per aktivitas (spek 1.16) ---
     // body.username = id aktivitas, body.nilai = angka (string).
     if (body.aksi === "koin_bonus") {
-      const akt = AKTIVITAS_KOIN.find((a) => a.id === String(body.username ?? ""));
-      if (!akt) throw Object.assign(new Error("Aktivitas tidak dikenal."), { status: 400 });
+      const akt = AKTIVITAS_KOIN.find(
+        (a) => a.id === String(body.username ?? ""),
+      );
+      if (!akt)
+        throw Object.assign(new Error("Aktivitas tidak dikenal."), {
+          status: 400,
+        });
       const n = Math.floor(Number(body.nilai));
       if (!Number.isFinite(n) || n < 0 || n > 1000) {
-        throw Object.assign(new Error("Bonus koin harus 0-1000."), { status: 400 });
+        throw Object.assign(new Error("Bonus koin harus 0-1000."), {
+          status: 400,
+        });
       }
-      const { error } = await db.from("pengaturan_sistem").upsert(
-        { kunci: akt.kunci, nilai: String(n), diubah_pada: new Date().toISOString() },
-        { onConflict: "kunci" },
-      );
+      const { error } = await db
+        .from("pengaturan_sistem")
+        .upsert(
+          {
+            kunci: akt.kunci,
+            nilai: String(n),
+            diubah_pada: new Date().toISOString(),
+          },
+          { onConflict: "kunci" },
+        );
       if (error) throw new Error("Gagal menyimpan bonus koin.");
       return { sukses: true };
     }
@@ -362,11 +454,14 @@ export async function POST(request: Request) {
       const kunci = String(body.username ?? "");
       const SAH: Record<string, [number, number]> = {
         wajah_ambang_login: [50, 99], // ketat login 1:N
-        wajah_margin: [0, 50],        // selisih anti-mirip
-        wajah_ambang: [50, 99],       // absen 1:1
+        wajah_margin: [0, 50], // selisih anti-mirip
+        wajah_ambang: [50, 99], // absen 1:1
       };
       const batas = SAH[kunci];
-      if (!batas) throw Object.assign(new Error("Pengaturan wajah tidak dikenal."), { status: 400 });
+      if (!batas)
+        throw Object.assign(new Error("Pengaturan wajah tidak dikenal."), {
+          status: 400,
+        });
       const persen = Number(body.nilai);
       if (!Number.isFinite(persen) || persen < batas[0] || persen > batas[1]) {
         throw Object.assign(
@@ -374,10 +469,16 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
-      const { error } = await db.from("pengaturan_sistem").upsert(
-        { kunci, nilai: String(persen / 100), diubah_pada: new Date().toISOString() },
-        { onConflict: "kunci" },
-      );
+      const { error } = await db
+        .from("pengaturan_sistem")
+        .upsert(
+          {
+            kunci,
+            nilai: String(persen / 100),
+            diubah_pada: new Date().toISOString(),
+          },
+          { onConflict: "kunci" },
+        );
       if (error) throw new Error("Gagal menyimpan pengaturan wajah.");
       return { sukses: true };
     }
