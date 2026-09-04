@@ -18,21 +18,26 @@ import {
   Cog,
   Crown,
   Droplets,
+  Footprints,
   Gamepad2,
+  Gem,
+  Hand,
   Lock,
   Moon,
   Palette,
+  PartyPopper,
+  PawPrint,
   Pencil,
   RefreshCw,
   Shirt,
   ShoppingBag,
   Smile,
   Sparkles,
+  Store,
   Sun,
   Utensils,
   X,
-  PartyPopper,
-  PawPrint,
+  Zap,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton, ScreenHeader, StatusBadge } from "@/components/pri-ui";
@@ -70,14 +75,42 @@ import {
   LABEL_SUASANA_HEWAN,
   makananHewanDariKode,
   type Gerakan,
+  type Aksesoris,
 } from "@/lib/pet";
+import {
+  adalahJaket,
+  KATALOG_SKIN_HEWAN,
+  KATEGORI_LABEL,
+  kategoriDariSlot,
+  skinHewanDariKode,
+  type KategoriAksesoris,
+} from "@/lib/pet-katalog-v5";
 import { cn } from "@/lib/utils";
 import { RobotSvg } from "./robot-svg";
 import { HewanSvg, type GerakHewan } from "./hewan-svg";
+import { PasarLobi } from "./pasar-lobi";
+
+/** Tab utama layar pet (v5: + Pasar). */
+export type TabPet = "rawat" | "toko" | "lemari" | "pasar";
+/** Bagian toko (v5): aksesoris per kategori, jaket, item langka, dan bagian lama. */
+type BagianToko =
+  | "kepala"
+  | "tangan"
+  | "tubuh"
+  | "kaki"
+  | "jaket"
+  | "langka"
+  | "makanan"
+  | "sparepart"
+  | "eksklusif"
+  | "gerakan"
+  | "hewan";
+const KATEGORI_TOKO: readonly KategoriAksesoris[] = ["kepala", "tangan", "tubuh", "kaki"];
 
 const MERAH = "linear-gradient(135deg, #DC2626, #B91C1C)";
 const SEGAR_MS = 60_000;
 const SLOT_URUT: SlotAksesoris[] = [
+  "kaki",
   "kepala",
   "mata",
   "leher",
@@ -247,15 +280,16 @@ function PilihRobot({
 export function PetScreen({
   onKembali,
   onBerubah,
+  tabAwal,
 }: {
   onKembali: () => void;
   onBerubah?: () => void;
+  /** v5: tab yang dibuka pertama (dari menu robot melayang). */
+  tabAwal?: TabPet;
 }) {
   const [st, setSt] = useState<PetState | null>(null);
-  const [tab, setTab] = useState<"rawat" | "toko" | "lemari">("rawat");
-  const [toko, setToko] = useState<
-    "aksesoris" | "makanan" | "sparepart" | "eksklusif" | "gerakan" | "hewan"
-  >("aksesoris");
+  const [tab, setTab] = useState<TabPet>(tabAwal ?? "rawat");
+  const [toko, setToko] = useState<BagianToko>("kepala");
   // v4 (4 Sep 2026): pratinjau gerakan pada robot utama & animasi hewan di panel rawat.
   const [gerakCoba, setGerakCoba] = useState<{
     kelas: string;
@@ -389,6 +423,65 @@ export function PetScreen({
   const persenXp = Math.round((100 * st.xp_di_level) / st.xp_berikut);
   const inventori = Object.entries(st.makanan).filter(([, n]) => n > 0);
   const totalMakanan = inventori.reduce((a, [, n]) => a + n, 0);
+
+  // ---- v5: harga ketetapan master, kartu aksesoris per kategori, skin hewan ----
+  const hargaKini = (kode: string, dasar: number) => st.harga_toko?.[kode] ?? dasar;
+  const hargaWarna = hargaKini(KODE_WARNA_CUSTOM, HARGA_WARNA_CUSTOM);
+  const paletHewan = (skin: string | null | undefined) => (skin ? skinHewanDariKode(skin)?.palet : undefined);
+  const tokoAksesoris = (KATEGORI_TOKO as readonly string[]).includes(toko) || toko === "jaket" || toko === "langka";
+  const daftarAksesorisToko: Aksesoris[] = tokoAksesoris
+    ? KATALOG_AKSESORIS.filter((a) =>
+        toko === "langka"
+          ? Boolean(a.langka)
+          : toko === "jaket"
+            ? adalahJaket(a)
+            : !a.langka && !adalahJaket(a) && kategoriDariSlot(a.slot) === toko,
+      )
+    : [];
+  const keteranganToko =
+    toko === "langka"
+      ? `${daftarAksesorisToko.length} item langka — hanya bisa dibeli saat master membuka event-nya. Yang terbuka sekarang: ${st.event_aktif.length}.`
+      : toko === "jaket"
+        ? `${daftarAksesorisToko.length} jaket bertuliskan PRI / TV Rakyat (putih & merah) · slot tubuh.`
+        : `${daftarAksesorisToko.length} item kategori ${KATEGORI_LABEL[toko as KategoriAksesoris] ?? toko} · dibeli sekali, langsung dipasang · satu per slot, cocok untuk semua skin.`;
+  const kartuAksesoris = (a: Aksesoris) => {
+    const punya = dimiliki.has(a.kode);
+    const harga = hargaKini(a.kode, a.harga);
+    const mampu = st.saldo_koin >= harga;
+    const eventBuka = !a.langka || st.event_aktif.includes(a.kode);
+    return (
+      <div key={a.kode} className={cn("glass-soft flex flex-col items-center rounded-xl p-2.5 text-center", a.langka && "ring-1 ring-amber-400/50")}>
+        <RobotSvg jenis={jenis} skin={st.skin_terpasang} warna={st.warna_custom} suasana="senang" terpasang={{ [a.slot]: a.kode }} sparepart={st.sparepart_terpasang} ukuran={72} animasi={false} />
+        <p className="mt-1 text-[11.5px] font-bold leading-tight text-teks-utama">{a.nama}</p>
+        <p className="text-[9.5px] text-teks-sekunder">
+          {SLOT_LABEL[a.slot]}
+          {a.langka ? " · LANGKA" : ""}
+        </p>
+        <p className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
+          <img src="/KMP.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5" /> {harga}
+          {harga !== a.harga ? <span className="text-[9px] font-semibold text-teks-sekunder line-through">{a.harga}</span> : null}
+        </p>
+        {punya ? (
+          <StatusBadge label="dimiliki" warna="hijau" />
+        ) : !eventBuka ? (
+          <span className="mt-1 flex h-8 w-full items-center justify-center gap-1 rounded-lg bg-amber-500/12 text-[10.5px] font-bold text-amber-700 dark:text-amber-300">
+            <Lock className="h-3 w-3" aria-hidden="true" /> Hanya saat event
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void jalankan(`beli:${a.kode}`, "beli", { kode: a.kode })}
+            disabled={Boolean(sibuk) || !mampu}
+            title={mampu ? a.keterangan : `Kurang ${harga - st.saldo_koin} koin`}
+            className="btn-tekan mt-1 h-8 w-full rounded-lg text-[11px] font-bold text-white disabled:opacity-40"
+            style={{ background: MERAH }}
+          >
+            {sibuk === `beli:${a.kode}` ? "…" : mampu ? "Beli" : "Koin kurang"}
+          </button>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="kolom-aplikasi px-4 pb-32">
@@ -566,12 +659,13 @@ export function PetScreen({
       </GlassCard>
 
       {/* Tab utama */}
-      <div className="glass mt-3 grid grid-cols-3 rounded-xl p-1">
+      <div className="glass mt-3 grid grid-cols-4 rounded-xl p-1">
         {(
           [
             ["rawat", "Rawat", Sparkles],
             ["toko", "Toko", ShoppingBag],
             ["lemari", "Lemari", Shirt],
+            ["pasar", "Pasar", Store],
           ] as const
         ).map(([k, label, Ikon]) => (
           <button
@@ -589,6 +683,16 @@ export function PetScreen({
           </button>
         ))}
       </div>
+
+      {/* ===== PASAR & LOBI (v5) ===== */}
+      {tab === "pasar" ? (
+        <PasarLobi
+          onBerubah={() => {
+            void getPet().then((d) => setSt(d)).catch(() => undefined);
+            onBerubah?.();
+          }}
+        />
+      ) : null}
 
       {/* ===== RAWAT ===== */}
       {tab === "rawat" ? (
@@ -769,15 +873,20 @@ export function PetScreen({
             <p className="text-[12.5px] font-bold text-teks-utama">Toko</p>
             <KoinChip saldo={st.saldo_koin} />
           </div>
-          <div className="mt-2 grid grid-cols-3 gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10">
+          <div className="tanpa-scrollbar -mx-1 mt-2 flex gap-1 overflow-x-auto px-1 pb-1">
             {(
               [
-                ["aksesoris", "Aksesoris", Shirt],
-                ["makanan", "Makanan", Utensils],
+                ["kepala", "Kepala", Crown],
+                ["tangan", "Tangan", Hand],
+                ["tubuh", "Tubuh", Shirt],
+                ["kaki", "Kaki", Footprints],
+                ["jaket", "Jaket PRI", Zap],
+                ["langka", "Langka", Gem],
                 ["sparepart", "Sparepart", Cog],
-                ["eksklusif", "Eksklusif", Crown],
+                ["eksklusif", "Eksklusif", Sparkles],
                 ["gerakan", "Gerakan", PartyPopper],
                 ["hewan", "Hewan", PawPrint],
+                ["makanan", "Makanan", Utensils],
               ] as const
             ).map(([k, label, Ikon]) => (
               <button
@@ -786,85 +895,26 @@ export function PetScreen({
                 onClick={() => setToko(k)}
                 aria-pressed={toko === k}
                 className={cn(
-                  "btn-tekan flex items-center justify-center gap-1 rounded-lg py-1.5 text-[11.5px] font-bold",
-                  toko === k
-                    ? "bg-white text-teks-utama shadow-sm dark:bg-white/15"
-                    : "text-teks-sekunder",
+                  "btn-tekan flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[11.5px] font-bold",
+                  toko === k ? "text-white" : "glass text-teks-sekunder",
                 )}
+                style={toko === k ? { background: MERAH } : undefined}
               >
                 <Ikon className="h-3.5 w-3.5" /> {label}
               </button>
             ))}
           </div>
 
-          {toko === "aksesoris" ? (
+          {tokoAksesoris ? (
             <>
-              <p className="mt-2 text-[11px] text-teks-sekunder">
-                30 aksesoris · dibeli sekali, langsung dipasang · satu per slot.
-              </p>
+              <p className="mt-2 text-[11px] text-teks-sekunder">{keteranganToko}</p>
+              {toko === "langka" && st.event_aktif.length === 0 ? (
+                <p className="mt-2 rounded-xl border border-dashed border-amber-400/50 bg-amber-400/8 px-3 py-2 text-[11px] text-teks-sekunder">
+                  Belum ada event yang dibuka. Item langka hanya bisa dibeli saat master membuka event-nya — pantau pengumuman!
+                </p>
+              ) : null}
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {KATALOG_AKSESORIS.map((a) => {
-                  const punya = dimiliki.has(a.kode);
-                  const mampu = st.saldo_koin >= a.harga;
-                  return (
-                    <div
-                      key={a.kode}
-                      className="glass-soft flex flex-col items-center rounded-xl p-2.5 text-center"
-                    >
-                      <RobotSvg
-                        jenis={jenis}
-                        skin={st.skin_terpasang}
-                        warna={st.warna_custom}
-                        suasana="senang"
-                        terpasang={{ [a.slot]: a.kode }}
-                        sparepart={st.sparepart_terpasang}
-                        ukuran={72}
-                        animasi={false}
-                      />
-                      <p className="mt-1 text-[11.5px] font-bold leading-tight text-teks-utama">
-                        {a.nama}
-                      </p>
-                      <p className="text-[9.5px] text-teks-sekunder">
-                        {SLOT_LABEL[a.slot]}
-                      </p>
-                      <p className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
-                        <img
-                          src="/KMP.svg"
-                          alt=""
-                          aria-hidden="true"
-                          className="h-3.5 w-3.5"
-                        />{" "}
-                        {a.harga}
-                      </p>
-                      {punya ? (
-                        <StatusBadge label="dimiliki" warna="hijau" />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void jalankan(`beli:${a.kode}`, "beli", {
-                              kode: a.kode,
-                            })
-                          }
-                          disabled={Boolean(sibuk) || !mampu}
-                          title={
-                            mampu
-                              ? a.keterangan
-                              : `Kurang ${a.harga - st.saldo_koin} koin`
-                          }
-                          className="btn-tekan mt-1 h-8 w-full rounded-lg text-[11px] font-bold text-white disabled:opacity-40"
-                          style={{ background: MERAH }}
-                        >
-                          {sibuk === `beli:${a.kode}`
-                            ? "…"
-                            : mampu
-                              ? "Beli"
-                              : "Koin kurang"}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+                {daftarAksesorisToko.map((a) => kartuAksesoris(a))}
               </div>
             </>
           ) : null}
@@ -878,7 +928,7 @@ export function PetScreen({
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {KATALOG_MAKANAN.map((m) => {
                   const punya = st.makanan[m.kode] ?? 0;
-                  const mampu = st.saldo_koin >= m.harga;
+                  const mampu = st.saldo_koin >= hargaKini(m.kode, m.harga);
                   return (
                     <div
                       key={m.kode}
@@ -903,7 +953,7 @@ export function PetScreen({
                           aria-hidden="true"
                           className="h-3.5 w-3.5"
                         />{" "}
-                        {m.harga}
+                        {hargaKini(m.kode, m.harga)}
                         {punya > 0 ? (
                           <span className="ml-1 rounded-full bg-pri/15 px-1.5 text-[10px] text-pri">
                             punya ×{punya}
@@ -921,7 +971,7 @@ export function PetScreen({
                         title={
                           mampu
                             ? m.keterangan
-                            : `Kurang ${m.harga - st.saldo_koin} koin`
+                            : `Kurang ${hargaKini(m.kode, m.harga) - st.saldo_koin} koin`
                         }
                         className="btn-tekan mt-1 h-8 w-full rounded-lg text-[11px] font-bold text-white disabled:opacity-40"
                         style={{
@@ -951,7 +1001,7 @@ export function PetScreen({
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {KATALOG_SPAREPART.map((s) => {
                   const punya = spDimiliki.has(s.kode);
-                  const mampu = st.saldo_koin >= s.harga;
+                  const mampu = st.saldo_koin >= hargaKini(s.kode, s.harga);
                   return (
                     <div
                       key={s.kode}
@@ -982,7 +1032,7 @@ export function PetScreen({
                           aria-hidden="true"
                           className="h-3.5 w-3.5"
                         />{" "}
-                        {s.harga}
+                        {hargaKini(s.kode, s.harga)}
                       </p>
                       {punya ? (
                         <StatusBadge label="dimiliki" warna="hijau" />
@@ -998,7 +1048,7 @@ export function PetScreen({
                           title={
                             mampu
                               ? s.keterangan
-                              : `Kurang ${s.harga - st.saldo_koin} koin`
+                              : `Kurang ${hargaKini(s.kode, s.harga) - st.saldo_koin} koin`
                           }
                           className="btn-tekan mt-1 h-8 w-full rounded-lg text-[11px] font-bold text-white disabled:opacity-40"
                           style={{
@@ -1032,7 +1082,7 @@ export function PetScreen({
                   const punya = skinDimiliki.has(sk.kode);
                   const dipakai = st.skin_terpasang === sk.kode;
                   const musimAktif = skinTersedia(sk);
-                  const mampu = st.saldo_koin >= sk.harga;
+                  const mampu = st.saldo_koin >= hargaKini(sk.kode, sk.harga);
                   return (
                     <div
                       key={sk.kode}
@@ -1085,7 +1135,7 @@ export function PetScreen({
                               aria-hidden="true"
                               className="h-3.5 w-3.5"
                             />{" "}
-                            {sk.harga}
+                            {hargaKini(sk.kode, sk.harga)}
                           </p>
                           {punya ? (
                             dipakai ? (
@@ -1130,7 +1180,7 @@ export function PetScreen({
                               title={
                                 mampu
                                   ? sk.keterangan
-                                  : `Kurang ${sk.harga - st.saldo_koin} koin`
+                                  : `Kurang ${hargaKini(sk.kode, sk.harga) - st.saldo_koin} koin`
                               }
                               className="btn-tekan h-8 rounded-lg px-3 text-[11px] font-bold text-white disabled:opacity-40"
                               style={{
@@ -1183,7 +1233,7 @@ export function PetScreen({
                         aria-hidden="true"
                         className="h-3.5 w-3.5"
                       />{" "}
-                      {HARGA_WARNA_CUSTOM}
+                      {hargaWarna}
                     </span>
                   ) : (
                     <span className="ml-auto">
@@ -1192,7 +1242,7 @@ export function PetScreen({
                   )}
                 </div>
                 <p className="mt-0.5 text-[10.5px] text-teks-sekunder">
-                  Buka sekali seharga {HARGA_WARNA_CUSTOM} koin, lalu warna
+                  Buka sekali seharga {hargaWarna} koin, lalu warna
                   utama robot bebas diganti kapan saja — ikut tampil di Ludo,
                   robot melayang, dan profil chat.
                 </p>
@@ -1205,12 +1255,12 @@ export function PetScreen({
                       })
                     }
                     disabled={
-                      Boolean(sibuk) || st.saldo_koin < HARGA_WARNA_CUSTOM
+                      Boolean(sibuk) || st.saldo_koin < hargaWarna
                     }
                     title={
-                      st.saldo_koin >= HARGA_WARNA_CUSTOM
+                      st.saldo_koin >= hargaWarna
                         ? "Buka fitur warna custom"
-                        : `Kurang ${HARGA_WARNA_CUSTOM - st.saldo_koin} koin`
+                        : `Kurang ${hargaWarna - st.saldo_koin} koin`
                     }
                     className="btn-tekan mt-2 h-9 w-full rounded-lg text-[11.5px] font-bold text-white disabled:opacity-40"
                     style={{
@@ -1220,9 +1270,9 @@ export function PetScreen({
                   >
                     {sibuk === `beli:${KODE_WARNA_CUSTOM}`
                       ? "…"
-                      : st.saldo_koin >= HARGA_WARNA_CUSTOM
-                        ? `Buka Warna Custom (${HARGA_WARNA_CUSTOM} koin)`
-                        : `Koin kurang (butuh ${HARGA_WARNA_CUSTOM})`}
+                      : st.saldo_koin >= hargaWarna
+                        ? `Buka Warna Custom (${hargaWarna} koin)`
+                        : `Koin kurang (butuh ${hargaWarna})`}
                   </button>
                 ) : (
                   <div className="mt-2 flex gap-3">
@@ -1324,7 +1374,7 @@ export function PetScreen({
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {KATALOG_GERAKAN.map((g) => {
                   const punya = gerakanDimiliki.has(g.kode);
-                  const mampu = st.saldo_koin >= g.harga;
+                  const mampu = st.saldo_koin >= hargaKini(g.kode, g.harga);
                   return (
                     <div
                       key={g.kode}
@@ -1349,7 +1399,7 @@ export function PetScreen({
                           aria-hidden="true"
                           className="h-3.5 w-3.5"
                         />{" "}
-                        {g.harga}
+                        {hargaKini(g.kode, g.harga)}
                       </p>
                       {punya ? (
                         <button
@@ -1371,7 +1421,7 @@ export function PetScreen({
                           title={
                             mampu
                               ? g.keterangan
-                              : `Kurang ${g.harga - st.saldo_koin} koin`
+                              : `Kurang ${hargaKini(g.kode, g.harga) - st.saldo_koin} koin`
                           }
                           className="btn-tekan mt-1 h-8 w-full rounded-lg text-[11px] font-bold text-white disabled:opacity-40"
                           style={{
@@ -1410,6 +1460,7 @@ export function PetScreen({
                         tahap={hewanAktif.tahap}
                         suasana={hewanAktif.suasana}
                         gerak={gerakHewan?.kode}
+                        palet={paletHewan(hewanAktif.skin)}
                         ukuran={120}
                       />
                     </button>
@@ -1580,13 +1631,65 @@ export function PetScreen({
                 </p>
               )}
 
+              {hewanAktif ? (
+                <>
+                  <p className="mt-3 text-[11.5px] font-bold text-teks-utama">
+                    Skin {hewanAktif.nama} · 5 pilihan
+                  </p>
+                  <div className="mt-1.5 grid grid-cols-3 gap-2 sm:grid-cols-6">
+                    <button
+                      type="button"
+                      onClick={() => hewanAktif.skin && void jalankan("hskin:bawaan", "hewan_skin", { hewan: hewanAktif.kode, kode: "" })}
+                      aria-pressed={!hewanAktif.skin}
+                      className={cn("glass-soft btn-tekan flex flex-col items-center rounded-xl p-2 text-center", !hewanAktif.skin && "ring-2 ring-pri/60")}
+                    >
+                      <HewanSvg jenis={hewanAktif.jenis} tahap={hewanAktif.tahap} ukuran={64} animasi={false} />
+                      <span className="mt-1 text-[10.5px] font-bold text-teks-utama">Bawaan</span>
+                    </button>
+                    {KATALOG_SKIN_HEWAN.filter((sh) => sh.hewan === hewanAktif.jenis).map((sh) => {
+                      const punya = st.skin_dimiliki.includes(sh.kode);
+                      const dipakai = hewanAktif.skin === sh.kode;
+                      const harga = hargaKini(sh.kode, sh.harga);
+                      return (
+                        <div key={sh.kode} className={cn("glass-soft flex flex-col items-center rounded-xl p-2 text-center", dipakai && "ring-2 ring-pri/60")}>
+                          <HewanSvg jenis={hewanAktif.jenis} tahap={hewanAktif.tahap} palet={sh.palet} ukuran={64} animasi={false} />
+                          <span className="mt-1 text-[10.5px] font-bold leading-tight text-teks-utama">{sh.nama}</span>
+                          {punya ? (
+                            <button
+                              type="button"
+                              onClick={() => void jalankan(`hskin:${sh.kode}`, "hewan_skin", { hewan: hewanAktif.kode, kode: dipakai ? "" : sh.kode })}
+                              disabled={Boolean(sibuk)}
+                              className={cn("btn-tekan mt-1 h-7 w-full rounded-lg text-[10.5px] font-bold", dipakai ? "bg-black/5 text-teks-utama dark:bg-white/10" : "text-white")}
+                              style={dipakai ? undefined : { background: MERAH }}
+                            >
+                              {dipakai ? "Lepas" : "Pakai"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => void jalankan(`beli:${sh.kode}`, "beli", { kode: sh.kode })}
+                              disabled={Boolean(sibuk) || st.saldo_koin < harga}
+                              title={sh.keterangan}
+                              className="btn-tekan mt-1 flex h-7 w-full items-center justify-center gap-1 rounded-lg text-[10.5px] font-bold text-white disabled:opacity-40"
+                              style={{ background: MERAH }}
+                            >
+                              <img src="/KMP.svg" alt="" aria-hidden="true" className="h-3 w-3" /> {harga}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : null}
+
               <p className="mt-3 text-[11.5px] font-bold text-teks-utama">
                 Adopsi hewan robot
               </p>
               <div className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {KATALOG_HEWAN.map((h) => {
                   const punya = st.hewan.daftar.some((x) => x.kode === h.kode);
-                  const mampu = st.saldo_koin >= h.harga;
+                  const mampu = st.saldo_koin >= hargaKini(h.kode, h.harga);
                   return (
                     <div
                       key={h.kode}
@@ -1613,7 +1716,7 @@ export function PetScreen({
                               aria-hidden="true"
                               className="h-3.5 w-3.5"
                             />{" "}
-                            {h.harga}
+                            {hargaKini(h.kode, h.harga)}
                           </p>
                           {punya ? (
                             <StatusBadge label="dipelihara" warna="hijau" />
@@ -1652,7 +1755,7 @@ export function PetScreen({
               <div className="mt-1.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {KATALOG_MAKANAN_HEWAN.map((m) => {
                   const punya = st.hewan_makanan[m.kode] ?? 0;
-                  const mampu = st.saldo_koin >= m.harga;
+                  const mampu = st.saldo_koin >= hargaKini(m.kode, m.harga);
                   const favorit = KATALOG_HEWAN.filter((h) =>
                     h.favorit.includes(m.kode),
                   ).map((h) => h.nama.replace(" Robot", ""));
@@ -1683,7 +1786,7 @@ export function PetScreen({
                           aria-hidden="true"
                           className="h-3.5 w-3.5"
                         />{" "}
-                        {m.harga}
+                        {hargaKini(m.kode, m.harga)}
                         {punya > 0 ? (
                           <span className="ml-1 rounded-full bg-pri/15 px-1.5 text-[10px] text-pri">
                             punya ×{punya}

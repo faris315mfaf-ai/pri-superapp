@@ -52,6 +52,15 @@ import {
   type HewanState,
   type HewanKlien,
 } from "@/lib/pet";
+import { bolehPet, PESAN_PET_DIMATIKAN } from "@/lib/pet-akses";
+import { bacaToko } from "@/lib/pet-toko";
+import {
+  eventAktif,
+  hargaEfektif,
+  skinHewanDariKode,
+  TOKO_KOSONG,
+  type PengaturanToko,
+} from "@/lib/pet-katalog-v5";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +96,7 @@ type Baris = {
 const KOLOM =
   "user_id, jenis, nama, kenyang, energi, senang, bersih, tidur, xp, aksesoris_dimiliki, aksesoris_terpasang, sparepart_dimiliki, sparepart_terpasang, makanan, skin_dimiliki, skin_terpasang, warna_terbuka, warna_custom, gerakan_dimiliki, hewan, hewan_makanan, aktivitas_hari_ini, aktivitas_tanggal, hadiah_terakhir, terakhir_dihitung, dibuat_pada";
 const SLOT_SAH = new Set<string>([
+  "kaki",
   "kepala",
   "mata",
   "leher",
@@ -193,6 +203,8 @@ function hewanKeKlien(b: Baris): HewanState {
       tahap: pr.tahap,
       suasana: suasanaHewan(kenyang),
       progres: { diTahap: pr.diTahap, butuh: pr.butuh },
+      // v5: skin hewan (hs_*) yang dipakai — hanya bila kodenya masih dikenal.
+      skin: d?.skin && skinHewanDariKode(String(d.skin)) ? String(d.skin) : null,
     });
   }
   daftar.sort((x, y) => x.kode.localeCompare(y.kode));
@@ -208,7 +220,11 @@ function keState(
   saldo: number,
   pemilik = "",
   publik = false,
+  toko: PengaturanToko = TOKO_KOSONG,
 ): PetState {
+  // v5: harga ketetapan master & item langka yang event-nya sedang dibuka.
+  const hargaToko = toko.harga;
+  const eventAktifKini = Object.keys(toko.event).filter((k) => eventAktif(k, toko));
   const kosong: Kebutuhan = { kenyang: 0, energi: 0, senang: 0, bersih: 0 };
   if (!b) {
     return {
@@ -240,6 +256,8 @@ function keState(
       saldo_koin: saldo,
       hadiah_hari_ini: false,
       dibuat_pada: null,
+      harga_toko: hargaToko,
+      event_aktif: eventAktifKini,
     };
   }
   const k = kebutuhanDari(b);
@@ -285,7 +303,9 @@ function keState(
     makanan,
     skin_dimiliki: publik
       ? []
-      : (b.skin_dimiliki ?? []).filter((x) => skinDariKode(x)),
+      : (b.skin_dimiliki ?? []).filter(
+          (x) => skinDariKode(x) || skinHewanDariKode(x),
+        ),
     skin_terpasang:
       b.skin_terpasang && skinDariKode(b.skin_terpasang)
         ? b.skin_terpasang
@@ -307,6 +327,8 @@ function keState(
     saldo_koin: publik ? 0 : saldo,
     hadiah_hari_ini: b.hadiah_terakhir === tanggalWib(),
     dibuat_pada: b.dibuat_pada,
+    harga_toko: hargaToko,
+    event_aktif: eventAktifKini,
   };
 }
 
@@ -326,16 +348,20 @@ export async function GET(request: Request) {
       return keState(segar, 0, String(orang?.nama ?? ""), true);
     }
 
+    // v5: fitur pet dimatikan untuk pemegang jabatan (master tetap boleh).
+    if (!bolehPet(user)) galat(PESAN_PET_DIMATIKAN, 403);
     const uid = Number(user.id);
-    let b = await bacaBaris(db, uid);
-    if (b) b = await segarkan(db, b);
-    return keState(b, await saldoKoin(uid), user.nama);
+    const [toko, baris] = await Promise.all([bacaToko(), bacaBaris(db, uid)]);
+    const b = baris ? await segarkan(db, baris) : null;
+    return keState(b, await saldoKoin(uid), user.nama, false, toko);
   });
 }
 
 export async function POST(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
+    // v5: fitur pet dimatikan untuk pemegang jabatan (master tetap boleh).
+    if (!bolehPet(user)) galat(PESAN_PET_DIMATIKAN, 403);
     const db = supabase();
     const uid = Number(user.id);
     const body = (await request.json().catch(() => ({}))) as Record<
@@ -345,8 +371,9 @@ export async function POST(request: Request) {
     const aksi = String(body.aksi ?? "");
     const kini = new Date().toISOString();
     const hariIni = tanggalWib();
+    const toko = await bacaToko();
     const balas = async (b: Baris | null, pesan: string) => ({
-      ...keState(b, await saldoKoin(uid), user.nama),
+      ...keState(b, await saldoKoin(uid), user.nama, false, toko),
       pesan,
     });
 
@@ -564,6 +591,8 @@ export async function POST(request: Request) {
       const grk = gerakanDariKode(kode);
       const hwn = hewanDariKode(kode);
       const mhw = makananHewanDariKode(kode);
+      // v5: skin hewan (hs_*) — butuh hewannya dulu.
+      const hsk = skinHewanDariKode(kode);
       const hewanDb = (b.hewan ?? {}) as HewanDb;
       const item =
         aks ??
@@ -572,12 +601,24 @@ export async function POST(request: Request) {
         grk ??
         hwn ??
         mhw ??
+        hsk ??
         (skn
           ? { nama: skn.nama, harga: skn.harga }
           : fiturWarna
             ? { nama: "Warna Custom", harga: HARGA_WARNA_CUSTOM }
             : undefined);
       if (!item) galat("Barang tidak ada di toko.");
+      // v5: harga ketetapan master menimpa harga katalog; item langka hanya saat event.
+      const hargaBeli = hargaEfektif(kode, item.harga, toko);
+      if (aks?.langka && !eventAktif(kode, toko))
+        galat(
+          `${aks.nama} adalah item LANGKA — hanya bisa didapat saat event-nya dibuka master.`,
+          409,
+        );
+      if (hsk && !hewanDb.daftar?.[`hewan_${hsk.hewan}`])
+        galat(`Pelihara ${hsk.hewan} robot dulu sebelum membeli skin-nya.`, 409);
+      if (hsk && (b.skin_dimiliki ?? []).includes(kode))
+        galat(`Skin ${hsk.nama} sudah Anda miliki.`, 409);
       if (aks && (b.aksesoris_dimiliki ?? []).includes(kode))
         galat(`${aks.nama} sudah Anda miliki.`, 409);
       if (spr && (b.sparepart_dimiliki ?? []).includes(kode))
@@ -600,14 +641,17 @@ export async function POST(request: Request) {
           409,
         );
       const saldo = await saldoKoin(uid);
-      if (saldo < item.harga)
-        galat(`Koin kurang: butuh ${item.harga}, saldo ${saldo}.`);
-      // Buku besar koin: baris negatif. Aksesoris/sparepart/skin/warna unik per kode
-      // (anti dobel); makanan boleh berkali-kali → referensi memuat waktu.
-      const referensi = mkn || mhw ? `${kode}-${Date.now()}` : kode;
+      if (saldo < hargaBeli)
+        galat(`Koin kurang: butuh ${hargaBeli}, saldo ${saldo}.`);
+      // Buku besar koin: baris negatif. Barang yang bisa DIPERDAGANGKAN
+      // (aksesoris/sparepart/skin) boleh dibeli lagi setelah dijual di pasar →
+      // referensi memuat waktu; anti-dobel dijaga pemeriksaan kepemilikan di atas.
+      // Gerakan/hewan/warna tetap unik per kode.
+      const referensi =
+        mkn || mhw || aks || spr || skn || hsk ? `${kode}-${Date.now()}` : kode;
       const { error: eKoin } = await db.from("koin_transaksi").insert({
         user_id: uid,
-        jumlah: -item.harga,
+        jumlah: -hargaBeli,
         aktivitas: "pet_beli",
         referensi,
       });
@@ -634,7 +678,7 @@ export async function POST(request: Request) {
           aksesoris_dimiliki: dimiliki,
           aksesoris_terpasang: terpasang,
         };
-        pesan = `${aks.nama} dibeli (−${aks.harga} koin) dan langsung dipasang.`;
+        pesan = `${aks.nama} dibeli (−${hargaBeli} koin) dan langsung dipasang.`;
       } else if (spr) {
         const dimiliki = [...(b.sparepart_dimiliki ?? []), kode];
         const terpasang = {
@@ -650,21 +694,31 @@ export async function POST(request: Request) {
           sparepart_dimiliki: dimiliki,
           sparepart_terpasang: terpasang,
         };
-        pesan = `${spr.nama} dipasang (−${spr.harga} koin).`;
+        pesan = `${spr.nama} dipasang (−${hargaBeli} koin).`;
+      } else if (hsk) {
+        // Skin hewan: masuk skin_dimiliki dan langsung dipakai hewan itu.
+        const dimiliki = [...(b.skin_dimiliki ?? []), kode];
+        const daftar = { ...(hewanDb.daftar ?? {}) };
+        const kh = `hewan_${hsk.hewan}`;
+        daftar[kh] = { ...daftar[kh], skin: kode };
+        const hewanBaru: HewanDb = { aktif: hewanDb.aktif ?? kh, daftar };
+        kolom = { skin_dimiliki: dimiliki, hewan: hewanBaru };
+        sesudah = { ...b, skin_dimiliki: dimiliki, hewan: hewanBaru };
+        pesan = `Skin ${hsk.nama} dipakai ${daftar[kh].nama} (−${hargaBeli} koin).`;
       } else if (skn) {
         const dimiliki = [...(b.skin_dimiliki ?? []), kode];
         kolom = { skin_dimiliki: dimiliki, skin_terpasang: kode };
         sesudah = { ...b, skin_dimiliki: dimiliki, skin_terpasang: kode };
-        pesan = `Skin eksklusif ${skn.nama} kini milik Anda selamanya (−${skn.harga} koin) dan langsung dipakai!`;
+        pesan = `Skin eksklusif ${skn.nama} kini milik Anda selamanya (−${hargaBeli} koin) dan langsung dipakai!`;
       } else if (fiturWarna) {
         kolom = { warna_terbuka: true };
         sesudah = { ...b, warna_terbuka: true };
-        pesan = `Warna custom terbuka (−${HARGA_WARNA_CUSTOM} koin). Pilih warna favorit Anda — bisa diganti kapan saja.`;
+        pesan = `Warna custom terbuka (−${hargaBeli} koin). Pilih warna favorit Anda — bisa diganti kapan saja.`;
       } else if (grk) {
         const dimiliki = [...(b.gerakan_dimiliki ?? []), kode];
         kolom = { gerakan_dimiliki: dimiliki };
         sesudah = { ...b, gerakan_dimiliki: dimiliki };
-        pesan = `Gerakan ${grk.nama} ${grk.emoji} dibeli (−${grk.harga} koin). Ketuk robot di beranda untuk memainkannya.`;
+        pesan = `Gerakan ${grk.nama} ${grk.emoji} dibeli (−${hargaBeli} koin). Ketuk robot di beranda untuk memainkannya.`;
       } else if (hwn) {
         const daftar = { ...(hewanDb.daftar ?? {}) };
         daftar[kode] = {
@@ -676,19 +730,19 @@ export async function POST(request: Request) {
         const hewanBaru: HewanDb = { aktif: hewanDb.aktif ?? kode, daftar };
         kolom = { hewan: hewanBaru };
         sesudah = { ...b, hewan: hewanBaru };
-        pesan = `${hwn.nama} "${hwn.namaBawaan}" resmi jadi peliharaan ${b.nama} (−${hwn.harga} koin)! Beri makan supaya tumbuh.`;
+        pesan = `${hwn.nama} "${hwn.namaBawaan}" resmi jadi peliharaan ${b.nama} (−${hargaBeli} koin)! Beri makan supaya tumbuh.`;
       } else if (mhw) {
         const inv = { ...(b.hewan_makanan ?? {}) };
         inv[kode] = Math.floor(Number(inv[kode] ?? 0)) + 1;
         kolom = { hewan_makanan: inv };
         sesudah = { ...b, hewan_makanan: inv };
-        pesan = `${mhw.nama} ${mhw.emoji} masuk inventori hewan (−${mhw.harga} koin). Sekarang ${inv[kode]}.`;
+        pesan = `${mhw.nama} ${mhw.emoji} masuk inventori hewan (−${hargaBeli} koin). Sekarang ${inv[kode]}.`;
       } else {
         const inv = { ...(b.makanan ?? {}) };
         inv[kode] = Math.floor(Number(inv[kode] ?? 0)) + 1;
         kolom = { makanan: inv };
         sesudah = { ...b, makanan: inv };
-        pesan = `${mkn!.nama} ${mkn!.emoji} masuk inventori (−${mkn!.harga} koin). Sekarang ${inv[kode]}.`;
+        pesan = `${mkn!.nama} ${mkn!.emoji} masuk inventori (−${hargaBeli} koin). Sekarang ${inv[kode]}.`;
       }
       const { error } = await db
         .from("pet_robot")
@@ -797,7 +851,7 @@ export async function POST(request: Request) {
     if (aksi === "warna") {
       if (!b.warna_terbuka)
         galat(
-          `Fitur warna custom belum dibuka — buka dulu di Toko → Eksklusif (${HARGA_WARNA_CUSTOM} koin).`,
+          `Fitur warna custom belum dibuka — buka dulu di Toko → Eksklusif (${hargaEfektif(KODE_WARNA_CUSTOM, HARGA_WARNA_CUSTOM, toko)} koin).`,
           403,
         );
       const kosong =
@@ -910,6 +964,33 @@ export async function POST(request: Request) {
           (tahapBaru !== tahapLama
             ? ` · TUMBUH jadi ${tahapBaru.toUpperCase()}!`
             : ""),
+      );
+    }
+
+    // ---------- v5: SKIN HEWAN (pasang / lepas) ----------
+    if (aksi === "hewan_skin") {
+      const hewanDb = (b.hewan ?? {}) as HewanDb;
+      const daftar = { ...(hewanDb.daftar ?? {}) };
+      const kodeHewan = String(body.hewan ?? "");
+      if (!daftar[kodeHewan]) galat("Hewan itu belum Anda pelihara.");
+      const kode = String(body.kode ?? "");
+      if (kode) {
+        const hs = skinHewanDariKode(kode);
+        if (!hs || `hewan_${hs.hewan}` !== kodeHewan)
+          galat("Skin itu bukan untuk hewan ini.");
+        if (!(b.skin_dimiliki ?? []).includes(kode))
+          galat("Skin itu belum Anda miliki.", 409);
+      }
+      daftar[kodeHewan] = { ...daftar[kodeHewan], skin: kode || null };
+      const hewanBaru: HewanDb = { aktif: hewanDb.aktif ?? kodeHewan, daftar };
+      const { error } = await db
+        .from("pet_robot")
+        .update({ hewan: hewanBaru, diperbarui_pada: kini })
+        .eq("user_id", uid);
+      if (error) throw new Error("Gagal menyimpan skin hewan.");
+      return balas(
+        { ...b, hewan: hewanBaru },
+        kode ? "Skin hewan dipasang." : "Skin hewan dilepas — kembali ke warna bawaan.",
       );
     }
 

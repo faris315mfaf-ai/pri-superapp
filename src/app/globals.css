@@ -1203,3 +1203,13 @@ html[data-mode-simpel="1"].dark body {
 .mode-simpel-layar {
   min-height: 100vh;
 }
+
+/* Lobi robot (v5, 5 Sep 2026): langkah kecil saat robot sendiri bergerak — transform saja. */
+@keyframes pet-melangkah {
+  from { transform: translateY(0) rotate(-2deg); }
+  to { transform: translateY(-4px) rotate(2deg); }
+}
+.pet-melangkah {
+  display: inline-block;
+  animation: pet-melangkah 0.28s ease-in-out infinite alternate;
+}

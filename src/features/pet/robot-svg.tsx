@@ -138,13 +138,11 @@ export function RobotSvg({
   const g = (nama: string) => `url(#${id}-${nama})`;
   const kelas = (k: string) => (animasi ? k : undefined);
 
-  const { mata, leher, aura } = terpasang;
-  // Skin megah menggantikan slot kepala/badan/punggung/tangan: aksesoris di slot itu
-  // disembunyikan selama skin dipakai (tetap dimiliki; tampil lagi saat skin dilepas).
-  const kepala = sk ? undefined : terpasang.kepala;
-  const badan = sk ? undefined : terpasang.badan;
-  const punggung = sk ? undefined : terpasang.punggung;
-  const tangan = sk ? undefined : terpasang.tangan;
+  // v5 (5 Sep 2026): SEMUA slot aksesoris tetap tampil di atas skin eksklusif
+  // (dulu kepala/badan/punggung/tangan disembunyikan saat skin dipakai) —
+  // aksesoris kini "terhubung ke semua skin". Slot baru: kaki.
+  const { mata, leher, aura, kepala, badan, punggung, tangan } = terpasang;
+  const aksKaki = terpasang.kaki;
   const lapis = sk ? lapisanSkin(sk.kode, { g, kelas }) : null;
   // Varian warna sparepart (4 Sep 2026): kode varian memakai BENTUK dasar
   // dengan PALET bagian sendiri (pk/pt/pm/pkp/ptb) — bentuk lama tidak diubah.
@@ -189,6 +187,7 @@ export function RobotSvg({
     punggung: gambarAksesorisBaru(punggung, { kelas }),
     tangan: gambarAksesorisBaru(tangan, { kelas }),
     aura: gambarAksesorisBaru(aura, { kelas }),
+    kaki: gambarAksesorisBaru(aksKaki, { kelas }),
   };
   const kelasTubuh = kelas(
     tidur ? KELAS_VITALITAS.tidur : KELAS_VITALITAS[vitalitas],
@@ -1294,6 +1293,7 @@ export function RobotSvg({
         ) : null}
 
         {kaki}
+        {aksBaru.kaki}
         {tubuh}
 
         {/* Panel dada + inti */}

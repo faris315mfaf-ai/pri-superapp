@@ -23,6 +23,7 @@ import { SeksiKuota } from "./seksi-kuota";
 import { SeksiServer } from "./seksi-server";
 import { SeksiBebasKewajiban } from "./seksi-bebas-kewajiban";
 import { SeksiSakelarBerat } from "./seksi-sakelar-berat";
+import { SeksiTokoPet } from "./seksi-toko-pet";
 import { SeksiFormatLaporan } from "./seksi-format-laporan";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -499,6 +500,12 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
             <SeksiEksporData />
             <SeksiServer />
             {/* Fitur berat & mode hemat + format laporan upload (4 Sep 2026) */}
+            {/* Toko Pet (v5, 5 Sep 2026): master sebagai pedagang */}
+            <SeksiTokoPet
+              pengaturan={data.pengaturan}
+              sedangProses={sedangProses}
+              onSelesai={() => setMuatUlang((n) => n + 1)}
+            />
             <SeksiSakelarBerat
               pengaturan={data.pengaturan}
               sedangProses={sedangProses}

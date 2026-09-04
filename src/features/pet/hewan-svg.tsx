@@ -33,6 +33,8 @@ export type GerakHewan =
 type Props = {
   jenis: JenisHewan;
   tahap: TahapHewan;
+  /** v5: palet skin hewan (dari KATALOG_SKIN_HEWAN) menggantikan warna bawaan. */
+  palet?: { badan: string; aksen: string; perut: string; mata: string };
   suasana?: SuasanaHewan;
   ukuran?: number;
   animasi?: boolean;
@@ -70,6 +72,27 @@ const PALET: Record<
     mata: "#38BDF8",
     label: "Kapibara robot",
   },
+  kelinci: {
+    badan: "#CBD5E1",
+    aksen: "#F9A8D4",
+    perut: "#F8FAFC",
+    mata: "#F472B6",
+    label: "Kelinci robot",
+  },
+  gajah: {
+    badan: "#64748B",
+    aksen: "#FEF3C7",
+    perut: "#CBD5E1",
+    mata: "#FDE047",
+    label: "Gajah robot",
+  },
+  kangguru: {
+    badan: "#B45309",
+    aksen: "#FDE68A",
+    perut: "#FBBF24",
+    mata: "#22D3EE",
+    label: "Kangguru robot",
+  },
 };
 
 const SKALA: Record<TahapHewan, { badan: number; kepala: number }> = {
@@ -98,10 +121,11 @@ export function HewanSvg({
   animasi = true,
   gerak,
   menghadap = "kanan",
+  palet,
   className,
   style,
 }: Props) {
-  const p = PALET[jenis];
+  const p = palet ? { ...PALET[jenis], ...palet } : PALET[jenis];
   const gelap = gelapkan(p.badan, 0.35);
   const terang = terangkan(p.badan, 0.3);
   const sk = SKALA[tahap];
@@ -227,18 +251,49 @@ export function HewanSvg({
               <circle cx="44" cy="64" r="5" fill={p.aksen} />
             </g>
           ) : null}
+          {jenis === "kelinci" ? (
+            <g className={kelas("hewan-ekor")} style={{ transformBox: "fill-box", transformOrigin: "100% 100%" }}>
+              <circle cx="54" cy="106" r="9" fill={p.perut} stroke={gelap} strokeWidth="2" />
+              <circle cx="51" cy="103" r="3" fill="#FFFFFF" opacity="0.8" />
+            </g>
+          ) : null}
+          {jenis === "gajah" ? (
+            <g className={kelas("hewan-ekor")} style={{ transformBox: "fill-box", transformOrigin: "100% 100%" }}>
+              <path d="M56 100 Q40 112 42 132" fill="none" stroke={gelap} strokeWidth="6" strokeLinecap="round" />
+              <path d="M56 100 Q40 112 42 132" fill="none" stroke={p.badan} strokeWidth="3" strokeLinecap="round" />
+              <circle cx="42" cy="134" r="5" fill={p.aksen} />
+            </g>
+          ) : null}
+          {jenis === "kangguru" ? (
+            <g className={kelas("hewan-ekor")} style={{ transformBox: "fill-box", transformOrigin: "100% 100%" }}>
+              <path d="M60 118 Q28 128 14 150" fill="none" stroke={gelap} strokeWidth="16" strokeLinecap="round" />
+              <path d="M60 118 Q28 128 14 150" fill="none" stroke={p.badan} strokeWidth="11" strokeLinecap="round" />
+              <path d="M44 128 l4 4 M32 136 l4 4" stroke={gelap} strokeWidth="2" strokeLinecap="round" opacity="0.6" />
+            </g>
+          ) : null}
 
           {/* kaki belakang (kelompok b) + depan (kelompok a) */}
           {kaki(66, "b")}
           {kaki(126, "a")}
 
           {/* badan */}
-          {jenis === "kapibara" ? (
+          {jenis === "kapibara" || jenis === "gajah" ? (
             <ellipse
               cx="100"
               cy="112"
-              rx="52"
-              ry="34"
+              rx={jenis === "gajah" ? 56 : 52}
+              ry={jenis === "gajah" ? 37 : 34}
+              fill={`url(#${id}-badan)`}
+              stroke={gelap}
+              strokeWidth="2"
+            />
+          ) : jenis === "kangguru" ? (
+            <rect
+              x="58"
+              y="66"
+              width="88"
+              height="76"
+              rx="30"
               fill={`url(#${id}-badan)`}
               stroke={gelap}
               strokeWidth="2"
@@ -263,6 +318,13 @@ export function HewanSvg({
             fill={p.perut}
             opacity="0.85"
           />
+          {jenis === "kangguru" ? (
+            /* kantong depan */
+            <g>
+              <path d="M78 112 Q102 142 126 112 L124 132 Q102 148 80 132 Z" fill={gelap} opacity="0.35" />
+              <path d="M80 114 Q102 136 124 114" fill="none" stroke={gelap} strokeWidth="2.5" strokeLinecap="round" />
+            </g>
+          ) : null}
           {/* garis pelat & sekrup */}
           <path
             d="M70 100 H130"
@@ -354,15 +416,39 @@ export function HewanSvg({
                 <circle cx="166" cy="54" r="7" fill={gelap} />
               </g>
             ) : null}
+            {jenis === "kelinci" ? (
+              <g>
+                <ellipse cx="132" cy="30" rx="8" ry="24" fill={p.badan} stroke={gelap} strokeWidth="2" transform="rotate(-8 132 30)" />
+                <ellipse cx="160" cy="30" rx="8" ry="24" fill={p.badan} stroke={gelap} strokeWidth="2" transform="rotate(8 160 30)" />
+                <ellipse cx="132" cy="32" rx="4" ry="16" fill={p.aksen} transform="rotate(-8 132 32)" />
+                <ellipse cx="160" cy="32" rx="4" ry="16" fill={p.aksen} transform="rotate(8 160 32)" />
+                <circle cx="132" cy="6" r="3" fill={p.mata} className={kelas("pet-denyut")} />
+                <circle cx="160" cy="6" r="3" fill={p.mata} className={kelas("pet-denyut")} />
+              </g>
+            ) : null}
+            {jenis === "gajah" ? (
+              <g>
+                <ellipse cx="118" cy="72" rx="20" ry="24" fill={p.badan} stroke={gelap} strokeWidth="2" />
+                <ellipse cx="118" cy="72" rx="12" ry="16" fill={p.perut} opacity="0.7" />
+              </g>
+            ) : null}
+            {jenis === "kangguru" ? (
+              <g>
+                <polygon points="128,54 134,22 148,50" fill={p.badan} stroke={gelap} strokeWidth="2" strokeLinejoin="round" />
+                <polygon points="156,50 168,22 176,56" fill={p.badan} stroke={gelap} strokeWidth="2" strokeLinejoin="round" />
+                <polygon points="134,52 137,34 145,50" fill={p.aksen} />
+                <polygon points="158,52 166,34 170,54" fill={p.aksen} />
+              </g>
+            ) : null}
 
             {/* tengkorak */}
-            {jenis === "kapibara" ? (
+            {jenis === "kapibara" || jenis === "gajah" ? (
               <rect
                 x="118"
                 y="48"
                 width="58"
                 height="52"
-                rx="22"
+                rx={jenis === "gajah" ? 26 : 22}
                 fill={`url(#${id}-badan)`}
                 stroke={gelap}
                 strokeWidth="2"
@@ -380,14 +466,28 @@ export function HewanSvg({
               />
             )}
             {/* moncong */}
-            <ellipse
-              cx="164"
-              cy="84"
-              rx={jenis === "kapibara" ? 16 : 12}
-              ry="9"
-              fill={p.perut}
-            />
-            <ellipse cx="170" cy="80" rx="4" ry="3" fill="#1F2937" />
+            {jenis === "gajah" ? (
+              <g>
+                <path d="M162 84 Q186 92 182 118 Q180 128 170 126" fill="none" stroke={gelap} strokeWidth="13" strokeLinecap="round" />
+                <path d="M162 84 Q186 92 182 118 Q180 128 170 126" fill="none" stroke={p.badan} strokeWidth="9" strokeLinecap="round" />
+                <path d="M168 92 h8 M172 104 h8 M172 114 h6" stroke={gelap} strokeWidth="1.5" opacity="0.5" />
+                <path d="M150 92 q-8 8 -4 18" fill="none" stroke={p.aksen} strokeWidth="4" strokeLinecap="round" />
+              </g>
+            ) : (
+              <ellipse
+                cx="164"
+                cy="84"
+                rx={jenis === "kapibara" || jenis === "kangguru" ? 16 : 12}
+                ry="9"
+                fill={p.perut}
+              />
+            )}
+            {jenis !== "gajah" ? <ellipse cx="170" cy="80" rx="4" ry="3" fill="#1F2937" /> : null}
+            {jenis === "kelinci" ? (
+              <g stroke={gelap} strokeWidth="1.2" opacity="0.7">
+                <path d="M172 82 l12 -3 M172 84 l13 2" />
+              </g>
+            ) : null}
             {/* mulut */}
             {tidur ? (
               <path
@@ -491,6 +591,24 @@ export function HewanSvg({
                   strokeWidth="2.5"
                   strokeLinecap="round"
                 />
+              </g>
+            ) : null}
+            {tahap === "dewasa" && jenis === "kelinci" ? (
+              <g>
+                <path d="M150 50 l-10 -6 v12 z M150 50 l10 -6 v12 z" fill="#EC4899" stroke="#9D174D" strokeWidth="1" />
+                <circle cx="150" cy="50" r="3" fill="#FBCFE8" />
+              </g>
+            ) : null}
+            {tahap === "dewasa" && jenis === "gajah" ? (
+              <g>
+                <path d="M124 52 Q146 40 170 52 L168 60 Q146 50 126 60 Z" fill="#EAB308" stroke="#A16207" strokeWidth="1" />
+                <circle cx="146" cy="48" r="4" fill="#E11D48" stroke="#9F1239" strokeWidth="1" />
+              </g>
+            ) : null}
+            {tahap === "dewasa" && jenis === "kangguru" ? (
+              <g>
+                <path d="M120 58 Q146 66 174 58 L172 66 Q146 74 122 66 Z" fill="#DC2626" stroke="#7F1D1D" strokeWidth="1" />
+                <path d="M128 62 h34" stroke="#F9FAFB" strokeWidth="1.5" opacity="0.6" />
               </g>
             ) : null}
           </g>

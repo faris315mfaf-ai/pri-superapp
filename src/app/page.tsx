@@ -53,6 +53,8 @@ import { TurPemandu } from "@/features/tur/tur-pemandu";
 import { ModalKembangApi } from "@/features/beranda/modal-kembang-api";
 import { PetScreen } from "@/features/pet/pet-screen";
 import { PetMelayang } from "@/features/pet/pet-melayang";
+import { ModalHadiahHarian } from "@/features/pet/modal-hadiah-harian";
+import { bolehPet } from "@/lib/pet-akses";
 import { HewanMelayang } from "@/features/pet/hewan-melayang";
 import { LudoScreen } from "@/features/ludo/ludo-screen";
 import { AcaraScreen } from "@/features/acara/acara-screen";
@@ -158,7 +160,7 @@ type SubLayar =
   // Panel Master — kewenangan tertinggi, hanya peran master
   | { nama: "panel-master" }
   // Pet Robot (percobaan master, 3 Sep 2026)
-  | { nama: "pet" }
+  | { nama: "pet"; tab?: "rawat" | "toko" | "lemari" | "pasar" }
   // Ludo Robot multipemain (percobaan, 3 Sep 2026)
   | { nama: "ludo" }
   // Matriks izin fitur per peran (super admin)
@@ -1038,7 +1040,7 @@ export default function Page() {
           onBukaLaporanKerja={() => setSubLayar({ nama: "laporan-kerja" })}
           onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           onBukaPanelMaster={() => setSubLayar({ nama: "panel-master" })}
-          onBukaPet={() => setSubLayar({ nama: "pet" })}
+          onBukaPet={bolehPet(user) ? () => setSubLayar({ nama: "pet" }) : undefined}
           onBukaLudo={sakelar.fitur.ludo === false ? undefined : () => setSubLayar({ nama: "ludo" })}
           onBukaPengaturanFitur={() =>
             setSubLayar({ nama: "pengaturan-fitur" })
@@ -1113,6 +1115,8 @@ export default function Page() {
           menunggu changelog ditutup dulu supaya tidak bertumpuk. */}
       {/* Perayaan reset periode + juara komentar (3 Sep 2026) */}
       {aplikasiAktif && !changelogBuka && sakelar.fitur.juara_efek !== false && <ModalKembangApi />}
+      {/* Hadiah login harian (v5, 5 Sep 2026): sekali per hari, diperiksa sekali per sesi. */}
+      {aplikasiAktif && user && <ModalHadiahHarian tunda={changelogBuka} />}
       {aplikasiAktif && !changelogBuka && <TurPemandu />}
 
       {/* Pemilih ucapan ulang tahun (dari notifikasi ultah yang diklik) */}
@@ -1209,6 +1213,7 @@ export default function Page() {
                     <PetScreen
                       onKembali={() => setSubLayar(null)}
                       onBerubah={() => setVersiPet((v) => v + 1)}
+                      tabAwal={subLayar.tab}
                     />
                   ) : subLayar.nama === "tabel-anggota" ? (
                     <TabelAnggotaScreen onKembali={() => setSubLayar(null)} />
@@ -1316,13 +1321,14 @@ export default function Page() {
           suaranya sendiri sedang terbuka. */}
       {/* Pet Robot melayang (percobaan, khusus master; 3 Sep 2026) — hanya di
           tab Beranda (dashboard master), tanpa sub-layar terbuka. */}
-      {user && tabEfektif === "beranda" && !subLayar && sakelar.fitur.pet_beranda !== false && (
+      {/* v5 (5 Sep 2026): pet dimatikan untuk pemegang jabatan (bolehPet). */}
+      {user && bolehPet(user) && tabEfektif === "beranda" && !subLayar && sakelar.fitur.pet_beranda !== false && (
         <PetMelayang
-          onBuka={() => setSubLayar({ nama: "pet" })}
+          onBuka={(tab) => setSubLayar({ nama: "pet", tab })}
           versi={versiPet}
         />
       )}
-      {user && tabEfektif === "beranda" && !subLayar && sakelar.fitur.pet_beranda !== false && (
+      {user && bolehPet(user) && tabEfektif === "beranda" && !subLayar && sakelar.fitur.pet_beranda !== false && (
         <HewanMelayang
           onBuka={() => setSubLayar({ nama: "pet" })}
           versi={versiPet}

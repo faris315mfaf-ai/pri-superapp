@@ -15,6 +15,18 @@
 // bisa diberikan — tetapi hanya oleh master, dan lewat pintu sendiri
 // yang jelas terlihat di kode maupun di layar.
 import { supabase } from "@/lib/supabase";
+import { bacaToko, simpanToko } from "@/lib/pet-toko";
+import {
+  aksesorisDariKode,
+  gerakanDariKode,
+  hewanDariKode,
+  KODE_WARNA_CUSTOM,
+  makananDariKode,
+  makananHewanDariKode,
+  skinDariKode,
+  sparepartDariKode,
+} from "@/lib/pet";
+import { skinHewanDariKode } from "@/lib/pet-katalog-v5";
 import { adalahKunciFiturBerat, resetCacheSakelar, simpanSakelar } from "@/lib/sakelar";
 import { pantauServer } from "@/lib/pantau-server";
 import { KUNCI_FORMAT_LAPORAN, validasiTemplate } from "@/lib/template-laporan";
@@ -25,6 +37,21 @@ import { buatHashSandi } from "@/lib/sandi";
 import { AKTIVITAS_KOIN } from "@/lib/koin";
 
 export const dynamic = "force-dynamic";
+
+/** Kode item apa pun yang dijual toko pet (untuk ketetapan harga master). */
+function itemTokoAda(kode: string): boolean {
+  return Boolean(
+    aksesorisDariKode(kode) ||
+      sparepartDariKode(kode) ||
+      skinDariKode(kode) ||
+      hewanDariKode(kode) ||
+      gerakanDariKode(kode) ||
+      makananDariKode(kode) ||
+      makananHewanDariKode(kode) ||
+      skinHewanDariKode(kode) ||
+      kode === KODE_WARNA_CUSTOM,
+  );
+}
 
 const PERAN_KHUSUS = [
   "super_admin",
@@ -205,6 +232,9 @@ export async function POST(request: Request) {
       id?: string;
       /** sakelar_fitur: kunci fitur berat (4 Sep 2026) */
       kunci?: string;
+      /** pet_toko_*: kode item (5 Sep 2026) & batas waktu event */
+      kode?: string;
+      sampai?: string;
     };
     const db = supabase();
 
@@ -375,6 +405,37 @@ export async function POST(request: Request) {
         .upsert({ kunci: KUNCI_FORMAT_LAPORAN, nilai, diubah_pada: new Date().toISOString() }, { onConflict: "kunci" });
       if (error) throw new Error("Gagal menyimpan format laporan.");
       return { sukses: true, bawaan: false };
+    }
+
+    // ---- TOKO PET (5 Sep 2026): master sebagai PEDAGANG — harga per item & event item langka ----
+    if (body.aksi === "pet_toko_harga") {
+      const kode = String(body.kode ?? "");
+      if (!itemTokoAda(kode)) throw Object.assign(new Error("Item toko tidak dikenal."), { status: 400 });
+      const toko = await bacaToko();
+      const nilai = String(body.nilai ?? "").trim();
+      if (nilai === "") delete toko.harga[kode];
+      else {
+        const n = Math.floor(Number(nilai));
+        if (!Number.isFinite(n) || n < 0 || n > 1_000_000)
+          throw Object.assign(new Error("Harga harus angka 0–1.000.000 koin."), { status: 400 });
+        toko.harga[kode] = n;
+      }
+      await simpanToko(toko);
+      return { sukses: true, toko };
+    }
+    if (body.aksi === "pet_toko_event") {
+      const kode = String(body.kode ?? "");
+      const aks = aksesorisDariKode(kode);
+      if (!aks?.langka) throw Object.assign(new Error("Bukan item langka."), { status: 400 });
+      const toko = await bacaToko();
+      if (body.nilai === true) {
+        const sampai = String(body.sampai ?? "").trim();
+        if (sampai && !Number.isFinite(Date.parse(sampai)))
+          throw Object.assign(new Error("Batas waktu event tidak sah."), { status: 400 });
+        toko.event[kode] = sampai ? new Date(sampai).toISOString() : null;
+      } else delete toko.event[kode];
+      await simpanToko(toko);
+      return { sukses: true, toko };
     }
 
     if (body.aksi === "tur_aktif") {

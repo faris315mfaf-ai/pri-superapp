@@ -5546,6 +5546,92 @@ export async function petAksi(
   return json as import("@/lib/pet").PetState & { pesan?: string };
 }
 
+// ---- PET v5 (5 Sep 2026): hadiah login harian, pasar trading, lobi ----
+export type KeadaanHarian = {
+  hari_ke: number;
+  sudah_klaim: boolean;
+  streak: number;
+  koin_hari_ini: number;
+  kalender: { hari: number; koin: number; diklaim: boolean; hari_ini: boolean }[];
+  saldo: number;
+  pesan?: string;
+};
+export async function getPetHarian(): Promise<KeadaanHarian> {
+  return (await fetchJson("/api/pet/harian")) as KeadaanHarian;
+}
+export async function klaimPetHarian(): Promise<KeadaanHarian> {
+  return (await fetchJson("/api/pet/harian", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })) as KeadaanHarian;
+}
+
+export type TawaranPasar = {
+  id: string;
+  kode_item: string;
+  jenis_item: "aksesoris" | "sparepart" | "skin";
+  nama_item: string;
+  harga_katalog: number;
+  minta_koin: number | null;
+  minta_item: string | null;
+  nama_minta_item: string | null;
+  pemilik_id: string;
+  pemilik_nama: string;
+  pemilik_avatar: string;
+  pihak_id: string | null;
+  pihak_nama: string;
+  arah: "jual" | "minta";
+  saya_pemilik: boolean;
+  saya_pembuat: boolean;
+  bisa_terima: boolean;
+  pesan: string;
+  status: string;
+  dibuat_pada: string;
+  selesai_pada: string | null;
+};
+export type ItemTradable = { kode: string; jenis: "aksesoris" | "sparepart" | "skin"; nama: string; harga: number; terpasang: boolean };
+export type DataPasar = {
+  tawaran: TawaranPasar[];
+  saya: TawaranPasar[];
+  riwayat: TawaranPasar[];
+  inventori: ItemTradable[];
+  saldo: number;
+  punya_robot: boolean;
+};
+export type RobotLobi = {
+  user_id: string;
+  nama_pemilik: string;
+  nama_robot: string;
+  jenis: "pria" | "wanita";
+  level: number;
+  skin: string | null;
+  warna: string | null;
+  terpasang: Record<string, string>;
+  sparepart: Record<string, string>;
+  tradable: ItemTradable[];
+  x: number;
+  y: number;
+  arah: "kiri" | "kanan";
+  pesan: string;
+  saya: boolean;
+};
+export type DataLobi = { robot: RobotLobi[]; saya_hadir: boolean };
+
+export async function getPasar(): Promise<DataPasar> {
+  return (await fetchJson("/api/pet/pasar?bagian=pasar")) as DataPasar;
+}
+export async function getLobi(): Promise<DataLobi> {
+  return (await fetchJson("/api/pet/pasar?bagian=lobi")) as DataLobi;
+}
+/** Aksi pasar (tawar/minta/batal/tolak/terima) — mengembalikan data pasar terbaru. */
+export async function pasarAksi(aksi: string, data: Record<string, unknown> = {}): Promise<DataPasar & { id?: string }> {
+  return (await fetchJson("/api/pet/pasar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ aksi, ...data }) })) as DataPasar & { id?: string };
+}
+/** Kirim posisi robot di lobi; balasan = daftar robot lain (satu permintaan per detak). */
+export async function kirimPosisiLobi(x: number, y: number, arah: "kiri" | "kanan", pesan: string): Promise<DataLobi> {
+  return (await fetchJson("/api/pet/pasar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ aksi: "lobi_posisi", x, y, arah, pesan }) })) as DataLobi;
+}
+export async function keluarLobi(): Promise<void> {
+  await fetchJson("/api/pet/pasar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ aksi: "lobi_keluar" }) }).catch(() => undefined);
+}
+
 /** Robot peliharaan orang lain — tampilan saja (profil publik di chat, 3 Sep 2026). */
 export async function getPetPublik(
   userId: string,

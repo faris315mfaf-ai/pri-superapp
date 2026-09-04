@@ -79,7 +79,8 @@ export function PetMelayang({
   onBuka,
   versi = 0,
 }: {
-  onBuka: () => void;
+  /** v5: buka layar pet langsung di tab tertentu (rawat = beri makan, toko, pasar). */
+  onBuka: (tab?: "rawat" | "toko" | "pasar") => void;
   versi?: number;
 }) {
   const [st, setSt] = useState<PetState | null>(null);
@@ -195,12 +196,34 @@ export function PetMelayang({
               type="button"
               onClick={() => {
                 setMenu(false);
-                onBuka();
+                onBuka("rawat");
               }}
               className="btn-tekan flex h-9 w-full items-center gap-2 rounded-xl bg-pri px-3 text-[11.5px] font-bold text-white"
             >
-              🤖 Buka Pet Robot
+              🍖 Beri makan & rawat
             </button>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setMenu(false);
+                  onBuka("toko");
+                }}
+                className="btn-tekan flex h-8 items-center justify-center gap-1 rounded-xl bg-black/5 text-[11px] font-bold text-teks-utama dark:bg-white/10"
+              >
+                🛍️ Toko
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenu(false);
+                  onBuka("pasar");
+                }}
+                className="btn-tekan flex h-8 items-center justify-center gap-1 rounded-xl bg-black/5 text-[11px] font-bold text-teks-utama dark:bg-white/10"
+              >
+                🤝 Pasar & Lobi
+              </button>
+            </div>
             {gerakanMilik.length > 0 ? (
               <div className="mt-1.5 flex flex-wrap gap-1">
                 {gerakanMilik.map((g) => (

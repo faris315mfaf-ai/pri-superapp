@@ -7,9 +7,11 @@
 // Terinspirasi POU: robot dirawat (makan dari inventori, main, mandi, tidur).
 // ============================================================
 
+import { AKSESORIS_V5 } from "./pet-katalog-v5";
+
 export type JenisRobot = "pria" | "wanita";
 export type SlotAksesoris =
-  "kepala" | "mata" | "leher" | "badan" | "punggung" | "tangan" | "aura";
+  "kepala" | "mata" | "leher" | "badan" | "punggung" | "tangan" | "aura" | "kaki";
 export type BagianSparepart = "kepala" | "mata" | "tubuh" | "kaki" | "tangan";
 export type Suasana =
   "senang" | "biasa" | "lapar" | "lelah" | "sedih" | "kotor" | "tidur";
@@ -25,6 +27,10 @@ export type Aksesoris = {
   /** Aksesoris generasi 2 (4 Sep 2026): digambar oleh keluarga bentuk `gambar` dengan warna `warna`. */
   gambar?: string;
   warna?: string;
+  /** v5 (5 Sep 2026): item LANGKA — hanya bisa dibeli saat master membuka event-nya. */
+  langka?: boolean;
+  /** v5: tulisan pada item (mis. jaket "PRI" / "TV Rakyat"). */
+  label?: string;
 };
 export type Makanan = {
   kode: string;
@@ -64,7 +70,7 @@ export type Skin = {
 // ------------------------------------------------------------
 // TOKO 1 — AKSESORIS (30). Kode TIDAK boleh diubah (tersimpan di DB).
 // ------------------------------------------------------------
-export const KATALOG_AKSESORIS: readonly Aksesoris[] = [
+const AKSESORIS_DASAR: readonly Aksesoris[] = [
   // kepala (8)
   {
     kode: "topi_pesta",
@@ -644,6 +650,13 @@ export const KATALOG_AKSESORIS: readonly Aksesoris[] = [
     keterangan: "Lingkaran cahaya ungu.",
   },
 ];
+
+/**
+ * Semua aksesoris: generasi 1–2 (di atas) + KATALOG v5 (5 Sep 2026: slot kaki,
+ * tangan/kepala tambahan, 30 jaket PRI/TV Rakyat, 50 item langka) dari
+ * lib/pet-katalog-v5 — satu daftar untuk toko, lemari, dan penggambar.
+ */
+export const KATALOG_AKSESORIS: readonly Aksesoris[] = [...AKSESORIS_DASAR, ...AKSESORIS_V5];
 
 // ------------------------------------------------------------
 // TOKO 2 — MAKANAN (30). Dibeli → inventori → dimakan satu-satu.
@@ -1456,6 +1469,7 @@ export const KATALOG_SPAREPART: readonly Sparepart[] = [
 ];
 
 export const SLOT_LABEL: Record<SlotAksesoris, string> = {
+  kaki: "Kaki",
   kepala: "Kepala",
   mata: "Mata",
   leher: "Leher",
@@ -2017,7 +2031,7 @@ export function gerakanDariKode(kode: string): Gerakan | undefined {
 // robot. Dibeli di toko, tumbuh dari ANAK → REMAJA → DEWASA lewat XP yang
 // didapat dari makan (makanan hewan dibeli di toko). Kenyang turun 4/jam.
 // ------------------------------------------------------------
-export type JenisHewan = "kucing" | "anjing" | "kapibara";
+export type JenisHewan = "kucing" | "anjing" | "kapibara" | "kelinci" | "gajah" | "kangguru";
 export type TahapHewan = "anak" | "remaja" | "dewasa";
 export type Hewan = {
   kode: string;
@@ -2055,6 +2069,34 @@ export const KATALOG_HEWAN: readonly Hewan[] = [
     harga: 650,
     keterangan: "Santai, suka berendam, jeruk di kepala saat dewasa.",
     favorit: ["mh_rumput_sirkuit", "mh_semangka_kapi"],
+  },
+  // v5 (5 Sep 2026): tiga hewan robot baru.
+  {
+    kode: "hewan_kelinci",
+    jenis: "kelinci",
+    nama: "Kelinci Robot",
+    namaBawaan: "Popo",
+    harga: 550,
+    keterangan: "Telinga panjang berantena, melompat tinggi, pita saat dewasa.",
+    favorit: ["mh_wortel_neon", "mh_rumput_sirkuit"],
+  },
+  {
+    kode: "hewan_gajah",
+    jenis: "gajah",
+    nama: "Gajah Robot",
+    namaBawaan: "Gado",
+    harga: 750,
+    keterangan: "Belalai hidrolik, telinga kipas lebar, mahkota emas saat dewasa.",
+    favorit: ["mh_semangka_kapi", "mh_prasmanan_hewan"],
+  },
+  {
+    kode: "hewan_kangguru",
+    jenis: "kangguru",
+    nama: "Kangguru Robot",
+    namaBawaan: "Kiko",
+    harga: 700,
+    keterangan: "Ekor pegas, kantong depan, bandana petinju saat dewasa.",
+    favorit: ["mh_biskuit_chip", "mh_kue_hewan"],
   },
 ];
 export function hewanDariKode(kode: string): Hewan | undefined {
@@ -2224,6 +2266,8 @@ export type DataHewanDb = {
   xp: number;
   kenyang: number;
   terakhir: string;
+  /** v5: skin hewan yang dipakai (kode hs_*) — null/absen = warna bawaan. */
+  skin?: string | null;
 };
 export type HewanDb = {
   aktif?: string | null;
@@ -2239,6 +2283,8 @@ export type HewanKlien = {
   tahap: TahapHewan;
   suasana: SuasanaHewan;
   progres: { diTahap: number; butuh: number };
+  /** v5: skin hewan terpasang (kode hs_*) atau null. */
+  skin: string | null;
 };
 export type HewanState = { aktif: HewanKlien | null; daftar: HewanKlien[] };
 
@@ -2303,4 +2349,7 @@ export type PetState = {
   saldo_koin: number;
   hadiah_hari_ini: boolean;
   dibuat_pada: string | null;
+  /** v5 (5 Sep 2026): harga yang ditetapkan master (kode → koin) dan item langka yang event-nya sedang dibuka. */
+  harga_toko: Record<string, number>;
+  event_aktif: string[];
 };

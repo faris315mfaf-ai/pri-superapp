@@ -10,6 +10,7 @@
 
 import type { ReactNode } from "react";
 import { aksesorisDariKode, gelapkan, terangkan } from "@/lib/pet";
+import { gambarAksesorisV5 } from "./robot-aksesoris-v5";
 
 type Ctx = { kelas: (k: string) => string | undefined };
 
@@ -66,6 +67,9 @@ export function gambarAksesorisBaru(
   if (!kode) return null;
   const item = aksesorisDariKode(kode);
   if (!item?.gambar) return null;
+  // Katalog v5 (5 Sep 2026): kaki, tangan/kepala tambahan, jaket, item langka.
+  const v5 = gambarAksesorisV5(item, { kelas });
+  if (v5) return v5;
   const w = item.warna ?? "#DC2626";
   const gelap = gelapkan(w, 0.35);
   const terang = terangkan(w, 0.35);

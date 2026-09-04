@@ -16,6 +16,7 @@ import {
   AnimatePresence,
 } from "framer-motion";
 import { getPet, type PetState } from "@/services";
+import { skinHewanDariKode } from "@/lib/pet-katalog-v5";
 import { LABEL_SUASANA_HEWAN, LABEL_TAHAP } from "@/lib/pet";
 import { HewanSvg, type GerakHewan } from "./hewan-svg";
 
@@ -322,6 +323,7 @@ export function HewanMelayang({
           tahap={hewan.tahap}
           suasana={hewan.suasana}
           gerak={gerak?.kode ?? (seret ? "senang" : undefined)}
+          palet={hewan.skin ? skinHewanDariKode(hewan.skin)?.palet : undefined}
           menghadap={menghadap}
           ukuran={LEBAR}
           animasi
