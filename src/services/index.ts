@@ -5628,6 +5628,18 @@ export async function pasarAksi(aksi: string, data: Record<string, unknown> = {}
 export async function kirimPosisiLobi(x: number, y: number, arah: "kiri" | "kanan", pesan: string): Promise<DataLobi> {
   return (await fetchJson("/api/pet/pasar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ aksi: "lobi_posisi", x, y, arah, pesan }) })) as DataLobi;
 }
+/** Konfigurasi lobi realtime (5 Sep 2026): kunci publishable + rupa robot saya. */
+export type KonfigLobi = {
+  realtime: boolean;
+  url: string;
+  key: string;
+  kanal: string;
+  dunia: { lebar: number; tinggi: number };
+  saya: Omit<RobotLobi, "x" | "y" | "arah" | "pesan" | "saya">;
+};
+export async function getLobiKonfig(): Promise<KonfigLobi> {
+  return (await fetchJson("/api/pet/lobi")) as KonfigLobi;
+}
 export async function keluarLobi(): Promise<void> {
   await fetchJson("/api/pet/pasar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ aksi: "lobi_keluar" }) }).catch(() => undefined);
 }

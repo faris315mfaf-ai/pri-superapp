@@ -17,6 +17,7 @@ import { pastikanMasuk } from "@/lib/sesi";
 import { saldoKoin } from "@/lib/koin";
 import { kirimKabar } from "@/lib/notifikasi";
 import { bolehPet, PESAN_PET_DIMATIKAN } from "@/lib/pet-akses";
+import { DUNIA_LOBI } from "@/lib/pet-lobi";
 import {
   aksesorisDariKode,
   skinDariKode,
@@ -30,8 +31,9 @@ export const dynamic = "force-dynamic";
 
 type JenisItemPasar = "aksesoris" | "sparepart" | "skin";
 
-const LEBAR_LOBI = 1000;
-const TINGGI_LOBI = 600;
+// Ukuran dunia bersama (lib/pet-lobi) — sama dengan halaman /lobi.
+const LEBAR_LOBI = DUNIA_LOBI.lebar;
+const TINGGI_LOBI = DUNIA_LOBI.tinggi;
 const LOBI_HIDUP_MS = 60_000;
 
 function galat(pesan: string, status = 400): never {
