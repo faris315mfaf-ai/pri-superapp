@@ -25,6 +25,7 @@ import {
   getKirimanManual,
   getKonfigUploadVideo,
   getTugasLink,
+  kompresVideoCloudinary,
   type KirimanManual,
   type TugasLink,
 } from "@/services";
@@ -37,6 +38,34 @@ const MAKS_UKURAN_MB_BAWAAN = 100;
 // Riwayat Log ditampilkan maks 5 per layar + nomor halaman (fitur 1.22.x)
 // supaya daftar panjang (puluhan video "siap ditinjau") tidak memenuhi layar.
 const PER_HAL = 5;
+
+/**
+ * Durasi video (detik) dibaca peramban dari metadata berkas — dipakai
+ * server menghitung plafon bitrate kompresi bila video > 50 MB.
+ * Gagal/terlalu lama → 0 (server memakai anggapan aman).
+ */
+function durasiBerkas(berkas: File): Promise<number> {
+  return new Promise((selesai) => {
+    try {
+      const v = document.createElement("video");
+      v.preload = "metadata";
+      const url = URL.createObjectURL(berkas);
+      let sudah = false;
+      const rapikan = (d: number) => {
+        if (sudah) return;
+        sudah = true;
+        URL.revokeObjectURL(url);
+        selesai(Number.isFinite(d) && d > 0 ? d : 0);
+      };
+      v.onloadedmetadata = () => rapikan(v.duration);
+      v.onerror = () => rapikan(0);
+      setTimeout(() => rapikan(0), 8000);
+      v.src = url;
+    } catch {
+      selesai(0);
+    }
+  });
+}
 
 function badgeStatus(k: KirimanManual) {
   if (k.status === "SUDAH DIPROSES") return <StatusBadge label="sudah tayang" warna="hijau" />;
@@ -62,6 +91,18 @@ export function KirimVideoManual({
   // Batas ukuran dari Pimred — dimuat sekali supaya label & penolakan
   // dini memakai angka yang sama dengan server.
   const [batasMb, setBatasMb] = useState(MAKS_UKURAN_MB_BAWAAN);
+  // Kompresi otomatis Cloudinary (5 Sep 2026): > kompresMb dikompres
+  // sampai <= kompresMb; di atas berkasMaksMb Cloudinary menolak (paket).
+  const [kompresMb, setKompresMb] = useState(50);
+  const [berkasMaksMb, setBerkasMaksMb] = useState(100);
+  // Waktu mulai kompresi (ms) — null = tidak sedang mengompres.
+  const [mengompres, setMengompres] = useState<number | null>(null);
+  const [detikKompres, setDetikKompres] = useState(0);
+  useEffect(() => {
+    if (mengompres === null) return;
+    const t = setInterval(() => setDetikKompres(Math.round((Date.now() - mengompres) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [mengompres]);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const idKu = useAppStore((s) => s.user?.id);
 
@@ -105,6 +146,8 @@ export function KirimVideoManual({
       try {
         const konfig = await getKonfigUploadVideo();
         if (hidup && konfig.maks_upload_mb) setBatasMb(konfig.maks_upload_mb);
+        if (hidup && konfig.kompres_mb) setKompresMb(konfig.kompres_mb);
+        if (hidup && konfig.berkas_maks_mb) setBerkasMaksMb(konfig.berkas_maks_mb);
       } catch {
         // Konfigurasi menyusul saat tombol unggah ditekan.
       }
@@ -115,6 +158,17 @@ export function KirimVideoManual({
   }, [muatUlang]);
 
   async function unggah(berkas: File) {
+    // Batas paket Cloudinary (Free: 100 MB per berkas) — di atas ini
+    // unggahan pasti ditolak Cloudinary, jadi hentikan lebih awal.
+    if (berkas.size > berkasMaksMb * 1024 * 1024) {
+      toast(
+        "peringatan",
+        "Video terlalu besar untuk Cloudinary",
+        `Berkas ${(berkas.size / 1024 / 1024).toFixed(0)} MB — Cloudinary menerima maksimal ${berkasMaksMb} MB per berkas. Kecilkan dulu di HP; sisanya dikompres otomatis sampai ${kompresMb} MB.`,
+      );
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
     if (berkas.size > batasMb * 1024 * 1024) {
       toast(
         "peringatan",
@@ -144,8 +198,12 @@ export function KirimVideoManual({
         );
       }
 
+      // Durasi dibaca dulu (cepat, dari metadata) — cadangan bila respons
+      // Cloudinary tidak menyertakan duration.
+      const durasiLokal = await durasiBerkas(berkas);
+
       // Unggah langsung peramban → Cloudinary dengan progres nyata.
-      const hasilUpload = await new Promise<{ secure_url: string; public_id: string; bytes?: number }>(
+      const hasilUpload = await new Promise<{ secure_url: string; public_id: string; bytes?: number; duration?: number }>(
         (selesai, gagal) => {
           const bentuk = new FormData();
           bentuk.append("file", berkas);
@@ -166,6 +224,7 @@ export function KirimVideoManual({
                 secure_url?: string;
                 public_id?: string;
                 bytes?: number;
+                duration?: number;
                 error?: { message?: string };
               };
               if (xhr.status >= 200 && xhr.status < 300 && json.secure_url && json.public_id) {
@@ -173,6 +232,7 @@ export function KirimVideoManual({
                   secure_url: json.secure_url,
                   public_id: json.public_id,
                   bytes: json.bytes,
+                  duration: json.duration,
                 });
               } else {
                 gagal(new Error(json.error?.message ?? "Penyimpanan menolak video ini."));
@@ -186,12 +246,32 @@ export function KirimVideoManual({
         },
       );
 
+      // 5 Sep 2026: video > kompresMb → Cloudinary mengompres di server
+      // (plafon bitrate sesuai durasi; resolusi & kualitas tampak dijaga)
+      // sampai <= kompresMb. Yang sudah kecil tidak disentuh.
+      let media = { secure_url: hasilUpload.secure_url, bytes: hasilUpload.bytes ?? berkas.size };
+      const batasKompres = (konfig.kompres_mb ?? kompresMb) * 1024 * 1024;
+      if (media.bytes > batasKompres) {
+        setMengompres(Date.now());
+        setDetikKompres(0);
+        try {
+          const hasil = await kompresVideoCloudinary({
+            public_id: hasilUpload.public_id,
+            bytes: media.bytes,
+            duration: hasilUpload.duration || durasiLokal,
+          });
+          if (hasil.perlu && hasil.secure_url) media = { secure_url: hasil.secure_url, bytes: hasil.bytes };
+        } finally {
+          setMengompres(null);
+        }
+      }
+
       await daftarkanVideoManual({
-        secure_url: hasilUpload.secure_url,
+        secure_url: media.secure_url,
         public_id: hasilUpload.public_id,
         judul: judul.trim() || undefined,
         tugas_id: tugasId || undefined,
-        bytes: hasilUpload.bytes ?? berkas.size,
+        bytes: media.bytes,
       });
 
       toast(
@@ -227,7 +307,9 @@ export function KirimVideoManual({
           Unggah video yang sudah Anda edit untuk ditayangkan lewat TV Rakyat.
           Video masuk antrean <b>persetujuan Pimpinan Redaksi</b> dulu; yang
           disetujui pindah ke kolom siap upload. Berkas mentahnya dihapus
-          otomatis dari penyimpanan <b>2 hari</b> setelah unggah.
+          otomatis dari penyimpanan <b>2 hari</b> setelah unggah. Video di atas{" "}
+          {kompresMb} MB <b>dikompres otomatis</b> oleh Cloudinary sampai maksimal {kompresMb} MB —
+          resolusi dan kualitas tampak dijaga, hanya plafon bitrate yang disesuaikan.
         </p>
 
         {/* Wajib memilih tugas bila ada tugas link terbuka */}
@@ -258,14 +340,14 @@ export function KirimVideoManual({
         {persen !== null ? (
           <div className="mt-3">
             <div className="flex items-center justify-between text-xs font-semibold text-teks-sekunder">
-              <span>Mengunggah…</span>
-              <span className="angka-tab">{persen}%</span>
+              <span>{mengompres !== null ? `Mengompres di Cloudinary (kualitas dijaga)… ${detikKompres} dtk` : "Mengunggah…"}</span>
+              <span className="angka-tab">{mengompres !== null ? `≤ ${kompresMb} MB` : `${persen}%`}</span>
             </div>
             <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
               <div
-                className="h-full rounded-full transition-all duration-300"
+                className={mengompres !== null ? "h-full w-1/3 animate-pulse rounded-full" : "h-full rounded-full transition-all duration-300"}
                 style={{
-                  width: `${persen}%`,
+                  width: mengompres !== null ? undefined : `${persen}%`,
                   background: "linear-gradient(90deg, #DC2626, #F59E0B)",
                 }}
               />

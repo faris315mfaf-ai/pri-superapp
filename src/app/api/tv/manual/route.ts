@@ -19,7 +19,7 @@ import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
-import { konfigUploadCloudinary, hapusVideoCloudinary, siapHapusCloudinary } from "@/lib/cloudinary";
+import { BATAS_BERKAS_CLOUDINARY_MB, BATAS_KOMPRES_MB, konfigUploadCloudinary, hapusVideoCloudinary, siapHapusCloudinary } from "@/lib/cloudinary";
 import { adalahPimred } from "@/lib/jabatan";
 import { kirimKabar } from "@/lib/notifikasi";
 import { maksUploadMb } from "@/lib/pengaturan-tv";
@@ -81,7 +81,7 @@ export async function GET(request: Request) {
       }
       // Batas ukuran diatur Pimred (fitur 1.20/6, 1-200 MB) — dipakai
       // klien untuk menolak berkas SEBELUM upload dimulai.
-      return { ...konfig, retensi_jam: RETENSI_JAM, maks_upload_mb: await maksUploadMb() };
+      return { ...konfig, retensi_jam: RETENSI_JAM, maks_upload_mb: await maksUploadMb(), kompres_mb: BATAS_KOMPRES_MB, berkas_maks_mb: BATAS_BERKAS_CLOUDINARY_MB };
     }
 
     const { data, error } = await supabase()

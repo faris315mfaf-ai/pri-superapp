@@ -1973,7 +1973,30 @@ export type KonfigUploadVideo = {
   retensi_jam: number;
   /** Batas ukuran berkas dari Pimred, MB (fitur 1.20/6) */
   maks_upload_mb: number;
+  /** Video di atas ini dikompres otomatis Cloudinary sampai <= nilai ini (MB, 5 Sep 2026) */
+  kompres_mb?: number;
+  /** Batas berkas paket Cloudinary (MB) — di atas ini upload ditolak Cloudinary */
+  berkas_maks_mb?: number;
 };
+
+export type HasilKompresVideo = {
+  perlu: boolean;
+  secure_url: string;
+  bytes: number;
+  transformasi: string;
+  br_kbps: number;
+  percobaan: number;
+  kompres_mb: number;
+};
+/** Minta Cloudinary mengompres video yang baru diunggah sampai <= 50 MB (kualitas dijaga). */
+export async function kompresVideoCloudinary(data: { public_id: string; bytes: number; duration: number }): Promise<HasilKompresVideo> {
+  const json = await fetchJson("/api/media/kompres", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+  return json as HasilKompresVideo;
+}
 
 export async function getKonfigUploadVideo(): Promise<KonfigUploadVideo> {
   const json = await fetchJson("/api/tv/manual?konfig=1", {
