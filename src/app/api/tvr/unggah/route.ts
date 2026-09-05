@@ -28,7 +28,8 @@ import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { beriKoin } from "@/lib/koin";
 import { selesaikanRequest } from "@/lib/tvr-request";
-import { hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
+import { BATAS_BERKAS_CLOUDINARY_MB, BATAS_KOMPRES_MB, hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
+import { kompresLaluSalinKeR2 } from "@/lib/kompres-r2";
 import { adalahPalugodam } from "@/lib/struktur";
 import { prosesPesananPalugodam } from "@/lib/palugodam";
 import { bersihkanMediaSiaran } from "@/lib/siaran";
@@ -192,14 +193,6 @@ export async function POST(request: Request) {
       "tvrku",
       "TV Rakyat Saya sedang dimatikan untuk peran Anda.",
     );
-    if (!uploadPostSiap()) {
-      throw Object.assign(
-        new Error(
-          "upload-post belum diatur (UPLOAD_POST_API_KEY kosong). Hubungi pengelola.",
-        ),
-        { status: 503 },
-      );
-    }
 
     const body = (await request.json().catch(() => ({}))) as {
       aksi?: string;
@@ -208,6 +201,8 @@ export async function POST(request: Request) {
       path?: string;
       video_url?: string;
       public_id?: string;
+      /** aksi "kompres": durasi video (detik) dari metadata peramban */
+      durasi?: number;
       r2_key?: string;
       /** PALUGODAM: kirim video cukup lewat tautan, tanpa unggah berkas. */
       video_link?: string;
@@ -227,11 +222,34 @@ export async function POST(request: Request) {
           status: 400,
         });
       }
-      if (ukuran > maksMb * 1024 * 1024) {
+      // Batas atas = batas Pimred ATAU batas berkas Cloudinary (paket Free
+      // 100 MB), mana yang lebih kecil. Di atas 50 MB dikompres otomatis.
+      const batasAtasMb = Math.min(maksMb, BATAS_BERKAS_CLOUDINARY_MB);
+      if (ukuran > batasAtasMb * 1024 * 1024) {
         throw Object.assign(
-          new Error(`Video terlalu besar. Batasnya ${maksMb} MB.`),
+          new Error(
+            `Video ${Math.round(ukuran / 1048576)} MB terlalu besar. Maksimal ${batasAtasMb} MB — kecilkan dulu di HP; di atas ${BATAS_KOMPRES_MB} MB akan dikompres otomatis.`,
+          ),
           { status: 400 },
         );
+      }
+      // 5 Sep 2026: > 50 MB → lewat Cloudinary dulu (dikompres ke <= 50 MB
+      // dengan kualitas dijaga, lalu disalin ke R2/bucket — lib/kompres-r2).
+      if (ukuran > BATAS_KOMPRES_MB * 1024 * 1024) {
+        const konfigCld = konfigUploadCloudinary();
+        if (!konfigCld) {
+          throw Object.assign(
+            new Error("Kompresi otomatis belum siap (Cloudinary belum diatur). Kecilkan video sampai 50 MB."),
+            { status: 503 },
+          );
+        }
+        return {
+          sukses: true,
+          cara: "cloudinary" as const,
+          cloudName: konfigCld.cloudName,
+          uploadPreset: konfigCld.uploadPreset,
+          kompres_mb: BATAS_KOMPRES_MB,
+        };
       }
       const ext =
         /\.(mp4|mov|m4v|webm)$/i.exec(body.nama ?? "")?.[1]?.toLowerCase() ??
@@ -266,8 +284,42 @@ export async function POST(request: Request) {
       };
     }
 
+    // ---- Langkah 1b (5 Sep 2026): video besar sudah di Cloudinary →
+    //      kompres <= 50 MB, salin ke R2, hapus dari Cloudinary ----
+    if (body.aksi === "kompres") {
+      const publicId = String(body.public_id ?? "").trim();
+      if (!publicId || publicId.length > 200 || !/^[\w/-]+$/.test(publicId)) {
+        throw Object.assign(new Error("Berkas video tidak dikenal."), { status: 400 });
+      }
+      const ukuran = Number(body.ukuran ?? 0);
+      if (!Number.isFinite(ukuran) || ukuran <= 0) {
+        throw Object.assign(new Error("Ukuran berkas tidak dikenal."), { status: 400 });
+      }
+      const durasi = Number(body.durasi ?? 0);
+      const key = `${user.id}/${Date.now()}.mp4`;
+      const hasil = await kompresLaluSalinKeR2(publicId, ukuran, Number.isFinite(durasi) ? durasi : 0, key);
+      return {
+        sukses: true,
+        cara: hasil.cara,
+        ...(hasil.cara === "r2" ? { r2_key: key } : { path: key }),
+        ukuran: hasil.bytes,
+        dikompres: hasil.dikompres,
+        br_kbps: hasil.br_kbps,
+      };
+    }
+
     // ---- Langkah 2: post ke sosmed via upload-post ----
     if (body.aksi === "post") {
+      // Hanya langkah ini yang butuh upload-post; "siapkan"/"kompres" tidak
+      // (5 Sep 2026 — supaya kompresi tetap bisa diuji tanpa kunci upload-post).
+      if (!uploadPostSiap()) {
+        throw Object.assign(
+          new Error(
+            "upload-post belum diatur (UPLOAD_POST_API_KEY kosong). Hubungi pengelola.",
+          ),
+          { status: 503 },
+        );
+      }
       // Jalur BARU (1 Sep 2026): media sudah di Cloudinary — klien
       // mengirim secure_url + public_id. Jalur LAMA (path bucket)
       // tetap diterima untuk klien yang masih memuat JS versi lama.

@@ -2824,26 +2824,32 @@ export async function getRiwayatTvrkuPost(): Promise<TvrkuPost[]> {
 }
 
 /** Langkah 1: minta URL unggah tertandatangan (video naik langsung ke storage). */
-export async function siapkanUnggahTvrku(
-  nama: string,
-  ukuran: number,
-): Promise<{
-  cara: "r2" | "supabase";
-  url: string;
+export type SiapUnggahTvrku = {
+  /** "cloudinary" (5 Sep 2026) = video > 50 MB: unggah ke Cloudinary dulu lalu aksi "kompres". */
+  cara: "r2" | "supabase" | "cloudinary";
+  url?: string;
   r2_key?: string;
   path?: string;
-}> {
+  cloudName?: string;
+  uploadPreset?: string;
+  kompres_mb?: number;
+};
+export async function siapkanUnggahTvrku(nama: string, ukuran: number): Promise<SiapUnggahTvrku> {
   const json = await fetchJson("/api/tvr/unggah", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ aksi: "siapkan", nama, ukuran }),
   });
-  return json as {
-    cara: "r2" | "supabase";
-    url: string;
-    r2_key?: string;
-    path?: string;
-  };
+  return json as SiapUnggahTvrku;
+}
+/** Video besar yang sudah di Cloudinary → dikompres <= 50 MB dan disalin ke R2 (kembali r2_key). */
+export async function kompresUnggahTvrku(data: { public_id: string; ukuran: number; durasi: number }): Promise<{ cara: "r2" | "supabase"; r2_key?: string; path?: string; ukuran: number; dikompres: boolean; br_kbps: number }> {
+  const json = await fetchJson("/api/tvr/unggah", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "kompres", ...data }),
+  });
+  return json as { cara: "r2" | "supabase"; r2_key?: string; path?: string; ukuran: number; dikompres: boolean; br_kbps: number };
 }
 
 /**

@@ -27,12 +27,12 @@ import {
   getJadwalTvrku,
   getRiwayatTvrkuPost,
   postTvrku,
-  siapkanUnggahTvrku,
   sinkronSosmedTvr,
   type JadwalTvrku,
   type TvrkuPost,
 } from "@/services";
 import { PlatformIcon, labelPlatform } from "@/components/platform-icon";
+import { KOMPRES_MB, unggahVideoTvrku } from "@/lib/unggah-video-klien";
 import { cn } from "@/lib/utils";
 
 const LABEL: Record<string, string> = {
@@ -44,8 +44,8 @@ const LABEL: Record<string, string> = {
   twitter: "X",
 };
 
-/** Batas ukuran video (2 Sep 2026) — sama dengan bucket & pengaturan server. */
-const MAKS_MB = 75;
+/** Batas berkas (5 Sep 2026): 100 MB = batas Cloudinary; > 50 MB dikompres otomatis. */
+const MAKS_MB = 100;
 
 function jamWib(iso: string): string {
   const t = Date.parse(iso);
@@ -126,7 +126,7 @@ export function UnggahSosmedSaya() {
   const [pilih, setPilih] = useState<Set<string>>(() => new Set());
   const [pakaiJadwal, setPakaiJadwal] = useState(false);
   const [jadwal, setJadwal] = useState("");
-  const [tahap, setTahap] = useState<"" | "unggah" | "post">("");
+  const [tahap, setTahap] = useState<"" | "unggah" | "kompres" | "post">("");
   // Persentase unggah (progres XHR nyata).
   const [persen, setPersen] = useState(0);
   // PALUGODAM (2 Sep 2026): boleh mengirim video cukup lewat TAUTAN
@@ -243,36 +243,13 @@ export function UnggahSosmedSaya() {
       //    dihapus otomatis 2 jam setelah tayang.
       setTahap("unggah");
       setPersen(0);
-      const siap = await siapkanUnggahTvrku(berkas.name, berkas.size);
-      await new Promise<void>((selesai, gagal) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("PUT", siap.url);
-        xhr.setRequestHeader("content-type", berkas.type || "video/mp4");
-        xhr.upload.onprogress = (ev) => {
-          if (ev.lengthComputable) setPersen(Math.round((100 * ev.loaded) / ev.total));
-        };
-        xhr.onload = () =>
-          xhr.status >= 200 && xhr.status < 300
-            ? selesai()
-            : gagal(
-                new Error(
-                  xhr.status === 413
-                    ? // Supabase punya batas GLOBAL per proyek (bawaan 50 MB) di luar batas
-                      // aplikasi — hanya bisa dinaikkan admin di Dashboard Supabase → Storage → Settings.
-                      "Penyimpanan menolak: ukuran video melebihi batas server saat ini. Kompres sampai di bawah 50 MB, atau minta admin menaikkan batas unggah di Supabase."
-                    : "Penyimpanan video menolak berkas ini. Coba lagi.",
-                ),
-              );
-        xhr.onerror = () =>
-          gagal(new Error("Koneksi terputus saat mengunggah video. Coba lagi."));
-        xhr.send(berkas);
-      });
+      const hasilUnggah = await unggahVideoTvrku(berkas, { onProgres: setPersen, onTahap: setTahap });
 
       // 2. Server menyerahkan tautan videonya ke upload-post.
       setTahap("post");
       const hasil = await postTvrku({
-        ...(siap.cara === "r2" ? { r2_key: siap.r2_key } : { path: siap.path }),
-        ukuran: berkas.size,
+        ...(hasilUnggah.cara === "r2" ? { r2_key: hasilUnggah.r2_key } : { path: hasilUnggah.path }),
+        ukuran: hasilUnggah.ukuran,
         judul: judul.trim(),
         caption: caption.trim() || undefined,
         platforms: [...pilih],
@@ -433,7 +410,8 @@ export function UnggahSosmedSaya() {
           {berkas ? `${berkas.name} (${Math.round(berkas.size / 1_048_576)} MB)` : "Pilih Video"}
         </button>
         <p className="mt-1.5 text-[10.5px] text-teks-sekunder">
-          Maksimal {MAKS_MB} MB per video (MP4/MOV/WebM).
+          Maksimal {MAKS_MB} MB per video (MP4/MOV/WebM). Di atas {KOMPRES_MB} MB dikompres
+          otomatis sampai {KOMPRES_MB} MB — resolusi &amp; kualitas tampak dijaga.
         </p>
         {terlaluBesar && (
           <div className="mt-2 rounded-xl border border-amber-400/40 bg-amber-400/10 p-3 text-[11.5px] leading-relaxed text-teks-utama">
@@ -441,8 +419,8 @@ export function UnggahSosmedSaya() {
               Video {terlaluBesar.mb} MB — melebihi batas {MAKS_MB} MB
             </p>
             <p className="mt-0.5 text-teks-sekunder">
-              Kompres dulu sampai di bawah {MAKS_MB} MB (resolusi 1080p, bitrate 4–6 Mbps sudah
-              bagus untuk sosmed), lalu pilih ulang berkasnya.
+              Cloudinary hanya menerima berkas sampai {MAKS_MB} MB. Kecilkan dulu sampai di bawah{" "}
+              {MAKS_MB} MB (1080p, bitrate 4–6 Mbps), lalu pilih ulang — sisanya dikompres otomatis.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <a
@@ -598,7 +576,7 @@ export function UnggahSosmedSaya() {
           {tahap ? (
             <>
               <Loader2 className="h-4.5 w-4.5 animate-spin" />
-              {tahap === "unggah" ? `Mengunggah video… ${persen}%` : "Memposting…"}
+              {tahap === "unggah" ? `Mengunggah video… ${persen}%` : tahap === "kompres" ? "Mengompres di Cloudinary (kualitas dijaga)…" : "Memposting…"}
             </>
           ) : (
             <>

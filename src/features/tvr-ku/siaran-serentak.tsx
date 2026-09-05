@@ -20,15 +20,16 @@ import {
   buatSiaran,
   getSiaran,
   getTvAnggotaDashboard,
-  siapkanUnggahTvrku,
   type ProfilTvAnggota,
   type Siaran,
 } from "@/services";
+import { KOMPRES_MB, unggahVideoTvrku } from "@/lib/unggah-video-klien";
 import { jamWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const PLATFORM6 = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"] as const;
-const MAKS_MB = 75;
+/** 100 MB = batas Cloudinary; > 50 MB dikompres otomatis (5 Sep 2026). */
+const MAKS_MB = 100;
 
 type ProfilPilihan = { profil: string; nama: string; akun: Record<string, string> };
 
@@ -42,7 +43,7 @@ export function SiaranSerentak() {
   const [caption, setCaption] = useState("");
   const [pakaiJadwal, setPakaiJadwal] = useState(false);
   const [jadwal, setJadwal] = useState("");
-  const [tahap, setTahap] = useState<"" | "unggah" | "kirim">("");
+  const [tahap, setTahap] = useState<"" | "unggah" | "kompres" | "kirim">("");
   const [persen, setPersen] = useState(0);
   const [daftar, setDaftar] = useState<Siaran[] | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -134,7 +135,7 @@ export function SiaranSerentak() {
 
   function pilihBerkas(f: File | null) {
     if (f && f.size > MAKS_MB * 1024 * 1024) {
-      toast("peringatan", `Video ${Math.round(f.size / 1_048_576)} MB — maksimal ${MAKS_MB} MB`, "Kompres dulu.");
+      toast("peringatan", `Video ${Math.round(f.size / 1_048_576)} MB — maksimal ${MAKS_MB} MB`, "Kecilkan dulu di HP; di atas 50 MB dikompres otomatis.");
       if (inputRef.current) inputRef.current.value = "";
       setBerkas(null);
       return;
@@ -150,26 +151,12 @@ export function SiaranSerentak() {
     try {
       setTahap("unggah");
       setPersen(0);
-      const siap = await siapkanUnggahTvrku(berkas.name, berkas.size);
-      await new Promise<void>((selesai, gagal) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("PUT", siap.url);
-        xhr.setRequestHeader("content-type", berkas.type || "video/mp4");
-        xhr.upload.onprogress = (ev) => {
-          if (ev.lengthComputable) setPersen(Math.round((100 * ev.loaded) / ev.total));
-        };
-        xhr.onload = () =>
-          xhr.status >= 200 && xhr.status < 300
-            ? selesai()
-            : gagal(new Error("Penyimpanan video menolak berkas ini. Coba lagi."));
-        xhr.onerror = () => gagal(new Error("Koneksi terputus saat mengunggah video. Coba lagi."));
-        xhr.send(berkas);
-      });
+      const hasilUnggah = await unggahVideoTvrku(berkas, { onProgres: setPersen, onTahap: setTahap });
 
       setTahap("kirim");
       const r = await buatSiaran({
-        ...(siap.cara === "r2" ? { r2_key: siap.r2_key } : { path: siap.path }),
-        ukuran: berkas.size,
+        ...(hasilUnggah.cara === "r2" ? { r2_key: hasilUnggah.r2_key } : { path: hasilUnggah.path }),
+        ukuran: hasilUnggah.ukuran,
         judul: judul.trim(),
         caption: caption.trim() || undefined,
         platforms: [...platform],
@@ -235,7 +222,7 @@ export function SiaranSerentak() {
           <UploadCloud className="h-5 w-5 text-pri" />
           {berkas ? `${berkas.name} (${Math.round(berkas.size / 1_048_576)} MB)` : "Pilih Video"}
         </button>
-        <p className="mt-1 text-[10.5px] text-teks-sekunder">Maksimal {MAKS_MB} MB (MP4/MOV/WebM).</p>
+        <p className="mt-1 text-[10.5px] text-teks-sekunder">Maksimal {MAKS_MB} MB (MP4/MOV/WebM). Di atas {KOMPRES_MB} MB dikompres otomatis sampai {KOMPRES_MB} MB, kualitas dijaga.</p>
 
         <input
           value={judul}

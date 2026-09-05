@@ -48,13 +48,13 @@ import {
   getStudioPengaturan,
   getStudioProyek,
   getStudioProyekList,
-  siapkanUnggahTvrku,
   studioPost,
   type StudioProfil,
   type StudioProyek,
   type StudioProyekRingkas,
   type StudioSiap,
 } from "@/services";
+import { unggahVideoTvrku } from "@/lib/unggah-video-klien";
 import { jamWIB } from "@/lib/format";
 import { TabAnggota } from "./studio-anggota";
 import { StudioPerAkun } from "./studio-per-akun";
@@ -69,7 +69,8 @@ const PLATFORM6 = [
   "threads",
   "twitter",
 ] as const;
-const MAKS_MB = 75;
+/** 100 MB = batas Cloudinary; > 50 MB dikompres otomatis (5 Sep 2026). */
+const MAKS_MB = 100;
 const MERAH = "linear-gradient(135deg, #DC2626, #B91C1C)";
 const UNGU = "linear-gradient(135deg, #7C3AED, #4F46E5)";
 
@@ -181,7 +182,7 @@ function PenunjukFase({
 function FormSumber({ onSelesai }: { onSelesai: (id: string) => void }) {
   const [link, setLink] = useState("");
   const [berkas, setBerkas] = useState<File | null>(null);
-  const [tahap, setTahap] = useState<"" | "link" | "unggah">("");
+  const [tahap, setTahap] = useState<"" | "link" | "unggah" | "kompres">("");
   const [persen, setPersen] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -217,28 +218,12 @@ function FormSumber({ onSelesai }: { onSelesai: (id: string) => void }) {
     setTahap("unggah");
     setPersen(0);
     try {
-      const siapU = await siapkanUnggahTvrku(berkas.name, berkas.size);
-      await new Promise<void>((selesai, gagal) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("PUT", siapU.url);
-        xhr.setRequestHeader("content-type", berkas.type || "video/mp4");
-        xhr.upload.onprogress = (ev) => {
-          if (ev.lengthComputable)
-            setPersen(Math.round((100 * ev.loaded) / ev.total));
-        };
-        xhr.onload = () =>
-          xhr.status >= 200 && xhr.status < 300
-            ? selesai()
-            : gagal(new Error("Penyimpanan menolak berkas."));
-        xhr.onerror = () =>
-          gagal(new Error("Koneksi terputus saat mengunggah."));
-        xhr.send(berkas);
-      });
+      const hasilUnggah = await unggahVideoTvrku(berkas, { onProgres: setPersen, onTahap: setTahap });
       const r = await studioPost("sumber_berkas", {
-        ...(siapU.cara === "r2"
-          ? { r2_key: siapU.r2_key }
-          : { path: siapU.path }),
-        ukuran: berkas.size,
+        ...(hasilUnggah.cara === "r2"
+          ? { r2_key: hasilUnggah.r2_key }
+          : { path: hasilUnggah.path }),
+        ukuran: hasilUnggah.ukuran,
       });
       toast("sukses", "Berkas tersimpan");
       setBerkas(null);
