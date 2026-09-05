@@ -42,6 +42,7 @@ import { NotifikasiScreen } from "@/features/notifikasi/notifikasi-screen";
 import { ProfilScreen } from "@/features/profil/profil-screen";
 import { AbsensiScreen } from "@/features/absensi/absensi-screen";
 import { LaporanKerjaScreen } from "@/features/laporan-kerja/laporan-kerja-screen";
+import { KelolaLaporanKpiScreen } from "@/features/laporan-kerja/kelola-laporan-kpi-screen";
 import { PanelMasterScreen } from "@/features/profil/panel-master";
 import { PengaturanFiturScreen } from "@/features/profil/pengaturan-fitur";
 import { BerandaScreen } from "@/features/beranda/beranda-screen";
@@ -145,6 +146,8 @@ type SubLayar =
   | { nama: "setel-kpi" }
   // Meja ACC HR: laporan video manual & permohonan sosmed terblokir (2 Sep 2026)
   | { nama: "persetujuan-kpi" }
+  // Kelola laporan KPI video anggota: HR / Pimred / master / super admin (5 Sep 2026)
+  | { nama: "kelola-laporan-kpi" }
   // KPI Video anggota dibuka dari kartu ringkasan dashboard (1 Sep 2026)
   | { nama: "dashboard-kpi" }
   // Dashboard TV Rakyat Nasional (1 Sep 2026)
@@ -852,7 +855,7 @@ export default function Page() {
   }, [user]);
 
   function handleTarget(
-    target: "qc" | "tv" | "dashboard" | "notifikasi" | null,
+    target: "qc" | "tv" | "dashboard" | "notifikasi" | "tvrku" | null,
   ) {
     if (!user) return;
     if (
@@ -862,9 +865,12 @@ export default function Page() {
       pilihTab("qc");
     } else if (
       target === "tv" &&
-      (user.role === "super_admin" || user.role === "admin_tv")
+      (user.role === "super_admin" || user.role === "admin_tv" || adalahPimred(user))
     ) {
       pilihTab("tv");
+    } else if (target === "tvrku") {
+      // Request video / laporan KPI (5 Sep 2026) -> TV Rakyat Saya
+      pilihTab("tvrku");
     } else if (target === "dashboard" && user.role === "super_admin") {
       pilihTab("beranda");
     } else if (target === "notifikasi") {
@@ -1038,6 +1044,11 @@ export default function Page() {
           onLogout={keluar}
           onBukaAbsensi={() => setSubLayar({ nama: "absensi" })}
           onBukaLaporanKerja={() => setSubLayar({ nama: "laporan-kerja" })}
+          onBukaKelolaLaporanKpi={
+            user.role === "master" || user.role === "super_admin" || adalahHR(user) || adalahPimred(user)
+              ? () => setSubLayar({ nama: "kelola-laporan-kpi" })
+              : undefined
+          }
           onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           onBukaPanelMaster={() => setSubLayar({ nama: "panel-master" })}
           onBukaPet={bolehPet(user) ? () => setSubLayar({ nama: "pet" }) : undefined}
@@ -1260,6 +1271,8 @@ export default function Page() {
                     />
                   ) : subLayar.nama === "persetujuan-kpi" ? (
                     <PersetujuanKpiScreen onKembali={() => setSubLayar(null)} />
+                  ) : subLayar.nama === "kelola-laporan-kpi" ? (
+                    <KelolaLaporanKpiScreen onKembali={() => setSubLayar(null)} />
                   ) : subLayar.nama === "pengumuman" ? (
                     <PengumumanScreen
                       user={user}

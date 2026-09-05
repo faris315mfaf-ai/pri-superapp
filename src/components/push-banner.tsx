@@ -10,7 +10,7 @@ import { useAppStore } from "@/hooks/use-app-store";
 
 type PushBannerStackProps = {
   /** Dipanggil saat banner diklik dengan target navigasinya */
-  onTarget: (target: "qc" | "tv" | "dashboard" | "notifikasi" | null) => void;
+  onTarget: (target: "qc" | "tv" | "dashboard" | "notifikasi" | "tvrku" | null) => void;
 };
 
 function LogoPriMini() {

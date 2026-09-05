@@ -112,6 +112,8 @@ type ProfilScreenProps = {
   onLogout: () => void;
   onBukaAbsensi?: () => void;
   onBukaLaporanKerja?: () => void;
+  /** Kelola laporan KPI video anggota (HR / Pimred / master / super admin, 5 Sep 2026) */
+  onBukaKelolaLaporanKpi?: () => void;
   onBukaNotifikasi?: () => void;
   onBukaPanelMaster?: () => void;
   /** Pet Robot (3 Sep 2026, terbuka untuk semua) */
@@ -334,6 +336,7 @@ export function ProfilScreen({
   onLogout,
   onBukaAbsensi,
   onBukaLaporanKerja,
+  onBukaKelolaLaporanKpi,
   onBukaNotifikasi,
   onBukaPanelMaster,
   onBukaPet,
@@ -856,6 +859,28 @@ export function ProfilScreen({
           </div>
         </FadeInUp>
       )}
+
+      {/* Kelola laporan KPI video anggota — HR / Pimred / master / super admin
+          (5 Sep 2026). Di luar blok "Kehadiran & Kinerja" karena Ketua Umum /
+          master bebas kewajiban (blok itu tersembunyi bagi mereka). */}
+      {onBukaKelolaLaporanKpi ? (
+        <FadeInUp delay={0.07}>
+          <SectionTitle judul="Kendali Laporan KPI" className="mt-6" />
+          <div className="glass overflow-hidden rounded-2xl">
+            <BarisPengaturan
+              ikon={ShieldCheck}
+              warnaIkon="#DC2626"
+              label="Kelola Laporan KPI Anggota"
+              onClick={onBukaKelolaLaporanKpi}
+              kanan={
+                <span className="text-xs font-medium text-teks-sekunder">
+                  Ubah / hapus link
+                </span>
+              }
+            />
+          </div>
+        </FadeInUp>
+      ) : null}
 
       {/* Daftar pengaturan */}
       <FadeInUp delay={0.08}>

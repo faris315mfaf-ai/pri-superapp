@@ -16,6 +16,8 @@
 //   n8n supaya dua pipeline saling menimpa, bukan menggandakan.
 // ============================================================
 import { supabase } from "@/lib/supabase";
+import { bacaBonusKoin } from "@/lib/koin";
+import { siarkanRealtime } from "@/lib/realtime-server";
 import {
   ambilAkunTertaut,
   ambilKomentarPostingan,
@@ -317,6 +319,11 @@ export async function jalankanAnalisisAyrshare(opsi: {
 
   // Peta pencocokan: platform|username(lower) → user_id → nama
   const namaPerId = new Map((roster ?? []).map((r) => [Number(r.id), r]));
+  // 5 Sep 2026: komentar yang BARU terverifikasi putaran ini → bonus koin
+  // (idempoten per periode|postingan) + siaran realtime supaya layar
+  // "Komen Video" anggota memuat ulang seketika.
+  const idPerNama = new Map((roster ?? []).map((r) => [String(r.nama), Number(r.id)]));
+  const komenBaru: { user_id: number; referensi: string }[] = [];
   const pemilikAkun = new Map<string, { nama: string; nomor_wa: string | null }>();
   for (const a of akunAnggota ?? []) {
     const orang = namaPerId.get(Number(a.user_id));
@@ -609,6 +616,14 @@ export async function jalankanAnalisisAyrshare(opsi: {
       for (const pb of perbaikiNama.slice(0, 200)) {
         await db.from("komentar").update({ nama_kader: pb.nama }).eq("id", pb.id);
       }
+      // Status Comply SEBELUM putaran ini — untuk menemukan yang baru komentar.
+      const { data: rekapSebelum } = await db
+        .from("rekap")
+        .select("nama_kader, jumlah_komentar")
+        .eq("periode", periode)
+        .eq("id_postingan", idPost)
+        .range(0, 999);
+      const complySebelum = new Set((rekapSebelum ?? []).filter((r) => Number(r.jumlah_komentar) > 0).map((r) => String(r.nama_kader)));
       const barisRekap = (roster ?? []).map((r) => {
         const adaAjuan = ajuanDisetujui.has(`${r.nama}|${idPost}`);
         const jumlah = Math.max(jumlahPer.get(r.nama) ?? 0, adaAjuan ? 1 : 0);
@@ -630,6 +645,12 @@ export async function jalankanAnalisisAyrshare(opsi: {
         };
       });
       await db.from("rekap").upsert(dedup(barisRekap, (b) => b.id_unik), { onConflict: "id_unik" });
+      for (const b of barisRekap) {
+        if (b.jumlah_komentar > 0 && !complySebelum.has(b.nama_kader)) {
+          const uidKader = idPerNama.get(b.nama_kader);
+          if (uidKader) komenBaru.push({ user_id: uidKader, referensi: `${periode}|${idPost}` });
+        }
+      }
 
       // Barulah postingan ini dinyatakan selesai diperiksa (urutan penting:
       // bila terputus, postingan yang belum sempat dibaca tetap tampak
@@ -648,6 +669,30 @@ export async function jalankanAnalisisAyrshare(opsi: {
         );
       }
     }
+  }
+
+  // 5 Sep 2026: bonus koin komentar terverifikasi (sekali per periode|postingan)
+  // + siaran realtime ke layar Komen Video anggota yang bersangkutan.
+  if (komenBaru.length > 0) {
+    try {
+      const bonusKomen = (await bacaBonusKoin()).komen_video ?? 0;
+      if (bonusKomen > 0) {
+        const barisKoin = dedup(
+          komenBaru.map((k) => ({ user_id: k.user_id, jumlah: bonusKomen, aktivitas: "komen_video", referensi: k.referensi })),
+          (b) => `${b.user_id}|${b.referensi}`,
+        );
+        for (let i = 0; i < barisKoin.length; i += 200) {
+          await db.from("koin_transaksi").upsert(barisKoin.slice(i, i + 200), { onConflict: "user_id,aktivitas,referensi", ignoreDuplicates: true });
+        }
+      }
+    } catch (e) {
+      console.error("[analisis/ayrshare] koin komen:", e instanceof Error ? e.message : e);
+    }
+    await siarkanRealtime("wajib-komen", "berubah", {
+      periode,
+      user_ids: [...new Set(komenBaru.map((k) => k.user_id))],
+      jumlah: komenBaru.length,
+    });
   }
 
   // Catat SATU baris riwayat bila putaran ini benar-benar memeriksa

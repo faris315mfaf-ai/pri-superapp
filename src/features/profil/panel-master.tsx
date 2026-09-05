@@ -25,6 +25,7 @@ import { SeksiBebasKewajiban } from "./seksi-bebas-kewajiban";
 import { SeksiSakelarBerat } from "./seksi-sakelar-berat";
 import { SeksiTokoPet } from "./seksi-toko-pet";
 import { SeksiFormatLaporan } from "./seksi-format-laporan";
+import { SeksiWaLaporan } from "./seksi-wa-laporan";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -521,6 +522,12 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                   nilai ? "Format laporan disimpan" : "Format laporan dikembalikan ke bawaan",
                 )
               }
+            />
+            {/* Tujuan kirim laporan video ke WhatsApp (5 Sep 2026) */}
+            <SeksiWaLaporan
+              pengaturan={data.pengaturan}
+              sedangProses={sedangProses}
+              onSelesai={() => setMuatUlang((n) => n + 1)}
             />
             <SeksiBebasKewajiban />
           </FadeInUp>

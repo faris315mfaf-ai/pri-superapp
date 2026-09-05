@@ -28,6 +28,7 @@ import { PreviewModal } from "./preview-modal";
 import { RiwayatVideo } from "./riwayat-video";
 import { KelolaTimPanel } from "./kelola-tim-panel";
 import { KelolaSumberPanel } from "./kelola-sumber-panel";
+import { RequestPanel } from "./request-panel";
 import { SeksiLipat } from "@/components/seksi-lipat";
 import { useAppStore } from "@/hooks/use-app-store";
 import { EmbedTerbaru } from "./embed-terbaru";
@@ -254,6 +255,16 @@ export function TvScreen({
                   setSinyalBukaTugas((n) => n + 1);
                 }}
               />
+            </SeksiLipat>
+        ) },
+        pimred && { id: "request-anggota", judul: "Request Video ke Anggota", ikon: Clapperboard, render: () => (
+            <SeksiLipat
+              id="request-anggota"
+              judul="Request Video ke Anggota"
+              ikon={Clapperboard}
+              keterangan="Kirim bahan video + arahan ke seluruh anggota"
+            >
+              <RequestPanel />
             </SeksiLipat>
         ) },
         pimred && { id: "bagi-tugas", judul: "Bagi Tugas ke Anggota", ikon: Send, render: () => (

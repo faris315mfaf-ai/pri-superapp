@@ -7,14 +7,15 @@
 // hanya useState/useEffect + Tailwind, mengincar akselerasi.
 // ============================================================
 
-import { useEffect, useState } from "react";
-import { ArrowLeft, Check, Crown, ExternalLink, KeyRound, LogOut, Megaphone, MessageCircle, Moon, Play, RefreshCw, Sun, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Crown, ExternalLink, KeyRound, LogOut, Megaphone, MessageCircle, Moon, Play, RefreshCw, Sun, X } from "lucide-react";
 import { AvatarInisial } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
 import { PlatformIcon, labelPlatform } from "@/components/platform-icon";
 import { ModalGantiSandi } from "@/features/profil/pengaturan-akun";
 import { toast, useAppStore } from "@/hooks/use-app-store";
 import { urlEmbedDari } from "@/lib/embed-sosmed";
+import { dengarkanRealtime } from "@/lib/realtime-klien";
 import { waktuJelasWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
@@ -264,14 +265,26 @@ export function LeaderboardSimpel({ onKembali, namaSaya }: { onKembali: () => vo
 }
 
 // ------------------------------------------------------------
-// KOMEN VIDEO: postingan TV Rakyat yang wajib dikomentari + embed + status
+// KOMEN VIDEO (5 Sep 2026): kartu per kartu geser ke samping, filter
+// Semua / Belum / Sudah, dan REALTIME — saat cron sinkron komentar
+// menemukan komentar Anda, server menyiarkan "wajib-komen/berubah" →
+// daftar dimuat ulang dan video pindah ke "Sudah komen". Cadangan: polling
+// tiap 60 dtk + saat layar kembali aktif (setelah menulis komentar di IG).
 // ------------------------------------------------------------
+type FilterKomen = "semua" | "belum" | "sudah";
+
 export function KomenVideoSimpel({ onKembali }: { onKembali: () => void }) {
+  const userId = useAppStore((s) => s.user?.id);
   const [data, setData] = useState<WajibKomenItem[] | null>(null);
   const [periode, setPeriode] = useState("");
+  const [filter, setFilter] = useState<FilterKomen>("belum");
   const [dimuat, setDimuat] = useState<Set<string>>(() => new Set());
+  const [ditulis, setDitulis] = useState<Set<string>>(() => new Set());
   const [versi, setVersi] = useState(0);
   const [sibuk, setSibuk] = useState(false);
+  const [realtime, setRealtime] = useState<"menyambung" | "tersambung" | "gagal">("menyambung");
+  const [posisi, setPosisi] = useState(0);
+  const relRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let hidup = true;
@@ -287,7 +300,7 @@ export function KomenVideoSimpel({ onKembali }: { onKembali: () => void }) {
       })
       .catch((e) => {
         if (!hidup) return;
-        setData([]);
+        setData((d) => d ?? []);
         toast("error", "Daftar postingan gagal dimuat", e instanceof Error ? e.message : "");
       })
       .finally(() => hidup && setSibuk(false));
@@ -296,7 +309,82 @@ export function KomenVideoSimpel({ onKembali }: { onKembali: () => void }) {
     };
   }, [versi]);
 
-  const belum = (data ?? []).filter((d) => !d.sudah_komentar).length;
+  // Realtime: siaran dari server saat ada komentar baru terverifikasi.
+  useEffect(() => {
+    let berhenti: (() => void) | null = null;
+    let batal = false;
+    void dengarkanRealtime(
+      "wajib-komen",
+      "berubah",
+      (p) => {
+        const ids = Array.isArray(p.user_ids) ? (p.user_ids as unknown[]).map(String) : null;
+        // Tanpa daftar user (siaran umum) atau saya termasuk → muat ulang.
+        if (!ids || (userId && ids.includes(String(userId)))) setVersi((v) => v + 1);
+      },
+      (s) => !batal && setRealtime(s),
+    ).then((stop) => {
+      if (batal) stop();
+      else berhenti = stop;
+    });
+    return () => {
+      batal = true;
+      berhenti?.();
+    };
+  }, [userId]);
+
+  // Cadangan: polling 60 dtk + muat ulang saat layar kembali aktif.
+  useEffect(() => {
+    const t = setInterval(() => setVersi((v) => v + 1), 60_000);
+    const saatAktif = () => {
+      if (document.visibilityState === "visible") setVersi((v) => v + 1);
+    };
+    document.addEventListener("visibilitychange", saatAktif);
+    window.addEventListener("focus", saatAktif);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", saatAktif);
+      window.removeEventListener("focus", saatAktif);
+    };
+  }, []);
+
+  const semua = data ?? [];
+  const belum = semua.filter((d) => !d.sudah_komentar).length;
+  const sudah = semua.length - belum;
+  const tampil = semua.filter((d) => (filter === "semua" ? true : filter === "belum" ? !d.sudah_komentar : d.sudah_komentar));
+
+  // Posisi kartu aktif untuk penghitung "3 / 12" (snap scroll horizontal).
+  function saatGulir() {
+    const el = relRef.current;
+    if (!el) return;
+    const lebar = el.clientWidth || 1;
+    setPosisi(Math.min(tampil.length - 1, Math.max(0, Math.round(el.scrollLeft / (lebar * 0.86)))));
+  }
+  function geser(arah: -1 | 1) {
+    const el = relRef.current;
+    if (!el) return;
+    el.scrollBy({ left: arah * el.clientWidth * 0.86, behavior: "smooth" });
+  }
+
+  const chip = (id: FilterKomen, label: string, jumlah: number, warna: string) => (
+    <button
+      type="button"
+      onClick={() => {
+        setFilter(id);
+        setPosisi(0);
+        relRef.current?.scrollTo({ left: 0 });
+      }}
+      aria-pressed={filter === id}
+      className={cn(
+        "flex h-9 items-center gap-1.5 rounded-full px-3 text-[12px] font-extrabold transition-transform active:scale-[0.97]",
+        filter === id ? "text-white" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+      )}
+      style={filter === id ? { background: warna } : undefined}
+    >
+      {label}
+      <span className={cn("rounded-full px-1.5 text-[10.5px]", filter === id ? "bg-white/25" : "bg-white dark:bg-slate-700")}>{jumlah}</span>
+    </button>
+  );
+
   return (
     <div className="mode-simpel-layar">
       <KepalaSimpel
@@ -312,87 +400,123 @@ export function KomenVideoSimpel({ onKembali }: { onKembali: () => void }) {
           />
         }
       />
-      <div className="flex items-center gap-2 px-3 pt-2 text-[11.5px] text-slate-600 dark:text-slate-300">
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 font-bold text-slate-800 dark:bg-slate-800 dark:text-slate-100">{data?.length ?? 0} postingan</span>
-        {belum > 0 ? <span className="rounded-full bg-red-100 px-2 py-0.5 font-bold text-red-700 dark:bg-red-900/40 dark:text-red-300">{belum} belum komen</span> : null}
-        {periode ? <span className="truncate">Periode {periode}</span> : null}
+      <div className="flex items-center gap-2 overflow-x-auto px-3 pt-2 [scrollbar-width:none]">
+        {chip("belum", "Belum komen", belum, "#DC2626")}
+        {chip("sudah", "Sudah komen", sudah, "#059669")}
+        {chip("semua", "Semua", semua.length, BIRU_SIMPEL)}
+      </div>
+      <div className="flex items-center gap-2 px-3 pt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+        <span
+          className={cn("h-2 w-2 rounded-full", realtime === "tersambung" ? "bg-emerald-500" : realtime === "gagal" ? "bg-slate-400" : "bg-amber-400 animate-pulse")}
+          aria-hidden="true"
+        />
+        <span>{realtime === "tersambung" ? "Realtime aktif: video pindah otomatis setelah komentar terdeteksi" : realtime === "gagal" ? "Diperbarui tiap 1 menit" : "Menyambungkan realtime…"}</span>
+        {periode ? <span className="ml-auto shrink-0">Periode {periode}</span> : null}
       </div>
       {data === null ? (
         <Memuat />
-      ) : data.length === 0 ? (
-        <Kosong teks="Tidak ada postingan wajib komen di periode ini." />
+      ) : tampil.length === 0 ? (
+        <Kosong teks={filter === "belum" ? (semua.length === 0 ? "Tidak ada postingan wajib komen di periode ini." : "Semua postingan sudah Anda komentari. Mantap!") : filter === "sudah" ? "Belum ada yang tercatat sudah dikomentari." : "Tidak ada postingan wajib komen di periode ini."} />
       ) : (
-        <div className="flex flex-col gap-2.5 px-3 pb-8 pt-2">
-          {data.map((item) => {
-            const kunci = `${item.platform}-${item.id_postingan}`;
-            const embed = urlEmbedDari(item.platform, item.url);
-            const terbuka = dimuat.has(kunci) && Boolean(embed);
-            return (
-              <article key={kunci} className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-                {terbuka ? (
-                  <iframe
-                    src={embed ?? undefined}
-                    title={`Video ${item.platform} ${item.akun}`}
-                    className="aspect-[4/5] w-full border-0"
-                    allow="autoplay; encrypted-media; picture-in-picture"
-                    allowFullScreen
-                    loading="lazy"
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (embed) setDimuat((s) => new Set(s).add(kunci));
-                      else window.open(item.url, "_blank", "noopener,noreferrer");
-                    }}
-                    aria-label={embed ? "Putar video di sini" : "Buka video"}
-                    className="relative block w-full bg-slate-100 dark:bg-slate-800"
-                  >
-                    {item.thumbnail ? (
-                      <img src={item.thumbnail} alt="" className="aspect-[4/3] w-full object-cover" loading="lazy" />
-                    ) : (
-                      <span className="flex aspect-[4/3] w-full items-center justify-center text-slate-400">
-                        <MessageCircle className="h-10 w-10" aria-hidden="true" />
-                      </span>
-                    )}
-                    <span className="absolute inset-0 flex items-center justify-center">
-                      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white">
-                        <Play className="h-6 w-6" aria-hidden="true" />
-                      </span>
-                    </span>
-                  </button>
-                )}
-                <div className="p-3">
-                  <div className="flex items-center gap-2">
-                    <PlatformIcon platform={item.platform} size={14} />
-                    <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-slate-900 dark:text-white">@{item.akun}</span>
-                    <span
-                      className={cn(
-                        "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-extrabold",
-                        item.sudah_komentar ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
-                      )}
+        <>
+          <div className="flex items-center justify-between px-3 pt-2">
+            <button type="button" onClick={() => geser(-1)} disabled={posisi <= 0} aria-label="Kartu sebelumnya" className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-700 disabled:opacity-30 dark:bg-slate-800 dark:text-slate-200">
+              <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <span className="text-[12px] font-bold text-slate-600 dark:text-slate-300">
+              {posisi + 1} / {tampil.length} · geser ke samping
+            </span>
+            <button type="button" onClick={() => geser(1)} disabled={posisi >= tampil.length - 1} aria-label="Kartu berikutnya" className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-700 disabled:opacity-30 dark:bg-slate-800 dark:text-slate-200">
+              <ChevronRight className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+          <div
+            ref={relRef}
+            onScroll={saatGulir}
+            className="flex snap-x snap-mandatory gap-3 overflow-x-auto px-3 pb-8 pt-2 [scrollbar-width:none]"
+            role="list"
+            aria-label="Daftar video wajib komen"
+          >
+            {tampil.map((item) => {
+              const kunci = `${item.platform}-${item.id_postingan}`;
+              const embed = urlEmbedDari(item.platform, item.url);
+              const terbuka = dimuat.has(kunci) && Boolean(embed);
+              const menunggu = !item.sudah_komentar && ditulis.has(kunci);
+              return (
+                <article key={kunci} role="listitem" className="w-[86%] shrink-0 snap-center overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+                  {terbuka ? (
+                    <iframe
+                      src={embed ?? undefined}
+                      title={`Video ${item.platform} ${item.akun}`}
+                      className="aspect-[4/5] w-full border-0"
+                      allow="autoplay; encrypted-media; picture-in-picture"
+                      allowFullScreen
+                      loading="lazy"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (embed) setDimuat((s) => new Set(s).add(kunci));
+                        else window.open(item.url, "_blank", "noopener,noreferrer");
+                      }}
+                      aria-label={embed ? "Putar video di sini" : "Buka video"}
+                      className="relative block w-full bg-slate-100 dark:bg-slate-800"
                     >
-                      {item.sudah_komentar ? <Check className="h-3 w-3" aria-hidden="true" /> : <X className="h-3 w-3" aria-hidden="true" />}
-                      {item.sudah_komentar ? "Sudah komen" : "Belum komen"}
-                    </span>
+                      {item.thumbnail ? (
+                        <img src={item.thumbnail} alt="" className="aspect-[4/5] w-full object-cover" loading="lazy" />
+                      ) : (
+                        <span className="flex aspect-[4/5] w-full items-center justify-center text-slate-400">
+                          <MessageCircle className="h-10 w-10" aria-hidden="true" />
+                        </span>
+                      )}
+                      <span className="absolute inset-0 flex items-center justify-center">
+                        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white">
+                          <Play className="h-6 w-6" aria-hidden="true" />
+                        </span>
+                      </span>
+                    </button>
+                  )}
+                  <div className="p-3">
+                    <div className="flex items-center gap-2">
+                      <PlatformIcon platform={item.platform} size={14} />
+                      <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-slate-900 dark:text-white">@{item.akun}</span>
+                      <span
+                        className={cn(
+                          "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-extrabold",
+                          item.sudah_komentar
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                            : menunggu
+                              ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                              : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+                        )}
+                      >
+                        {item.sudah_komentar ? <Check className="h-3 w-3" aria-hidden="true" /> : menunggu ? <RefreshCw className="h-3 w-3 animate-spin" aria-hidden="true" /> : <X className="h-3 w-3" aria-hidden="true" />}
+                        {item.sudah_komentar ? "Sudah komen" : menunggu ? "Menunggu verifikasi" : "Belum komen"}
+                      </span>
+                    </div>
+                    {item.caption ? <p className="mt-1.5 line-clamp-2 text-[12px] leading-snug text-slate-700 dark:text-slate-300">{item.caption}</p> : null}
+                    <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Tayang: {item.waktu_posting ? waktuJelasWIB(item.waktu_posting) : "-"}</p>
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => {
+                        if (!item.sudah_komentar) setDitulis((s) => new Set(s).add(kunci));
+                      }}
+                      className="mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded-lg text-[13px] font-extrabold text-white"
+                      style={{ background: item.sudah_komentar ? "#64748B" : BIRU_SIMPEL }}
+                    >
+                      <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                      {item.sudah_komentar ? "Lihat postingan" : "Komentari sekarang"}
+                    </a>
+                    {menunggu ? <p className="mt-1.5 text-center text-[10.5px] text-slate-500 dark:text-slate-400">Komentar Anda diperiksa robot beberapa menit sekali. Kartu pindah otomatis ke &quot;Sudah komen&quot;.</p> : null}
                   </div>
-                  {item.caption ? <p className="mt-1.5 line-clamp-2 text-[12px] leading-snug text-slate-700 dark:text-slate-300">{item.caption}</p> : null}
-                  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Tayang: {item.waktu_posting ? waktuJelasWIB(item.waktu_posting) : "-"}</p>
-                  <a
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded-lg text-[13px] font-extrabold text-white"
-                    style={{ background: item.sudah_komentar ? "#64748B" : BIRU_SIMPEL }}
-                  >
-                    <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                    {item.sudah_komentar ? "Lihat postingan" : "Komentari sekarang"}
-                  </a>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+                </article>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

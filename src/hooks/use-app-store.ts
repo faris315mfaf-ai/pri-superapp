@@ -28,7 +28,7 @@ export type PushBannerItem = {
   judul: string;
   isi: string;
   waktu: string;
-  target: "qc" | "tv" | "dashboard" | "notifikasi" | null;
+  target: "qc" | "tv" | "dashboard" | "notifikasi" | "tvrku" | null;
 };
 
 export type Tema = "light" | "dark";

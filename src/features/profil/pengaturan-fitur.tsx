@@ -243,8 +243,11 @@ export function PengaturanFiturScreen({ onKembali }: { onKembali: () => void }) 
 
 const AKTIVITAS_TAMPIL = [
   { id: "absen", label: "Absen masuk harian" },
+  { id: "login_harian", label: "Hadiah login harian (hari ke-7 dua kali lipat)" },
+  { id: "upload_video", label: "Mengunggah video lewat TV Rakyat Saya" },
+  { id: "laporan_video", label: "Laporan video tersimpan / disetujui HR" },
+  { id: "komen_video", label: "Komentar terverifikasi di postingan wajib" },
   { id: "chat_baru", label: "Chat pertama ke teman baru" },
-  { id: "laporan_video", label: "Laporan video tersimpan" },
   { id: "akun_sosmed", label: "Menambahkan akun sosmed" },
 ] as const;
 

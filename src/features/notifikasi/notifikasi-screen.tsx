@@ -38,7 +38,7 @@ import type { KomponenIkon, NotifikasiItem } from "@/types";
 // Tipe & konstanta
 // ------------------------------------------------------------
 
-type TargetLayar = "qc" | "tv" | "dashboard" | null;
+type TargetLayar = "qc" | "tv" | "dashboard" | "tvrku" | null;
 
 type NotifikasiScreenProps = {
   onTarget: (target: TargetLayar) => void;
@@ -83,7 +83,7 @@ let sudahAdaDataNotifikasi = false;
 
 /** Target "notifikasi" berarti tetap di layar ini → null */
 function targetLayar(target: NotifikasiItem["target"]): TargetLayar {
-  return target === "qc" || target === "tv" || target === "dashboard"
+  return target === "qc" || target === "tv" || target === "dashboard" || target === "tvrku"
     ? target
     : null;
 }

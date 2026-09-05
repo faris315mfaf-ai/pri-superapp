@@ -26,6 +26,8 @@ import { maksUploadMb } from "@/lib/pengaturan-tv";
 import { unggahVideoUp, uploadPostSiap } from "@/lib/upload-post";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
+import { beriKoin } from "@/lib/koin";
+import { selesaikanRequest } from "@/lib/tvr-request";
 import { hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
 import { adalahPalugodam } from "@/lib/struktur";
 import { prosesPesananPalugodam } from "@/lib/palugodam";
@@ -461,6 +463,15 @@ export async function POST(request: Request) {
         .select("id")
         .single();
       if (error) console.error("[tvrku/unggah] simpan riwayat:", error.message);
+      // 5 Sep 2026: bonus koin unggah video + tutup request TV Rakyat yang
+      // sedang dikerjakan anggota ini (bila ada).
+      if (baris?.id) {
+        const idPost = Number(baris.id);
+        after(async () => {
+          await beriKoin(Number(user.id), "upload_video", `tvrku-${idPost}`);
+          await selesaikanRequest(Number(user.id), { tvrku_post_id: idPost });
+        });
+      }
 
       // Coba catat KPI segera (platform cepat seperti YouTube/TikTok
       // biasanya sudah punya URL); sisanya menyusul saat layar dibuka.

@@ -5644,6 +5644,79 @@ export async function keluarLobi(): Promise<void> {
   await fetchJson("/api/pet/pasar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ aksi: "lobi_keluar" }) }).catch(() => undefined);
 }
 
+// ---- REQUEST VIDEO TV Rakyat, KIRIM LAPORAN WA, KELOLA LAPORAN KPI, REALTIME (5 Sep 2026) ----
+export type RequestVideo = {
+  id: string;
+  judul: string;
+  keterangan: string;
+  video_url: string;
+  pembuat: string;
+  aktif: boolean;
+  dibuat_pada: string;
+  jumlah_dikerjakan: number;
+  jumlah_selesai: number;
+  status_saya: "dikerjakan" | "selesai" | null;
+  kerja: { user_id: string; nama: string; status: string; pada: string }[];
+};
+export type DataRequestVideo = {
+  pimred: boolean;
+  aktif_saya: { id: string; kerja_id: string; judul: string } | null;
+  request: RequestVideo[];
+  pesan?: string;
+  id?: string;
+};
+export async function getRequestVideo(): Promise<DataRequestVideo> {
+  return (await fetchJson("/api/tvr/request")) as DataRequestVideo;
+}
+export async function requestVideoAksi(aksi: string, data: Record<string, unknown> = {}): Promise<DataRequestVideo> {
+  return (await fetchJson("/api/tvr/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ aksi, ...data }) })) as DataRequestVideo;
+}
+export async function siapkanRequestVideo(nama: string, ukuran: number): Promise<{ r2_key: string; url: string }> {
+  return (await fetchJson("/api/tvr/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ aksi: "siapkan", nama, ukuran }) })) as { r2_key: string; url: string };
+}
+
+export type KeadaanKirimLaporan = {
+  boleh: boolean;
+  alasan: string;
+  terkirim_hari_ini: number;
+  batas_per_hari: number;
+  jeda_menit: number;
+  berikutnya_pada: string | null;
+  kanal: "fonnte_grup" | "convia_nomor" | "belum";
+  riwayat: { dikirim_pada: string; kanal: string; jumlah_video: number; status: string }[];
+  tanggal?: string;
+  pratinjau?: string;
+  jumlah?: number;
+  menunggu?: number;
+  per_platform?: Record<string, string[]>;
+  sukses?: boolean;
+};
+export async function getKirimLaporan(): Promise<KeadaanKirimLaporan> {
+  return (await fetchJson("/api/tvr/kirim-laporan")) as KeadaanKirimLaporan;
+}
+export async function kirimLaporanWa(): Promise<KeadaanKirimLaporan> {
+  return (await fetchJson("/api/tvr/kirim-laporan", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })) as KeadaanKirimLaporan;
+}
+
+export type LaporanAnggotaBaris = { id: string; user_id: string; platform: string; url_video: string; keyword: string | null; sumber: string | null; dibuat_pada: string; tanggal_wib: string };
+export type AnggotaLaporan = { id: string; nama: string; avatar_url: string; divisi: string; jumlah: number };
+export async function getLaporanAnggota(tanggal: string): Promise<{ tanggal: string; daftar: AnggotaLaporan[]; total: number }> {
+  return (await fetchJson(`/api/tvr/laporan-anggota?tanggal=${encodeURIComponent(tanggal)}`)) as { tanggal: string; daftar: AnggotaLaporan[]; total: number };
+}
+export async function getLaporanAnggotaDetail(tanggal: string, userId: string): Promise<{ tanggal: string; anggota: Omit<AnggotaLaporan, "jumlah"> | null; laporan: LaporanAnggotaBaris[] }> {
+  return (await fetchJson(`/api/tvr/laporan-anggota?tanggal=${encodeURIComponent(tanggal)}&user_id=${encodeURIComponent(userId)}`)) as { tanggal: string; anggota: Omit<AnggotaLaporan, "jumlah"> | null; laporan: LaporanAnggotaBaris[] };
+}
+export async function ubahLaporanAnggota(id: string, url_video: string, platform?: string): Promise<LaporanAnggotaBaris> {
+  const json = await fetchJson("/api/tvr/laporan-anggota", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, url_video, platform }) });
+  return json.laporan as LaporanAnggotaBaris;
+}
+export async function hapusLaporanAnggota(id: string, alasan = ""): Promise<void> {
+  await fetchJson("/api/tvr/laporan-anggota", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, alasan }) });
+}
+export async function getRealtimeKonfig(): Promise<{ realtime: boolean; url: string; key: string }> {
+  return (await fetchJson("/api/realtime/konfig")) as { realtime: boolean; url: string; key: string };
+}
+
 /** Robot peliharaan orang lain — tampilan saja (profil publik di chat, 3 Sep 2026). */
 export async function getPetPublik(
   userId: string,

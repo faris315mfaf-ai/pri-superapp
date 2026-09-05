@@ -188,7 +188,7 @@ export type NotifikasiItem = {
   waktu_relatif: string; // "5 menit lalu"
   kelompok: "HARI_INI" | "KEMARIN" | "LEBIH_LAMA";
   dibaca: boolean;
-  target: "qc" | "tv" | "dashboard" | "notifikasi" | null;
+  target: "qc" | "tv" | "dashboard" | "notifikasi" | "tvrku" | null;
   /** Jenis peristiwa (mis. "ultah") — untuk aksi klik khusus */
   jenis_peristiwa?: string;
 };

@@ -18,6 +18,7 @@ import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { beriKoin } from "@/lib/koin";
 import { kirimKabar } from "@/lib/notifikasi";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
+import { selesaikanRequest } from "@/lib/tvr-request";
 import {
   bannedAktifPerUser,
   hitungKpi,
@@ -355,6 +356,9 @@ export async function POST(request: Request) {
         .select("id, platform, url_video, keyword, tanggal_wib, dibuat_pada, status")
         .single();
       if (error || !data) throw new Error("gagal tersimpan");
+      // 5 Sep 2026: laporan link ini menutup request TV Rakyat yang sedang dikerjakan.
+      const idPending = Number(data.id);
+      after(() => selesaikanRequest(Number(user.id), { laporan_pending_id: idPending }));
       return { ...data, id: String(data.id) };
     }
 

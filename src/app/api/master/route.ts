@@ -235,6 +235,9 @@ export async function POST(request: Request) {
       /** pet_toko_*: kode item (5 Sep 2026) & batas waktu event */
       kode?: string;
       sampai?: string;
+      /** wa_laporan: tujuan kiriman laporan video */
+      grup?: string;
+      nomor?: string;
     };
     const db = supabase();
 
@@ -436,6 +439,20 @@ export async function POST(request: Request) {
       } else delete toko.event[kode];
       await simpanToko(toko);
       return { sukses: true, toko };
+    }
+
+    // ---- KIRIM LAPORAN KE WHATSAPP (5 Sep 2026): tujuan grup Fonnte / nomor Convia ----
+    if (body.aksi === "wa_laporan") {
+      const grup = String(body.grup ?? "").trim().slice(0, 80);
+      const nomor = String(body.nomor ?? "").replace(/[^0-9+]/g, "").slice(0, 20);
+      const kini = new Date().toISOString();
+      const simpan = async (kunci: string, nilai: string) => {
+        if (nilai) await db.from("pengaturan_sistem").upsert({ kunci, nilai, diubah_pada: kini }, { onConflict: "kunci" });
+        else await db.from("pengaturan_sistem").delete().eq("kunci", kunci);
+      };
+      await simpan("wa_grup_laporan", grup);
+      await simpan("wa_nomor_laporan", nomor);
+      return { sukses: true, grup, nomor };
     }
 
     if (body.aksi === "tur_aktif") {

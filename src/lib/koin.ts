@@ -20,6 +20,9 @@ export const AKTIVITAS_KOIN = [
   { id: "akun_sosmed", kunci: "koin_bonus_akun_sosmed", label: "Menambahkan akun sosmed", bawaan: 20 },
   // v5 (5 Sep 2026): hadiah login harian (10 koin × 2); hari ke-7 beruntun = dua kali lipat.
   { id: "login_harian", kunci: "koin_bonus_login_harian", label: "Hadiah login harian (hari ke-7 ×2)", bawaan: 20 },
+  // 5 Sep 2026: unggah video lewat TV Rakyat Saya & komentar terverifikasi di postingan wajib.
+  { id: "upload_video", kunci: "koin_bonus_upload_video", label: "Mengunggah video (TV Rakyat Saya)", bawaan: 15 },
+  { id: "komen_video", kunci: "koin_bonus_komen_video", label: "Komentar terverifikasi di postingan wajib", bawaan: 5 },
 ] as const;
 
 export type AktivitasKoin = (typeof AKTIVITAS_KOIN)[number]["id"];
