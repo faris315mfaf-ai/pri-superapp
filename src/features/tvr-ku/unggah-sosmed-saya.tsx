@@ -659,6 +659,12 @@ export function UnggahSosmedSaya() {
                       <X className="h-3 w-3" /> sebagian gagal
                     </span>
                   )}
+                  {/* Platform yang dinyatakan upload-post GAGAL terbit (6 Sep 2026) — biasanya akun perlu ditautkan ulang */}
+                  {Array.isArray((r.hasil as { kpi_gagal?: unknown } | null)?.kpi_gagal) && ((r.hasil as { kpi_gagal: string[] }).kpi_gagal.length > 0) && (
+                    <span className="flex items-center gap-0.5 text-[10px] font-bold text-gagal" title="Video tidak terbit di platform ini — cek tautan akun di seksi Akun TV Rakyat Saya">
+                      <X className="h-3 w-3" /> gagal terbit: {(r.hasil as { kpi_gagal: string[] }).kpi_gagal.map((p) => labelPlatform(p)).join(", ")}
+                    </span>
+                  )}
                 </div>
                 {/* Tautan hasil per platform + tombol Bagikan (3 Sep 2026) */}
                 {Object.keys(r.tautan ?? {}).length > 0 ? (
