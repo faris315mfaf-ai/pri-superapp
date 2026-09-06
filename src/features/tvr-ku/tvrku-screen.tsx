@@ -38,7 +38,6 @@ import {
   Ban,
   Hourglass,
   Radio,
-  Send,
   ShieldCheck,
   FileText,
 } from "lucide-react";
@@ -78,7 +77,6 @@ import { PanelTugasSaya } from "./tugas-saya";
 import { KirimVideoManual } from "./kirim-video-manual";
 import { UnggahSosmedSaya } from "./unggah-sosmed-saya";
 import { RequestVideoPanel } from "./request-video-panel";
-import { ModalKirimLaporan } from "./modal-kirim-laporan";
 import { SiaranSerentak } from "./siaran-serentak";
 import { StudioPalugodam } from "./studio-palugodam";
 import { InsightSayaPanel } from "./insight-saya-panel";
@@ -559,7 +557,6 @@ export function TvrKuScreen({
   const versiSegar = useVersiSegar();
   const [modalWebsite, setModalWebsite] = useState(false);
   const [modalLaporan, setModalLaporan] = useState(false);
-  const [modalKirimWa, setModalKirimWa] = useState(false);
   const [editAkun, setEditAkun] = useState<AkunTvr | null>(null);
   const [editLaporan, setEditLaporan] = useState<LaporanVideo | null>(null);
 
@@ -1046,27 +1043,15 @@ export function TvrKuScreen({
       <FadeInUp delay={0.14}>
         <div className="mt-5 flex items-center justify-between md:mt-0">
           <SectionTitle judul="Laporan Video Hari Ini" className="!mt-0" />
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setModalKirimWa(true)}
-              className="btn-tekan flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold text-white"
-              style={{ background: "linear-gradient(135deg, #16A34A, #15803D)" }}
-              aria-label="Kirim laporan ke WhatsApp"
-            >
-              <Send className="h-3.5 w-3.5" aria-hidden="true" />
-              Kirim ke WA
-            </button>
-            <button
-              type="button"
-              onClick={() => setModalLaporan(true)}
-              className="btn-tekan flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold text-white"
-              style={{ background: "linear-gradient(135deg, #10B981, #059669)" }}
-            >
-              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-              Tambah Laporan
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setModalLaporan(true)}
+            className="btn-tekan flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold text-white"
+            style={{ background: "linear-gradient(135deg, #10B981, #059669)" }}
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            Tambah Laporan
+          </button>
         </div>
         {memuat ? (
           <GlassSkeleton className="mt-2 h-16 rounded-2xl" />
@@ -1198,9 +1183,6 @@ export function TvrKuScreen({
           (s) => (!ketum || !SEKSI_KPI_TVRKU.has(s.id)) && (!hanyaSeksi || hanyaSeksi.includes(s.id)),
         )}
       />
-
-      {/* Kirim laporan hari ini ke WhatsApp (5 Sep 2026) */}
-      {modalKirimWa ? <ModalKirimLaporan onTutup={() => setModalKirimWa(false)} /> : null}
 
       {/* Modal-modal */}
       <AnimatePresence>

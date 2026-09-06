@@ -4,8 +4,9 @@
 // RangkumanLink (TVR Saya, 3 Sep 2026) — merangkum semua tautan video
 // pengguna pada satu tanggal per sosmed ke format laporan WhatsApp:
 //   Nama : … / Tanggal : … / INSTAGRAM 1. … 2. … / TIKTOK … / X … / dst.
-// + kotak kendala → Generate → Salin / Bagikan ke WhatsApp (pengguna memilih
-// grup tujuan di aplikasi WhatsApp-nya sendiri).
+// + kotak kendala → Generate → teks BISA DIEDIT/DITULIS ULANG (6 Sep 2026)
+// → Salin / Bagikan ke WhatsApp (pengguna memilih grup tujuan di aplikasi
+// WhatsApp-nya sendiri). Tidak ada pengiriman otomatis lewat bot.
 // ============================================================
 
 import { useEffect, useState } from "react";
@@ -160,12 +161,14 @@ export function RangkumanLink() {
       {teks ? (
         <>
           <textarea
-            readOnly
             value={teks}
+            onChange={(e) => setTeks(e.target.value)}
             rows={Math.min(22, teks.split("\n").length + 1)}
-            aria-label="Teks laporan"
+            aria-label="Teks laporan (bisa diedit)"
+            spellCheck={false}
             className="glass-input mt-3 w-full rounded-xl px-3 py-2 font-mono text-[11.5px] leading-relaxed whitespace-pre text-teks-utama"
           />
+          <p className="mt-1 text-[10.5px] text-teks-sekunder">Teks di atas bisa Anda ubah atau tambah langsung sebelum disalin/dibagikan. Tekan Generate lagi untuk menyusun ulang dari data.</p>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <button
               type="button"

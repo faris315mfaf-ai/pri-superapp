@@ -5704,29 +5704,6 @@ export async function siapkanRequestVideo(nama: string, ukuran: number): Promise
   return (await fetchJson("/api/tvr/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ aksi: "siapkan", nama, ukuran }) })) as { r2_key: string; url: string };
 }
 
-export type KeadaanKirimLaporan = {
-  boleh: boolean;
-  alasan: string;
-  terkirim_hari_ini: number;
-  batas_per_hari: number;
-  jeda_menit: number;
-  berikutnya_pada: string | null;
-  kanal: "fonnte_grup" | "convia_nomor" | "belum";
-  riwayat: { dikirim_pada: string; kanal: string; jumlah_video: number; status: string }[];
-  tanggal?: string;
-  pratinjau?: string;
-  jumlah?: number;
-  menunggu?: number;
-  per_platform?: Record<string, string[]>;
-  sukses?: boolean;
-};
-export async function getKirimLaporan(): Promise<KeadaanKirimLaporan> {
-  return (await fetchJson("/api/tvr/kirim-laporan")) as KeadaanKirimLaporan;
-}
-export async function kirimLaporanWa(): Promise<KeadaanKirimLaporan> {
-  return (await fetchJson("/api/tvr/kirim-laporan", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })) as KeadaanKirimLaporan;
-}
-
 export type LaporanAnggotaBaris = { id: string; user_id: string; platform: string; url_video: string; keyword: string | null; sumber: string | null; dibuat_pada: string; tanggal_wib: string };
 export type AnggotaLaporan = { id: string; nama: string; avatar_url: string; divisi: string; jumlah: number };
 export async function getLaporanAnggota(tanggal: string): Promise<{ tanggal: string; daftar: AnggotaLaporan[]; total: number }> {
