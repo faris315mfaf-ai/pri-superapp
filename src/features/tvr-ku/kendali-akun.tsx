@@ -58,9 +58,9 @@ export function KendaliAkun({
             <Users className="h-5 w-5" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-teks-utama">Beralih menjadi akun anggota</p>
+            <p className="text-sm font-bold text-teks-utama">Masuk sebagai akun anggota</p>
             <p className="mt-0.5 text-[11px] leading-relaxed text-teks-sekunder">
-              Tekan satu bulatan untuk mengendalikan, memantau, dan mengerjakan seluruh TV Rakyat Saya atas nama anggota itu (unggah, jadwal, laporan, akun tertaut). Modul lain tidak ikut berubah.
+              Tekan satu bulatan → aplikasi berganti menjadi akun anggota itu SEPENUHNYA (semua modul: TVR Saya, unggah, laporan, chat, profil) tanpa kata sandi. Pita di atas layar menunjukkan akun siapa yang sedang dipakai; tekan &quot;Kembali ke akun saya&quot; untuk pulang.
             </p>
           </div>
         </div>

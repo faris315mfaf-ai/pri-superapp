@@ -421,3 +421,78 @@ export async function daftarJadwalUp(): Promise<JadwalUp[]> {
     jenis: String(p.post_type ?? ""),
   }));
 }
+
+// ------------------------------------------------------------
+// Status unggahan & URL pasti per platform (6 Sep 2026)
+// ------------------------------------------------------------
+
+export type StatusUp = {
+  status: string;
+  completed: number;
+  total: number;
+  /** platform (nama APLIKASI) → { sukses, pesan, waktu } */
+  per: Record<string, { sukses: boolean; pesan: string; waktu: string | null }>;
+  mentah: unknown;
+};
+
+/** GET /uploadposts/status?request_id=… (atau job_id untuk post terjadwal). */
+export async function statusUnggahUp(id: string): Promise<StatusUp> {
+  const q = /^job_/i.test(id) ? `job_id=${encodeURIComponent(id)}` : `request_id=${encodeURIComponent(id)}`;
+  const d = await panggil<{ status?: string; completed?: number; total?: number; results?: Record<string, unknown>[] }>(
+    `/uploadposts/status?${q}`,
+    { method: "GET", timeoutMs: 20000 },
+  );
+  const per: StatusUp["per"] = {};
+  for (const r of d.results ?? []) {
+    const up = String(r.platform ?? "").toLowerCase();
+    const app = DARI_UP[up] ?? up;
+    if (!app) continue;
+    per[app] = { sukses: r.success === true, pesan: String(r.message ?? ""), waktu: keIso(r.upload_timestamp) };
+  }
+  return { status: String(d.status ?? ""), completed: Number(d.completed ?? 0), total: Number(d.total ?? 0), per, mentah: d };
+}
+
+export type PostPastiUp = { post_url: string; post_id: string; waktu: string | null };
+
+/** Cari URL http pertama di antara kunci yang lazim dipakai upload-post. */
+function urlDari(o: Record<string, unknown> | undefined): string {
+  if (!o) return "";
+  for (const k of ["post_url", "url", "permalink", "share_url", "link", "video_url"]) {
+    const v = o[k];
+    if (typeof v === "string" && /^https?:\/\//i.test(v)) return v;
+  }
+  return "";
+}
+
+/**
+ * GET /uploadposts/post-analytics/{request_id} → URL pasti postingan per
+ * platform ("post_url" + "platform_post_id"). Balasan bisa berbentuk
+ * { platforms: { x: {...}, instagram: {...} } } atau daftar — keduanya dibaca.
+ * Platform yang belum punya URL tidak dimasukkan.
+ */
+export async function analitikPostUp(requestId: string): Promise<Map<string, PostPastiUp>> {
+  const d = await panggil<Record<string, unknown>>(`/uploadposts/post-analytics/${encodeURIComponent(requestId)}`, { method: "GET", timeoutMs: 25000 });
+  const hasil = new Map<string, PostPastiUp>();
+  const wadah = (d.platforms ?? d.results ?? d.data ?? d) as unknown;
+  const masukkan = (namaUp: string, o: Record<string, unknown>) => {
+    const app = DARI_UP[namaUp.toLowerCase()] ?? namaUp.toLowerCase();
+    const url = urlDari(o) || urlDari(o.post as Record<string, unknown> | undefined);
+    if (!url) return;
+    hasil.set(app, {
+      post_url: url,
+      post_id: String(o.platform_post_id ?? o.post_id ?? o.id ?? ""),
+      waktu: keIso(o.upload_timestamp ?? o.published_at ?? o.timestamp ?? o.created_at ?? o.post_date),
+    });
+  };
+  if (Array.isArray(wadah)) {
+    for (const item of wadah as Record<string, unknown>[]) {
+      const nama = String(item.platform ?? "");
+      if (nama) masukkan(nama, item);
+    }
+  } else if (wadah && typeof wadah === "object") {
+    for (const [nama, isi] of Object.entries(wadah as Record<string, unknown>)) {
+      if (isi && typeof isi === "object" && !Array.isArray(isi)) masukkan(nama, isi as Record<string, unknown>);
+    }
+  }
+  return hasil;
+}

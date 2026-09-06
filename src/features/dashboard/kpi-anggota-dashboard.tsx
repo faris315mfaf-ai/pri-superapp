@@ -30,7 +30,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ArrowDownAZ, ArrowUpAZ, ExternalLink, Search, X } from "lucide-react";
+import { ArrowDownAZ, ArrowUpAZ, ExternalLink, FileDown, Search, X } from "lucide-react";
 import { PlatformIcon, labelPlatform } from "@/components/platform-icon";
 import { GlassCard } from "@/components/glass-card";
 import { AvatarInisial, EmptyState, GlassSkeleton, StatusBadge } from "@/components/pri-ui";
@@ -42,6 +42,7 @@ import {
   type KpiDashboardAnggota,
   type KpiDashboardData,
   type LaporanVideo,
+  unduhPdfKpiVideo,
 } from "@/services";
 import { DIVISI } from "@/lib/struktur";
 import { Target } from "lucide-react";
@@ -180,6 +181,21 @@ export function KpiAnggotaDashboard() {
     setData(null);
     setGagal(false);
     setFTanggal(t || tanggalWibSekarang());
+  }
+  // Laporan KPI video berbentuk tabel PDF (6 Sep 2026).
+  const [pdfSibuk, setPdfSibuk] = useState(false);
+  async function unduhPdf() {
+    if (pdfSibuk) return;
+    setPdfSibuk(true);
+    try {
+      const r = await unduhPdfKpiVideo(fTanggal);
+      window.open(r.url, "_blank", "noopener,noreferrer");
+      toast("sukses", "PDF siap", `${r.jumlah_orang} pengguna · ${r.jumlah_link} link. Tautan berlaku 24 jam.`);
+    } catch (e) {
+      toast("error", "Gagal membuat PDF", e instanceof Error ? e.message : "");
+    } finally {
+      setPdfSibuk(false);
+    }
   }
 
   function bukaDetail(a: KpiDashboardAnggota) {
@@ -525,6 +541,9 @@ export function KpiAnggotaDashboard() {
               aria-label="Pilih tanggal"
               className="glass-input h-9 rounded-lg px-2.5 text-xs text-teks-utama"
             />
+            <button type="button" onClick={() => void unduhPdf()} disabled={pdfSibuk} aria-label="Unduh laporan KPI video PDF" className="btn-tekan flex h-9 items-center gap-1 rounded-lg px-2.5 text-xs font-bold text-white disabled:opacity-60" style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}>
+              <FileDown className="h-3.5 w-3.5" aria-hidden="true" /> {pdfSibuk ? "…" : "PDF"}
+            </button>
             <select
               value={fDivisi}
               onChange={(e) => setFDivisi(e.target.value)}

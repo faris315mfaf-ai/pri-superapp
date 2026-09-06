@@ -43,6 +43,7 @@ import { ProfilScreen } from "@/features/profil/profil-screen";
 import { AbsensiScreen } from "@/features/absensi/absensi-screen";
 import { LaporanKerjaScreen } from "@/features/laporan-kerja/laporan-kerja-screen";
 import { KelolaLaporanKpiScreen } from "@/features/laporan-kerja/kelola-laporan-kpi-screen";
+import { BannerKendali } from "@/components/banner-kendali";
 import { PanelMasterScreen } from "@/features/profil/panel-master";
 import { PengaturanFiturScreen } from "@/features/profil/pengaturan-fitur";
 import { BerandaScreen } from "@/features/beranda/beranda-screen";
@@ -1362,6 +1363,8 @@ export default function Page() {
       {/* Lapisan global: toast + push banner */}
       <ToastViewport />
       <PushBannerStack onTarget={handleTarget} />
+      {/* Pita "masuk sebagai …" saat admin PALUGODAM mengendalikan akun (6 Sep 2026) */}
+      <BannerKendali namaAktif={user?.nama} />
     </>
   );
 }

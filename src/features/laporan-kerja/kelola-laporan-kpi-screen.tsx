@@ -8,13 +8,13 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, ExternalLink, Pencil, Search, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, FileDown, Pencil, Search, Trash2, X } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { AvatarInisial, EmptyState, GlassSkeleton, ScreenHeader, ThemeToggle } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
 import { PlatformIcon, labelPlatform } from "@/components/platform-icon";
 import { toast } from "@/hooks/use-app-store";
-import { getLaporanAnggota, getLaporanAnggotaDetail, hapusLaporanAnggota, ubahLaporanAnggota, type AnggotaLaporan, type LaporanAnggotaBaris } from "@/services";
+import { getLaporanAnggota, getLaporanAnggotaDetail, hapusLaporanAnggota, ubahLaporanAnggota, unduhPdfKpiVideo, type AnggotaLaporan, type LaporanAnggotaBaris } from "@/services";
 import { jamWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +35,20 @@ export function KelolaLaporanKpiScreen({ onKembali }: { onKembali: () => void })
   const [alasan, setAlasan] = useState("");
   const [sibuk, setSibuk] = useState("");
   const [versi, setVersi] = useState(0);
+  const [pdfSibuk, setPdfSibuk] = useState(false);
+  async function unduhPdf() {
+    if (pdfSibuk) return;
+    setPdfSibuk(true);
+    try {
+      const r = await unduhPdfKpiVideo(tanggal);
+      window.open(r.url, "_blank", "noopener,noreferrer");
+      toast("sukses", "PDF siap", `${r.jumlah_orang} pengguna · ${r.jumlah_link} link. Tautan berlaku 24 jam.`);
+    } catch (e) {
+      toast("error", "Gagal membuat PDF", e instanceof Error ? e.message : "");
+    } finally {
+      setPdfSibuk(false);
+    }
+  }
 
   useEffect(() => {
     let hidup = true;
@@ -103,6 +117,9 @@ export function KelolaLaporanKpiScreen({ onKembali }: { onKembali: () => void })
       <div className="flex gap-2">
         <input type="date" value={tanggal} max={tanggalWib()} onChange={(e) => e.target.value && setTanggal(e.target.value)} aria-label="Tanggal laporan" className="glass-input h-11 flex-1 rounded-xl px-3 text-sm text-teks-utama" />
         <span className="glass flex h-11 items-center rounded-xl px-3 text-[12px] font-bold text-teks-utama">{total} laporan</span>
+        <button type="button" onClick={() => void unduhPdf()} disabled={pdfSibuk} aria-label="Unduh laporan KPI video PDF" className="btn-tekan flex h-11 items-center gap-1 rounded-xl px-3 text-[12px] font-bold text-white disabled:opacity-60" style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}>
+          <FileDown className="h-4 w-4" aria-hidden="true" /> {pdfSibuk ? "…" : "PDF"}
+        </button>
       </div>
 
       {!pilih ? (

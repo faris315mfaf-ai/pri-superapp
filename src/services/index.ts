@@ -5742,6 +5742,20 @@ export async function ubahLaporanAnggota(id: string, url_video: string, platform
 export async function hapusLaporanAnggota(id: string, alasan = ""): Promise<void> {
   await fetchJson("/api/tvr/laporan-anggota", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, alasan }) });
 }
+/** Beralih akun PENUH (6 Sep 2026): server membuat sesi untuk anggota PALUGODAM tujuan. */
+export async function kendaliMasuk(userId: string): Promise<{ token: string; user: User }> {
+  const json = await fetchJson("/api/tvr/kendali", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "masuk", user_id: userId }),
+  });
+  return json as { token: string; user: User };
+}
+/** Laporan KPI video (tabel PDF) untuk satu tanggal → tautan unduh 24 jam. */
+export async function unduhPdfKpiVideo(tanggal: string): Promise<{ url: string; nama_file: string; jumlah_orang: number; jumlah_link: number }> {
+  const json = await fetchJson(`/api/tvr/laporan-kpi-pdf?tanggal=${encodeURIComponent(tanggal)}`, { headers: headerToken() });
+  return json as { url: string; nama_file: string; jumlah_orang: number; jumlah_link: number };
+}
 export async function getRealtimeKonfig(): Promise<{ realtime: boolean; url: string; key: string }> {
   return (await fetchJson("/api/realtime/konfig")) as { realtime: boolean; url: string; key: string };
 }
