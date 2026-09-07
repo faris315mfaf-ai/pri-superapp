@@ -29,7 +29,7 @@
 // dibatalkan seluruh entrinya tanpa memindai seluruh basis kunci.
 // ============================================================
 
-import { klienRedis } from "@/lib/redis";
+import { klienCache } from "@/lib/redis";
 import type { UserPublik } from "@/lib/sesi";
 
 /** Umur entri cache. Dinaikkan 60→300 dtk (1 Sep 2026, pemangkasan
@@ -62,7 +62,7 @@ function kunciMilik(userId: string): string {
  * dan pemanggil harus bertanya ke database seperti biasa.
  */
 export async function ambilCacheSesi(tokenHash: string): Promise<UserPublik | null> {
-  const redis = klienRedis();
+  const redis = klienCache();
   if (redis) {
     try {
       const isi = await redis.get<UserPublik>(kunciRedis(tokenHash));
@@ -90,7 +90,7 @@ export async function simpanCacheSesi(
   tokenHash: string,
   user: UserPublik,
 ): Promise<void> {
-  const redis = klienRedis();
+  const redis = klienCache();
   if (redis) {
     try {
       await redis.set(kunciRedis(tokenHash), user, { ex: TTL_DETIK });
@@ -121,7 +121,7 @@ export async function simpanCacheSesi(
 
 /** Hapus satu entri (dipakai saat sebuah perangkat keluar). */
 export async function hapusCacheToken(tokenHash: string): Promise<void> {
-  const redis = klienRedis();
+  const redis = klienCache();
   if (redis) {
     try {
       await redis.del(kunciRedis(tokenHash));
@@ -144,7 +144,7 @@ export async function hapusCacheToken(tokenHash: string): Promise<void> {
 export async function hapusCacheUser(userId: number | string): Promise<void> {
   const id = String(userId);
 
-  const redis = klienRedis();
+  const redis = klienCache();
   if (redis) {
     try {
       const daftar = await redis.smembers<string[]>(kunciMilik(id));
@@ -167,7 +167,7 @@ export async function hapusCacheUser(userId: number | string): Promise<void> {
 
 /** true bila cache sesi memakai Redis — dipakai /api/sehat. */
 export function cacheSesiTerpusat(): boolean {
-  return klienRedis() !== null;
+  return klienCache() !== null;
 }
 
 // ------------------------------------------------------------
