@@ -14,6 +14,7 @@ import { waktuAmbilKomentarTerakhir } from "@/lib/kepatuhan";
 import { after } from "next/server";
 import { bungkus } from "@/lib/api-helper";
 import { supabase } from "@/lib/supabase";
+import { denganCache } from "@/lib/cache-bersama";
 import { periodeSaatIni } from "@/lib/periode-qc";
 import {
   leaderboardVideo,
@@ -46,17 +47,17 @@ let hasilCache: {
 } | null = null;
 const TTL_CACHE_MS = 30_000;
 
-// Leaderboard KEPATUHAN KOMEN (2 Sep 2026) — cache mikro 30 dtk.
-const cacheKomen = new Map<string, { isi: Record<string, unknown>; pada: number }>();
+// Leaderboard KEPATUHAN KOMEN (2 Sep 2026) — kini cache bersama 60 dtk (lib/cache-bersama).
 const PLATFORM_KOMEN = new Set(["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"]);
 
 /** platformKomen kosong = semua sosmed; terisi = hanya postingan sosmed itu (3 Sep 2026). */
 async function leaderboardKomen(platformKomen = "") {
-  const kunciCache = platformKomen || "semua";
-  const ada = cacheKomen.get(kunciCache);
-  if (ada && Date.now() - ada.pada < TTL_CACHE_MS) return ada.isi;
-  const db = supabase();
   const periode = periodeSaatIni();
+  // 7 Sep 2026: cache bersama (Redis) 60 dtk — sama untuk semua pengguna.
+  return denganCache(`leaderboard-komen:${periode}:${platformKomen || "semua"}`, 60, () => hitungLeaderboardKomen(periode, platformKomen));
+}
+async function hitungLeaderboardKomen(periode: string, platformKomen: string) {
+  const db = supabase();
   const [{ data: baris }, { data: roster }, diperbarui] = await Promise.all([
     // v_app_kepatuhan_kader: periode, nama_kader, total, sudah (+nomor_wa —
     // SENGAJA tidak dibaca: endpoint ini untuk semua pengguna).
@@ -94,7 +95,6 @@ async function leaderboardKomen(platformKomen = "") {
     platform: platformKomen,
     daftar,
   };
-  cacheKomen.set(kunciCache, { isi, pada: Date.now() });
   return isi;
 }
 

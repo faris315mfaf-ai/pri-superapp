@@ -19,6 +19,7 @@
 // sampai retensi 7 hari supaya pengawas masih bisa memeriksa bila ada
 // laporan penyalahgunaan. Setelah 7 hari terhapus permanen dari sistem.
 import { supabase } from "@/lib/supabase";
+import { denganCache } from "@/lib/cache-bersama";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
@@ -96,6 +97,9 @@ async function bersihkanPesanLama() {
 
 /** true bila fitur chat sedang dinyalakan (bawaan: nyala). */
 async function chatAktif(): Promise<boolean> {
+  return denganCache("chat-aktif", 60, hitungChatAktif);
+}
+async function hitungChatAktif(): Promise<boolean> {
   try {
     const { data } = await supabase()
       .from("pengaturan_sistem")
@@ -111,6 +115,9 @@ async function chatAktif(): Promise<boolean> {
 
 /** Mode chat: 'terbuka' (bawaan) atau 'persetujuan'. */
 async function modeChat(): Promise<"terbuka" | "persetujuan"> {
+  return denganCache("chat-mode", 60, hitungModeChat);
+}
+async function hitungModeChat(): Promise<"terbuka" | "persetujuan"> {
   try {
     const { data } = await supabase()
       .from("pengaturan_sistem")

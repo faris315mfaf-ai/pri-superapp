@@ -9,9 +9,15 @@
 // Beranda, leaderboard Kepatuhan Komen, dan kartu ringkasan dashboard.
 // ============================================================
 import { supabase } from "@/lib/supabase";
+import { denganCache } from "@/lib/cache-bersama";
 
 /** ISO waktu pengambilan komentar terakhir untuk periode; null bila belum pernah. */
 export async function waktuAmbilKomentarTerakhir(periode?: string): Promise<string | null> {
+  // 7 Sep 2026: hasilnya sama untuk semua pengguna → cache bersama 60 dtk.
+  return denganCache(`komentar-terakhir:${periode ?? "-"}`, 60, () => hitungWaktuAmbilKomentarTerakhir(periode));
+}
+
+async function hitungWaktuAmbilKomentarTerakhir(periode?: string): Promise<string | null> {
   try {
     const db = supabase();
     let p = db

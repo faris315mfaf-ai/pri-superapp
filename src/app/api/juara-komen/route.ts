@@ -12,6 +12,7 @@
 // leaderboard (/api/peringkat-tvr?komen=1), hanya untuk periode yang sudah
 // selesai; total komentar tetap ditampilkan sebagai info.
 import { supabase } from "@/lib/supabase";
+import { denganCache } from "@/lib/cache-bersama";
 import { fiturBeratAktif } from "@/lib/sakelar";
 import { bungkus } from "@/lib/api-helper";
 import { pastikanMasuk } from "@/lib/sesi";
@@ -36,8 +37,6 @@ type Hasil = {
   juara: Juara[];
 };
 
-let cache: { isi: Hasil; pada: number } | null = null;
-const TTL_MS = 60_000;
 
 async function hitung(): Promise<Hasil> {
   const db = supabase();
@@ -127,9 +126,7 @@ export async function GET(request: Request) {
     if (!(await fiturBeratAktif("juara_efek"))) {
       return { periode: null, tanggal: null, periode_kini: periodeSaatIni(), juara: [], nonaktif: true };
     }
-    if (cache && Date.now() - cache.pada < TTL_MS) return cache.isi;
-    const isi = await hitung();
-    cache = { isi, pada: Date.now() };
-    return isi;
+    // 7 Sep 2026: cache bersama 120 dtk (sama untuk semua pengguna).
+    return denganCache(`juara-komen:${periodeSaatIni()}`, 120, hitung);
   });
 }

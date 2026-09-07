@@ -5,6 +5,7 @@
 // KPI membandingkan periode aktif dengan periode sebelumnya untuk
 // mendapatkan nilai `delta` (panah naik/turun di kartu).
 import { supabase } from "@/lib/supabase";
+import { denganCache } from "@/lib/cache-bersama";
 import { bungkus, pastikanSukses } from "@/lib/api-helper";
 import { pastikanMasuk } from "@/lib/sesi";
 
@@ -110,17 +111,20 @@ export async function GET(request: Request) {
     // tampil 0% padahal ada 52 kepatuhan, dan "postingan dipantau"
     // tampil 22 padahal 113. View agregat mengembalikan HITUNGAN, jadi
     // banyaknya data tidak lagi memengaruhi kebenaran angkanya.
+    // 7 Sep 2026: agregat berat dicache bersama 60 dtk (sama untuk semua pengguna).
     const ringkasanPeriode =
       daftarPeriode.length > 0
-        ? (pastikanSukses(
-            await db
-              .from("v_app_ringkasan_periode")
-              .select(
-                "periode, total_unit, sudah_komentar, belum_komentar, jumlah_postingan, jumlah_kader, persen_patuh",
-              )
-              .in("periode", daftarPeriode),
-            "ringkasan kepatuhan",
-          ) as BarisRingkasan[])
+        ? await denganCache(`ringkasan-periode:${daftarPeriode.join("|")}`, 60, async () =>
+            pastikanSukses(
+              await db
+                .from("v_app_ringkasan_periode")
+                .select(
+                  "periode, total_unit, sudah_komentar, belum_komentar, jumlah_postingan, jumlah_kader, persen_patuh",
+                )
+                .in("periode", daftarPeriode),
+              "ringkasan kepatuhan",
+            ) as BarisRingkasan[],
+          )
         : [];
 
     const perPeriode = new Map(ringkasanPeriode.map((r) => [r.periode, r]));
@@ -219,13 +223,16 @@ export async function GET(request: Request) {
 
     // Kepatuhan per akun juga dari agregat database, sebab menyaring
     // baris mentah di sini terkena batas 1.000 baris yang sama.
-    const ringkasanAkun = (pastikanSukses(
-      await db
-        .from("v_app_ringkasan_akun_periode")
-        .select("periode, platform, akun_wajib, persen_patuh")
-        .eq("periode", periodeAktif),
-      "ringkasan per akun",
-    ) as BarisRingkasanAkun[]) ?? [];
+    const ringkasanAkun =
+      (await denganCache(`ringkasan-akun:${periodeAktif}`, 60, async () =>
+        (pastikanSukses(
+          await db
+            .from("v_app_ringkasan_akun_periode")
+            .select("periode, platform, akun_wajib, persen_patuh")
+            .eq("periode", periodeAktif),
+          "ringkasan per akun",
+        ) as BarisRingkasanAkun[]) ?? [],
+      )) ?? [];
     const persenPerAkun = new Map(
       ringkasanAkun.map((r) => [r.akun_wajib, Number(r.persen_patuh) || 0]),
     );

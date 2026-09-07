@@ -9,11 +9,15 @@ import { bungkus, pastikanSukses } from "@/lib/api-helper";
 import { adalahPengurus, pastikanMasuk } from "@/lib/sesi";
 import { adalahHR } from "@/lib/hr";
 import { periodeSaatIni } from "@/lib/periode-qc";
+import { denganCache } from "@/lib/cache-bersama";
 
 export const dynamic = "force-dynamic";
 
 /** Ambang "perlu ditindaklanjuti" (persen), disetel HR — bawaan 70. */
 async function ambangTindak(): Promise<number> {
+  return denganCache("qc-ambang-tindak", 120, hitungAmbangTindak);
+}
+async function hitungAmbangTindak(): Promise<number> {
   try {
     const { data } = await supabase()
       .from("pengaturan_sistem")
@@ -28,6 +32,24 @@ async function ambangTindak(): Promise<number> {
 }
 
 type BarisRekap = { sudah_komentar: boolean; nomor_wa?: string | null };
+type BarisKader = { nama_kader: string; total: number; sudah: number; nomor_wa: string | null };
+
+/** Semua baris v_app_kepatuhan_kader satu periode — cache bersama 90 dtk. */
+function kepatuhanKaderPeriode(periode: string): Promise<BarisKader[]> {
+  return denganCache(`kepatuhan-kader:${periode}`, 90, async () => {
+    const { data } = await supabase()
+      .from("v_app_kepatuhan_kader")
+      .select("nama_kader, total, sudah, nomor_wa")
+      .eq("periode", periode)
+      .range(0, 9999);
+    return (data ?? []).map((b) => ({
+      nama_kader: String(b.nama_kader),
+      total: Number(b.total ?? 0),
+      sudah: Number(b.sudah ?? 0),
+      nomor_wa: (b.nomor_wa as string | null) ?? null,
+    }));
+  });
+}
 
 export async function GET(request: Request) {
   return bungkus(async () => {
@@ -49,15 +71,14 @@ export async function GET(request: Request) {
       // Tanpa ?periode = jendela QC yang SEDANG berjalan (19:00-18:59,
       // dihitung server — klien tak perlu tahu aturan jendelanya).
       const p = periode || periodeSaatIni();
-      const [{ data }, diperbarui] = await Promise.all([
-        supabase()
-          .from("v_app_kepatuhan_kader")
-          .select("total, sudah")
-          .eq("periode", p)
-          .eq("nama_kader", user.nama)
-          .maybeSingle(),
+      // 7 Sep 2026: view agregat dihitung SEKALI per periode untuk semua kader
+      // (cache bersama 90 dtk), bukan sekali per pengguna per menit — inilah
+      // beban terbesar Supabase saat insiden.
+      const [semuaKader, diperbarui] = await Promise.all([
+        kepatuhanKaderPeriode(p),
         waktuAmbilKomentarTerakhir(p),
       ]);
+      const data = semuaKader.find((b) => b.nama_kader === user.nama) ?? null;
       return {
         total: Number(data?.total ?? 0),
         sudah: Number(data?.sudah ?? 0),
@@ -67,21 +88,14 @@ export async function GET(request: Request) {
     }
 
     // --- Ringkasan PER PLATFORM (rombakan 31 Agu 2026) ---
+    // (7 Sep 2026: tiga query view/daftar postingan di bawah dicache bersama 60 dtk.)
     // Untuk kartu atas HR Center: jumlah postingan per sosmed + kader
     // patuh 100% per sosmed + daftar "perlu ditindaklanjuti" (< ambang).
     if (searchParams.get("ringkas_platform") === "1") {
       const p = periode || periodeSaatIni();
-      const [{ data: perPlat }, { data: posts }, ambang] = await Promise.all([
-        supabase()
-          .from("v_app_kepatuhan_kader_platform")
-          .select("platform, nama_kader, total, sudah")
-          .eq("periode", p)
-          .range(0, 9999),
-        supabase()
-          .from("postingan")
-          .select("platform")
-          .eq("periode", p)
-          .range(0, 9999),
+      const [perPlat, posts, ambang] = await Promise.all([
+        denganCache(`kepatuhan-platform:${p}`, 60, async () => (await supabase().from("v_app_kepatuhan_kader_platform").select("platform, nama_kader, total, sudah").eq("periode", p).range(0, 9999)).data ?? []),
+        denganCache(`postingan-platform:${p}`, 60, async () => (await supabase().from("postingan").select("platform").eq("periode", p).range(0, 9999)).data ?? []),
         ambangTindak(),
       ]);
 
@@ -102,11 +116,7 @@ export async function GET(request: Request) {
       const platforms = [...new Set([...postinganPer.keys(), ...platMap.keys()])].sort();
 
       // Daftar tindak lanjut: gabungan SEMUA platform per kader < ambang.
-      const { data: perKader } = await supabase()
-        .from("v_app_kepatuhan_kader")
-        .select("nama_kader, total, sudah, nomor_wa")
-        .eq("periode", p)
-        .range(0, 9999);
+      const perKader = await kepatuhanKaderPeriode(p);
       const bolehWa = adalahPengurus(user.role) || adalahHR(user);
       const tindak = (perKader ?? [])
         .map((r) => ({
@@ -158,7 +168,8 @@ export async function GET(request: Request) {
         .limit(1000);
       if (akunSaring) qRingkas = qRingkas.eq("kelompok_akun", akunSaring);
       if (platformSaring) qRingkas = qRingkas.eq("platform", platformSaring);
-      const { data: mentah } = await qRingkas;
+      const kunciRingkas = `ringkas-kader:${periode}:${akunSaring ?? ""}:${platformSaring ?? ""}`;
+      const mentah = await denganCache(kunciRingkas, 60, async () => (await qRingkas).data ?? []);
       // View per-akun berbutir (kader × platform) — bila platform TIDAK
       // ikut disaring, gabungkan dulu per kader supaya satu kader = satu
       // baris (panel mengharapkan itu).
