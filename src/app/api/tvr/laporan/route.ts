@@ -43,7 +43,8 @@ async function targetKpiUser(userId: number): Promise<number> {
   }
 }
 
-const PLATFORM_SAH = new Set<string>(PLATFORM_KPI);
+// Bilibili (6 Sep 2026) boleh dilaporkan walau bukan bagian KPI 5x6.
+const PLATFORM_SAH = new Set<string>([...PLATFORM_KPI, "bilibili"]);
 const BOLEH_LIHAT_SEMUA = new Set(["admin_hr", "super_admin", "master"]);
 
 function tokenDari(request: Request): string {
@@ -270,12 +271,12 @@ function validasiLink(platformMentah: string, urlMentah: string): {
   // Link harus menuju platform video yang dikenal — laporan berisi
   // tautan sembarang hanya mengotori rekap yang dipantau atasan.
   const hostSah =
-    /(instagram|tiktok|youtube|youtu\.be|facebook|fb\.watch|threads|twitter|x)\.(com|net|be)$/i.test(
+    /(instagram|tiktok|youtube|youtu\.be|facebook|fb\.watch|threads|twitter|x|bilibili)\.(com|net|be|tv)$/i.test(
       host,
-    ) || /^(youtu\.be|fb\.watch|x\.com)$/i.test(host);
+    ) || /^(youtu\.be|fb\.watch|x\.com|b23\.tv)$/i.test(host);
   if (!hostSah) {
     throw Object.assign(
-      new Error("Link harus menuju Instagram, TikTok, YouTube, Facebook, Threads, atau X."),
+      new Error("Link harus menuju Instagram, TikTok, YouTube, Facebook, Threads, X, atau Bilibili."),
       { status: 400 },
     );
   }
@@ -295,7 +296,9 @@ function validasiLink(platformMentah: string, urlMentah: string): {
             ? "facebook"
             : h.includes("threads")
               ? "threads"
-              : "twitter";
+              : h.includes("bilibili") || h.includes("b23.tv")
+                ? "bilibili"
+                : "twitter";
   }
 
   return {

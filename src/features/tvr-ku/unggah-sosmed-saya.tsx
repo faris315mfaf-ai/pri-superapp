@@ -16,7 +16,8 @@
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
-import { CalendarClock, Check, Link2, Loader2, Send, Share2, UploadCloud, Wand2, X } from "lucide-react";
+import { CalendarClock, Check, History, Link2, Loader2, Send, Share2, UploadCloud, Wand2, X } from "lucide-react";
+import { SeksiLipat } from "@/components/seksi-lipat";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
 import { toast, useAppStore } from "@/hooks/use-app-store";
@@ -631,8 +632,7 @@ export function UnggahSosmedSaya() {
 
       {/* Riwayat */}
       {riwayat !== null && riwayat.length > 0 && (
-        <GlassCard className="p-4">
-          <p className="text-[12.5px] font-bold text-teks-utama">Riwayat Post Saya</p>
+        <SeksiLipat id="tvrku-riwayat-post" judul="Riwayat Post Saya" ikon={History} bawaanTerbuka>
           <div className="mt-2 flex flex-col gap-2">
             {riwayat.slice(0, 8).map((r) => (
               <div key={r.id} className="glass-soft rounded-xl p-2.5">
@@ -698,7 +698,7 @@ export function UnggahSosmedSaya() {
               </div>
             ))}
           </div>
-        </GlassCard>
+        </SeksiLipat>
       )}
     </div>
   );

@@ -77,6 +77,7 @@ import { PanelTugasSaya } from "./tugas-saya";
 import { KirimVideoManual } from "./kirim-video-manual";
 import { UnggahSosmedSaya } from "./unggah-sosmed-saya";
 import { RequestVideoPanel } from "./request-video-panel";
+import { RekapAnggotaPalugodam } from "./rekap-anggota-palugodam";
 import { SiaranSerentak } from "./siaran-serentak";
 import { StudioPalugodam } from "./studio-palugodam";
 import { InsightSayaPanel } from "./insight-saya-panel";
@@ -89,6 +90,7 @@ const PLATFORM_TVR = [
   { id: "facebook", label: "Facebook" },
   { id: "threads", label: "Threads" },
   { id: "twitter", label: "X" },
+  { id: "bilibili", label: "Bilibili" },
 ] as const;
 
 const NAMA_HARI_PENDEK = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
@@ -729,6 +731,17 @@ export function TvrKuScreen({
                   </FadeInUp>
                 ),
               },
+              {
+                id: "rekap-palugodam",
+                judul: "Rekap Laporan Anggota PALUGODAM",
+                ikon: FileText,
+                keterangan: "Generate laporan per anggota + tambah/ubah link (6 Sep 2026)",
+                render: () => (
+                  <FadeInUp delay={0.02}>
+                    <RekapAnggotaPalugodam />
+                  </FadeInUp>
+                ),
+              },
             ]
           : []),
         { id: "kpi", judul: "KPI Video Hari Ini", ikon: Video, render: () => (
@@ -973,10 +986,9 @@ export function TvrKuScreen({
           : []),
         { id: "insight-saya", judul: "Insight Akun Saya", ikon: BarChart3, render: () => (
       <FadeInUp delay={0.11}>
-        <SectionTitle judul="Insight Akun Saya" />
-        <div className="mt-2.5">
+        <SeksiLipat id="tvrku-insight" judul="Insight Akun Saya" ikon={BarChart3} bawaanTerbuka>
           <InsightSayaPanel />
-        </div>
+        </SeksiLipat>
       </FadeInUp>
         ) },
         { id: "website", judul: "Website TV Rakyat", ikon: Globe, render: () => (
@@ -1041,8 +1053,8 @@ export function TvrKuScreen({
         ) },
         { id: "laporan", judul: "Laporan Video Hari Ini", ikon: Video, render: () => (
       <FadeInUp delay={0.14}>
-        <div className="mt-5 flex items-center justify-between md:mt-0">
-          <SectionTitle judul="Laporan Video Hari Ini" className="!mt-0" />
+        <SeksiLipat id="tvrku-laporan" judul="Laporan Video Hari Ini" ikon={Video} bawaanTerbuka>
+        <div className="flex items-center justify-end">
           <button
             type="button"
             onClick={() => setModalLaporan(true)}
@@ -1163,6 +1175,7 @@ export function TvrKuScreen({
             </div>
           </div>
         )}
+        </SeksiLipat>
       </FadeInUp>
         ) },
         { id: "rangkuman", judul: "Rangkuman Link Harian", ikon: FileText, keterangan: "Laporan link video per sosmed siap kirim ke WhatsApp", render: () => (

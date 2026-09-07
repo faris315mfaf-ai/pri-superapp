@@ -38,6 +38,15 @@ export async function userEfektifTvr(request: Request): Promise<UserEfektif> {
   if (!mentah) return asli;
   const targetId = Number(mentah);
   if (!Number.isFinite(targetId) || targetId <= 0) galat("Header X-Sebagai tidak sah.", 400);
+  return targetKendali(asli, targetId);
+}
+
+/**
+ * Akun PALUGODAM yang boleh dikendalikan `asli` (6 Sep 2026: dipisah supaya
+ * bisa dipakai lewat ?user_id= juga, bukan hanya header X-Sebagai).
+ */
+export async function targetKendali(asli: UserPublik, targetId: number): Promise<UserEfektif> {
+  if (!Number.isFinite(targetId) || targetId <= 0) galat("Id akun tidak sah.", 400);
   if (targetId === Number(asli.id)) return asli;
   if (!adalahAdminStudio(asli)) galat("Beralih akun hanya untuk Admin PALUGODAM / pengurus.", 403);
   const { data } = await supabase().from("app_user").select(KOLOM_USER).eq("id", targetId).maybeSingle();

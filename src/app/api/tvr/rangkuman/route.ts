@@ -12,7 +12,8 @@
 // dulu (dengan anggaran waktu) sebelum laporan disusun.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
-import { userEfektifTvr } from "@/lib/sebagai";
+import { targetKendali, userEfektifTvr } from "@/lib/sebagai";
+import { pastikanMasuk } from "@/lib/sesi";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ const URUTAN_PLATFORM = [
   "facebook",
   "youtube",
   "threads",
+  "bilibili",
 ] as const;
 
 function tanggalWib(): string {
@@ -36,7 +38,9 @@ function tanggalWib(): string {
 export async function GET(request: Request) {
   return bungkus(async () => {
     // 4 Sep 2026: admin PALUGODAM bisa mengendalikan akun anggota (header X-Sebagai).
-    const user = await userEfektifTvr(request);
+    // 6 Sep 2026: atau lewat ?user_id= (rekap per anggota di panel admin PALUGODAM).
+    const paramUser = Number(new URL(request.url).searchParams.get("user_id") ?? 0);
+    const user = paramUser > 0 ? await targetKendali(await pastikanMasuk(request), paramUser) : await userEfektifTvr(request);
     const db = supabase();
     const uid = Number(user.id);
     const mentah = (

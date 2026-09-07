@@ -4,8 +4,8 @@
 // route Next hanya boleh mengekspor handler HTTP.
 // ============================================================
 
-export const URUTAN_PLATFORM = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"];
-export const LABEL_PLATFORM: Record<string, string> = { instagram: "INSTAGRAM", tiktok: "TIKTOK", youtube: "YOUTUBE", facebook: "FACEBOOK", threads: "THREADS", twitter: "X", website: "WEBSITE" };
+export const URUTAN_PLATFORM = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter", "bilibili"];
+export const LABEL_PLATFORM: Record<string, string> = { instagram: "INSTAGRAM", tiktok: "TIKTOK", youtube: "YOUTUBE", facebook: "FACEBOOK", threads: "THREADS", twitter: "X", bilibili: "BILIBILI", website: "WEBSITE" };
 
 export function urutPlatform(a: string, b: string): number {
   return ((URUTAN_PLATFORM.indexOf(a) + 100) % 100) - ((URUTAN_PLATFORM.indexOf(b) + 100) % 100);

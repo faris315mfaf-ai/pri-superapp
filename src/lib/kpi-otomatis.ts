@@ -165,6 +165,11 @@ export async function rekonsiliasiKpiRinci(userId: number, opsi: { anggaranMs?: 
   const ringkas: RingkasanRekonsiliasi = { baru: 0, dari_pasti: 0, dari_media: 0, disembuhkan: 0, gagal_terbit: 0, pending_tersisa: 0, catatan: [] };
   if (!uploadPostSiap()) return ringkas;
   const tenggat = opsi.anggaranMs ? Date.now() + opsi.anggaranMs : Infinity;
+  // Sisa anggaran (ms) — dipakai sebagai batas waktu TIAP panggilan upload-post
+  // supaya jalur interaktif (Generate laporan, anggaran 30 dtk) tidak
+  // menggantung bermenit-menit (insiden 7 Sep 2026: 4,2 menit).
+  const sisa = () => (tenggat === Infinity ? 25_000 : tenggat - Date.now());
+  const cukup = () => sisa() > 4_000;
   try {
     const db = supabase();
     const { data: profilBaris } = await db
@@ -234,15 +239,15 @@ export async function rekonsiliasiKpiRinci(userId: number, opsi: { anggaranMs?: 
     // hasil.kpi_gagal agar tidak ditanya lagi (dan bisa ditampilkan ke anggota).
     let ditanya = 0;
     for (const p of [...posts].reverse()) {
-      if (Date.now() > tenggat || ditanya >= BATAS_TANYA_PASTI) break;
-      const sisa = belumPasti(p);
-      if (sisa.length === 0 || !p.request_id) continue;
+      if (!cukup() || ditanya >= BATAS_TANYA_PASTI) break;
+      const perluCek = belumPasti(p);
+      if (perluCek.length === 0 || !p.request_id) continue;
       ditanya += 1;
       const jejak = { pasti: new Set(p.kpi_pasti), gagal: new Set(p.kpi_gagal) };
       try {
-        const per = await analitikPostUp(p.request_id);
+        const per = await analitikPostUp(p.request_id, Math.min(25_000, sisa()));
         let adaKosong = false;
-        for (const pf of sisa) {
+        for (const pf of perluCek) {
           const url = per.get(pf)?.post_url ?? "";
           if (!url) {
             adaKosong = true;
@@ -260,9 +265,9 @@ export async function rekonsiliasiKpiRinci(userId: number, opsi: { anggaranMs?: 
           jejak.pasti.add(pf);
         }
         // Platform tanpa URL: tanya status — gagal terbit? Jangan ditanya terus sampai 96 jam.
-        if (adaKosong) {
-          const st = await statusUnggahUp(p.request_id);
-          for (const pf of sisa) {
+        if (adaKosong && cukup()) {
+          const st = await statusUnggahUp(p.request_id, Math.min(20_000, sisa()));
+          for (const pf of perluCek) {
             if (jejak.pasti.has(pf)) continue;
             const s = st.per[pf];
             if (st.status === "completed" && s && s.sukses === false) {
@@ -284,11 +289,11 @@ export async function rekonsiliasiKpiRinci(userId: number, opsi: { anggaranMs?: 
     const platformPending = new Set<string>();
     for (const p of posts) for (const pf of pendingDari(p)) platformPending.add(pf);
     for (const pf of platformPending) {
-      if (Date.now() > tenggat) break;
+      if (!cukup()) break;
       const pending = posts.filter((p) => pendingDari(p).includes(pf));
       if (pending.length === 0) continue;
       try {
-        const media = await postinganTerbaruUp(profil, pf, BATAS_MEDIA);
+        const media = await postinganTerbaruUp(profil, pf, BATAS_MEDIA, Math.min(20_000, sisa()));
         const pasangan = cocokkanMedia(pending, media, urlSudah);
         for (const c of pasangan) {
           const r = await catatLaporan(db, userId, pf, c.url, c.waktu, c.post_id);

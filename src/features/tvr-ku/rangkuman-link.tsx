@@ -25,6 +25,7 @@ const URUTAN: [string, string][] = [
   ["facebook", "FACEBOOK"],
   ["youtube", "YOUTUBE"],
   ["threads", "THREADS"],
+  ["bilibili", "BILIBILI"],
 ];
 const KENDALA_MAKS = 600;
 
@@ -46,7 +47,7 @@ export function susunLaporan(d: DataRangkuman, kendala: string): string {
   return baris.join("\n");
 }
 
-export function RangkumanLink() {
+export function RangkumanLink({ userId, judul }: { /** Rekap anggota lain (admin PALUGODAM, 6 Sep 2026) */ userId?: string; judul?: string } = {}) {
   const [tanggal, setTanggal] = useState(tanggalWibPerangkat);
   const [data, setData] = useState<DataRangkuman | null>(null);
   const [kendala, setKendala] = useState("");
@@ -56,13 +57,13 @@ export function RangkumanLink() {
 
   useEffect(() => {
     let hidup = true;
-    getRangkumanLink(tanggal)
+    getRangkumanLink(tanggal, userId)
       .then((d) => hidup && setData(d))
       .catch((e) => hidup && toast("error", "Gagal memuat tautan", e instanceof Error ? e.message : ""));
     return () => {
       hidup = false;
     };
-  }, [tanggal]);
+  }, [tanggal, userId]);
 
   function generate() {
     if (!data) return;
@@ -102,7 +103,7 @@ export function RangkumanLink() {
     <GlassCard className="p-4">
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-[12.5px] font-bold text-teks-utama">
-          <FileText className="h-4 w-4 text-pri" /> Rangkuman Link Harian
+          <FileText className="h-4 w-4 text-pri" /> {judul ?? "Rangkuman Link Harian"}
         </p>
         <input
           type="date"
@@ -123,7 +124,7 @@ export function RangkumanLink() {
       </p>
 
       {/* Ringkasan per platform */}
-      <div className="mt-3 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+      <div className="mt-3 grid grid-cols-4 gap-1.5 sm:grid-cols-7">
         {URUTAN.map(([kunci, judul]) => {
           const n = data?.per_platform[kunci]?.length ?? 0;
           return (

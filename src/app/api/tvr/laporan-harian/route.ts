@@ -21,7 +21,7 @@ import { KUNCI_FORMAT_LAPORAN, renderTemplate, TEMPLATE_LAPORAN_BAWAAN, type Dat
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const URUTAN_PLATFORM = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"];
+const URUTAN_PLATFORM = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter", "bilibili"];
 const NAMA_HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 const NAMA_BULAN = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 

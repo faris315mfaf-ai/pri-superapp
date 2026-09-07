@@ -344,11 +344,12 @@ export async function postinganTerbaruUp(
   profil: string,
   platformApp: string,
   limit = 5,
+  timeoutMs = 20000,
 ): Promise<PostinganUp[]> {
   const up = KE_UP[platformApp] ?? platformApp;
   const d = await panggil<{ media?: Record<string, unknown>[] }>(
     `/uploadposts/media?platform=${encodeURIComponent(up)}&user=${encodeURIComponent(profil)}&limit=${Math.min(Math.max(limit, 1), 25)}`,
-    { method: "GET", timeoutMs: 20000 },
+    { method: "GET", timeoutMs: Math.max(3000, timeoutMs) },
   );
   return (d.media ?? []).map((m) => ({
     id: String(m.id ?? ""),
@@ -436,11 +437,11 @@ export type StatusUp = {
 };
 
 /** GET /uploadposts/status?request_id=… (atau job_id untuk post terjadwal). */
-export async function statusUnggahUp(id: string): Promise<StatusUp> {
+export async function statusUnggahUp(id: string, timeoutMs = 20000): Promise<StatusUp> {
   const q = /^job_/i.test(id) ? `job_id=${encodeURIComponent(id)}` : `request_id=${encodeURIComponent(id)}`;
   const d = await panggil<{ status?: string; completed?: number; total?: number; results?: Record<string, unknown>[] }>(
     `/uploadposts/status?${q}`,
-    { method: "GET", timeoutMs: 20000 },
+    { method: "GET", timeoutMs: Math.max(3000, timeoutMs) },
   );
   const per: StatusUp["per"] = {};
   for (const r of d.results ?? []) {
@@ -470,8 +471,8 @@ function urlDari(o: Record<string, unknown> | undefined): string {
  * { platforms: { x: {...}, instagram: {...} } } atau daftar — keduanya dibaca.
  * Platform yang belum punya URL tidak dimasukkan.
  */
-export async function analitikPostUp(requestId: string): Promise<Map<string, PostPastiUp>> {
-  const d = await panggil<Record<string, unknown>>(`/uploadposts/post-analytics/${encodeURIComponent(requestId)}`, { method: "GET", timeoutMs: 25000 });
+export async function analitikPostUp(requestId: string, timeoutMs = 25000): Promise<Map<string, PostPastiUp>> {
+  const d = await panggil<Record<string, unknown>>(`/uploadposts/post-analytics/${encodeURIComponent(requestId)}`, { method: "GET", timeoutMs: Math.max(3000, timeoutMs) });
   const hasil = new Map<string, PostPastiUp>();
   const wadah = (d.platforms ?? d.results ?? d.data ?? d) as unknown;
   const masukkan = (namaUp: string, o: Record<string, unknown>) => {

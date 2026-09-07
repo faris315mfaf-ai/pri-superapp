@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 function tanggalWib(): string {
   return new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
 }
-const PLATFORM = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"];
+const PLATFORM = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter", "bilibili"];
 
 export function KelolaLaporanKpiScreen({ onKembali }: { onKembali: () => void }) {
   const [tanggal, setTanggal] = useState(tanggalWib);

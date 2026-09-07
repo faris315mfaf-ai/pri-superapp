@@ -5716,6 +5716,11 @@ export async function ubahLaporanAnggota(id: string, url_video: string, platform
   const json = await fetchJson("/api/tvr/laporan-anggota", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, url_video, platform }) });
   return json.laporan as LaporanAnggotaBaris;
 }
+/** Tambah link laporan atas nama anggota (admin/HR/pimred; anggota diberi notifikasi). */
+export async function tambahLaporanAnggota(data: { user_id: string; platform: string; url_video: string; tanggal?: string }): Promise<LaporanAnggotaBaris> {
+  const json = await fetchJson("/api/tvr/laporan-anggota", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+  return json.laporan as LaporanAnggotaBaris;
+}
 export async function hapusLaporanAnggota(id: string, alasan = ""): Promise<void> {
   await fetchJson("/api/tvr/laporan-anggota", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, alasan }) });
 }
@@ -5758,9 +5763,14 @@ export type RangkumanLink = {
 
 export async function getRangkumanLink(
   tanggal?: string,
+  /** 6 Sep 2026: admin PALUGODAM merekap anggota lain (server memeriksa hak). */
+  userId?: string,
 ): Promise<RangkumanLink> {
-  const q = tanggal ? `?tanggal=${encodeURIComponent(tanggal)}` : "";
-  const json = await fetchJson(`/api/tvr/rangkuman${q}`);
+  const p = new URLSearchParams();
+  if (tanggal) p.set("tanggal", tanggal);
+  if (userId) p.set("user_id", userId);
+  const q = p.toString();
+  const json = await fetchJson(`/api/tvr/rangkuman${q ? `?${q}` : ""}`);
   return json as RangkumanLink;
 }
 
