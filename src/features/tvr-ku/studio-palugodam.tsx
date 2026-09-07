@@ -25,6 +25,7 @@ import {
   ChevronRight,
   Clapperboard,
   Copy,
+  Download,
   ExternalLink,
   FileText,
   Link2,
@@ -49,6 +50,7 @@ import {
   getStudioProyek,
   getStudioProyekList,
   studioPost,
+  unduhVideoStudio,
   type StudioProfil,
   type StudioProyek,
   type StudioProyekRingkas,
@@ -116,6 +118,58 @@ function KartuSiap({ siap }: { siap: StudioSiap | null }) {
         </div>
       ))}
     </div>
+  );
+}
+
+// ------------------------------------------------------------
+// Unduh satu versi hasil render (7 Sep 2026)
+//
+// Berkasnya diambil lewat server kita (Content-Disposition: attachment),
+// bukan ditautkan langsung ke CDN Creatomate — atribut `download` diabaikan
+// peramban untuk tautan lintas domain, jadi tautan langsung hanya membuka
+// videonya. Anggota memakai tombol yang sama di seksi "Video Siap Unggah".
+// ------------------------------------------------------------
+function TombolUnduhVersi({
+  itemId,
+  label = "Unduh",
+  className,
+}: {
+  itemId: string;
+  label?: string;
+  className?: string;
+}) {
+  const [sibuk, setSibuk] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={sibuk}
+      onClick={() => {
+        setSibuk(true);
+        unduhVideoStudio(itemId)
+          .then(() =>
+            toast("sukses", "Video tersimpan", "Cek folder Unduhan perangkat."),
+          )
+          .catch((e: unknown) =>
+            toast(
+              "error",
+              "Gagal mengunduh",
+              e instanceof Error ? e.message : "",
+            ),
+          )
+          .finally(() => setSibuk(false));
+      }}
+      className={cn(
+        "btn-tekan flex items-center gap-1 text-[10.5px] font-bold text-teks-utama disabled:opacity-50",
+        className,
+      )}
+    >
+      {sibuk ? (
+        <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+      ) : (
+        <Download className="h-3 w-3" aria-hidden="true" />
+      )}
+      {label}
+    </button>
   );
 }
 
@@ -921,15 +975,18 @@ function EditorProyek({
                         </p>
                       ) : null}
                       {it.render_url ? (
-                        <a
-                          href={it.render_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-1 flex items-center gap-1 text-[10.5px] font-bold text-pri"
-                        >
-                          <ExternalLink className="h-3 w-3" /> Lihat hasil
-                          render
-                        </a>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <a
+                            href={it.render_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-[10.5px] font-bold text-pri"
+                          >
+                            <ExternalLink className="h-3 w-3" /> Lihat hasil
+                            render
+                          </a>
+                          <TombolUnduhVersi itemId={it.id} />
+                        </div>
                       ) : null}
                     </div>
                   );
@@ -1090,6 +1147,7 @@ function EditorProyek({
                   >
                     tonton
                   </a>
+                  <TombolUnduhVersi itemId={i.id} />
                 </div>
               ))}
           </div>

@@ -5349,6 +5349,55 @@ export async function studioPost(
   return (json ?? {}) as Record<string, unknown>;
 }
 
+// ---- VIDEO SIAP UNGGAH: versi milik anggota sendiri (7 Sep 2026) ----
+/** Satu versi hasil render Studio PALUGODAM yang ditujukan untuk akun ini. */
+export type VideoSiapUnggah = {
+  id: string;
+  proyek_id: string;
+  profil: string;
+  judul: string;
+  highlight: string;
+  caption: string;
+  sumber_link: string;
+  sumber_platform: string;
+  /** Tautan Creatomate — untuk menonton pratinjau, bukan mengunduh. */
+  render_url: string;
+  siap_pada: string;
+};
+
+export async function getVideoSaya(): Promise<VideoSiapUnggah[]> {
+  const json = await fetchJson("/api/tvr/video-saya");
+  return (json?.data ?? []) as VideoSiapUnggah[];
+}
+
+/**
+ * Unduh berkas video hasil render lewat server kita sendiri.
+ *
+ * Tidak menautkan langsung ke CDN Creatomate: atribut `download` diabaikan
+ * peramban untuk tautan lintas domain, sehingga videonya hanya terbuka di
+ * pemutar — bukan tersimpan. Route /unduh mengalirkannya dengan
+ * Content-Disposition: attachment.
+ */
+export async function unduhVideoStudio(id: string): Promise<void> {
+  const res = await fetch(`/api/tvr/video-saya/unduh?item=${encodeURIComponent(id)}`, {
+    headers: headerToken(),
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(j?.error ?? `Gagal mengunduh video (${res.status}).`);
+  }
+  const blob = await res.blob();
+  const nama = res.headers.get("x-nama-berkas") ?? `video-${id}.mp4`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nama;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
 // ---- Rincian kepatuhan komen per orang + AJUAN komentar (3 Sep 2026) ----
 export type KepatuhanDetailPost = {
   id_postingan: string;

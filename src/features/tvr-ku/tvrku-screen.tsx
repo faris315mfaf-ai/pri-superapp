@@ -24,6 +24,7 @@ import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Clapperboard,
+  Download,
   ExternalLink,
   Link2,
   Loader2,
@@ -76,6 +77,7 @@ import { TombolLonceng } from "@/components/tombol-lonceng";
 import { PanelTugasSaya } from "./tugas-saya";
 import { KirimVideoManual } from "./kirim-video-manual";
 import { UnggahSosmedSaya } from "./unggah-sosmed-saya";
+import { VideoSiapUnggah } from "./video-siap-unggah";
 import { RequestVideoPanel } from "./request-video-panel";
 import { RekapAnggotaPalugodam } from "./rekap-anggota-palugodam";
 import { SiaranSerentak } from "./siaran-serentak";
@@ -933,6 +935,26 @@ export function TvrKuScreen({
         </div>
       </FadeInUp>
         ) },
+        // Versi hasil render Studio yang ditujukan untuk akun ini — diunduh
+        // lalu diunggah manual (7 Sep 2026). Hanya anggota PALUGODAM yang
+        // punya versi sendiri, jadi seksinya disembunyikan dari divisi lain.
+        ...(bolehAccKomen
+          ? [
+              {
+                id: "video-siap-unggah",
+                judul: "Video Siap Unggah",
+                ikon: Download,
+                render: () => (
+                  <FadeInUp delay={0.1}>
+                    <SectionTitle judul="Video Siap Unggah" />
+                    <div className="mt-2.5">
+                      <VideoSiapUnggah />
+                    </div>
+                  </FadeInUp>
+                ),
+              },
+            ]
+          : []),
         ...(bolehAccKomen
           ? [
               {
