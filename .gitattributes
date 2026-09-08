@@ -1,0 +1,7 @@
+# Skrip yang dijalankan di server Linux WAJIB berakhiran baris LF.
+# Tanpa aturan ini, Git di Windows menyimpannya sebagai CRLF dan bash di
+# VPS menolaknya dengan galat aneh seperti: "$'\r': command not found".
+vps/*.sh   text eol=lf
+vps/*.mjs  text eol=lf
+vps/*.sql  text eol=lf
+vps/*.txt  text eol=lf
