@@ -1,0 +1,251 @@
+#!/usr/bin/env bash
+# =====================================================================
+# LANGKAH 2 — Memasang Supabase (open source) di VPS + HTTPS.
+#
+# Hasil akhir: https://DOMAIN melayani REST, Storage, Realtime, dan
+# Studio — persis seperti Supabase Cloud, tapi milik sendiri.
+#
+# CARA PAKAI (root, di VPS):
+#   DOMAIN=db.domainanda.com bash 02-pasang-supabase.sh
+#
+# Syarat: DNS A record DOMAIN sudah menunjuk ke IP VPS ini (dicek di
+# bawah — kalau belum, skrip berhenti supaya sertifikat HTTPS tidak
+# gagal terbit dan kena batas percobaan Let's Encrypt).
+# =====================================================================
+set -euo pipefail
+
+[ "$(id -u)" -eq 0 ] || { echo "Jalankan sebagai root." >&2; exit 1; }
+: "${DOMAIN:?Isi DOMAIN, contoh: DOMAIN=db.domainanda.com bash $0}"
+
+DIR=/opt/pri/supabase
+SRC=/opt/pri/supabase-src
+
+echo "== 1/8 Memeriksa DNS =="
+IP_VPS="$(curl -fsS https://api.ipify.org || true)"
+IP_DOM="$(getent hosts "$DOMAIN" | awk '{print $1}' | head -1 || true)"
+echo "IP VPS   : ${IP_VPS:-tidak terbaca}"
+echo "IP DOMAIN: ${IP_DOM:-belum diarahkan}"
+if [ -z "$IP_DOM" ] || { [ -n "$IP_VPS" ] && [ "$IP_DOM" != "$IP_VPS" ]; }; then
+  echo "DNS belum benar. Buat A record: $DOMAIN -> ${IP_VPS:-IP VPS}, tunggu 5-15 menit, ulangi." >&2
+  exit 1
+fi
+
+echo "== 2/8 Mengunduh paket Supabase =="
+if [ ! -d "$DIR" ]; then
+  rm -rf "$SRC"
+  git clone --filter=blob:none --no-checkout --depth 1 https://github.com/supabase/supabase "$SRC"
+  git -C "$SRC" sparse-checkout set --cone docker
+  git -C "$SRC" checkout
+  cp -r "$SRC/docker" "$DIR"
+  cp "$DIR/.env.example" "$DIR/.env"
+fi
+cd "$DIR"
+
+echo "== 3/8 Menentukan versi PostgreSQL 17 (samakan dengan Supabase Cloud) =="
+# Supabase Cloud proyek ini memakai PostgreSQL 17.6. Kalau VPS memakai
+# versi lebih rendah, hasil pg_dump 17 GAGAL dipulihkan. Tag diambil
+# otomatis dari Docker Hub supaya tidak salah tulis.
+PG_TAG="$(curl -fsS 'https://hub.docker.com/v2/repositories/supabase/postgres/tags?page_size=100&name=17.' \
+  | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+def kunci(t):
+    return [int(x) for x in t.split('.') if x.isdigit()]
+tag = [t['name'] for t in d.get('results', []) if t['name'].startswith('17.')]
+print(sorted(tag, key=kunci)[-1] if tag else '')
+")"
+[ -n "$PG_TAG" ] || { echo "Gagal membaca versi PostgreSQL 17 dari Docker Hub." >&2; exit 1; }
+echo "Memakai supabase/postgres:$PG_TAG"
+
+echo "== 4/8 Membuat kunci rahasia =="
+acak() { openssl rand -hex "$1"; }
+buat_jwt() {
+  python3 - "$1" "$2" <<'PY'
+import base64, hmac, hashlib, json, sys, time
+peran, rahasia = sys.argv[1], sys.argv[2]
+b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+kepala = b64(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
+kini = int(time.time())
+isi = b64(json.dumps({"role": peran, "iss": "supabase", "iat": kini,
+                      "exp": kini + 10 * 365 * 24 * 3600}, separators=(",", ":")).encode())
+pesan = f"{kepala}.{isi}".encode()
+tanda = b64(hmac.new(rahasia.encode(), pesan, hashlib.sha256).digest())
+print(f"{kepala}.{isi}.{tanda}")
+PY
+}
+if [ -f /opt/pri/kunci.txt ]; then
+  echo "Kunci sudah pernah dibuat — memakai yang lama (/opt/pri/kunci.txt)."
+  # shellcheck disable=SC1091
+  . /opt/pri/kunci.env
+else
+  PG_PASS="$(acak 24)"
+  JWT_SECRET="$(acak 32)"
+  ANON_KEY="$(buat_jwt anon "$JWT_SECRET")"
+  SERVICE_KEY="$(buat_jwt service_role "$JWT_SECRET")"
+  SECRET_KEY_BASE="$(acak 32)"
+  VAULT_ENC_KEY="$(acak 16)"
+  DASH_PASS="$(acak 12)"
+  umask 077
+  cat > /opt/pri/kunci.env <<EOF
+PG_PASS='$PG_PASS'
+JWT_SECRET='$JWT_SECRET'
+ANON_KEY='$ANON_KEY'
+SERVICE_KEY='$SERVICE_KEY'
+SECRET_KEY_BASE='$SECRET_KEY_BASE'
+VAULT_ENC_KEY='$VAULT_ENC_KEY'
+DASH_PASS='$DASH_PASS'
+EOF
+fi
+export PG_PASS JWT_SECRET ANON_KEY SERVICE_KEY SECRET_KEY_BASE VAULT_ENC_KEY DASH_PASS DOMAIN
+
+echo "== 5/8 Menulis konfigurasi (.env) =="
+python3 - <<'PY'
+import os, re, pathlib
+berkas = pathlib.Path("/opt/pri/supabase/.env")
+domain = os.environ["DOMAIN"]
+ubah = {
+    "POSTGRES_PASSWORD": os.environ["PG_PASS"],
+    "JWT_SECRET": os.environ["JWT_SECRET"],
+    "ANON_KEY": os.environ["ANON_KEY"],
+    "SERVICE_ROLE_KEY": os.environ["SERVICE_KEY"],
+    "SECRET_KEY_BASE": os.environ["SECRET_KEY_BASE"],
+    "VAULT_ENC_KEY": os.environ["VAULT_ENC_KEY"],
+    "DASHBOARD_USERNAME": "admin",
+    "DASHBOARD_PASSWORD": os.environ["DASH_PASS"],
+    "SITE_URL": f"https://{domain}",
+    "API_EXTERNAL_URL": f"https://{domain}",
+    "SUPABASE_PUBLIC_URL": f"https://{domain}",
+    # Batas unggah 200 MB. Bawaan self-host cuma 50 MB, dan aplikasi ini
+    # sudah memakai video sampai 75 MB (bucket tvrku).
+    "FILE_SIZE_LIMIT": "209715200",
+    # Login pengguna TIDAK memakai Auth Supabase (aplikasi punya sesi
+    # sendiri), jadi pendaftaran lewat GoTrue dimatikan.
+    "DISABLE_SIGNUP": "true",
+    "ENABLE_EMAIL_SIGNUP": "false",
+    "ENABLE_ANONYMOUS_USERS": "false",
+    "STUDIO_DEFAULT_ORGANIZATION": "PRI",
+    "STUDIO_DEFAULT_PROJECT": "PRI SuperApp",
+    "POOLER_TENANT_ID": "pri",
+    "KONG_HTTP_PORT": "8000",
+}
+baris, sudah, keluar = berkas.read_text().splitlines(), set(), []
+for b in baris:
+    m = re.match(r"^([A-Z0-9_]+)=", b)
+    if m and m.group(1) in ubah:
+        keluar.append(f"{m.group(1)}={ubah[m.group(1)]}")
+        sudah.add(m.group(1))
+    else:
+        keluar.append(b)
+for k, v in ubah.items():
+    if k not in sudah:
+        keluar.append(f"{k}={v}")
+berkas.write_text("\n".join(keluar) + "\n")
+print("  .env ditulis:", len(ubah), "nilai")
+PY
+
+echo "== 6/8 Mengunci port ke localhost =="
+# PENTING: port yang dipublikasikan Docker MENEMBUS ufw. Kalau dibiarkan,
+# Postgres dan Kong terbuka ke internet. Berkas override ini memaksa
+# semua port hanya mendengar di 127.0.0.1; internet cuma lewat Caddy.
+PG_TAG="$PG_TAG" python3 - <<'PY'
+import json, os, subprocess, pathlib
+cfg = json.loads(subprocess.check_output(
+    ["docker", "compose", "config", "--format", "json"], cwd="/opt/pri/supabase"))
+layanan = {}
+for nama, s in cfg.get("services", {}).items():
+    port = s.get("ports") or []
+    if not port:
+        continue
+    daftar = []
+    for p in port:
+        if isinstance(p, dict):
+            daftar.append(f"127.0.0.1:{p.get('published')}:{p.get('target')}/{p.get('protocol', 'tcp')}")
+        else:
+            daftar.append(f"127.0.0.1:{p}")
+    layanan.setdefault(nama, {})["ports"] = daftar
+# Versi PostgreSQL disamakan dengan Supabase Cloud. Ditulis ke layanan
+# "db" yang SAMA dengan blok port di atas — kalau ditulis terpisah, YAML
+# punya dua kunci "db" dan penguncian portnya hilang diam-diam.
+layanan.setdefault("db", {})["image"] = f"supabase/postgres:{os.environ['PG_TAG']}"
+isi = ["# Dibuat otomatis oleh 02-pasang-supabase.sh — jangan diedit tangan.",
+       "services:"]
+for nama, nilai in layanan.items():
+    isi.append(f"  {nama}:")
+    if "image" in nilai:
+        isi.append(f"    image: {nilai['image']}")
+    if "ports" in nilai:
+        isi.append("    ports: !override")
+        for d in nilai["ports"]:
+            isi.append(f'      - "{d}"')
+isi.append("")
+pathlib.Path("/opt/pri/supabase/docker-compose.override.yml").write_text("\n".join(isi))
+kunci_port = [n for n, v in layanan.items() if "ports" in v]
+print("  layanan yang portnya dikunci:", ", ".join(kunci_port) or "(tidak ada)")
+PY
+docker compose config >/dev/null || {
+  echo "Konfigurasi Docker tidak valid. Cek versi Compose (butuh v2.24+ untuk '!override'):" >&2
+  docker compose version >&2
+  exit 1
+}
+# Verifikasi: tidak boleh ada port yang mendengar selain 127.0.0.1
+docker compose config --format json | python3 -c "
+import json, sys
+cfg = json.load(sys.stdin)
+buruk = []
+for nama, s in cfg.get('services', {}).items():
+    for p in s.get('ports') or []:
+        ip = p.get('host_ip') if isinstance(p, dict) else ''
+        if ip not in ('127.0.0.1',):
+            buruk.append(f\"{nama}:{p}\")
+if buruk:
+    print('PORT TERBUKA KE INTERNET:', buruk); sys.exit(1)
+print('  semua port aman (127.0.0.1 saja)')
+"
+
+echo "== 7/8 Menyalakan Supabase =="
+docker compose pull
+docker compose up -d
+echo -n "Menunggu API siap"
+for i in $(seq 1 60); do
+  kode="$(curl -s -o /dev/null -w '%{http_code}' -H "apikey: $ANON_KEY" http://127.0.0.1:8000/rest/v1/ || true)"
+  if [ "$kode" = "200" ]; then echo " OK"; break; fi
+  echo -n "."; sleep 5
+  [ "$i" = "60" ] && { echo; echo "API belum siap. Cek: docker compose -f $DIR/docker-compose.yml logs --tail=50" >&2; exit 1; }
+done
+
+echo "== 8/8 HTTPS (Caddy) =="
+cat > /etc/caddy/Caddyfile <<EOF
+$DOMAIN {
+	encode zstd gzip
+	# Video sampai 200 MB harus lolos (bucket tvrku).
+	request_body {
+		max_size 210MB
+	}
+	reverse_proxy 127.0.0.1:8000 {
+		transport http {
+			read_timeout 600s
+			write_timeout 600s
+		}
+	}
+}
+EOF
+caddy validate --config /etc/caddy/Caddyfile
+systemctl reload caddy
+sleep 5
+curl -s -o /dev/null -w "HTTPS %{http_code}\n" -H "apikey: $ANON_KEY" "https://$DOMAIN/rest/v1/"
+
+umask 077
+cat > /opt/pri/kunci.txt <<EOF
+=== ISI KE VERCEL (Environment Variables) ===
+SUPABASE_URL=https://$DOMAIN
+SUPABASE_SECRET_KEY=$SERVICE_KEY
+SUPABASE_PUBLISHABLE_KEY=$ANON_KEY
+
+=== UNTUK ADMIN (jangan dibagikan) ===
+Studio     : https://$DOMAIN  (user: admin, sandi: $DASH_PASS)
+Sandi DB   : $PG_PASS
+JWT secret : $JWT_SECRET
+EOF
+echo
+echo "SELESAI. Kunci tersimpan di /opt/pri/kunci.txt (tampilkan: cat /opt/pri/kunci.txt)"
+echo "Lanjut: LANGKAH 3 — pindahkan data (03-pindah-data.sh)."

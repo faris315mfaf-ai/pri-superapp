@@ -1,0 +1,17 @@
+# Salin berkas ini menjadi /opt/pri/skrip/env-migrasi.txt lalu isi nilainya.
+# JANGAN pakai tanda kutip. Berkas ini berisi kunci rahasia —
+# simpan hanya di VPS, jangan pernah masuk ke Git atau chat.
+#
+# SUMBER = Supabase Cloud yang sekarang dipakai
+#   SUMBER_URL : https://pichnkyjepsirpclofhs.supabase.co
+#   SUMBER_KEY : secret key (sb_secret_...) dari Dashboard > Settings > API Keys
+# TUJUAN = Supabase di VPS (semua ada di /opt/pri/kunci.txt)
+#   TUJUAN_URL      : https://db.domainanda.com
+#   TUJUAN_KEY      : SUPABASE_SECRET_KEY
+#   TUJUAN_ANON_KEY : SUPABASE_PUBLISHABLE_KEY (dipakai uji realtime)
+
+SUMBER_URL=https://pichnkyjepsirpclofhs.supabase.co
+SUMBER_KEY=isi-secret-key-supabase-cloud
+TUJUAN_URL=https://db.domainanda.com
+TUJUAN_KEY=isi-service-role-key-dari-kunci.txt
+TUJUAN_ANON_KEY=isi-anon-key-dari-kunci.txt
