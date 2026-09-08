@@ -16,7 +16,8 @@
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
-import { CalendarClock, Check, History, Link2, Loader2, Send, Share2, UploadCloud, Wand2, X } from "lucide-react";
+import { AlertTriangle, CalendarClock, Check, ChevronDown, History, Link2, Loader2, RotateCcw, Send, Share2, UploadCloud, Wand2, X } from "lucide-react";
+import { BATAS_CAPTION_TVR, LABEL_SOSMED, solusiGagal } from "@/lib/batas-caption";
 import { SeksiLipat } from "@/components/seksi-lipat";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
@@ -124,6 +125,10 @@ export function UnggahSosmedSaya() {
   }
   const [judul, setJudul] = useState("");
   const [caption, setCaption] = useState("");
+  // CAPTION PER SOSMED (8 Sep 2026): teks khusus tiap platform — X 280,
+  // Threads 500, TikTok/IG 2200… Platform tanpa teks khusus memakai caption utama.
+  const [captionPer, setCaptionPer] = useState<Record<string, string>>({});
+  const [captionTerbuka, setCaptionTerbuka] = useState<string | null>(null);
   const [pilih, setPilih] = useState<Set<string>>(() => new Set());
   const [pakaiJadwal, setPakaiJadwal] = useState(false);
   const [jadwal, setJadwal] = useState("");
@@ -199,9 +204,18 @@ export function UnggahSosmedSaya() {
   }
 
   const adaVideo = modeLink ? tautan.trim().startsWith("https://") : Boolean(berkas);
+  // Teks yang benar-benar dikirim ke tiap sosmed (judul + caption utama, atau khusus).
+  const teksUtama = caption.trim() ? `${judul.trim()}\n\n${caption.trim()}` : judul.trim();
+  const captionUntuk = (p: string) => captionPer[p] ?? teksUtama;
+  const batasUntuk = (p: string) => BATAS_CAPTION_TVR[p] ?? 2200;
+  const platformKelebihan = [...pilih].filter((p) => captionUntuk(p).length > batasUntuk(p));
+  const captionPerKirim = Object.fromEntries(
+    Object.entries(captionPer).filter(([p, v]) => pilih.has(p) && v.trim() && v.trim() !== teksUtama),
+  );
   const sah =
     adaVideo &&
     judul.trim().length >= 3 &&
+    platformKelebihan.length === 0 &&
     pilih.size > 0 &&
     (!pakaiJadwal || Boolean(jadwal));
 
@@ -216,6 +230,7 @@ export function UnggahSosmedSaya() {
           video_link: tautan.trim(),
           judul: judul.trim(),
           caption: caption.trim() || undefined,
+        caption_per: Object.keys(captionPerKirim).length > 0 ? captionPerKirim : undefined,
           platforms: [...pilih],
           jadwal: pakaiJadwal && jadwal ? new Date(jadwal).toISOString() : undefined,
         });
@@ -229,6 +244,7 @@ export function UnggahSosmedSaya() {
         setTautan("");
         setJudul("");
         setCaption("");
+      setCaptionPer({});
         setPilih(new Set());
         setPakaiJadwal(false);
         setJadwal("");
@@ -253,6 +269,7 @@ export function UnggahSosmedSaya() {
         ukuran: hasilUnggah.ukuran,
         judul: judul.trim(),
         caption: caption.trim() || undefined,
+        caption_per: Object.keys(captionPerKirim).length > 0 ? captionPerKirim : undefined,
         platforms: [...pilih],
         jadwal: pakaiJadwal && jadwal ? new Date(jadwal).toISOString() : undefined,
       });
@@ -271,6 +288,7 @@ export function UnggahSosmedSaya() {
       setBerkas(null);
       setJudul("");
       setCaption("");
+      setCaptionPer({});
       setPilih(new Set());
       setPakaiJadwal(false);
       setJadwal("");
@@ -501,6 +519,82 @@ export function UnggahSosmedSaya() {
           ))}
         </div>
 
+        {/* CAPTION PER SOSMED (8 Sep 2026) — meniru unggah TV Rakyat Official:
+            tiap platform punya batas resmi; X/Threads sering kepanjangan. */}
+        {pilih.size > 0 && (
+          <div className="glass-soft mt-3 rounded-2xl p-1.5">
+            <div className="flex items-center justify-between px-2.5 pb-0.5 pt-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-teks-sekunder">Caption per sosmed</p>
+              {platformKelebihan.length > 0 ? (
+                <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-gagal">
+                  <AlertTriangle className="h-3 w-3" aria-hidden="true" /> {platformKelebihan.length} melebihi batas
+                </span>
+              ) : (
+                <span className="text-[10.5px] text-teks-sekunder">ketuk untuk mengubah</span>
+              )}
+            </div>
+            {[...pilih].map((p) => {
+              const teks = captionUntuk(p);
+              const batas = batasUntuk(p);
+              const lebih = teks.length > batas;
+              const terbuka = captionTerbuka === p;
+              const khusus = captionPer[p] !== undefined;
+              return (
+                <div key={p} className="px-2 py-1">
+                  <button
+                    type="button"
+                    onClick={() => setCaptionTerbuka((k) => (k === p ? null : p))}
+                    aria-expanded={terbuka}
+                    aria-label={`Caption untuk ${LABEL_SOSMED[p] ?? p}`}
+                    className="btn-tekan flex w-full items-center gap-2.5 rounded-xl px-1 py-1.5 text-left"
+                  >
+                    <PlatformIcon platform={p} size={14} denganWadah />
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-teks-utama">
+                      {LABEL_SOSMED[p] ?? p}
+                      {!khusus && <span className="ml-1.5 text-[10px] text-teks-sekunder">(caption utama)</span>}
+                    </span>
+                    <span className={cn("angka-tab shrink-0 rounded-full px-2 py-px text-[10px] font-bold", lebih ? "bg-gagal/15 text-gagal" : "bg-sukses/10 text-emerald-600 dark:text-emerald-400")}>
+                      {teks.length.toLocaleString("id-ID")}/{batas.toLocaleString("id-ID")}
+                    </span>
+                    <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-teks-sekunder transition-transform", terbuka && "rotate-180")} aria-hidden="true" />
+                  </button>
+                  {terbuka && (
+                    <div className="px-1 pb-1.5">
+                      <textarea
+                        value={teks}
+                        rows={4}
+                        disabled={Boolean(tahap)}
+                        onChange={(e) => setCaptionPer((c) => ({ ...c, [p]: e.target.value }))}
+                        aria-label={`Teks caption ${LABEL_SOSMED[p] ?? p}`}
+                        className={cn("glass-soft mt-1 w-full resize-none rounded-xl px-3 py-2 text-[12.5px] leading-relaxed text-teks-utama/90 outline-none focus:ring-2 disabled:opacity-60", lebih ? "ring-2 ring-gagal/60" : "focus:ring-pri/50")}
+                      />
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        {p === "twitter" && <span className="text-[10.5px] text-teks-sekunder">X: maks 280 karakter; tautan dihapus otomatis oleh X.</span>}
+                        {p === "threads" && <span className="text-[10.5px] text-teks-sekunder">Threads: maks 500 karakter.</span>}
+                        {khusus && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCaptionPer((c) => {
+                                const n = { ...c };
+                                delete n[p];
+                                return n;
+                              })
+                            }
+                            className="btn-tekan ml-auto inline-flex items-center gap-1 rounded-lg bg-black/5 px-2 py-1 text-[10.5px] font-bold text-teks-utama dark:bg-white/10"
+                          >
+                            <RotateCcw className="h-3 w-3" aria-hidden="true" /> Pakai caption utama
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         {/* Mode kirim: dua pilihan jelas (permintaan 1 Sep 2026) —
             Upload Sekarang ATAU Jadwalkan Upload. */}
         <p className="mt-3 text-[11.5px] font-semibold text-teks-sekunder">Waktu kirim:</p>
@@ -662,7 +756,13 @@ export function UnggahSosmedSaya() {
                   {/* Platform yang dinyatakan upload-post GAGAL terbit (6 Sep 2026) — biasanya akun perlu ditautkan ulang */}
                   {Array.isArray((r.hasil as { kpi_gagal?: unknown } | null)?.kpi_gagal) && ((r.hasil as { kpi_gagal: string[] }).kpi_gagal.length > 0) && (
                     <span className="flex items-center gap-0.5 text-[10px] font-bold text-gagal" title="Video tidak terbit di platform ini — cek tautan akun di seksi Akun TV Rakyat Saya">
-                      <X className="h-3 w-3" /> gagal terbit: {(r.hasil as { kpi_gagal: string[] }).kpi_gagal.map((p) => labelPlatform(p)).join(", ")}
+                      <X className="h-3 w-3" /> gagal terbit:{" "}
+                      {(r.hasil as { kpi_gagal: string[] }).kpi_gagal
+                        .map((p) => {
+                          const alasan = ((r.hasil as { kpi_gagal_alasan?: Record<string, string> }).kpi_gagal_alasan ?? {})[p];
+                          return alasan ? `${labelPlatform(p)} (${solusiGagal(p, alasan).ringkas})` : labelPlatform(p);
+                        })
+                        .join("; ")}
                     </span>
                   )}
                 </div>

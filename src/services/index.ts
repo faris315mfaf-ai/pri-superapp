@@ -2871,6 +2871,8 @@ export async function postTvrku(data: {
   ukuran?: number;
   judul: string;
   caption?: string;
+  /** Caption khusus per sosmed (8 Sep 2026) — hanya yang diisi. */
+  caption_per?: Record<string, string>;
   platforms: string[];
   jadwal?: string;
 }): Promise<{

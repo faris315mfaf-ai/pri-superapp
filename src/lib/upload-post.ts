@@ -258,9 +258,11 @@ export async function unggahVideoUp(opsi: {
     // Caption khusus platform ini (bila diisi) menimpa title umum.
     const khusus = opsi.captionPer?.[p]?.trim();
     if (khusus) {
-      form.set(`${up}_title`, khusus.slice(0, 2200));
       if (up === "youtube" || up === "facebook") {
+        // Judul tetap pendek (YouTube membatasi 100 karakter); caption khusus jadi deskripsi.
         form.set(`${up}_description`, khusus.slice(0, 5000));
+      } else {
+        form.set(`${up}_title`, khusus.slice(0, 2200));
       }
     }
   }
@@ -286,6 +288,24 @@ export async function unggahVideoUp(opsi: {
           "",
       ) || null,
   };
+}
+
+/**
+ * Platform yang LANGSUNG dinyatakan gagal dalam balasan unggah (bila
+ * upload-post sempat memprosesnya sinkron). Balasan latar ("initiated in
+ * background") tidak memuat results → kosong; statusnya menyusul lewat
+ * rekonsiliasi (statusUnggahUp).
+ */
+export function gagalDariBalasan(mentah: unknown): { platform: string; pesan: string }[] {
+  const d = (mentah && typeof mentah === "object" ? mentah : {}) as Record<string, unknown>;
+  const daftar = Array.isArray(d.results) ? (d.results as Record<string, unknown>[]) : [];
+  const keluar: { platform: string; pesan: string }[] = [];
+  for (const r of daftar) {
+    if (r.success !== false) continue;
+    const up = String(r.platform ?? "").toLowerCase();
+    keluar.push({ platform: DARI_UP[up] ?? up, pesan: String(r.error ?? r.message ?? "").slice(0, 300) });
+  }
+  return keluar;
 }
 
 // ------------------------------------------------------------

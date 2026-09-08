@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { pastikanMasuk } from "@/lib/sesi";
 import { rekonsiliasiKpiRinci } from "@/lib/kpi-otomatis";
+import { perbaikiLaporanSemua, perbaikiLaporanUser } from "@/lib/perbaikan-laporan";
 import { analitikPostUp, postinganTerbaruUp, statusUnggahUp, uploadPostSiap } from "@/lib/upload-post";
 
 export const dynamic = "force-dynamic";
@@ -19,9 +20,21 @@ export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
     if (user.role !== "master") throw Object.assign(new Error("Halaman tidak ditemukan."), { status: 404 });
-    if (!uploadPostSiap()) throw Object.assign(new Error("upload-post belum diatur."), { status: 503 });
     const url = new URL(request.url);
     const db = supabase();
+
+    // ?perbaiki=1[&user_id=…|&semua=1][&hari=30][&coba=1] — hapus laporan ganda &
+    // rapikan tautan (lib/perbaikan-laporan). coba=1 = hanya menghitung.
+    if (url.searchParams.get("perbaiki") === "1") {
+      const hari = Math.min(90, Math.max(1, Number(url.searchParams.get("hari") ?? 30)));
+      const terapkan = url.searchParams.get("coba") !== "1";
+      const uid = Number(url.searchParams.get("user_id") ?? 0);
+      if (uid > 0) return { terapkan, hasil: await perbaikiLaporanUser(uid, hari, terapkan) };
+      if (url.searchParams.get("semua") === "1") return { terapkan, hasil: await perbaikiLaporanSemua(hari, terapkan) };
+      throw Object.assign(new Error("user_id atau semua=1 wajib."), { status: 400 });
+    }
+
+    if (!uploadPostSiap()) throw Object.assign(new Error("upload-post belum diatur."), { status: 503 });
 
     if (url.searchParams.get("jalankan") === "1") {
       const uid = Number(url.searchParams.get("user_id") ?? 0);

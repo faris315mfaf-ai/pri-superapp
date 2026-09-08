@@ -30,6 +30,9 @@ import { beriKoin } from "@/lib/koin";
 import { selesaikanRequest } from "@/lib/tvr-request";
 import { BATAS_BERKAS_CLOUDINARY_MB, BATAS_KOMPRES_MB, hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
 import { kompresLaluSalinKeR2 } from "@/lib/kompres-r2";
+import { gagalDariBalasan } from "@/lib/upload-post";
+import { BATAS_CAPTION_TVR, LABEL_SOSMED, solusiGagal } from "@/lib/batas-caption";
+import { kirimKabar } from "@/lib/notifikasi";
 import { adalahPalugodam } from "@/lib/struktur";
 import { prosesPesananPalugodam } from "@/lib/palugodam";
 import { bersihkanMediaSiaran } from "@/lib/siaran";
@@ -208,6 +211,8 @@ export async function POST(request: Request) {
       video_link?: string;
       judul?: string;
       caption?: string;
+      /** Caption KHUSUS per sosmed (8 Sep 2026) — hanya platform yang diisi. */
+      caption_per?: Record<string, string>;
       platforms?: string[];
       jadwal?: string;
     };
@@ -310,16 +315,6 @@ export async function POST(request: Request) {
 
     // ---- Langkah 2: post ke sosmed via upload-post ----
     if (body.aksi === "post") {
-      // Hanya langkah ini yang butuh upload-post; "siapkan"/"kompres" tidak
-      // (5 Sep 2026 — supaya kompresi tetap bisa diuji tanpa kunci upload-post).
-      if (!uploadPostSiap()) {
-        throw Object.assign(
-          new Error(
-            "upload-post belum diatur (UPLOAD_POST_API_KEY kosong). Hubungi pengelola.",
-          ),
-          { status: 503 },
-        );
-      }
       // Jalur BARU (1 Sep 2026): media sudah di Cloudinary — klien
       // mengirim secure_url + public_id. Jalur LAMA (path bucket)
       // tetap diterima untuk klien yang masih memuat JS versi lama.
@@ -424,6 +419,24 @@ export async function POST(request: Request) {
           status: 400,
         });
       }
+      // Caption per sosmed: hanya platform yang dipilih, wajib muat di batas platformnya.
+      const captionPer: Record<string, string> = {};
+      if (body.caption_per && typeof body.caption_per === "object") {
+        for (const [pf, teks] of Object.entries(body.caption_per)) {
+          const p = String(pf).toLowerCase();
+          if (!platforms.includes(p) || typeof teks !== "string") continue;
+          const bersih = teks.trim();
+          if (!bersih) continue;
+          const batasKarakter = BATAS_CAPTION_TVR[p] ?? 2200;
+          if (bersih.length > batasKarakter) {
+            throw Object.assign(
+              new Error(`Caption untuk ${LABEL_SOSMED[p] ?? p} melebihi batas ${batasKarakter} karakter (${bersih.length}).`),
+              { status: 400 },
+            );
+          }
+          captionPer[p] = bersih;
+        }
+      }
 
       const profil = await profilUp(Number(user.id));
       if (!profil) {
@@ -465,6 +478,14 @@ export async function POST(request: Request) {
           : pakaiCloudinary
             ? videoUrlCloud
             : db.storage.from("tvrku").getPublicUrl(path).data.publicUrl;
+      // Hanya langkah ini yang butuh upload-post; validasi masukan dilakukan lebih
+      // dulu supaya pesan galatnya jelas (dan bisa diuji tanpa kunci upload-post).
+      if (!uploadPostSiap()) {
+        throw Object.assign(
+          new Error("upload-post belum diatur (UPLOAD_POST_API_KEY kosong). Hubungi pengelola."),
+          { status: 503 },
+        );
+      }
       const hasil = await unggahVideoUp({
         profil,
         videoUrl,
@@ -472,7 +493,13 @@ export async function POST(request: Request) {
         caption: body.caption ?? "",
         platforms,
         scheduleDate: jadwal,
+        captionPer: Object.keys(captionPer).length > 0 ? captionPer : undefined,
       });
+      // Platform yang langsung dinyatakan gagal oleh upload-post (balasan sinkron).
+      const gagalAwal = gagalDariBalasan(hasil.mentah);
+      const hasilSimpan = gagalAwal.length
+        ? { ...hasil.mentah, kpi_gagal: gagalAwal.map((g) => g.platform), kpi_gagal_alasan: Object.fromEntries(gagalAwal.map((g) => [g.platform, g.pesan])) }
+        : hasil.mentah;
 
       // Berkas dihapus 2 jam setelah TAYANG: post langsung = sekarang+2j;
       // terjadwal = jadwal+2j (upload-post butuh URL-nya masih hidup
@@ -506,7 +533,7 @@ export async function POST(request: Request) {
               ? Math.floor(Number(body.ukuran))
               : null,
           jadwal: jadwal ?? null,
-          hasil: hasil.mentah,
+          hasil: hasilSimpan,
           request_id: hasil.request_id,
           // Kiriman TAUTAN: berkasnya milik anggota di layanan lain —
           // sistem tidak berhak menghapusnya, jadi tanpa jadwal sapu.
@@ -523,6 +550,25 @@ export async function POST(request: Request) {
           await beriKoin(Number(user.id), "upload_video", `tvrku-${idPost}`);
           await selesaikanRequest(Number(user.id), { tvrku_post_id: idPost });
         });
+      }
+      // Kegagalan yang sudah pasti saat ini juga → kabari anggota beserta solusinya
+      // (yang baru ketahuan belakangan dikabari oleh rekonsiliasi KPI).
+      if (gagalAwal.length > 0) {
+        after(() =>
+          kirimKabar({
+            judul: `⚠️ Video gagal terbit di ${gagalAwal.map((g) => LABEL_SOSMED[g.platform] ?? g.platform).join(", ")}`,
+            isi: `"${judul}" tidak terbit di ${gagalAwal.length} sosmed:\n${gagalAwal
+              .map((g) => {
+                const { ringkas, solusi } = solusiGagal(g.platform, g.pesan);
+                return `• ${LABEL_SOSMED[g.platform] ?? g.platform}: ${ringkas}${g.pesan ? ` (${g.pesan.slice(0, 120)})` : ""}\n  Solusi: ${solusi}`;
+              })
+              .join("\n")}`,
+            kategori: "peringatan",
+            jenis_peristiwa: "unggah_gagal",
+            target: "tvrku",
+            untukUserIds: [Number(user.id)],
+          }),
+        );
       }
 
       // Coba catat KPI segera (platform cepat seperti YouTube/TikTok
