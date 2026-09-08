@@ -5,13 +5,13 @@
 # SUMBER = Supabase Cloud yang sekarang dipakai
 #   SUMBER_URL : https://pichnkyjepsirpclofhs.supabase.co
 #   SUMBER_KEY : secret key (sb_secret_...) dari Dashboard > Settings > API Keys
-# TUJUAN = Supabase di VPS (semua ada di /opt/pri/kunci.txt)
-#   TUJUAN_URL      : https://db.domainanda.com
+# TUJUAN = Supabase di VPS (semua nilainya ada di /opt/pri/kunci.txt)
+#   TUJUAN_URL      : https://srv1954653.hstgr.cloud  (nama gratis bawaan VPS)
 #   TUJUAN_KEY      : SUPABASE_SECRET_KEY
-#   TUJUAN_ANON_KEY : SUPABASE_PUBLISHABLE_KEY (dipakai uji realtime)
+#   TUJUAN_ANON_KEY : SUPABASE_PUBLISHABLE_KEY (dipakai menguji realtime)
 
 SUMBER_URL=https://pichnkyjepsirpclofhs.supabase.co
 SUMBER_KEY=isi-secret-key-supabase-cloud
-TUJUAN_URL=https://db.domainanda.com
+TUJUAN_URL=https://srv1954653.hstgr.cloud
 TUJUAN_KEY=isi-service-role-key-dari-kunci.txt
 TUJUAN_ANON_KEY=isi-anon-key-dari-kunci.txt

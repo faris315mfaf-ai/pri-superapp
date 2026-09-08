@@ -21,14 +21,34 @@ DIR=/opt/pri/supabase
 SRC=/opt/pri/supabase-src
 
 echo "== 1/8 Memeriksa DNS =="
-IP_VPS="$(curl -fsS https://api.ipify.org || true)"
-IP_DOM="$(getent hosts "$DOMAIN" | awk '{print $1}' | head -1 || true)"
-echo "IP VPS   : ${IP_VPS:-tidak terbaca}"
-echo "IP DOMAIN: ${IP_DOM:-belum diarahkan}"
-if [ -z "$IP_DOM" ] || { [ -n "$IP_VPS" ] && [ "$IP_DOM" != "$IP_VPS" ]; }; then
-  echo "DNS belum benar. Buat A record: $DOMAIN -> ${IP_VPS:-IP VPS}, tunggu 5-15 menit, ulangi." >&2
+# Nama boleh apa saja asal menunjuk ke server ini: nama bawaan Hostinger
+# (srvXXXXXXX.hstgr.cloud), subdomain sendiri, atau nama gratis. Yang
+# penting cocok, karena sertifikat HTTPS diterbitkan berdasarkan nama.
+IP_LOKAL="$( (ip -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1; curl -4 -fsS --max-time 10 https://api.ipify.org 2>/dev/null; echo) | sort -u | grep -v '^$' || true)"
+IP_DOM="$(getent ahosts "$DOMAIN" | awk '{print $1}' | sort -u || true)"
+echo "Alamat server ini :" $IP_LOKAL
+echo "Alamat $DOMAIN :" ${IP_DOM:-'(belum diarahkan)'}
+COCOK=0
+for a in $IP_DOM; do
+  for b in $IP_LOKAL; do [ "$a" = "$b" ] && COCOK=1; done
+done
+if [ "$COCOK" -ne 1 ]; then
+  echo >&2
+  echo "DNS belum menunjuk ke server ini, sertifikat HTTPS pasti gagal terbit." >&2
+  echo "Arahkan $DOMAIN ke salah satu alamat di atas, tunggu 5-15 menit, lalu ulangi." >&2
   exit 1
 fi
+# Kalau ada alamat IPv6 milik orang lain, Let's Encrypt bisa mencobanya
+# lebih dulu lalu gagal. Cukup diperingatkan, bukan dihentikan.
+for a in $IP_DOM; do
+  case "$a" in
+    *:*)
+      punya=0
+      for b in $IP_LOKAL; do [ "$a" = "$b" ] && punya=1; done
+      [ "$punya" -eq 0 ] && echo "PERINGATAN: alamat IPv6 $a bukan milik server ini — hapus AAAA record bila HTTPS gagal." >&2
+      ;;
+  esac
+done
 
 echo "== 2/8 Mengunduh paket Supabase =="
 if [ ! -d "$DIR" ]; then
@@ -167,12 +187,19 @@ for nama, s in cfg.get("services", {}).items():
 # "db" yang SAMA dengan blok port di atas — kalau ditulis terpisah, YAML
 # punya dua kunci "db" dan penguncian portnya hilang diam-diam.
 layanan.setdefault("db", {})["image"] = f"supabase/postgres:{os.environ['PG_TAG']}"
+# Gerbang (Kong) menolak unggahan besar dengan galat 413 kalau batas
+# bawaannya dibiarkan. Video di aplikasi ini bisa 75 MB.
+layanan.setdefault("kong", {})["environment"] = {"KONG_NGINX_PROXY_CLIENT_MAX_BODY_SIZE": "210m"}
 isi = ["# Dibuat otomatis oleh 02-pasang-supabase.sh — jangan diedit tangan.",
        "services:"]
 for nama, nilai in layanan.items():
     isi.append(f"  {nama}:")
     if "image" in nilai:
         isi.append(f"    image: {nilai['image']}")
+    if "environment" in nilai:
+        isi.append("    environment:")
+        for k, v in nilai["environment"].items():
+            isi.append(f'      {k}: "{v}"')
     if "ports" in nilai:
         isi.append("    ports: !override")
         for d in nilai["ports"]:
