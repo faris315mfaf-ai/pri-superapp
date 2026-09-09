@@ -47,6 +47,8 @@ import { BannerKendali } from "@/components/banner-kendali";
 import { PanelMasterScreen } from "@/features/profil/panel-master";
 import { PengaturanFiturScreen } from "@/features/profil/pengaturan-fitur";
 import { BerandaScreen } from "@/features/beranda/beranda-screen";
+import { BerandaSimpelGlass } from "@/features/beranda/beranda-simpel-glass";
+import { LeaderboardKomenScreen, PengumumanDaftarScreen } from "@/features/beranda/layar-anggota";
 import { DatabaseScreen } from "@/features/database/database-screen";
 import { LayarPerbaikan } from "@/features/perbaikan/layar-perbaikan";
 import { PilihUcapanUltah } from "@/features/notifikasi/pilih-ucapan-ultah";
@@ -174,11 +176,15 @@ type SubLayar =
   // Susunan modul footer pilihan pengguna (fitur 1.20/4)
   | { nama: "atur-menu" }
   // Database anggota (detail per pengguna, untuk pengurus)
-  | { nama: "database" };
+  | { nama: "database" }
+  // Beranda anggota tanpa jabatan (10 Sep 2026): daftar pengumuman & leaderboard komen
+  | { nama: "pengumuman-daftar" }
+  | { nama: "leaderboard-komen" };
 
 const TAB_AWAL: Record<Role, KunciTab> = {
   master: "beranda",
   super_admin: "beranda",
+  superadmin: "beranda",
   admin_hr: "qc",
   admin_tv: "tv",
   ketua: "beranda",
@@ -237,7 +243,13 @@ const TAB_ROLE: Record<Role, KunciTab[]> = {
   master: ["beranda", "konten", "qc", "tv", "tvrku", "chat", "profil"],
   // Super admin TIDAK punya tab TV Rakyat: otomatisasi video adalah
   // tanggung jawab tim TV Rakyat (lihat bolehProsesVideo di types).
-  super_admin: ["beranda", "konten", "qc", "chat", "profil"],
+  // HR Center (qc) hanya untuk Divisi HR (10 Sep 2026) — ditambahkan
+  // dinamis oleh adalahHR(), bukan bawaan peran.
+  super_admin: ["beranda", "konten", "chat", "profil"],
+  // superadmin (10 Sep 2026): beranda = Dashboard penuh, Konten penuh,
+  // tab Dashboard ditambahkan dinamis (aksesPenuh). Tanpa TV Official,
+  // chat, robot, dan perintah suara.
+  superadmin: ["beranda", "konten", "profil"],
   admin_hr: ["konten", "qc", "chat", "profil"],
   admin_tv: ["konten", "tv", "chat", "profil"],
   ketua: ["beranda", "konten", "tvrku", "chat", "profil"],
@@ -290,6 +302,8 @@ export default function Page() {
   const [sembunyiTab, setSembunyiTab] = useState<string[]>([]);
   // Jabatan ini boleh memakai Asisten AI? (fitur 1.20/3)
   const [bolehAsisten, setBolehAsisten] = useState(false);
+  // Gulir TVR Saya ke seksi tertentu saat dibuka dari beranda ringkas (10 Sep 2026).
+  const [fokusTvrku, setFokusTvrku] = useState<{ seksi: string; tik: number } | null>(null);
   // Id notifikasi yang sudah pernah terlihat di sesi ini. Dipakai untuk
   // membedakan notifikasi yang benar-benar BARU datang (layak dimunculkan
   // sebagai banner) dari yang memang sudah ada sejak awal.
@@ -884,6 +898,10 @@ export default function Page() {
   // ------------------------------------------------------------
 
   const layarTab: { kunci: KunciTab; isi: React.ReactNode }[] = [];
+  // Kelola Laporan KPI anggota: pengurus pusat (termasuk superadmin), HR, Pimred.
+  const bolehKelolaKpi = Boolean(
+    user && (user.role === "master" || user.role === "super_admin" || user.role === "superadmin" || adalahHR(user) || adalahPimred(user)),
+  );
   if (user) {
     // Tab yang tersedia mengikuti TAB_ROLE — satu sumber kebenaran,
     // supaya daftar tab di navigasi bawah dan layar yang dipasang di
@@ -905,9 +923,26 @@ export default function Page() {
       tabBoleh.includes("beranda") &&
       (user.role === "ketua" || user.role === "anggota")
     ) {
+      // 10 Sep 2026: TANPA jabatan → beranda ringkas ala Mode Simpel berkulit
+      // kaca merah; pemegang jabatan tetap memakai beranda lengkap.
+      const tanpaJabatan = !(user.jabatan ?? "").trim();
       layarTab.push({
         kunci: "beranda",
-        isi: (
+        isi: tanpaJabatan ? (
+          <BerandaSimpelGlass
+            user={user}
+            onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
+            onBukaAbsensi={() => setSubLayar({ nama: "absensi" })}
+            onBukaTvrKu={(seksi) => {
+              if (seksi) setFokusTvrku({ seksi, tik: Date.now() });
+              pilihTab("tvrku");
+            }}
+            onBukaKonten={() => pilihTab("konten")}
+            onBukaProfil={() => pilihTab("profil")}
+            onBukaPengumuman={() => setSubLayar({ nama: "pengumuman-daftar" })}
+            onBukaLeaderboard={() => setSubLayar({ nama: "leaderboard-komen" })}
+          />
+        ) : (
           <BerandaScreen
             user={user}
             onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
@@ -929,11 +964,13 @@ export default function Page() {
                 : undefined
             }
             user={user}
-            onBukaKelolaPengguna={() =>
-              setSubLayar({ nama: "kelola-pengguna" })
+            onBukaKelolaPengguna={
+              // superadmin (10 Sep 2026): tanpa Kelola Pengguna (bukan bagian fiturnya).
+              user.role !== "superadmin" ? () => setSubLayar({ nama: "kelola-pengguna" }) : undefined
             }
-            onBukaModulQc={() => pilihTab("qc")}
-            onBukaModulTv={() => pilihTab("tv")}
+            // HR Center / TV Official hanya bila modulnya memang ada di tab pemakai.
+            onBukaModulQc={tabBoleh.includes("qc") ? () => pilihTab("qc") : undefined}
+            onBukaModulTv={tabBoleh.includes("tv") ? () => pilihTab("tv") : undefined}
             onBukaAbsensi={() => setSubLayar({ nama: "absensi-hari-ini" })}
             onBukaKpiVideo={() => setSubLayar({ nama: "dashboard-kpi" })}
             onBukaTvNasional={() => setSubLayar({ nama: "tv-nasional" })}
@@ -1010,6 +1047,7 @@ export default function Page() {
           <TvrKuScreen
             user={user}
             onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
+            gulirKe={fokusTvrku}
           />
         ),
       });
@@ -1046,9 +1084,7 @@ export default function Page() {
           onBukaAbsensi={() => setSubLayar({ nama: "absensi" })}
           onBukaLaporanKerja={() => setSubLayar({ nama: "laporan-kerja" })}
           onBukaKelolaLaporanKpi={
-            user.role === "master" || user.role === "super_admin" || adalahHR(user) || adalahPimred(user)
-              ? () => setSubLayar({ nama: "kelola-laporan-kpi" })
-              : undefined
+            bolehKelolaKpi ? () => setSubLayar({ nama: "kelola-laporan-kpi" }) : undefined
           }
           onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           onBukaPanelMaster={() => setSubLayar({ nama: "panel-master" })}
@@ -1236,6 +1272,19 @@ export default function Page() {
                       <ScreenHeader
                         judul="KPI Video Anggota"
                         onKembali={() => setSubLayar(null)}
+                        kanan={
+                          // Kelola Laporan KPI Anggota langsung dari fitur KPI (10 Sep 2026).
+                          bolehKelolaKpi ? (
+                            <button
+                              type="button"
+                              onClick={() => setSubLayar({ nama: "kelola-laporan-kpi" })}
+                              className="btn-tekan flex h-10 items-center gap-1.5 rounded-full px-3.5 text-[12px] font-bold text-white"
+                              style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)", boxShadow: "0 8px 18px rgba(220,38,38,0.35)" }}
+                            >
+                              Kelola Laporan
+                            </button>
+                          ) : undefined
+                        }
                       />
                       <KpiAnggotaDashboard />
                     </div>
@@ -1272,6 +1321,10 @@ export default function Page() {
                     />
                   ) : subLayar.nama === "persetujuan-kpi" ? (
                     <PersetujuanKpiScreen onKembali={() => setSubLayar(null)} />
+                  ) : subLayar.nama === "pengumuman-daftar" ? (
+                    <PengumumanDaftarScreen onKembali={() => setSubLayar(null)} />
+                  ) : subLayar.nama === "leaderboard-komen" ? (
+                    <LeaderboardKomenScreen onKembali={() => setSubLayar(null)} namaSaya={user?.nama ?? ""} />
                   ) : subLayar.nama === "kelola-laporan-kpi" ? (
                     <KelolaLaporanKpiScreen onKembali={() => setSubLayar(null)} />
                   ) : subLayar.nama === "pengumuman" ? (

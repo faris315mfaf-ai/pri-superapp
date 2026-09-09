@@ -21,7 +21,7 @@ import { pastikanFiturAktif } from "@/lib/fitur-server";
 
 export const dynamic = "force-dynamic";
 
-const BOLEH_LIHAT_SEMUA = new Set(["admin_hr", "super_admin", "master"]);
+const BOLEH_LIHAT_SEMUA = new Set(["admin_hr", "super_admin", "master", "superadmin"]);
 
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";

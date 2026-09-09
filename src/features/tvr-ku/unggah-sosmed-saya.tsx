@@ -212,12 +212,41 @@ export function UnggahSosmedSaya() {
   const captionPerKirim = Object.fromEntries(
     Object.entries(captionPer).filter(([p, v]) => pilih.has(p) && v.trim() && v.trim() !== teksUtama),
   );
-  const sah =
-    adaVideo &&
-    judul.trim().length >= 3 &&
-    platformKelebihan.length === 0 &&
-    pilih.size > 0 &&
-    (!pakaiJadwal || Boolean(jadwal));
+  // DAFTAR KEKURANGAN (10 Sep 2026): dulu tombol hanya mati diam-diam saat
+  // ada yang belum lengkap — anggota tidak tahu apa yang kurang. Kini
+  // tombol tetap bisa ditekan dan menyebutkan satu per satu yang kurang.
+  const kekurangan: string[] = [];
+  if (!adaVideo) kekurangan.push(modeLink ? "Tautan video belum diisi (harus diawali https://)" : "Video belum dipilih");
+  if (judul.trim().length < 3) kekurangan.push("Judul video minimal 3 huruf");
+  if (pilih.size === 0) kekurangan.push("Pilih minimal 1 sosmed tujuan");
+  for (const p of platformKelebihan) {
+    kekurangan.push(`Caption ${LABEL_SOSMED[p] ?? p} melebihi batas ${batasUntuk(p)} karakter`);
+  }
+  if (pakaiJadwal) {
+    if (!jadwal) kekurangan.push("Waktu jadwal belum diisi");
+    else {
+      const t = Date.parse(jadwal);
+      if (!Number.isFinite(t)) kekurangan.push("Waktu jadwal tidak terbaca");
+      else if (t < Date.now() + 5 * 60_000) kekurangan.push("Jadwal minimal 5 menit dari sekarang");
+      else if (t > Date.now() + 7 * 86_400_000) kekurangan.push("Jadwal maksimal 7 hari ke depan");
+    }
+  }
+  const sah = kekurangan.length === 0;
+  const [tampilKurang, setTampilKurang] = useState(false);
+  function tekanKirim() {
+    if (tahap) return;
+    if (!sah) {
+      setTampilKurang(true);
+      toast(
+        "peringatan",
+        pakaiJadwal ? "Belum bisa dijadwalkan" : "Belum bisa diposting",
+        `Lengkapi dulu: ${kekurangan.join(" · ")}`,
+      );
+      return;
+    }
+    setTampilKurang(false);
+    void kirim();
+  }
 
   async function kirim() {
     if (!sah || tahap) return;
@@ -661,11 +690,32 @@ export function UnggahSosmedSaya() {
           melapor link lagi. Tiap platform tujuan dihitung 1 video.
         </p>
 
+        {tampilKurang && kekurangan.length > 0 && (
+          <div
+            className="glass-soft mt-3 rounded-xl border border-gagal/30 px-3 py-2.5"
+            role="alert"
+            aria-live="polite"
+          >
+            <p className="flex items-center gap-1.5 text-[11.5px] font-bold text-gagal">
+              <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+              {pakaiJadwal ? "Belum bisa dijadwalkan — lengkapi dulu:" : "Belum bisa diposting — lengkapi dulu:"}
+            </p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[11.5px] text-teks-utama">
+              {kekurangan.map((k) => (
+                <li key={k}>{k}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <button
           type="button"
-          onClick={() => void kirim()}
-          disabled={!sah || Boolean(tahap)}
-          className="btn-tekan mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13.5px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={tekanKirim}
+          disabled={Boolean(tahap)}
+          aria-disabled={!sah}
+          className={cn(
+            "btn-tekan mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13.5px] font-bold text-white disabled:cursor-not-allowed disabled:opacity-50",
+            !sah && !tahap && "opacity-75",
+          )}
           style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
         >
           {tahap ? (

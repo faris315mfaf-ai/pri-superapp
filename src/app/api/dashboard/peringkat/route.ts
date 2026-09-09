@@ -26,9 +26,10 @@ import {
 } from "@/lib/kpi-video";
 import { labelPeriodeUntukTanggal } from "@/lib/periode-qc";
 
+import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 export const dynamic = "force-dynamic";
 
-const HR = new Set(["master", "super_admin", "admin_hr"]);
+const HR = new Set(["master", "super_admin", "superadmin", "admin_hr"]);
 
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
@@ -101,7 +102,7 @@ export async function GET(request: Request) {
         .select("id, nama, avatar_url, divisi")
         .eq("aktif", true)
         .eq("status", "aktif")
-        .neq("role", "master")
+        .not("role", "in", PERAN_TERSEMBUNYI_IN)
         .limit(500),
       // Kategori KOMEN: agregat per kader per periode (view DB).
       semuaBarisData((a, b) =>

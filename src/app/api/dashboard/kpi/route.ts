@@ -31,6 +31,7 @@ import {
   targetPerPlatformDari,
 } from "@/lib/kpi-video";
 
+import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 export const dynamic = "force-dynamic";
 // Cabang ?cek=1 memeriksa sampai 40 link ke situs luar (oEmbed).
 export const maxDuration = 60;
@@ -200,7 +201,7 @@ export async function GET(request: Request) {
             .select("id")
             .eq("aktif", true)
             .eq("status", "aktif")
-            .neq("role", "master")
+            .not("role", "in", PERAN_TERSEMBUNYI_IN)
             .limit(500),
           bannedAktifPerUser(),
           db.from("app_user").select("id, kpi_video").not("kpi_video", "is", null),
@@ -275,7 +276,7 @@ export async function GET(request: Request) {
         .select("id, nama, avatar_url, divisi, kpi_video")
         .eq("aktif", true)
         .eq("status", "aktif")
-        .neq("role", "master")
+        .not("role", "in", PERAN_TERSEMBUNYI_IN)
         .limit(500),
       // Baris mentah hari itu (~ratusan) — perlu kolom platform untuk
       // aturan 5x6; view agregat tidak memuat platform.

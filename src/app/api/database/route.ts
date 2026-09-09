@@ -15,6 +15,7 @@ import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { deskripsiStruktur } from "@/lib/struktur";
 
+import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 export const dynamic = "force-dynamic";
 
 const HARI_RIWAYAT = 7;
@@ -156,7 +157,7 @@ export async function GET(request: Request) {
         .select("id, nama, avatar_url, jabatan, bidang_jabatan, divisi, sub_divisi, posisi_divisi")
         .eq("aktif", true)
         .eq("status", "aktif")
-        .neq("role", "master")
+        .not("role", "in", PERAN_TERSEMBUNYI_IN)
         .order("nama"),
       // Anti-batas-1000 (2 Sep 2026): rekap per periode & laporan video per
       // hari sama-sama bisa >1000 baris.

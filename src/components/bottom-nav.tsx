@@ -50,7 +50,12 @@ export const TAB_PER_ROLE: Record<Role, KunciTab[]> = {
   // Modul KONTEN wajib hadir untuk SEMUA peran (fitur 1.20/5): isinya
   // tarikan konten sosmed TV Rakyat hasil Ayrshare/upload-post.
   master: ["beranda", "konten", "qc", "tv", "tvrku", "chat", "profil"],
-  super_admin: ["beranda", "konten", "qc", "chat", "profil"],
+  // HR Center (qc) hanya untuk Divisi HR (10 Sep 2026) — Ketua Umum tidak
+  // lagi membawanya di tab bawaan; page.tsx menambahkannya bila adalahHR().
+  super_admin: ["beranda", "konten", "chat", "profil"],
+  // superadmin: Dashboard penuh (beranda) + Konten penuh; tab Dashboard
+  // ditambahkan dinamis. Tanpa TV Official, chat, robot, suara.
+  superadmin: ["beranda", "konten", "profil"],
   admin_hr: ["konten", "qc", "chat", "profil"],
   admin_tv: ["konten", "tv", "chat", "profil"],
   // Ketua & anggota: konten + TVR Saya + chat. Ketua tambahannya ada

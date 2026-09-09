@@ -37,6 +37,7 @@ import { DIVISI } from "@/lib/struktur";
 import type { User } from "@/types";
 import { cn } from "@/lib/utils";
 
+import { peranTersembunyi } from "@/lib/peran";
 const LABEL_CAKUPAN: Record<CakupanPengumuman, string> = {
   semua: "Semua Pengguna",
   divisi: "Per Divisi",
@@ -75,7 +76,7 @@ export function PengumumanScreen({
         setCakupanBoleh(p.cakupan_boleh);
         setJabatanPilihan(p.jabatan_pilihan);
         setCakupan((c) => (p.cakupan_boleh.includes(c) ? c : (p.cakupan_boleh[0] ?? "semua")));
-        if (r) setRoster(r.data.filter((u) => u.role !== "master"));
+        if (r) setRoster(r.data.filter((u) => !peranTersembunyi(u.role)));
       } catch (e) {
         if (hidup) toast("error", "Gagal memuat", e instanceof Error ? e.message : "");
       } finally {

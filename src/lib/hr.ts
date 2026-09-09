@@ -22,10 +22,14 @@ export function diDivisiHR(u: UserRingkas): boolean {
   return (u?.divisi ?? "").trim() === DIVISI_HR;
 }
 
-/** "Orang HR" = peran admin_hr ATAU anggota Divisi HR. */
+/**
+ * "Orang HR" = anggota Divisi HR. (10 Sep 2026: peran lama `admin_hr`
+ * tidak lagi dihitung — permintaan user "HR Center hanya untuk Divisi HR";
+ * tidak ada akun ber-peran admin_hr yang tersisa di database.)
+ */
 export function adalahHR(u: UserRingkas): boolean {
   if (!u) return false;
-  return u.role === "admin_hr" || diDivisiHR(u);
+  return diDivisiHR(u);
 }
 
 /**

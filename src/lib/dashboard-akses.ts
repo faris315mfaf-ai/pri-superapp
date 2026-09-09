@@ -35,7 +35,8 @@ function urai(pemakai: PemakaiDashboard | string): PemakaiDashboard {
  * dipakai untuk pemberian akses per-peran bagi yang TANPA jabatan.
  */
 function aksesPenuh(p: PemakaiDashboard): boolean {
-  if (p.role === "master" || p.role === "super_admin") return true;
+  // superadmin (10 Sep 2026): akun pusat dengan Dashboard SELENGKAPNYA.
+  if (p.role === "master" || p.role === "super_admin" || p.role === "superadmin") return true;
   return (p.jabatan ?? "").trim() !== "";
 }
 

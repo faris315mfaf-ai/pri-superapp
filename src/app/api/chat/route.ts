@@ -27,6 +27,7 @@ import { bacaStreakChat, catatPesanStreak } from "@/lib/streak";
 import { beriKoin } from "@/lib/koin";
 import { after } from "next/server";
 
+import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 export const dynamic = "force-dynamic";
 
 // Super admin & master berperan sebagai pengawas sistem: boleh
@@ -281,7 +282,7 @@ export async function GET(request: Request) {
         .eq("aktif", true)
         .eq("status", "aktif")
         .neq("id", idKu)
-        .neq("role", "master")
+        .not("role", "in", PERAN_TERSEMBUNYI_IN)
         .order("nama")
         .limit(200);
       return {

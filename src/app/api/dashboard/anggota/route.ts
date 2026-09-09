@@ -17,6 +17,7 @@ import { userDariToken } from "@/lib/sesi";
 import { bolehDashboard } from "@/lib/dashboard-akses";
 import { adalahHR } from "@/lib/hr";
 
+import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 export const dynamic = "force-dynamic";
 
 const HR = new Set(["master", "super_admin", "admin_hr"]);
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
         )
         .eq("aktif", true)
         .eq("status", "aktif")
-        .neq("role", "master")
+        .not("role", "in", PERAN_TERSEMBUNYI_IN)
         .limit(500),
       // Username sosmed yang dipakai komentar QC (per user, lengkap).
       db

@@ -300,10 +300,33 @@ export function SectionTitle({
 }) {
   return (
     <div className={cn("mb-3 flex items-center justify-between gap-2", className)}>
-      <h2 className="font-heading text-[15px] font-bold tracking-tight text-teks-utama">
+      <h2 className="flex items-center gap-2 font-heading text-[15px] font-bold tracking-tight text-teks-utama">
+        {/* Aksen merah (10 Sep 2026): satu bahasa visual untuk semua judul seksi. */}
+        <span className="segmen-garis" aria-hidden="true" />
         {judul}
       </h2>
       {aksi}
+    </div>
+  );
+}
+
+/**
+ * SegmenJudul (10 Sep 2026) — pembatas kelompok seksi (mis. "Hubungkan",
+ * "Unggah & Jadwal", "KPI & Laporan" di TVR Saya). Huruf kapital kecil
+ * + garis memudar, supaya terasa sebagai penanda, bukan judul kartu.
+ */
+export function SegmenJudul({ label, className }: { label: string; className?: string }) {
+  return (
+    <div className={cn("mt-6 mb-2 flex items-center gap-2.5", className)} role="presentation">
+      <span className="segmen-garis" aria-hidden="true" />
+      <span className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-teks-sekunder">
+        {label}
+      </span>
+      <span
+        className="h-px min-w-6 flex-1"
+        style={{ background: "linear-gradient(90deg, var(--glass-border), transparent)" }}
+        aria-hidden="true"
+      />
     </div>
   );
 }

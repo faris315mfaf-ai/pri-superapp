@@ -37,7 +37,7 @@ function jamWib(): string {
   return `${String(d.getUTCHours()).padStart(2, "0")}.${String(d.getUTCMinutes()).padStart(2, "0")}`;
 }
 function bolehLihat(u: { role?: string; jabatan?: string | null; divisi?: string | null }): boolean {
-  return u.role === "master" || u.role === "super_admin" || adalahHR(u) || adalahPimred(u);
+  return u.role === "master" || u.role === "super_admin" || u.role === "superadmin" || adalahHR(u) || adalahPimred(u);
 }
 
 export async function GET(request: Request) {

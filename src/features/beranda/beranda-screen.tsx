@@ -50,7 +50,7 @@ import {
   getStreakSaya,
 } from "@/services";
 import { bolehFitur } from "@/lib/fitur";
-import { jamWIB, sapaanHari, tanggalIndonesia, waktuJelasWIB } from "@/lib/format";
+import { jamWIB, namaSapaan, sapaanHari, tanggalIndonesia, waktuJelasWIB } from "@/lib/format";
 import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 import type { KomponenIkon, User } from "@/types";
 
@@ -196,7 +196,7 @@ export function BerandaScreen({
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-medium text-teks-sekunder">{sapaanHari()},</p>
           <h1 className="truncate font-heading text-[22px] leading-tight font-extrabold tracking-tight text-teks-utama">
-            {user.nama.split(" ")[0] || user.nama}
+            {namaSapaan(user)}
           </h1>
           <p className="mt-1 text-[11px] text-teks-sekunder">
             {tanggalIndonesia(`${tanggalWibPerangkat()}T00:00:00+07:00`)}
@@ -204,7 +204,7 @@ export function BerandaScreen({
           {/* Jam WIB berjalan tiap detik (spek 1.15) */}
           <JamDigital className="mt-0.5 block font-heading text-lg font-extrabold tracking-tight text-teks-utama" />
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex max-w-[62%] shrink-0 flex-wrap items-center justify-end gap-2">
           {/* Avatar saya — bercincin Mythical bila masuk 3 besar TVR */}
           <CincinJuara userId={user.id} ukuran={36}>
             {user.avatar_url ? (
@@ -233,22 +233,6 @@ export function BerandaScreen({
 
       {/* Running text juara komentar periode terakhir (3 Sep 2026) */}
       {sakelarFitur.juara_efek !== false && <RunningTextJuara />}
-
-      {/* CHAT NAKA (3 Sep 2026): untuk anggota TANPA jabatan — tombol WhatsApp
-          langsung ke NAKA. Pemegang jabatan / pengurus tidak melihatnya. */}
-      {!(user.jabatan ?? "").trim() && user.role !== "master" && user.role !== "super_admin" && (
-        <a
-          href="https://wa.me/62882007525790?text=Halo%20NAKA%2C%20saya%20anggota%20PRI%20SuperApp."
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-tekan mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[14px] font-extrabold tracking-wide text-white shadow-lg"
-          style={{ background: "linear-gradient(135deg, #25D366, #128C7E)" }}
-          aria-label="Chat NAKA lewat WhatsApp"
-        >
-          <MessageCircle className="h-5 w-5" aria-hidden="true" />
-          CHAT NAKA
-        </a>
-      )}
 
       {/* Seksi-seksi Beranda dalam kerangka TATA LETAK (fitur 1.20/1&2):
           semua bisa dilipat, diurutkan ulang, dan disembunyikan lewat

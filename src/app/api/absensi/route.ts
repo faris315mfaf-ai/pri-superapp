@@ -29,7 +29,7 @@ const RETENSI_HARI = 7;
 // Aplikasi mengompres foto ke ≤100 KB; 150 KB di sini adalah penjaga
 // terakhir supaya penyimpanan tidak membengkak lewat jalur lain.
 const MAKS_FOTO_BYTE = 150 * 1024;
-const BOLEH_LIHAT_SEMUA = new Set(["admin_hr", "super_admin", "master"]);
+const BOLEH_LIHAT_SEMUA = new Set(["admin_hr", "super_admin", "master", "superadmin"]);
 
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";

@@ -16,6 +16,7 @@ import { userDariToken } from "@/lib/sesi";
 import { adalahPimred } from "@/lib/jabatan";
 import { kirimKabar } from "@/lib/notifikasi";
 
+import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 export const dynamic = "force-dynamic";
 
 // Tugas video TV Rakyat hanya boleh diberikan ke anggota Divisi TV
@@ -93,7 +94,7 @@ export async function GET(request: Request) {
         .eq("divisi", DIVISI_TV)
         .eq("aktif", true)
         .eq("status", "aktif")
-        .neq("role", "master")
+        .not("role", "in", PERAN_TERSEMBUNYI_IN)
         .order("nama");
       if (error) {
         console.error("[tv/tugas] kandidat:", error.message);

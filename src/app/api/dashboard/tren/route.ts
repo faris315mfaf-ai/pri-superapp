@@ -15,6 +15,7 @@ import { adalahHR } from "@/lib/hr";
 import { tepatWaktu } from "@/lib/absensi-status";
 import { labelPeriodeUntukTanggal, periodeSaatIni } from "@/lib/periode-qc";
 
+import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 export const dynamic = "force-dynamic";
 
 const HR = new Set(["master", "super_admin", "admin_hr"]);
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
           .select("id", { count: "exact", head: true })
           .eq("aktif", true)
           .eq("status", "aktif")
-          .neq("role", "master"),
+          .not("role", "in", PERAN_TERSEMBUNYI_IN),
       ]);
 
       const perHari = new Map<string, { hadir: number; telat: number }>();

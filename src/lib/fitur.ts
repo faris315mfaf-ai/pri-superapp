@@ -183,6 +183,6 @@ export function bolehFitur(
   kunci: KunciFitur,
   peran?: string,
 ): boolean {
-  if (peran === "master" || peran === "super_admin") return true;
+  if (peran === "master" || peran === "super_admin" || peran === "superadmin") return true;
   return izin?.[kunci] !== false;
 }

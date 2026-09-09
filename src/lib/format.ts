@@ -203,3 +203,22 @@ export function waktuJelasWIB(iso: string | null | undefined): string {
     selisihMnt < 1 ? "baru saja" : selisihMnt < 60 ? `${selisihMnt} menit lalu` : selisihMnt < 48 * 60 ? `${Math.floor(selisihMnt / 60)} jam lalu` : `${Math.floor(selisihMnt / 1440)} hari lalu`;
   return `${hari}, ${d.getUTCDate()} ${bulan} ${dua(d.getUTCHours())}:${dua(d.getUTCMinutes())} WIB (${lalu})`;
 }
+
+/** "YYYY-MM-DD" hari ini menurut WIB (jam perangkat + 7). */
+export function tanggalWibHariIni(): string {
+  return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/**
+ * Nama untuk sapaan (10 Sep 2026): nama panggilan bila ada; kalau tidak,
+ * kata pertama — kecuali kata pertamanya cuma singkatan ("M." pada
+ * "M. Faris"), maka dua kata pertama supaya sapaannya menyapa orangnya,
+ * bukan inisialnya.
+ */
+export function namaSapaan(u: { nama: string; nama_panggilan?: string | null }): string {
+  const panggilan = (u.nama_panggilan ?? "").trim();
+  if (panggilan) return panggilan;
+  const kata = (u.nama ?? "").trim().split(/\s+/).filter(Boolean);
+  if (kata.length > 1 && kata[0].replace(/\./g, "").length <= 2) return `${kata[0]} ${kata[1]}`;
+  return kata[0] || u.nama;
+}

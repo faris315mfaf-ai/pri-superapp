@@ -19,6 +19,7 @@ import { supabase } from "@/lib/supabase";
 import { DIVISI } from "@/lib/struktur";
 import { periodeSaatIni } from "@/lib/periode-qc";
 
+import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 export const UMUR_SEGAR_MENIT = 60;
 // Aturan KPI 5x6 (31 Agu 2026): bawaan 5 video x 6 platform = 30/hari.
 // Snapshot memakai perkiraan total-based (banned per user tidak ditarik
@@ -119,7 +120,7 @@ export async function bangunSnapshot(): Promise<Record<string, unknown>> {
     const { data: roster } = await db
       .from("app_user")
       .select("id, role, divisi, jabatan, status, aktif, kpi_video, last_login_at, google_linked, wa_terverifikasi")
-      .neq("role", "master")
+      .not("role", "in", PERAN_TERSEMBUNYI_IN)
       .limit(2000);
     const aktif = (roster ?? []).filter((u) => u.aktif && u.status === "aktif");
     const perPeran: Record<string, number> = {};

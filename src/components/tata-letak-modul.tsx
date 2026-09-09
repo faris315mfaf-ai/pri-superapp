@@ -27,6 +27,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { SeksiLipat } from "@/components/seksi-lipat";
+import { SegmenJudul } from "@/components/pri-ui";
 import { getPreferensi, simpanPreferensi } from "@/services";
 import { toast } from "@/hooks/use-app-store";
 import { cn } from "@/lib/utils";
@@ -39,6 +40,13 @@ export type SeksiModul = {
   keterangan?: string;
   /** false (bawaan SeksiLipat) = mulai terlipat */
   bawaanTerbuka?: boolean;
+  /**
+   * Nama kelompok (10 Sep 2026): pembatas "SegmenJudul" dirender saat
+   * kelompok berganti dari seksi sebelumnya (mis. "Hubungkan", "KPI & Laporan").
+   */
+  segmen?: string;
+  /** true = selalu di atas mengikuti urutan bawaan, tak tergeser preferensi. */
+  pin?: boolean;
   render: () => ReactNode;
 };
 
@@ -50,8 +58,12 @@ type PrefLayout = { urutan?: unknown; sembunyi?: unknown };
  * di belakang sesuai urutan bawaannya.
  */
 function susun(seksi: SeksiModul[], urutan: string[] | null): SeksiModul[] {
-  if (!urutan || urutan.length === 0) return seksi;
-  const perId = new Map(seksi.map((s) => [s.id, s]));
+  // Seksi ber-pin selalu di depan sesuai urutan bawaannya (mis. Request
+  // Video di TVR Saya) — preferensi lama tidak bisa menggesernya ke bawah.
+  const dipin = seksi.filter((s) => s.pin);
+  const bebas = seksi.filter((s) => !s.pin);
+  if (!urutan || urutan.length === 0) return [...dipin, ...bebas];
+  const perId = new Map(bebas.map((s) => [s.id, s]));
   const hasil: SeksiModul[] = [];
   for (const id of urutan) {
     const s = perId.get(id);
@@ -60,8 +72,8 @@ function susun(seksi: SeksiModul[], urutan: string[] | null): SeksiModul[] {
       perId.delete(id);
     }
   }
-  for (const s of seksi) if (perId.has(s.id)) hasil.push(s);
-  return hasil;
+  for (const s of bebas) if (perId.has(s.id)) hasil.push(s);
+  return [...dipin, ...hasil];
 }
 
 export function TataLetakModul({
@@ -208,23 +220,37 @@ export function TataLetakModul({
         </Reorder.Group>
       ) : (
         // Mode normal: seksi ditampilkan penuh; yang disembunyikan hilang.
-        tersusun.map((s) => {
-          if (sembunyi.includes(s.id)) return null;
-          // Seksi yang sudah punya kepala/kartu sendiri dirender apa adanya.
-          if (!bungkusSeksi) return <div key={s.id}>{s.render()}</div>;
-          return (
-            <SeksiLipat
-              key={s.id}
-              id={`${modul}-${s.id}`}
-              judul={s.judul}
-              ikon={s.ikon}
-              keterangan={s.keterangan}
-              bawaanTerbuka={s.bawaanTerbuka}
-            >
-              {s.render()}
-            </SeksiLipat>
-          );
-        })
+        // Pembatas kelompok (SegmenJudul) muncul tiap kali `segmen` berganti.
+        (() => {
+          let segmenTerakhir: string | undefined;
+          return tersusun.map((s) => {
+            if (sembunyi.includes(s.id)) return null;
+            const kepala =
+              s.segmen && s.segmen !== segmenTerakhir ? <SegmenJudul label={s.segmen} /> : null;
+            if (s.segmen) segmenTerakhir = s.segmen;
+            // Seksi yang sudah punya kepala/kartu sendiri dirender apa adanya.
+            // id pembungkus dipakai untuk menggulir ke seksi (mis. dari beranda).
+            const isi = !bungkusSeksi ? (
+              s.render()
+            ) : (
+              <SeksiLipat
+                id={`${modul}-${s.id}`}
+                judul={s.judul}
+                ikon={s.ikon}
+                keterangan={s.keterangan}
+                bawaanTerbuka={s.bawaanTerbuka}
+              >
+                {s.render()}
+              </SeksiLipat>
+            );
+            return (
+              <div key={s.id} id={bungkusSeksi ? undefined : `${modul}-${s.id}`} className="scroll-mt-4">
+                {kepala}
+                {isi}
+              </div>
+            );
+          });
+        })()
       )}
     </div>
   );

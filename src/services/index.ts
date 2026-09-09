@@ -1641,6 +1641,23 @@ export type BalasanLaporanVideo = {
   dibebaskan: string | null;
   /** Laporan manual (link) yang menunggu ACC HR / ditolak 7 hari terakhir. */
   menunggu?: LaporanPending[];
+  /**
+   * Unggahan lewat aplikasi HARI INI yang tautannya belum tercatat per
+   * platform (10 Sep 2026): menunggu tautan / gagal terbit / terjadwal.
+   */
+  unggahan?: UnggahanMenunggu[];
+};
+
+export type UnggahanMenunggu = {
+  /** id tvrku_post */
+  id: string;
+  judul: string;
+  platform: string;
+  status: "menunggu" | "gagal" | "terjadwal";
+  alasan: string | null;
+  solusi: string | null;
+  dibuat_pada: string;
+  jadwal: string | null;
 };
 
 export type LaporanPending = {

@@ -16,6 +16,7 @@ import { kirimKabar } from "@/lib/notifikasi";
 import { DIVISI } from "@/lib/struktur";
 import { bacaBasis } from "@/lib/asisten-basis";
 
+import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 // Bawaan DIVERIFIKASI terhadap kunci user 28 Agu 2026: generasi 2.5
 // sudah ditutup untuk pengguna baru; 3.6-flash teruji menjawab, dan
 // 3.1-flash-live-preview adalah model bidi (suara) generasi terbaru.
@@ -342,7 +343,7 @@ export async function jalankanAlat(
           "id, nama, email, nomor_wa, wa_terverifikasi, tanggal_lahir, divisi, sub_divisi, posisi_divisi, jabatan, role, status, aktif, google_linked, last_login_at, created_at",
         )
         .ilike("nama", `%${q.replace(/[%_]/g, "")}%`)
-        .neq("role", "master")
+        .not("role", "in", PERAN_TERSEMBUNYI_IN)
         .limit(1)
         .maybeSingle();
       if (!u) return { galat: `Anggota "${q}" tidak ditemukan.` };
@@ -506,7 +507,7 @@ export async function jalankanAlat(
           .select("id")
           .eq("aktif", true)
           .eq("status", "aktif")
-          .neq("role", "master")
+          .not("role", "in", PERAN_TERSEMBUNYI_IN)
           .limit(500),
         db.from("absensi").select("user_id, jenis").eq("tanggal_wib", tanggal).limit(1000),
         db
@@ -540,7 +541,7 @@ export async function jalankanAlat(
           .select("id, kpi_video")
           .eq("aktif", true)
           .eq("status", "aktif")
-          .neq("role", "master")
+          .not("role", "in", PERAN_TERSEMBUNYI_IN)
           .limit(500),
         db
           .from("v_app_video_harian_user")
@@ -634,7 +635,7 @@ export async function jalankanAlat(
         .from("app_user")
         .select("nama, divisi, jabatan, aktif, status")
         .ilike("nama", `%${q.replace(/[%_]/g, "")}%`)
-        .neq("role", "master")
+        .not("role", "in", PERAN_TERSEMBUNYI_IN)
         .limit(5);
       return {
         hasil: (data ?? []).map((u) => ({

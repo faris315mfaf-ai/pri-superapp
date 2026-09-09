@@ -193,6 +193,17 @@ const KONFIG_ROLE: Record<
     kelasTeks: "text-sukses",
     warnaIkon: "#10B981",
   },
+  // superadmin (10 Sep 2026): akun operasional pusat, tersembunyi seperti
+  // master — labelnya netral supaya tidak mengundang perhatian.
+  superadmin: {
+    label: "Super Admin",
+    ikon: Zap,
+    latar:
+      "linear-gradient(135deg, rgba(220,38,38,0.16), rgba(245,158,11,0.22))",
+    tepi: "rgba(220, 38, 38, 0.32)",
+    kelasTeks: "text-pri",
+    warnaIkon: "#DC2626",
+  },
 };
 
 // ------------------------------------------------------------

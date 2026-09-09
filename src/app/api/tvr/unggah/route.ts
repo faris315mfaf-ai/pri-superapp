@@ -573,7 +573,16 @@ export async function POST(request: Request) {
 
       // Coba catat KPI segera (platform cepat seperti YouTube/TikTok
       // biasanya sudah punya URL); sisanya menyusul saat layar dibuka.
-      if (!jadwal) after(() => rekonsiliasiKpiOtomatis(Number(user.id)));
+      // 10 Sep 2026: dicoba DUA kali — sebagian sosmed baru memberi URL
+      // pasti puluhan detik setelah unggah; percobaan kedua menangkapnya
+      // supaya video langsung tampil di Laporan Video Hari Ini.
+      if (!jadwal) {
+        after(async () => {
+          await rekonsiliasiKpiOtomatis(Number(user.id));
+          await new Promise((r) => setTimeout(r, 25_000));
+          await rekonsiliasiKpiOtomatis(Number(user.id));
+        });
+      }
       after(bersihkanVideoKedaluwarsa);
       return {
         sukses: hasil.sukses,

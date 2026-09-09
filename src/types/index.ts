@@ -18,6 +18,9 @@
 export type Role =
   | "master"
   | "super_admin"
+  // superadmin (10 Sep 2026): akun operasional pusat — tersembunyi seperti
+  // master; Dashboard & Konten penuh; tanpa TV Official/chat/robot/suara.
+  | "superadmin"
   | "admin_hr"
   | "admin_tv"
   | "ketua"

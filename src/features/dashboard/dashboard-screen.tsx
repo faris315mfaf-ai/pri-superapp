@@ -19,8 +19,7 @@ import {
   SeksiInsightTvr,
 } from "./seksi-pemantauan";
 import { KartuPengumumanTerbaru } from "@/features/konten/beranda-anggota";
-import { sapaanHari, tanggalIndonesia } from "@/lib/format";
-import { APP_TODAY_ISO } from "@/types";
+import { namaSapaan, sapaanHari, tanggalIndonesia, tanggalWibHariIni } from "@/lib/format";
 import type { User } from "@/types";
 import { Database, Globe2, Tv, Users } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
@@ -36,8 +35,9 @@ import { CincinJuara } from "@/features/peringkat/cincin-mythic";
 
 type DashboardScreenProps = {
   user: User;
-  onBukaModulQc: () => void;
-  onBukaModulTv: () => void;
+  /** Buka HR Center — kosong bila pemakai tidak punya modulnya (10 Sep 2026). */
+  onBukaModulQc?: () => void;
+  onBukaModulTv?: () => void;
   onBukaNotifikasi: () => void;
   /** Jumlah notifikasi yang belum dibaca (badge merah lonceng) */
   jumlahBelumBaca: number;
@@ -138,7 +138,7 @@ export function DashboardScreen({
       .catch(() => {});
   });
 
-  const namaPanggilan = user.nama.split(" ")[0] || user.nama;
+  const namaPanggilan = namaSapaan(user);
 
   return (
     <div className="kolom-aplikasi px-4 pt-5 pb-32">
@@ -150,12 +150,16 @@ export function DashboardScreen({
             {namaPanggilan}
           </h1>
           <p className="mt-1 text-[11px] text-teks-sekunder">
-            {tanggalIndonesia(APP_TODAY_ISO)}
+            {/* 10 Sep 2026: dulu memakai konstanta APP_TODAY_ISO (23 Agu) — tanggalnya
+                tidak pernah berubah. Kini tanggal WIB hari ini sungguhan. */}
+            {tanggalIndonesia(`${tanggalWibHariIni()}T00:00:00+07:00`)}
           </p>
           <JamDigital className="mt-0.5 block font-heading text-lg font-extrabold tracking-tight text-teks-utama" />
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        {/* Kumpulan ikon boleh melipat ke baris kedua supaya sapaan tidak
+            tertutup di layar sempit (10 Sep 2026). */}
+        <div className="flex max-w-[62%] shrink-0 flex-wrap items-center justify-end gap-2">
           {/* Avatar — bercincin Mythical bila masuk 3 besar TVR */}
           <CincinJuara userId={user.id} ukuran={48}>
             <AvatarInisial nama={user.nama} ukuran="lg" />
@@ -205,7 +209,7 @@ export function DashboardScreen({
       <div className="mt-4">
         <FadeInUp>
           <RingkasanUtama
-            onBukaKomen={onBukaModulQc}
+            onBukaKomen={onBukaModulQc ?? onBukaKepatuhan}
             onBukaAbsensi={onBukaAbsensi}
             onBukaKerja={onBukaDatabase}
             onBukaVideo={onBukaKpiVideo}

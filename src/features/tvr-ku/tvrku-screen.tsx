@@ -23,24 +23,25 @@ import { useEffect, useState } from "react";
 import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  AlertTriangle,
+  Ban,
+  BarChart3,
   Clapperboard,
   Download,
   ExternalLink,
+  FileText,
+  Globe,
+  Hourglass,
   Link2,
   Loader2,
   Pencil,
   Plus,
+  Radio,
+  RefreshCw,
+  ShieldCheck,
   Trash2,
   Video,
-  Globe,
   X,
-  RefreshCw,
-  BarChart3,
-  Ban,
-  Hourglass,
-  Radio,
-  ShieldCheck,
-  FileText,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { EmptyState, FadeInUp, GlassSkeleton, SectionTitle, StatusBadge, ThemeToggle } from "@/components/pri-ui";
@@ -65,6 +66,7 @@ import {
   type KerjaKpi,
   type LaporanVideo,
   type LaporanPending,
+  type UnggahanMenunggu,
   kirimLaporanBatch,
   getKeywordWajib,
   hubungkanSosmedTvr,
@@ -516,6 +518,7 @@ export function TvrKuScreen({
   onBukaNotifikasi,
   hanyaSeksi,
   tanpaHeader = false,
+  gulirKe = null,
 }: {
   user: User;
   onBukaNotifikasi?: () => void;
@@ -523,6 +526,8 @@ export function TvrKuScreen({
   hanyaSeksi?: string[];
   /** true = tanpa kepala "TV Rakyat Saya" (layar induk sudah punya kepala). */
   tanpaHeader?: boolean;
+  /** Gulir ke seksi tertentu (id) saat dibuka dari beranda ringkas (10 Sep 2026). */
+  gulirKe?: { seksi: string; tik: number } | null;
 }) {
   // KENDALI AKUN (4 Sep 2026): admin PALUGODAM boleh beralih menjadi anggota
   // divisinya — hanya di modul ini. Saat mengendalikan, seluruh permintaan
@@ -549,6 +554,8 @@ export function TvrKuScreen({
   const [akun, setAkun] = useState<AkunTvr[] | null>(null);
   const [laporan, setLaporan] = useState<LaporanVideo[]>([]);
   const [menunggu, setMenunggu] = useState<LaporanPending[]>([]);
+  // Unggahan hari ini yang tautannya belum tercatat (10 Sep 2026).
+  const [unggahan, setUnggahan] = useState<UnggahanMenunggu[]>([]);
   const [kpiTarget, setKpiTarget] = useState(5);
   // Persen KETAT per platform & status tercapai dari server (2 Sep 2026).
   const [kpiPersen, setKpiPersen] = useState<number | null>(null);
@@ -579,6 +586,7 @@ export function TvrKuScreen({
         setAkun(a);
         setLaporan(l.data);
         setMenunggu(l.menunggu ?? []);
+        setUnggahan(l.unggahan ?? []);
         setKpiTarget(l.kpi_target);
         setKpiPersen(l.kpi_persen ?? null);
         setKpiTercapai(l.kpi_tercapai ?? null);
@@ -598,6 +606,15 @@ export function TvrKuScreen({
       hidup = false;
     };
   }, [muatUlang, versiSegar]);
+  // Gulir ke seksi yang diminta beranda ringkas — setelah data siap supaya
+  // posisinya tidak bergeser lagi oleh kartu yang baru muncul.
+  useEffect(() => {
+    if (!gulirKe || memuat) return;
+    const t = setTimeout(() => {
+      document.getElementById(`tvrku-${gulirKe.seksi}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [gulirKe, memuat]);
 
   const jumlahHariIni = laporan.length;
   const persenKpi = kpiPersen ?? Math.min(100, Math.round((100 * jumlahHariIni) / kpiTarget));
@@ -724,6 +741,8 @@ export function TvrKuScreen({
           ? [
               {
                 id: "kendali-akun",
+                pin: true,
+                segmen: "Admin PALUGODAM",
                 judul: "Kendali Akun PALUGODAM",
                 ikon: ShieldCheck,
                 keterangan: "Masuk penuh sebagai akun anggota Divisi PALUGODAM tanpa kata sandi",
@@ -735,6 +754,8 @@ export function TvrKuScreen({
               },
               {
                 id: "rekap-palugodam",
+                pin: true,
+                segmen: "Admin PALUGODAM",
                 judul: "Rekap Laporan Anggota PALUGODAM",
                 ikon: FileText,
                 keterangan: "Generate laporan per anggota + tambah/ubah link (6 Sep 2026)",
@@ -746,84 +767,25 @@ export function TvrKuScreen({
               },
             ]
           : []),
-        { id: "kpi", judul: "KPI Video Hari Ini", ikon: Video, render: () => (
-      <FadeInUp>
-        <GlassCard className="flex items-center gap-4 p-4">
-          <ProgressRing value={dibebaskan ? 100 : persenKpi} size={72}>
-            <span className="font-heading text-base font-extrabold text-teks-utama">
-              {dibebaskan ? "✓" : `${jumlahHariIni}/${kpiTarget}`}
-            </span>
-          </ProgressRing>
-          <div className="min-w-0 flex-1">
-            <p className="font-heading text-sm font-bold text-teks-utama">KPI Video Hari Ini</p>
-            <p className="mt-1 text-xs leading-relaxed text-teks-sekunder">
-              {dibebaskan
-                ? `Kewajiban dibebaskan — status ${dibebaskan} Anda hari ini disetujui.`
-                : targetTercapai
-                  ? `Target ${kpiTarget} video tercapai. Kerja bagus!`
-                  : `Lengkapi ${Math.max(0, kpiTarget - jumlahHariIni)} video lagi — minimal 5 di TIAP sosmed aktif.`}
-            </p>
-            {kpiRencana && kpiRencana.rencana_total > 0 && (
-              <p className="mt-1.5 text-[11px] text-teks-sekunder">
-                Rencana kerja hari ini: {kpiRencana.rencana_selesai}/{kpiRencana.rencana_total}{" "}
-                selesai ({kpiRencana.kpi_persen ?? 0}%)
-              </p>
-            )}
-          </div>
-        </GlassCard>
-      </FadeInUp>
-        ) },
-        { id: "tugas", judul: "Tugas & Unggah Video", ikon: Clapperboard, render: () => (
-      <>
-      {/* Tugas link dari Pimred + unggah video tugas (tampil hanya
-          bila memang ada tugas — anggota lain tidak terganggu) */}
-      <PanelTugasSaya />
-      <KirimVideoManual hanyaBilaAdaTugas />
-      </>
-        ) },
-        { id: "grafik", judul: "Laporan 7 Hari Terakhir", ikon: Video, render: () => (
-      <FadeInUp delay={0.06}>
-        <div className="mt-4">
-        <SeksiLipat id="tvrku-grafik" judul="Laporan 7 Hari Terakhir" ikon={Video} bawaanTerbuka>
-          <div className="flex h-24 items-end justify-between gap-1.5">
-            {riwayat7.map((r) => {
-              const capai = r.jumlah >= kpiTarget;
-              return (
-                <div key={r.tanggal} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-                  <span className="angka-tab text-[10px] font-bold text-teks-utama">
-                    {r.jumlah}
-                  </span>
-                  <div
-                    className={cn("w-full max-w-[26px] rounded-t-md", capai ? "bg-sukses" : "bg-pri/60")}
-                    style={{ height: `${Math.max(6, (r.jumlah / maksGrafik) * 64)}px` }}
-                    aria-hidden="true"
-                  />
-                  <span className="text-[9px] text-teks-sekunder">
-                    {NAMA_HARI_PENDEK[new Date(`${r.tanggal}T00:00:00+07:00`).getDay()]}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <p className="mt-2 text-center text-[10px] text-teks-sekunder/80">
-            Hijau = target {kpiTarget} video tercapai
-          </p>
-        </SeksiLipat>
+        { id: "request-video", pin: true, segmen: "Request Video", judul: "Request Video TV Rakyat", ikon: Radio, render: () => (
+      <FadeInUp delay={0.09}>
+        <div className="mt-1">
+          <RequestVideoPanel />
         </div>
       </FadeInUp>
         ) },
-        { id: "akun", judul: "Akun TV Rakyat Saya", ikon: Link2, render: () => (
-      <FadeInUp delay={0.1}>
-        {/* Tombol "+ Tambah" DIHAPUS (31 Agu 2026): akun tidak lagi
-            diketik manual — semuanya datang otomatis dari akun yang
-            Anda LOGIN lewat upload-post. */}
-        <div className="mt-5">
-          <SectionTitle judul="Akun TV Rakyat Saya" className="!mt-0" />
-        </div>
-
-        {/* Penautan sosmed sungguhan (spek 1.17): login akunmu lewat
-            halaman penyedia — 1 pengguna = 1 profil. */}
-        <div className="mt-2 flex gap-2">
+        { id: "akun", segmen: "Hubungkan", judul: "Hubungkan TV Rakyat Saya", ikon: Link2, render: () => (
+      <FadeInUp delay={0.04}>
+        {/* 10 Sep 2026: "Akun TV Rakyat Saya" → "Hubungkan TV Rakyat Saya":
+            bisa diminimalkan, dan Website TV Rakyat ikut di segmen ini. */}
+        <SeksiLipat
+          id="tvrku-hubungkan"
+          judul="Hubungkan TV Rakyat Saya"
+          ikon={Link2}
+          bawaanTerbuka
+          keterangan="Sosmed & website TV Rakyat Anda"
+        >
+        <div className="flex gap-2">
           <button
             type="button"
             disabled={sedangHubung}
@@ -917,17 +879,69 @@ export function TvrKuScreen({
             ))}
           </div>
         )}
-      </FadeInUp>
-        ) },
-        { id: "request-video", judul: "Request Video TV Rakyat", ikon: Radio, render: () => (
-      <FadeInUp delay={0.09}>
-        <SectionTitle judul="Request Video dari TV Rakyat" />
-        <div className="mt-2.5">
-          <RequestVideoPanel />
+        <div className="mt-4 flex items-center justify-between">
+          <p className="flex items-center gap-1.5 text-[12.5px] font-bold text-teks-utama">
+            <Globe className="h-4 w-4 text-pri" aria-hidden="true" />
+            Website TV Rakyat
+          </p>
+          <button
+            type="button"
+            onClick={() => setModalWebsite(true)}
+            className="btn-tekan flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold text-white"
+            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            Tambah
+          </button>
         </div>
+        {(akun ?? []).filter((a) => a.platform === "website").length === 0 ? (
+          <p className="mt-2 text-[11.5px] text-teks-sekunder">
+            Belum ada website terdaftar.
+          </p>
+        ) : (
+          <div className="mt-2 flex flex-col gap-2">
+            {(akun ?? [])
+              .filter((a) => a.platform === "website")
+              .map((a) => (
+                <GlassCard key={a.id} className="flex items-center gap-3 p-3">
+                  <PlatformIcon platform="website" size={18} denganWadah />
+                  <a
+                    href={urlProfilSosmed("website", a.username)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-tekan min-w-0 flex-1"
+                  >
+                    <p className="truncate text-sm font-bold text-teks-utama">
+                      {a.username}
+                      <ExternalLink
+                        className="ml-1 inline h-3 w-3 text-teks-sekunder"
+                        aria-hidden="true"
+                      />
+                    </p>
+                    <p className="text-[11px] text-teks-sekunder">Website</p>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void hapusAkunTvr(a.id)
+                        .then(() => setMuatUlang((n) => n + 1))
+                        .catch((e) =>
+                          toast("error", "Gagal menghapus", e instanceof Error ? e.message : ""),
+                        );
+                    }}
+                    aria-label={`Hapus ${a.username}`}
+                    className="btn-tekan p-1.5 text-teks-sekunder/70"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </GlassCard>
+              ))}
+          </div>
+        )}
+        </SeksiLipat>
       </FadeInUp>
         ) },
-        { id: "unggah-sosmed", judul: "Unggah ke Sosmed Saya", ikon: Clapperboard, render: () => (
+        { id: "unggah-sosmed", segmen: "Unggah & Jadwal", judul: "Unggah ke Sosmed Saya", ikon: Clapperboard, render: () => (
       <FadeInUp delay={0.1}>
         <SectionTitle judul="Unggah ke Sosmed Saya" />
         <div className="mt-2.5">
@@ -1006,77 +1020,63 @@ export function TvrKuScreen({
               },
             ]
           : []),
-        { id: "insight-saya", judul: "Insight Akun Saya", ikon: BarChart3, render: () => (
-      <FadeInUp delay={0.11}>
-        <SeksiLipat id="tvrku-insight" judul="Insight Akun Saya" ikon={BarChart3} bawaanTerbuka>
-          <InsightSayaPanel />
-        </SeksiLipat>
-      </FadeInUp>
+        { id: "tugas", segmen: "Unggah & Jadwal", judul: "Tugas & Unggah Video", ikon: Clapperboard, render: () => (
+      <>
+      {/* Tugas link dari Pimred + unggah video tugas (tampil hanya
+          bila memang ada tugas — anggota lain tidak terganggu) */}
+      <PanelTugasSaya />
+      <KirimVideoManual hanyaBilaAdaTugas />
+      </>
         ) },
-        { id: "website", judul: "Website TV Rakyat", ikon: Globe, render: () => (
-      <FadeInUp delay={0.12}>
-        <div className="mt-5 flex items-center justify-between">
-          <SectionTitle judul="Website TV Rakyat" className="!mt-0" />
-          <button
-            type="button"
-            onClick={() => setModalWebsite(true)}
-            className="btn-tekan flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold text-white"
-            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-            Tambah
-          </button>
-        </div>
-        {(akun ?? []).filter((a) => a.platform === "website").length === 0 ? (
-          <p className="mt-2 text-[11.5px] text-teks-sekunder">
-            Belum ada website terdaftar.
-          </p>
-        ) : (
-          <div className="mt-2 flex flex-col gap-2">
-            {(akun ?? [])
-              .filter((a) => a.platform === "website")
-              .map((a) => (
-                <GlassCard key={a.id} className="flex items-center gap-3 p-3">
-                  <PlatformIcon platform="website" size={18} denganWadah />
-                  <a
-                    href={urlProfilSosmed("website", a.username)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-tekan min-w-0 flex-1"
-                  >
-                    <p className="truncate text-sm font-bold text-teks-utama">
-                      {a.username}
-                      <ExternalLink
-                        className="ml-1 inline h-3 w-3 text-teks-sekunder"
-                        aria-hidden="true"
-                      />
-                    </p>
-                    <p className="text-[11px] text-teks-sekunder">Website</p>
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void hapusAkunTvr(a.id)
-                        .then(() => setMuatUlang((n) => n + 1))
-                        .catch((e) =>
-                          toast("error", "Gagal menghapus", e instanceof Error ? e.message : ""),
-                        );
-                    }}
-                    aria-label={`Hapus ${a.username}`}
-                    className="btn-tekan p-1.5 text-teks-sekunder/70"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                </GlassCard>
-              ))}
+        { id: "kpi", segmen: "KPI & Laporan", judul: "KPI Video Hari Ini", ikon: Video, render: () => (
+      <FadeInUp>
+        <GlassCard className="flex items-center gap-4 p-4">
+          <ProgressRing value={dibebaskan ? 100 : persenKpi} size={72}>
+            <span className="font-heading text-base font-extrabold text-teks-utama">
+              {dibebaskan ? "✓" : `${jumlahHariIni}/${kpiTarget}`}
+            </span>
+          </ProgressRing>
+          <div className="min-w-0 flex-1">
+            <p className="font-heading text-sm font-bold text-teks-utama">KPI Video Hari Ini</p>
+            <p className="mt-1 text-xs leading-relaxed text-teks-sekunder">
+              {dibebaskan
+                ? `Kewajiban dibebaskan — status ${dibebaskan} Anda hari ini disetujui.`
+                : targetTercapai
+                  ? `Target ${kpiTarget} video tercapai. Kerja bagus!`
+                  : `Lengkapi ${Math.max(0, kpiTarget - jumlahHariIni)} video lagi — minimal 5 di TIAP sosmed aktif.`}
+            </p>
+            {kpiRencana && kpiRencana.rencana_total > 0 && (
+              <p className="mt-1.5 text-[11px] text-teks-sekunder">
+                Rencana kerja hari ini: {kpiRencana.rencana_selesai}/{kpiRencana.rencana_total}{" "}
+                selesai ({kpiRencana.kpi_persen ?? 0}%)
+              </p>
+            )}
           </div>
-        )}
+        </GlassCard>
       </FadeInUp>
         ) },
-        { id: "laporan", judul: "Laporan Video Hari Ini", ikon: Video, render: () => (
+        { id: "laporan", segmen: "KPI & Laporan", judul: "Laporan Video Hari Ini", ikon: Video, render: () => (
       <FadeInUp delay={0.14}>
         <SeksiLipat id="tvrku-laporan" judul="Laporan Video Hari Ini" ikon={Video} bawaanTerbuka>
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-between gap-2">
+          {/* Ringkasan + segarkan (10 Sep 2026): unggahan yang tautannya masih
+              ditunggu ikut ditampilkan supaya tak ada video yang "hilang". */}
+          <p className="min-w-0 truncate text-[11px] text-teks-sekunder">
+            {laporan.length} tercatat
+            {unggahan.filter((u) => u.status === "menunggu").length > 0 &&
+              ` · ${unggahan.filter((u) => u.status === "menunggu").length} menunggu tautan`}
+            {unggahan.filter((u) => u.status === "gagal").length > 0 &&
+              ` · ${unggahan.filter((u) => u.status === "gagal").length} gagal terbit`}
+          </p>
+          <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setMuatUlang((n) => n + 1)}
+            aria-label="Segarkan laporan"
+            className="glass btn-tekan flex h-7 w-7 items-center justify-center rounded-full text-teks-utama"
+          >
+            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
           <button
             type="button"
             onClick={() => setModalLaporan(true)}
@@ -1086,10 +1086,44 @@ export function TvrKuScreen({
             <Plus className="h-3.5 w-3.5" aria-hidden="true" />
             Tambah Laporan
           </button>
+          </div>
         </div>
+        {unggahan.length > 0 && (
+          <div className="mt-2 flex flex-col gap-2">
+            {unggahan.map((u) => (
+              <GlassCard key={`${u.id}-${u.platform}`} className="flex items-center gap-3 p-3">
+                <span
+                  className={cn(
+                    "flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
+                    u.status === "gagal" ? "bg-gagal/12 text-gagal" : "bg-amber-500/12 text-amber-500",
+                    u.status === "menunggu" && "denyut-tunggu",
+                  )}
+                  aria-hidden="true"
+                >
+                  {u.status === "gagal" ? <AlertTriangle className="h-3.5 w-3.5" /> : <Hourglass className="h-3.5 w-3.5" />}
+                </span>
+                <PlatformIcon platform={u.platform} size={15} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-semibold text-teks-utama">{u.judul || "Video tanpa judul"}</p>
+                  <p className="mt-0.5 text-[10px] leading-snug text-teks-sekunder">
+                    {u.status === "gagal"
+                      ? `Gagal terbit di ${labelPlatform(u.platform)}: ${u.alasan}${u.solusi ? ` — ${u.solusi}` : ""}`
+                      : u.status === "terjadwal"
+                        ? `Terjadwal tayang ${jamWIB(u.jadwal ?? u.dibuat_pada)} · tautan menyusul setelah tayang`
+                        : `Diunggah ${jamWIB(u.dibuat_pada)} · menunggu tautan dari ${labelPlatform(u.platform)}`}
+                  </p>
+                </div>
+                <StatusBadge
+                  label={u.status === "gagal" ? "gagal" : u.status === "terjadwal" ? "terjadwal" : "menunggu"}
+                  warna={u.status === "gagal" ? "merah" : "kuning"}
+                />
+              </GlassCard>
+            ))}
+          </div>
+        )}
         {memuat ? (
           <GlassSkeleton className="mt-2 h-16 rounded-2xl" />
-        ) : laporan.length === 0 ? (
+        ) : laporan.length === 0 && unggahan.length === 0 ? (
           <GlassCard className="mt-2 p-1">
             <EmptyState
               ikon={Link2}
@@ -1200,14 +1234,52 @@ export function TvrKuScreen({
         </SeksiLipat>
       </FadeInUp>
         ) },
-        { id: "rangkuman", judul: "Rangkuman Link Harian", ikon: FileText, keterangan: "Laporan link video per sosmed siap kirim ke WhatsApp", render: () => (
+        { id: "grafik", segmen: "KPI & Laporan", judul: "Laporan 7 Hari Terakhir", ikon: Video, render: () => (
+      <FadeInUp delay={0.06}>
+        <div className="mt-4">
+        <SeksiLipat id="tvrku-grafik" judul="Laporan 7 Hari Terakhir" ikon={Video} bawaanTerbuka>
+          <div className="flex h-24 items-end justify-between gap-1.5">
+            {riwayat7.map((r) => {
+              const capai = r.jumlah >= kpiTarget;
+              return (
+                <div key={r.tanggal} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+                  <span className="angka-tab text-[10px] font-bold text-teks-utama">
+                    {r.jumlah}
+                  </span>
+                  <div
+                    className={cn("w-full max-w-[26px] rounded-t-md", capai ? "bg-sukses" : "bg-pri/60")}
+                    style={{ height: `${Math.max(6, (r.jumlah / maksGrafik) * 64)}px` }}
+                    aria-hidden="true"
+                  />
+                  <span className="text-[9px] text-teks-sekunder">
+                    {NAMA_HARI_PENDEK[new Date(`${r.tanggal}T00:00:00+07:00`).getDay()]}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-center text-[10px] text-teks-sekunder/80">
+            Hijau = target {kpiTarget} video tercapai
+          </p>
+        </SeksiLipat>
+        </div>
+      </FadeInUp>
+        ) },
+        { id: "rangkuman", segmen: "KPI & Laporan", judul: "Rangkuman Link Harian", ikon: FileText, keterangan: "Laporan link video per sosmed siap kirim ke WhatsApp", render: () => (
       <FadeInUp delay={0.15}>
         <div className="mt-5 md:mt-0">
           <RangkumanLink />
         </div>
       </FadeInUp>
         ) },
-        { id: "sosmed-terblokir", judul: "Sosmed Terblokir (KPI)", ikon: Ban, render: () => (
+        { id: "insight-saya", segmen: "KPI & Laporan", judul: "Insight Akun Saya", ikon: BarChart3, render: () => (
+      <FadeInUp delay={0.11}>
+        <SeksiLipat id="tvrku-insight" judul="Insight Akun Saya" ikon={BarChart3} bawaanTerbuka>
+          <InsightSayaPanel />
+        </SeksiLipat>
+      </FadeInUp>
+        ) },
+        { id: "sosmed-terblokir", segmen: "KPI & Laporan", judul: "Sosmed Terblokir (KPI)", ikon: Ban, render: () => (
       <FadeInUp delay={0.16}>
         <div className="mt-5 md:mt-0">
           <PermohonanBlokir />

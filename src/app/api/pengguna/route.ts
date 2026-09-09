@@ -14,6 +14,7 @@ import { pastikanStrukturSah } from "@/lib/struktur";
 import { aksesDashboardRole } from "@/lib/dashboard-akses";
 import { adalahHR, diDivisiHR } from "@/lib/hr";
 
+import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 export const dynamic = "force-dynamic";
 
 // Peran yang bisa DIPILIH dari panel kini hanya Ketua dan Anggota.
@@ -77,7 +78,7 @@ export async function GET(request: Request) {
       // Peran master tidak pernah tampil di panel mana pun — disaring
       // di server, bukan disembunyikan di layar, supaya tidak bisa
       // dilihat lewat pemeriksaan jaringan.
-      .neq("role", "master")
+      .not("role", "in", PERAN_TERSEMBUNYI_IN)
       .order("status", { ascending: true })
       .order("created_at", { ascending: false })
       .limit(500);

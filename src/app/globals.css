@@ -1213,3 +1213,45 @@ html[data-mode-simpel="1"].dark body {
   display: inline-block;
   animation: pet-melangkah 0.28s ease-in-out infinite alternate;
 }
+
+/* ============================================================
+   AKSEN MERAH & UBIN BERANDA (10 Sep 2026)
+   Dipakai SectionTitle/SegmenJudul (garis aksen) dan BerandaSimpelGlass
+   (ubin ringkas). Satu tempat supaya seluruh aplikasi seragam.
+   ============================================================ */
+.segmen-garis {
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #dc2626, #b91c1c);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.45);
+}
+.ubin-ikon {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow: 0 8px 18px rgba(220, 38, 38, 0.35);
+}
+.ubin-ikon-hijau {
+  background: linear-gradient(135deg, #25d366, #128c7e);
+  box-shadow: 0 8px 18px rgba(37, 211, 102, 0.35);
+}
+.ubin-beranda {
+  transition:
+    box-shadow 0.25s ease,
+    transform var(--durasi-tekan) var(--ease-keluar);
+}
+.btn-tekan:active:not(:disabled) .ubin-beranda {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+}
+/* Denyut pelan untuk status "menunggu tautan" (laporan video hari ini). */
+@keyframes denyut-tunggu {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.denyut-tunggu {
+  animation: denyut-tunggu 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .denyut-tunggu { animation: none; }
+}

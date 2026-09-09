@@ -10,6 +10,8 @@
 export function bolehPet(u: { role?: string | null; jabatan?: string | null } | null | undefined): boolean {
   if (!u) return false;
   if (u.role === "master") return true;
+  // superadmin (10 Sep 2026): akun operasional pusat — tanpa fitur robot.
+  if (u.role === "superadmin") return false;
   return (u.jabatan ?? "").trim() === "";
 }
 

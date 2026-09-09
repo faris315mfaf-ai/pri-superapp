@@ -15,6 +15,7 @@ import { wewenangTv } from "@/lib/tv-tim";
 import { kirimKabar } from "@/lib/notifikasi";
 import { maksUploadMb, retensiJamTv, videoBaruTampil } from "@/lib/pengaturan-tv";
 
+import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
@@ -53,7 +54,7 @@ export async function GET(request: Request) {
         .select("id, nama, avatar_url, jabatan, divisi")
         .eq("aktif", true)
         .eq("status", "aktif")
-        .neq("role", "master")
+        .not("role", "in", PERAN_TERSEMBUNYI_IN)
         .order("nama"),
     ]);
 

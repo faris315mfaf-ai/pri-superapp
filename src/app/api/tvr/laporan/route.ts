@@ -18,6 +18,7 @@ import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { beriKoin } from "@/lib/koin";
 import { kirimKabar } from "@/lib/notifikasi";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
+import { solusiGagal } from "@/lib/batas-caption";
 import { selesaikanRequest } from "@/lib/tvr-request";
 import {
   bannedAktifPerUser,
@@ -45,7 +46,7 @@ async function targetKpiUser(userId: number): Promise<number> {
 
 // Bilibili (6 Sep 2026) boleh dilaporkan walau bukan bagian KPI 5x6.
 const PLATFORM_SAH = new Set<string>([...PLATFORM_KPI, "bilibili"]);
-const BOLEH_LIHAT_SEMUA = new Set(["admin_hr", "super_admin", "master"]);
+const BOLEH_LIHAT_SEMUA = new Set(["admin_hr", "super_admin", "master", "superadmin"]);
 
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
@@ -197,6 +198,43 @@ export async function GET(request: Request) {
     }
 
     // --- Laporan milik sendiri ---
+    // UNGGAHAN HARI INI YANG BELUM TERCATAT (10 Sep 2026): setiap video yang
+    // diunggah lewat aplikasi WAJIB tampil di daftar — walau sosmednya belum
+    // memberi tautan pasti. Statusnya per platform: menunggu / gagal /
+    // terjadwal. Bila masih ada yang menunggu, tautannya dicoba diambil
+    // SEKARANG (anggaran 8 dtk) supaya pembukaan pertama sudah lengkap.
+    const uid = Number(user.id);
+    const awalHari = new Date(`${tanggal}T00:00:00+07:00`).toISOString();
+    const akhirHari = new Date(`${tanggal}T23:59:59.999+07:00`).toISOString();
+    const { data: postHariIni } = await db
+      .from("tvrku_post")
+      .select("id, judul, platforms, kpi_tercatat, jadwal, dibuat_pada, hasil")
+      .eq("user_id", uid)
+      .or(
+        `and(jadwal.is.null,dibuat_pada.gte.${awalHari},dibuat_pada.lte.${akhirHari}),and(jadwal.gte.${awalHari},jadwal.lte.${akhirHari})`,
+      )
+      .order("id", { ascending: false })
+      .limit(40);
+    const daftarStr = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
+    const posts = (postHariIni ?? []).map((p) => {
+      const hasil = (p.hasil && typeof p.hasil === "object" && !Array.isArray(p.hasil) ? p.hasil : {}) as Record<string, unknown>;
+      const alasanPer = (hasil.kpi_gagal_alasan && typeof hasil.kpi_gagal_alasan === "object" ? hasil.kpi_gagal_alasan : {}) as Record<string, string>;
+      return {
+        id: Number(p.id),
+        judul: String(p.judul ?? ""),
+        platforms: daftarStr(p.platforms),
+        tercatat: new Set(daftarStr(p.kpi_tercatat)),
+        gagal: new Set(daftarStr(hasil.kpi_gagal)),
+        alasanPer,
+        jadwal: p.jadwal ? String(p.jadwal) : null,
+        dibuat_pada: String(p.dibuat_pada),
+      };
+    });
+    const adaMenunggu = posts.some(
+      (p) => !(p.jadwal && Date.parse(p.jadwal) > Date.now()) && p.platforms.some((pf) => !p.tercatat.has(pf) && !p.gagal.has(pf)),
+    );
+    if (adaMenunggu) await rekonsiliasiKpiOtomatis(uid, { anggaranMs: 8_000 }).catch(() => 0);
+
     const [{ data, error }, jenisBebas, targetKu, bannedKu] = await Promise.all([
       db
         .from("laporan_video")
@@ -234,6 +272,30 @@ export async function GET(request: Request) {
 
     // KPI OTOMATIS: unggahan lewat aplikasi yang URL postingannya sudah
     // terbit dicatat sendiri (hasilnya tampak pada pembukaan berikutnya).
+    // Tautan yang sudah tercatat untuk unggahan hari ini (tanggal laporan
+    // bisa berbeda dari tanggal unggah, jadi dicari per id unggahan).
+    const idPost = posts.map((p) => p.id);
+    const { data: tautanPost } = idPost.length
+      ? await db.from("laporan_video").select("tvrku_post_id, platform").eq("user_id", uid).in("tvrku_post_id", idPost)
+      : { data: [] as { tvrku_post_id: unknown; platform: unknown }[] };
+    const sudahTercatat = new Set((tautanPost ?? []).map((t) => `${Number(t.tvrku_post_id)}|${String(t.platform)}`));
+    const unggahan: {
+      id: string; judul: string; platform: string; status: "menunggu" | "gagal" | "terjadwal";
+      alasan: string | null; solusi: string | null; dibuat_pada: string; jadwal: string | null;
+    }[] = [];
+    for (const p of posts) {
+      const terjadwal = Boolean(p.jadwal && Date.parse(p.jadwal) > Date.now());
+      for (const pf of p.platforms) {
+        if (p.tercatat.has(pf) || sudahTercatat.has(`${p.id}|${pf}`)) continue;
+        if (p.gagal.has(pf)) {
+          const pesan = String(p.alasanPer[pf] ?? "");
+          const { ringkas, solusi } = solusiGagal(pf, pesan);
+          unggahan.push({ id: String(p.id), judul: p.judul, platform: pf, status: "gagal", alasan: ringkas || pesan || "gagal terbit", solusi, dibuat_pada: p.dibuat_pada, jadwal: p.jadwal });
+        } else {
+          unggahan.push({ id: String(p.id), judul: p.judul, platform: pf, status: terjadwal ? "terjadwal" : "menunggu", alasan: null, solusi: null, dibuat_pada: p.dibuat_pada, jadwal: p.jadwal });
+        }
+      }
+    }
     after(() => rekonsiliasiKpiOtomatis(Number(user.id)));
 
     return {
@@ -241,6 +303,7 @@ export async function GET(request: Request) {
       hari_ini: tanggalWibSekarang(),
       data: daftar,
       menunggu: (pending ?? []).map((d) => ({ ...d, id: String(d.id) })),
+      unggahan,
       // kpi_target kini TOTAL (per-platform x platform aktif) supaya
       // tampilan "x/target" langsung benar tanpa mengubah pemanggil lama.
       kpi_target: kpi.target_total,

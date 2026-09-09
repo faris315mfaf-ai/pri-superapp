@@ -20,6 +20,7 @@ import {
   targetPerPlatformDari,
 } from "@/lib/kpi-video";
 
+import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 export const dynamic = "force-dynamic";
 
 /** Cache mikro per-instance (lihat catatan di dalam GET). */
@@ -77,7 +78,7 @@ export async function GET(request: Request) {
         .select("id, kpi_video")
         .eq("aktif", true)
         .eq("status", "aktif")
-        .neq("role", "master")
+        .not("role", "in", PERAN_TERSEMBUNYI_IN)
         .limit(500),
       // 3. KPI kerja hari ini — view harian per orang.
       db

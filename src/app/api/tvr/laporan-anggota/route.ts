@@ -21,7 +21,7 @@ const PLATFORM = new Set(["instagram", "tiktok", "youtube", "facebook", "threads
 
 type PenggunaGerbang = { role?: string; jabatan?: string | null; divisi?: string | null; posisi_divisi?: string | null };
 function bolehKelola(u: PenggunaGerbang): boolean {
-  return u.role === "master" || u.role === "super_admin" || adalahHR(u) || adalahPimred(u);
+  return u.role === "master" || u.role === "super_admin" || u.role === "superadmin" || adalahHR(u) || adalahPimred(u);
 }
 /** 6 Sep 2026: Admin PALUGODAM (kepala divisi) boleh mengelola — hanya anggota divisinya. */
 function bolehAkses(u: PenggunaGerbang): boolean {
