@@ -330,3 +330,26 @@ export function SegmenJudul({ label, className }: { label: string; className?: s
     </div>
   );
 }
+
+/**
+ * TitikOnline (10 Sep 2026) — titik hijau kecil penanda "sedang membuka
+ * aplikasi". Ditempel di pojok kanan-bawah avatar; pembungkusnya harus
+ * `relative`. Diberi cincin sewarna latar supaya tetap terbaca di atas
+ * foto yang ramai.
+ */
+export function TitikOnline({ ukuran = 11, className }: { ukuran?: number; className?: string }) {
+  return (
+    <span
+      role="img"
+      aria-label="Sedang online"
+      title="Sedang membuka aplikasi"
+      className={cn("absolute -bottom-0.5 -right-0.5 rounded-full", className)}
+      style={{
+        width: ukuran,
+        height: ukuran,
+        background: "linear-gradient(135deg, #34D399, #10B981)",
+        boxShadow: "0 0 0 2px var(--app-bg), 0 2px 6px rgba(16,185,129,0.55)",
+      }}
+    />
+  );
+}

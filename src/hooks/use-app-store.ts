@@ -104,6 +104,13 @@ type AppState = {
   versiSegar: number;
   segarkanData: () => void;
 
+  /**
+   * Id pengguna yang SEDANG membuka aplikasi (10 Sep 2026). Diisi detak
+   * tiap 10 detik; dipakai titik hijau & hitungan "online" di Chat.
+   */
+  hadir: string[];
+  setHadir: (ids: string[]) => void;
+
   // Toast
   toasts: ToastItem[];
   pushToast: (toast: Omit<ToastItem, "id">) => void;
@@ -191,6 +198,8 @@ export const useAppStore = create<AppState>()(
       wewenangTv: { anggota: false, acc: false, upload: false, proses: false },
       setWewenangTv: (wewenangTv) => set({ wewenangTv }),
       toggleTema: () => set({ tema: get().tema === "light" ? "dark" : "light" }),
+      hadir: [],
+      setHadir: (hadir) => set({ hadir }),
       versiSegar: 0,
       segarkanData: () => {
         set({ versiSegar: get().versiSegar + 1 });

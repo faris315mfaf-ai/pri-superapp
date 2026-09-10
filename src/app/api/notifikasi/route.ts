@@ -6,6 +6,8 @@ import { bungkus, pastikanSukses } from "@/lib/api-helper";
 import { pastikanMasuk, userDariToken } from "@/lib/sesi";
 import { adalahHR } from "@/lib/hr";
 
+import { catatHadir } from "@/lib/kehadiran";
+import { after } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
@@ -16,7 +18,10 @@ export async function GET(request: Request) {
     const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
     // Wajib login: sebelumnya pemanggil anonim tetap dilayani dan
     // menerima notifikasi internal yang tidak beralamat.
-    await pastikanMasuk(request);
+    const saya = await pastikanMasuk(request);
+    // Mode Simpel tidak menjalankan detak; memuat notifikasi tetap bukti
+    // aplikasinya sedang dibuka, jadi kehadirannya dicatat di sini juga.
+    after(() => catatHadir(saya.id));
     const pengguna = token ? await userDariToken(token) : null;
 
     let kueri = supabase()

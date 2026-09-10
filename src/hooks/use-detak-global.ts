@@ -77,8 +77,10 @@ export function useDetakGlobal(aktif: boolean) {
       }
       sedang = true;
       try {
-        const tanda = await getDetak();
+        const { tanda, hadir } = await getDetak();
         gagalRef.current = 0;
+        // Siapa yang sedang membuka aplikasi (titik hijau & hitungan di Chat).
+        useAppStore.getState().setHadir(hadir);
         // Detak PERTAMA hanya merekam keadaan awal — data baru saja
         // dimuat, jadi tidak perlu langsung ditarik ulang.
         if (tandaRef.current !== null && tanda !== tandaRef.current) {

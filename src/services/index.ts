@@ -5996,7 +5996,17 @@ export async function ubahSayapAktif(id: number, aktif: boolean): Promise<void> 
 // Dipanggil tiap 10 detik oleh useDetakGlobal — sengaja tanpa cache
 // peramban supaya jawabannya selalu segar.
 // ------------------------------------------------------------
-export async function getDetak(): Promise<string> {
+export type HasilDetak = {
+  /** Tanda perubahan global; berubah = ada data baru. */
+  tanda: string;
+  /** Id pengguna yang sedang membuka aplikasi (±60 detik terakhir). */
+  hadir: string[];
+};
+
+export async function getDetak(): Promise<HasilDetak> {
   const json = await fetchJson("/api/detak", { cache: "no-store" });
-  return String(json?.tanda ?? "");
+  return {
+    tanda: String(json?.tanda ?? ""),
+    hadir: Array.isArray(json?.hadir) ? (json.hadir as unknown[]).map(String) : [],
+  };
 }

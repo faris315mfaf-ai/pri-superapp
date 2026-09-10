@@ -22,6 +22,7 @@ import { denganCache } from "@/lib/cache-bersama";
 import { pastikanMasuk } from "@/lib/sesi";
 import { supabase } from "@/lib/supabase";
 
+import { catatHadir, daftarHadir } from "@/lib/kehadiran";
 export const dynamic = "force-dynamic";
 
 /** Tabel yang perubahannya harus terasa di layar dalam hitungan detik. */
@@ -63,7 +64,14 @@ export async function GET(request: Request) {
   return bungkus(async () => {
     // Wajib login: endpoint internal, dan pemeriksaan sesinya sendiri
     // sudah dilayani cache (lib/cache-sesi) sehingga tetap murah.
-    await pastikanMasuk(request);
-    return { tanda: await denganCache("detak:global", TTL_DETIK, hitungTanda) };
+    const user = await pastikanMasuk(request);
+    // KEHADIRAN (10 Sep 2026): detak inilah bukti "aplikasinya sedang
+    // dibuka", jadi ditumpangi sekalian — tanpa permintaan tambahan.
+    await catatHadir(user.id);
+    const [tanda, hadir] = await Promise.all([
+      denganCache("detak:global", TTL_DETIK, hitungTanda),
+      daftarHadir(),
+    ]);
+    return { tanda, hadir, online: hadir.length };
   });
 }

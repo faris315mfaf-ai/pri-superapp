@@ -14,7 +14,7 @@
 // Umum bisa ke semua atau per divisi (lihat /api/pengumuman).
 // ============================================================
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -44,8 +44,9 @@ import {
   GlassSkeleton,
   StatusBadge,
   ThemeToggle,
+  TitikOnline,
 } from "@/components/pri-ui";
-import { toast } from "@/hooks/use-app-store";
+import { toast, useAppStore } from "@/hooks/use-app-store";
 import { kompresGambar } from "@/lib/gambar-kompres";
 import { IkonStreak } from "@/components/ikon-streak";
 import { PanelGrup } from "./panel-grup";
@@ -100,6 +101,9 @@ function PanelPercakapan({
   onKembali: () => void;
   onSegarkanDaftar: () => void;
 }) {
+  // Titik hijau "sedang membuka aplikasi" (10 Sep 2026) — daftar hadir
+  // diperbarui detak tiap 10 detik.
+  const lawanOnline = useAppStore((st) => st.hadir.includes(String(kontak.lawan_id)));
   const [pesan, setPesan] = useState<ChatPesan[]>([]);
   const [statusKontak, setStatusKontak] = useState(kontak.status);
   const [dimintaOleh, setDimintaOleh] = useState(kontak.diminta_oleh);
@@ -280,13 +284,16 @@ function PanelPercakapan({
           className="btn-tekan flex min-w-0 flex-1 items-center gap-3 text-left"
         >
           {/* Border Mythical ikut tampil di chat (1 Sep 2026) */}
-          <CincinJuara userId={kontak.lawan_id} ukuran={36}>
-            {kontak.lawan_avatar ? (
-              <FotoBulat src={kontak.lawan_avatar} ukuran={36} />
-            ) : (
-              <AvatarInisial nama={kontak.lawan_nama} ukuran={36} />
-            )}
-          </CincinJuara>
+          <span className="relative shrink-0">
+            <CincinJuara userId={kontak.lawan_id} ukuran={36}>
+              {kontak.lawan_avatar ? (
+                <FotoBulat src={kontak.lawan_avatar} ukuran={36} />
+              ) : (
+                <AvatarInisial nama={kontak.lawan_nama} ukuran={36} />
+              )}
+            </CincinJuara>
+            {lawanOnline && <TitikOnline ukuran={11} />}
+          </span>
           <span className="min-w-0 flex-1">
             <span className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-teks-utama">
               <span className="truncate">{kontak.lawan_nama}</span>
@@ -294,7 +301,13 @@ function PanelPercakapan({
               <IkonStreak hari={kontak.streak_hari ?? 0} skala="besar" />
             </span>
             <span className="block text-[10px] text-teks-sekunder">
-              {statusKontak === "diterima" ? "Percakapan terbuka · ketuk untuk profil" : "Menunggu persetujuan"}
+              {lawanOnline ? (
+                <span className="font-bold text-sukses">Online sekarang</span>
+              ) : statusKontak === "diterima" ? (
+                "Percakapan terbuka · ketuk untuk profil"
+              ) : (
+                "Menunggu persetujuan"
+              )}
             </span>
           </span>
         </button>
@@ -843,6 +856,9 @@ export function ChatScreen({
   onBukaNotifikasi?: () => void;
 }) {
   const [daftar, setDaftar] = useState<ChatKontak[] | null>(null);
+  // Siapa yang sedang membuka aplikasi (dari detak 10 detik).
+  const hadir = useAppStore((st) => st.hadir);
+  const hadirSet = useMemo(() => new Set(hadir.map(String)), [hadir]);
   const [muatUlang, setMuatUlang] = useState(0);
   const versiSegar = useVersiSegar();
   const [kontakAktif, setKontakAktif] = useState<ChatKontak | null>(null);
@@ -937,7 +953,17 @@ export function ChatScreen({
           <h1 className="font-heading text-2xl font-extrabold tracking-tight text-teks-utama">
             Chat
           </h1>
-          <p className="mt-0.5 text-xs text-teks-sekunder">Komunikasi internal partai</p>
+          {/* Teks & lencana boleh turun baris, jangan saling menghimpit
+              sampai kalimatnya patah (10 Sep 2026). */}
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="whitespace-nowrap text-xs text-teks-sekunder">Komunikasi internal partai</p>
+            {hadirSet.size > 0 && (
+              <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-sukses/12 px-2 py-0.5 text-[10.5px] font-bold text-sukses">
+                <span className="h-1.5 w-1.5 rounded-full bg-sukses" aria-hidden="true" />
+                {hadirSet.size} online
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {pengawas && (
@@ -1071,13 +1097,17 @@ export function ChatScreen({
                   className="btn-tekan text-left"
                 >
                   <GlassCard className="flex items-center gap-3 p-3">
-                    <CincinJuara userId={k.lawan_id} ukuran={44}>
-                      {k.lawan_avatar ? (
-                        <FotoBulat src={k.lawan_avatar} ukuran={44} />
-                      ) : (
-                        <AvatarInisial nama={k.lawan_nama} ukuran={44} />
-                      )}
-                    </CincinJuara>
+                    <span className="relative shrink-0">
+                      <CincinJuara userId={k.lawan_id} ukuran={44}>
+                        {k.lawan_avatar ? (
+                          <FotoBulat src={k.lawan_avatar} ukuran={44} />
+                        ) : (
+                          <AvatarInisial nama={k.lawan_nama} ukuran={44} />
+                        )}
+                      </CincinJuara>
+                      {/* Titik hijau = sedang membuka aplikasi (10 Sep 2026) */}
+                      {hadirSet.has(String(k.lawan_id)) && <TitikOnline ukuran={12} />}
+                    </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <p className="flex min-w-0 items-center gap-1.5 truncate text-sm font-bold text-teks-utama">
