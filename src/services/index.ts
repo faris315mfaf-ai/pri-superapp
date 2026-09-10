@@ -5988,3 +5988,13 @@ export async function ubahSayapAktif(id: number, aktif: boolean): Promise<void> 
     body: JSON.stringify({ id, aktif }),
   });
 }
+
+// ------------------------------------------------------------
+// Detak sistem (10 Sep 2026): satu tanda ringan "ada yang baru?"
+// Dipanggil tiap 10 detik oleh useDetakGlobal — sengaja tanpa cache
+// peramban supaya jawabannya selalu segar.
+// ------------------------------------------------------------
+export async function getDetak(): Promise<string> {
+  const json = await fetchJson("/api/detak", { cache: "no-store" });
+  return String(json?.tanda ?? "");
+}

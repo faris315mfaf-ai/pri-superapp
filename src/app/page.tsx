@@ -60,6 +60,7 @@ import { PetMelayang } from "@/features/pet/pet-melayang";
 import { ModalHadiahHarian } from "@/features/pet/modal-hadiah-harian";
 import { bolehPet } from "@/lib/pet-akses";
 import { MODUL_AKUN, modulDibuka } from "@/lib/peran";
+import { useDetakGlobal } from "@/hooks/use-detak-global";
 import { HewanMelayang } from "@/features/pet/hewan-melayang";
 import { LudoScreen } from "@/features/ludo/ludo-screen";
 import { AcaraScreen } from "@/features/acara/acara-screen";
@@ -528,6 +529,11 @@ export default function Page() {
   // ------------------------------------------------------------
   const aplikasiAktif = siap && !!user && !menyambut;
 
+  // PENYEGARAN LATAR BELAKANG 10 DETIK (10 Sep 2026): satu detak ringan
+  // menanyakan "ada yang baru?"; bila ada, seluruh layar yang terbuka
+  // menarik ulang datanya lewat jalur segarkanData() yang sudah ada.
+  useDetakGlobal(aplikasiAktif);
+
   // Izin fitur per peran (diatur super admin). Dimuat sekali saat
   // masuk dan disegarkan tiap 5 menit, supaya fitur yang baru
   // dimatikan/dinyalakan ikut berlaku tanpa perlu keluar-masuk.
@@ -644,7 +650,11 @@ export default function Page() {
     }
 
     void muat();
-    const berkala = setInterval(() => void muat(), 30_000);
+    // 10 Sep 2026: 30 → 60 detik. Notifikasi baru kini terasa jauh lebih
+    // cepat lewat DETAK 10 detik (useDetakGlobal → "pri:segarkan" →
+    // muat()), jadi jaring pengaman berkala ini boleh separuh lebih
+    // jarang — beban server turun, notifikasi justru lebih segar.
+    const berkala = setInterval(() => void muat(), 60_000);
     // Begitu admin kembali ke tab ini, segarkan langsung supaya tidak
     // perlu menunggu giliran berikutnya.
     const saatTerlihat = () => {
