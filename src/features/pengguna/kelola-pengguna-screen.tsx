@@ -39,7 +39,7 @@ import { toast } from "@/hooks/use-app-store";
 import { getPengguna, ubahPengguna, type PenggunaAdmin,
   setujuiSemuaPendaftar,
 } from "@/services";
-import { butuhSubDivisi, DIVISI } from "@/lib/struktur";
+import { butuhSubDivisi, deskripsiStruktur, DIVISI, DIVISI_SAYAP, gelarSayap } from "@/lib/struktur";
 import { PilihStruktur } from "./pilih-struktur";
 import { JABATAN_PARTAI, KUOTA_JABATAN, jabatanLengkap } from "@/lib/jabatan";
 import { cn } from "@/lib/utils";
@@ -192,17 +192,20 @@ export function KelolaPenggunaScreen({ onKembali }: { onKembali: () => void }) {
 
   async function simpanDivisi(
     u: PenggunaAdmin,
-    info: { divisi: string; sub_divisi: string; posisi_divisi: string },
+    info: { divisi: string; sub_divisi: string; posisi_divisi: string; jabatan_sayap?: string },
   ) {
     if (sedangProses) return;
     setSedangProses(u.id);
     try {
       await ubahPengguna(u.id, "ubah_divisi", undefined, undefined, undefined, info);
+      const gelar = gelarSayap(info.sub_divisi, info.jabatan_sayap);
       toast(
         "sukses",
         info.divisi
-          ? `${u.nama.split(" ")[0]} kini ${info.posisi_divisi === "kepala" ? "Kepala" : "Anggota"} ${info.divisi}`
-          : "Divisi dikosongkan",
+          ? gelar
+            ? `${u.nama.split(" ")[0]} kini ${gelar}`
+            : `${u.nama.split(" ")[0]} kini ${info.posisi_divisi === "kepala" ? "Kepala" : "Anggota"} ${info.divisi}`
+          : "Struktur dikosongkan",
       );
       setMemilihDivisi(null);
       setMuatUlang((n) => n + 1);
@@ -512,7 +515,7 @@ function BarisPengguna({
 
             <p className="mt-0.5 truncate text-[11.5px] text-teks-sekunder">
               {u.nomor_wa ? `+${u.nomor_wa}` : u.email}
-              {u.jabatan ? ` · ${jabatanLengkap(u.jabatan, u.bidang_jabatan)}` : ""}
+              {deskripsiStruktur(u) ? ` · ${deskripsiStruktur(u)}` : ""}
             </p>
 
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -575,6 +578,8 @@ function BarisPengguna({
               <button
                 type="button"
                 onClick={onUbahJabatan}
+                disabled={u.divisi === DIVISI_SAYAP}
+                title={u.divisi === DIVISI_SAYAP ? "Anggota Sayap Partai memakai jabatan sayap (tombol Struktur)" : undefined}
                 className="glass btn-tekan inline-flex h-9 items-center justify-center gap-1.5 rounded-xl px-3 text-[12.5px] font-semibold text-teks-utama"
               >
                 <Briefcase className="h-4 w-4" />
@@ -586,7 +591,7 @@ function BarisPengguna({
                 className="glass btn-tekan inline-flex h-9 items-center justify-center gap-1.5 rounded-xl px-3 text-[12.5px] font-semibold text-teks-utama"
               >
                 <Building2 className="h-4 w-4" />
-                Divisi
+                Struktur
               </button>
               {u.aktif ? (
                 <button
@@ -797,12 +802,14 @@ function PilihDivisi({
 }: {
   pengguna: PenggunaAdmin;
   sedangProses: boolean;
-  onSimpan: (info: { divisi: string; sub_divisi: string; posisi_divisi: string }) => void;
+  onSimpan: (info: { divisi: string; sub_divisi: string; posisi_divisi: string; jabatan_sayap?: string }) => void;
   onTutup: () => void;
 }) {
   const [divisi, setDivisi] = useState(pengguna.divisi ?? "");
   const [sub, setSub] = useState(pengguna.sub_divisi ?? "");
   const [posisi, setPosisi] = useState(pengguna.posisi_divisi === "kepala" ? "kepala" : "anggota");
+  const [jabatanSayap, setJabatanSayap] = useState(pengguna.jabatan_sayap ?? "");
+  const diSayap = divisi === DIVISI_SAYAP;
   const sah = !divisi || !butuhSubDivisi(divisi) || Boolean(sub);
 
   return (
@@ -839,15 +846,25 @@ function PilihDivisi({
         <div className="scrollbar-tipis mt-4 flex flex-col gap-3 overflow-y-auto">
           {/* 10 Sep 2026: pemilih dua langkah Zona · Sayap · Divisi */}
           <PilihStruktur
-            nilai={{ divisi, sub_divisi: sub }}
+            nilai={{ divisi, sub_divisi: sub, jabatan_sayap: jabatanSayap }}
             onUbah={(v) => {
               setDivisi(v.divisi);
               setSub(v.sub_divisi);
+              setJabatanSayap(v.jabatan_sayap ?? "");
             }}
             disabled={sedangProses}
             bolehKosong
+            bolehJabatanSayap
           />
-          {divisi && (
+          {/* Jabatan DPP direset saat masuk sayap — katakan sebelum, bukan
+              sesudah, supaya tidak ada jabatan yang hilang mengagetkan. */}
+          {diSayap && pengguna.jabatan ? (
+            <p className="rounded-xl bg-gagal/10 px-3 py-2 text-[11.5px] leading-relaxed text-gagal">
+              Jabatan DPP <b>{jabatanLengkap(pengguna.jabatan, pengguna.bidang_jabatan)}</b> akan
+              dikosongkan: anggota Sayap Partai memakai jabatan sayap saja.
+            </p>
+          ) : null}
+          {divisi && !diSayap && (
             <div className="flex gap-2">
               {(["anggota", "kepala"] as const).map((pos) => (
                 <button
@@ -873,7 +890,7 @@ function PilihDivisi({
           <button
             type="button"
             disabled={!sah || sedangProses}
-            onClick={() => onSimpan({ divisi, sub_divisi: sub, posisi_divisi: posisi })}
+            onClick={() => onSimpan({ divisi, sub_divisi: sub, posisi_divisi: posisi, jabatan_sayap: diSayap ? jabatanSayap : "" })}
             className="btn-tekan flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-bold text-white disabled:opacity-50"
             style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
           >

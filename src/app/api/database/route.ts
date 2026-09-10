@@ -72,7 +72,7 @@ export async function GET(request: Request) {
     if (idDiminta) {
       const { data: orang } = await db
         .from("app_user")
-        .select("id, nama, avatar_url, jabatan, bidang_jabatan, divisi, sub_divisi, posisi_divisi, role, nomor_wa")
+        .select("id, nama, avatar_url, jabatan, bidang_jabatan, divisi, sub_divisi, posisi_divisi, jabatan_sayap, role, nomor_wa")
         .eq("id", idDiminta)
         .maybeSingle();
       if (!orang || orang.role === "master") {
@@ -163,7 +163,7 @@ export async function GET(request: Request) {
     const [{ data: daftar }, rekapHariIni, absenHariIni, videoHariIni] = await Promise.all([
       db
         .from("app_user")
-        .select("id, nama, avatar_url, jabatan, bidang_jabatan, divisi, sub_divisi, posisi_divisi")
+        .select("id, nama, avatar_url, jabatan, bidang_jabatan, divisi, sub_divisi, posisi_divisi, jabatan_sayap")
         .eq("aktif", true)
         .eq("status", "aktif")
         .not("role", "in", PERAN_TERSEMBUNYI_IN)

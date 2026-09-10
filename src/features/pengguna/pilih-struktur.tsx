@@ -19,7 +19,9 @@ import {
   DIVISI_BIASA,
   DIVISI_SAYAP,
   DIVISI_ZONA,
+  JABATAN_SAYAP,
   KATEGORI_STRUKTUR,
+  gelarSayap,
   SUB_SAYAP,
   SUB_ZONA,
   kategoriStruktur,
@@ -29,7 +31,12 @@ import { cn } from "@/lib/utils";
 import { getSayap, tambahSayap, type SayapPartai } from "@/services";
 import type { KomponenIkon } from "@/types";
 
-export type NilaiStruktur = { divisi: string; sub_divisi: string };
+export type NilaiStruktur = {
+  divisi: string;
+  sub_divisi: string;
+  /** Jabatan di sayap (10 Sep 2026); hanya berlaku untuk Sayap Partai. */
+  jabatan_sayap?: string;
+};
 
 const IKON: Record<KategoriStruktur, KomponenIkon> = {
   zona: MapPinned,
@@ -43,6 +50,7 @@ export function PilihStruktur({
   disabled = false,
   besar = false,
   bolehKosong = false,
+  bolehJabatanSayap = false,
 }: {
   nilai: NilaiStruktur;
   onUbah: (baru: NilaiStruktur) => void;
@@ -51,6 +59,11 @@ export function PilihStruktur({
   besar?: boolean;
   /** true = ada pilihan "Tanpa struktur" (Kelola Pengguna / Panel Master). */
   bolehKosong?: boolean;
+  /**
+   * true = ikut memilih JABATAN DI SAYAP (Ketua Umum dst.). Hanya untuk
+   * layar pengurus; anggota tidak menetapkan jabatannya sendiri.
+   */
+  bolehJabatanSayap?: boolean;
 }) {
   // Kategori DITURUNKAN dari nilai tersimpan; hanya "divisi" yang bisa
   // dipilih lebih dulu sebelum divisinya ditentukan (nilai masih kosong),
@@ -85,9 +98,9 @@ export function PilihStruktur({
   function pilihKategori(k: KategoriStruktur) {
     setKategoriLokal(k);
     setFormTambah(false);
-    if (k === "zona") onUbah({ divisi: DIVISI_ZONA, sub_divisi: "" });
-    else if (k === "sayap") onUbah({ divisi: DIVISI_SAYAP, sub_divisi: "" });
-    else onUbah({ divisi: "", sub_divisi: "" });
+    if (k === "zona") onUbah({ divisi: DIVISI_ZONA, sub_divisi: "", jabatan_sayap: "" });
+    else if (k === "sayap") onUbah({ divisi: DIVISI_SAYAP, sub_divisi: "", jabatan_sayap: nilai.jabatan_sayap ?? "" });
+    else onUbah({ divisi: "", sub_divisi: "", jabatan_sayap: "" });
   }
 
   async function simpanSayapBaru() {
@@ -97,7 +110,7 @@ export function PilihStruktur({
       const baru = await tambahSayap(singkatan, namaPanjang);
       const segar = await getSayap();
       setSayap(segar.data);
-      onUbah({ divisi: DIVISI_SAYAP, sub_divisi: baru.nilai });
+      onUbah({ divisi: DIVISI_SAYAP, sub_divisi: baru.nilai, jabatan_sayap: nilai.jabatan_sayap ?? "" });
       setFormTambah(false);
       setSingkatan("");
       setNamaPanjang("");
@@ -166,7 +179,7 @@ export function PilihStruktur({
         <select
           value={nilai.sub_divisi}
           disabled={disabled}
-          onChange={(e) => onUbah({ divisi: DIVISI_ZONA, sub_divisi: e.target.value })}
+          onChange={(e) => onUbah({ divisi: DIVISI_ZONA, sub_divisi: e.target.value, jabatan_sayap: "" })}
           aria-label="Zona"
           className={kelasSelect}
         >
@@ -183,7 +196,7 @@ export function PilihStruktur({
           <select
             value={nilai.sub_divisi}
             disabled={disabled || sayap === null}
-            onChange={(e) => onUbah({ divisi: DIVISI_SAYAP, sub_divisi: e.target.value })}
+            onChange={(e) => onUbah({ divisi: DIVISI_SAYAP, sub_divisi: e.target.value, jabatan_sayap: nilai.jabatan_sayap ?? "" })}
             aria-label="Sayap partai"
             className={kelasSelect}
           >
@@ -194,6 +207,34 @@ export function PilihStruktur({
               </option>
             ))}
           </select>
+          {/* Jabatan DI SAYAP (10 Sep 2026): kepengurusan sayap sendiri —
+              tidak berpengaruh apa pun di DPP, tetapi membuka Dashboard. */}
+          {bolehJabatanSayap && nilai.sub_divisi && (
+            <div>
+              <label className="mb-1 block text-[11.5px] font-semibold text-teks-sekunder" htmlFor="jabatan-sayap">
+                Jabatan di sayap
+              </label>
+              <select
+                id="jabatan-sayap"
+                value={nilai.jabatan_sayap ?? ""}
+                disabled={disabled}
+                onChange={(e) => onUbah({ divisi: DIVISI_SAYAP, sub_divisi: nilai.sub_divisi, jabatan_sayap: e.target.value })}
+                className={kelasSelect}
+              >
+                <option value="">— Anggota biasa —</option>
+                {JABATAN_SAYAP.map((j) => (
+                  <option key={j} value={j}>
+                    {j}
+                  </option>
+                ))}
+              </select>
+              {nilai.jabatan_sayap ? (
+                <p className="mt-1 text-[11px] font-semibold text-pri">
+                  {gelarSayap(nilai.sub_divisi, nilai.jabatan_sayap)}
+                </p>
+              ) : null}
+            </div>
+          )}
           {bolehTambah && !formTambah && (
             <button
               type="button"
@@ -252,7 +293,7 @@ export function PilihStruktur({
         <select
           value={nilai.divisi}
           disabled={disabled}
-          onChange={(e) => onUbah({ divisi: e.target.value, sub_divisi: "" })}
+          onChange={(e) => onUbah({ divisi: e.target.value, sub_divisi: "", jabatan_sayap: "" })}
           aria-label="Divisi"
           className={kelasSelect}
         >

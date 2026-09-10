@@ -96,6 +96,53 @@ export const SUB_ZONA: { nilai: string; label: string }[] = [
   "Kalimantan & Sulawesi",
 ].map((z) => ({ nilai: z, label: z }));
 
+// ============================================================
+// JABATAN DI SAYAP PARTAI (10 Sep 2026)
+//
+// Sayap punya kepengurusannya sendiri dengan nama jabatan yang KEBETULAN
+// sama dengan DPP ("Ketua Umum", dst.) tetapi kuasanya sama sekali
+// berbeda: Ketua Umum DPP JURI PRI adalah pemimpin sayap JURI, BUKAN
+// pemimpin partai. Karena itu jabatan sayap disimpan di kolom sendiri
+// (app_user.jabatan_sayap) dan TIDAK PERNAH menyentuh aturan pusat yang
+// membaca `jabatan` — termasuk kenaikan otomatis menjadi super admin.
+//
+// Yang DIDAPAT pengurus sayap (permintaan user): akses modul Dashboard.
+// ============================================================
+export const JABATAN_SAYAP = [
+  "Ketua Umum",
+  "Wakil Ketua Umum",
+  "Sekretaris Jenderal",
+  "Wakil Sekretaris Jenderal",
+  "Bendahara Umum",
+  "Wakil Bendahara Umum",
+] as const;
+
+export type JabatanSayap = (typeof JABATAN_SAYAP)[number];
+
+/** true bila teks ini salah satu jabatan sayap yang sah. */
+export function jabatanSayapSah(nilai: string): boolean {
+  return (JABATAN_SAYAP as readonly string[]).includes(nilai.trim());
+}
+
+/**
+ * Gelar lengkap pengurus sayap: "Ketua Umum DPP JURI PRI".
+ * Kosong bila salah satu bagiannya belum ada.
+ */
+export function gelarSayap(subDivisi?: string | null, jabatanSayap?: string | null): string {
+  const s = (subDivisi ?? "").trim();
+  const j = (jabatanSayap ?? "").trim();
+  if (!s || !j) return "";
+  return `${j} DPP ${s} PRI`;
+}
+
+/** true bila orang ini pengurus (bukan sekadar anggota) sebuah sayap. */
+export function adalahPengurusSayap(u: {
+  divisi?: string | null;
+  jabatan_sayap?: string | null;
+}): boolean {
+  return (u.divisi ?? "").trim() === DIVISI_SAYAP && Boolean((u.jabatan_sayap ?? "").trim());
+}
+
 /** true bila divisi ini mewajibkan pilihan sub-divisi. */
 export function butuhSubDivisi(divisi: string): boolean {
   return divisi === "Divisi Sayap Partai" || divisi === "Divisi Zona";
@@ -155,7 +202,12 @@ export function deskripsiStruktur(u: {
   divisi?: string | null;
   sub_divisi?: string | null;
   posisi_divisi?: string | null;
+  jabatan_sayap?: string | null;
 }): string {
+  // Pengurus sayap dibaca dengan gelar sayapnya — "Ketua Umum DPP JURI
+  // PRI" — dan tidak pernah tertukar dengan jabatan DPP.
+  const gelar = gelarSayap(u.sub_divisi, u.jabatan_sayap);
+  if (gelar && (u.divisi ?? "").trim() === DIVISI_SAYAP) return gelar;
   const j = (u.jabatan ?? "").trim();
   if (j) {
     const b = (u.bidang_jabatan ?? "").trim();
@@ -168,7 +220,7 @@ export function deskripsiStruktur(u: {
   // Zona & Sayap dibaca sebagai kategorinya sendiri (10 Sep 2026):
   // "Kepala Zona Sumatera", "Anggota Sayap PERI" — bukan "Divisi Zona · …".
   if (d === DIVISI_ZONA) return `${awalan}Zona${sub ? ` ${sub}` : ""}`;
-  if (d === DIVISI_SAYAP) return `${awalan}Sayap${sub ? ` ${sub}` : ""}`;
+  if (d === DIVISI_SAYAP) return `Anggota Sayap${sub ? ` ${sub}` : ""}`;
   return `${awalan}${d}${sub ? ` · ${sub}` : ""}`;
 }
 

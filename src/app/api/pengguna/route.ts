@@ -10,7 +10,7 @@ import { hapusCacheUser, userDariToken, cabutSemuaSesi } from "@/lib/sesi";
 import { buatHashSandi } from "@/lib/sandi";
 import { kirimKabar } from "@/lib/notifikasi";
 import { JABATAN_PARTAI, KUOTA_JABATAN } from "@/lib/jabatan";
-import { pastikanStrukturSah } from "@/lib/struktur";
+import { DIVISI_SAYAP, jabatanSayapSah, pastikanStrukturSah } from "@/lib/struktur";
 import { aksesDashboardRole } from "@/lib/dashboard-akses";
 import { adalahHR, diDivisiHR } from "@/lib/hr";
 
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase()
       .from("app_user")
       .select(
-        "id, nama, nama_panggilan, email, username, nomor_wa, role, jabatan, bidang_jabatan, divisi, sub_divisi, posisi_divisi, zona_id, zona:zona(nama), avatar_url, status, aktif, wa_terverifikasi, profil_lengkap, created_at, disetujui_oleh, disetujui_pada, modul_izin",
+        "id, nama, nama_panggilan, email, username, nomor_wa, role, jabatan, bidang_jabatan, divisi, sub_divisi, posisi_divisi, zona_id, zona:zona(nama), avatar_url, status, aktif, wa_terverifikasi, profil_lengkap, created_at, disetujui_oleh, disetujui_pada, modul_izin, jabatan_sayap",
       )
       // Yang menunggu persetujuan ditaruh paling atas — itu yang
       // butuh tindakan, bukan sekadar daftar.
@@ -173,6 +173,8 @@ export async function PATCH(request: Request) {
       divisi?: string;
       sub_divisi?: string;
       posisi_divisi?: string;
+      /** ubah_divisi: jabatan di Sayap Partai (terpisah dari jabatan DPP) */
+      jabatan_sayap?: string;
     };
 
     // Otoritas penuh Kelola Pengguna: Super Admin + Master + anggota
@@ -326,6 +328,23 @@ export async function PATCH(request: Request) {
         if (!JABATAN_SAH.includes(jabatan)) {
           throw Object.assign(new Error("Jabatan tidak dikenal"), { status: 400 });
         }
+        // Anggota Sayap Partai TIDAK punya jabatan DPP (10 Sep 2026):
+        // kepengurusannya diatur lewat jabatan sayap di menu Struktur.
+        if (jabatan) {
+          const { data: strukturnya } = await db
+            .from("app_user")
+            .select("divisi")
+            .eq("id", id)
+            .maybeSingle();
+          if ((strukturnya?.divisi ?? "") === DIVISI_SAYAP) {
+            throw Object.assign(
+              new Error(
+                "Anggota Sayap Partai tidak memakai jabatan DPP. Atur jabatan sayapnya lewat tombol Struktur, atau pindahkan dulu dari Sayap Partai.",
+              ),
+              { status: 409 },
+            );
+          }
+        }
 
         // Kuota jabatan tunggal/terbatas: menetapkan orang melebihi
         // kuota DITOLAK dengan menyebut pemegang lamanya — jangan
@@ -362,9 +381,50 @@ export async function PATCH(request: Request) {
         const sub = (body.sub_divisi ?? "").trim();
         pastikanStrukturSah(divisi, sub, await nilaiSayapTambahan());
         const posisi = body.posisi_divisi === "kepala" ? "kepala" : "anggota";
+        const diSayap = divisi === DIVISI_SAYAP;
+        const jabatanSayap = (body.jabatan_sayap ?? "").trim();
+        if (jabatanSayap) {
+          if (!diSayap) {
+            throw Object.assign(new Error("Jabatan sayap hanya untuk anggota Sayap Partai."), { status: 400 });
+          }
+          if (!jabatanSayapSah(jabatanSayap)) {
+            throw Object.assign(new Error("Jabatan sayap tidak dikenal."), { status: 400 });
+          }
+          // Satu sayap hanya boleh punya satu pemegang tiap jabatan.
+          const { data: pemegang } = await db
+            .from("app_user")
+            .select("id, nama")
+            .eq("divisi", DIVISI_SAYAP)
+            .eq("sub_divisi", sub)
+            .eq("jabatan_sayap", jabatanSayap)
+            .eq("aktif", true)
+            .neq("id", id);
+          if ((pemegang ?? []).length > 0) {
+            throw Object.assign(
+              new Error(
+                `${jabatanSayap} ${sub} sedang dipegang ${(pemegang ?? []).map((o) => o.nama).join(", ")}. Kosongkan dulu jabatan beliau.`,
+              ),
+              { status: 409 },
+            );
+          }
+        }
         perubahan.divisi = divisi;
         perubahan.sub_divisi = divisi ? sub : "";
-        perubahan.posisi_divisi = divisi ? posisi : "anggota";
+        perubahan.jabatan_sayap = diSayap ? jabatanSayap : "";
+        // Pengurus sayap otomatis "kepala" di sayapnya; sisanya ikut pilihan HR.
+        perubahan.posisi_divisi = diSayap
+          ? jabatanSayap
+            ? "kepala"
+            : "anggota"
+          : divisi
+            ? posisi
+            : "anggota";
+        // JABATAN DPP DIRESET (10 Sep 2026): masuk Sayap Partai berarti
+        // kepengurusannya sepenuhnya di sayap, tanpa jabatan pusat.
+        if (diSayap) {
+          perubahan.jabatan = "";
+          perubahan.bidang_jabatan = null;
+        }
         break;
       }
       case "nonaktifkan":

@@ -37,7 +37,7 @@ import { buatHashSandi } from "@/lib/sandi";
 import { AKTIVITAS_KOIN } from "@/lib/koin";
 
 import { JABATAN_PARTAI, KUOTA_JABATAN } from "@/lib/jabatan";
-import { pastikanStrukturSah } from "@/lib/struktur";
+import { DIVISI_SAYAP, jabatanSayapSah, pastikanStrukturSah } from "@/lib/struktur";
 import { nilaiSayapTambahan } from "@/lib/sayap";
 import { bersihkanModulIzin } from "@/lib/peran";
 export const dynamic = "force-dynamic";
@@ -248,6 +248,8 @@ export async function POST(request: Request) {
       divisi?: string;
       sub_divisi?: string;
       posisi_divisi?: string;
+      /** buat_akun: jabatan di Sayap Partai (terpisah dari jabatan DPP) */
+      jabatan_sayap?: string;
       /** buat_akun / ubah_modul: modul per akun */
       modul_izin?: unknown;
     };
@@ -320,6 +322,8 @@ export async function POST(request: Request) {
       const divisi = String(body.divisi ?? "").trim();
       const sub = String(body.sub_divisi ?? "").trim();
       const posisi = body.posisi_divisi === "kepala" ? "kepala" : "anggota";
+      const diSayap = divisi === DIVISI_SAYAP;
+      const jabatanSayap = (body.jabatan_sayap ?? "").trim();
       const nomorWaMentah = String(body.nomor_wa ?? "").replace(/[^\d+]/g, "");
       const nomorWa = nomorWaMentah ? nomorWaMentah.replace(/^\+/, "").replace(/^0/, "62") : null;
       if (nama.length < 3) throw Object.assign(new Error("Nama minimal 3 huruf."), { status: 400 });
@@ -332,6 +336,34 @@ export async function POST(request: Request) {
       }
       if (jabatan && !(JABATAN_PARTAI as readonly string[]).includes(jabatan)) {
         throw Object.assign(new Error("Jabatan tidak dikenal."), { status: 400 });
+      }
+      if (jabatanSayap) {
+        if (!diSayap) {
+          throw Object.assign(new Error("Jabatan sayap hanya untuk anggota Sayap Partai."), { status: 400 });
+        }
+        if (!jabatanSayapSah(jabatanSayap)) {
+          throw Object.assign(new Error("Jabatan sayap tidak dikenal."), { status: 400 });
+        }
+        const { data: pemegang } = await db
+          .from("app_user")
+          .select("nama")
+          .eq("divisi", DIVISI_SAYAP)
+          .eq("sub_divisi", sub)
+          .eq("jabatan_sayap", jabatanSayap)
+          .eq("aktif", true);
+        if ((pemegang ?? []).length > 0) {
+          throw Object.assign(
+            new Error(`${jabatanSayap} ${sub} sudah dipegang ${(pemegang ?? []).map((o) => o.nama).join(", ")}.`),
+            { status: 409 },
+          );
+        }
+      }
+      // Anggota sayap tidak memakai jabatan DPP (10 Sep 2026).
+      if (diSayap && jabatan) {
+        throw Object.assign(
+          new Error("Anggota Sayap Partai tidak memakai jabatan DPP — pilih jabatan sayapnya saja."),
+          { status: 400 },
+        );
       }
       pastikanStrukturSah(divisi, sub, await nilaiSayapTambahan());
       if (nomorWa && !/^62\d{8,14}$/.test(nomorWa)) {
@@ -360,11 +392,12 @@ export async function POST(request: Request) {
           nomor_wa: nomorWa,
           password_hash: await buatHashSandi(sandi),
           role,
-          jabatan,
-          bidang_jabatan: bidang,
+          jabatan: diSayap ? "" : jabatan,
+          bidang_jabatan: diSayap ? "" : bidang,
           divisi,
           sub_divisi: divisi ? sub : "",
-          posisi_divisi: divisi ? posisi : "anggota",
+          jabatan_sayap: diSayap ? jabatanSayap : "",
+          posisi_divisi: diSayap ? (jabatanSayap ? "kepala" : "anggota") : divisi ? posisi : "anggota",
           status: "aktif",
           aktif: true,
           profil_lengkap: true,

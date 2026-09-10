@@ -20,6 +20,7 @@ import { JABATAN_PARTAI } from "@/lib/jabatan";
 import { MODUL_AKUN, type KunciModul, type ModulIzin } from "@/lib/peran";
 import { cn } from "@/lib/utils";
 import { PilihStruktur, type NilaiStruktur } from "@/features/pengguna/pilih-struktur";
+import { DIVISI_SAYAP } from "@/lib/struktur";
 import { aksiMaster, aksiMasterHasil, type PenggunaAdmin } from "@/services";
 
 const PERAN_BARU = [
@@ -124,19 +125,21 @@ export function SeksiAkunBaru({ onSelesai }: { onSelesai: () => void }) {
   const [peran, setPeran] = useState<string>("anggota");
   const [jabatan, setJabatan] = useState("");
   const [bidang, setBidang] = useState("");
-  const [struktur, setStruktur] = useState<NilaiStruktur>({ divisi: "", sub_divisi: "" });
+  const [struktur, setStruktur] = useState<NilaiStruktur>({ divisi: "", sub_divisi: "", jabatan_sayap: "" });
   const [posisi, setPosisi] = useState<"anggota" | "kepala">("anggota");
   const [modul, setModul] = useState<Record<KunciModul, Keadaan>>(() => dariIzin(null));
   const [sibuk, setSibuk] = useState(false);
 
   const usernameSah = /^[a-z0-9._]{3,30}$/.test(username);
+  const diSayap = struktur.divisi === DIVISI_SAYAP;
   const kekurangan: string[] = [];
   if (nama.trim().length < 3) kekurangan.push("Nama minimal 3 huruf");
   if (!usernameSah) kekurangan.push("Username 3–30 huruf kecil/angka/titik/garis bawah");
   if (sandi.length < 6) kekurangan.push("Sandi minimal 6 karakter");
-  if (struktur.divisi && (struktur.divisi === "Divisi Zona" || struktur.divisi === "Divisi Sayap Partai") && !struktur.sub_divisi) {
+  if (struktur.divisi && (struktur.divisi === "Divisi Zona" || struktur.divisi === DIVISI_SAYAP) && !struktur.sub_divisi) {
     kekurangan.push("Pilih zona/sayapnya");
   }
+  if (diSayap && jabatan) kekurangan.push("Anggota Sayap Partai tidak memakai jabatan DPP");
   const sah = kekurangan.length === 0;
 
   async function kirim() {
@@ -153,6 +156,7 @@ export function SeksiAkunBaru({ onSelesai }: { onSelesai: () => void }) {
         bidang_jabatan: bidang.trim(),
         divisi: struktur.divisi,
         sub_divisi: struktur.sub_divisi,
+        jabatan_sayap: diSayap ? (struktur.jabatan_sayap ?? "") : "",
         posisi_divisi: struktur.divisi ? posisi : "anggota",
         modul_izin: (keIzin(modul) as Record<string, boolean> | null) ?? {},
       });
@@ -164,7 +168,7 @@ export function SeksiAkunBaru({ onSelesai }: { onSelesai: () => void }) {
       setPeran("anggota");
       setJabatan("");
       setBidang("");
-      setStruktur({ divisi: "", sub_divisi: "" });
+      setStruktur({ divisi: "", sub_divisi: "", jabatan_sayap: "" });
       setPosisi("anggota");
       setModul(dariIzin(null));
       onSelesai();
@@ -236,8 +240,11 @@ export function SeksiAkunBaru({ onSelesai }: { onSelesai: () => void }) {
         </div>
 
         <div>
-          <p className="mb-1.5 text-[11.5px] font-semibold text-teks-sekunder">Jabatan struktur partai (opsional)</p>
-          <select value={jabatan} onChange={(e) => setJabatan(e.target.value)} aria-label="Jabatan" className="glass-soft h-11 w-full rounded-xl px-3 text-sm text-teks-utama outline-none focus:ring-2 focus:ring-pri/50">
+          <p className="mb-1.5 text-[11.5px] font-semibold text-teks-sekunder">
+            Jabatan struktur partai (opsional)
+            {diSayap ? " — tidak berlaku untuk anggota sayap" : ""}
+          </p>
+          <select value={jabatan} onChange={(e) => setJabatan(e.target.value)} aria-label="Jabatan" disabled={diSayap} className="glass-soft h-11 w-full rounded-xl px-3 text-sm text-teks-utama outline-none focus:ring-2 focus:ring-pri/50 disabled:opacity-50">
             <option value="">— Tanpa jabatan —</option>
             {JABATAN_PARTAI.map((j) => (
               <option key={j} value={j}>
@@ -252,8 +259,20 @@ export function SeksiAkunBaru({ onSelesai }: { onSelesai: () => void }) {
 
         <div>
           <p className="mb-1.5 text-[11.5px] font-semibold text-teks-sekunder">Struktur: Zona · Sayap · Divisi (opsional)</p>
-          <PilihStruktur nilai={struktur} onUbah={setStruktur} bolehKosong />
-          {struktur.divisi && (
+          <PilihStruktur
+            nilai={struktur}
+            onUbah={(v) => {
+              setStruktur(v);
+              // Masuk sayap = jabatan DPP dikosongkan (aturan 10 Sep 2026).
+              if (v.divisi === DIVISI_SAYAP) {
+                setJabatan("");
+                setBidang("");
+              }
+            }}
+            bolehKosong
+            bolehJabatanSayap
+          />
+          {struktur.divisi && !diSayap && (
             <div className="mt-2 flex gap-2">
               {(["anggota", "kepala"] as const).map((pos) => (
                 <button

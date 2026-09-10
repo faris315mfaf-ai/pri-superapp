@@ -17,11 +17,18 @@ import {
 } from "@/lib/dashboard-katalog";
 
 import { modulDibuka } from "@/lib/peran";
+import { adalahPengurusSayap } from "@/lib/struktur";
 export { KATALOG_DASHBOARD, KUNCI_DASHBOARD_SAH };
 export type { KunciDashboard };
 
 /** Pemakai yang dinilai: cukup peran + jabatannya. */
-type PemakaiDashboard = { role: string; jabatan?: string | null; modul_izin?: unknown };
+type PemakaiDashboard = {
+  role: string;
+  jabatan?: string | null;
+  modul_izin?: unknown;
+  divisi?: string | null;
+  jabatan_sayap?: string | null;
+};
 
 /** Kompat: pemanggil lama mengirim string role saja. */
 function urai(pemakai: PemakaiDashboard | string): PemakaiDashboard {
@@ -40,6 +47,9 @@ function aksesPenuh(p: PemakaiDashboard): boolean {
   if (p.role === "master" || p.role === "super_admin" || p.role === "superadmin") return true;
   // Modul Dashboard dibuka master per akun (10 Sep 2026) → penuh.
   if (modulDibuka(p, "dashboard") === true) return true;
+  // Pengurus SAYAP (10 Sep 2026): jabatannya tidak berpengaruh apa pun di
+  // DPP, tetapi Dashboard tetap dibuka — permintaan user.
+  if (adalahPengurusSayap(p)) return true;
   return (p.jabatan ?? "").trim() !== "";
 }
 

@@ -520,6 +520,8 @@ export type PenggunaAdmin = {
   bidang_jabatan?: string;
   /** Modul per akun yang dibuka/ditutup master (10 Sep 2026). */
   modul_izin?: Record<string, boolean> | null;
+  /** Jabatan di Sayap Partai (10 Sep 2026) — terpisah dari jabatan DPP. */
+  jabatan_sayap?: string;
   divisi?: string;
   sub_divisi?: string;
   posisi_divisi?: string;
@@ -555,7 +557,7 @@ export async function ubahPengguna(
   role?: string,
   jabatan?: string,
   bidang?: string,
-  divisiInfo?: { divisi: string; sub_divisi?: string; posisi_divisi?: string },
+  divisiInfo?: { divisi: string; sub_divisi?: string; posisi_divisi?: string; jabatan_sayap?: string },
 ): Promise<void> {
   await fetchJson("/api/pengguna", {
     method: "PATCH",

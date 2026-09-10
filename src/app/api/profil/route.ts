@@ -16,7 +16,7 @@ import {
   userDariTokenLonggar,
   type BarisUser,
 } from "@/lib/sesi";
-import { pastikanStrukturSah } from "@/lib/struktur";
+import { DIVISI_SAYAP, pastikanStrukturSah } from "@/lib/struktur";
 
 import { nilaiSayapTambahan } from "@/lib/sayap";
 export const dynamic = "force-dynamic";
@@ -288,6 +288,15 @@ export async function POST(request: Request) {
       sub_divisi: subDivisi,
       profil_lengkap: true,
     };
+    // Aturan sayap (10 Sep 2026): anggota Sayap Partai tidak memakai
+    // jabatan DPP; sebaliknya, pindah keluar dari sayap mengosongkan
+    // jabatan sayapnya. Jabatan sayap sendiri hanya ditetapkan pengurus.
+    if (divisi === DIVISI_SAYAP) {
+      perubahan.jabatan = "";
+      perubahan.bidang_jabatan = null;
+    } else {
+      perubahan.jabatan_sayap = "";
+    }
 
     if (body.foto) {
       const { data, jenis, ekstensi } = bacaDataUrl(body.foto);
