@@ -80,6 +80,26 @@ export function rencanakanPerbaikan(
 
 export type HasilPerbaikan = { user_id: number; diperiksa: number; dihapus: number; diubah: number; ditautkan: number; contoh: string[] };
 
+// ------------------------------------------------------------
+// PENAHAN LAJU (10 Sep 2026) — pelajaran mahal.
+//
+// Perbaikan ini menulis satu baris per permintaan. Dijalankan untuk
+// ratusan anggota tanpa jeda, ia sempat menembak Supabase belasan
+// permintaan per detik selama berjam-jam: CPU instansi 100%, dan
+// aplikasi yang dipakai orang sungguhan ikut melambat sampai 20 detik
+// PADAHAL databasenya sendiri menganggur. Jadi sekarang tiap tulisan
+// diberi jeda, dan antar-anggota jedanya lebih panjang.
+//
+// Perbaikan ini tidak dikejar waktu — lebih baik selesai lambat
+// daripada membuat aplikasi tidak bisa dipakai.
+// ------------------------------------------------------------
+/** Jeda antar penulisan (ms). */
+export const JEDA_TULIS_MS = 120;
+/** Jeda antar anggota (ms). */
+export const JEDA_ORANG_MS = 1500;
+const tunggu = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const tarikNapas = () => tunggu(JEDA_TULIS_MS);
+
 export async function perbaikiLaporanUser(userId: number, hari = 30, terapkan = true): Promise<HasilPerbaikan> {
   const db = supabase();
   const sejak = new Date(Date.now() + 7 * 3600_000 - hari * 86_400_000).toISOString().slice(0, 10);
@@ -123,14 +143,17 @@ export async function perbaikiLaporanUser(userId: number, hari = 30, terapkan = 
     const potong = rencana.hapus.slice(i, i + 100).map((h) => h.id);
     const { error } = await db.from("laporan_video").delete().in("id", potong);
     if (!error) hasil.dihapus += potong.length;
+    await tarikNapas();
   }
   for (const t of rencana.tautkan) {
     const { error } = await db.from("laporan_video").update({ tvrku_post_id: t.tvrku_post_id }).eq("id", t.id);
     if (!error) hasil.ditautkan += 1;
+    await tarikNapas();
   }
   for (const u of rencana.ubah) {
     const { error } = await db.from("laporan_video").update({ url_video: u.ke }).eq("id", u.id);
     if (!error) hasil.diubah += 1;
+    await tarikNapas();
   }
   return hasil;
 }
@@ -142,7 +165,10 @@ export async function perbaikiLaporanSemua(hari = 30, terapkan = true, batasOran
   const { data } = await db.from("laporan_video").select("user_id").gte("tanggal_wib", sejak).limit(20000);
   const ids = [...new Set((data ?? []).map((d) => Number(d.user_id)))].slice(0, batasOrang);
   const per: HasilPerbaikan[] = [];
-  for (const uid of ids) per.push(await perbaikiLaporanUser(uid, hari, terapkan));
+  for (const uid of ids) {
+    per.push(await perbaikiLaporanUser(uid, hari, terapkan));
+    if (terapkan) await tunggu(JEDA_ORANG_MS);
+  }
   return {
     orang: ids.length,
     dihapus: per.reduce((n, h) => n + h.dihapus, 0),

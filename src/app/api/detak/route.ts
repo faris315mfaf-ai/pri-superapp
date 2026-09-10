@@ -23,6 +23,8 @@ import { pastikanMasuk } from "@/lib/sesi";
 import { supabase } from "@/lib/supabase";
 
 import { catatHadir, daftarHadir } from "@/lib/kehadiran";
+import { bacaSakelar } from "@/lib/sakelar";
+import { jedaDetak, ratakan } from "@/lib/rem-detak";
 export const dynamic = "force-dynamic";
 
 /** Tabel yang perubahannya harus terasa di layar dalam hitungan detik. */
@@ -37,7 +39,12 @@ const TABEL_PANTAU = [
 /** Umur tanda di cache bersama; lebih pendek dari jeda detak klien. */
 const TTL_DETIK = 5;
 
+// Rem otomatis: jedanya dihitung lib/rem-detak (murni, teruji terpisah).
+/** Rata-rata bergerak lama kueri tanda (ms) di instansi ini. */
+let msTanda = 0;
+
 async function hitungTanda(): Promise<string> {
+  const mulai = Date.now();
   const db = supabase();
   const bagian = await Promise.all(
     TABEL_PANTAU.map(async (tabel) => {
@@ -57,6 +64,7 @@ async function hitungTanda(): Promise<string> {
       return `${tabel[0]}${data?.id ?? 0}`;
     }),
   );
+  msTanda = ratakan(msTanda, Date.now() - mulai);
   return bagian.join(".");
 }
 
@@ -68,10 +76,17 @@ export async function GET(request: Request) {
     // KEHADIRAN (10 Sep 2026): detak inilah bukti "aplikasinya sedang
     // dibuka", jadi ditumpangi sekalian — tanpa permintaan tambahan.
     await catatHadir(user.id);
-    const [tanda, hadir] = await Promise.all([
+    const [tanda, hadir, sakelar] = await Promise.all([
       denganCache("detak:global", TTL_DETIK, hitungTanda),
       daftarHadir(),
+      bacaSakelar().catch(() => null),
     ]);
-    return { tanda, hadir, online: hadir.length };
+    return {
+      tanda,
+      hadir,
+      online: hadir.length,
+      // Klien memakai angka ini sebagai jeda detak berikutnya (detik).
+      jeda: jedaDetak(sakelar?.hemat === true, msTanda),
+    };
   });
 }

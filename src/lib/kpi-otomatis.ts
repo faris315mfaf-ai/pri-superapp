@@ -158,19 +158,30 @@ async function catatLaporan(
   const kunci = kunciVideo(platform, url);
   // X memecah satu unggahan jadi utas → satu baris per unggahan sudah cukup.
   if (ctx.kunciSudah.has(kunci) || (platform === "twitter" && ctx.adaTerkait.has(`${postId}|twitter`))) return "dobel";
-  const { error } = await db.from("laporan_video").insert({
-    user_id: userId,
-    platform,
-    url_video: url,
-    keyword: null,
-    tanggal_wib: tanggalWibDari(waktu),
-    sumber: "otomatis",
-    tvrku_post_id: postId,
-  });
-  if (error && error.code !== "23505") return "gagal";
+  // 10 Sep 2026: dulu INSERT biasa, lalu galat 23505 ("sudah ada")
+  // dianggap wajar. Akibatnya rekonsiliasi menembakkan ~955 penulisan
+  // GAGAL per hari ke database — beban dan log galat yang sia-sia.
+  // Kini konflik ditangani Postgres sendiri (ON CONFLICT DO NOTHING):
+  // tidak ada galat, dan baris balasan yang kosong = memang sudah ada.
+  const { data: barisBaru, error } = await db
+    .from("laporan_video")
+    .upsert(
+      {
+        user_id: userId,
+        platform,
+        url_video: url,
+        keyword: null,
+        tanggal_wib: tanggalWibDari(waktu),
+        sumber: "otomatis",
+        tvrku_post_id: postId,
+      },
+      { onConflict: "user_id,url_video", ignoreDuplicates: true },
+    )
+    .select("id");
+  if (error) return "gagal";
   ctx.kunciSudah.add(kunci);
   ctx.adaTerkait.add(`${postId}|${platform}`);
-  if (!error) {
+  if ((barisBaru ?? []).length > 0) {
     // Bila anggota sempat melaporkan link ini MANUAL (menunggu ACC HR),
     // deteksi otomatis = bukti sah → langsung disetujui (2 Sep 2026).
     await db

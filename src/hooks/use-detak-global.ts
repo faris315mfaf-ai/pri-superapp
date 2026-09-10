@@ -48,6 +48,9 @@ export function useDetakGlobal(aktif: boolean) {
   const gagalRef = useRef(0);
   // Aplikasi baru dibuka = penggunanya jelas sedang ada di depan layar.
   const sentuhRef = useRef(Date.now());
+  // Jeda yang DIPERINTAHKAN server (detik → ms). Melebar sendiri saat
+  // server berat; kembali normal begitu server pulih.
+  const jedaRef = useRef(JEDA_DETAK_MS);
 
   useEffect(() => {
     if (!aktif) return;
@@ -60,7 +63,8 @@ export function useDetakGlobal(aktif: boolean) {
       if (timer) clearTimeout(timer);
       const lipat = 2 ** Math.min(gagalRef.current, MAKS_MUNDUR);
       const diam = Date.now() - sentuhRef.current > DIAM_MS;
-      const dasar = diam ? JEDA_DIAM_MS : JEDA_DETAK_MS;
+      // Yang paling jarang menang: perintah server vs mundur karena diam.
+      const dasar = Math.max(jedaRef.current, diam ? JEDA_DIAM_MS : 0);
       timer = setTimeout(periksa, dasar * lipat + Math.random() * JITTER_MS);
     }
 
@@ -77,8 +81,9 @@ export function useDetakGlobal(aktif: boolean) {
       }
       sedang = true;
       try {
-        const { tanda, hadir } = await getDetak();
+        const { tanda, hadir, jeda } = await getDetak();
         gagalRef.current = 0;
+        jedaRef.current = jeda * 1000;
         // Siapa yang sedang membuka aplikasi (titik hijau & hitungan di Chat).
         useAppStore.getState().setHadir(hadir);
         // Detak PERTAMA hanya merekam keadaan awal — data baru saja

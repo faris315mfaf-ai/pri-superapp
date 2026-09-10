@@ -2544,7 +2544,17 @@ export async function hapusVideoAntrian(
 // Panel Master (khusus peran master)
 // ------------------------------------------------------------
 
+export type OrangOnline = {
+  id: string;
+  nama: string;
+  avatar_url: string;
+  role: string;
+  struktur: string;
+};
+
 export type DataMaster = {
+  /** Siapa saja yang sedang membuka aplikasi (10 Sep 2026). */
+  online?: { jumlah: number; orang: OrangOnline[] };
   ringkasan: {
     pengguna_aktif: number;
     percakapan: number;
@@ -6001,12 +6011,22 @@ export type HasilDetak = {
   tanda: string;
   /** Id pengguna yang sedang membuka aplikasi (±60 detik terakhir). */
   hadir: string[];
+  /**
+   * Jeda detak berikutnya dalam DETIK, ditentukan server (10 Sep 2026).
+   * Melebar sendiri saat database melambat atau mode hemat menyala —
+   * rem otomatis supaya ratusan perangkat tidak memperparah keadaan.
+   */
+  jeda: number;
 };
 
 export async function getDetak(): Promise<HasilDetak> {
   const json = await fetchJson("/api/detak", { cache: "no-store" });
+  const jeda = Number(json?.jeda);
   return {
     tanda: String(json?.tanda ?? ""),
     hadir: Array.isArray(json?.hadir) ? (json.hadir as unknown[]).map(String) : [],
+    // Batas aman: server tidak boleh menyuruh lebih cepat dari 5 detik
+    // atau lebih lambat dari 5 menit, walau jawabannya aneh.
+    jeda: Number.isFinite(jeda) ? Math.min(300, Math.max(5, jeda)) : 10,
   };
 }

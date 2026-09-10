@@ -30,7 +30,12 @@ const JENDELA_MS = 60_000;
 /** Hasil pembacaan ditahan sebentar supaya ratusan detik tidak menembak Redis bersamaan. */
 const MEMO_MS = 5_000;
 
-const memori = new Map<string, number>();
+// Catatan memori sengaja ditempel ke globalThis: Next kadang memuat modul
+// yang sama lebih dari sekali (tiap rute punya bundel sendiri, apalagi saat
+// dev/HMR). Kalau Map-nya milik modul, /api/detak dan /api/master bisa
+// memegang dua catatan berbeda dan daftar online terbaca kosong.
+const gudang = globalThis as unknown as { __priHadir?: Map<string, number> };
+const memori: Map<string, number> = (gudang.__priHadir ??= new Map<string, number>());
 let memo: { pada: number; data: string[] } | null = null;
 
 function kunciEmber(geser = 0): string {

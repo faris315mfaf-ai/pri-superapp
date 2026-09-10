@@ -37,9 +37,10 @@ import { buatHashSandi } from "@/lib/sandi";
 import { AKTIVITAS_KOIN } from "@/lib/koin";
 
 import { JABATAN_PARTAI, KUOTA_JABATAN } from "@/lib/jabatan";
-import { DIVISI_SAYAP, jabatanSayapSah, pastikanStrukturSah } from "@/lib/struktur";
+import { deskripsiStruktur, DIVISI_SAYAP, jabatanSayapSah, pastikanStrukturSah } from "@/lib/struktur";
 import { nilaiSayapTambahan } from "@/lib/sayap";
 import { bersihkanModulIzin } from "@/lib/peran";
+import { daftarHadir } from "@/lib/kehadiran";
 export const dynamic = "force-dynamic";
 
 /** Kode item apa pun yang dijual toko pet (untuk ketetapan harga master). */
@@ -180,7 +181,9 @@ export async function GET(request: Request) {
         .limit(30),
       db
         .from("akun_wajib")
-        .select("id, username, platform, nama_tampilan, aktif")
+        // Kolom label di DB bernama `nama_akun` (BUKAN nama_tampilan) —
+        // salah nama membuat PostgREST menolak 400 dan daftar jadi kosong.
+        .select("id, username, platform, nama_akun, aktif")
         .order("platform")
         .order("username"),
       db
@@ -192,7 +195,30 @@ export async function GET(request: Request) {
       db.from("pengaturan_sistem").select("kunci, nilai"),
     ]);
 
+    // SIAPA YANG ONLINE (10 Sep 2026): dari detak, jadi tanpa kueri berkala
+    // tambahan. Nama diambil sekali di sini karena panel jarang dibuka.
+    const idHadir = await daftarHadir().catch(() => [] as string[]);
+    const nomor = idHadir.map(Number).filter((n) => Number.isFinite(n) && n > 0);
+    const { data: orangHadir } = nomor.length
+      ? await db
+          .from("app_user")
+          .select("id, nama, avatar_url, role, jabatan, divisi")
+          .in("id", nomor.slice(0, 300))
+      : { data: [] as { id: unknown; nama: unknown; avatar_url: unknown; role: unknown; jabatan: unknown; divisi: unknown }[] };
+
     return {
+      online: {
+        jumlah: idHadir.length,
+        orang: (orangHadir ?? [])
+          .map((o) => ({
+            id: String(o.id),
+            nama: String(o.nama ?? ""),
+            avatar_url: String(o.avatar_url ?? ""),
+            role: String(o.role ?? ""),
+            struktur: deskripsiStruktur(o as Parameters<typeof deskripsiStruktur>[0]),
+          }))
+          .sort((a, b) => a.nama.localeCompare(b.nama)),
+      },
       ringkasan: {
         pengguna_aktif: jumlahUser ?? 0,
         percakapan: jumlahChat ?? 0,
@@ -211,7 +237,7 @@ export async function GET(request: Request) {
         id: String(a.id),
         username: a.username,
         platform: a.platform,
-        nama_tampilan: a.nama_tampilan ?? "",
+        nama_tampilan: a.nama_akun ?? "",
         aktif: a.aktif,
       })),
       pengaturan: Object.fromEntries(
@@ -449,7 +475,7 @@ export async function POST(request: Request) {
       }
       const { error } = await db
         .from("akun_wajib")
-        .insert({ username, platform, nama_tampilan: username, aktif: true });
+        .insert({ username, platform, nama_akun: username, aktif: true });
       if (error) {
         if (error.code === "23505") {
           throw Object.assign(

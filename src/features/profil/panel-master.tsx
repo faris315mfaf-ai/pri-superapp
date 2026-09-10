@@ -34,18 +34,19 @@ import {
   Database,
   Download,
   FileText,
+  GraduationCap,
+  KeyRound,
   Loader2,
   LogOut,
   Plus,
   RefreshCw,
+  ScanFace,
   ShieldCheck,
   Trash2,
   Upload,
-  UserCog,
   UserCheck,
-  GraduationCap,
-  KeyRound,
-  ScanFace,
+  UserCog,
+  Users,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { FotoBulat } from "@/components/foto-bulat";
@@ -57,6 +58,7 @@ import {
   GlassSkeleton,
   SectionTitle,
   StatusBadge,
+  TitikOnline,
 } from "@/components/pri-ui";
 import { PlatformIcon } from "@/components/platform-icon";
 import { toast } from "@/hooks/use-app-store";
@@ -284,6 +286,67 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                 )
               }
             />
+
+            {/* SIAPA YANG ONLINE (10 Sep 2026) — dari detak, jadi selalu
+                mutakhir tanpa kueri berkala tambahan. */}
+            <SectionTitle judul="Sedang Online" className="mt-6" />
+            <p className="mb-2 text-[11px] leading-relaxed text-teks-sekunder">
+              Yang aplikasinya sedang terbuka (±60 detik terakhir). Angkanya ikut
+              turun sendiri begitu mereka menutup aplikasi.
+            </p>
+            <GlassCard className="p-3.5">
+              <div className="flex items-center gap-2.5">
+                <span
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-white"
+                  style={{ background: "linear-gradient(135deg, #10B981, #059669)", boxShadow: "0 8px 18px rgba(16,185,129,0.35)" }}
+                  aria-hidden="true"
+                >
+                  <Users className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="angka-tab font-heading text-xl font-extrabold text-teks-utama">
+                    {data.online?.jumlah ?? 0} orang
+                  </p>
+                  <p className="text-[11px] text-teks-sekunder">sedang membuka aplikasi</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMuatUlang((n) => n + 1)}
+                  aria-label="Segarkan daftar online"
+                  className="glass btn-tekan flex h-9 w-9 items-center justify-center rounded-full text-teks-utama"
+                >
+                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+              {(data.online?.orang ?? []).length > 0 ? (
+                // Saat ramai daftarnya bisa ratusan nama: dibatasi tinggi
+                // lalu digulir sendiri supaya panel tetap bisa dipakai.
+                <div className="mt-3 flex max-h-64 flex-col gap-1.5 overflow-y-auto pr-1">
+                  {(data.online?.orang ?? []).map((o) => (
+                    <div key={o.id} className="flex items-center gap-2.5">
+                      <span className="relative shrink-0">
+                        {o.avatar_url ? (
+                          <FotoBulat src={o.avatar_url} ukuran={30} />
+                        ) : (
+                          <AvatarInisial nama={o.nama} ukuran={30} />
+                        )}
+                        <TitikOnline ukuran={9} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[12.5px] font-bold text-teks-utama">{o.nama}</span>
+                        {o.struktur && (
+                          <span className="block truncate text-[10.5px] text-teks-sekunder">{o.struktur}</span>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2.5 text-[11.5px] text-teks-sekunder">
+                  Belum ada yang terdeteksi membuka aplikasi saat ini.
+                </p>
+              )}
+            </GlassCard>
 
             {/* Buat akun baru lengkap (10 Sep 2026) */}
             <SeksiAkunBaru onSelesai={() => setMuatUlang((n) => n + 1)} />
