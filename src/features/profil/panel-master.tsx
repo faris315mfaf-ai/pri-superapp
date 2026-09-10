@@ -81,6 +81,7 @@ import {
 import { jamWIB, tanggalIndonesia } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+import { ModalModulAkun, SeksiAkunBaru } from "./akun-baru-master";
 const PERAN_PILIHAN = [
   { id: "super_admin", label: "Super Admin", warna: "#DC2626" },
   { id: "admin_tv", label: "Admin TV Rakyat", warna: "#10B981" },
@@ -104,6 +105,8 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
   );
   // Akun yang sedang di-reset sandinya (spek 1.15)
   const [resetUntuk, setResetUntuk] = useState<PenggunaAdmin | null>(null);
+  // Modul per akun (10 Sep 2026): akun yang sedang diatur modulnya.
+  const [modulUntuk, setModulUntuk] = useState<PenggunaAdmin | null>(null);
 
   useEffect(() => {
     let hidup = true;
@@ -282,6 +285,9 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
               }
             />
 
+            {/* Buat akun baru lengkap (10 Sep 2026) */}
+            <SeksiAkunBaru onSelesai={() => setMuatUlang((n) => n + 1)} />
+
             <SectionTitle judul="Peran Istimewa" className="mt-6" />
             <p className="mb-2 text-[11px] leading-relaxed text-teks-sekunder">
               Panel super admin hanya bisa memberi Ketua/Anggota. Peran Super
@@ -318,6 +324,18 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
                     <button
                       type="button"
                       disabled={sedangProses || u.role === "master"}
+                      onClick={() => setModulUntuk(u)}
+                      aria-label={`Atur modul ${u.nama}`}
+                      className={cn(
+                        "glass btn-tekan rounded-xl px-2.5 py-1.5 text-[11px] font-bold disabled:opacity-40",
+                        u.modul_izin && Object.keys(u.modul_izin).length > 0 ? "text-pri" : "text-teks-utama",
+                      )}
+                    >
+                      Modul
+                    </button>
+                    <button
+                      type="button"
+                      disabled={sedangProses || u.role === "master"}
                       onClick={() => setResetUntuk(u)}
                       aria-label={`Reset sandi ${u.nama}`}
                       className="btn-tekan p-1.5 text-teks-sekunder disabled:opacity-40"
@@ -344,6 +362,13 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
             </div>
           </FadeInUp>
 
+          {modulUntuk && (
+            <ModalModulAkun
+              pengguna={modulUntuk}
+              onTutup={() => setModulUntuk(null)}
+              onTersimpan={() => setMuatUlang((n) => n + 1)}
+            />
+          )}
           {/* Database foto unggahan (spek 1.15) */}
           <FadeInUp delay={0.07}>
             <GaleriFotoMaster />

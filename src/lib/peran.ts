@@ -35,3 +35,46 @@ export function adalahPengurusPusat(u: { role?: string | null } | null | undefin
   const r = u?.role ?? "";
   return r === "master" || r === "super_admin" || r === "superadmin";
 }
+
+// ------------------------------------------------------------
+// MODUL PER AKUN (10 Sep 2026): master membuka/menutup modul saat membuat
+// akun di Panel Master. Disimpan di app_user.modul_izin (jsonb):
+//   { dashboard: true, qc: false, ... }   true = dibuka, false = ditutup,
+//   tidak ada / null = mengikuti peran & jabatan seperti biasa.
+// Dipakai page.tsx (tab), dashboard-akses, hr, tv-tim, asisten (server).
+// ------------------------------------------------------------
+export const MODUL_AKUN = [
+  { kunci: "dashboard", label: "Dashboard", keterangan: "Absensi, KPI anggota, kepatuhan komen, TV Rakyat, database, TV Nasional" },
+  { kunci: "qc", label: "HR Center", keterangan: "Kelola pengguna, ACC KPI, kirim pengumuman" },
+  { kunci: "tv", label: "TV Rakyat Official", keterangan: "Produksi & unggah video resmi" },
+  { kunci: "tvrku", label: "TVR Saya", keterangan: "Akun sosmed pribadi & laporan video" },
+  { kunci: "chat", label: "Chat", keterangan: "Percakapan antar anggota" },
+  { kunci: "asisten", label: "Asisten AI", keterangan: "Chatbot & perintah suara" },
+  { kunci: "acara", label: "Acara", keterangan: "Tanggal penting partai" },
+] as const;
+
+export type KunciModul = (typeof MODUL_AKUN)[number]["kunci"];
+export type ModulIzin = Partial<Record<KunciModul, boolean>>;
+
+const KUNCI_MODUL_SAH = new Set<string>(MODUL_AKUN.map((m) => m.kunci));
+
+/** true = dibuka master, false = ditutup master, undefined = ikut peran. */
+export function modulDibuka(
+  u: { modul_izin?: unknown } | null | undefined,
+  kunci: KunciModul,
+): boolean | undefined {
+  const izin = u?.modul_izin;
+  if (!izin || typeof izin !== "object" || Array.isArray(izin)) return undefined;
+  const v = (izin as Record<string, unknown>)[kunci];
+  return typeof v === "boolean" ? v : undefined;
+}
+
+/** Saring masukan mentah jadi peta modul yang sah; null bila kosong. */
+export function bersihkanModulIzin(mentah: unknown): ModulIzin | null {
+  if (!mentah || typeof mentah !== "object" || Array.isArray(mentah)) return null;
+  const hasil: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(mentah as Record<string, unknown>)) {
+    if (KUNCI_MODUL_SAH.has(k) && typeof v === "boolean") hasil[k] = v;
+  }
+  return Object.keys(hasil).length > 0 ? (hasil as ModulIzin) : null;
+}

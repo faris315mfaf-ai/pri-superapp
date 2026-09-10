@@ -36,6 +36,10 @@ import { kirimKabar } from "@/lib/notifikasi";
 import { buatHashSandi } from "@/lib/sandi";
 import { AKTIVITAS_KOIN } from "@/lib/koin";
 
+import { JABATAN_PARTAI, KUOTA_JABATAN } from "@/lib/jabatan";
+import { pastikanStrukturSah } from "@/lib/struktur";
+import { nilaiSayapTambahan } from "@/lib/sayap";
+import { bersihkanModulIzin } from "@/lib/peran";
 export const dynamic = "force-dynamic";
 
 /** Kode item apa pun yang dijual toko pet (untuk ketetapan harga master). */
@@ -235,6 +239,17 @@ export async function POST(request: Request) {
       /** pet_toko_*: kode item (5 Sep 2026) & batas waktu event */
       kode?: string;
       sampai?: string;
+      /** buat_akun (10 Sep 2026) */
+      nama?: string;
+      sandi?: string;
+      nomor_wa?: string;
+      jabatan?: string;
+      bidang_jabatan?: string;
+      divisi?: string;
+      sub_divisi?: string;
+      posisi_divisi?: string;
+      /** buat_akun / ubah_modul: modul per akun */
+      modul_izin?: unknown;
     };
     const db = supabase();
 
@@ -294,6 +309,91 @@ export async function POST(request: Request) {
       return { sukses: true };
     }
 
+    // --- Buat akun baru lengkap (10 Sep 2026) ---
+    if (body.aksi === "buat_akun") {
+      const nama = String(body.nama ?? "").trim().replace(/\s+/g, " ");
+      const username = String(body.username ?? "").trim().toLowerCase();
+      const sandi = String(body.sandi ?? "");
+      const role = String(body.role ?? "anggota");
+      const jabatan = String(body.jabatan ?? "").trim();
+      const bidang = String(body.bidang_jabatan ?? "").trim();
+      const divisi = String(body.divisi ?? "").trim();
+      const sub = String(body.sub_divisi ?? "").trim();
+      const posisi = body.posisi_divisi === "kepala" ? "kepala" : "anggota";
+      const nomorWaMentah = String(body.nomor_wa ?? "").replace(/[^\d+]/g, "");
+      const nomorWa = nomorWaMentah ? nomorWaMentah.replace(/^\+/, "").replace(/^0/, "62") : null;
+      if (nama.length < 3) throw Object.assign(new Error("Nama minimal 3 huruf."), { status: 400 });
+      if (!/^[a-z0-9._]{3,30}$/.test(username)) {
+        throw Object.assign(new Error("Username 3–30 huruf kecil, angka, titik, atau garis bawah."), { status: 400 });
+      }
+      if (sandi.length < 6) throw Object.assign(new Error("Sandi minimal 6 karakter."), { status: 400 });
+      if (!["anggota", "ketua", "superadmin", ...PERAN_KHUSUS].includes(role)) {
+        throw Object.assign(new Error("Peran tidak dikenal."), { status: 400 });
+      }
+      if (jabatan && !(JABATAN_PARTAI as readonly string[]).includes(jabatan)) {
+        throw Object.assign(new Error("Jabatan tidak dikenal."), { status: 400 });
+      }
+      pastikanStrukturSah(divisi, sub, await nilaiSayapTambahan());
+      if (nomorWa && !/^62\d{8,14}$/.test(nomorWa)) {
+        throw Object.assign(new Error("Nomor WhatsApp tidak wajar."), { status: 400 });
+      }
+      const { data: kembar } = await db.from("app_user").select("id").ilike("username", username).limit(1);
+      if (kembar && kembar.length > 0) throw Object.assign(new Error(`Username @${username} sudah dipakai.`), { status: 409 });
+      if (nomorWa) {
+        const { data: waKembar } = await db.from("app_user").select("id").eq("nomor_wa", nomorWa).limit(1);
+        if (waKembar && waKembar.length > 0) throw Object.assign(new Error("Nomor WhatsApp sudah terdaftar."), { status: 409 });
+      }
+      // Kuota jabatan (mis. Ketua Umum hanya 1) tetap dihormati.
+      const kuota = jabatan ? KUOTA_JABATAN[jabatan] : undefined;
+      if (kuota !== undefined) {
+        const { count } = await db.from("app_user").select("id", { count: "exact", head: true }).eq("jabatan", jabatan).eq("aktif", true);
+        if ((count ?? 0) >= kuota) {
+          throw Object.assign(new Error(`Kuota ${jabatan} sudah penuh (${kuota}).`), { status: 409 });
+        }
+      }
+      const { data: baris, error } = await db
+        .from("app_user")
+        .insert({
+          nama,
+          username,
+          email: `${username}@pri.local`,
+          nomor_wa: nomorWa,
+          password_hash: await buatHashSandi(sandi),
+          role,
+          jabatan,
+          bidang_jabatan: bidang,
+          divisi,
+          sub_divisi: divisi ? sub : "",
+          posisi_divisi: divisi ? posisi : "anggota",
+          status: "aktif",
+          aktif: true,
+          profil_lengkap: true,
+          // Dibuat master → tidak perlu verifikasi WA berulang.
+          wa_terverifikasi: true,
+          disetujui_oleh: master.nama,
+          disetujui_pada: new Date().toISOString(),
+          modul_izin: bersihkanModulIzin(body.modul_izin),
+        })
+        .select("id, username")
+        .single();
+      if (error) {
+        console.error("[master] buat akun:", error.message);
+        throw new Error("Gagal membuat akun.");
+      }
+      return { sukses: true, id: String(baris.id), username: String(baris.username) };
+    }
+    // --- Modul per akun (10 Sep 2026) ---
+    if (body.aksi === "ubah_modul") {
+      const id = Number(body.user_id);
+      if (!id) throw Object.assign(new Error("Akun tidak disebutkan."), { status: 400 });
+      const { data: target } = await db.from("app_user").select("id, role").eq("id", id).maybeSingle();
+      if (!target || target.role === "master") throw Object.assign(new Error("Akun tidak ditemukan."), { status: 404 });
+      const { error } = await db.from("app_user").update({ modul_izin: bersihkanModulIzin(body.modul_izin) }).eq("id", id);
+      if (error) throw new Error("Gagal menyimpan modul akun.");
+      // Sesi yang sedang aktif membaca ulang akunnya dari database.
+      await hapusCacheUser(id);
+      return { sukses: true };
+    }
     // --- Akun wajib QC ---
     if (body.aksi === "tambah_akun_wajib") {
       const platform = String(body.platform ?? "").toLowerCase();

@@ -16,11 +16,12 @@ import {
   type KunciDashboard,
 } from "@/lib/dashboard-katalog";
 
+import { modulDibuka } from "@/lib/peran";
 export { KATALOG_DASHBOARD, KUNCI_DASHBOARD_SAH };
 export type { KunciDashboard };
 
 /** Pemakai yang dinilai: cukup peran + jabatannya. */
-type PemakaiDashboard = { role: string; jabatan?: string | null };
+type PemakaiDashboard = { role: string; jabatan?: string | null; modul_izin?: unknown };
 
 /** Kompat: pemanggil lama mengirim string role saja. */
 function urai(pemakai: PemakaiDashboard | string): PemakaiDashboard {
@@ -37,6 +38,8 @@ function urai(pemakai: PemakaiDashboard | string): PemakaiDashboard {
 function aksesPenuh(p: PemakaiDashboard): boolean {
   // superadmin (10 Sep 2026): akun pusat dengan Dashboard SELENGKAPNYA.
   if (p.role === "master" || p.role === "super_admin" || p.role === "superadmin") return true;
+  // Modul Dashboard dibuka master per akun (10 Sep 2026) → penuh.
+  if (modulDibuka(p, "dashboard") === true) return true;
   return (p.jabatan ?? "").trim() !== "";
 }
 

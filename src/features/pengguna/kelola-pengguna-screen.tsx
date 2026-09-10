@@ -39,7 +39,8 @@ import { toast } from "@/hooks/use-app-store";
 import { getPengguna, ubahPengguna, type PenggunaAdmin,
   setujuiSemuaPendaftar,
 } from "@/services";
-import { butuhSubDivisi, DIVISI, pilihanSubDivisi } from "@/lib/struktur";
+import { butuhSubDivisi, DIVISI } from "@/lib/struktur";
+import { PilihStruktur } from "./pilih-struktur";
 import { JABATAN_PARTAI, KUOTA_JABATAN, jabatanLengkap } from "@/lib/jabatan";
 import { cn } from "@/lib/utils";
 
@@ -802,7 +803,6 @@ function PilihDivisi({
   const [divisi, setDivisi] = useState(pengguna.divisi ?? "");
   const [sub, setSub] = useState(pengguna.sub_divisi ?? "");
   const [posisi, setPosisi] = useState(pengguna.posisi_divisi === "kepala" ? "kepala" : "anggota");
-  const daftarSub = pilihanSubDivisi(divisi);
   const sah = !divisi || !butuhSubDivisi(divisi) || Boolean(sub);
 
   return (
@@ -829,47 +829,24 @@ function PilihDivisi({
         </div>
 
         <h2 className="shrink-0 font-heading text-lg font-bold text-teks-utama">
-          Divisi untuk {pengguna.nama.split(" ")[0]}
+          Struktur untuk {pengguna.nama.split(" ")[0]}
         </h2>
         <p className="mt-1 shrink-0 text-[12.5px] leading-relaxed text-teks-sekunder">
-          Anggota memilih divisinya sendiri saat mendaftar; posisi
-          <b> Kepala/Anggota</b> hanya bisa diatur dari sini.
+          Pilih <b>Zona</b>, <b>Sayap</b>, atau <b>Divisi</b>, lalu isinya. Posisi
+          <b> Kepala/Anggota</b> hanya bisa diatur dari sini. Sayap baru bisa
+          ditambahkan langsung (Divisi HR, superadmin, master).
         </p>
-
         <div className="scrollbar-tipis mt-4 flex flex-col gap-3 overflow-y-auto">
-          <select
-            value={divisi}
-            onChange={(e) => {
-              setDivisi(e.target.value);
-              setSub("");
+          {/* 10 Sep 2026: pemilih dua langkah Zona · Sayap · Divisi */}
+          <PilihStruktur
+            nilai={{ divisi, sub_divisi: sub }}
+            onUbah={(v) => {
+              setDivisi(v.divisi);
+              setSub(v.sub_divisi);
             }}
-            aria-label="Divisi"
-            className="glass-soft h-11 w-full rounded-xl px-3 text-sm text-teks-utama outline-none focus:ring-2 focus:ring-pri/50"
-          >
-            <option value="">— Tanpa divisi —</option>
-            {DIVISI.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-
-          {daftarSub.length > 0 && (
-            <select
-              value={sub}
-              onChange={(e) => setSub(e.target.value)}
-              aria-label="Sub-divisi"
-              className="glass-soft h-11 w-full rounded-xl px-3 text-sm text-teks-utama outline-none focus:ring-2 focus:ring-pri/50"
-            >
-              <option value="">— Pilih sub-divisi —</option>
-              {daftarSub.map((x) => (
-                <option key={x.nilai} value={x.nilai}>
-                  {x.label}
-                </option>
-              ))}
-            </select>
-          )}
-
+            disabled={sedangProses}
+            bolehKosong
+          />
           {divisi && (
             <div className="flex gap-2">
               {(["anggota", "kepala"] as const).map((pos) => (
@@ -887,7 +864,7 @@ function PilihDivisi({
                       : undefined
                   }
                 >
-                  {pos === "kepala" ? "Kepala Divisi" : "Anggota Divisi"}
+                  {pos === "kepala" ? "Kepala" : "Anggota"}
                 </button>
               ))}
             </div>
@@ -901,7 +878,7 @@ function PilihDivisi({
             style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
           >
             {sedangProses && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-            Simpan Divisi
+            Simpan Struktur
           </button>
         </div>
       </motion.div>

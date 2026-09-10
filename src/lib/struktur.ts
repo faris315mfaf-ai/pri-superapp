@@ -37,6 +37,29 @@ export const DIVISI = [
 /** Divisi produksi konten mandiri (fitur khusus di TV Rakyat Saya). */
 export const DIVISI_PALUGODAM = "Divisi PALUGODAM";
 
+// KATEGORI STRUKTUR (10 Sep 2026): di layar, orang memilih dulu salah satu
+// dari Zona / Sayap / Divisi, baru isinya. Di database bentuknya tetap
+// `divisi` + `sub_divisi` (Zona & Sayap adalah "divisi" dengan sub), jadi
+// data lama tidak perlu dimigrasi.
+export const DIVISI_ZONA = "Divisi Zona";
+export const DIVISI_SAYAP = "Divisi Sayap Partai";
+export const KATEGORI_STRUKTUR = [
+  { kunci: "zona", label: "Zona", keterangan: "Wilayah kerja partai" },
+  { kunci: "sayap", label: "Sayap", keterangan: "Organisasi sayap partai" },
+  { kunci: "divisi", label: "Divisi", keterangan: "Divisi kerja pusat" },
+] as const;
+export type KategoriStruktur = (typeof KATEGORI_STRUKTUR)[number]["kunci"];
+/** Divisi kerja biasa (tanpa Zona & Sayap yang punya kategori sendiri). */
+export const DIVISI_BIASA = DIVISI.filter((d) => d !== DIVISI_ZONA && d !== DIVISI_SAYAP);
+/** Kategori dari nilai `divisi` tersimpan; null bila belum memilih. */
+export function kategoriStruktur(divisi?: string | null): KategoriStruktur | null {
+  const d = (divisi ?? "").trim();
+  if (!d) return null;
+  if (d === DIVISI_ZONA) return "zona";
+  if (d === DIVISI_SAYAP) return "sayap";
+  return "divisi";
+}
+
 /** true bila orang ini anggota PALUGODAM (master ikut, untuk pengujian). */
 export function adalahPalugodam(u: {
   role?: string;
@@ -78,9 +101,16 @@ export function butuhSubDivisi(divisi: string): boolean {
   return divisi === "Divisi Sayap Partai" || divisi === "Divisi Zona";
 }
 
-/** Pilihan sub-divisi untuk sebuah divisi (kosong bila tak perlu). */
-export function pilihanSubDivisi(divisi: string): { nilai: string; label: string }[] {
-  if (divisi === "Divisi Sayap Partai") return SUB_SAYAP;
+/**
+ * Pilihan sub-divisi untuk sebuah divisi (kosong bila tak perlu).
+ * `sayapTambahan` = sayap dari tabel sayap_partai (ditambah HR/superadmin/
+ * master) yang ikut sah di samping sayap bawaan.
+ */
+export function pilihanSubDivisi(
+  divisi: string,
+  sayapTambahan: readonly { nilai: string; label: string }[] = [],
+): { nilai: string; label: string }[] {
+  if (divisi === "Divisi Sayap Partai") return [...SUB_SAYAP, ...sayapTambahan];
   if (divisi === "Divisi Zona") return SUB_ZONA;
   return [];
 }
@@ -89,12 +119,19 @@ export function pilihanSubDivisi(divisi: string): { nilai: string; label: string
  * Periksa pasangan divisi + sub-divisi. Melempar Error (status 400)
  * bila tidak sah — dipanggil dari route API sebelum menyimpan.
  */
-export function pastikanStrukturSah(divisi: string, subDivisi: string): void {
+export function pastikanStrukturSah(
+  divisi: string,
+  subDivisi: string,
+  sayapTambahan: readonly string[] = [],
+): void {
   if (!divisi) return; // belum memilih itu boleh; yang salah yang ditolak
   if (!(DIVISI as readonly string[]).includes(divisi)) {
     throw Object.assign(new Error("Divisi tidak dikenal."), { status: 400 });
   }
-  const pilihan = pilihanSubDivisi(divisi);
+  const pilihan = pilihanSubDivisi(
+    divisi,
+    sayapTambahan.map((n) => ({ nilai: n, label: n })),
+  );
   if (pilihan.length > 0) {
     if (!pilihan.some((p) => p.nilai === subDivisi)) {
       throw Object.assign(
@@ -128,6 +165,10 @@ export function deskripsiStruktur(u: {
   if (!d) return "";
   const awalan = u.posisi_divisi === "kepala" ? "Kepala " : "";
   const sub = (u.sub_divisi ?? "").trim();
+  // Zona & Sayap dibaca sebagai kategorinya sendiri (10 Sep 2026):
+  // "Kepala Zona Sumatera", "Anggota Sayap PERI" — bukan "Divisi Zona · …".
+  if (d === DIVISI_ZONA) return `${awalan}Zona${sub ? ` ${sub}` : ""}`;
+  if (d === DIVISI_SAYAP) return `${awalan}Sayap${sub ? ` ${sub}` : ""}`;
   return `${awalan}${d}${sub ? ` · ${sub}` : ""}`;
 }
 

@@ -15,6 +15,7 @@ import { aksesDashboardRole } from "@/lib/dashboard-akses";
 import { adalahHR, diDivisiHR } from "@/lib/hr";
 
 import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
+import { nilaiSayapTambahan } from "@/lib/sayap";
 export const dynamic = "force-dynamic";
 
 // Peran yang bisa DIPILIH dari panel kini hanya Ketua dan Anggota.
@@ -71,7 +72,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase()
       .from("app_user")
       .select(
-        "id, nama, nama_panggilan, email, username, nomor_wa, role, jabatan, bidang_jabatan, divisi, sub_divisi, posisi_divisi, zona_id, zona:zona(nama), avatar_url, status, aktif, wa_terverifikasi, profil_lengkap, created_at, disetujui_oleh, disetujui_pada",
+        "id, nama, nama_panggilan, email, username, nomor_wa, role, jabatan, bidang_jabatan, divisi, sub_divisi, posisi_divisi, zona_id, zona:zona(nama), avatar_url, status, aktif, wa_terverifikasi, profil_lengkap, created_at, disetujui_oleh, disetujui_pada, modul_izin",
       )
       // Yang menunggu persetujuan ditaruh paling atas — itu yang
       // butuh tindakan, bukan sekadar daftar.
@@ -359,7 +360,7 @@ export async function PATCH(request: Request) {
         // anggota cuma bisa memilih divisinya sendiri (tanpa posisi).
         const divisi = (body.divisi ?? "").trim();
         const sub = (body.sub_divisi ?? "").trim();
-        pastikanStrukturSah(divisi, sub);
+        pastikanStrukturSah(divisi, sub, await nilaiSayapTambahan());
         const posisi = body.posisi_divisi === "kepala" ? "kepala" : "anggota";
         perubahan.divisi = divisi;
         perubahan.sub_divisi = divisi ? sub : "";

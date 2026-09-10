@@ -17,6 +17,7 @@ import { adalahPimred } from "@/lib/jabatan";
 import { bolehProsesVideo } from "@/types";
 import type { UserPublik } from "@/lib/sesi";
 
+import { modulDibuka } from "@/lib/peran";
 /**
  * SEMENTARA (permintaan 2 Sep 2026): SELURUH anggota Divisi TV Rakyat
  * berwenang penuh — upload ke sosmed + menyetujui video — tanpa perlu
@@ -43,6 +44,7 @@ export async function wewenangTv(user: {
   jabatan?: string | null;
   divisi?: string | null;
   posisi_divisi?: string | null;
+  modul_izin?: unknown;
 }): Promise<WewenangTv> {
   // Hierarki OTOMATIS (spek 1.18/1.1): Pimpinan Redaksi (jabatan) dan
   // KETUA DIVISI TV RAKYAT (posisi kepala di Divisi TV Rakyat) langsung
@@ -53,6 +55,8 @@ export async function wewenangTv(user: {
     adalahPimred(user) ||
     ketuaDivisiTv ||
     (DIVISI_TV_PENUH && divisiTv) ||
+    // Modul TV Official dibuka master per akun (10 Sep 2026).
+    modulDibuka(user, "tv") === true ||
     bolehProsesVideo((user.role ?? "") as never);
   if (penuh) {
     return { anggota: true, acc: true, upload: true, proses: true };

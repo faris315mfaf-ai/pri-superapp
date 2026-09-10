@@ -59,6 +59,7 @@ import { PetScreen } from "@/features/pet/pet-screen";
 import { PetMelayang } from "@/features/pet/pet-melayang";
 import { ModalHadiahHarian } from "@/features/pet/modal-hadiah-harian";
 import { bolehPet } from "@/lib/pet-akses";
+import { MODUL_AKUN, modulDibuka } from "@/lib/peran";
 import { HewanMelayang } from "@/features/pet/hewan-melayang";
 import { LudoScreen } from "@/features/ludo/ludo-screen";
 import { AcaraScreen } from "@/features/acara/acara-screen";
@@ -236,6 +237,9 @@ function tabAwalDenganRestor(
     return tersimpan.tab;
   return TAB_AWAL[role];
 }
+
+/** Urutan baku tab bila susunannya perlu dibakukan ulang (modul per akun). */
+const URUTAN_TAB: KunciTab[] = ["beranda", "konten", "qc", "tv", "tvrku", "dashboard", "asisten", "acara", "chat", "notifikasi", "profil"];
 
 const TAB_ROLE: Record<Role, KunciTab[]> = {
   // Modul KONTEN kembali & WAJIB untuk semua peran (fitur 1.20/5):
@@ -482,6 +486,21 @@ export default function Page() {
         0,
         "asisten",
       );
+    }
+    // MODUL PER AKUN (10 Sep 2026): master membuka/menutup modul saat membuat
+    // akun. Dibuka → tab ditambahkan; ditutup → dibuang (Konten & Profil
+    // tidak pernah dibuang). Setelah itu urutan tab dibakukan.
+    if (user.modul_izin) {
+      for (const m of MODUL_AKUN) {
+        const v = modulDibuka(user, m.kunci);
+        if (v === true && !dasar.includes(m.kunci)) dasar.push(m.kunci);
+        // (Konten & Profil tidak ada di katalog modul, jadi tak pernah terbuang.)
+        if (v === false) {
+          const i = dasar.indexOf(m.kunci);
+          if (i >= 0) dasar.splice(i, 1);
+        }
+      }
+      dasar.sort((a, b) => URUTAN_TAB.indexOf(a) - URUTAN_TAB.indexOf(b));
     }
     return dasar;
   }, [user, tvAnggota, aksesDashboard, bolehAsisten]);
@@ -958,8 +977,8 @@ export default function Page() {
         isi: (
           <DashboardScreen
             onBukaDatabase={
-              user.role !== "anggota" &&
-              bolehFitur(izinFitur, "database.detail", user.role)
+              aksesDashboard.includes("anggota") ||
+              (user.role !== "anggota" && bolehFitur(izinFitur, "database.detail", user.role))
                 ? () => setSubLayar({ nama: "database" })
                 : undefined
             }
@@ -1019,9 +1038,34 @@ export default function Page() {
       });
     }
     if (tabBoleh.includes("dashboard")) {
+      // 10 Sep 2026: SELURUH pemegang jabatan (dan akun yang modul Dashboard-nya
+      // dibuka master) mendapat Dashboard PENUH — layar yang sama dengan
+      // beranda pengurus pusat, bukan daftar sub-dashboard yang ringkas.
+      const dashboardPenuh =
+        (user.role === "ketua" || user.role === "anggota") &&
+        ((user.jabatan ?? "").trim() !== "" || modulDibuka(user, "dashboard") === true);
       layarTab.push({
         kunci: "dashboard",
-        isi: (
+        isi: dashboardPenuh ? (
+          <DashboardScreen
+            user={user}
+            onBukaDatabase={
+              aksesDashboard.includes("anggota")
+                ? () => setSubLayar({ nama: "database" })
+                : undefined
+            }
+            onBukaKelolaPengguna={adalahHR(user) ? () => setSubLayar({ nama: "kelola-pengguna" }) : undefined}
+            onBukaModulQc={tabBoleh.includes("qc") ? () => pilihTab("qc") : undefined}
+            onBukaModulTv={tabBoleh.includes("tv") ? () => pilihTab("tv") : undefined}
+            onBukaAbsensi={() => setSubLayar({ nama: "absensi-hari-ini" })}
+            onBukaKpiVideo={() => setSubLayar({ nama: "dashboard-kpi" })}
+            onBukaTvNasional={() => setSubLayar({ nama: "tv-nasional" })}
+            onBukaKepatuhan={() => setSubLayar({ nama: "dashboard-kepatuhan" })}
+            onBukaTvAnalitik={() => setSubLayar({ nama: "dashboard-tv" })}
+            onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
+            jumlahBelumBaca={belumBaca}
+          />
+        ) : (
           <ModulDashboardScreen
             user={user}
             boleh={aksesDashboard}

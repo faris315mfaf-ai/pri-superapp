@@ -16,6 +16,7 @@ import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { deskripsiStruktur } from "@/lib/struktur";
 
 import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
+import { bolehDashboard } from "@/lib/dashboard-akses";
 export const dynamic = "force-dynamic";
 
 const HARI_RIWAYAT = 7;
@@ -41,16 +42,24 @@ export async function GET(request: Request) {
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
     // Peran anggota tidak pernah boleh membuka data orang lain dari sini,
     // apa pun isi matriksnya — privasi absen/KPI bukan urusan sesama anggota.
-    if (user.role === "anggota") {
+    // 10 Sep 2026: peran anggota boleh bila ia pemegang jabatan / dibuka
+    // master (dashboard "Database Anggota" menyala) — dashboard penuh untuk
+    // seluruh pemegang jabatan.
+    const lewatDashboard = await bolehDashboard(user, "anggota");
+    if (user.role === "anggota" && !lewatDashboard) {
       throw Object.assign(new Error("Anda tidak berhak membuka database anggota."), {
         status: 403,
       });
     }
-    await pastikanFiturAktif(
-      user,
-      "database.detail",
-      "Fitur database anggota sedang dimatikan untuk peran Anda.",
-    );
+    // Pemegang dashboard "Database Anggota" (jabatan / dibuka master) tidak
+    // dijegal matriks per-peran — matriks itu untuk peran biasa.
+    if (!lewatDashboard) {
+      await pastikanFiturAktif(
+        user,
+        "database.detail",
+        "Fitur database anggota sedang dimatikan untuk peran Anda.",
+      );
+    }
 
     const db = supabase();
     const url = new URL(request.url);

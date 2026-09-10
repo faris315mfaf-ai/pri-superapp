@@ -21,6 +21,7 @@ import {
 } from "@/lib/gemini";
 import { jabatanBolehAsisten } from "@/lib/jabatan";
 
+import { modulDibuka } from "@/lib/peran";
 export const dynamic = "force-dynamic";
 
 function tokenDari(request: Request): string {
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
         );
       }
     }
-    if (!(await bolehChatbotRole(user.role)) && !jabatanBolehAsisten(user.jabatan)) {
+    if (!(await bolehChatbotRole(user.role)) && !jabatanBolehAsisten(user.jabatan) && modulDibuka(user, "asisten") !== true) {
       throw Object.assign(
         new Error("Jabatan Anda belum diberi akses Asisten AI."),
         { status: 403 },

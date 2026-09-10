@@ -1,4 +1,5 @@
-// ============================================================
+
+import { modulDibuka } from "@/lib/peran";// ============================================================
 // Helper peran HR (fitur 1.22.x/1).
 //
 // DUA konsep berbeda digabung menjadi "orang HR":
@@ -15,7 +16,7 @@
 
 export const DIVISI_HR = "Divisi HR";
 
-type UserRingkas = { role?: string | null; divisi?: string | null } | null | undefined;
+type UserRingkas = { role?: string | null; divisi?: string | null; modul_izin?: unknown } | null | undefined;
 
 /** Apakah user berada di Divisi HR (perbandingan string, pola rumah). */
 export function diDivisiHR(u: UserRingkas): boolean {
@@ -29,6 +30,8 @@ export function diDivisiHR(u: UserRingkas): boolean {
  */
 export function adalahHR(u: UserRingkas): boolean {
   if (!u) return false;
+  // Modul HR Center yang dibuka master per akun (10 Sep 2026) = orang HR.
+  if (modulDibuka(u, "qc") === true) return true;
   return diDivisiHR(u);
 }
 

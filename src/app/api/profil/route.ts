@@ -18,6 +18,7 @@ import {
 } from "@/lib/sesi";
 import { pastikanStrukturSah } from "@/lib/struktur";
 
+import { nilaiSayapTambahan } from "@/lib/sayap";
 export const dynamic = "force-dynamic";
 // Foto dikirim sebagai data URL; unggahan bisa mendekati 2 MB.
 export const maxDuration = 30;
@@ -276,7 +277,7 @@ export async function POST(request: Request) {
     if (!divisi) {
       throw Object.assign(new Error("Pilih divisi Anda."), { status: 400 });
     }
-    pastikanStrukturSah(divisi, subDivisi);
+    pastikanStrukturSah(divisi, subDivisi, await nilaiSayapTambahan());
 
     const db = supabase();
     const perubahan: Record<string, unknown> = {

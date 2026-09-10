@@ -58,6 +58,8 @@ export type User = {
   sub_divisi?: string;
   posisi_divisi?: "kepala" | "anggota";
   nama_panggilan?: string;
+  /** Modul per akun yang dibuka/ditutup master (10 Sep 2026); null = ikut peran. */
+  modul_izin?: Record<string, boolean> | null;
   /** "YYYY-MM-DD" — dasar fitur ulang tahun */
   tanggal_lahir?: string | null;
   /** false = belum verifikasi WA; aplikasi menagih tiap 3 jam */

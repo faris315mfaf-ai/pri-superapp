@@ -58,7 +58,8 @@ import {
   wajahLoginTersedia,
   type UserLengkap,
 } from "@/services";
-import { butuhSubDivisi, DIVISI, pilihanSubDivisi } from "@/lib/struktur";
+import { butuhSubDivisi } from "@/lib/struktur";
+import { PilihStruktur } from "@/features/pengguna/pilih-struktur";
 import { cn } from "@/lib/utils";
 
 type Langkah = "tertutup" | "masuk" | "daftar" | "otp" | "profil" | "menunggu" | "lupa" | "developer";
@@ -906,7 +907,6 @@ function FormProfil({
 
   // Sub-divisi hanya berlaku untuk Sayap Partai & Zona — ganti divisi
   // berarti pilihan sub yang lama tidak sah lagi.
-  const daftarSub = pilihanSubDivisi(divisi);
 
   function pilihFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -1032,52 +1032,23 @@ function FormProfil({
       </div>
 
       <div>
-        <label htmlFor="p-divisi" className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
-          Divisi
-        </label>
-        <select
-          id="p-divisi"
-          value={divisi}
-          onChange={(e) => {
-            setDivisi(e.target.value);
-            setSubDivisi("");
+        <p className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
+          Struktur: Zona · Sayap · Divisi
+        </p>
+        {/* 10 Sep 2026: pilih kategori dulu (Zona / Sayap / Divisi), baru isinya. */}
+        <PilihStruktur
+          nilai={{ divisi, sub_divisi: subDivisi }}
+          onUbah={(v) => {
+            setDivisi(v.divisi);
+            setSubDivisi(v.sub_divisi);
           }}
           disabled={memuat}
-          className="glass-soft h-12 w-full rounded-xl px-3.5 text-[15px] text-teks-utama outline-none focus:ring-2 focus:ring-pri/50 disabled:opacity-60"
-        >
-          <option value="">— Pilih divisi —</option>
-          {DIVISI.map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
-          ))}
-        </select>
-        <p className="mt-1 text-[11px] text-teks-sekunder">
+          besar
+        />
+        <p className="mt-1.5 text-[11px] text-teks-sekunder">
           Jabatan resmi & posisi Kepala/Anggota diatur pengurus, bukan diisi sendiri.
         </p>
       </div>
-
-      {daftarSub.length > 0 && (
-        <div>
-          <label htmlFor="p-sub" className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
-            {divisi === "Divisi Zona" ? "Zona" : "Sayap Partai"}
-          </label>
-          <select
-            id="p-sub"
-            value={subDivisi}
-            onChange={(e) => setSubDivisi(e.target.value)}
-            disabled={memuat}
-            className="glass-soft h-12 w-full rounded-xl px-3.5 text-[15px] text-teks-utama outline-none focus:ring-2 focus:ring-pri/50 disabled:opacity-60"
-          >
-            <option value="">— Pilih —</option>
-            {daftarSub.map((sub) => (
-              <option key={sub.nilai} value={sub.nilai}>
-                {sub.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
 
       <PesanError pesan={error} />
 

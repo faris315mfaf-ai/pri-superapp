@@ -518,6 +518,8 @@ export type PenggunaAdmin = {
   disetujui_oleh: string | null;
   /** Bidang pelengkap jabatan, mis. "Bidang IT dan Infrastruktur" */
   bidang_jabatan?: string;
+  /** Modul per akun yang dibuka/ditutup master (10 Sep 2026). */
+  modul_izin?: Record<string, boolean> | null;
   divisi?: string;
   sub_divisi?: string;
   posisi_divisi?: string;
@@ -2572,7 +2574,7 @@ export async function getDataMaster(): Promise<DataMaster> {
 
 export async function aksiMaster(
   aksi: string,
-  data: Record<string, string | boolean> = {},
+  data: Record<string, string | boolean | number | null | Record<string, boolean>> = {},
 ): Promise<void> {
   await fetchJson("/api/master", {
     method: "POST",
@@ -2584,7 +2586,7 @@ export async function aksiMaster(
 /** Sama seperti aksiMaster, tetapi mengembalikan jawaban server (mis. hasil pantau server). */
 export async function aksiMasterHasil(
   aksi: string,
-  data: Record<string, string | boolean> = {},
+  data: Record<string, string | boolean | number | null | Record<string, boolean>> = {},
 ): Promise<Record<string, unknown>> {
   const json = await fetchJson("/api/master", {
     method: "POST",
@@ -5952,4 +5954,37 @@ export async function ludoAksi(
     sukses?: boolean;
     dihapus?: boolean;
   };
+}
+
+// ------------------------------------------------------------
+// Sayap Partai (10 Sep 2026): bawaan + tambahan HR/superadmin/master
+// ------------------------------------------------------------
+export type SayapPartai = {
+  id: number | null;
+  nilai: string;
+  label: string;
+  bawaan: boolean;
+  aktif: boolean;
+};
+
+export async function getSayap(semua = false): Promise<{ boleh_kelola: boolean; data: SayapPartai[] }> {
+  const json = await fetchJson(`/api/sayap${semua ? "?semua=1" : ""}`, { headers: headerToken() });
+  return { boleh_kelola: json.boleh_kelola === true, data: (json.data ?? []) as SayapPartai[] };
+}
+
+export async function tambahSayap(nilai: string, label: string): Promise<{ id: number; nilai: string; label: string }> {
+  const json = await fetchJson("/api/sayap", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ nilai, label }),
+  });
+  return json.data as { id: number; nilai: string; label: string };
+}
+
+export async function ubahSayapAktif(id: number, aktif: boolean): Promise<void> {
+  await fetchJson("/api/sayap", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id, aktif }),
+  });
 }
