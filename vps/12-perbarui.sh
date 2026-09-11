@@ -24,7 +24,24 @@
 # =====================================================================
 set -euo pipefail
 
-[ "$(id -u)" -eq 0 ] || { echo "Jalankan sebagai root: sudo $0" >&2; exit 1; }
+# --- Melindungi diri dari ditimpa saat sedang berjalan ----------------
+# Langkah 2 menyalin seluruh isi vps/ ke /opt/pri-skrip — termasuk berkas
+# skrip INI kalau ia dijalankan dari sana. Bash membaca skrip sambil
+# menjalankannya, jadi berkas yang ditimpa di tengah jalan membuat sisa
+# perintahnya terbaca ngawur: yang dijalankan bukan lagi yang tertulis,
+# dan kacaunya baru terasa di tengah pembaruan.
+#
+# Karena itu skrip menyalin dirinya ke berkas sementara lebih dulu, lalu
+# menjalankan salinan itu. Berkas aslinya boleh ditimpa sesuka hati.
+if [ -z "${PRI_BERKAS_ASLI:-}" ]; then
+  __salinan="$(mktemp -t pri-perbarui.XXXXXX)"
+  cat "$0" > "$__salinan"
+  PRI_BERKAS_ASLI="$(readlink -f "$0")" exec bash "$__salinan" "$@"
+fi
+# Salinan sementara dibersihkan sendiri, apa pun hasil pembaruannya.
+case "$0" in /tmp/*) trap 'rm -f "$0"' EXIT ;; esac
+
+[ "$(id -u)" -eq 0 ] || { echo "Jalankan sebagai root: sudo $PRI_BERKAS_ASLI" >&2; exit 1; }
 
 SUMBER=/opt/pri/sumber
 APP=/opt/pri/aplikasi
@@ -39,16 +56,6 @@ case "${1:-}" in
   "")            ;;
   *) echo "Pilihan tidak dikenal: $1 (yang ada: --tanpa-tarik, --skrip-saja)" >&2; exit 1 ;;
 esac
-
-# Pasang sendiri sebagai perintah pendek, supaya pembaruan berikutnya
-# cukup mengetik satu kata dari mana pun.
-if [ ! -L /usr/local/bin/pri-perbarui ] || [ "$(readlink -f /usr/local/bin/pri-perbarui)" != "$(readlink -f "$0")" ]; then
-  # "|| true": kalau pemasangan pintasan gagal (mis. /usr/local/bin tidak
-  # bisa ditulis), itu hal kecil — pembaruan tetap harus jalan, bukan
-  # berhenti diam-diam di baris ini.
-  { ln -sf "$(readlink -f "$0")" /usr/local/bin/pri-perbarui 2>/dev/null \
-    && echo "  perintah pendek dipasang: pri-perbarui"; } || true
-fi
 
 cd "$SUMBER"
 
@@ -74,6 +81,19 @@ cp -r "$SUMBER/vps/"* "$SKRIP/"
 cp "$SUMBER/vps/aplikasi/Dockerfile" "$SUMBER/vps/aplikasi/docker-compose.yml" "$APP/"
 cp "$SUMBER/vps/aplikasi/jadwal/"* "$APP/jadwal/"
 chmod +x "$APP/jadwal/"*.sh "$SKRIP/"*.sh 2>/dev/null || true
+
+# Pintasan "pri-perbarui" dipasang DI SINI, bukan di awal: barulah pasti
+# ada salinan skrip di $SKRIP untuk ditunjuk. Sebelumnya pintasan
+# menunjuk ke tempat skrip kebetulan dijalankan — dan kalau pemasangan
+# pertama dijalankan langsung dari folder sumber, perintah pendeknya
+# tidak pernah ada sampai seseorang menebak sendiri jalurnya.
+PINTASAN=/usr/local/bin/pri-perbarui
+if [ "$(readlink -f "$PINTASAN" 2>/dev/null || true)" != "$SKRIP/12-perbarui.sh" ]; then
+  # "|| true": gagal memasang pintasan itu hal kecil — pembaruan tetap
+  # harus jalan, bukan berhenti diam-diam di baris ini.
+  { ln -sf "$SKRIP/12-perbarui.sh" "$PINTASAN" 2>/dev/null \
+    && echo "  perintah pendek dipasang: pri-perbarui"; } || true
+fi
 
 # Berhenti di sini kalau yang dibutuhkan memang cuma skripnya. Membangun
 # ulang aplikasi memakan menit dan sempat memutus layanan — tidak pantas
