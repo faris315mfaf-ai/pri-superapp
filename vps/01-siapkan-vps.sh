@@ -27,10 +27,19 @@ fi
 echo "== 1/7 Zona waktu Asia/Jakarta =="
 timedatectl set-timezone Asia/Jakarta || true
 
-echo "== 2/7 Memperbarui sistem =="
+echo "== 2/9 Memperbarui sistem =="
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
-apt-get upgrade -y
+# Pembaruan MENYELURUH sengaja TIDAK otomatis (11 Sep 2026): server ini
+# bisa sudah melayani aplikasi lain, dan `apt-get upgrade` bisa memulai
+# ulang layanan di tengah jam kerja. Jalankan sendiri saat sepi:
+#   UPGRADE=1 bash 01-siapkan-vps.sh
+if [ "${UPGRADE:-0}" = "1" ]; then
+  apt-get upgrade -y
+else
+  TERTUNDA=$(apt-get -s upgrade 2>/dev/null | grep -c '^Inst' || true)
+  echo "  $TERTUNDA paket bisa diperbarui — dilewati (pakai UPGRADE=1 bila mau)."
+fi
 
 echo "== 3/7 Paket dasar =="
 apt-get install -y curl git ufw fail2ban ca-certificates gnupg python3 jq \
@@ -60,7 +69,18 @@ if ! command -v caddy >/dev/null 2>&1; then
 fi
 systemctl enable --now caddy
 
-echo "== 6/7 Firewall =="
+echo "== 6/9 Firewall =="
+# Kalau server ini sudah melayani sesuatu di port lain, menyalakan ufw
+# bisa memutusnya diam-diam. Port yang SUDAH mendengar ke publik
+# diizinkan lebih dulu, lalu dilaporkan supaya terlihat.
+SUDAH=$(ss -tlnH 2>/dev/null | awk '{print $4}' | grep -vE '^(127\.0\.0\.1|\[::1\])' | sed -E 's/.*:([0-9]+)$/\1/' | sort -un | tr '\n' ' ')
+echo "  port yang sudah melayani publik: ${SUDAH:-(tidak ada)}"
+for p in $SUDAH; do
+  case "$p" in
+    22|80|443) ;;
+    *) echo "  mengizinkan port $p yang sudah dipakai layanan lain"; ufw allow "$p"/tcp >/dev/null ;;
+  esac
+done
 # Hanya SSH + web yang terbuka. Postgres (5432) TIDAK pernah dibuka ke
 # internet: aplikasi memanggil lewat HTTPS/REST, bukan koneksi Postgres
 # langsung. Ini menutup pintu masuk paling berbahaya.
@@ -112,7 +132,16 @@ LimitNPROC=infinity
 LimitCORE=infinity
 EOF
 systemctl daemon-reload
-systemctl restart docker
+# Memulai ulang Docker ikut memulai ulang SEMUA container di server ini.
+# Kalau sudah ada yang jalan, jangan diganggu: setelan baru toh berlaku
+# pada pemulaian berikutnya.
+JALAN=$(docker ps -q 2>/dev/null | wc -l)
+if [ "$JALAN" -gt 0 ]; then
+  echo "  ada $JALAN container sedang jalan — Docker TIDAK dimulai ulang."
+  echo "  setelan batas berkas berlaku setelah: systemctl restart docker (lakukan saat sepi)."
+else
+  systemctl restart docker
+fi
 
 echo "== 9/9 Folder kerja =="
 mkdir -p /opt/pri/skrip /opt/pri/cadangan /opt/pri/dump
