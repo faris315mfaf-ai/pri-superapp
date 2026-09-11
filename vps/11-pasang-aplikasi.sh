@@ -135,6 +135,11 @@ def tutup():
     if nama_kini is None:
         return
     gabung = "\\n".join(nilai_kini) if len(nilai_kini) > 1 else nilai_kini[0]
+    # Nilai berbaris-baris yang DIKUTIP: tanda kutipnya menempel di
+    # ujung baris pertama dan baris terakhir, jadi baru bisa dibuang
+    # setelah semuanya disatukan — bukan per baris.
+    if len(gabung) >= 2 and gabung[0] == gabung[-1] and gabung[0] in '"\'':
+        gabung = gabung[1:-1]
     if nama_kini in paksa:
         gabung = paksa[nama_kini]; sudah.add(nama_kini)
         keluar.append(f"{nama_kini}={gabung}")
