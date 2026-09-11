@@ -457,9 +457,25 @@ $DOMAIN {
 EOF
 pasang_blok_caddy "PRI Supabase" /tmp/blok-supabase.caddy || exit 1
 lapor_situs_caddy "$DOMAIN"
-sleep 5
-curl -s -o /dev/null -w "HTTPS %{http_code} (200 = siap dipakai)\n" \
-  -H "apikey: $SERVICE_KEY" -H "Authorization: Bearer $SERVICE_KEY" "https://$DOMAIN/rest/v1/"
+# Sertifikat HTTPS baru diterbitkan saat permintaan PERTAMA datang, dan
+# itu butuh beberapa puluh detik. Menunggu 5 detik lalu menyerah membuat
+# pemasangan yang sebenarnya berhasil terlihat gagal.
+echo -n "  menunggu sertifikat HTTPS terbit"
+KODE=""
+for i in $(seq 1 20); do
+  KODE="$(curl -s -o /dev/null -m 15 -w '%{http_code}'     -H "apikey: $SERVICE_KEY" -H "Authorization: Bearer $SERVICE_KEY"     "https://$DOMAIN/rest/v1/" || echo 000)"
+  [ "$KODE" = "200" ] && break
+  echo -n "."; sleep 6
+done
+echo
+if [ "$KODE" = "200" ]; then
+  echo "  HTTPS 200 — https://$DOMAIN siap dipakai"
+else
+  echo "  HTTPS $KODE — belum tentu gagal." >&2
+  echo "  Sertifikat mungkin masih diterbitkan; tunggu 1-2 menit lalu periksa:" >&2
+  echo "    curl -s -o /dev/null -w '%{http_code}\n' https://$DOMAIN/rest/v1/" >&2
+  echo "  Jawaban 401 pun sudah berarti HTTPS jalan (kunci saja tidak dikirim)." >&2
+fi
 
 umask 077
 cat > /opt/pri/kunci.txt <<EOF

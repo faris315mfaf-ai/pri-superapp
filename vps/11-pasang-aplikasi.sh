@@ -40,9 +40,9 @@ command -v caddy  >/dev/null || { echo "Caddy belum ada — jalankan 01-siapkan-
 # shellcheck disable=SC1091
 . "$SKRIP_DIR/blok-caddy.sh"
 kenali_caddy || exit 1
-DOMAIN_DB="$(grep -oE '^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,} \{' "$CADDYFILE" 2>/dev/null | sed 's/ {$//' | grep -m1 '^db\.' || true)"
+DOMAIN_DB="$(grep -m1 '^API_EXTERNAL_URL=' /opt/pri/supabase/.env 2>/dev/null | cut -d= -f2- | sed 's#^https\?://##; s#/.*$##')"
 [ -n "${DOMAIN_DB:-}" ] || {
-  echo "Alamat Supabase tidak terbaca dari $CADDYFILE." >&2
+  echo "Alamat Supabase tidak terbaca dari /opt/pri/supabase/.env." >&2
   echo "Jalankan 02-pasang-supabase.sh dulu." >&2
   exit 1
 }

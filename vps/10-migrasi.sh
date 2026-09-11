@@ -31,8 +31,16 @@ KERJA=/opt/pri/kerja
 # shellcheck disable=SC1091
 . /opt/pri/kunci.env
 
-DOMAIN="$(grep -m1 -oP '^\S+(?= \{)' /etc/caddy/Caddyfile 2>/dev/null || true)"
-[ -n "$DOMAIN" ] || { echo "Domain tidak terbaca dari /etc/caddy/Caddyfile." >&2; exit 1; }
+# Alamat dibaca dari pengaturan Supabase sendiri, BUKAN dari Caddyfile.
+# Caddy di server ini ternyata berupa container dengan berkas pengaturan
+# di tempat lain, jadi menebak /etc/caddy/Caddyfile membaca berkas yang
+# tidak dipakai siapa pun. API_EXTERNAL_URL adalah sumber yang benar.
+DOMAIN="$(grep -m1 '^API_EXTERNAL_URL=' /opt/pri/supabase/.env 2>/dev/null | cut -d= -f2- | sed 's#^https\?://##; s#/.*$##')"
+[ -n "$DOMAIN" ] || {
+  echo "Alamat Supabase tidak terbaca dari /opt/pri/supabase/.env." >&2
+  echo "Jalankan 02-pasang-supabase.sh dulu." >&2
+  exit 1
+}
 
 # ---------------------------------------------------------------------
 # 2. Yang HARUS diisi manusia cuma tiga baris — semuanya milik Cloud.
@@ -86,9 +94,14 @@ docker build -q -t pri-migrator "$BANGUN" | sed 's/^/  /'
 # 4. Jaringan: container harus bisa memanggil database Supabase di VPS
 #    dengan nama "db", persis seperti layanan Supabase lainnya.
 # ---------------------------------------------------------------------
-JARINGAN="$(docker inspect supabase-db --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null | awk '{print $1}')"
-[ -n "$JARINGAN" ] || { echo "Container supabase-db tidak ditemukan — Supabase belum jalan?" >&2; exit 1; }
-echo "  jaringan Docker: $JARINGAN"
+# Container database dicari dari IMAGE-nya: namanya berbeda antar versi
+# paket Supabase, dan nama container PASTI bisa dipanggil lewat jaringan
+# Docker — berbeda dengan nama layanan yang bergantung pada alias.
+DB_CT="$(docker ps --format '{{.Names}}\t{{.Image}}' | awk -F'\t' 'index($2, "supabase/postgres") {print $1; exit}')"
+[ -n "$DB_CT" ] || { echo "Container database Supabase tidak ditemukan — Supabase belum jalan?" >&2; exit 1; }
+JARINGAN="$(docker inspect "$DB_CT" --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null | awk '{print $1}')"
+[ -n "$JARINGAN" ] || { echo "Jaringan container $DB_CT tidak terbaca." >&2; exit 1; }
+echo "  database: $DB_CT   jaringan: $JARINGAN"
 
 mkdir -p "$KERJA/dump"
 
@@ -103,7 +116,7 @@ docker run --rm -i \
   -e SUMBER_DB="$SUMBER_DB" \
   -e SUMBER_URL="${SUMBER_URL%/}" \
   -e SUMBER_KEY="$SUMBER_KEY" \
-  -e TUJUAN_DB="postgresql://postgres:${PG_PASS}@db:5432/postgres" \
+  -e TUJUAN_DB="postgresql://postgres:${PG_PASS}@${DB_CT}:5432/postgres" \
   -e TUJUAN_URL="https://${DOMAIN}" \
   -e TUJUAN_KEY="$SERVICE_KEY" \
   -e TUJUAN_ANON_KEY="$ANON_KEY" \
