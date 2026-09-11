@@ -229,6 +229,28 @@ nama_gerbang = next(
             for p in (sv.get("ports") or []))),
     None,
 )
+# ---------------------------------------------------------------------
+# BATAS UNGGAH LAYANAN PENYIMPANAN (12 Sep 2026)
+#
+# docker-compose.yml paket Supabase MENULIS ANGKANYA LANGSUNG:
+#   FILE_SIZE_LIMIT: 52428800      (50 MB)
+# Nilai di .env tidak pernah dipakai untuk layanan ini. Akibatnya bucket
+# yang batasnya lebih besar dari 50 MB DITOLAK saat dibuat, dengan pesan
+# "The object exceeded the maximum allowed size" — dan bucket video
+# aplikasi ini memang 75 MB. Jadi ditimpa dari sini.
+# ---------------------------------------------------------------------
+BATAS_UNGGAH = "209715200"  # 200 MB, sama dengan nilai di .env
+nama_simpan = next(
+    (n for n, sv in cfg.get("services", {}).items()
+     if "storage-api" in str(sv.get("image", "")).lower()),
+    None,
+)
+if nama_simpan:
+    layanan.setdefault(nama_simpan, {}).setdefault("environment", {})["FILE_SIZE_LIMIT"] = BATAS_UNGGAH
+    print(f"  batas unggah penyimpanan ({nama_simpan}) dinaikkan ke {int(BATAS_UNGGAH) // 1024 // 1024} MB")
+else:
+    print("  layanan penyimpanan tidak ditemukan — batas unggah tidak diubah")
+
 if nama_gerbang and "kong" in str(cfg["services"][nama_gerbang].get("image", "")).lower():
     layanan.setdefault(nama_gerbang, {})["environment"] = {
         "KONG_NGINX_PROXY_CLIENT_MAX_BODY_SIZE": "210m"
