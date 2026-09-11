@@ -33,6 +33,7 @@ import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 import { TombolPeringkat } from "@/features/peringkat/tombol-peringkat";
 import { CincinJuara } from "@/features/peringkat/cincin-mythic";
 
+import { LencanaOnline } from "@/components/lencana-online";
 type DashboardScreenProps = {
   user: User;
   /** Buka HR Center — kosong bila pemakai tidak punya modulnya (10 Sep 2026). */
@@ -153,6 +154,7 @@ export function DashboardScreen({
             {tanggalIndonesia(`${tanggalWibHariIni()}T00:00:00+07:00`)}
           </p>
           <JamDigital className="mt-0.5 block font-heading text-lg font-extrabold tracking-tight text-teks-utama" />
+          <LencanaOnline className="mt-1.5" />
         </div>
 
         {/* Kumpulan ikon boleh melipat ke baris kedua supaya sapaan tidak

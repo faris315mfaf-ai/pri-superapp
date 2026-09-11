@@ -50,6 +50,7 @@ import { getAbsensi, getKomentarSaya, getLaporanVideo, getStreakSaya } from "@/s
 import type { KomponenIkon, User } from "@/types";
 import { RunningTextJuara } from "./running-text-juara";
 
+import { LencanaOnline } from "@/components/lencana-online";
 /** Nomor WhatsApp admin (permintaan user 10 Sep 2026) — menggantikan Chat NAKA. */
 export const WA_ADMIN = "6287718123039";
 
@@ -269,6 +270,7 @@ export function BerandaSimpelGlass({
             {tanggalIndonesia(`${tanggalWibPerangkat()}T00:00:00+07:00`)}
           </p>
           <JamDigital className="mt-0.5 block font-heading text-lg font-extrabold tracking-tight text-teks-utama" />
+          <LencanaOnline className="mt-1.5" />
         </div>
         <div className="flex max-w-[62%] shrink-0 flex-wrap items-center justify-end gap-2">
           <CincinJuara userId={user.id} ukuran={36}>

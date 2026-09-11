@@ -54,6 +54,7 @@ import { jamWIB, namaSapaan, sapaanHari, tanggalIndonesia, waktuJelasWIB } from 
 import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 import type { KomponenIkon, User } from "@/types";
 
+import { LencanaOnline } from "@/components/lencana-online";
 function tanggalWibPerangkat(): string {
   return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
@@ -203,6 +204,7 @@ export function BerandaScreen({
           </p>
           {/* Jam WIB berjalan tiap detik (spek 1.15) */}
           <JamDigital className="mt-0.5 block font-heading text-lg font-extrabold tracking-tight text-teks-utama" />
+          <LencanaOnline className="mt-1.5" />
         </div>
         <div className="flex max-w-[62%] shrink-0 flex-wrap items-center justify-end gap-2">
           {/* Avatar saya — bercincin Mythical bila masuk 3 besar TVR */}
