@@ -71,7 +71,50 @@ ufw --force enable
 systemctl enable --now fail2ban
 ufw status verbose | head -20
 
-echo "== 7/7 Folder kerja =="
+echo "== 7/9 Swap (jaring pengaman memori) =="
+# VPS 32 GB seharusnya tidak pernah kehabisan memori untuk beban ini,
+# tetapi tanpa swap sama sekali, satu lonjakan sesaat (mis. pg_restore
+# atau backup) bisa membuat kernel MEMBUNUH PostgreSQL. Swap kecil
+# dipakai sebagai rem darurat, bukan sebagai memori tambahan — karena
+# itu swappiness disetel rendah supaya database tetap di RAM.
+if [ ! -f /swapfile ] && ! swapon --show | grep -q .; then
+  RAM_GB=$(( $(awk '/MemTotal/ {print $2}' /proc/meminfo) / 1024 / 1024 ))
+  if [ "$RAM_GB" -ge 16 ]; then SWAP_GB=4; else SWAP_GB=2; fi
+  echo "RAM ${RAM_GB} GB -> swap ${SWAP_GB} GB"
+  fallocate -l "${SWAP_GB}G" /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=$((SWAP_GB * 1024))
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+else
+  echo "Swap sudah ada — dilewati."
+fi
+cat > /etc/sysctl.d/99-pri.conf <<'EOF'
+# Database harus tetap di RAM; swap hanya untuk keadaan darurat.
+vm.swappiness = 10
+# Menulis halaman kotor lebih awal supaya tidak ada hentakan besar
+# saat checkpoint PostgreSQL.
+vm.dirty_background_ratio = 5
+vm.dirty_ratio = 10
+# Koneksi banyak + Docker: batas berkas dan antrean dinaikkan.
+fs.file-max = 2097152
+net.core.somaxconn = 4096
+EOF
+sysctl --system >/dev/null
+free -h | sed 's/^/  /'
+
+echo "== 8/9 Batas berkas untuk Docker =="
+mkdir -p /etc/systemd/system/docker.service.d
+cat > /etc/systemd/system/docker.service.d/limits.conf <<'EOF'
+[Service]
+LimitNOFILE=1048576
+LimitNPROC=infinity
+LimitCORE=infinity
+EOF
+systemctl daemon-reload
+systemctl restart docker
+
+echo "== 9/9 Folder kerja =="
 mkdir -p /opt/pri/skrip /opt/pri/cadangan /opt/pri/dump
 chmod 700 /opt/pri
 

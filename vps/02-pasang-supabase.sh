@@ -190,16 +190,84 @@ layanan.setdefault("db", {})["image"] = f"supabase/postgres:{os.environ['PG_TAG'
 # Gerbang (Kong) menolak unggahan besar dengan galat 413 kalau batas
 # bawaannya dibiarkan. Video di aplikasi ini bisa 75 MB.
 layanan.setdefault("kong", {})["environment"] = {"KONG_NGINX_PROXY_CLIENT_MAX_BODY_SIZE": "210m"}
+
+# ---------------------------------------------------------------
+# PENYETELAN MEMORI POSTGRESQL (11 Sep 2026)
+#
+# Bawaan paket Supabase self-host disetel untuk mesin kecil. Di VPS
+# 32 GB, PostgreSQL yang tidak disetel hanya memakai sebagian kecil
+# RAM: kueri jadi membaca disk padahal seluruh database (277 MB)
+# sebenarnya muat di memori berkali-kali lipat.
+#
+# Angka dihitung dari RAM yang BENAR-BENAR terpasang, bukan ditulis
+# mati, supaya skrip ini tetap benar kalau VPS-nya diganti ukuran.
+# Sisakan ruang untuk layanan lain (Kong, Storage, Realtime, Studio)
+# dan untuk cache berkas milik kernel.
+# ---------------------------------------------------------------
+with open("/proc/meminfo") as f:
+    ram_mb = int([b for b in f if b.startswith("MemTotal")][0].split()[1]) // 1024
+inti = os.cpu_count() or 2
+# Layanan non-database di server ini kira-kira butuh segini.
+sisa_layanan_mb = 4096
+ram_db_mb = max(1024, ram_mb - sisa_layanan_mb)
+shared_mb = max(256, int(ram_db_mb * 0.25))          # halaman data yang dipegang PostgreSQL
+cache_mb = max(512, int(ram_db_mb * 0.70))           # perkiraan cache total (dipakai perencana kueri)
+maint_mb = min(2048, max(128, ram_db_mb // 16))      # untuk VACUUM, CREATE INDEX, pg_restore
+maks_koneksi = 200
+# Patokan umum: (RAM x 25%) dibagi jumlah koneksi maksimum. Dibatasi
+# 32 MB supaya lonjakan kueri berat serentak tidak menghabiskan RAM.
+work_mb = max(4, min(32, (ram_db_mb // 4) // maks_koneksi))
+paralel = max(1, min(8, inti))
+setelan = {
+    "max_connections": str(maks_koneksi),
+    "shared_buffers": f"{shared_mb}MB",
+    "effective_cache_size": f"{cache_mb}MB",
+    "maintenance_work_mem": f"{maint_mb}MB",
+    "work_mem": f"{work_mb}MB",
+    # Penyimpanan VPS memakai SSD/NVMe: membaca acak hampir semurah berurutan.
+    "random_page_cost": "1.1",
+    "effective_io_concurrency": "200",
+    "max_worker_processes": str(paralel),
+    "max_parallel_workers": str(paralel),
+    "max_parallel_workers_per_gather": str(max(2, paralel // 2)),
+    "max_parallel_maintenance_workers": str(max(2, paralel // 2)),
+    # Checkpoint lebih jarang & lebih halus = tidak ada hentakan tulis.
+    "wal_buffers": "16MB",
+    "min_wal_size": "1GB",
+    "max_wal_size": "4GB",
+    "checkpoint_completion_target": "0.9",
+    # Kueri yang lebih lambat dari 2 detik dicatat supaya bisa ditelusuri.
+    "log_min_duration_statement": "2000",
+}
+perintah = list(cfg["services"].get("db", {}).get("command") or [])
+if not perintah:
+    # Jaga-jaga bila paket Supabase berubah: jalankan postgres apa adanya.
+    perintah = ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+for k, v in setelan.items():
+    perintah += ["-c", f"{k}={v}"]
+layanan.setdefault("db", {})["command"] = perintah
+# /dev/shm bawaan Docker hanya 64 MB. Kueri paralel PostgreSQL memakai
+# memori bersama ini dan akan gagal dengan galat "No space left on
+# device" yang menyesatkan kalau dibiarkan sekecil itu.
+layanan["db"]["shm_size"] = "2gb"
+print(f"  RAM terbaca {ram_mb} MB, {inti} inti -> shared_buffers {shared_mb}MB, "
+      f"cache {cache_mb}MB, work_mem {work_mb}MB, maks koneksi {maks_koneksi}")
 isi = ["# Dibuat otomatis oleh 02-pasang-supabase.sh — jangan diedit tangan.",
        "services:"]
 for nama, nilai in layanan.items():
     isi.append(f"  {nama}:")
     if "image" in nilai:
         isi.append(f"    image: {nilai['image']}")
+    if "shm_size" in nilai:
+        isi.append(f"    shm_size: \"{nilai['shm_size']}\"")
     if "environment" in nilai:
         isi.append("    environment:")
         for k, v in nilai["environment"].items():
             isi.append(f'      {k}: "{v}"')
+    if "command" in nilai:
+        isi.append("    command: !override")
+        for c in nilai["command"]:
+            isi.append(f'      - "{c}"')
     if "ports" in nilai:
         isi.append("    ports: !override")
         for d in nilai["ports"]:
