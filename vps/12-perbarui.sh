@@ -13,8 +13,14 @@
 # siapa pun sadar dan tanpa perlu tahu perintah pemulihan.
 #
 # CARA PAKAI (root, di VPS):
-#   pri-perbarui              # ambil kode terbaru lalu terapkan
+#   pri-perbarui                # ambil kode terbaru lalu terapkan
 #   pri-perbarui --tanpa-tarik  # bangun ulang saja, tanpa git pull
+#   pri-perbarui --skrip-saja   # ambil kode & segarkan skrip perawatan
+#                               # saja: tidak membangun, tidak menyentuh
+#                               # aplikasi yang sedang melayani orang.
+#                               # Dipakai kalau yang ditambahkan hanya
+#                               # skrip di folder vps/ (mis. perbaikan
+#                               # database), bukan kode aplikasi.
 # =====================================================================
 set -euo pipefail
 
@@ -26,12 +32,22 @@ SKRIP=/opt/pri-skrip
 PORT="$(grep -m1 '^PORT_APLIKASI=' "$APP/.env" 2>/dev/null | cut -d= -f2- || echo 3001)"
 PORT="${PORT:-3001}"
 TARIK=1
-[ "${1:-}" = "--tanpa-tarik" ] && TARIK=0
+SKRIP_SAJA=0
+case "${1:-}" in
+  --tanpa-tarik) TARIK=0 ;;
+  --skrip-saja)  SKRIP_SAJA=1 ;;
+  "")            ;;
+  *) echo "Pilihan tidak dikenal: $1 (yang ada: --tanpa-tarik, --skrip-saja)" >&2; exit 1 ;;
+esac
 
 # Pasang sendiri sebagai perintah pendek, supaya pembaruan berikutnya
 # cukup mengetik satu kata dari mana pun.
 if [ ! -L /usr/local/bin/pri-perbarui ] || [ "$(readlink -f /usr/local/bin/pri-perbarui)" != "$(readlink -f "$0")" ]; then
-  ln -sf "$(readlink -f "$0")" /usr/local/bin/pri-perbarui 2>/dev/null     && echo "  perintah pendek dipasang: pri-perbarui"
+  # "|| true": kalau pemasangan pintasan gagal (mis. /usr/local/bin tidak
+  # bisa ditulis), itu hal kecil — pembaruan tetap harus jalan, bukan
+  # berhenti diam-diam di baris ini.
+  { ln -sf "$(readlink -f "$0")" /usr/local/bin/pri-perbarui 2>/dev/null \
+    && echo "  perintah pendek dipasang: pri-perbarui"; } || true
 fi
 
 cd "$SUMBER"
@@ -58,6 +74,19 @@ cp -r "$SUMBER/vps/"* "$SKRIP/"
 cp "$SUMBER/vps/aplikasi/Dockerfile" "$SUMBER/vps/aplikasi/docker-compose.yml" "$APP/"
 cp "$SUMBER/vps/aplikasi/jadwal/"* "$APP/jadwal/"
 chmod +x "$APP/jadwal/"*.sh "$SKRIP/"*.sh 2>/dev/null || true
+
+# Berhenti di sini kalau yang dibutuhkan memang cuma skripnya. Membangun
+# ulang aplikasi memakan menit dan sempat memutus layanan — tidak pantas
+# dibayar hanya untuk menyalin beberapa berkas skrip.
+if [ "$SKRIP_SAJA" = "1" ]; then
+  echo
+  echo "Skrip perawatan sudah yang terbaru di $SKRIP:"
+  ls -1 "$SKRIP"/*.sh | sed 's#.*/#  #'
+  echo
+  echo "Aplikasi TIDAK disentuh (masih versi $(docker image inspect -f '{{.Id}}' pri-aplikasi:terbaru 2>/dev/null | cut -c8-19 || echo '?'))."
+  echo "Untuk menerapkan perubahan kode aplikasi, jalankan: pri-perbarui"
+  exit 0
+fi
 
 echo "== 3/6 Menyimpan versi sekarang sebagai cadangan =="
 # Kalau yang baru bermasalah, inilah yang dihidupkan kembali.
@@ -104,7 +133,10 @@ fi
 
 echo "== 6/6 Memeriksa hasil =="
 curl -s --max-time 30 "http://127.0.0.1:$PORT/api/sehat" | head -c 200; echo
-DOMAIN_APP="$(grep -m1 '^APP_URL=' "$APP/env.txt" 2>/dev/null | cut -d= -f2- | sed 's#^https\?://##; s#/.*$##')"
+# "|| true": tanpa itu, env.txt yang tidak ada membuat pembaruan yang
+# SUDAH BERHASIL berakhir dengan status gagal di baris terakhir ini —
+# tanpa pesan "SELESAI" dan tanpa petunjuk pengembalian.
+DOMAIN_APP="$(grep -m1 '^APP_URL=' "$APP/env.txt" 2>/dev/null | cut -d= -f2- | sed 's#^https\?://##; s#/.*$##' || true)"
 if [ -n "$DOMAIN_APP" ]; then
   curl -s -o /dev/null -m 30 -w "  https://$DOMAIN_APP -> %{http_code}\n" "https://$DOMAIN_APP/api/hidup" || true
 fi
