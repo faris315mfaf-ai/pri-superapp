@@ -206,9 +206,28 @@ if nama_db is None:
     raise SystemExit("Layanan PostgreSQL tidak ditemukan di paket Supabase ini.")
 print(f"  layanan PostgreSQL: {nama_db}")
 layanan.setdefault(nama_db, {})["image"] = f"supabase/postgres:{os.environ['PG_TAG']}"
-# Gerbang (Kong) menolak unggahan besar dengan galat 413 kalau batas
-# bawaannya dibiarkan. Video di aplikasi ini bisa 75 MB.
-layanan.setdefault("kong", {})["environment"] = {"KONG_NGINX_PROXY_CLIENT_MAX_BODY_SIZE": "210m"}
+# Gerbang menolak unggahan besar dengan galat 413 kalau batas bawaannya
+# dibiarkan. Video di aplikasi ini bisa 75 MB.
+#
+# Tapi nama DAN jenis gerbangnya berbeda antar versi paket: pernah
+# "kong", di paket baru "api-gw" yang isinya Envoy. Setelan di bawah
+# KHUSUS Kong, jadi hanya dipasang kalau gerbangnya memang Kong.
+# Untuk gerbang lain, batas unggah sudah dijaga dua lapis lain:
+# Caddy (request_body 210MB) dan FILE_SIZE_LIMIT di .env.
+nama_gerbang = next(
+    (n for n, sv in cfg.get("services", {}).items()
+     if any(str(p.get("target") if isinstance(p, dict) else p).endswith("8000")
+            for p in (sv.get("ports") or []))),
+    None,
+)
+if nama_gerbang and "kong" in str(cfg["services"][nama_gerbang].get("image", "")).lower():
+    layanan.setdefault(nama_gerbang, {})["environment"] = {
+        "KONG_NGINX_PROXY_CLIENT_MAX_BODY_SIZE": "210m"
+    }
+    print(f"  batas unggah gerbang ({nama_gerbang}) dinaikkan")
+else:
+    print(f"  gerbang: {nama_gerbang or 'tidak ditemukan'} (bukan Kong) — "
+          "batas unggah dijaga Caddy & FILE_SIZE_LIMIT")
 
 # ---------------------------------------------------------------
 # PENYETELAN MEMORI POSTGRESQL (11 Sep 2026)
@@ -271,6 +290,18 @@ layanan.setdefault(nama_db, {})["command"] = perintah
 layanan[nama_db]["shm_size"] = "2gb"
 print(f"  RAM terbaca {ram_mb} MB, {inti} inti -> shared_buffers {shared_mb}MB, "
       f"cache {cache_mb}MB, work_mem {work_mb}MB, maks koneksi {maks_koneksi}")
+# PENJAGA (12 Sep 2026): berkas aturan TIDAK BOLEH menyebut layanan yang
+# tidak ada di paket. Kalau menyebut, Docker menganggapnya layanan baru
+# tanpa image dan menolak seluruh konfigurasi — "service X has neither an
+# image nor a build context". Nama layanan Supabase berubah antar versi,
+# jadi penyaringan ini yang menutup seluruh jenis kesalahan itu sekaligus.
+ada = set(cfg.get("services", {}))
+buang = [n for n in layanan if n not in ada]
+for n in buang:
+    del layanan[n]
+if buang:
+    print("  dilewati (tidak ada di paket ini):", ", ".join(buang))
+
 isi = ["# Dibuat otomatis oleh 02-pasang-supabase.sh — jangan diedit tangan.",
        "services:"]
 for nama, nilai in layanan.items():
