@@ -51,6 +51,31 @@ const nextConfig: NextConfig = {
   // hasil pindaian TIDAK didaftarkan (host CDN-nya berubah-ubah) dan
   // tetap memakai <img> biasa.
   images: {
+    // ------------------------------------------------------------
+    // KENAPA PERLINDUNGAN INI DIMATIKAN DI SERVER SENDIRI (12 Sep 2026)
+    //
+    // Next 16 memeriksa nama host gambar sampai ke alamat IP-nya. Kalau
+    // mengarah ke alamat jaringan DALAM, gambarnya ditolak — pengamanan
+    // terhadap SSRF (aplikasi disuruh mengintip jaringan dalam sendiri).
+    //
+    // Di server ini nama db.pri-superapp.com memang sengaja diarahkan ke
+    // dalam (extra_hosts di docker-compose), supaya aplikasi tidak perlu
+    // memutar lewat internet hanya untuk bicara dengan databasenya
+    // sendiri. Akibatnya SELURUH foto ditolak — dengan pesan
+    // «"url" parameter is not allowed», persis seperti kalau host-nya
+    // tidak terdaftar. Itulah yang membuatnya sulit sekali dilacak.
+    //
+    // Mematikannya di sini aman karena dua hal:
+    //   1. remotePatterns di bawah adalah daftar tertutup berisi empat
+    //      nama. Tidak ada alamat lain yang bisa diminta sama sekali.
+    //   2. db.pri-superapp.com itu nama PUBLIK — siapa pun di internet
+    //      bisa menghubunginya langsung. Jalan dalam tadi cuma jalan
+    //      pintas kita sendiri, bukan pintu yang selama ini tertutup.
+    //
+    // Hanya di server sendiri. Di Vercel tidak ada jalan pintas seperti
+    // itu, jadi perlindungannya dibiarkan menyala.
+    // ------------------------------------------------------------
+    ...(process.env.VERCEL ? {} : { dangerouslyAllowLocalIP: true }),
     remotePatterns: [
       // Host penyimpanan berkas: dari env + daftar tetap (lihat atas).
       // Nama lama tetap ada selama masa peralihan, supaya foto yang

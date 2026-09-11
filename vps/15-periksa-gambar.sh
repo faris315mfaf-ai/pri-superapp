@@ -77,18 +77,26 @@ HASIL="$(docker exec "$CT" node -e '
   for (const p of ["/app/.next/required-server-files.json"]) {
     try {
       const c = JSON.parse(fs.readFileSync(p, "utf8")).config;
-      console.log(JSON.stringify(c.images.remotePatterns));
+      console.log(JSON.stringify({
+        remotePatterns: c.images.remotePatterns,
+        dangerouslyAllowLocalIP: c.images.dangerouslyAllowLocalIP,
+      }));
       process.exit(0);
     } catch {}
   }
   process.exit(3);
 ' 2>/dev/null || true)"
 
+DI_DAFTAR=tidak
 if [ -n "$HASIL" ]; then
   echo "$HASIL" | tr ',' '\n' | grep -o '"hostname":"[^"]*"' | sed 's/"hostname":"/    /; s/"$//'
   case "$HASIL" in
-    *db.pri-superapp.com*) echo "  -> db.pri-superapp.com ADA di daftar" ;;
-    *) echo "  -> db.pri-superapp.com TIDAK ADA di daftar (inilah sebab foto kosong)" ;;
+    *db.pri-superapp.com*) DI_DAFTAR=ya; echo "  -> db.pri-superapp.com ADA di daftar" ;;
+    *) echo "  -> db.pri-superapp.com TIDAK ADA di daftar" ;;
+  esac
+  case "$HASIL" in
+    *'"dangerouslyAllowLocalIP":true'*) IZIN_DALAM=ya;   echo "  -> gambar dari alamat dalam: DIIZINKAN" ;;
+    *)                                  IZIN_DALAM=tidak; echo "  -> gambar dari alamat dalam: masih diperiksa Next" ;;
   esac
 else
   echo "  tidak terbaca dari required-server-files.json, dicoba cara lain:"
@@ -103,16 +111,45 @@ echo
 echo "===== 5. JAWABAN NYATA DARI APLIKASI ====="
 PORT="$(grep -m1 '^PORT_APLIKASI=' "$APP/.env" 2>/dev/null | cut -d= -f2- || true)"
 PORT="${PORT:-3001}"
+DITOLAK=tidak
 for H in db.pri-superapp.com pichnkyjepsirpclofhs.supabase.co; do
   J="$(curl -s --max-time 20 \
        "http://127.0.0.1:$PORT/_next/image?url=https%3A%2F%2F$H%2Fstorage%2Fv1%2Fobject%2Fpublic%2Fuji%2Fuji.jpg&w=64&q=75" \
        | head -c 80 || true)"
   case "$J" in
-    *"not allowed"*) echo "  $H -> DITOLAK" ;;
+    *"not allowed"*) echo "  $H -> DITOLAK"
+                     [ "$H" = db.pri-superapp.com ] && DITOLAK=ya ;;
     *"upstream"*)    echo "  $H -> boleh (berkas ujinya saja yang tidak ada)" ;;
     *)               echo "  $H -> $J" ;;
   esac
 done
+
+echo
+echo "===== 6. KESIMPULAN ====="
+# Next memakai pesan penolakan yang SAMA PERSIS untuk dua hal yang sangat
+# berbeda: host tidak terdaftar, atau host mengarah ke alamat jaringan
+# dalam. Tanpa dipisahkan di sini, pencarian sebabnya mudah salah arah.
+if [ "$DITOLAK" = tidak ]; then
+  echo "  Tidak ada yang perlu diperbaiki: gambar dari db.pri-superapp.com diterima."
+elif [ "$DI_DAFTAR" = tidak ]; then
+  echo "  SEBAB: db.pri-superapp.com tidak ada di daftar host yang dibawa"
+  echo "         aplikasi saat dibangun. Bangun ulang: pri-perbarui"
+else
+  echo "  Host SUDAH terdaftar tapi tetap ditolak — berarti bukan soal daftar."
+  echo "  SEBAB: Next 16 menolak gambar yang nama hostnya mengarah ke alamat"
+  echo "         jaringan DALAM. Di server ini db.pri-superapp.com memang"
+  echo "         sengaja diarahkan ke dalam (extra_hosts) supaya cepat."
+  if [ "${IZIN_DALAM:-tidak}" = ya ]; then
+    echo "  Padahal izinnya sudah menyala di aplikasi ini — laporkan hasil ini."
+  else
+    echo "  Perbaikannya sudah ada di kode terbaru. Ambil lalu bangun ulang:"
+    echo "    pri-perbarui"
+  fi
+  echo
+  echo "  Bukti dari catatan aplikasi (kalau ada):"
+  docker logs --tail 300 "$CT" 2>&1 | grep -i "private IP" | tail -3 | sed 's/^/    /' \
+    || echo "    (tidak ada barisnya)"
+fi
 
 echo
 echo "Selesai membaca. Tidak ada yang diubah."

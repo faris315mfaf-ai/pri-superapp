@@ -172,8 +172,12 @@ if [ -n "$HOST_DB" ]; then
       echo >&2
       echo "  PERINGATAN BESAR: foto TIDAK AKAN TAMPIL." >&2
       echo "  next/image menolak gambar dari $HOST_DB." >&2
-      echo "  Sebabnya SUPABASE_URL tidak sampai ke proses build." >&2
-      echo "  Periksa baris SUPABASE_URL di $APP/.env, lalu ulangi: pri-perbarui" >&2
+      # Sengaja TIDAK menyebut satu sebab saja: pesan penolakan Next sama
+      # persis untuk dua hal yang sangat berbeda — host tidak terdaftar,
+      # atau host mengarah ke alamat jaringan dalam. Menebak salah satu
+      # di sini pernah mengirim pencarian ke arah yang keliru.
+      echo "  Cari sebabnya (hanya membaca, tidak mengubah apa pun):" >&2
+      echo "    bash $SKRIP/15-periksa-gambar.sh" >&2
       ;;
     *) echo "  daftar host gambar: $HOST_DB diterima" ;;
   esac
