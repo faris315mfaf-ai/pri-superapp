@@ -67,12 +67,19 @@ echo "== 3/8 Menentukan versi PostgreSQL 17 (samakan dengan Supabase Cloud) =="
 # otomatis dari Docker Hub supaya tidak salah tulis.
 PG_TAG="$(curl -fsS 'https://hub.docker.com/v2/repositories/supabase/postgres/tags?page_size=100&name=17.' \
   | python3 -c "
-import sys, json
+import re, sys, json
+# HANYA versi polos seperti 17.6.1.008.
+#
+# Tag bervarian seperti '17.9.0.016-orioledb_arm64' HARUS ditolak: itu
+# mesin penyimpanan yang berbeda (OrioleDB, bukan PostgreSQL biasa) DAN
+# dibangun untuk prosesor ARM. Di server Intel/AMD ia tidak jalan sama
+# sekali. Tanpa saringan ini tag varian bisa menang hanya karena
+# angkanya kebetulan lebih besar — persis yang terjadi 12 Sep 2026.
+pola = re.compile(r'^17[.][0-9]+[.][0-9]+[.][0-9]+$')
 d = json.load(sys.stdin)
-def kunci(t):
-    return [int(x) for x in t.split('.') if x.isdigit()]
-tag = [t['name'] for t in d.get('results', []) if t['name'].startswith('17.')]
-print(sorted(tag, key=kunci)[-1] if tag else '')
+tag = [t['name'] for t in d.get('results', []) if pola.match(t['name'])]
+tag.sort(key=lambda t: [int(x) for x in t.split('.')])
+print(tag[-1] if tag else '')
 ")"
 [ -n "$PG_TAG" ] || { echo "Gagal membaca versi PostgreSQL 17 dari Docker Hub." >&2; exit 1; }
 echo "Memakai supabase/postgres:$PG_TAG"
@@ -186,7 +193,19 @@ for nama, s in cfg.get("services", {}).items():
 # Versi PostgreSQL disamakan dengan Supabase Cloud. Ditulis ke layanan
 # "db" yang SAMA dengan blok port di atas — kalau ditulis terpisah, YAML
 # punya dua kunci "db" dan penguncian portnya hilang diam-diam.
-layanan.setdefault("db", {})["image"] = f"supabase/postgres:{os.environ['PG_TAG']}"
+# Nama layanan PostgreSQL berubah-ubah antar versi paket Supabase
+# (pernah "db"). Karena itu dicari dari IMAGE-nya — kalau ditebak dari
+# nama lalu salah, override justru MEMBUAT layanan baru yang tidak
+# pernah diminta, dan itu gagalnya membingungkan.
+nama_db = next(
+    (n for n, sv in cfg.get("services", {}).items()
+     if "supabase/postgres" in str(sv.get("image", ""))),
+    None,
+)
+if nama_db is None:
+    raise SystemExit("Layanan PostgreSQL tidak ditemukan di paket Supabase ini.")
+print(f"  layanan PostgreSQL: {nama_db}")
+layanan.setdefault(nama_db, {})["image"] = f"supabase/postgres:{os.environ['PG_TAG']}"
 # Gerbang (Kong) menolak unggahan besar dengan galat 413 kalau batas
 # bawaannya dibiarkan. Video di aplikasi ini bisa 75 MB.
 layanan.setdefault("kong", {})["environment"] = {"KONG_NGINX_PROXY_CLIENT_MAX_BODY_SIZE": "210m"}
@@ -239,17 +258,17 @@ setelan = {
     # Kueri yang lebih lambat dari 2 detik dicatat supaya bisa ditelusuri.
     "log_min_duration_statement": "2000",
 }
-perintah = list(cfg["services"].get("db", {}).get("command") or [])
+perintah = list(cfg["services"].get(nama_db, {}).get("command") or [])
 if not perintah:
     # Jaga-jaga bila paket Supabase berubah: jalankan postgres apa adanya.
     perintah = ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
 for k, v in setelan.items():
     perintah += ["-c", f"{k}={v}"]
-layanan.setdefault("db", {})["command"] = perintah
+layanan.setdefault(nama_db, {})["command"] = perintah
 # /dev/shm bawaan Docker hanya 64 MB. Kueri paralel PostgreSQL memakai
 # memori bersama ini dan akan gagal dengan galat "No space left on
 # device" yang menyesatkan kalau dibiarkan sekecil itu.
-layanan["db"]["shm_size"] = "2gb"
+layanan[nama_db]["shm_size"] = "2gb"
 print(f"  RAM terbaca {ram_mb} MB, {inti} inti -> shared_buffers {shared_mb}MB, "
       f"cache {cache_mb}MB, work_mem {work_mb}MB, maks koneksi {maks_koneksi}")
 isi = ["# Dibuat otomatis oleh 02-pasang-supabase.sh — jangan diedit tangan.",
@@ -277,6 +296,23 @@ pathlib.Path("/opt/pri/supabase/docker-compose.override.yml").write_text("\n".jo
 kunci_port = [n for n, v in layanan.items() if "ports" in v]
 print("  layanan yang portnya dikunci:", ", ".join(kunci_port) or "(tidak ada)")
 PY
+# PENTING (12 Sep 2026): paket Supabase versi baru menetapkan
+# COMPOSE_FILE di .env. Begitu daftar itu ada, Docker BERHENTI membaca
+# docker-compose.override.yml secara otomatis — aturan pengunci port
+# ditulis tapi tidak pernah dipakai, dan database ikut terbuka ke
+# internet tanpa ada pesan apa pun. Jadi berkasnya didaftarkan sendiri.
+if grep -q '^COMPOSE_FILE=' .env; then
+  if ! grep '^COMPOSE_FILE=' .env | grep -q 'docker-compose.override.yml'; then
+    sed -i 's#^COMPOSE_FILE=\(.*\)$#COMPOSE_FILE=\1:docker-compose.override.yml#' .env
+    echo "  aturan didaftarkan ke COMPOSE_FILE"
+  else
+    echo "  aturan sudah terdaftar di COMPOSE_FILE"
+  fi
+  grep '^COMPOSE_FILE=' .env | sed 's/^/  /'
+else
+  echo "  COMPOSE_FILE tidak ditetapkan — Docker membaca aturan otomatis"
+fi
+
 docker compose config >/dev/null || {
   echo "Konfigurasi Docker tidak valid. Cek versi Compose (butuh v2.24+ untuk '!override'):" >&2
   docker compose version >&2
