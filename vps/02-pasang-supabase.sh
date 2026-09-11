@@ -19,6 +19,10 @@ set -euo pipefail
 
 DIR=/opt/pri/supabase
 SRC=/opt/pri/supabase-src
+# Lokasi skrip disimpan SEBAGAI JALUR PENUH di awal, sebelum `cd` mana
+# pun. Memakai $(dirname "$0") belakangan menghasilkan jalur relatif
+# yang sudah tidak berlaku begitu skrip pindah folder kerja.
+SKRIP_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "== 1/8 Memeriksa DNS =="
 # Nama boleh apa saja asal menunjuk ke server ini: nama bawaan Hostinger
@@ -422,7 +426,12 @@ echo "== 8/8 HTTPS (Caddy) =="
 # Server ini melayani lebih dari satu situs, jadi Caddyfile TIDAK boleh
 # ditimpa. Caranya ditulis sekali di blok-caddy.sh dan dipakai bersama
 # skrip pemasang aplikasi.
-. "$(dirname "$0")/blok-caddy.sh"
+[ -f "$SKRIP_DIR/blok-caddy.sh" ] || {
+  echo "Berkas pembantu hilang: $SKRIP_DIR/blok-caddy.sh" >&2
+  echo "Salin ulang: cp -r /opt/pri/sumber/vps/* $SKRIP_DIR/" >&2
+  exit 1
+}
+. "$SKRIP_DIR/blok-caddy.sh"
 cat > /tmp/blok-supabase.caddy <<EOF
 $DOMAIN {
 	encode zstd gzip
