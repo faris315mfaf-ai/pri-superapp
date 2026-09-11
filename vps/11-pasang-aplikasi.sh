@@ -33,8 +33,20 @@ command -v caddy  >/dev/null || { echo "Caddy belum ada — jalankan 01-siapkan-
 [ -f /opt/pri/kunci.env ] || { echo "Supabase belum terpasang — jalankan 02-pasang-supabase.sh dulu." >&2; exit 1; }
 # shellcheck disable=SC1091
 . /opt/pri/kunci.env
-DOMAIN_DB="$(grep -m1 -oP '^\S+(?= \{)' /etc/caddy/Caddyfile 2>/dev/null | head -1 || true)"
-[ -n "${DOMAIN_DB:-}" ] || { echo "Domain Supabase tidak terbaca dari Caddyfile." >&2; exit 1; }
+# Caddy bisa berupa layanan sistem ATAU container milik aplikasi lain,
+# dan berkas pengaturannya beda tempat. Dikenali dulu, baru dibaca —
+# membaca /etc/caddy/Caddyfile begitu saja bisa mengambil berkas yang
+# sama sekali tidak dipakai siapa pun.
+# shellcheck disable=SC1091
+. "$SKRIP_DIR/blok-caddy.sh"
+kenali_caddy || exit 1
+DOMAIN_DB="$(grep -oE '^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,} \{' "$CADDYFILE" 2>/dev/null | sed 's/ {$//' | grep -m1 '^db\.' || true)"
+[ -n "${DOMAIN_DB:-}" ] || {
+  echo "Alamat Supabase tidak terbaca dari $CADDYFILE." >&2
+  echo "Jalankan 02-pasang-supabase.sh dulu." >&2
+  exit 1
+}
+echo "  alamat Supabase: $DOMAIN_DB"
 
 if [ ! -d "$SUMBER/src" ] || [ ! -f "$SUMBER/package.json" ]; then
   echo >&2
@@ -164,8 +176,10 @@ curl -s --max-time 30 "http://127.0.0.1:$PORT/api/sehat" | head -c 300; echo
 docker compose exec -T redis redis-cli ping | sed 's/^/  redis: /'
 
 echo "== 8/8 Mengarahkan domain ke aplikasi =="
-# shellcheck disable=SC1091
-. "$SKRIP_DIR/blok-caddy.sh"
+# Sama seperti Supabase: kalau Caddy berupa container, ia harus memanggil
+# aplikasi lewat nama container, bukan 127.0.0.1 yang berarti dirinya sendiri.
+TUJUAN="$(alamat_dalam_untuk_caddy pri-aplikasi 3000)" || exit 1
+echo "  Caddy akan meneruskan ke: $TUJUAN"
 cat > /tmp/blok-aplikasi.caddy <<EOF
 $DOMAIN_APP {
 	encode zstd gzip
@@ -173,7 +187,7 @@ $DOMAIN_APP {
 	request_body {
 		max_size 210MB
 	}
-	reverse_proxy 127.0.0.1:$PORT {
+	reverse_proxy $TUJUAN {
 		transport http {
 			read_timeout 600s
 			write_timeout 600s

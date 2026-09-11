@@ -432,6 +432,14 @@ echo "== 8/8 HTTPS (Caddy) =="
   exit 1
 }
 . "$SKRIP_DIR/blok-caddy.sh"
+kenali_caddy || exit 1
+
+# Container gerbang Supabase = yang memublikasikan 127.0.0.1:8000.
+GERBANG_CT="$(docker ps --format '{{.Names}}	{{.Ports}}' | awk -F'	' '$2 ~ /127.0.0.1:8000->/ {print $1; exit}')"
+[ -n "$GERBANG_CT" ] || { echo "Container gerbang Supabase tidak ditemukan." >&2; exit 1; }
+TUJUAN="$(alamat_dalam_untuk_caddy "$GERBANG_CT" 8000)" || exit 1
+echo "  Caddy akan meneruskan ke: $TUJUAN"
+
 cat > /tmp/blok-supabase.caddy <<EOF
 $DOMAIN {
 	encode zstd gzip
@@ -439,7 +447,7 @@ $DOMAIN {
 	request_body {
 		max_size 210MB
 	}
-	reverse_proxy 127.0.0.1:8000 {
+	reverse_proxy $TUJUAN {
 		transport http {
 			read_timeout 600s
 			write_timeout 600s
