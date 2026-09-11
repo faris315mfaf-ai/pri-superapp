@@ -5,3 +5,8 @@ vps/*.sh   text eol=lf
 vps/*.mjs  text eol=lf
 vps/*.sql  text eol=lf
 vps/*.txt  text eol=lf
+# Termasuk isi subfolder (mis. vps/migrator/): Dockerfile tidak berakhiran
+# apa pun, jadi harus disebut sendiri — kalau tersimpan CRLF, baris
+# pertamanya gagal dibaca dan container tidak bisa dibangun.
+vps/**/*.sh      text eol=lf
+vps/**/Dockerfile text eol=lf
