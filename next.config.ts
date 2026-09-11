@@ -4,6 +4,20 @@ import type { NextConfig } from "next";
 // tidak pernah berbeda dari versi aplikasi yang sebenarnya.
 import { version as versiPaket } from "./package.json";
 
+/**
+ * Nama host Supabase dari SUPABASE_URL. Dibaca saat BUILD karena daftar
+ * host next/image memang ditentukan saat build; kalau kosong atau salah
+ * bentuk, cukup dilewati tanpa menggagalkan build.
+ */
+const hostSupabase = (() => {
+  try {
+    const u = (process.env.SUPABASE_URL ?? "").trim();
+    return u ? new URL(u).hostname : "";
+  } catch {
+    return "";
+  }
+})();
+
 const nextConfig: NextConfig = {
   env: { NEXT_PUBLIC_VERSI_APLIKASI: versiPaket },
   ...(process.env.VERCEL ? {} : { output: "standalone" as const }),
@@ -13,6 +27,10 @@ const nextConfig: NextConfig = {
   // tetap memakai <img> biasa.
   images: {
     remotePatterns: [
+      // Host Supabase dibaca dari env (11 Sep 2026) supaya pindah ke
+      // server sendiri tidak membuat next/image menolak foto profil &
+      // sampul video. Nama lama tetap didaftarkan selama masa peralihan.
+      ...(hostSupabase ? [{ protocol: "https" as const, hostname: hostSupabase }] : []),
       { protocol: "https", hostname: "pichnkyjepsirpclofhs.supabase.co" },
       { protocol: "https", hostname: "res.cloudinary.com" },
       // Avatar akun Google (fitur 1.19/3.1): pengguna yang masuk lewat

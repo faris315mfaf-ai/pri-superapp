@@ -1,0 +1,125 @@
+# =====================================================================
+# SUSUNAN CONTAINER PRI SUPERAPP DI VPS (11 Sep 2026)
+#
+# Satu tumpukan terpisah bernama "pri", berdampingan dengan tumpukan
+# Supabase dan dengan aplikasi lain yang sudah lebih dulu ada di server
+# ini. Tidak ada satu pun yang saling menimpa.
+#
+#   aplikasi  — Next.js (hasil build standalone)
+#   redis     — cache bersama: sesi, tanda detak, siapa yang online
+#   jadwal    — penjalan tugas berkala, pengganti Vercel Cron
+#
+# Gerbang masuk tetap Caddy milik server (di luar tumpukan ini), yang
+# membagi berdasarkan nama domain. Karena itu TIDAK ADA satu pun port di
+# sini yang terbuka ke internet — semuanya hanya mendengar di dalam
+# server (127.0.0.1), persis seperti tumpukan Supabase.
+# =====================================================================
+name: pri
+
+services:
+  aplikasi:
+    build:
+      context: /opt/pri/sumber
+      dockerfile: /opt/pri/aplikasi/Dockerfile
+      args:
+        # Dibutuhkan saat build: daftar host gambar next/image.
+        SUPABASE_URL: ${SUPABASE_URL}
+    image: pri-aplikasi:terbaru
+    container_name: pri-aplikasi
+    restart: unless-stopped
+    env_file:
+      - /opt/pri/aplikasi/env.txt
+    environment:
+      # Cache bersama ada di dalam server, bukan menyeberang internet.
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+      TZ: Asia/Jakarta
+    # Permintaan aplikasi ke Supabase memakai alamat PUBLIK (sama dengan
+    # yang dipakai peramban). Ini disengaja: sepuluh tempat di kode
+    # menyimpan alamat berkas hasil `getPublicUrl` ke database — kalau
+    # klien server memakai alamat dalam, yang tersimpan jadi alamat yang
+    # tidak bisa dibuka siapa pun. Baris di bawah membuat nama itu
+    # menunjuk balik ke server ini, jadi permintaannya tidak keluar ke
+    # internet, cuma mampir ke Caddy di mesin yang sama.
+    extra_hosts:
+      - "${DOMAIN_DB}:host-gateway"
+    ports:
+      - "127.0.0.1:${PORT_APLIKASI:-3001}:3000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - pri
+    # Batas memori: 32 GB dibagi bersama Supabase (PostgreSQL sendiri
+    # sudah memesan 7 GB) dan aplikasi lain di server ini.
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  redis:
+    image: redis:7-alpine
+    container_name: pri-redis
+    restart: unless-stopped
+    # allkeys-lru: kalau memori penuh, yang paling lama tidak dipakai
+    # dibuang sendiri. Ini CACHE — kehilangan isinya tidak merusak data,
+    # cuma membuat permintaan berikutnya sedikit lebih lambat.
+    command:
+      - redis-server
+      - --maxmemory
+      - 2gb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --appendonly
+      - "no"
+      - --save
+      - ""
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pri
+    deploy:
+      resources:
+        limits:
+          memory: 2560M
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  jadwal:
+    build:
+      context: /opt/pri/aplikasi/jadwal
+    image: pri-jadwal:terbaru
+    container_name: pri-jadwal
+    restart: unless-stopped
+    environment:
+      # Dipanggil lewat jaringan dalam, tidak lewat internet.
+      APP_URL: http://aplikasi:3000
+      CRON_SECRET: ${CRON_SECRET}
+      TZ: Asia/Jakarta
+    depends_on:
+      - aplikasi
+    networks:
+      - pri
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  redis-data:
+
+networks:
+  pri:
+    name: pri

@@ -10,3 +10,5 @@ vps/*.txt  text eol=lf
 # pertamanya gagal dibaca dan container tidak bisa dibangun.
 vps/**/*.sh      text eol=lf
 vps/**/Dockerfile text eol=lf
+vps/**/*.yml    text eol=lf
+.dockerignore   text eol=lf

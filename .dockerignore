@@ -1,0 +1,39 @@
+# Yang TIDAK boleh ikut masuk ke dalam container.
+#
+# Paling penting baris .env*: berkas itu berisi seluruh kunci rahasia.
+# Kalau ikut tersalin, kuncinya tertanam permanen di dalam image dan
+# ikut ke mana pun image itu dibawa. Kunci diberikan saat container
+# JALAN (env_file di docker-compose), bukan saat dibangun.
+.env
+.env.*
+*.pem
+*.key
+*.keystore
+
+# Tidak perlu & bikin lambat (dibangun ulang di dalam container).
+node_modules
+.next
+out
+dist
+.turbo
+
+# Riwayat & perkakas pengembangan.
+.git
+.gitignore
+.github
+.vscode
+.idea
+.claude
+
+# Catatan, hasil uji, dan berkas sementara.
+*.log
+dev.log
+server.log
+scratchpad
+"Claude outputs"
+coverage
+.DS_Store
+Thumbs.db
+
+# Skrip server: dijalankan DI server, bukan di dalam aplikasi.
+vps

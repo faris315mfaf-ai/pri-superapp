@@ -333,54 +333,27 @@ for i in $(seq 1 60); do
 done
 
 echo "== 8/8 HTTPS (Caddy) =="
-# PENTING (11 Sep 2026): server ini bisa saja SUDAH melayani situs lain
-# — VPS user ternyata sudah menjalankan satu aplikasi Next.js di balik
-# Caddy. Menimpa Caddyfile berarti situs itu mati seketika. Maka bagian
-# milik PRI ditandai dengan pembatas, dan HANYA bagian itu yang
-# ditambah/diganti. Sisanya tidak pernah disentuh.
-CF=/etc/caddy/Caddyfile
-AWAL="# >>> PRI SuperApp — dikelola skrip, jangan diedit tangan >>>"
-AKHIR="# <<< PRI SuperApp <<<"
-mkdir -p "$(dirname "$CF")"
-touch "$CF"
-CADANGAN="$CF.cadangan-$(date +%Y%m%d-%H%M%S)"
-cp -a "$CF" "$CADANGAN"
-echo "  salinan konfigurasi lama: $CADANGAN"
-if grep -qF "$AWAL" "$CF"; then
-  echo "  bagian PRI yang lama ditemukan — diganti, bukan ditumpuk."
-  awk -v a="$AWAL" -v b="$AKHIR" '
-    index($0, a) { lewat = 1 }
-    !lewat { print }
-    index($0, b) { lewat = 0 }
-  ' "$CADANGAN" > "$CF"
-fi
-{
-  printf '%s\n' "$AWAL"
-  printf '%s {\n' "$DOMAIN"
-  printf '\tencode zstd gzip\n'
-  printf '\t# Video sampai 200 MB harus lolos (bucket tvrku).\n'
-  printf '\trequest_body {\n\t\tmax_size 210MB\n\t}\n'
-  printf '\treverse_proxy 127.0.0.1:8000 {\n'
-  printf '\t\ttransport http {\n\t\t\tread_timeout 600s\n\t\t\twrite_timeout 600s\n\t\t}\n'
-  printf '\t}\n}\n'
-  printf '%s\n' "$AKHIR"
-} >> "$CF"
-
-# Kalau konfigurasi gabungan tidak sah, KEMBALIKAN yang lama —
-# lebih baik Supabase belum bisa diakses daripada situs lain ikut mati.
-if ! caddy validate --config "$CF" >/tmp/caddy-validate.log 2>&1; then
-  echo "Konfigurasi Caddy tidak sah, mengembalikan yang lama:" >&2
-  sed 's/^/  /' /tmp/caddy-validate.log >&2
-  cp -a "$CADANGAN" "$CF"
-  systemctl reload caddy || true
-  exit 1
-fi
-systemctl reload caddy
-# Pastikan situs lain (kalau ada) masih hidup setelah perubahan.
-LAIN=$(grep -oE '^[a-zA-Z0-9.*-]+\.[a-zA-Z]{2,}' "$CF" | grep -v "^${DOMAIN}$" | sort -u | head -5)
-for d in $LAIN; do
-  printf '  situs lain %s -> %s\n' "$d" "$(curl -s -o /dev/null -m 15 -w '%{http_code}' "https://$d/" || echo gagal)"
-done
+# Server ini melayani lebih dari satu situs, jadi Caddyfile TIDAK boleh
+# ditimpa. Caranya ditulis sekali di blok-caddy.sh dan dipakai bersama
+# skrip pemasang aplikasi.
+. "$(dirname "$0")/blok-caddy.sh"
+cat > /tmp/blok-supabase.caddy <<EOF
+$DOMAIN {
+	encode zstd gzip
+	# Video sampai 200 MB harus lolos (bucket tvrku).
+	request_body {
+		max_size 210MB
+	}
+	reverse_proxy 127.0.0.1:8000 {
+		transport http {
+			read_timeout 600s
+			write_timeout 600s
+		}
+	}
+}
+EOF
+pasang_blok_caddy "PRI Supabase" /tmp/blok-supabase.caddy || exit 1
+lapor_situs_caddy "$DOMAIN"
 sleep 5
 curl -s -o /dev/null -w "HTTPS %{http_code}\n" -H "apikey: $ANON_KEY" "https://$DOMAIN/rest/v1/"
 
