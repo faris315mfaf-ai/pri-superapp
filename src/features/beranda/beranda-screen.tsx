@@ -25,7 +25,7 @@ import {
   MessageCircle,
   Video, Megaphone, Newspaper } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
-import { AvatarInisial, FadeInUp, StatusBadge, ThemeToggle } from "@/components/pri-ui";
+import { TitikOnline, AvatarInisial, FadeInUp, StatusBadge, ThemeToggle } from "@/components/pri-ui";
 import { ProgressRing } from "@/components/progress-ring";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { IkonStreak } from "@/components/ikon-streak";
@@ -55,6 +55,7 @@ import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 import type { KomponenIkon, User } from "@/types";
 
 import { LencanaOnline } from "@/components/lencana-online";
+import { ModalStatus } from "@/components/modal-status";
 function tanggalWibPerangkat(): string {
   return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
@@ -109,6 +110,8 @@ export function BerandaScreen({
   const sakelarFitur = useAppStore((s) => s.sakelar.fitur);
   const boleh = (k: Parameters<typeof bolehFitur>[1]) => bolehFitur(izin, k, user.role);
 
+
+  const [statusBuka, setStatusBuka] = useState(false);
   const [kpiKerja, setKpiKerja] = useState<KerjaKpi | null>(null);
   const [video, setVideo] = useState<{ jumlah: number; target: number; persen: number | null } | null>(null);
   const [komentar, setKomentar] = useState<{ total: number; sudah: number; diperbarui?: string | null } | null>(null);
@@ -208,13 +211,23 @@ export function BerandaScreen({
         </div>
         <div className="flex max-w-[62%] shrink-0 flex-wrap items-center justify-end gap-2">
           {/* Avatar saya — bercincin Mythical bila masuk 3 besar TVR */}
-          <CincinJuara userId={user.id} ukuran={36}>
-            {user.avatar_url ? (
-              <FotoBulat src={user.avatar_url} ukuran={36} />
-            ) : (
-              <AvatarInisial nama={user.nama} ukuran={36} />
-            )}
-          </CincinJuara>
+          {/* Ketuk foto profil: lihat siapa yang sedang online dan
+              keadaan server (12 Sep 2026). */}
+          <button
+            type="button"
+            onClick={() => setStatusBuka(true)}
+            aria-label="Lihat siapa yang online & keadaan server"
+            className="btn-tekan relative rounded-full"
+          >
+            <CincinJuara userId={user.id} ukuran={36}>
+              {user.avatar_url ? (
+                <FotoBulat src={user.avatar_url} ukuran={36} />
+              ) : (
+                <AvatarInisial nama={user.nama} ukuran={36} />
+              )}
+            </CincinJuara>
+            <TitikOnline ukuran={10} />
+          </button>
           {/* Api task streak (spek 4.1): absensi harian berturut-turut */}
           {streak > 0 && (
             <span className="glass flex h-10 items-center rounded-xl px-2.5">
@@ -362,6 +375,8 @@ export function BerandaScreen({
           ]}
         />
       </div>
+
+      {statusBuka && <ModalStatus onTutup={() => setStatusBuka(false)} />}
     </div>
   );
 }

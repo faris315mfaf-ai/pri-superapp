@@ -6048,6 +6048,32 @@ export type HasilDetak = {
   jeda: number;
 };
 
+// ------------------------------------------------------------
+// Status aplikasi: siapa online + keadaan server (12 Sep 2026)
+// ------------------------------------------------------------
+export type StatusAplikasi = {
+  online: {
+    jumlah: number;
+    orang: { id: string; nama: string; avatar_url: string; struktur: string }[];
+  };
+  server: {
+    cpu_persen: number | null;
+    cpu_inti: number;
+    ram_persen: number | null;
+    ram_total: number | null;
+    ram_terpakai: number | null;
+    disk_persen: number | null;
+    beban_1m: number | null;
+    diambil_pada: string;
+  } | null;
+};
+
+/** Dibuka dari beranda (ketuk foto profil). Diambil saat dibuka saja. */
+export async function getStatus(): Promise<StatusAplikasi> {
+  const json = await fetchJson("/api/status", { headers: headerToken() });
+  return json as StatusAplikasi;
+}
+
 export async function getDetak(): Promise<HasilDetak> {
   const json = await fetchJson("/api/detak", { cache: "no-store" });
   const jeda = Number(json?.jeda);

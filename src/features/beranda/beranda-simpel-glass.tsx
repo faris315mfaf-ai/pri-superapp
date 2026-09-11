@@ -30,7 +30,7 @@ import {
   Video,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
-import { AvatarInisial, FadeInUp, ThemeToggle } from "@/components/pri-ui";
+import { TitikOnline, AvatarInisial, FadeInUp, ThemeToggle } from "@/components/pri-ui";
 import { ProgressRing } from "@/components/progress-ring";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { IkonStreak } from "@/components/ikon-streak";
@@ -51,6 +51,7 @@ import type { KomponenIkon, User } from "@/types";
 import { RunningTextJuara } from "./running-text-juara";
 
 import { LencanaOnline } from "@/components/lencana-online";
+import { ModalStatus } from "@/components/modal-status";
 /** Nomor WhatsApp admin (permintaan user 10 Sep 2026) — menggantikan Chat NAKA. */
 export const WA_ADMIN = "6287718123039";
 
@@ -203,6 +204,8 @@ export function BerandaSimpelGlass({
   const mauKomentar = boleh("beranda.kpi_komentar") && !bebas;
   const mauAbsen = boleh("beranda.absensi") && !bebas;
 
+
+  const [statusBuka, setStatusBuka] = useState(false);
   const [video, setVideo] = useState<{ jumlah: number; target: number; persen: number | null; dibebaskan: string | null } | null>(null);
   const [komentar, setKomentar] = useState<{ total: number; sudah: number } | null>(null);
   const [absen, setAbsen] = useState<{ masuk: string | null; pulang: string | null } | null>(null);
@@ -273,13 +276,23 @@ export function BerandaSimpelGlass({
           <LencanaOnline className="mt-1.5" />
         </div>
         <div className="flex max-w-[62%] shrink-0 flex-wrap items-center justify-end gap-2">
-          <CincinJuara userId={user.id} ukuran={36}>
-            {user.avatar_url ? (
-              <FotoBulat src={user.avatar_url} ukuran={36} />
-            ) : (
-              <AvatarInisial nama={user.nama} ukuran={36} />
-            )}
-          </CincinJuara>
+          {/* Ketuk foto profil: lihat siapa yang sedang online dan
+              keadaan server (12 Sep 2026). */}
+          <button
+            type="button"
+            onClick={() => setStatusBuka(true)}
+            aria-label="Lihat siapa yang online & keadaan server"
+            className="btn-tekan relative rounded-full"
+          >
+            <CincinJuara userId={user.id} ukuran={36}>
+              {user.avatar_url ? (
+                <FotoBulat src={user.avatar_url} ukuran={36} />
+              ) : (
+                <AvatarInisial nama={user.nama} ukuran={36} />
+              )}
+            </CincinJuara>
+            <TitikOnline ukuran={10} />
+          </button>
           {streak > 0 && (
             <span className="glass flex h-10 items-center rounded-xl px-2.5">
               <IkonStreak hari={streak} />
@@ -424,6 +437,8 @@ export function BerandaSimpelGlass({
       <p className="mt-5 text-center text-[11px] text-teks-sekunder">{user.nama} · Beranda ringkas</p>
 
       {modalAkun && <ModalAkunSosmed onTutup={() => setModalAkun(false)} />}
+
+      {statusBuka && <ModalStatus onTutup={() => setStatusBuka(false)} />}
     </div>
   );
 }

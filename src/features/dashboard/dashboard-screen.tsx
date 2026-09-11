@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { JamDigital } from "@/components/jam-digital";
 import { AlertTriangle, Bell } from "lucide-react";
-import { AvatarInisial, EmptyState, FadeInUp, GlassSkeleton, ThemeToggle, SectionTitle } from "@/components/pri-ui";
+import { TitikOnline, AvatarInisial, EmptyState, FadeInUp, GlassSkeleton, ThemeToggle, SectionTitle } from "@/components/pri-ui";
 import { getDashboard } from "@/services";
 import type { DashboardData } from "@/services";
 import { toast } from "@/hooks/use-app-store";
@@ -34,6 +34,7 @@ import { TombolPeringkat } from "@/features/peringkat/tombol-peringkat";
 import { CincinJuara } from "@/features/peringkat/cincin-mythic";
 
 import { LencanaOnline } from "@/components/lencana-online";
+import { ModalStatus } from "@/components/modal-status";
 type DashboardScreenProps = {
   user: User;
   /** Buka HR Center — kosong bila pemakai tidak punya modulnya (10 Sep 2026). */
@@ -70,6 +71,8 @@ export function DashboardScreen({
   onBukaKepatuhan,
   onBukaTvAnalitik,
 }: DashboardScreenProps) {
+
+  const [statusBuka, setStatusBuka] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
   const [memuat, setMemuat] = useState(true);
   const [pesanError, setPesanError] = useState<string | null>(null);
@@ -161,9 +164,19 @@ export function DashboardScreen({
             tertutup di layar sempit (10 Sep 2026). */}
         <div className="flex max-w-[62%] shrink-0 flex-wrap items-center justify-end gap-2">
           {/* Avatar — bercincin Mythical bila masuk 3 besar TVR */}
-          <CincinJuara userId={user.id} ukuran={48}>
-            <AvatarInisial nama={user.nama} ukuran="lg" />
-          </CincinJuara>
+          {/* Ketuk foto profil: lihat siapa yang sedang online dan
+              keadaan server (12 Sep 2026). */}
+          <button
+            type="button"
+            onClick={() => setStatusBuka(true)}
+            aria-label="Lihat siapa yang online & keadaan server"
+            className="btn-tekan relative rounded-full"
+          >
+            <CincinJuara userId={user.id} ukuran={48}>
+              <AvatarInisial nama={user.nama} ukuran="lg" />
+            </CincinJuara>
+            <TitikOnline ukuran={10} />
+          </button>
 
           {/* Mahkota leaderboard TV Rakyat (kiri lonceng, 1 Sep 2026) */}
           <TombolPeringkat />
@@ -340,6 +353,8 @@ export function DashboardScreen({
           />
         )}
       </div>
+
+      {statusBuka && <ModalStatus onTutup={() => setStatusBuka(false)} />}
     </div>
   );
 }
