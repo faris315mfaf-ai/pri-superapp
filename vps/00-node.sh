@@ -7,6 +7,13 @@
 #   bash 00-node.sh 04-pindah-storage.mjs
 #   bash 00-node.sh 06-uji-migrasi.mjs
 #
+# CATATAN 11 Sep 2026 — CARA YANG LEBIH MUDAH ADA SEKARANG:
+#   bash 10-migrasi.sh
+# Satu perintah itu menjalankan langkah 3 sampai 6 sekaligus di dalam
+# satu container yang sudah berisi semua alatnya. Berkas ini dibiarkan
+# sebagai cara manual, untuk kalau ingin menjalankan satu langkah saja
+# tanpa container.
+#
 # Membaca kunci dari /opt/pri/skrip/env-migrasi.txt (buat dari contoh).
 # =====================================================================
 set -euo pipefail

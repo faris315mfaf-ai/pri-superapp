@@ -18,6 +18,13 @@
 #
 # CARA PAKAI (root, di VPS):
 #   bash 03-pindah-data.sh
+#
+# CATATAN 11 Sep 2026 — CARA YANG LEBIH MUDAH ADA SEKARANG:
+#   bash 10-migrasi.sh
+# Satu perintah itu menjalankan langkah 3 sampai 6 sekaligus di dalam
+# satu container yang sudah berisi semua alatnya. Berkas ini dibiarkan
+# sebagai cara manual, untuk kalau ingin menjalankan satu langkah saja
+# tanpa container.
 # =====================================================================
 set -euo pipefail
 

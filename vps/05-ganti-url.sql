@@ -15,7 +15,12 @@
 --     -v baru=https://db.domainanda.com -f - < /opt/pri/skrip/05-ganti-url.sql
 -- =====================================================================
 
+-- Alamat lama boleh dioper dari luar (-v lama=...). Kalau tidak
+-- dioper, dipakai alamat proyek Supabase Cloud yang sekarang.
+\if :{?lama}
+\else
 \set lama 'https://pichnkyjepsirpclofhs.supabase.co'
+\endif
 \set ON_ERROR_STOP on
 
 begin;
