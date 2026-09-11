@@ -298,6 +298,30 @@ print('  semua port aman (127.0.0.1 saja)')
 "
 
 echo "== 7/8 Menyalakan Supabase =="
+# Server ini bisa sudah memakai port yang sama untuk aplikasi lain
+# (mis. PostgreSQL sendiri di 5432). Kalau bentrok, `docker compose up`
+# gagal dengan pesan yang membingungkan — jadi diperiksa lebih dulu,
+# lengkap dengan siapa pemakainya.
+BENTROK=""
+for P in 5432 8000 8443 4000; do
+  PEMAKAI="$(ss -tlnp 2>/dev/null | awk -v p=":$P\$" '$4 ~ p {print $NF}' | head -1)"
+  if [ -n "$PEMAKAI" ]; then
+    # Milik Supabase sendiri (sisa percobaan sebelumnya) tidak dihitung.
+    if docker ps --format '{{.Names}} {{.Ports}}' 2>/dev/null | grep -q "supabase.*:$P->"; then
+      echo "  port $P sudah dipakai Supabase sendiri — tidak apa-apa."
+    else
+      BENTROK="$BENTROK $P($PEMAKAI)"
+    fi
+  fi
+done
+if [ -n "$BENTROK" ]; then
+  echo >&2
+  echo "Port berikut sudah dipakai program lain di server ini:$BENTROK" >&2
+  echo "Supabase butuh 5432, 8000, 8443, dan 4000 di dalam server." >&2
+  echo "Hentikan program itu, atau pindahkan portnya, lalu ulangi." >&2
+  exit 1
+fi
+echo "  port yang dibutuhkan semuanya bebas"
 docker compose pull
 docker compose up -d
 echo -n "Menunggu API siap"
