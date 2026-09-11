@@ -53,6 +53,32 @@ const nextConfig: NextConfig = {
   //   menutup akses untuk PIHAK KETIGA (daftar izin kosong berarti
   //   tidak ada origin luar yang boleh; origin sendiri diatur lewat
   //   allowlist "self" pada kamera/mikrofon/geolokasi).
+  // ------------------------------------------------------------
+  // VERCEL JADI PENUNJUK JALAN (12 Sep 2026)
+  //
+  // Aplikasi sudah pindah ke server sendiri. Tapi Vercel TIDAK dimatikan
+  // begitu saja: APK yang sudah terpasang di ponsel anggota terkunci ke
+  // alamat lama, dan mematikannya mendadak membuat semua pemakai APK
+  // kehilangan aplikasinya sekaligus.
+  //
+  // Jadi salinan di Vercel diubah jadi penunjuk jalan: apa pun yang
+  // datang ke sana diteruskan ke domain sendiri. Pemakai lama tetap
+  // sampai ke tujuan sampai sempat memasang APK baru.
+  //
+  // HANYA berlaku di Vercel. Variabel VERCEL diisi sendiri oleh Vercel
+  // saat membangun; di server sendiri ia kosong, jadi tidak ada
+  // pengalihan sama sekali di sana.
+  //
+  // Sengaja TIDAK permanen, supaya peramban tidak mengingatnya selamanya.
+  // Kalau suatu saat Vercel perlu dipakai lagi, cukup dibatalkan tanpa
+  // menunggu ingatan peramban orang hilang sendiri.
+  // ------------------------------------------------------------
+  async redirects() {
+    if (!process.env.VERCEL) return [];
+    const tujuan = (process.env.APP_URL || "https://pri-superapp.com").replace(/\/+$/, "");
+    return [{ source: "/:jalur*", destination: tujuan + "/:jalur*", permanent: false }];
+  },
+
   async headers() {
     return [
       {

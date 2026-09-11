@@ -3,19 +3,5 @@
   "buildCommand": "next build",
   "regions": [
     "sin1"
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/sinkron-komen",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/cron/pantau-server",
-      "schedule": "*/10 * * * *"
-    },
-    {
-      "path": "/api/cron/rekonsiliasi-kpi",
-      "schedule": "*/15 * * * *"
-    }
   ]
 }
