@@ -12,7 +12,7 @@
 #   TUJUAN_KEY  service role key VPS
 #   TUJUAN_ANON_KEY  anon key VPS (untuk menguji Realtime)
 #
-# Perintah: data | berkas | url | uji | semua
+# Perintah: data | izin | berkas | url | uji | semua
 # Berhenti pada kegagalan pertama — migrasi setengah jalan lebih
 # berbahaya daripada migrasi yang jelas-jelas gagal.
 # =====================================================================
@@ -74,6 +74,8 @@ langkah_data() {
     echo "   semuanya cuma 'does not exist' (wajar di database kosong)"
   fi
 
+  langkah_izin
+
   echo "-- menyalakan ekstensi pg_net (dipakai kirim_push_notifikasi)"
   psql "$TUJUAN_DB" -v ON_ERROR_STOP=1 -tAc 'create extension if not exists pg_net' >/dev/null
   psql "$TUJUAN_DB" -tAc "select extname from pg_extension where extname in ('pg_net','pgcrypto','uuid-ossp')" | sed 's/^/   ekstensi: /'
@@ -101,6 +103,45 @@ select 'tabel ' || count(*) from information_schema.tables where table_schema='p
 union all select 'view ' || count(*) from information_schema.views where table_schema='public'
 union all select 'fungsi ' || count(*) from information_schema.routines where routine_schema='public'" \
     | sed 's/^/   /'
+}
+
+# ---------------------------------------------------------------------
+# HAK AKSES — WAJIB, dan paling mudah terlewat (12 Sep 2026)
+#
+# Salinan dibuat dengan --no-privileges supaya tidak membawa daftar hak
+# akses milik Supabase Cloud (isinya menyebut peran yang belum tentu ada
+# di server sendiri). Konsekuensinya: di server baru tabelnya ADA tapi
+# peran anon/authenticated/service_role belum punya izin apa pun atasnya.
+#
+# Gejalanya menyesatkan: API menjawab "permission denied for schema
+# public", dan jumlah baris tiap tabel terbaca KOSONG — seolah datanya
+# tidak ikut pindah, padahal datanya utuh.
+# ---------------------------------------------------------------------
+langkah_izin() {
+  wajib TUJUAN_DB
+  echo "-- mengembalikan hak akses peran Supabase"
+  psql "$TUJUAN_DB" -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
+grant usage on schema public to postgres, anon, authenticated, service_role;
+grant all privileges on all tables    in schema public to postgres, anon, authenticated, service_role;
+grant all privileges on all sequences in schema public to postgres, anon, authenticated, service_role;
+grant all privileges on all routines  in schema public to postgres, anon, authenticated, service_role;
+-- Tabel yang dibuat SETELAH ini pun ikut terbuka, jadi tidak perlu
+-- diulang setiap kali aplikasi menambah tabel.
+alter default privileges in schema public grant all on tables    to postgres, anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to postgres, anon, authenticated, service_role;
+alter default privileges in schema public grant all on routines  to postgres, anon, authenticated, service_role;
+SQL
+
+  # PostgREST menyimpan gambaran skema di memori. Tanpa diberi tahu, ia
+  # masih memakai gambaran lama dan tetap menolak walau izinnya sudah
+  # benar — kebingungan yang mudah dikira izinnya gagal dipasang.
+  echo "-- memberi tahu API bahwa skema berubah"
+  psql "$TUJUAN_DB" -tAc "notify pgrst, 'reload schema'" >/dev/null
+  sleep 3
+  BISA="$(psql "$TUJUAN_DB" -tAc "
+    select count(*) from information_schema.role_table_grants
+    where grantee = 'service_role' and table_schema = 'public'" | tr -d '\r')"
+  echo "   tabel yang kini boleh dibaca API: ${BISA:-0}"
 }
 
 # ---------------------------------------------------------------------
@@ -140,6 +181,7 @@ langkah_uji() {
 
 case "$PERINTAH" in
   data)   langkah_data ;;
+  izin)   langkah_izin ;;
   berkas) langkah_berkas ;;
   url)    langkah_url ;;
   uji)    langkah_uji ;;
@@ -152,7 +194,7 @@ case "$PERINTAH" in
     echo "Semua langkah lulus. Sekarang boleh mengganti 3 nilai env di Vercel."
     ;;
   *)
-    echo "Perintah tidak dikenal: $PERINTAH (pilih: data | berkas | url | uji | semua)" >&2
+    echo "Perintah tidak dikenal: $PERINTAH (pilih: data | izin | berkas | url | uji | semua)" >&2
     exit 1
     ;;
 esac
