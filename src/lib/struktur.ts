@@ -191,6 +191,114 @@ export function pastikanStrukturSah(
   }
 }
 
+// ============================================================
+// STRUKTUR GANDA (11 Sep 2026) — satu orang boleh berada di lebih dari
+// satu struktur. Contoh: Zona Jawa Barat SEKALIGUS Divisi HR.
+//
+// Cara menyimpannya sengaja tidak mengubah kolom lama: struktur PERTAMA
+// tetap di `divisi`/`sub_divisi`/`jabatan_sayap` (itulah struktur utama,
+// dipakai seluruh kode lama tanpa disentuh), sisanya di kolom baru
+// `struktur_lain` (jsonb array). Jadi tidak ada migrasi data, dan fitur
+// lama tidak bisa rusak karenanya.
+// ============================================================
+
+export type StrukturSatuan = {
+  divisi: string;
+  sub_divisi: string;
+  jabatan_sayap?: string;
+};
+
+/** Sebanyak-banyaknya struktur yang boleh dipegang satu orang. */
+export const MAKS_STRUKTUR = 4;
+
+/** Kunci pembanding supaya struktur yang sama tidak tercatat dua kali. */
+export function kunciStruktur(s: StrukturSatuan): string {
+  return `${s.divisi.trim().toLowerCase()}|${(s.sub_divisi ?? "").trim().toLowerCase()}`;
+}
+
+/** Baca kolom `struktur_lain` apa adanya dari database — tahan data sampah. */
+export function bacaStrukturLain(mentah: unknown): StrukturSatuan[] {
+  if (!Array.isArray(mentah)) return [];
+  const keluar: StrukturSatuan[] = [];
+  const sudah = new Set<string>();
+  for (const x of mentah) {
+    if (!x || typeof x !== "object") continue;
+    const o = x as Record<string, unknown>;
+    const divisi = String(o.divisi ?? "").trim();
+    if (!divisi) continue;
+    const satu: StrukturSatuan = {
+      divisi,
+      sub_divisi: String(o.sub_divisi ?? "").trim(),
+      jabatan_sayap: String(o.jabatan_sayap ?? "").trim(),
+    };
+    const k = kunciStruktur(satu);
+    if (sudah.has(k)) continue;
+    sudah.add(k);
+    keluar.push(satu);
+    if (keluar.length >= MAKS_STRUKTUR) break;
+  }
+  return keluar;
+}
+
+/**
+ * Semua struktur seseorang, struktur utama lebih dulu. Yang kosong
+ * dibuang, yang kembar disatukan.
+ */
+export function semuaStruktur(u: {
+  divisi?: string | null;
+  sub_divisi?: string | null;
+  jabatan_sayap?: string | null;
+  struktur_lain?: unknown;
+}): StrukturSatuan[] {
+  const daftar: StrukturSatuan[] = [];
+  const utama = (u.divisi ?? "").trim();
+  if (utama) {
+    daftar.push({
+      divisi: utama,
+      sub_divisi: (u.sub_divisi ?? "").trim(),
+      jabatan_sayap: (u.jabatan_sayap ?? "").trim(),
+    });
+  }
+  const sudah = new Set(daftar.map(kunciStruktur));
+  for (const s of bacaStrukturLain(u.struktur_lain)) {
+    const k = kunciStruktur(s);
+    if (sudah.has(k)) continue;
+    sudah.add(k);
+    daftar.push(s);
+  }
+  return daftar.slice(0, MAKS_STRUKTUR);
+}
+
+/**
+ * Pisahkan daftar struktur jadi bentuk simpan: yang pertama ke kolom
+ * lama, sisanya ke `struktur_lain`.
+ */
+export function pecahStruktur(daftar: StrukturSatuan[]): {
+  divisi: string;
+  sub_divisi: string;
+  jabatan_sayap: string;
+  struktur_lain: StrukturSatuan[];
+} {
+  const bersih = bacaStrukturLain(daftar);
+  const utama = bersih[0];
+  return {
+    divisi: utama?.divisi ?? "",
+    sub_divisi: utama?.sub_divisi ?? "",
+    jabatan_sayap: utama?.jabatan_sayap ?? "",
+    struktur_lain: bersih.slice(1),
+  };
+}
+
+/** Apakah orang ini berada di divisi tertentu — struktur mana pun. */
+export function punyaDivisi(
+  u: { divisi?: string | null; struktur_lain?: unknown },
+  divisi: string,
+): boolean {
+  const cari = divisi.trim().toLowerCase();
+  if ((u.divisi ?? "").trim().toLowerCase() === cari) return true;
+  return bacaStrukturLain(u.struktur_lain).some((s) => s.divisi.trim().toLowerCase() === cari);
+}
+
 /**
  * Keterangan struktur untuk ditampilkan di bawah nama:
  * jabatan resmi menang; kalau tidak ada, susun dari divisi.

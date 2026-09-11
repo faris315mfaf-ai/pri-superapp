@@ -1,5 +1,6 @@
 
-import { modulDibuka } from "@/lib/peran";// ============================================================
+import { modulDibuka } from "@/lib/peran";
+import { punyaDivisi } from "@/lib/struktur";// ============================================================
 // Helper peran HR (fitur 1.22.x/1).
 //
 // DUA konsep berbeda digabung menjadi "orang HR":
@@ -16,11 +17,19 @@ import { modulDibuka } from "@/lib/peran";// ===================================
 
 export const DIVISI_HR = "Divisi HR";
 
-type UserRingkas = { role?: string | null; divisi?: string | null; modul_izin?: unknown } | null | undefined;
+type UserRingkas =
+  | { role?: string | null; divisi?: string | null; modul_izin?: unknown; struktur_lain?: unknown }
+  | null
+  | undefined;
 
-/** Apakah user berada di Divisi HR (perbandingan string, pola rumah). */
+/**
+ * Apakah user berada di Divisi HR. Sejak struktur ganda (11 Sep 2026)
+ * pertanyaannya dijawab dari SEMUA strukturnya: orang yang struktur
+ * utamanya Zona tetapi juga anggota Divisi HR tetap orang HR.
+ */
 export function diDivisiHR(u: UserRingkas): boolean {
-  return (u?.divisi ?? "").trim() === DIVISI_HR;
+  if (!u) return false;
+  return punyaDivisi(u, DIVISI_HR);
 }
 
 /**

@@ -21,7 +21,7 @@ import {
 import { KartuPengumumanTerbaru } from "@/features/konten/beranda-anggota";
 import { namaSapaan, sapaanHari, tanggalIndonesia, tanggalWibHariIni } from "@/lib/format";
 import type { User } from "@/types";
-import { Database, Globe2, Tv, Users } from "lucide-react";
+import { Globe2, Tv, Users } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { TvNasionalDashboard } from "./tv-nasional-dashboard";
 import { KartuKelolaPengguna } from "./kartu-kelola-pengguna";
@@ -46,7 +46,6 @@ type DashboardScreenProps = {
    * peran lain menerima undefined dan kartunya tidak dirender.
    */
   onBukaKelolaPengguna?: () => void;
-  onBukaDatabase?: () => void;
   /** Kartu ringkasan (1 Sep 2026): buka absensi & KPI video anggota. */
   onBukaAbsensi?: () => void;
   onBukaKpiVideo?: () => void;
@@ -60,7 +59,6 @@ type DashboardScreenProps = {
 export function DashboardScreen({
   user,
   onBukaKelolaPengguna,
-  onBukaDatabase,
   onBukaModulQc,
   onBukaModulTv,
   onBukaNotifikasi,
@@ -211,11 +209,14 @@ export function DashboardScreen({
           <RingkasanUtama
             onBukaKomen={onBukaModulQc ?? onBukaKepatuhan}
             onBukaAbsensi={onBukaAbsensi}
-            onBukaKerja={onBukaDatabase}
             onBukaVideo={onBukaKpiVideo}
           />
         </FadeInUp>
       </div>
+
+      {/* Database Anggota TIDAK lagi di sini (11 Sep 2026, permintaan user
+          "database anggota dimasukkan di HR Center saja") — tempatnya
+          sekarang hanya HR Center, bersama Tabel Anggota. */}
 
       {/* ===== Semua Dashboard (1 Sep 2026): seluruh sub-dashboard
           (Absensi, KPI Anggota, Kepatuhan Komen, TV Rakyat, Database
@@ -228,7 +229,6 @@ export function DashboardScreen({
           kpi: onBukaKpiVideo,
           kepatuhan: onBukaKepatuhan,
           tv: onBukaTvAnalitik,
-          anggota: onBukaDatabase,
           tvnasional: onBukaTvNasional,
         };
         const daftar = KATALOG_DASHBOARD.filter((d) => tujuan[d.kunci]);
@@ -307,37 +307,6 @@ export function DashboardScreen({
             bungkusSeksi={false}
             seksi={
               [
-                onBukaDatabase && {
-                  id: "database",
-                  judul: "Database Anggota",
-                  ikon: Database,
-                  render: () => (
-                    <button
-                      type="button"
-                      onClick={onBukaDatabase}
-                      className="btn-tekan w-full text-left"
-                      aria-label="Buka Database Anggota"
-                    >
-                      <GlassCard className="flex items-center gap-3 p-4">
-                        <span
-                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
-                          style={{ background: "linear-gradient(135deg, #8B5CF6, #6D28D9)" }}
-                          aria-hidden="true"
-                        >
-                          <Database className="h-5 w-5" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block font-heading text-[15px] font-bold text-teks-utama">
-                            Database Anggota
-                          </span>
-                          <span className="mt-0.5 block text-[11.5px] leading-snug text-teks-sekunder">
-                            Detail per orang: kewajiban komentar, KPI kerja, absensi, laporan video.
-                          </span>
-                        </span>
-                      </GlassCard>
-                    </button>
-                  ),
-                },
                 onBukaKelolaPengguna && {
                   id: "kelola",
                   judul: "Kelola Pengguna",

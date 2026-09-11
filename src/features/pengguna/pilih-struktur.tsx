@@ -21,6 +21,8 @@ import {
   DIVISI_ZONA,
   JABATAN_SAYAP,
   KATEGORI_STRUKTUR,
+  MAKS_STRUKTUR,
+  butuhSubDivisi,
   gelarSayap,
   SUB_SAYAP,
   SUB_ZONA,
@@ -37,6 +39,18 @@ export type NilaiStruktur = {
   /** Jabatan di sayap (10 Sep 2026); hanya berlaku untuk Sayap Partai. */
   jabatan_sayap?: string;
 };
+
+/** Nama pendek satu struktur, untuk daftar pilihan yang sudah dipakai. */
+function labelSatu(s: NilaiStruktur): string {
+  const d = s.divisi.trim();
+  const sub = (s.sub_divisi ?? "").trim();
+  if (d === DIVISI_ZONA) return `Zona ${sub || "belum dipilih"}`;
+  if (d === DIVISI_SAYAP) {
+    const j = (s.jabatan_sayap ?? "").trim();
+    return j ? gelarSayap(sub, j) : `Sayap ${sub || "belum dipilih"}`;
+  }
+  return d || "belum dipilih";
+}
 
 const IKON: Record<KategoriStruktur, KomponenIkon> = {
   zona: MapPinned,
@@ -304,6 +318,183 @@ export function PilihStruktur({
             </option>
           ))}
         </select>
+      )}
+    </div>
+  );
+}
+
+
+// ============================================================
+// PilihStrukturBanyak (11 Sep 2026) — satu orang boleh berada di LEBIH
+// DARI SATU struktur. Permintaan user: "pada struktur bisa dipilih
+// lebih dari 1".
+//
+// Yang PERTAMA dalam daftar adalah struktur UTAMA: itulah yang disimpan
+// di kolom divisi/sub_divisi lama dan yang tampil di bawah nama orang.
+// Sisanya struktur tambahan. Urutan bisa diubah lewat "Jadikan utama"
+// supaya tidak perlu menghapus lalu memilih ulang.
+// ============================================================
+export function PilihStrukturBanyak({
+  daftar,
+  onUbah,
+  disabled = false,
+  besar = false,
+  bolehKosong = false,
+  bolehJabatanSayap = false,
+  maks = MAKS_STRUKTUR,
+}: {
+  daftar: NilaiStruktur[];
+  onUbah: (baru: NilaiStruktur[]) => void;
+  disabled?: boolean;
+  besar?: boolean;
+  bolehKosong?: boolean;
+  bolehJabatanSayap?: boolean;
+  maks?: number;
+}) {
+  // Struktur yang SEDANG disusun; belum masuk daftar sampai lengkap.
+  const [draf, setDraf] = useState<NilaiStruktur>({ divisi: "", sub_divisi: "", jabatan_sayap: "" });
+  const [menyusun, setMenyusun] = useState(daftar.length === 0);
+
+  // Lengkap = divisinya terisi, dan sub-divisinya sudah dipilih untuk
+  // yang memang mewajibkan (Zona & Sayap).
+  const drafLengkap =
+    draf.divisi.trim().length > 0 &&
+    (!butuhSubDivisi(draf.divisi) || (draf.sub_divisi ?? "").trim().length > 0);
+  const kembar = daftar.some(
+    (d) => d.divisi === draf.divisi && (d.sub_divisi ?? "") === (draf.sub_divisi ?? ""),
+  );
+  const penuh = daftar.length >= maks;
+
+  function tambah() {
+    if (!drafLengkap || kembar || penuh) return;
+    onUbah([...daftar, { ...draf }]);
+    setDraf({ divisi: "", sub_divisi: "", jabatan_sayap: "" });
+    setMenyusun(false);
+  }
+
+  function buang(i: number) {
+    onUbah(daftar.filter((_, n) => n !== i));
+  }
+
+  function jadikanUtama(i: number) {
+    if (i === 0) return;
+    const baru = [...daftar];
+    const [pindah] = baru.splice(i, 1);
+    onUbah([pindah, ...baru]);
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      {daftar.length > 0 && (
+        <ul className="flex flex-col gap-1.5" aria-label="Struktur yang dipilih">
+          {daftar.map((s, i) => {
+            const k = kategoriStruktur(s.divisi);
+            const Ikon = k ? IKON[k] : Building2;
+            return (
+              <li
+                key={`${s.divisi}|${s.sub_divisi}`}
+                className="glass-soft flex items-center gap-2 rounded-xl px-3 py-2"
+              >
+                <span
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-pri/10 text-pri"
+                  aria-hidden="true"
+                >
+                  <Ikon className="h-3.5 w-3.5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[12.5px] font-bold text-teks-utama">
+                    {labelSatu(s)}
+                  </span>
+                  {i === 0 && (
+                    <span className="block text-[10.5px] text-teks-sekunder">
+                      struktur utama — ini yang tampil di bawah nama
+                    </span>
+                  )}
+                </span>
+                {i > 0 && (
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => jadikanUtama(i)}
+                    className="btn-tekan shrink-0 rounded-full px-2 py-1 text-[10.5px] font-bold text-pri disabled:opacity-50"
+                  >
+                    Jadikan utama
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={disabled || (!bolehKosong && daftar.length === 1)}
+                  onClick={() => buang(i)}
+                  aria-label={`Hapus struktur ${labelSatu(s)}`}
+                  className="btn-tekan shrink-0 p-1 text-teks-sekunder/70 disabled:opacity-30"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {menyusun ? (
+        <div className="flex flex-col gap-2">
+          <PilihStruktur
+            nilai={draf}
+            onUbah={setDraf}
+            disabled={disabled || penuh}
+            besar={besar}
+            bolehJabatanSayap={bolehJabatanSayap}
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={disabled || !drafLengkap || kembar || penuh}
+              onClick={tambah}
+              className="btn-tekan flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-[12.5px] font-bold text-white disabled:opacity-50"
+              style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              {daftar.length === 0 ? "Pakai struktur ini" : "Tambahkan struktur ini"}
+            </button>
+            {daftar.length > 0 && (
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => {
+                  setDraf({ divisi: "", sub_divisi: "", jabatan_sayap: "" });
+                  setMenyusun(false);
+                }}
+                className="btn-tekan glass h-10 rounded-xl px-3 text-[12.5px] font-bold text-teks-sekunder"
+              >
+                Batal
+              </button>
+            )}
+          </div>
+          {kembar && drafLengkap && (
+            <p className="text-[11px] font-semibold text-gagal">Struktur itu sudah dipilih.</p>
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={disabled || penuh}
+          onClick={() => setMenyusun(true)}
+          className="btn-tekan flex items-center gap-1.5 self-start rounded-full px-3 py-1.5 text-[11.5px] font-bold text-pri disabled:opacity-40"
+        >
+          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+          {penuh ? `Maksimal ${maks} struktur` : "Tambah struktur lain"}
+        </button>
+      )}
+
+      {bolehKosong && daftar.length > 0 && !menyusun && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onUbah([])}
+          className="btn-tekan self-start text-[11.5px] font-semibold text-teks-sekunder underline-offset-2 hover:underline"
+        >
+          Kosongkan semua struktur
+        </button>
       )}
     </div>
   );

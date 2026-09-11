@@ -14,7 +14,7 @@
 
 import { useEffect, useState } from "react";
 import { ClipboardList, Megaphone, MessageCircle, X } from "lucide-react";
-import { motion } from "framer-motion";
+import { GeserHapus } from "@/components/geser-hapus";
 import { GlassCard } from "@/components/glass-card";
 import { FadeInUp } from "@/components/pri-ui";
 import { ProgressRing } from "@/components/progress-ring";
@@ -49,6 +49,10 @@ function tanggalWibPerangkat(): string {
 // merapikan tampilan SAYA — pengumumannya sendiri tetap ada untuk
 // orang lain dan tetap terbaca di layar Chat.
 const KUNCI_TUTUP = "pri-pengumuman-ditutup";
+// Kartu pengumuman dipasang di BEBERAPA layar sekaligus (beranda anggota,
+// beranda kaca, dashboard pengurus). Tanpa kabar bersama, menutup di satu
+// tempat tidak terasa di tempat lain dan pengumumannya seolah balik lagi.
+const PERISTIWA_TUTUP = "pri:pengumuman-ditutup";
 
 function bacaDitutup(): string[] {
   try {
@@ -56,6 +60,18 @@ function bacaDitutup(): string[] {
   } catch {
     return [];
   }
+}
+
+/** Tutup satu pengumuman: dicatat, lalu semua kartu yang sedang tampil diberi tahu. */
+function tutupPengumuman(id: string) {
+  try {
+    // Simpan maksimal 100 id terakhir supaya localStorage tidak menumpuk.
+    const baru = [...new Set([...bacaDitutup(), id])].slice(-100);
+    localStorage.setItem(KUNCI_TUTUP, JSON.stringify(baru));
+  } catch {
+    // localStorage penuh/terblokir: kartunya tetap hilang sesi ini.
+  }
+  window.dispatchEvent(new CustomEvent(PERISTIWA_TUTUP, { detail: id }));
 }
 
 export function KartuPengumumanTerbaru() {
@@ -79,16 +95,16 @@ export function KartuPengumumanTerbaru() {
     };
   }, [versiSegar]);
 
-  function tutup(id: string) {
-    // Simpan maksimal 100 id terakhir supaya localStorage tidak menumpuk.
-    try {
-      const baru = [...bacaDitutup(), id].slice(-100);
-      localStorage.setItem(KUNCI_TUTUP, JSON.stringify(baru));
-    } catch {
-      // localStorage penuh/terblokir: kartunya tetap hilang sesi ini.
+  // Satu pengumuman ditutup di mana pun = hilang di kartu ini juga.
+  useEffect(() => {
+    function dengar(e: Event) {
+      const id = String((e as CustomEvent).detail ?? "");
+      if (!id) return;
+      setDaftar((lama) => (lama ?? []).filter((p) => p.id !== id));
     }
-    setDaftar((lama) => (lama ?? []).filter((p) => p.id !== id));
-  }
+    window.addEventListener(PERISTIWA_TUTUP, dengar);
+    return () => window.removeEventListener(PERISTIWA_TUTUP, dengar);
+  }, []);
 
   // Tidak ada pengumuman = tidak ada kartu — beranda tidak perlu
   // kotak kosong yang hanya bilang "belum ada apa-apa".
@@ -98,18 +114,8 @@ export function KartuPengumumanTerbaru() {
     <FadeInUp>
       <div className="mt-4 flex flex-col gap-2">
         {daftar.map((p) => (
-          <motion.div
-            key={p.id}
-            layout
-            // Geser ke KIRI untuk menghapus dari beranda (ala WhatsApp).
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={{ left: 0.6, right: 0.05 }}
-            onDragEnd={(_, info) => {
-              if (info.offset.x < -90) tutup(p.id);
-            }}
-            exit={{ opacity: 0, x: -160 }}
-          >
+          // Geser ke KIRI untuk membuang dari beranda (ala daftar pesan).
+          <GeserHapus key={p.id} onHapus={() => tutupPengumuman(p.id)}>
             <GlassCard className="border-l-4 border-l-[#DC2626] p-3.5">
               <div className="flex items-start gap-2.5">
                 <span
@@ -129,7 +135,7 @@ export function KartuPengumumanTerbaru() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => tutup(p.id)}
+                  onClick={() => tutupPengumuman(p.id)}
                   aria-label="Tutup pengumuman ini"
                   className="btn-tekan shrink-0 text-teks-sekunder/60"
                 >
@@ -137,7 +143,7 @@ export function KartuPengumumanTerbaru() {
                 </button>
               </div>
             </GlassCard>
-          </motion.div>
+          </GeserHapus>
         ))}
       </div>
     </FadeInUp>

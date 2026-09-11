@@ -22,6 +22,7 @@ import {
   ClipboardCheck,
   Check,
   ChevronRight,
+  Database,
   History,
   ScanSearch,
   UsersRound,
@@ -305,6 +306,9 @@ export function QcScreen({
           {(
             [
               ["tabel-anggota", "Database Anggota", UsersRound, true],
+              // Pindah dari Dashboard (11 Sep 2026): detail per orang —
+              // kewajiban komentar, KPI kerja, absensi, laporan video.
+              ["database", "Detail Anggota", Database, true],
               ["absensi-hari-ini", "Absensi Hari Ini", CalendarDays, true],
               ["setel-kpi", "Setel KPI", TrendingUp, true],
               ["persetujuan-kpi", "ACC KPI", ClipboardCheck, true],

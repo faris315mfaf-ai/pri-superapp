@@ -107,7 +107,6 @@ import { modulUntukDivisi } from "@/lib/modul-divisi";
 import { adalahHR } from "@/lib/hr";
 import { KUNCI_CHANGELOG_DILIHAT } from "@/lib/changelog";
 import { VERSI_APLIKASI } from "@/lib/versi";
-import { bolehFitur } from "@/lib/fitur";
 import { toast, useAppStore } from "@/hooks/use-app-store";
 import { adalahPimred } from "@/lib/jabatan";
 import {
@@ -986,12 +985,6 @@ export default function Page() {
         kunci: "beranda",
         isi: (
           <DashboardScreen
-            onBukaDatabase={
-              aksesDashboard.includes("anggota") ||
-              (user.role !== "anggota" && bolehFitur(izinFitur, "database.detail", user.role))
-                ? () => setSubLayar({ nama: "database" })
-                : undefined
-            }
             user={user}
             onBukaKelolaPengguna={
               // superadmin (10 Sep 2026): tanpa Kelola Pengguna (bukan bagian fiturnya).
@@ -1021,6 +1014,7 @@ export default function Page() {
               setSubLayar({
                 nama: nama as
                   | "tabel-anggota"
+                  | "database"
                   | "absensi-hari-ini"
                   | "setel-kpi"
                   | "persetujuan-kpi"
@@ -1059,11 +1053,6 @@ export default function Page() {
         isi: dashboardPenuh ? (
           <DashboardScreen
             user={user}
-            onBukaDatabase={
-              aksesDashboard.includes("anggota")
-                ? () => setSubLayar({ nama: "database" })
-                : undefined
-            }
             onBukaKelolaPengguna={adalahHR(user) ? () => setSubLayar({ nama: "kelola-pengguna" }) : undefined}
             onBukaModulQc={tabBoleh.includes("qc") ? () => pilihTab("qc") : undefined}
             onBukaModulTv={tabBoleh.includes("tv") ? () => pilihTab("tv") : undefined}

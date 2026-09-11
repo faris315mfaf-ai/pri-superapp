@@ -16,6 +16,9 @@ import { adalahHR, diDivisiHR } from "@/lib/hr";
 
 import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 import { nilaiSayapTambahan } from "@/lib/sayap";
+import { kolomStrukturLainAda } from "@/lib/kolom-struktur";
+import { pastikanDaftarStrukturSah } from "@/lib/struktur-banyak";
+import { bacaStrukturLain } from "@/lib/struktur";
 export const dynamic = "force-dynamic";
 
 // Peran yang bisa DIPILIH dari panel kini hanya Ketua dan Anggota.
@@ -86,6 +89,21 @@ export async function GET(request: Request) {
 
     if (error) throw new Error("Gagal memuat daftar pengguna");
 
+    // STRUKTUR GANDA (11 Sep 2026): diambil terpisah, satu kueri ringan,
+    // dan hanya bila kolomnya sudah terpasang (sql/43). Digabung ulang
+    // per-id supaya daftar kolom utama tetap literal — supabase-js tidak
+    // bisa mengurai daftar kolom yang dirakit template string.
+    const strukturLain = new Map<string, ReturnType<typeof bacaStrukturLain>>();
+    if (await kolomStrukturLainAda()) {
+      const { data: baris } = await supabase()
+        .from("app_user")
+        .select("id, struktur_lain")
+        .in("id", (data ?? []).map((u) => u.id));
+      for (const b of baris ?? []) {
+        strukturLain.set(String(b.id), bacaStrukturLain(b.struktur_lain));
+      }
+    }
+
     const daftar = (data ?? []).map((u) => ({
       ...u,
       id: String(u.id),
@@ -94,6 +112,7 @@ export async function GET(request: Request) {
       bidang_jabatan: u.bidang_jabatan ?? "",
       divisi: u.divisi ?? "",
       sub_divisi: u.sub_divisi ?? "",
+      struktur_lain: strukturLain.get(String(u.id)) ?? [],
       posisi_divisi: u.posisi_divisi ?? "anggota",
     }));
 
@@ -172,6 +191,8 @@ export async function PATCH(request: Request) {
       bidang?: string;
       divisi?: string;
       sub_divisi?: string;
+      /** Struktur tambahan di luar yang utama (11 Sep 2026). */
+      struktur_lain?: unknown;
       posisi_divisi?: string;
       /** ubah_divisi: jabatan di Sayap Partai (terpisah dari jabatan DPP) */
       jabatan_sayap?: string;
@@ -411,6 +432,15 @@ export async function PATCH(request: Request) {
         perubahan.divisi = divisi;
         perubahan.sub_divisi = divisi ? sub : "";
         perubahan.jabatan_sayap = diSayap ? jabatanSayap : "";
+        // STRUKTUR GANDA (11 Sep 2026): struktur di luar yang utama.
+        // Disimpan hanya bila kolomnya sudah ada (sql/43) — sebelum itu
+        // aplikasi tetap jalan dengan satu struktur seperti biasa.
+        if (await kolomStrukturLainAda()) {
+          const lain = pastikanDaftarStrukturSah(body.struktur_lain, await nilaiSayapTambahan());
+          perubahan.struktur_lain = divisi
+            ? lain.filter((x) => !(x.divisi === divisi && x.sub_divisi === sub))
+            : [];
+        }
         // Pengurus sayap otomatis "kepala" di sayapnya; sisanya ikut pilihan HR.
         perubahan.posisi_divisi = diSayap
           ? jabatanSayap

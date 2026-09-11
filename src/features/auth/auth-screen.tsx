@@ -59,7 +59,7 @@ import {
   type UserLengkap,
 } from "@/services";
 import { butuhSubDivisi } from "@/lib/struktur";
-import { PilihStruktur } from "@/features/pengguna/pilih-struktur";
+import { PilihStrukturBanyak, type NilaiStruktur } from "@/features/pengguna/pilih-struktur";
 import { cn } from "@/lib/utils";
 
 type Langkah = "tertutup" | "masuk" | "daftar" | "otp" | "profil" | "menunggu" | "lupa" | "developer";
@@ -900,6 +900,9 @@ function FormProfil({
   const [tanggalLahir, setTanggalLahir] = useState("");
   const [divisi, setDivisi] = useState("");
   const [subDivisi, setSubDivisi] = useState("");
+  // Struktur ganda (11 Sep 2026): yang PERTAMA jadi struktur utama,
+  // dan itulah yang tetap dikirim lewat divisi/sub_divisi seperti dulu.
+  const [strukturDaftar, setStrukturDaftar] = useState<NilaiStruktur[]>([]);
   const [foto, setFoto] = useState<string>("");
   const [memuat, setMemuat] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -936,6 +939,7 @@ function FormProfil({
         tanggal_lahir: tanggalLahir,
         divisi,
         sub_divisi: subDivisi,
+        struktur_lain: strukturDaftar.slice(1),
         foto: foto || undefined,
       });
       toast("sukses", "Profil tersimpan");
@@ -1035,12 +1039,14 @@ function FormProfil({
         <p className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
           Struktur: Zona · Sayap · Divisi
         </p>
-        {/* 10 Sep 2026: pilih kategori dulu (Zona / Sayap / Divisi), baru isinya. */}
-        <PilihStruktur
-          nilai={{ divisi, sub_divisi: subDivisi }}
-          onUbah={(v) => {
-            setDivisi(v.divisi);
-            setSubDivisi(v.sub_divisi);
+        {/* 10 Sep 2026: pilih kategori dulu (Zona / Sayap / Divisi), baru
+            isinya. 11 Sep 2026: boleh lebih dari satu struktur. */}
+        <PilihStrukturBanyak
+          daftar={strukturDaftar}
+          onUbah={(baru) => {
+            setStrukturDaftar(baru);
+            setDivisi(baru[0]?.divisi ?? "");
+            setSubDivisi(baru[0]?.sub_divisi ?? "");
           }}
           disabled={memuat}
           besar

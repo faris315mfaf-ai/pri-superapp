@@ -20,6 +20,8 @@ import {
   simpanCacheSesi,
 } from "@/lib/cache-sesi";
 
+import { kolomStrukturLainAda } from "@/lib/kolom-struktur";
+import { bacaStrukturLain } from "@/lib/struktur";
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -85,6 +87,8 @@ type BarisUser = {
   sembunyi_kewajiban?: boolean | null;
   modul_izin?: Record<string, boolean> | null;
   jabatan_sayap?: string | null;
+  /** Struktur tambahan di luar yang utama (11 Sep 2026, sql/43). */
+  struktur_lain?: unknown;
 };
 
 export type UserPublik = User & {
@@ -117,11 +121,24 @@ export function keUserPublik(b: BarisUser): UserPublik {
     sembunyi_kewajiban: b.sembunyi_kewajiban === true,
     modul_izin: b.modul_izin && typeof b.modul_izin === "object" ? b.modul_izin : null,
     jabatan_sayap: b.jabatan_sayap ?? "",
+    struktur_lain: bacaStrukturLain(b.struktur_lain),
   };
 }
 
 const KOLOM_USER =
   "id, email, nama, role, jabatan, avatar_url, status, profil_lengkap, aktif, username, nomor_wa, wa_terverifikasi, divisi, sub_divisi, posisi_divisi, nama_panggilan, tanggal_lahir, google_linked, google_avatar, sembunyi_kewajiban, modul_izin, jabatan_sayap";
+// Sama persis, plus struktur tambahan (11 Sep 2026). Ditulis LENGKAP,
+// bukan dirakit, karena supabase-js hanya bisa mengurai daftar kolom
+// yang berupa teks tetap. Dipakai hanya bila kolomnya sudah terpasang
+// (sql/43); sebelum itu daftar lama yang dipakai, jadi tidak ada
+// permintaan yang gagal hanya karena SQL-nya belum dijalankan.
+const KOLOM_USER_PLUS =
+  "id, email, nama, role, jabatan, avatar_url, status, profil_lengkap, aktif, username, nomor_wa, wa_terverifikasi, divisi, sub_divisi, posisi_divisi, nama_panggilan, tanggal_lahir, google_linked, google_avatar, sembunyi_kewajiban, modul_izin, jabatan_sayap, struktur_lain";
+
+/** Daftar kolom akun yang aman dipakai pada keadaan database saat ini. */
+async function kolomUser(): Promise<typeof KOLOM_USER | typeof KOLOM_USER_PLUS> {
+  return (await kolomStrukturLainAda()) ? KOLOM_USER_PLUS : KOLOM_USER;
+}
 
 /**
  * Tukar token perangkat dengan data akun.
@@ -165,7 +182,7 @@ export async function userDariToken(token: string): Promise<UserPublik | null> {
 
   const { data: user } = await db
     .from("app_user")
-    .select(KOLOM_USER)
+    .select(await kolomUser())
     .eq("id", sesi.user_id)
     .maybeSingle();
 
@@ -247,7 +264,7 @@ export async function userDariTokenLonggar(token: string): Promise<UserPublik | 
 
   const { data } = await db
     .from("app_user")
-    .select(KOLOM_USER)
+    .select(await kolomUser())
     .eq("id", sesi.user_id)
     .maybeSingle();
 

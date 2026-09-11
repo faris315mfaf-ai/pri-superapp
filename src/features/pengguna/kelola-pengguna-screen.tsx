@@ -40,7 +40,7 @@ import { getPengguna, ubahPengguna, type PenggunaAdmin,
   setujuiSemuaPendaftar,
 } from "@/services";
 import { butuhSubDivisi, deskripsiStruktur, DIVISI, DIVISI_SAYAP, gelarSayap } from "@/lib/struktur";
-import { PilihStruktur } from "./pilih-struktur";
+import { PilihStrukturBanyak, type NilaiStruktur } from "./pilih-struktur";
 import { JABATAN_PARTAI, KUOTA_JABATAN, jabatanLengkap } from "@/lib/jabatan";
 import { cn } from "@/lib/utils";
 
@@ -192,7 +192,7 @@ export function KelolaPenggunaScreen({ onKembali }: { onKembali: () => void }) {
 
   async function simpanDivisi(
     u: PenggunaAdmin,
-    info: { divisi: string; sub_divisi: string; posisi_divisi: string; jabatan_sayap?: string },
+    info: { divisi: string; sub_divisi: string; posisi_divisi: string; jabatan_sayap?: string; struktur_lain?: NilaiStruktur[] },
   ) {
     if (sedangProses) return;
     setSedangProses(u.id);
@@ -802,13 +802,30 @@ function PilihDivisi({
 }: {
   pengguna: PenggunaAdmin;
   sedangProses: boolean;
-  onSimpan: (info: { divisi: string; sub_divisi: string; posisi_divisi: string; jabatan_sayap?: string }) => void;
+  onSimpan: (info: { divisi: string; sub_divisi: string; posisi_divisi: string; jabatan_sayap?: string; struktur_lain?: NilaiStruktur[] }) => void;
   onTutup: () => void;
 }) {
-  const [divisi, setDivisi] = useState(pengguna.divisi ?? "");
-  const [sub, setSub] = useState(pengguna.sub_divisi ?? "");
+  // STRUKTUR GANDA (11 Sep 2026): yang pertama = struktur utama, dan
+  // itulah yang tetap mengisi kolom divisi/sub_divisi seperti sebelumnya.
+  const [strukturDaftar, setStrukturDaftar] = useState<NilaiStruktur[]>(() => {
+    const awal: NilaiStruktur[] = [];
+    if ((pengguna.divisi ?? "").trim()) {
+      awal.push({
+        divisi: pengguna.divisi ?? "",
+        sub_divisi: pengguna.sub_divisi ?? "",
+        jabatan_sayap: pengguna.jabatan_sayap ?? "",
+      });
+    }
+    for (const x of pengguna.struktur_lain ?? []) {
+      awal.push({ divisi: x.divisi, sub_divisi: x.sub_divisi, jabatan_sayap: x.jabatan_sayap ?? "" });
+    }
+    return awal;
+  });
   const [posisi, setPosisi] = useState(pengguna.posisi_divisi === "kepala" ? "kepala" : "anggota");
-  const [jabatanSayap, setJabatanSayap] = useState(pengguna.jabatan_sayap ?? "");
+  const utama = strukturDaftar[0];
+  const divisi = utama?.divisi ?? "";
+  const sub = utama?.sub_divisi ?? "";
+  const jabatanSayap = utama?.jabatan_sayap ?? "";
   const diSayap = divisi === DIVISI_SAYAP;
   const sah = !divisi || !butuhSubDivisi(divisi) || Boolean(sub);
 
@@ -845,13 +862,9 @@ function PilihDivisi({
         </p>
         <div className="scrollbar-tipis mt-4 flex flex-col gap-3 overflow-y-auto">
           {/* 10 Sep 2026: pemilih dua langkah Zona · Sayap · Divisi */}
-          <PilihStruktur
-            nilai={{ divisi, sub_divisi: sub, jabatan_sayap: jabatanSayap }}
-            onUbah={(v) => {
-              setDivisi(v.divisi);
-              setSub(v.sub_divisi);
-              setJabatanSayap(v.jabatan_sayap ?? "");
-            }}
+          <PilihStrukturBanyak
+            daftar={strukturDaftar}
+            onUbah={setStrukturDaftar}
             disabled={sedangProses}
             bolehKosong
             bolehJabatanSayap
@@ -890,7 +903,15 @@ function PilihDivisi({
           <button
             type="button"
             disabled={!sah || sedangProses}
-            onClick={() => onSimpan({ divisi, sub_divisi: sub, posisi_divisi: posisi, jabatan_sayap: diSayap ? jabatanSayap : "" })}
+            onClick={() =>
+              onSimpan({
+                divisi,
+                sub_divisi: sub,
+                posisi_divisi: posisi,
+                jabatan_sayap: diSayap ? jabatanSayap : "",
+                struktur_lain: strukturDaftar.slice(1),
+              })
+            }
             className="btn-tekan flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-bold text-white disabled:opacity-50"
             style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
           >

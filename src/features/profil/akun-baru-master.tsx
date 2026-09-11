@@ -19,7 +19,7 @@ import { toast } from "@/hooks/use-app-store";
 import { JABATAN_PARTAI } from "@/lib/jabatan";
 import { MODUL_AKUN, type KunciModul, type ModulIzin } from "@/lib/peran";
 import { cn } from "@/lib/utils";
-import { PilihStruktur, type NilaiStruktur } from "@/features/pengguna/pilih-struktur";
+import { PilihStrukturBanyak, type NilaiStruktur } from "@/features/pengguna/pilih-struktur";
 import { DIVISI_SAYAP } from "@/lib/struktur";
 import { aksiMaster, aksiMasterHasil, type PenggunaAdmin } from "@/services";
 
@@ -125,7 +125,9 @@ export function SeksiAkunBaru({ onSelesai }: { onSelesai: () => void }) {
   const [peran, setPeran] = useState<string>("anggota");
   const [jabatan, setJabatan] = useState("");
   const [bidang, setBidang] = useState("");
-  const [struktur, setStruktur] = useState<NilaiStruktur>({ divisi: "", sub_divisi: "", jabatan_sayap: "" });
+  // STRUKTUR GANDA (11 Sep 2026): yang pertama = struktur utama.
+  const [strukturDaftar, setStrukturDaftar] = useState<NilaiStruktur[]>([]);
+  const struktur: NilaiStruktur = strukturDaftar[0] ?? { divisi: "", sub_divisi: "", jabatan_sayap: "" };
   const [posisi, setPosisi] = useState<"anggota" | "kepala">("anggota");
   const [modul, setModul] = useState<Record<KunciModul, Keadaan>>(() => dariIzin(null));
   const [sibuk, setSibuk] = useState(false);
@@ -158,6 +160,7 @@ export function SeksiAkunBaru({ onSelesai }: { onSelesai: () => void }) {
         sub_divisi: struktur.sub_divisi,
         jabatan_sayap: diSayap ? (struktur.jabatan_sayap ?? "") : "",
         posisi_divisi: struktur.divisi ? posisi : "anggota",
+        struktur_lain: strukturDaftar.slice(1),
         modul_izin: (keIzin(modul) as Record<string, boolean> | null) ?? {},
       });
       toast("sukses", "Akun dibuat", `@${String(hasil.username ?? username)} siap dipakai. Minta pemiliknya segera mengganti sandi.`);
@@ -168,7 +171,7 @@ export function SeksiAkunBaru({ onSelesai }: { onSelesai: () => void }) {
       setPeran("anggota");
       setJabatan("");
       setBidang("");
-      setStruktur({ divisi: "", sub_divisi: "", jabatan_sayap: "" });
+      setStrukturDaftar([]);
       setPosisi("anggota");
       setModul(dariIzin(null));
       onSelesai();
@@ -259,12 +262,12 @@ export function SeksiAkunBaru({ onSelesai }: { onSelesai: () => void }) {
 
         <div>
           <p className="mb-1.5 text-[11.5px] font-semibold text-teks-sekunder">Struktur: Zona · Sayap · Divisi (opsional)</p>
-          <PilihStruktur
-            nilai={struktur}
-            onUbah={(v) => {
-              setStruktur(v);
+          <PilihStrukturBanyak
+            daftar={strukturDaftar}
+            onUbah={(baru) => {
+              setStrukturDaftar(baru);
               // Masuk sayap = jabatan DPP dikosongkan (aturan 10 Sep 2026).
-              if (v.divisi === DIVISI_SAYAP) {
+              if (baru[0]?.divisi === DIVISI_SAYAP) {
                 setJabatan("");
                 setBidang("");
               }

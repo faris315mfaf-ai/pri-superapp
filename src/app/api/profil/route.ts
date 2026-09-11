@@ -19,6 +19,8 @@ import {
 import { DIVISI_SAYAP, pastikanStrukturSah } from "@/lib/struktur";
 
 import { nilaiSayapTambahan } from "@/lib/sayap";
+import { kolomStrukturLainAda } from "@/lib/kolom-struktur";
+import { pastikanDaftarStrukturSah } from "@/lib/struktur-banyak";
 export const dynamic = "force-dynamic";
 // Foto dikirim sebagai data URL; unggahan bisa mendekati 2 MB.
 export const maxDuration = 30;
@@ -248,6 +250,8 @@ export async function POST(request: Request) {
       tanggal_lahir?: string;
       divisi?: string;
       sub_divisi?: string;
+      /** Struktur tambahan di luar yang utama (11 Sep 2026). */
+      struktur_lain?: unknown;
       foto?: string; // data URL
     };
 
@@ -288,6 +292,13 @@ export async function POST(request: Request) {
       sub_divisi: subDivisi,
       profil_lengkap: true,
     };
+    // STRUKTUR GANDA (11 Sep 2026) — hanya bila kolomnya sudah ada (sql/43).
+    if (await kolomStrukturLainAda()) {
+      perubahan.struktur_lain = pastikanDaftarStrukturSah(
+        body.struktur_lain,
+        await nilaiSayapTambahan(),
+      ).filter((x) => !(x.divisi === divisi && x.sub_divisi === subDivisi));
+    }
     // Aturan sayap (10 Sep 2026): anggota Sayap Partai tidak memakai
     // jabatan DPP; sebaliknya, pindah keluar dari sayap mengosongkan
     // jabatan sayapnya. Jabatan sayap sendiri hanya ditetapkan pengurus.

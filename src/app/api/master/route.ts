@@ -41,6 +41,8 @@ import { deskripsiStruktur, DIVISI_SAYAP, jabatanSayapSah, pastikanStrukturSah }
 import { nilaiSayapTambahan } from "@/lib/sayap";
 import { bersihkanModulIzin } from "@/lib/peran";
 import { daftarHadir } from "@/lib/kehadiran";
+import { kolomStrukturLainAda } from "@/lib/kolom-struktur";
+import { pastikanDaftarStrukturSah } from "@/lib/struktur-banyak";
 export const dynamic = "force-dynamic";
 
 /** Kode item apa pun yang dijual toko pet (untuk ketetapan harga master). */
@@ -273,6 +275,8 @@ export async function POST(request: Request) {
       bidang_jabatan?: string;
       divisi?: string;
       sub_divisi?: string;
+      /** Struktur tambahan di luar yang utama (11 Sep 2026). */
+      struktur_lain?: unknown;
       posisi_divisi?: string;
       /** buat_akun: jabatan di Sayap Partai (terpisah dari jabatan DPP) */
       jabatan_sayap?: string;
@@ -422,6 +426,14 @@ export async function POST(request: Request) {
           bidang_jabatan: diSayap ? "" : bidang,
           divisi,
           sub_divisi: divisi ? sub : "",
+          ...((await kolomStrukturLainAda())
+            ? {
+                struktur_lain: pastikanDaftarStrukturSah(
+                  body.struktur_lain,
+                  await nilaiSayapTambahan(),
+                ).filter((x) => !(x.divisi === divisi && x.sub_divisi === sub)),
+              }
+            : {}),
           jabatan_sayap: diSayap ? jabatanSayap : "",
           posisi_divisi: diSayap ? (jabatanSayap ? "kepala" : "anggota") : divisi ? posisi : "anggota",
           status: "aktif",

@@ -62,6 +62,11 @@ export type User = {
   modul_izin?: Record<string, boolean> | null;
   /** Jabatan di Sayap Partai (10 Sep 2026) — TERPISAH dari `jabatan` DPP. */
   jabatan_sayap?: string;
+  /**
+   * Struktur TAMBAHAN di luar divisi/sub_divisi utama (11 Sep 2026).
+   * Satu orang boleh berada di beberapa struktur sekaligus.
+   */
+  struktur_lain?: { divisi: string; sub_divisi: string; jabatan_sayap?: string }[];
   /** "YYYY-MM-DD" — dasar fitur ulang tahun */
   tanggal_lahir?: string | null;
   /** false = belum verifikasi WA; aplikasi menagih tiap 3 jam */

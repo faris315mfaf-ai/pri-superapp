@@ -307,6 +307,8 @@ export async function lengkapiProfil(data: {
   tanggal_lahir: string; // YYYY-MM-DD
   divisi: string;
   sub_divisi?: string;
+  /** Struktur tambahan di luar yang utama (11 Sep 2026). */
+  struktur_lain?: { divisi: string; sub_divisi: string; jabatan_sayap?: string }[];
   foto?: string;
 }): Promise<UserLengkap> {
   const json = await fetchJson("/api/profil", {
@@ -525,6 +527,8 @@ export type PenggunaAdmin = {
   divisi?: string;
   sub_divisi?: string;
   posisi_divisi?: string;
+  /** Struktur tambahan di luar yang utama (11 Sep 2026). */
+  struktur_lain?: { divisi: string; sub_divisi: string; jabatan_sayap?: string }[];
 };
 
 export async function getPengguna(): Promise<{
@@ -557,7 +561,14 @@ export async function ubahPengguna(
   role?: string,
   jabatan?: string,
   bidang?: string,
-  divisiInfo?: { divisi: string; sub_divisi?: string; posisi_divisi?: string; jabatan_sayap?: string },
+  divisiInfo?: {
+    divisi: string;
+    sub_divisi?: string;
+    posisi_divisi?: string;
+    jabatan_sayap?: string;
+    /** Struktur tambahan di luar yang utama (11 Sep 2026). */
+    struktur_lain?: { divisi: string; sub_divisi: string; jabatan_sayap?: string }[];
+  },
 ): Promise<void> {
   await fetchJson("/api/pengguna", {
     method: "PATCH",
@@ -2586,7 +2597,16 @@ export async function getDataMaster(): Promise<DataMaster> {
 
 export async function aksiMaster(
   aksi: string,
-  data: Record<string, string | boolean | number | null | Record<string, boolean>> = {},
+  data: Record<
+    string,
+    | string
+    | boolean
+    | number
+    | null
+    | Record<string, boolean>
+    // Daftar struktur (11 Sep 2026) — satu orang boleh lebih dari satu.
+    | { divisi: string; sub_divisi: string; jabatan_sayap?: string }[]
+  > = {},
 ): Promise<void> {
   await fetchJson("/api/master", {
     method: "POST",
@@ -2598,7 +2618,16 @@ export async function aksiMaster(
 /** Sama seperti aksiMaster, tetapi mengembalikan jawaban server (mis. hasil pantau server). */
 export async function aksiMasterHasil(
   aksi: string,
-  data: Record<string, string | boolean | number | null | Record<string, boolean>> = {},
+  data: Record<
+    string,
+    | string
+    | boolean
+    | number
+    | null
+    | Record<string, boolean>
+    // Daftar struktur (11 Sep 2026) — satu orang boleh lebih dari satu.
+    | { divisi: string; sub_divisi: string; jabatan_sayap?: string }[]
+  > = {},
 ): Promise<Record<string, unknown>> {
   const json = await fetchJson("/api/master", {
     method: "POST",
