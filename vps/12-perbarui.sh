@@ -133,6 +133,31 @@ fi
 
 echo "== 6/6 Memeriksa hasil =="
 curl -s --max-time 30 "http://127.0.0.1:$PORT/api/sehat" | head -c 200; echo
+
+# --- Daftar host gambar --------------------------------------------
+# Diperiksa sejak 12 Sep 2026, setelah kejadian ini: aplikasi terbangun
+# tanpa SUPABASE_URL, next/image menolak SEMUA foto dari server sendiri,
+# dan yang terlihat pengguna hanyalah foto kosong di mana-mana — tanpa
+# satu pun galat di log. Nyaris mustahil ditebak dari gejalanya.
+#
+# Alamat berkas palsu sengaja dipakai: yang ditanyakan bukan ada atau
+# tidaknya berkas, melainkan boleh atau tidaknya HOST itu.
+HOST_DB="$(grep -m1 '^SUPABASE_URL=' "$APP/.env" 2>/dev/null | cut -d= -f2- \
+           | tr -d '"' | sed 's#^https\?://##; s#/.*$##' || true)"
+if [ -n "$HOST_DB" ]; then
+  UJI="https%3A%2F%2F$HOST_DB%2Fstorage%2Fv1%2Fobject%2Fpublic%2Fuji%2Fuji.jpg"
+  JAWAB="$(curl -s --max-time 20 "http://127.0.0.1:$PORT/_next/image?url=$UJI&w=64&q=75" | head -c 200 || true)"
+  case "$JAWAB" in
+    *"is not allowed"*)
+      echo >&2
+      echo "  PERINGATAN BESAR: foto TIDAK AKAN TAMPIL." >&2
+      echo "  next/image menolak gambar dari $HOST_DB." >&2
+      echo "  Sebabnya SUPABASE_URL tidak sampai ke proses build." >&2
+      echo "  Periksa baris SUPABASE_URL di $APP/.env, lalu ulangi: pri-perbarui" >&2
+      ;;
+    *) echo "  daftar host gambar: $HOST_DB diterima" ;;
+  esac
+fi
 # "|| true": tanpa itu, env.txt yang tidak ada membuat pembaruan yang
 # SUDAH BERHASIL berakhir dengan status gagal di baris terakhir ini —
 # tanpa pesan "SELESAI" dan tanpa petunjuk pengembalian.

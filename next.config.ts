@@ -18,6 +18,31 @@ const hostSupabase = (() => {
   }
 })();
 
+/**
+ * Host penyimpanan berkas yang SELALU boleh, apa pun isi env saat build.
+ *
+ * Pelajaran mahal (12 Sep 2026): daftar host next/image ditentukan saat
+ * BUILD. Satu kali aplikasi terbangun tanpa SUPABASE_URL, seluruh foto
+ * dari server sendiri ditolak dengan "url parameter is not allowed" —
+ * dan yang terlihat pengguna hanyalah foto kosong di mana-mana, tanpa
+ * satu pun pesan galat. Sulit sekali ditebak dari gejalanya.
+ *
+ * Karena itu host produksi ditulis tetap di sini sebagai jaring
+ * pengaman. Env tetap dibaca supaya domain lain (uji coba, pindah
+ * domain lagi) tidak perlu menyentuh berkas ini.
+ */
+const HOST_BERKAS_TETAP = ["db.pri-superapp.com", "pichnkyjepsirpclofhs.supabase.co"];
+
+const hostGambar = [...new Set([hostSupabase, ...HOST_BERKAS_TETAP].filter(Boolean))];
+
+if (!hostSupabase) {
+  // Terlihat di log build — satu-satunya tanda bahwa jaring pengaman di
+  // atas sedang menanggung sesuatu yang seharusnya datang dari env.
+  console.warn(
+    "[next.config] SUPABASE_URL kosong saat build — daftar host gambar memakai daftar tetap.",
+  );
+}
+
 const nextConfig: NextConfig = {
   env: { NEXT_PUBLIC_VERSI_APLIKASI: versiPaket },
   ...(process.env.VERCEL ? {} : { output: "standalone" as const }),
@@ -27,11 +52,10 @@ const nextConfig: NextConfig = {
   // tetap memakai <img> biasa.
   images: {
     remotePatterns: [
-      // Host Supabase dibaca dari env (11 Sep 2026) supaya pindah ke
-      // server sendiri tidak membuat next/image menolak foto profil &
-      // sampul video. Nama lama tetap didaftarkan selama masa peralihan.
-      ...(hostSupabase ? [{ protocol: "https" as const, hostname: hostSupabase }] : []),
-      { protocol: "https", hostname: "pichnkyjepsirpclofhs.supabase.co" },
+      // Host penyimpanan berkas: dari env + daftar tetap (lihat atas).
+      // Nama lama tetap ada selama masa peralihan, supaya foto yang
+      // alamatnya belum sempat diperbarui tidak ikut hilang.
+      ...hostGambar.map((hostname) => ({ protocol: "https" as const, hostname })),
       { protocol: "https", hostname: "res.cloudinary.com" },
       // Avatar akun Google (fitur 1.19/3.1): pengguna yang masuk lewat
       // Google membawa foto profil dari CDN googleusercontent.
@@ -54,31 +78,17 @@ const nextConfig: NextConfig = {
   //   tidak ada origin luar yang boleh; origin sendiri diatur lewat
   //   allowlist "self" pada kamera/mikrofon/geolokasi).
   // ------------------------------------------------------------
-  // VERCEL JADI PENUNJUK JALAN (12 Sep 2026)
+  // Catatan soal salinan lama di Vercel (12 Sep 2026)
   //
-  // Aplikasi sudah pindah ke server sendiri. Tapi Vercel TIDAK dimatikan
-  // begitu saja: APK yang sudah terpasang di ponsel anggota terkunci ke
-  // alamat lama, dan mematikannya mendadak membuat semua pemakai APK
-  // kehilangan aplikasinya sekaligus.
+  // Sempat dipasang pengalihan paksa dari Vercel ke domain sendiri,
+  // lalu DIBATALKAN sebelum sempat dipakai. Alasannya: APK yang sudah
+  // terpasang di ponsel anggota terkunci ke alamat Vercel. Pengalihan
+  // ke domain lain membuat APK keluar dari wilayahnya sendiri — yang
+  // muncul bukan aplikasi, melainkan jendela peramban berbilah alamat.
   //
-  // Jadi salinan di Vercel diubah jadi penunjuk jalan: apa pun yang
-  // datang ke sana diteruskan ke domain sendiri. Pemakai lama tetap
-  // sampai ke tujuan sampai sempat memasang APK baru.
-  //
-  // HANYA berlaku di Vercel. Variabel VERCEL diisi sendiri oleh Vercel
-  // saat membangun; di server sendiri ia kosong, jadi tidak ada
-  // pengalihan sama sekali di sana.
-  //
-  // Sengaja TIDAK permanen, supaya peramban tidak mengingatnya selamanya.
-  // Kalau suatu saat Vercel perlu dipakai lagi, cukup dibatalkan tanpa
-  // menunggu ingatan peramban orang hilang sendiri.
+  // Gantinya komponen PindahDomain: salinan lama tetap bekerja penuh,
+  // hanya memberi tahu alamat barunya. Lihat src/components/pindah-domain.tsx.
   // ------------------------------------------------------------
-  async redirects() {
-    if (!process.env.VERCEL) return [];
-    const tujuan = (process.env.APP_URL || "https://pri-superapp.com").replace(/\/+$/, "");
-    return [{ source: "/:jalur*", destination: tujuan + "/:jalur*", permanent: false }];
-  },
-
   async headers() {
     return [
       {

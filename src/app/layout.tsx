@@ -5,6 +5,7 @@ import { Plus_Jakarta_Sans, Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { DaftarServiceWorker } from "@/components/daftar-service-worker";
+import { PindahDomain } from "@/components/pindah-domain";
 
 // ============================================================
 // Jaring pengaman pemulihan — WAJIB berjalan sebelum berkas
@@ -184,6 +185,9 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: SKRIP_PEMULIHAN }}
         />
         {children}
+        {/* Hanya muncul di salinan lama (…vercel.app); di alamat yang
+            benar komponen ini tidak menggambar apa pun. */}
+        <PindahDomain tujuan={process.env.APP_URL || "https://pri-superapp.com"} />
         <Toaster />
         <DaftarServiceWorker />
       </body>
