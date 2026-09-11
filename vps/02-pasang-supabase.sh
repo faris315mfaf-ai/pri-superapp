@@ -100,8 +100,13 @@ tanda = b64(hmac.new(rahasia.encode(), pesan, hashlib.sha256).digest())
 print(f"{kepala}.{isi}.{tanda}")
 PY
 }
-if [ -f /opt/pri/kunci.txt ]; then
-  echo "Kunci sudah pernah dibuat — memakai yang lama (/opt/pri/kunci.txt)."
+# Diperiksa kunci.env, BUKAN kunci.txt: kunci.env ditulis di langkah ini
+# juga, sedangkan kunci.txt baru ditulis di langkah terakhir. Memeriksa
+# kunci.txt berarti setiap kegagalan di tengah akan membuat kunci baru
+# di percobaan berikutnya — dan database yang sudah terlanjur dibangun
+# dengan sandi lama langsung menolak semua sambungan.
+if [ -f /opt/pri/kunci.env ]; then
+  echo "Kunci sudah pernah dibuat — memakai yang lama (/opt/pri/kunci.env)."
   # shellcheck disable=SC1091
   . /opt/pri/kunci.env
 else
@@ -391,13 +396,27 @@ fi
 echo "  port yang dibutuhkan semuanya bebas"
 docker compose pull
 docker compose up -d
+# Diperiksa dengan kunci LAYANAN, bukan kunci publik. Gerbang versi baru
+# memasang aturan RBAC: kunci publik dijawab 403 "RBAC: access denied" di
+# alamat ini walaupun seluruh sistem sehat. Memakai kunci publik membuat
+# pemeriksaan menunggu selamanya pada pemasangan yang sebenarnya berhasil.
 echo -n "Menunggu API siap"
+SIAP=0
 for i in $(seq 1 60); do
-  kode="$(curl -s -o /dev/null -w '%{http_code}' -H "apikey: $ANON_KEY" http://127.0.0.1:8000/rest/v1/ || true)"
-  if [ "$kode" = "200" ]; then echo " OK"; break; fi
+  kode="$(curl -s -o /dev/null -w '%{http_code}' \
+    -H "apikey: $SERVICE_KEY" -H "Authorization: Bearer $SERVICE_KEY" \
+    http://127.0.0.1:8000/rest/v1/ || true)"
+  if [ "$kode" = "200" ]; then SIAP=1; echo " OK"; break; fi
   echo -n "."; sleep 5
-  [ "$i" = "60" ] && { echo; echo "API belum siap. Cek: docker compose -f $DIR/docker-compose.yml logs --tail=50" >&2; exit 1; }
 done
+if [ "$SIAP" -ne 1 ]; then
+  echo
+  echo "API belum siap (jawaban terakhir: ${kode:-tidak ada})." >&2
+  echo "Container yang tidak jalan:" >&2
+  docker compose ps -a --format '{{.Service}} {{.State}}' | awk '$2 != "running"' >&2
+  echo "Catatan: docker compose -f $DIR/docker-compose.yml logs --tail=50" >&2
+  exit 1
+fi
 
 echo "== 8/8 HTTPS (Caddy) =="
 # Server ini melayani lebih dari satu situs, jadi Caddyfile TIDAK boleh
@@ -422,7 +441,8 @@ EOF
 pasang_blok_caddy "PRI Supabase" /tmp/blok-supabase.caddy || exit 1
 lapor_situs_caddy "$DOMAIN"
 sleep 5
-curl -s -o /dev/null -w "HTTPS %{http_code}\n" -H "apikey: $ANON_KEY" "https://$DOMAIN/rest/v1/"
+curl -s -o /dev/null -w "HTTPS %{http_code} (200 = siap dipakai)\n" \
+  -H "apikey: $SERVICE_KEY" -H "Authorization: Bearer $SERVICE_KEY" "https://$DOMAIN/rest/v1/"
 
 umask 077
 cat > /opt/pri/kunci.txt <<EOF
