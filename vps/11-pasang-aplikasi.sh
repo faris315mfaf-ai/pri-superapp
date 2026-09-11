@@ -110,21 +110,59 @@ paksa = {
 # REDIS_URL dan cache tetap menyeberang internet ke layanan luar.
 kosongkan = ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN",
              "KV_REST_API_URL", "KV_REST_API_TOKEN"]
-keluar, sudah = [], set()
-for baris in berkas.read_text(encoding="utf-8", errors="replace").splitlines():
-    m = re.match(r"^([A-Z0-9_]+)=(.*)$", baris)
-    if not m:
-        keluar.append(baris)
-        continue
-    nama, nilai = m.group(1), m.group(2).strip()
-    # Tanda kutip dibuang: env_file Docker memperlakukannya sebagai isi.
+# NILAI BERBARIS-BARIS (12 Sep 2026).
+#
+# .env.local memuat kunci privat Ayrshare yang isinya 28 baris. Docker
+# TIDAK BISA membaca bentuk itu di env_file — ia menolak seluruh berkas
+# dengan galat 'unexpected character "+" in variable name', yang sama
+# sekali tidak menyebut baris mana penyebabnya.
+#
+# Jadi baris lanjutan disatukan jadi satu baris memakai \n. Itu memang
+# bentuk yang diharapkan aplikasi: lib/ayrshare.ts sudah mengembalikan
+# \n menjadi baris baru sebelum memakainya.
+def bersihkan(nilai: str) -> str:
+    nilai = nilai.strip()
     if len(nilai) >= 2 and nilai[0] == nilai[-1] and nilai[0] in "\"'":
         nilai = nilai[1:-1]
-    if nama in paksa:
-        nilai = paksa[nama]; sudah.add(nama)
-    elif nama in kosongkan:
+    return nilai
+
+keluar, sudah = [], set()
+nama_kini, nilai_kini = None, []
+
+def tutup():
+    """Selesaikan satu nilai yang sedang dikumpulkan."""
+    global nama_kini, nilai_kini
+    if nama_kini is None:
+        return
+    gabung = "\\n".join(nilai_kini) if len(nilai_kini) > 1 else nilai_kini[0]
+    if nama_kini in paksa:
+        gabung = paksa[nama_kini]; sudah.add(nama_kini)
+        keluar.append(f"{nama_kini}={gabung}")
+    elif nama_kini not in kosongkan:
+        keluar.append(f"{nama_kini}={gabung}")
+    nama_kini, nilai_kini = None, []
+
+for baris in berkas.read_text(encoding="utf-8", errors="replace").splitlines():
+    m = re.match(r"^([A-Z0-9_]+)=(.*)$", baris)
+    if m:
+        tutup()
+        nama_kini, nilai_kini = m.group(1), [bersihkan(m.group(2))]
         continue
-    keluar.append(f"{nama}={nilai}")
+    if not baris.strip() or baris.lstrip().startswith("#"):
+        tutup()
+        keluar.append(baris)
+        continue
+    # Bukan nama=nilai, bukan komentar, bukan kosong → lanjutan nilai
+    # sebelumnya (mis. isi kunci privat).
+    if nama_kini is not None:
+        nilai_kini.append(bersihkan(baris))
+    else:
+        keluar.append(baris)
+tutup()
+
+berbaris = [b.split("=", 1)[0] for b in keluar if "\\n" in b]
+if berbaris:
+    print(f"  nilai berbaris-banyak disatukan: {', '.join(berbaris)}")
 for nama, nilai in paksa.items():
     if nama not in sudah:
         keluar.append(f"{nama}={nilai}")
