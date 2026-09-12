@@ -47,6 +47,7 @@ export const MODUL_AKUN = [
   { kunci: "dashboard", label: "Dashboard", keterangan: "Absensi, KPI anggota, kepatuhan komen, TV Rakyat, database, TV Nasional" },
   { kunci: "qc", label: "HR Center", keterangan: "Kelola pengguna, ACC KPI, kirim pengumuman" },
   { kunci: "tv", label: "TV Rakyat Official", keterangan: "Produksi & unggah video resmi" },
+  { kunci: "tvnas", label: "TV Rakyat Nasional", keterangan: "Modul gabungan: angka nasional + seluruh kendali TV Rakyat Official" },
   { kunci: "tvrku", label: "TVR Saya", keterangan: "Akun sosmed pribadi & laporan video" },
   { kunci: "chat", label: "Chat", keterangan: "Percakapan antar anggota" },
   { kunci: "asisten", label: "Asisten AI", keterangan: "Chatbot & perintah suara" },

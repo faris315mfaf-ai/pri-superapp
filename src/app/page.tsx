@@ -32,6 +32,7 @@ import { QcScreen } from "@/features/qc-konten/qc-screen";
 import { AccountDetailScreen } from "@/features/qc-konten/account-detail-screen";
 import { PostDetailScreen } from "@/features/qc-konten/post-detail-screen";
 import { TvScreen } from "@/features/tv-rakyat/tv-screen";
+import { TvNasionalScreen } from "@/features/tv-rakyat/tv-nasional-screen";
 import { KelolaPenggunaScreen } from "@/features/pengguna/kelola-pengguna-screen";
 import { PengumumanScreen } from "@/features/pengguna/pengumuman-screen";
 import { PersetujuanKpiScreen } from "@/features/pengguna/persetujuan-kpi-screen";
@@ -108,7 +109,7 @@ import { adalahHR } from "@/lib/hr";
 import { KUNCI_CHANGELOG_DILIHAT } from "@/lib/changelog";
 import { VERSI_APLIKASI } from "@/lib/versi";
 import { toast, useAppStore } from "@/hooks/use-app-store";
-import { adalahPimred } from "@/lib/jabatan";
+import { adalahTvrNasional, adalahPimred } from "@/lib/jabatan";
 import {
   getIzinFitur,
   getWewenangTv,
@@ -240,7 +241,7 @@ function tabAwalDenganRestor(
 }
 
 /** Urutan baku tab bila susunannya perlu dibakukan ulang (modul per akun). */
-const URUTAN_TAB: KunciTab[] = ["beranda", "konten", "qc", "tv", "tvrku", "dashboard", "asisten", "acara", "chat", "notifikasi", "profil"];
+const URUTAN_TAB: KunciTab[] = ["beranda", "konten", "qc", "tv", "tvnas", "tvrku", "dashboard", "asisten", "acara", "chat", "notifikasi", "profil"];
 
 const TAB_ROLE: Record<Role, KunciTab[]> = {
   // Modul KONTEN kembali & WAJIB untuk semua peran (fitur 1.20/5):
@@ -450,6 +451,16 @@ export default function Page() {
         dasar.indexOf("tvrku") >= 0 ? dasar.indexOf("tvrku") : 1,
         0,
         "tv",
+      );
+    }
+    // Jabatan TV Rakyat Nasional (12 Sep 2026): modul gabungan. Jabatan
+    // ini BERDAMPINGAN dengan jabatan lain, jadi tidak boleh menggeser
+    // atau menghapus modul yang sudah didapat dari jabatan aslinya.
+    if (adalahTvrNasional(user) && !dasar.includes("tvnas")) {
+      dasar.splice(
+        dasar.indexOf("tvrku") >= 0 ? dasar.indexOf("tvrku") : dasar.length - 1,
+        0,
+        "tvnas",
       );
     }
     // Modul per-divisi (spek 1.5): tiap divisi punya SATU modul
@@ -1045,6 +1056,17 @@ export default function Page() {
         kunci: "tv",
         isi: (
           <TvScreen
+            user={user}
+            onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
+          />
+        ),
+      });
+    }
+    if (tabBoleh.includes("tvnas")) {
+      layarTab.push({
+        kunci: "tvnas",
+        isi: (
+          <TvNasionalScreen
             user={user}
             onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           />

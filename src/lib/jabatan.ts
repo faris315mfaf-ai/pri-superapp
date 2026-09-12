@@ -68,6 +68,49 @@ export function adalahPimred(user: { role?: string; jabatan?: string | null }): 
   return (user.jabatan ?? "").trim().startsWith("Pimpinan Redaksi");
 }
 
+// ============================================================
+// JABATAN TV RAKYAT NASIONAL (12 Sep 2026)
+//
+// Berbeda dari seluruh jabatan di atas: jabatan ini BERDAMPINGAN, bukan
+// menggantikan. Satu orang bisa Direktur Eksekutif sekaligus TV Rakyat
+// Nasional. Karena itu ia tinggal di kolomnya sendiri (app_user
+// .jabatan_tvr, lihat sql/46) dan tidak pernah menyentuh kolom `jabatan`
+// yang dipakai aturan-aturan pusat.
+//
+// Kuasanya: membuka modul TV Rakyat Nasional — gabungan dashboard
+// nasional dan seluruh kendali TV Rakyat Official.
+// ============================================================
+
+export const JABATAN_TVR_NASIONAL = "TV Rakyat Nasional";
+
+/** true bila orang ini memegang jabatan TV Rakyat Nasional. */
+export function adalahTvrNasional(user: {
+  role?: string;
+  jabatan_tvr?: string | null;
+}): boolean {
+  if (user.role === "master") return true;
+  return (user.jabatan_tvr ?? "").trim() === JABATAN_TVR_NASIONAL;
+}
+
+/**
+ * Siapa yang boleh MEMERINTAHKAN video wajib ke seluruh anggota.
+ *
+ * Sesuai permintaan: seluruh anggota TV Rakyat, Direktur Eksekutif, dan
+ * Pimpinan Redaksi. "Anggota TV Rakyat" tidak diperiksa di sini karena
+ * jawabannya ada di database (wewenangTv) — fungsi ini hanya memutuskan
+ * bagian yang bisa dijawab dari jabatan saja, dan sisanya digabung di
+ * server.
+ */
+export function jabatanBolehPerintahVideo(user: {
+  role?: string;
+  jabatan?: string | null;
+  jabatan_tvr?: string | null;
+}): boolean {
+  if (adalahPimred(user)) return true;
+  if (adalahTvrNasional(user)) return true;
+  return (user.jabatan ?? "").trim().startsWith("Direktur Eksekutif");
+}
+
 /**
  * Boleh membentuk tim & memberi tugas: role KETUA yang memegang
  * jabatan struktur. Master ikut supaya sistem bisa diuji/diselamatkan.

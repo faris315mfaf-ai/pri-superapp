@@ -71,14 +71,16 @@ export async function wewenangTv(user: {
   if (!data) {
     return { anggota: false, acc: false, upload: false, proses: false };
   }
-  // Anggota tim TV boleh memproses video; ACC & upload menyusul
-  // penunjukan Pimred.
-  return {
-    anggota: true,
-    proses: true,
-    acc: data.boleh_acc === true,
-    upload: data.boleh_upload === true,
-  };
+  // PENUNJUKAN PER ORANG DIHAPUS (12 Sep 2026).
+  //
+  // Dulu anggota tim TV masih harus ditunjuk satu per satu sebelum boleh
+  // meng-ACC atau mengunggah. Hasilnya justru kebalikan dari maksudnya:
+  // orang sudah ada di dalam tim, melihat modulnya, tapi tombol
+  // unggahnya mati — dan tidak ada apa pun di layar yang menjelaskan
+  // kenapa. Sekarang siapa pun yang berada di dalam modul TV Rakyat
+  // Official berwenang penuh. Kolom boleh_acc/boleh_upload dibiarkan ada
+  // di database supaya baris lama tidak perlu diutak-atik.
+  return { anggota: true, proses: true, acc: true, upload: true };
 }
 
 /** true bila user berhak menyetujui video (dipakai /api/tv/persetujuan). */

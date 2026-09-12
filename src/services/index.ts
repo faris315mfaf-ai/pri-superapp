@@ -1078,6 +1078,78 @@ export async function getKeywordWajib(): Promise<{
   };
 }
 
+// ------------------------------------------------------------
+// TV RAKYAT NASIONAL (12 Sep 2026)
+// ------------------------------------------------------------
+
+export type IndikatorNasional =
+  | "pengikut" | "tayangan" | "jangkauan" | "suka" | "komentar" | "bagikan";
+
+export type KenaikanNasional = {
+  rentang: string;
+  label: string;
+  kenaikan: Record<IndikatorNasional, number | null>;
+  sekarang: Record<IndikatorNasional, number | null>;
+  dibanding_tanggal: string;
+  catatan: string;
+  pilihan: { kunci: string; label: string }[];
+};
+
+export async function getKenaikanNasional(rentang: string): Promise<KenaikanNasional> {
+  const json = await fetchJson(
+    `/api/tv-nasional/kenaikan?rentang=${encodeURIComponent(rentang)}`,
+    { headers: headerToken() },
+  );
+  return json as unknown as KenaikanNasional;
+}
+
+export type VideoWajib = {
+  id: string;
+  judul: string;
+  keterangan: string;
+  link_doksli: string;
+  kategori: string;
+  batas_waktu: string;
+  aktif: boolean;
+  dibuat_pada: string;
+};
+
+export async function getVideoWajib(): Promise<{ data: VideoWajib[]; boleh: boolean }> {
+  const json = await fetchJson("/api/tv/video-wajib", { headers: headerToken() });
+  return { data: (json.data ?? []) as VideoWajib[], boleh: json.boleh === true };
+}
+
+export async function tambahVideoWajib(isi: {
+  judul: string;
+  keterangan?: string;
+  link_doksli?: string;
+  kategori?: string;
+  batas_waktu?: string;
+}): Promise<VideoWajib> {
+  const json = await fetchJson("/api/tv/video-wajib", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(isi),
+  });
+  return json as unknown as VideoWajib;
+}
+
+export async function toggleVideoWajib(id: string, aktif: boolean): Promise<void> {
+  await fetchJson("/api/tv/video-wajib", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id, aktif }),
+  });
+}
+
+export async function hapusVideoWajib(id: string): Promise<void> {
+  await fetchJson("/api/tv/video-wajib", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id }),
+  });
+}
+
 export async function tambahKeyword(keyword: string): Promise<void> {
   await fetchJson("/api/tv/keyword", {
     method: "POST",

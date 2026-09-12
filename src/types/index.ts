@@ -62,6 +62,9 @@ export type User = {
   modul_izin?: Record<string, boolean> | null;
   /** Jabatan di Sayap Partai (10 Sep 2026) — TERPISAH dari `jabatan` DPP. */
   jabatan_sayap?: string;
+  /** Jabatan TV Rakyat Nasional — BERDAMPINGAN dengan `jabatan`,
+   *  bukan menggantikannya (12 Sep 2026, sql/46). */
+  jabatan_tvr?: string;
   /**
    * Struktur TAMBAHAN di luar divisi/sub_divisi utama (11 Sep 2026).
    * Satu orang boleh berada di beberapa struktur sekaligus.

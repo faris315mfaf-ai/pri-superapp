@@ -10,15 +10,14 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Tv, Newspaper, Send, Clapperboard, Activity, History, Radar, ListChecks, Tag } from "lucide-react";
+import { Tv, Newspaper, Send, Clapperboard, Activity, History, ListChecks, Settings, Tag } from "lucide-react";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
 import { BeritaPanel } from "./berita-panel";
-import { InsightPanel } from "./insight-panel";
-import { InsightDetailScreen } from "./insight-detail-screen";
 import { KirimVideoManual } from "@/features/tvr-ku/kirim-video-manual";
 import { PanelTugasLink } from "./tugas-link-panel";
 import { HasilScrapingPanel } from "./hasil-scraping-panel";
+import { ModalPengaturanTv } from "./modal-pengaturan-tv";
 import { KelolaKeywordPanel } from "./kelola-keyword-panel";
 import { TataLetakModul, type SeksiModul } from "@/components/tata-letak-modul";
 import { PipelinePanel } from "./pipeline-panel";
@@ -26,8 +25,6 @@ import { KirimVideoPanel } from "./kirim-video-panel";
 import { ProgressPanel } from "./progress-panel";
 import { PreviewModal } from "./preview-modal";
 import { RiwayatVideo } from "./riwayat-video";
-import { KelolaTimPanel } from "./kelola-tim-panel";
-import { KelolaSumberPanel } from "./kelola-sumber-panel";
 import { RequestPanel } from "./request-panel";
 import { SeksiLipat } from "@/components/seksi-lipat";
 import { useAppStore } from "@/hooks/use-app-store";
@@ -49,9 +46,13 @@ type PayloadProses = {
 export function TvScreen({
   user,
   onBukaNotifikasi,
+  tanpaHeader = false,
 }: {
   user: User;
   onBukaNotifikasi?: () => void;
+  /** Dipakai modul TV Rakyat Nasional, yang memasang kepalanya sendiri
+   *  di atas layar ini — tanpa ini kepalanya muncul dua kali. */
+  tanpaHeader?: boolean;
 }) {
   // Pimpinan Redaksi (dan master): berhak menyetujui/menolak video.
   const pimred = adalahPimred(user);
@@ -86,8 +87,9 @@ export function TvScreen({
   const [sesiProses, setSesiProses] = useState(0);
   // Naik setelah unggahan selesai → RiwayatVideo memuat ulang
   const [refreshKey, setRefreshKey] = useState(0);
-  // Layar insight rinci (per postingan) — dibuka dari panel Insight
-  const [insightRinci, setInsightRinci] = useState(false);
+  // Pengaturan khusus TV Rakyat Official — di balik tombol gerigi
+  // (12 Sep 2026), bukan lagi panel besar di tengah alur kerja.
+  const [pengaturanBuka, setPengaturanBuka] = useState(false);
 
   function mulaiProses(p: PayloadProses) {
     setPayload(p);
@@ -153,8 +155,9 @@ export function TvScreen({
   }
 
   return (
-    <div className="kolom-aplikasi px-4 pb-32">
+    <div className={tanpaHeader ? "" : "kolom-aplikasi px-4 pb-32"}>
       {/* Header modul */}
+      {!tanpaHeader && (
       <header className="flex items-start justify-between gap-3 pt-5">
         <div className="flex items-center gap-3">
           <span
@@ -177,18 +180,24 @@ export function TvScreen({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {/* Gerigi: pengaturan yang jarang disentuh, disimpan di balik
+              satu tombol supaya alur produksi tetap lapang. */}
+          {pimred && (
+            <button
+              type="button"
+              onClick={() => setPengaturanBuka(true)}
+              aria-label="Pengaturan TV Rakyat Official"
+              className="glass btn-tekan flex h-9 w-9 items-center justify-center rounded-full text-teks-utama"
+            >
+              <Settings className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
           <TombolLonceng onBuka={onBukaNotifikasi} />
           <ThemeToggle />
         </div>
       </header>
+      )}
 
-      {/* Insight profil sosmed — angka asli dari Ayrshare */}
-      <FadeInUp delay={0.03} className="mt-5">
-        <InsightPanel onBukaRinci={() => setInsightRinci(true)} />
-      </FadeInUp>
-
-      {/* ── Kelola tim (khusus Pimred): tanpa dua kolom, lebar penuh ── */}
-      {pimred && <KelolaTimPanel />}
 
       {/*
         Tata letak dua bagian yang jelas, bukan tumpukan panel acak:
@@ -218,16 +227,6 @@ export function TvScreen({
               idTerpilih={videoSumber?.id ?? null}
             />
           </SeksiLipat>
-        ) },
-        pimred && { id: "kelola-sumber", judul: "Kelola Sumber Berita", ikon: Radar, render: () => (
-            <SeksiLipat
-              id="kelola-sumber"
-              judul="Kelola Sumber Berita"
-              ikon={Radar}
-              keterangan="Tambah/stop akun IG & TikTok + interval scraping"
-            >
-              <KelolaSumberPanel />
-            </SeksiLipat>
         ) },
         pimred && { id: "kelola-keyword", judul: "Keyword Wajib Laporan", ikon: Tag, render: () => (
             <SeksiLipat
@@ -358,21 +357,8 @@ export function TvScreen({
       {/* Galeri 30 konten terbaru seluruh sosmed + metrik (spek 1.15) */}
       <EmbedTerbaru />
 
-      {/* Layar insight rinci — menutupi layar TV Rakyat */}
-      <AnimatePresence>
-        {insightRinci && (
-          <motion.div
-            key="insight-rinci"
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ type: "spring", stiffness: 340, damping: 34 }}
-            className="fixed inset-0 z-[55] overflow-y-auto overscroll-contain bg-[var(--app-bg)] lg:left-60"
-          >
-            <InsightDetailScreen onKembali={() => setInsightRinci(false)} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Pengaturan khusus TV Rakyat Official (tombol gerigi). */}
+      {pengaturanBuka && <ModalPengaturanTv onTutup={() => setPengaturanBuka(false)} />}
 
       {/* Modal pratinjau (melayang di atas layar) */}
       <AnimatePresence>

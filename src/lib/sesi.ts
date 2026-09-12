@@ -87,6 +87,7 @@ type BarisUser = {
   sembunyi_kewajiban?: boolean | null;
   modul_izin?: Record<string, boolean> | null;
   jabatan_sayap?: string | null;
+  jabatan_tvr?: string | null;
   /** Struktur tambahan di luar yang utama (11 Sep 2026, sql/43). */
   struktur_lain?: unknown;
 };
@@ -121,19 +122,20 @@ export function keUserPublik(b: BarisUser): UserPublik {
     sembunyi_kewajiban: b.sembunyi_kewajiban === true,
     modul_izin: b.modul_izin && typeof b.modul_izin === "object" ? b.modul_izin : null,
     jabatan_sayap: b.jabatan_sayap ?? "",
+    jabatan_tvr: b.jabatan_tvr ?? "",
     struktur_lain: bacaStrukturLain(b.struktur_lain),
   };
 }
 
 const KOLOM_USER =
-  "id, email, nama, role, jabatan, avatar_url, status, profil_lengkap, aktif, username, nomor_wa, wa_terverifikasi, divisi, sub_divisi, posisi_divisi, nama_panggilan, tanggal_lahir, google_linked, google_avatar, sembunyi_kewajiban, modul_izin, jabatan_sayap";
+  "id, email, nama, role, jabatan, avatar_url, status, profil_lengkap, aktif, username, nomor_wa, wa_terverifikasi, divisi, sub_divisi, posisi_divisi, nama_panggilan, tanggal_lahir, google_linked, google_avatar, sembunyi_kewajiban, modul_izin, jabatan_sayap, jabatan_tvr";
 // Sama persis, plus struktur tambahan (11 Sep 2026). Ditulis LENGKAP,
 // bukan dirakit, karena supabase-js hanya bisa mengurai daftar kolom
 // yang berupa teks tetap. Dipakai hanya bila kolomnya sudah terpasang
 // (sql/43); sebelum itu daftar lama yang dipakai, jadi tidak ada
 // permintaan yang gagal hanya karena SQL-nya belum dijalankan.
 const KOLOM_USER_PLUS =
-  "id, email, nama, role, jabatan, avatar_url, status, profil_lengkap, aktif, username, nomor_wa, wa_terverifikasi, divisi, sub_divisi, posisi_divisi, nama_panggilan, tanggal_lahir, google_linked, google_avatar, sembunyi_kewajiban, modul_izin, jabatan_sayap, struktur_lain";
+  "id, email, nama, role, jabatan, avatar_url, status, profil_lengkap, aktif, username, nomor_wa, wa_terverifikasi, divisi, sub_divisi, posisi_divisi, nama_panggilan, tanggal_lahir, google_linked, google_avatar, sembunyi_kewajiban, modul_izin, jabatan_sayap, jabatan_tvr, struktur_lain";
 
 /** Daftar kolom akun yang aman dipakai pada keadaan database saat ini. */
 async function kolomUser(): Promise<typeof KOLOM_USER | typeof KOLOM_USER_PLUS> {

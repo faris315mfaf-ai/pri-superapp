@@ -6,7 +6,7 @@
 // ============================================================
 
 import { motion } from "framer-motion";
-import { Home, Newspaper, ShieldCheck, Tv, Clapperboard, MessagesSquare, Bell, User, CalendarDays, LayoutDashboard, Bot } from "lucide-react";
+import { Home, Newspaper, Radio, ShieldCheck, Tv, Clapperboard, MessagesSquare, Bell, User, CalendarDays, LayoutDashboard, Bot } from "lucide-react";
 import type { KomponenIkon, Role } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +16,7 @@ export type KunciTab =
   | "qc"
   | "acara"
   | "tv"
+  | "tvnas"
   | "tvrku"
   | "dashboard"
   | "asisten"
@@ -31,6 +32,9 @@ export const KONFIG_TAB: Record<
   konten: { label: "Konten", ikon: Newspaper },
   qc: { label: "HR Center", ikon: ShieldCheck },
   tv: { label: "TV Rakyat Ofc", ikon: Tv },
+  // Modul gabungan (12 Sep 2026): angka nasional + seluruh kendali
+  // TV Rakyat Official, dipegang jabatan TV Rakyat Nasional.
+  tvnas: { label: "TV Nasional", ikon: Radio },
   acara: { label: "Acara", ikon: CalendarDays },
   tvrku: { label: "TVR Saya", ikon: Clapperboard },
   // Modul Dashboard (fitur 1.19/3.3): tampil hanya bila jabatannya
