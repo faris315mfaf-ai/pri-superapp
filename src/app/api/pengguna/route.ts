@@ -9,7 +9,7 @@ import { bungkus } from "@/lib/api-helper";
 import { hapusCacheUser, userDariToken, cabutSemuaSesi } from "@/lib/sesi";
 import { buatHashSandi } from "@/lib/sandi";
 import { kirimKabar } from "@/lib/notifikasi";
-import { JABATAN_PARTAI, KUOTA_JABATAN } from "@/lib/jabatan";
+import { JABATAN_TVR_NASIONAL, JABATAN_PARTAI, KUOTA_JABATAN } from "@/lib/jabatan";
 import { DIVISI_SAYAP, jabatanSayapSah, pastikanStrukturSah } from "@/lib/struktur";
 import { aksesDashboardRole } from "@/lib/dashboard-akses";
 import { adalahHR, diDivisiHR } from "@/lib/hr";
@@ -75,7 +75,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabase()
       .from("app_user")
       .select(
-        "id, nama, nama_panggilan, email, username, nomor_wa, role, jabatan, bidang_jabatan, divisi, sub_divisi, posisi_divisi, zona_id, zona:zona(nama), avatar_url, status, aktif, wa_terverifikasi, profil_lengkap, created_at, disetujui_oleh, disetujui_pada, modul_izin, jabatan_sayap",
+        "id, nama, nama_panggilan, email, username, nomor_wa, role, jabatan, bidang_jabatan, divisi, sub_divisi, posisi_divisi, zona_id, zona:zona(nama), avatar_url, status, aktif, wa_terverifikasi, profil_lengkap, created_at, disetujui_oleh, disetujui_pada, modul_izin, jabatan_sayap, jabatan_tvr",
       )
       // Yang menunggu persetujuan ditaruh paling atas — itu yang
       // butuh tindakan, bukan sekadar daftar.
@@ -196,6 +196,7 @@ export async function PATCH(request: Request) {
       posisi_divisi?: string;
       /** ubah_divisi: jabatan di Sayap Partai (terpisah dari jabatan DPP) */
       jabatan_sayap?: string;
+      jabatan_tvr?: string;
     };
 
     // Otoritas penuh Kelola Pengguna: Super Admin + Master + anggota
@@ -393,6 +394,18 @@ export async function PATCH(request: Request) {
 
         perubahan.jabatan = jabatan;
         perubahan.bidang_jabatan = jabatan ? (body.bidang ?? "").trim().slice(0, 120) || null : null;
+        // TV RAKYAT NASIONAL (12 Sep 2026): jabatan yang BERDAMPINGAN.
+        // Dikirim bersama jabatan utama, tapi disimpan di kolom sendiri
+        // dan TIDAK menggugurkan jabatan mana pun — itulah seluruh
+        // alasan keberadaannya. Hanya diubah bila field-nya memang
+        // dikirim, supaya pemanggil lama tidak diam-diam mencabutnya.
+        if (body.jabatan_tvr !== undefined) {
+          const jtvr = (body.jabatan_tvr ?? "").trim();
+          if (jtvr && jtvr !== JABATAN_TVR_NASIONAL) {
+            throw Object.assign(new Error("Jabatan TV Rakyat tidak dikenal."), { status: 400 });
+          }
+          perubahan.jabatan_tvr = jtvr;
+        }
         break;
       }
       case "ubah_divisi": {

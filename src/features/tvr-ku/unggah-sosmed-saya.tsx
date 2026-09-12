@@ -25,6 +25,7 @@ import { toast, useAppStore } from "@/hooks/use-app-store";
 import { adalahPalugodam } from "@/lib/struktur";
 import { ModalEditOtomatis } from "./modal-edit-otomatis";
 import {
+  getKeywordWajib,
   batalkanJadwalTvrku,
   getJadwalTvrku,
   getRiwayatTvrkuPost,
@@ -124,6 +125,10 @@ export function UnggahSosmedSaya() {
     setBerkas(f);
   }
   const [judul, setJudul] = useState("");
+  // Kategori WAJIB (12 Sep 2026) — daftarnya ditetapkan tim TV Rakyat
+  // Official, dipakai sistem untuk mengelompokkan video.
+  const [kategori, setKategori] = useState("");
+  const [daftarKategori, setDaftarKategori] = useState<string[]>([]);
   const [caption, setCaption] = useState("");
   // CAPTION PER SOSMED (8 Sep 2026): teks khusus tiap platform — X 280,
   // Threads 500, TikTok/IG 2200… Platform tanpa teks khusus memakai caption utama.
@@ -218,6 +223,7 @@ export function UnggahSosmedSaya() {
   const kekurangan: string[] = [];
   if (!adaVideo) kekurangan.push(modeLink ? "Tautan video belum diisi (harus diawali https://)" : "Video belum dipilih");
   if (judul.trim().length < 3) kekurangan.push("Judul video minimal 3 huruf");
+  if (!kategori) kekurangan.push("Pilih kategori video");
   if (pilih.size === 0) kekurangan.push("Pilih minimal 1 sosmed tujuan");
   for (const p of platformKelebihan) {
     kekurangan.push(`Caption ${LABEL_SOSMED[p] ?? p} melebihi batas ${batasUntuk(p)} karakter`);
@@ -248,6 +254,22 @@ export function UnggahSosmedSaya() {
     void kirim();
   }
 
+  useEffect(() => {
+    let hidup = true;
+    void (async () => {
+      try {
+        const d = await getKeywordWajib();
+        if (hidup) setDaftarKategori(d.data.filter((k) => k.aktif).map((k) => k.keyword));
+      } catch {
+        // Gagal memuat kategori tidak boleh mematikan seluruh panel;
+        // tombol kirim tetap menahan karena kategorinya masih kosong.
+      }
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, []);
+
   async function kirim() {
     if (!sah || tahap) return;
     try {
@@ -258,6 +280,7 @@ export function UnggahSosmedSaya() {
         const h = await postTvrku({
           video_link: tautan.trim(),
           judul: judul.trim(),
+          keyword: kategori,
           caption: caption.trim() || undefined,
         caption_per: Object.keys(captionPerKirim).length > 0 ? captionPerKirim : undefined,
           platforms: [...pilih],
@@ -272,6 +295,7 @@ export function UnggahSosmedSaya() {
         }
         setTautan("");
         setJudul("");
+        setKategori("");
         setCaption("");
       setCaptionPer({});
         setPilih(new Set());
@@ -297,6 +321,7 @@ export function UnggahSosmedSaya() {
         ...(hasilUnggah.cara === "r2" ? { r2_key: hasilUnggah.r2_key } : { path: hasilUnggah.path }),
         ukuran: hasilUnggah.ukuran,
         judul: judul.trim(),
+        keyword: kategori,
         caption: caption.trim() || undefined,
         caption_per: Object.keys(captionPerKirim).length > 0 ? captionPerKirim : undefined,
         platforms: [...pilih],
@@ -316,6 +341,7 @@ export function UnggahSosmedSaya() {
       }
       setBerkas(null);
       setJudul("");
+      setKategori("");
       setCaption("");
       setCaptionPer({});
       setPilih(new Set());
@@ -509,6 +535,26 @@ export function UnggahSosmedSaya() {
           disabled={Boolean(tahap)}
           className="glass-input mt-3 h-11 w-full rounded-xl px-3 text-sm text-teks-utama"
         />
+        <select
+          value={kategori}
+          onChange={(e) => setKategori(e.target.value)}
+          disabled={Boolean(tahap)}
+          aria-label="Kategori video"
+          className="glass-input mt-2 h-11 w-full rounded-xl px-3 text-sm text-teks-utama"
+        >
+          <option value="">Kategori video (wajib)…</option>
+          {daftarKategori.map((k) => (
+            <option key={k} value={k}>
+              {k}
+            </option>
+          ))}
+        </select>
+        {daftarKategori.length === 0 && (
+          <p className="mt-1 text-[10.5px] leading-snug text-teks-sekunder">
+            Belum ada kategori dari tim TV Rakyat Official — mintalah mereka
+            menambahkannya dulu.
+          </p>
+        )}
         <textarea
           value={caption}
           onChange={(e) => setCaption(e.target.value)}

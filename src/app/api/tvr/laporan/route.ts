@@ -394,6 +394,15 @@ export async function POST(request: Request) {
     // tetap ada — tapi harus diverifikasi HR supaya tak disalahgunakan.
     async function ajukan(platformMentah: string, urlMentah: string, keywordMentah?: string) {
       const { platform, urlBersih } = validasiLink(platformMentah, urlMentah);
+      // KATEGORI WAJIB (12 Sep 2026). Tanpa ini video tidak bisa
+      // dikelompokkan, dan seluruh gunanya kategori hilang: daftar
+      // panjang tanpa kategori sama saja dengan tidak punya kategori.
+      // Ditegakkan DI SERVER, bukan cuma di layar — jalur lain yang
+      // memanggil endpoint ini harus ikut aturan yang sama.
+      const kategori = bersihkanKeyword(keywordMentah);
+      if (!kategori) {
+        throw Object.assign(new Error("Pilih kategori videonya dulu."), { status: 400 });
+      }
       // Sudah tercatat (otomatis/ACC sebelumnya)? Jangan minta ACC ulang.
       const { data: sudahAda } = await db
         .from("laporan_video")
@@ -416,7 +425,7 @@ export async function POST(request: Request) {
           user_id: Number(user.id),
           platform,
           url_video: urlBersih,
-          keyword: bersihkanKeyword(keywordMentah),
+          keyword: kategori,
           tanggal_wib: tanggal,
         })
         .select("id, platform, url_video, keyword, tanggal_wib, dibuat_pada, status")

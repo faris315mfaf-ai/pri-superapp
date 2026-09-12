@@ -14,7 +14,7 @@
 import { useEffect, useState } from "react";
 import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { AnimatePresence, motion } from "framer-motion";
-import {
+import { Radio,
   ArrowLeft,
   Briefcase,
   Building2,
@@ -41,7 +41,7 @@ import { getPengguna, ubahPengguna, type PenggunaAdmin,
 } from "@/services";
 import { butuhSubDivisi, deskripsiStruktur, DIVISI, DIVISI_SAYAP, gelarSayap } from "@/lib/struktur";
 import { PilihStrukturBanyak, type NilaiStruktur } from "./pilih-struktur";
-import { JABATAN_PARTAI, KUOTA_JABATAN, jabatanLengkap } from "@/lib/jabatan";
+import { JABATAN_TVR_NASIONAL, JABATAN_PARTAI, KUOTA_JABATAN, jabatanLengkap } from "@/lib/jabatan";
 import { cn } from "@/lib/utils";
 
 type Saringan = "menunggu" | "aktif" | "semua";
@@ -131,11 +131,13 @@ export function KelolaPenggunaScreen({ onKembali }: { onKembali: () => void }) {
     pesanSukses?: string,
     jabatan?: string,
     bidang?: string,
+    divisiInfo?: undefined,
+    jabatanTvr?: string,
   ) {
     if (sedangProses) return;
     setSedangProses(u.id);
     try {
-      await ubahPengguna(u.id, tindakan, role, jabatan, bidang);
+      await ubahPengguna(u.id, tindakan, role, jabatan, bidang, divisiInfo, jabatanTvr);
       toast("sukses", pesanSukses ?? "Perubahan tersimpan");
       setMemilihPeran(null);
       setMemilihJabatan(null);
@@ -393,16 +395,20 @@ export function KelolaPenggunaScreen({ onKembali }: { onKembali: () => void }) {
             pengguna={memilihJabatan}
             sedangProses={sedangProses === memilihJabatan.id}
             onTutup={() => setMemilihJabatan(null)}
-            onPilih={(jabatan, bidang) =>
+            onPilih={(jabatan, bidang, tvrNasional) =>
               void jalankan(
                 memilihJabatan,
                 "ubah_jabatan",
                 undefined,
                 jabatan
                   ? `Jabatan ${memilihJabatan.nama.split(" ")[0]} kini ${jabatanLengkap(jabatan, bidang)}`
-                  : "Jabatan dikosongkan",
+                  : tvrNasional
+                    ? `${memilihJabatan.nama.split(" ")[0]} kini ${JABATAN_TVR_NASIONAL}`
+                    : "Jabatan dikosongkan",
                 jabatan,
                 bidang,
+                undefined,
+                tvrNasional ? JABATAN_TVR_NASIONAL : "",
               )
             }
           />
@@ -932,11 +938,17 @@ function PilihJabatan({
 }: {
   pengguna: PenggunaAdmin;
   sedangProses: boolean;
-  onPilih: (jabatan: string, bidang?: string) => void;
+  onPilih: (jabatan: string, bidang?: string, tvrNasional?: boolean) => void;
   onTutup: () => void;
 }) {
   const [terpilih, setTerpilih] = useState<string>(pengguna.jabatan || "");
   const [bidang, setBidang] = useState<string>(pengguna.bidang_jabatan ?? "");
+  // Jabatan TV Rakyat Nasional: BERDAMPINGAN, bukan menggantikan —
+  // karena itu sakelar sendiri, bukan satu baris lagi di daftar jabatan.
+  // Kalau ia ikut daftar, memilihnya berarti melepas jabatan aslinya.
+  const [tvrNasional, setTvrNasional] = useState<boolean>(
+    (pengguna.jabatan_tvr ?? "") === JABATAN_TVR_NASIONAL,
+  );
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -1002,6 +1014,32 @@ function PilihJabatan({
             </button>
           ))}
 
+          <button
+            type="button"
+            disabled={sedangProses}
+            onClick={() => setTvrNasional((v) => !v)}
+            aria-pressed={tvrNasional}
+            className={cn(
+              "glass-soft btn-tekan mt-1 flex items-center gap-3 rounded-2xl px-3.5 py-3 text-left disabled:opacity-50",
+              tvrNasional && "ring-2 ring-[#7C3AED]/60",
+            )}
+          >
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+              style={{ background: "#7C3AED1A", color: "#7C3AED" }}
+            >
+              <Radio className="h-4.5 w-4.5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold text-teks-utama">
+                {JABATAN_TVR_NASIONAL}
+              </span>
+              <span className="block text-[10px] text-teks-sekunder">
+                bisa dirangkap dengan jabatan di atas · membuka modul TV Nasional
+              </span>
+            </span>
+            {tvrNasional && <Check className="h-4 w-4 shrink-0 text-[#7C3AED]" />}
+          </button>
         </div>
 
         {/* Bidang spesifik (teks bebas) + tombol aksi */}
@@ -1016,8 +1054,8 @@ function PilihJabatan({
           <div className="mt-2.5 flex gap-2">
             <button
               type="button"
-              disabled={sedangProses || !pengguna.jabatan}
-              onClick={() => onPilih("")}
+              disabled={sedangProses || (!pengguna.jabatan && !tvrNasional)}
+              onClick={() => onPilih("", "", tvrNasional)}
               className="glass btn-tekan flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold text-teks-sekunder disabled:opacity-40"
             >
               <X className="h-3.5 w-3.5" />
@@ -1026,7 +1064,7 @@ function PilihJabatan({
             <button
               type="button"
               disabled={sedangProses || !terpilih}
-              onClick={() => onPilih(terpilih, bidang)}
+              onClick={() => onPilih(terpilih, bidang, tvrNasional)}
               className="btn-tekan flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 font-heading text-sm font-bold text-white disabled:opacity-50"
               style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
             >

@@ -11,6 +11,11 @@ cat > /etc/crontabs/root <<'JADWAL'
 */5  * * * * /panggil.sh sinkron-komen
 */10 * * * * /panggil.sh pantau-server
 */15 * * * * /panggil.sh rekonsiliasi-kpi
+# Rekaman angka nasional TV Rakyat (12 Sep 2026). Sekali sehari sudah
+# cukup: yang dibutuhkan panel kenaikan adalah SATU titik pembanding
+# per hari. Pukul 23.50 WIB = 16.50 UTC — hampir tutup hari, jadi
+# rekamannya mewakili hasil hari itu, bukan hasil setengah hari.
+50 16 * * * /panggil.sh rekam-metrik
 JADWAL
 
 echo "Penjadwal siap. Waktu server: $(date '+%d/%m/%Y %H:%M:%S %Z')"

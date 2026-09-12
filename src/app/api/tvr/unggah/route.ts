@@ -213,6 +213,7 @@ export async function POST(request: Request) {
       caption?: string;
       /** Caption KHUSUS per sosmed (8 Sep 2026) — hanya platform yang diisi. */
       caption_per?: Record<string, string>;
+      keyword?: string;
       platforms?: string[];
       jadwal?: string;
     };
@@ -411,6 +412,15 @@ export async function POST(request: Request) {
           status: 400,
         });
       }
+      // KATEGORI WAJIB (12 Sep 2026). Ditetapkan tim TV Rakyat Official
+      // supaya sistem tahu video ini dikelompokkan ke mana. Ditegakkan di
+      // server, bukan hanya di layar: unggahan yang lolos tanpa kategori
+      // akan menjadi lubang permanen di pengelompokan — datanya tidak
+      // bisa ditebak lagi setelah videonya terlanjur naik.
+      const kategori = (body.keyword ?? "").trim().slice(0, 120);
+      if (!kategori) {
+        throw Object.assign(new Error("Pilih kategori videonya dulu."), { status: 400 });
+      }
       const platforms = (body.platforms ?? [])
         .map((p) => String(p).toLowerCase())
         .filter((p) => (PLATFORM_KPI as readonly string[]).includes(p));
@@ -514,6 +524,7 @@ export async function POST(request: Request) {
         .insert({
           user_id: Number(user.id),
           judul,
+          keyword: kategori,
           caption: (body.caption ?? "").slice(0, 2200),
           platforms,
           // video_path menampung penunjuk berkas sesuai generasinya:

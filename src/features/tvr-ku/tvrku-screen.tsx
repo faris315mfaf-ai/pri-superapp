@@ -86,6 +86,7 @@ import { SiaranSerentak } from "./siaran-serentak";
 import { StudioPalugodam } from "./studio-palugodam";
 import { InsightSayaPanel } from "./insight-saya-panel";
 import { cn } from "@/lib/utils";
+import { PanelVideoWajib } from "@/features/tv-rakyat/panel-video-wajib";
 
 const PLATFORM_TVR = [
   { id: "instagram", label: "Instagram" },
@@ -355,6 +356,10 @@ function ModalLaporanBatch({
       toast("info", "Link ini sudah ada di daftar");
       return;
     }
+    if (!keyword.trim()) {
+      toast("peringatan", "Pilih kategori videonya dulu");
+      return;
+    }
     setAntrean((a) => [...a, { keyword: keyword.trim(), url }]);
     setKeyword("");
     setLink("");
@@ -366,6 +371,10 @@ function ModalLaporanBatch({
     const semua = [...antrean];
     const sisaUrl = link.trim();
     if (sisaUrl.length >= 8 && !semua.some((a) => a.url === sisaUrl)) {
+      if (!keyword.trim()) {
+        toast("peringatan", "Pilih kategori untuk link yang terakhir");
+        return;
+      }
       semua.push({ keyword: keyword.trim(), url: sisaUrl });
     }
     if (semua.length === 0 || sedangKirim) return;
@@ -403,24 +412,34 @@ function ModalLaporanBatch({
       >
         <h3 className="font-heading text-base font-bold text-teks-utama">Laporkan Video</h3>
         <p className="mt-1 text-[11.5px] leading-relaxed text-teks-sekunder">
-          Isi <b>keyword</b> (tema yang ditentukan Pimred) di kiri dan{" "}
+          Pilih <b>kategori</b> videonya di kiri dan tempel{" "}
           <b>link video</b> di kanan, lalu tekan + untuk menumpuk beberapa.
         </p>
-        {keywords.length > 0 && (
+        {keywords.length === 0 && (
           <p className="mt-1 text-[10.5px] leading-snug text-teks-sekunder">
-            Keyword wajib: <b className="text-teks-utama/80">{keywords.join(", ")}</b>
+            Belum ada kategori dari tim TV Rakyat Official. Hubungi mereka
+            dulu — laporan tanpa kategori tidak bisa dikelompokkan.
           </p>
         )}
 
         <div className="mt-3 flex gap-2">
-          <input
-            list="daftar-keyword-laporan"
+          {/* Dropdown, bukan ketik bebas (12 Sep 2026): kategori dipakai
+              sistem untuk mengelompokkan video. Ketikan bebas melahirkan
+              "bansos", "Bansos", dan "bansos " sebagai tiga kelompok
+              berbeda — dan pengelompokannya jadi tidak ada artinya. */}
+          <select
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            placeholder="Keyword"
-            aria-label="Keyword"
-            className="glass w-[38%] min-w-0 rounded-xl px-3 py-2.5 text-sm text-teks-utama placeholder:text-teks-sekunder/60 focus:outline-none"
-          />
+            aria-label="Kategori video"
+            className="glass w-[38%] min-w-0 rounded-xl px-3 py-2.5 text-sm text-teks-utama focus:outline-none"
+          >
+            <option value="">Kategori…</option>
+            {keywords.map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
           <input
             value={link}
             onChange={(e) => setLink(e.target.value)}
@@ -444,12 +463,6 @@ function ModalLaporanBatch({
             <Plus className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <datalist id="daftar-keyword-laporan">
-          {keywords.map((k) => (
-            <option key={k} value={k} />
-          ))}
-        </datalist>
-
         {antrean.length > 0 && (
           <div className="scrollbar-tipis mt-2.5 flex max-h-40 flex-col gap-1.5 overflow-y-auto">
             {antrean.map((item) => (
@@ -767,6 +780,16 @@ export function TvrKuScreen({
               },
             ]
           : []),
+        // Video wajib PALING ATAS (12 Sep 2026): ini perintah kerja, dan
+        // perintah kerja mendahului laporan hasil kerja. Ditaruh di bawah,
+        // ia terlewat justru oleh orang yang paling perlu membacanya.
+        { id: "video-wajib", pin: true, segmen: "Video Wajib", judul: "Video Wajib", ikon: Video, render: () => (
+      <FadeInUp delay={0.02}>
+        <div className="mt-1">
+          <PanelVideoWajib />
+        </div>
+      </FadeInUp>
+        ) },
         { id: "request-video", pin: true, segmen: "Request Video", judul: "Request Video TV Rakyat", ikon: Radio, render: () => (
       <FadeInUp delay={0.09}>
         <div className="mt-1">

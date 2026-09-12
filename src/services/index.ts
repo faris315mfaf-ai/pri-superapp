@@ -518,6 +518,9 @@ export type PenggunaAdmin = {
   profil_lengkap: boolean;
   created_at: string;
   disetujui_oleh: string | null;
+  /** Jabatan TV Rakyat Nasional (12 Sep 2026) — berdampingan, bukan
+   *  menggantikan `jabatan`. */
+  jabatan_tvr?: string;
   /** Bidang pelengkap jabatan, mis. "Bidang IT dan Infrastruktur" */
   bidang_jabatan?: string;
   /** Modul per akun yang dibuka/ditutup master (10 Sep 2026). */
@@ -569,6 +572,9 @@ export async function ubahPengguna(
     /** Struktur tambahan di luar yang utama (11 Sep 2026). */
     struktur_lain?: { divisi: string; sub_divisi: string; jabatan_sayap?: string }[];
   },
+  /** Jabatan TV Rakyat Nasional — dikirim bersama "ubah_jabatan", tapi
+   *  disimpan di kolom sendiri dan tidak menggugurkan jabatan lain. */
+  jabatanTvr?: string,
 ): Promise<void> {
   await fetchJson("/api/pengguna", {
     method: "PATCH",
@@ -579,6 +585,7 @@ export async function ubahPengguna(
       role,
       jabatan,
       bidang,
+      ...(jabatanTvr === undefined ? {} : { jabatan_tvr: jabatanTvr }),
       ...(divisiInfo ?? {}),
     }),
   });
@@ -3005,6 +3012,9 @@ export async function postTvrku(data: {
   caption?: string;
   /** Caption khusus per sosmed (8 Sep 2026) — hanya yang diisi. */
   caption_per?: Record<string, string>;
+  /** Kategori video — WAJIB sejak 12 Sep 2026, dari daftar tim TV
+   *  Rakyat Official. Server menolak unggahan tanpa ini. */
+  keyword: string;
   platforms: string[];
   jadwal?: string;
 }): Promise<{
