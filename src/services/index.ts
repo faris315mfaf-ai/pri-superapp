@@ -1116,6 +1116,37 @@ export async function getKenaikanNasional(rentang: string): Promise<KenaikanNasi
   return json as unknown as KenaikanNasional;
 }
 
+export type InsightKategori = {
+  kategori: string;
+  ringkasan: {
+    jumlah_video: number;
+    jumlah_terukur: number;
+    per_platform: Record<string, { video: number; terukur: number }>;
+    total: { tayangan: number; suka: number; komentar: number; bagikan: number };
+  };
+  video: {
+    kunci: string;
+    platform: string;
+    url: string;
+    judul: string;
+    thumbnail_url: string;
+    akun: string;
+    pelapor: string;
+    tanggal_wib: string;
+    waktu_posting: string | null;
+    metrik: { tayangan: number; suka: number; komentar: number; bagikan: number } | null;
+  }[];
+  ditampilkan: number;
+};
+
+export async function getInsightKategori(kategori: string): Promise<InsightKategori> {
+  const json = await fetchJson(
+    `/api/tv-nasional/kategori?kategori=${encodeURIComponent(kategori)}`,
+    { headers: headerToken() },
+  );
+  return json as unknown as InsightKategori;
+}
+
 export type VideoWajib = {
   id: string;
   judul: string;

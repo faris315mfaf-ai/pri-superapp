@@ -19,6 +19,7 @@ import { Radio } from "lucide-react";
 import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { TvNasionalDashboard } from "@/features/dashboard/tv-nasional-dashboard";
+import { PanelInsightKategori } from "./panel-insight-kategori";
 import { PanelKenaikanNasional } from "./panel-kenaikan-nasional";
 
 export function TvNasionalScreen({
@@ -60,6 +61,10 @@ export function TvNasionalScreen({
       </FadeInUp>
 
       <FadeInUp delay={0.06} className="mt-4">
+        <PanelInsightKategori />
+      </FadeInUp>
+
+      <FadeInUp delay={0.09} className="mt-4">
         <TvNasionalDashboard />
       </FadeInUp>
     </div>

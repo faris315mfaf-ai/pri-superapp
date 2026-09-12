@@ -526,6 +526,13 @@ function ModalLaporanBatch({
 // Seksi KPI yang TIDAK berlaku untuk Ketua Umum (2 Sep 2026).
 const SEKSI_KPI_TVRKU = new Set(["kpi", "tugas", "grafik", "laporan", "sosmed-terblokir"]);
 
+// Seksi yang disembunyikan (12 Sep 2026) — lihat catatan serupa di
+// tv-screen.tsx: sakelar, bukan penghapusan.
+const TAMPIL_TVRKU: Record<"tugas" | "studio", boolean> = {
+  tugas: false,
+  studio: false,
+};
+
 export function TvrKuScreen({
   user: userAsli,
   onBukaNotifikasi,
@@ -1009,7 +1016,7 @@ export function TvrKuScreen({
               },
             ]
           : []),
-        ...(bolehStudio
+        ...(bolehStudio && TAMPIL_TVRKU.studio
           ? [
               {
                 id: "studio-palugodam",
@@ -1043,6 +1050,8 @@ export function TvrKuScreen({
               },
             ]
           : []),
+        ...(TAMPIL_TVRKU.tugas
+          ? [
         { id: "tugas", segmen: "Unggah & Jadwal", judul: "Tugas & Unggah Video", ikon: Clapperboard, render: () => (
       <>
       {/* Tugas link dari Pimred + unggah video tugas (tampil hanya
@@ -1051,6 +1060,8 @@ export function TvrKuScreen({
       <KirimVideoManual hanyaBilaAdaTugas />
       </>
         ) },
+          ]
+          : []),
         { id: "kpi", segmen: "KPI & Laporan", judul: "KPI Video Hari Ini", ikon: Video, render: () => (
       <FadeInUp>
         <GlassCard className="flex items-center gap-4 p-4">

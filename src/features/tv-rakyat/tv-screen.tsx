@@ -44,6 +44,21 @@ type PayloadProses = {
   caption_sumber?: string;
 };
 
+// ------------------------------------------------------------
+// SEKSI YANG DISEMBUNYIKAN (12 Sep 2026, permintaan langsung).
+//
+// Kodenya sengaja dibiarkan: menyembunyikan lewat sakelar berarti
+// menyalakannya lagi cukup mengubah satu kata di sini. Menghapusnya
+// berarti menggali riwayat git kalau suatu hari dibutuhkan lagi.
+// Bertipe boolean (bukan literal) supaya `x && {...}` tidak dibaca lint
+// sebagai ekspresi tetap.
+// ------------------------------------------------------------
+const TAMPIL: Record<"hasilScraping" | "bagiTugas" | "buatVideo", boolean> = {
+  hasilScraping: false,
+  bagiTugas: false,
+  buatVideo: false,
+};
+
 export function TvScreen({
   user,
   onBukaNotifikasi,
@@ -246,7 +261,7 @@ export function TvScreen({
               <KelolaKeywordPanel />
             </SeksiLipat>
         ) },
-        pimred && { id: "hasil-scraping", judul: "Hasil Scraping Berita", ikon: ListChecks, render: () => (
+        pimred && TAMPIL.hasilScraping && { id: "hasil-scraping", judul: "Hasil Scraping Berita", ikon: ListChecks, render: () => (
             <SeksiLipat
               id="hasil-scraping"
               judul="Hasil Scraping Berita"
@@ -274,7 +289,7 @@ export function TvScreen({
               <RequestPanel />
             </SeksiLipat>
         ) },
-        pimred && { id: "bagi-tugas", judul: "Bagi Tugas ke Anggota", ikon: Send, render: () => (
+        pimred && TAMPIL.bagiTugas && { id: "bagi-tugas", judul: "Bagi Tugas ke Anggota", ikon: Send, render: () => (
             <SeksiLipat
               id="bagi-tugas"
               judul="Bagi Tugas ke Anggota"
@@ -285,7 +300,7 @@ export function TvScreen({
               <PanelTugasLink linkAwal={linkPakai || videoSumber?.link_video} />
             </SeksiLipat>
         ) },
-        bolehProses && { id: "buat-video", judul: "Buat Video", ikon: Clapperboard, render: () => (
+        bolehProses && TAMPIL.buatVideo && { id: "buat-video", judul: "Buat Video", ikon: Clapperboard, render: () => (
           <SeksiLipat
             id="buat-video"
             judul="Buat Video"

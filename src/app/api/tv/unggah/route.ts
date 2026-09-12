@@ -412,13 +412,9 @@ export async function POST(request: Request) {
         }
       }
 
-      // 2. Siaran ke SEMUA anggota: ada video baru + tugas komen & share.
-      await kirimKabar({
-        judul: "\ud83c\udfac Video baru di TV Rakyat!",
-        isi: `"${judulTampil}" baru tayang. Tugas Anda: beri komentar dan bagikan ke grup WhatsApp \u2014 buka Beranda untuk tombolnya.`,
-        kategori: "info",
-        jenis_peristiwa: "tv_publik",
-      });
+      // 2. (DIHAPUS 12 Sep 2026) Siaran "Video baru di TV Rakyat!" ke
+      //    seluruh anggota. Video tetap masuk kanal Konten & kewajiban
+      //    komen di bawah — hanya notifikasinya yang tidak lagi dikirim.
 
       // 3. Daftarkan SEKETIKA ke kanal konten + wajib-komen (feed_konten +
       // postingan), tanpa menunggu sinkron berkala. Di latar (after) agar
