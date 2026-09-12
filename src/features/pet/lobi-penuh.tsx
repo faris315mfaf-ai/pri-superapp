@@ -237,7 +237,16 @@ export function LobiPenuh() {
     [tampilkanPesan],
   );
 
-  // ---- cadangan polling (tanpa realtime) ----
+  // Realtime kembali hidup → polling dihentikan. Tanpa ini, sekali
+  // terputus berarti polling selamanya walau sambungannya sudah pulih.
+  const hentikanPolling = useCallback(() => {
+    if (pollTimer.current) {
+      clearInterval(pollTimer.current);
+      pollTimer.current = null;
+    }
+  }, []);
+
+  // ---- cadangan polling (selama realtime terputus) ----
   const mulaiPolling = useCallback(() => {
     if (pollTimer.current) return;
     setStatus("polling");
@@ -320,8 +329,19 @@ export function LobiPenuh() {
             meta,
             onStatus: (st) => {
               if (!hidup) return;
-              setStatus(st);
-              if (st === "gagal") mulaiPolling();
+              // Sambungan realtime kini menyembuhkan diri (lobi-realtime.ts):
+              // "gagal" hanya sementara. Polling dipakai selama putus, dan
+              // dihentikan begitu "tersambung" datang lagi.
+              if (st === "tersambung") {
+                hentikanPolling();
+                setStatus("tersambung");
+                return;
+              }
+              if (st === "gagal") {
+                mulaiPolling();
+                return;
+              }
+              if (!pollTimer.current) setStatus(st);
             },
             onHadir: terapkanHadir,
             onGerak: terimaGerak,
@@ -344,7 +364,7 @@ export function LobiPenuh() {
       if (sambungan.current) void sambungan.current.tutup();
       void keluarLobi();
     };
-  }, [mulaiPolling, terapkanHadir, terimaGerak, terimaPesan]);
+  }, [hentikanPolling, mulaiPolling, terapkanHadir, terimaGerak, terimaPesan]);
 
   // ---- mesin gerak + kamera + peer (rAF) ----
   useEffect(() => {

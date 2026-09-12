@@ -33,6 +33,7 @@ import {
 import { formatAngkaRingkas, jamWIB, urlProfilSosmed, waktuJelasWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { CincinMythic, FITUR_PERINGKAT_AKTIF, LabelMythic } from "./cincin-mythic";
+import { PanelKoinTerkaya, PanelTopMingguan } from "./panel-koin-mingguan";
 import { ModalKepatuhanDetail } from "./modal-kepatuhan-detail";
 
 const LABEL_INDIKATOR: Record<keyof MetrikNasional, string> = {
@@ -415,14 +416,18 @@ function PanelVideo() {
 
 /** Mode "Video Terbaik" disembunyikan dulu (permintaan user 3 Sep 2026); kode tetap ada. */
 const FITUR_VIDEO_TERBAIK = false;
-const MODE_LEADERBOARD: ["tvr" | "komen" | "video", string][] = [
+type ModeLeaderboard = "tvr" | "komen" | "video" | "koin" | "mingguan";
+const MODE_LEADERBOARD: [ModeLeaderboard, string][] = [
   ["tvr", "TV Rakyat"],
-  ["komen", "Kepatuhan Komen"],
-  ...(FITUR_VIDEO_TERBAIK ? ([["video", "Video Terbaik"]] as ["video", string][]) : []),
+  ["komen", "Kepatuhan"],
+  ...(FITUR_VIDEO_TERBAIK ? ([["video", "Video Terbaik"]] as [ModeLeaderboard, string][]) : []),
+  // 12 Sep 2026: pengguna terkaya (koin) & kenaikan pekan ini.
+  ["koin", "Koin"],
+  ["mingguan", "Mingguan"],
 ];
 
 function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
-  const [mode, setMode] = useState<"tvr" | "komen" | "video">("tvr");
+  const [mode, setMode] = useState<ModeLeaderboard>("tvr");
   const [komen, setKomen] = useState<KepatuhanKomenLeaderboard | null>(null);
   const [detailNama, setDetailNama] = useState<string | null>(null);
   const [platformKomen, setPlatformKomen] = useState("");
@@ -516,7 +521,11 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
               ? "Leaderboard Kepatuhan Komen"
               : mode === "video"
                 ? "Top Video Terbaik"
-                : "Leaderboard TV Rakyat"}
+                : mode === "koin"
+                  ? "Pengguna Koin Terkaya"
+                  : mode === "mingguan"
+                    ? "Top Mingguan (Senin–Minggu)"
+                    : "Leaderboard TV Rakyat"}
           </p>
           <button
             type="button"
@@ -530,10 +539,8 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
 
         {/* Mode: TV Rakyat | Kepatuhan Komen (2 Sep 2026) */}
         <div
-          className={cn(
-            "mx-4 mb-1 grid gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10",
-            MODE_LEADERBOARD.length === 3 ? "grid-cols-3" : "grid-cols-2",
-          )}
+          className="mx-4 mb-1 grid gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10"
+          style={{ gridTemplateColumns: `repeat(${MODE_LEADERBOARD.length}, minmax(0, 1fr))` }}
         >
           {MODE_LEADERBOARD.map(([k, label]) => (
             <button
@@ -562,6 +569,10 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
             />
           ) : mode === "video" ? (
             <PanelVideo />
+          ) : mode === "koin" ? (
+            <PanelKoinTerkaya />
+          ) : mode === "mingguan" ? (
+            <PanelTopMingguan />
           ) : !data ? (
             <div className="flex flex-col gap-3 pt-2">
               <GlassSkeleton className="h-40 rounded-2xl" />

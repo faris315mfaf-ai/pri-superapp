@@ -1417,6 +1417,42 @@ export type PeringkatTvr = {
   diperbarui: string;
 };
 
+export type PeringkatKoin = {
+  daftar: { peringkat: number; user_id: string; nama: string; avatar_url: string; saldo: number }[];
+  jumlah: number;
+  saya: { peringkat: number; user_id: string; nama: string; avatar_url: string; saldo: number } | null;
+};
+
+export async function getPeringkatKoin(): Promise<PeringkatKoin> {
+  const json = await fetchJson("/api/peringkat-koin", { headers: headerToken() });
+  return json as unknown as PeringkatKoin;
+}
+
+export type BarisMingguan = {
+  peringkat: number;
+  user_id: string;
+  nama: string;
+  avatar_url: string;
+  ini: number;
+  lalu: number;
+  naik: number;
+};
+
+export type PeringkatMingguan = {
+  metrik: "laporan" | "pengikut";
+  tersedia: boolean;
+  catatan: string;
+  jendela: { ini: { dari: string; sampai: string }; lalu: { dari: string; sampai: string }; hari_ke: number };
+  daftar: BarisMingguan[];
+  jumlah: number;
+  saya: BarisMingguan | null;
+};
+
+export async function getPeringkatMingguan(metrik: "laporan" | "pengikut"): Promise<PeringkatMingguan> {
+  const json = await fetchJson(`/api/peringkat-mingguan?metrik=${metrik}`, { headers: headerToken() });
+  return json as unknown as PeringkatMingguan;
+}
+
 export async function getPeringkatTvr(): Promise<PeringkatTvr> {
   const json = await fetchJson("/api/peringkat-tvr");
   return json as PeringkatTvr;

@@ -14,14 +14,19 @@ import { supabase } from "@/lib/supabase";
 
 /** Aktivitas berhadiah koin + kunci pengaturannya. */
 export const AKTIVITAS_KOIN = [
-  { id: "absen", kunci: "koin_bonus_absen", label: "Absen masuk harian", bawaan: 10 },
-  { id: "chat_baru", kunci: "koin_bonus_chat_baru", label: "Chat pertama ke teman baru", bawaan: 5 },
-  { id: "laporan_video", kunci: "koin_bonus_laporan_video", label: "Laporan video tersimpan", bawaan: 15 },
+  // Lima cara utama (permintaan 12 Sep 2026) — urutannya mengikuti daftar
+  // di Panel Master supaya yang dibaca master sama dengan yang dijanjikan.
+  { id: "upload_video", kunci: "koin_bonus_upload_video", label: "Upload video lewat SuperApp", bawaan: 15 },
+  { id: "laporan_video", kunci: "koin_bonus_laporan_video", label: "Menambahkan link video manual", bawaan: 15 },
+  { id: "absen", kunci: "koin_bonus_absen", label: "Absensi harian", bawaan: 10 },
+  { id: "chat_baru", kunci: "koin_bonus_chat_baru", label: "Chat (percakapan baru dengan seseorang)", bawaan: 5 },
+  // Diberikan penjadwal harian kepada juara komentar periode yang baru
+  // selesai (lib/juara-komen) — sekali per periode, tidak bisa dobel.
+  { id: "juara_komen_harian", kunci: "koin_bonus_juara_komen_harian", label: "Reward top komen harian (juara 1)", bawaan: 50 },
   { id: "akun_sosmed", kunci: "koin_bonus_akun_sosmed", label: "Menambahkan akun sosmed", bawaan: 20 },
   // v5 (5 Sep 2026): hadiah login harian (10 koin × 2); hari ke-7 beruntun = dua kali lipat.
   { id: "login_harian", kunci: "koin_bonus_login_harian", label: "Hadiah login harian (hari ke-7 ×2)", bawaan: 20 },
-  // 5 Sep 2026: unggah video lewat TV Rakyat Saya & komentar terverifikasi di postingan wajib.
-  { id: "upload_video", kunci: "koin_bonus_upload_video", label: "Mengunggah video (TV Rakyat Saya)", bawaan: 15 },
+  // 5 Sep 2026: komentar terverifikasi di postingan wajib.
   { id: "komen_video", kunci: "koin_bonus_komen_video", label: "Komentar terverifikasi di postingan wajib", bawaan: 5 },
 ] as const;
 

@@ -11,6 +11,7 @@
 // Keamanan: sama seperti cron lain — bila CRON_SECRET terpasang, wajib
 // `Authorization: Bearer`; bila tidak, hanya user-agent penjadwal.
 import { rekamMetrikHarian } from "@/lib/tvr-nasional";
+import { beriKoinJuaraKomenHarian } from "@/lib/juara-komen";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -27,7 +28,16 @@ async function jalankan(request: Request) {
   if (!sah) return Response.json({ error: "Tidak berwenang." }, { status: 403 });
   try {
     const hasil = await rekamMetrikHarian();
-    return Response.json(hasil, { headers: { "Cache-Control": "no-store" } });
+    // Reward top komen harian (12 Sep 2026): juara 1 periode yang baru
+    // selesai diberi koin. Gagal di sini tidak membatalkan rekaman —
+    // keduanya urusan terpisah yang kebetulan berjalan di jam yang sama.
+    let juara: unknown = null;
+    try {
+      juara = await beriKoinJuaraKomenHarian();
+    } catch (e) {
+      juara = { error: e instanceof Error ? e.message : "gagal" };
+    }
+    return Response.json({ ...hasil, juara_komen: juara }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     console.error("[cron/rekam-metrik]", e);
     return Response.json({ error: e instanceof Error ? e.message : "gagal" }, { status: 500 });

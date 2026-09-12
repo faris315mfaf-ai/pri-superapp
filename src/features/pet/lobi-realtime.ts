@@ -1,21 +1,29 @@
-"use client";
-
 // ============================================================
-// lobi-realtime.ts — pembungkus Supabase Realtime untuk LOBI ROBOT (5 Sep 2026).
+// Sambungan realtime LOBI ROBOT — Supabase Realtime (presence + broadcast).
 //
-// Satu kanal broadcast+presence per lobi:
-//   • presence  : siapa yang hadir + RUPA robot + posisi terakhir saat diam
-//                 (pendatang baru langsung melihat semua orang di tempatnya).
-//   • "gerak"   : {id,x,y,vx,vy,arah,t} dikirim maks 5×/detik HANYA saat
-//                 bergerak (+1 pesan saat berhenti). Penerima memprediksi
-//                 posisi dari kecepatan (dead reckoning) → terasa realtime
-//                 meski pesan jarang.
-//   • "pesan"   : gelembung teks singkat.
-//   • "ping"    : diterima kembali oleh pengirim (self: true) → latensi bolak-balik.
-// supabase-js dimuat DINAMIS hanya di halaman lobi (bundel utama tetap ringan).
-// Tanpa kunci / gagal tersambung → pemanggil beralih ke polling database.
+// DITULIS ULANG 12 Sep 2026 supaya TIDAK PERNAH MENYERAH.
+//
+// Versi lama menyambung SEKALI. Begitu kanal putus — ponsel tidur,
+// pindah dari Wi-Fi ke seluler, server realtime dimulai ulang — statusnya
+// jadi "gagal", pemanggil beralih ke polling database, dan tidak ada
+// yang pernah mencoba kembali. Yang dilihat pemain: lencana "Realtime"
+// berubah jadi "Polling 2 dtk" dan robot lain tersendat selamanya.
+//
+// Sekarang sambungan diawasi terus-menerus:
+//   • Putus dengan alasan apa pun → sambung ulang sendiri, jeda bertahap
+//     1 → 2 → 4 → 8 → 15 detik (lalu tetap 15 detik), tanpa batas.
+//   • Layar kembali aktif / jaringan kembali "online" → coba SEKETIKA,
+//     tidak menunggu jeda.
+//   • Pengawas gema ping: kalau ping sendiri tidak menggema > 20 detik
+//     padahal status "tersambung", sambungannya dianggap zombie (soket
+//     terbuka tapi mati) dan dipasang ulang.
+//
+// Status "gagal" kini bersifat SEMENTARA — pemanggil boleh memakai
+// polling selama itu, tapi harus kembali ke realtime begitu status
+// "tersambung" datang lagi.
+//
+// Tanpa kunci / tidak pernah tersambung → pemanggil tetap bisa polling.
 // ============================================================
-
 import type { RealtimeChannel, SupabaseClient } from "@supabase/supabase-js";
 
 export type MetaRobot = {
@@ -46,6 +54,17 @@ export type SambunganLobi = {
   tutup: () => Promise<void>;
 };
 
+/** Jeda sambung-ulang ke-n (detik): 1, 2, 4, 8, lalu tetap 15. */
+export function jedaSambungUlangMs(percobaan: number): number {
+  const dasar = Math.min(15_000, 1000 * 2 ** Math.min(Math.max(0, percobaan), 4));
+  return Math.min(15_000, dasar);
+}
+
+/** Batas diam gema ping sebelum sambungan dianggap zombie. */
+export const BATAS_GEMA_MS = 20_000;
+const PING_MS = 5_000;
+const TUNGGU_AWAL_MS = 8_000;
+
 export async function hubungkanLobi(o: {
   url: string;
   key: string;
@@ -64,14 +83,26 @@ export async function hubungkanLobi(o: {
   });
   let meta: MetaRobot = { ...o.meta };
   const saya = meta.id;
+
+  let ch: RealtimeChannel | null = null;
+  let ditutup = false;
+  let tersambung = false;
+  let percobaan = 0;
+  let gemaTerakhir = Date.now();
+  let timerUlang: ReturnType<typeof setTimeout> | null = null;
   let timerPing: ReturnType<typeof setInterval> | null = null;
+  let statusTerakhir: StatusKanal | null = null;
 
-  const ch: RealtimeChannel = klien.channel(o.kanal, {
-    config: { broadcast: { self: true, ack: false }, presence: { key: saya } },
-  });
+  const lapor = (s: StatusKanal) => {
+    // Status yang sama tidak diulang — pemanggil menyetel state React
+    // di sini, dan render ulang tanpa perubahan hanya membuang tenaga.
+    if (s === statusTerakhir) return;
+    statusTerakhir = s;
+    o.onStatus(s);
+  };
 
-  const sinkron = () => {
-    const state = ch.presenceState<MetaRobot>();
+  const sinkron = (kanal: RealtimeChannel) => {
+    const state = kanal.presenceState<MetaRobot>();
     const peers: Record<string, MetaRobot> = {};
     for (const [kunci, daftar] of Object.entries(state)) {
       if (kunci === saya) continue;
@@ -81,77 +112,159 @@ export async function hubungkanLobi(o: {
     o.onHadir(peers);
   };
 
-  ch.on("presence", { event: "sync" }, sinkron);
-  ch.on("broadcast", { event: "gerak" }, ({ payload }) => {
-    const p = payload as PaketGerak;
-    if (!p || p.id === saya) return;
-    o.onGerak(p);
-  });
-  ch.on("broadcast", { event: "pesan" }, ({ payload }) => {
-    const p = payload as { id: string; teks: string };
-    if (!p || p.id === saya) return;
-    o.onPesan(p.id, String(p.teks ?? "").slice(0, 60));
-  });
-  ch.on("broadcast", { event: "ping" }, ({ payload }) => {
-    const p = payload as { id: string; t: number };
-    if (p?.id === saya && typeof p.t === "number") o.onLatensi(Math.max(0, Date.now() - p.t));
-  });
+  const buangKanal = (kanal: RealtimeChannel | null) => {
+    if (!kanal) return;
+    void klien.removeChannel(kanal).catch(() => {
+      // sudah lepas sendiri — tidak apa-apa
+    });
+  };
 
-  o.onStatus("menyambung");
-  await new Promise<void>((selesai) => {
-    let sudah = false;
-    ch.subscribe(async (status) => {
-      if (status === "SUBSCRIBED") {
-        await ch.track(meta);
-        o.onStatus("tersambung");
-        if (!sudah) {
-          sudah = true;
-          selesai();
-        }
-      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        o.onStatus("gagal");
-        if (!sudah) {
-          sudah = true;
-          selesai();
-        }
-      } else if (status === "CLOSED") {
-        o.onStatus("tutup");
+  const jadwalkanUlang = () => {
+    if (ditutup || timerUlang) return;
+    const jeda = jedaSambungUlangMs(percobaan) + Math.floor(Math.random() * 400);
+    percobaan += 1;
+    timerUlang = setTimeout(() => {
+      timerUlang = null;
+      if (!ditutup) pasangKanal();
+    }, jeda);
+  };
+
+  /** Coba sekarang juga, tanpa menunggu jeda (layar aktif / online). */
+  const sambungSekarang = () => {
+    if (ditutup || tersambung) return;
+    if (timerUlang) {
+      clearTimeout(timerUlang);
+      timerUlang = null;
+    }
+    percobaan = 0;
+    pasangKanal();
+  };
+
+  const pasangKanal = () => {
+    if (ditutup) return;
+    const lama = ch;
+    ch = null;
+    tersambung = false;
+    buangKanal(lama);
+    lapor("menyambung");
+
+    const baru = klien.channel(o.kanal, {
+      config: { broadcast: { self: true, ack: false }, presence: { key: saya } },
+    });
+    ch = baru;
+
+    baru.on("presence", { event: "sync" }, () => {
+      if (baru === ch) sinkron(baru);
+    });
+    baru.on("broadcast", { event: "gerak" }, ({ payload }) => {
+      const p = payload as PaketGerak;
+      if (!p || p.id === saya) return;
+      o.onGerak(p);
+    });
+    baru.on("broadcast", { event: "pesan" }, ({ payload }) => {
+      const p = payload as { id: string; teks: string };
+      if (!p || p.id === saya) return;
+      o.onPesan(p.id, String(p.teks ?? "").slice(0, 60));
+    });
+    baru.on("broadcast", { event: "ping" }, ({ payload }) => {
+      const p = payload as { id: string; t: number };
+      if (p?.id === saya && typeof p.t === "number") {
+        gemaTerakhir = Date.now();
+        o.onLatensi(Math.max(0, Date.now() - p.t));
       }
     });
-    // Jangan menggantung selamanya bila server tidak menjawab.
-    setTimeout(() => {
-      if (!sudah) {
-        sudah = true;
-        o.onStatus("gagal");
+
+    baru.subscribe(async (status) => {
+      // Kanal usang (sudah diganti yang lebih baru) tidak boleh mengubah
+      // apa pun — inilah yang membuat sambung-ulang tidak saling tumpang.
+      if (baru !== ch || ditutup) return;
+      if (status === "SUBSCRIBED") {
+        percobaan = 0;
+        tersambung = true;
+        gemaTerakhir = Date.now();
+        try {
+          await baru.track(meta);
+        } catch {
+          // presence gagal ditulis: bukan alasan menganggap putus
+        }
+        lapor("tersambung");
+        void baru.send({ type: "broadcast", event: "ping", payload: { id: saya, t: Date.now() } });
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        tersambung = false;
+        lapor("gagal");
+        jadwalkanUlang();
+      }
+    });
+  };
+
+  // --- Pemicu sambung-ulang seketika ---------------------------------
+  const saatTerlihat = () => {
+    if (typeof document !== "undefined" && document.visibilityState === "visible") sambungSekarang();
+  };
+  const saatOnline = () => sambungSekarang();
+  if (typeof document !== "undefined") document.addEventListener("visibilitychange", saatTerlihat);
+  if (typeof window !== "undefined") window.addEventListener("online", saatOnline);
+
+  // --- Ping berkala + pengawas zombie ---------------------------------
+  timerPing = setInterval(() => {
+    if (ditutup || !ch || !tersambung) return;
+    void ch.send({ type: "broadcast", event: "ping", payload: { id: saya, t: Date.now() } });
+    if (Date.now() - gemaTerakhir > BATAS_GEMA_MS) {
+      // Soket mengaku hidup tapi tidak ada satu pun gema — pasang ulang.
+      tersambung = false;
+      lapor("gagal");
+      pasangKanal();
+    }
+  }, PING_MS);
+
+  // --- Sambungan pertama: tunggu hasil awal, tapi jangan menggantung ---
+  pasangKanal();
+  await new Promise<void>((selesai) => {
+    const mulai = Date.now();
+    const cek = setInterval(() => {
+      if (tersambung || statusTerakhir === "gagal" || Date.now() - mulai > TUNGGU_AWAL_MS) {
+        clearInterval(cek);
+        if (!tersambung && statusTerakhir !== "gagal") lapor("gagal"); // biar pemanggil mulai polling
         selesai();
       }
-    }, 8000);
+    }, 100);
   });
-
-  timerPing = setInterval(() => {
-    void ch.send({ type: "broadcast", event: "ping", payload: { id: saya, t: Date.now() } });
-  }, 5000);
-  void ch.send({ type: "broadcast", event: "ping", payload: { id: saya, t: Date.now() } });
 
   return {
     kirimGerak: (p) => {
+      if (!ch || !tersambung) return;
       void ch.send({ type: "broadcast", event: "gerak", payload: { ...p, id: saya, t: Date.now() } });
     },
     kirimPesan: (teks) => {
+      if (!ch || !tersambung) return;
       void ch.send({ type: "broadcast", event: "pesan", payload: { id: saya, teks: teks.slice(0, 60) } });
     },
     perbaruiMeta: async (sebagian) => {
       meta = { ...meta, ...sebagian };
-      await ch.track(meta);
+      if (!ch || !tersambung) return; // dikirim ulang otomatis saat tersambung (track di SUBSCRIBED)
+      try {
+        await ch.track(meta);
+      } catch {
+        // akan dikirim lagi setelah sambung ulang
+      }
     },
     tutup: async () => {
+      ditutup = true;
+      if (timerUlang) clearTimeout(timerUlang);
       if (timerPing) clearInterval(timerPing);
-      try {
-        await ch.untrack();
-      } catch {
-        // sudah terputus
+      if (typeof document !== "undefined") document.removeEventListener("visibilitychange", saatTerlihat);
+      if (typeof window !== "undefined") window.removeEventListener("online", saatOnline);
+      const kanal = ch;
+      ch = null;
+      if (kanal) {
+        try {
+          await kanal.untrack();
+        } catch {
+          // sudah terputus
+        }
+        await klien.removeChannel(kanal).catch(() => {});
       }
-      await klien.removeChannel(ch);
+      lapor("tutup");
     },
   };
 }

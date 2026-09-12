@@ -34,6 +34,8 @@ export type TotalNasional = {
   total: MetrikTvr;
   profil_terbaca: number;
   profil_total: number;
+  /** Total per anggota (gabungan semua platform) — untuk rekaman per orang. */
+  per_anggota: { user_id: string; total: MetrikTvr }[];
 };
 
 /** Satu bagian per rentang waktu yang bisa dipilih di panel. */
@@ -106,19 +108,25 @@ export async function hitungTotalNasional(): Promise<TotalNasional> {
   }
 
   let terbaca = 0;
+  const perAnggota: { user_id: string; total: MetrikTvr }[] = [];
   for (const a of anggota) {
     let adaIsi = false;
+    let milik = metrikTvrKosong();
     for (const p of PLATFORM_TVR) {
       const m = a.platform[p];
       if (m) {
         total = jumlahkanMetrikTvr(total, m);
+        milik = jumlahkanMetrikTvr(milik, m);
         adaIsi = true;
       }
     }
-    if (adaIsi) terbaca += 1;
+    if (adaIsi) {
+      terbaca += 1;
+      perAnggota.push({ user_id: String(a.user_id), total: milik });
+    }
   }
 
-  return { total, profil_terbaca: terbaca, profil_total: anggota.length };
+  return { total, profil_terbaca: terbaca, profil_total: anggota.length, per_anggota: perAnggota };
 }
 
 /** Simpan/perbarui rekaman hari ini. Dipanggil penjadwal. */
@@ -127,6 +135,7 @@ export async function rekamMetrikHarian(): Promise<{
   total: MetrikTvr;
   profil_terbaca: number;
   profil_total: number;
+  anggota_terekam: number;
 }> {
   const kini = await hitungTotalNasional();
   const tanggal = tanggalWib();
@@ -141,7 +150,37 @@ export async function rekamMetrikHarian(): Promise<{
     .from("tvr_metrik_harian")
     .upsert(baris, { onConflict: "tanggal_wib" });
   if (error) throw new Error(`Gagal menyimpan rekaman harian: ${error.message}`);
-  return { tanggal_wib: tanggal, ...kini };
+
+  // Rekaman PER ANGGOTA (sql/48) — dasar leaderboard Top Mingguan
+  // (kenaikan pengikut). Dipotong per 500 baris supaya satu permintaan
+  // tidak membengkak; satu potongan gagal tidak menggagalkan rekaman
+  // nasional yang sudah tersimpan di atas.
+  const perOrang = kini.per_anggota.map((a) => ({
+    tanggal_wib: tanggal,
+    user_id: Number(a.user_id),
+    pengikut: a.total.pengikut ?? 0,
+    tayangan: a.total.tayangan ?? 0,
+    jangkauan: a.total.jangkauan ?? 0,
+    suka: a.total.suka ?? 0,
+    komentar: a.total.komentar ?? 0,
+    bagikan: a.total.bagikan ?? 0,
+    diambil_pada: baris.diambil_pada,
+  }));
+  for (let i = 0; i < perOrang.length; i += 500) {
+    const { error: e2 } = await supabase()
+      .from("tvr_metrik_anggota_harian")
+      .upsert(perOrang.slice(i, i + 500), { onConflict: "tanggal_wib,user_id" });
+    if (e2) console.error("[rekam-metrik] per anggota:", e2.message);
+  }
+  // per_anggota sengaja TIDAK ikut dikembalikan: ratusan baris yang tidak
+  // dibutuhkan pemanggil, hanya membengkakkan jawaban cron.
+  return {
+    tanggal_wib: tanggal,
+    total: kini.total,
+    profil_terbaca: kini.profil_terbaca,
+    profil_total: kini.profil_total,
+    anggota_terekam: perOrang.length,
+  };
 }
 
 type BarisRekaman = {
