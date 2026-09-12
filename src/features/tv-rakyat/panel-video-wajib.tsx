@@ -34,6 +34,7 @@ import {
   getKeywordWajib,
   getVideoWajib,
   hapusVideoWajib,
+  tambahKeyword,
   tambahVideoWajib,
   toggleVideoWajib,
   type KeywordWajib,
@@ -55,6 +56,10 @@ export function PanelVideoWajib() {
   const [link, setLink] = useState("");
   const [kat, setKat] = useState("");
   const [batas, setBatas] = useState("");
+  // Kategori baru diketik di sini juga — tanpa harus pergi ke seksi lain
+  // lalu kembali. Setelah tersimpan, langsung terpilih di dropdown.
+  const [katBaru, setKatBaru] = useState("");
+  const [sibukKat, setSibukKat] = useState(false);
 
   useEffect(() => {
     let hidup = true;
@@ -83,6 +88,27 @@ export function PanelVideoWajib() {
       hidup = false;
     };
   }, [muat]);
+
+  async function tambahKategori() {
+    const nama = katBaru.trim();
+    if (nama.length < 2) {
+      toast("peringatan", "Nama kategori minimal 2 huruf");
+      return;
+    }
+    setSibukKat(true);
+    try {
+      await tambahKeyword(nama);
+      const k = await getKeywordWajib();
+      setKategori(k.data.filter((x) => x.aktif));
+      setKat(nama);
+      setKatBaru("");
+      toast("sukses", `Kategori "${nama}" ditambahkan`);
+    } catch (e) {
+      toast("error", "Gagal menambah kategori", e instanceof Error ? e.message : "");
+    } finally {
+      setSibukKat(false);
+    }
+  }
 
   async function simpan() {
     if (judul.trim().length < 3) {
@@ -223,12 +249,34 @@ export function PanelVideoWajib() {
               />
             </label>
           </div>
-          {kategori.length === 0 && (
-            <p className="text-[11px] leading-snug text-teks-sekunder">
-              Belum ada kategori. Tambahkan dulu di seksi &ldquo;Kategori Wajib
-              Laporan&rdquo; supaya sistem tahu video ini dikelompokkan ke mana.
-            </p>
-          )}
+          <div className="flex gap-2">
+            <input
+              value={katBaru}
+              onChange={(e) => setKatBaru(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void tambahKategori();
+                }
+              }}
+              placeholder="Kategori baru (mis. Bansos)"
+              aria-label="Kategori baru"
+              className="glass-input h-10 min-w-0 flex-1 rounded-xl px-3 text-sm text-teks-utama"
+            />
+            <button
+              type="button"
+              onClick={() => void tambahKategori()}
+              disabled={sibukKat}
+              className="glass btn-tekan flex h-10 shrink-0 items-center gap-1 rounded-xl px-3 text-[12px] font-bold text-teks-utama disabled:opacity-60"
+            >
+              {sibukKat ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              Kategori
+            </button>
+          </div>
           <button
             type="button"
             onClick={() => void simpan()}

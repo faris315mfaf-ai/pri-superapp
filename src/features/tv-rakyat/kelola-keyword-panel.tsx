@@ -86,8 +86,9 @@ export function KelolaKeywordPanel() {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[11px] leading-snug text-teks-sekunder">
-        Tetapkan keyword/tema yang <b>wajib</b> diangkat seluruh anggota di laporan
-        videonya (mis. <b>BPJS</b>). Anggota memilih keyword ini saat melaporkan videonya.
+        Kategori video yang dipilih anggota saat mengunggah atau melaporkan
+        videonya (mis. <b>BPJS</b>). <b>Video Sendiri</b> selalu ada dan tidak bisa
+        dihapus — untuk video buatan anggota di luar tema mana pun.
       </p>
 
       {/* Tambah keyword */}
@@ -133,6 +134,12 @@ export function KelolaKeywordPanel() {
               <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-teks-utama">
                 {k.keyword}
               </span>
+              {k.tetap ? (
+                <span className="rounded-lg bg-teks-sekunder/15 px-2.5 py-1 text-[10.5px] font-bold text-teks-sekunder">
+                  tetap
+                </span>
+              ) : (
+              <>
               <button
                 type="button"
                 onClick={() => void toggle(k.id)}
@@ -152,6 +159,8 @@ export function KelolaKeywordPanel() {
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
               </button>
+              </>
+              )}
             </div>
           ))}
         </div>

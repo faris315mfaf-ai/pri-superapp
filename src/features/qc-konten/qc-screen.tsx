@@ -311,7 +311,10 @@ export function QcScreen({
               ["database", "Detail Anggota", Database, true],
               ["absensi-hari-ini", "Absensi Hari Ini", CalendarDays, true],
               ["setel-kpi", "Setel KPI", TrendingUp, true],
-              ["persetujuan-kpi", "ACC KPI", ClipboardCheck, true],
+              // ACC KPI DIMATIKAN (12 Sep 2026): laporan video kini langsung
+              // dihitung, tidak lagi menunggu persetujuan HR. Layarnya masih
+              // ada di kode untuk membereskan sisa antrean lama bila perlu.
+              ["persetujuan-kpi", "ACC KPI", ClipboardCheck, false],
               ["kelola-pengguna", "Kelola Pengguna", UserCog, bolehHR],
               ["pengumuman", "Kirim Pengumuman", Megaphone, bolehHR],
             ] as const

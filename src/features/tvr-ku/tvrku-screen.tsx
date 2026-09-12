@@ -696,10 +696,10 @@ export function TvrKuScreen({
     if (tersimpan > 0) {
       toast(
         "sukses",
-        tersimpan === 1 ? "Laporan dikirim ke HR" : `${tersimpan} laporan dikirim ke HR`,
+        tersimpan === 1 ? "Laporan tersimpan" : `${tersimpan} laporan tersimpan`,
         gagal.length > 0
-          ? `Dihitung KPI setelah ACC HR. ${gagal.length} link gagal — lihat rinciannya.`
-          : "Dihitung KPI setelah disetujui Divisi HR.",
+          ? `Langsung dihitung KPI. ${gagal.length} link gagal — lihat rinciannya.`
+          : "Langsung dihitung ke KPI Anda.",
       );
     }
     for (const gl of gagal.slice(0, 3)) {
@@ -1215,7 +1215,7 @@ export function TvrKuScreen({
           <div className="mt-3">
             <p className="flex items-center gap-1.5 text-[11px] font-bold text-teks-sekunder">
               <Hourglass className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
-              Laporan link menunggu ACC Divisi HR — belum dihitung KPI
+              Laporan lama yang masih tercatat menunggu — belum dihitung KPI
             </p>
             <div className="mt-1.5 flex flex-col gap-2">
               {menunggu.map((m) => (

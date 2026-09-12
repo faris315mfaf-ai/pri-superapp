@@ -15,8 +15,7 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
-import { jabatanBolehPerintahVideo } from "@/lib/jabatan";
-import { wewenangTv } from "@/lib/tv-tim";
+import { bolehKelolaTvr } from "@/lib/tv-tim";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +30,8 @@ async function pastikanMasuk(request: Request) {
   return user;
 }
 
-/** Berwenang memerintahkan video? Jabatan dulu (murah), baru tanya database. */
-async function bolehPerintah(user: Parameters<typeof wewenangTv>[0]): Promise<boolean> {
-  if (jabatanBolehPerintahVideo(user)) return true;
-  return (await wewenangTv(user)).anggota;
-}
+/** Berwenang memerintahkan video = berwenang mengatur TV Rakyat (satu aturan). */
+const bolehPerintah = bolehKelolaTvr;
 
 async function pastikanBerwenang(request: Request) {
   const user = await pastikanMasuk(request);

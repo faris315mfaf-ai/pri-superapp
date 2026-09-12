@@ -1067,7 +1067,6 @@ export default function Page() {
         kunci: "tvnas",
         isi: (
           <TvNasionalScreen
-            user={user}
             onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           />
         ),

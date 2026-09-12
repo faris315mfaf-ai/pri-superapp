@@ -31,6 +31,7 @@ import { useAppStore } from "@/hooks/use-app-store";
 import { EmbedTerbaru } from "./embed-terbaru";
 import type { Berita, HasilProsesVideo, User, VideoAntrian } from "@/types";
 import { adalahPimred } from "@/lib/jabatan";
+import { PanelVideoWajib } from "./panel-video-wajib";
 
 type FaseTv = "form" | "proses" | "pratinjau";
 
@@ -50,8 +51,8 @@ export function TvScreen({
 }: {
   user: User;
   onBukaNotifikasi?: () => void;
-  /** Dipakai modul TV Rakyat Nasional, yang memasang kepalanya sendiri
-   *  di atas layar ini — tanpa ini kepalanya muncul dua kali. */
+  /** Sembunyikan kepala modul — untuk layar lain yang menanam layar ini
+   *  di bawah kepalanya sendiri. */
   tanpaHeader?: boolean;
 }) {
   // Pimpinan Redaksi (dan master): berhak menyetujui/menolak video.
@@ -197,6 +198,13 @@ export function TvScreen({
         </div>
       </header>
       )}
+
+      {/* Video wajib (12 Sep 2026): perintah video untuk seluruh anggota,
+          DIKELOLA dari sini — di modul tempat tim TV Rakyat Official
+          bekerja sehari-hari, bukan di modul dashboard. */}
+      <FadeInUp delay={0.03} className="mt-5">
+        <PanelVideoWajib />
+      </FadeInUp>
 
 
       {/*

@@ -16,7 +16,6 @@ import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { beriKoin } from "@/lib/koin";
-import { kirimKabar } from "@/lib/notifikasi";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { solusiGagal } from "@/lib/batas-caption";
 import { selesaikanRequest } from "@/lib/tvr-request";
@@ -419,34 +418,40 @@ export async function POST(request: Request) {
         .eq("status", "menunggu")
         .maybeSingle();
       if (sudahMenunggu) throw Object.assign(new Error("sudah menunggu ACC HR"), { status: 409 });
+      // TANPA ACC HR (12 Sep 2026): laporan langsung masuk laporan_video
+      // dan langsung dihitung KPI. Meja ACC dulu dibuat karena deteksi
+      // otomatis kadang luput dan HR ingin memeriksa link satu per satu;
+      // dalam praktiknya antreannya menumpuk dan anggota menunggu berhari-
+      // hari untuk sesuatu yang hampir selalu disetujui.
       const { data, error } = await db
-        .from("laporan_video_pending")
+        .from("laporan_video")
         .insert({
           user_id: Number(user.id),
           platform,
           url_video: urlBersih,
           keyword: kategori,
           tanggal_wib: tanggal,
+          sumber: "manual",
         })
-        .select("id, platform, url_video, keyword, tanggal_wib, dibuat_pada, status")
+        .select("id, platform, url_video, keyword, tanggal_wib, dibuat_pada")
         .single();
-      if (error || !data) throw new Error("gagal tersimpan");
-      // 5 Sep 2026: laporan link ini menutup request TV Rakyat yang sedang dikerjakan.
-      const idPending = Number(data.id);
-      after(() => selesaikanRequest(Number(user.id), { laporan_pending_id: idPending }));
-      return { ...data, id: String(data.id) };
+      if (error || !data) {
+        // 23505 = sudah tercatat lewat jalur lain — bukan galat baru.
+        if (error?.code === "23505") {
+          throw Object.assign(new Error("sudah tercatat di KPI Anda"), { status: 409 });
+        }
+        throw new Error("gagal tersimpan");
+      }
+      const idBaru = Number(data.id);
+      // Koin diberikan di sini — di tempat yang dulu dilakukan saat ACC.
+      after(() => beriKoin(Number(user.id), "laporan_video", `laporan-${idBaru}`));
+      // 5 Sep 2026: laporan link ini menutup request TV Rakyat yang sedang
+      // dikerjakan. Rujukan pending sengaja tidak diisi — kolom itu
+      // menunjuk ke tabel pending yang tidak lagi dipakai jalur ini.
+      after(() => selesaikanRequest(Number(user.id), {}));
+      return { ...data, id: String(data.id), status: "disetujui" };
     }
 
-    async function kabariHR(jumlah: number) {
-      await kirimKabar({
-        judul: "Laporan video manual menunggu ACC",
-        isi: `${user.nama} mengirim ${jumlah} link video untuk disetujui. Periksa di HR Center → ACC KPI.`,
-        kategori: "info",
-        jenis_peristiwa: "laporan_video_acc",
-        // Ketua Umum (super_admin) SENGAJA tidak dikabari (permintaan 2 Sep 2026).
-        untukRole: ["admin_hr", "master"],
-      });
-    }
 
     // --- Mode BATCH: banyak link sekali klik (spek 3.3). Tiap link
     //     diproses sendiri supaya satu link jelek tak membatalkan sisanya.
@@ -468,8 +473,7 @@ export async function POST(request: Request) {
           });
         }
       }
-      if (tersimpan.length > 0) await kabariHR(tersimpan.length);
-      return { sukses: true, menunggu: true, tersimpan, gagal };
+      return { sukses: true, menunggu: false, tersimpan, gagal };
     }
 
     // --- Mode satu link. ---
@@ -486,8 +490,7 @@ export async function POST(request: Request) {
       }
       throw e;
     }
-    await kabariHR(1);
-    return { sukses: true, menunggu: true, data };
+    return { sukses: true, menunggu: false, data };
   });
 }
 

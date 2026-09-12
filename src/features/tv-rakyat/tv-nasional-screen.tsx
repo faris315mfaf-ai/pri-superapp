@@ -3,29 +3,27 @@
 // ============================================================
 // TvNasionalScreen (12 Sep 2026) — modul TV Rakyat Nasional.
 //
-// Satu modul, dua hal yang selama ini terpisah:
-//   • ANGKA NASIONAL: kenaikan gabungan seluruh akun yang terdaftar.
-//   • SELURUH KENDALI TV RAKYAT OFFICIAL: layar yang sama persis, bukan
-//     salinan yang lama-lama berbeda sendiri.
+// HANYA DASHBOARD. Kendali produksi (video wajib, unggah, kategori,
+// pengaturan) tetap di modul TV Rakyat Official — tempat tim itu bekerja
+// sehari-hari. Menaruh salinan kendali yang sama di dua modul membuat
+// orang tidak pernah yakin mana yang "resmi", dan setiap perbaikan
+// harus dikerjakan dua kali.
 //
-// Layar Official sengaja DIPAKAI ULANG, bukan ditiru. Menyalin isinya
-// berarti setiap perbaikan di kemudian hari harus dikerjakan dua kali —
-// dan cepat atau lambat salah satunya terlewat.
+// Dua panel:
+//   • KENAIKAN nasional — hari ini, kemarin, sepekan, sebulan.
+//   • Dashboard nasional yang sudah ada — total per sosial media dan
+//     peringkat anggota. Dipakai ulang apa adanya, bukan disalin.
 // ============================================================
 
 import { Radio } from "lucide-react";
 import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
 import { TombolLonceng } from "@/components/tombol-lonceng";
+import { TvNasionalDashboard } from "@/features/dashboard/tv-nasional-dashboard";
 import { PanelKenaikanNasional } from "./panel-kenaikan-nasional";
-import { PanelVideoWajib } from "./panel-video-wajib";
-import { TvScreen } from "./tv-screen";
-import type { User } from "@/types";
 
 export function TvNasionalScreen({
-  user,
   onBukaNotifikasi,
 }: {
-  user: User;
   onBukaNotifikasi?: () => void;
 }) {
   return (
@@ -47,7 +45,7 @@ export function TvNasionalScreen({
               TV Rakyat Nasional
             </h1>
             <p className="text-xs text-teks-sekunder">
-              Angka nasional + seluruh kendali TV Rakyat Official
+              Angka gabungan seluruh akun TV Rakyat
             </p>
           </div>
         </div>
@@ -57,19 +55,13 @@ export function TvNasionalScreen({
         </div>
       </header>
 
-      {/* Video wajib paling atas: perintah kerja mendahului laporan. */}
-      <FadeInUp delay={0.02} className="mt-5">
-        <PanelVideoWajib />
-      </FadeInUp>
-
-      <FadeInUp delay={0.05} className="mt-3">
+      <FadeInUp delay={0.03} className="mt-5">
         <PanelKenaikanNasional />
       </FadeInUp>
 
-      {/* Seluruh isi modul TV Rakyat Official, apa adanya. */}
-      <div className="mt-2">
-        <TvScreen user={user} onBukaNotifikasi={onBukaNotifikasi} tanpaHeader />
-      </div>
+      <FadeInUp delay={0.06} className="mt-4">
+        <TvNasionalDashboard />
+      </FadeInUp>
     </div>
   );
 }

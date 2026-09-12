@@ -13,7 +13,7 @@
 // gerbang yang memakai aturan berbeda dari yang lain.
 // ============================================================
 import { supabase } from "@/lib/supabase";
-import { adalahPimred } from "@/lib/jabatan";
+import { adalahPimred, jabatanBolehPerintahVideo } from "@/lib/jabatan";
 import { bolehProsesVideo } from "@/types";
 import type { UserPublik } from "@/lib/sesi";
 
@@ -91,4 +91,19 @@ export async function bolehAccVideo(user: UserPublik): Promise<boolean> {
 /** true bila user berhak mengunggah ke sosmed (dipakai /api/tv/unggah). */
 export async function bolehUploadVideo(user: UserPublik): Promise<boolean> {
   return (await wewenangTv(user)).upload;
+}
+
+/**
+ * Boleh MENGATUR urusan TV Rakyat untuk seluruh anggota — menetapkan
+ * kategori video dan menerbitkan video wajib (12 Sep 2026).
+ *
+ * Satu fungsi untuk dua rute (/api/tv/keyword dan /api/tv/video-wajib),
+ * supaya tidak mungkin seseorang boleh menerbitkan video wajib tapi
+ * ditolak saat menambah kategorinya dari layar yang sama.
+ *
+ * Jabatan diperiksa dulu (tanpa database), sisanya ditanya ke tv_tim.
+ */
+export async function bolehKelolaTvr(user: Parameters<typeof wewenangTv>[0]): Promise<boolean> {
+  if (jabatanBolehPerintahVideo(user)) return true;
+  return (await wewenangTv(user)).anggota;
 }

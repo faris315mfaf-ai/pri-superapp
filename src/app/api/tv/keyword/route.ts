@@ -13,6 +13,8 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { adalahPimred } from "@/lib/jabatan";
+import { bolehKelolaTvr } from "@/lib/tv-tim";
+import { KATEGORI_TETAP, kategoriTetap } from "@/lib/kategori-tetap";
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +29,15 @@ async function pastikanMasuk(request: Request) {
   return user;
 }
 
-async function pastikanPimred(request: Request) {
+// Dulu hanya Pimpinan Redaksi. Sejak 12 Sep 2026 seluruh tim TV Rakyat
+// Official (plus Direktur Eksekutif & TV Rakyat Nasional) — orang yang
+// sama yang menerbitkan video wajib, dan kategori ditambahkan langsung
+// dari layar itu. Aturannya satu, di bolehKelolaTvr.
+async function pastikanPengelola(request: Request) {
   const user = await pastikanMasuk(request);
-  if (!adalahPimred(user)) {
+  if (!(await bolehKelolaTvr(user))) {
     throw Object.assign(
-      new Error("Hanya Pimpinan Redaksi TV Rakyat yang boleh mengatur keyword."),
+      new Error("Hanya tim TV Rakyat Official & pimpinan yang boleh mengatur kategori."),
       { status: 403 },
     );
   }
@@ -41,7 +47,9 @@ async function pastikanPimred(request: Request) {
 export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
-    const pimred = adalahPimred(user);
+    // "pimred" dipertahankan namanya untuk klien lama; artinya kini
+    // "boleh mengelola", bukan hanya Pimpinan Redaksi.
+    const pimred = adalahPimred(user) || (await bolehKelolaTvr(user));
     let q = supabase()
       .from("keyword_wajib")
       .select("id, keyword, aktif")
@@ -50,24 +58,31 @@ export async function GET(request: Request) {
     if (!pimred) q = q.eq("aktif", true);
     const { data, error } = await q;
     if (error) throw new Error("Gagal memuat keyword.");
-    return {
-      data: (data ?? []).map((k) => ({
-        id: String(k.id),
-        keyword: k.keyword,
-        aktif: k.aktif === true,
-      })),
-      pimred,
-    };
+    // Kategori TETAP di depan: ia ada di kode, bukan di database, jadi
+    // tidak bisa terhapus dan tidak ikut hilang kalau tabelnya kosong.
+    const tetap = KATEGORI_TETAP.map((nama) => ({
+      id: kategoriTetap.id(nama),
+      keyword: nama,
+      aktif: true,
+      tetap: true,
+    }));
+    const dariDb = (data ?? [])
+      .filter((k) => !kategoriTetap.adalah(String(k.keyword)))
+      .map((k) => ({ id: String(k.id), keyword: k.keyword, aktif: k.aktif === true, tetap: false }));
+    return { data: [...tetap, ...dariDb], pimred };
   });
 }
 
 export async function POST(request: Request) {
   return bungkus(async () => {
-    const user = await pastikanPimred(request);
+    const user = await pastikanPengelola(request);
     const body = (await request.json().catch(() => ({}))) as { keyword?: string };
     const keyword = (body.keyword ?? "").trim().slice(0, 60);
     if (keyword.length < 2) {
       throw Object.assign(new Error("Keyword minimal 2 karakter."), { status: 400 });
+    }
+    if (kategoriTetap.adalah(keyword)) {
+      throw Object.assign(new Error(`"${keyword}" sudah ada sebagai kategori tetap.`), { status: 409 });
     }
     const { error } = await supabase()
       .from("keyword_wajib")
@@ -84,8 +99,11 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   return bungkus(async () => {
-    await pastikanPimred(request);
+    await pastikanPengelola(request);
     const body = (await request.json().catch(() => ({}))) as { id?: string | number };
+    if (kategoriTetap.adalahId(String(body.id ?? ""))) {
+      throw Object.assign(new Error("Kategori tetap tidak bisa diubah atau dihapus."), { status: 400 });
+    }
     const id = Number(body.id ?? 0);
     if (!id) throw Object.assign(new Error("Keyword tidak disebutkan."), { status: 400 });
     const db = supabase();
@@ -103,8 +121,11 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   return bungkus(async () => {
-    await pastikanPimred(request);
+    await pastikanPengelola(request);
     const body = (await request.json().catch(() => ({}))) as { id?: string | number };
+    if (kategoriTetap.adalahId(String(body.id ?? ""))) {
+      throw Object.assign(new Error("Kategori tetap tidak bisa diubah atau dihapus."), { status: 400 });
+    }
     const id = Number(body.id ?? 0);
     if (!id) throw Object.assign(new Error("Keyword tidak disebutkan."), { status: 400 });
     const { error } = await supabase().from("keyword_wajib").delete().eq("id", id);

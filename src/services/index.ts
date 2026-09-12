@@ -1072,7 +1072,13 @@ export async function setIntervalBerita(menit: number): Promise<number> {
 // Keyword wajib laporan video (fitur 1.22.x/keyword)
 // ------------------------------------------------------------
 
-export type KeywordWajib = { id: string; keyword: string; aktif: boolean };
+export type KeywordWajib = {
+  id: string;
+  keyword: string;
+  aktif: boolean;
+  /** Kategori tetap dari kode (mis. "Video Sendiri"): tidak bisa diubah/dihapus. */
+  tetap?: boolean;
+};
 
 export async function getKeywordWajib(): Promise<{
   data: KeywordWajib[];
