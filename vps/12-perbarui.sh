@@ -88,6 +88,11 @@ chmod +x "$APP/jadwal/"*.sh "$SKRIP/"*.sh 2>/dev/null || true
 # pertama dijalankan langsung dari folder sumber, perintah pendeknya
 # tidak pernah ada sampai seseorang menebak sendiri jalurnya.
 PINTASAN=/usr/local/bin/pri-perbarui
+# Izin jalan dipastikan SEBELUM pintasannya dibuat. Git di Windows tidak
+# pernah mencatat tanda "boleh dijalankan", jadi berkas yang baru ditarik
+# datang tanpa izin itu — dan pintasan yang menunjuk ke sana gagal dengan
+# "Permission denied", pesan yang sama sekali tidak menyebut git.
+chmod +x "$SKRIP/12-perbarui.sh" 2>/dev/null || true
 if [ "$(readlink -f "$PINTASAN" 2>/dev/null || true)" != "$SKRIP/12-perbarui.sh" ]; then
   # "|| true": gagal memasang pintasan itu hal kecil — pembaruan tetap
   # harus jalan, bukan berhenti diam-diam di baris ini.
