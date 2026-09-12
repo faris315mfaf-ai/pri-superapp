@@ -31,7 +31,6 @@
 // sarankan regenerate di dashboard upload-post bila tersedia.
 // ============================================================
 
-import { uraiJawabanPostAnalytics, type MetrikPost } from "@/lib/metrik-post-up";
 
 const DASAR = "https://api.upload-post.com/api";
 
@@ -504,23 +503,72 @@ function urlDari(o: Record<string, unknown> | undefined): string {
  * Platform yang belum punya URL tidak dimasukkan.
  */
 /**
- * ANGKA per postingan dari upload-post (12 Sep 2026): suka, komentar,
- * dibagikan, tayangan, impresi, jangkauan — per platform. Endpoint yang
- * sama dengan analitikPostUp; bedanya, di sini angkanya ikut dibaca dan
- * jawaban MENTAH ikut dikembalikan supaya bisa disimpan & diperiksa.
+ * ANGKA PER POSTINGAN dari upload-post — SATU PROFIL SEKALIGUS.
+ *
+ * Kontrak (diverifikasi dari openapi.json resmi upload-post, 13 Sep 2026):
+ *   GET /uploadposts/post-analytics/cached?user=<profile_username>
+ *       [&platform=][&since=YYYY-MM-DD][&until=YYYY-MM-DD][&limit≤200][&cursor=]
+ *   → { success, posts: [{ post_id, platform, profile_username, date,
+ *        captured_at, metrics: {…kunci beda per platform…}, post_url,
+ *        media_type, upload_timestamp }], next_cursor, has_more }
+ *
+ * `since` bawaan upload-post hanya 30 hari — untuk pengiklan yang
+ * bertanya "20 video bulan lalu dapat berapa", rentangnya harus dikirim
+ * eksplisit. Halaman diikuti sampai habis (maks `maksHalaman`).
+ *
+ * CATATAN PENTING: endpoint /post-analytics/{request_id} yang dipakai
+ * analitikPostUp() di bawah TIDAK ADA di spesifikasi — ia kebetulan
+ * memberi post_url, tapi bukan angka. Angka hanya ada di sini.
  */
-export async function metrikPostUp(
-  requestId: string,
-  timeoutMs = 25000,
-): Promise<{ mentah: unknown; per_platform: Record<string, MetrikPost> }> {
-  const d = await panggil<unknown>(`/uploadposts/post-analytics/${encodeURIComponent(requestId)}`, {
-    method: "GET",
-    timeoutMs: Math.max(3000, timeoutMs),
-  });
-  return {
-    mentah: d,
-    per_platform: uraiJawabanPostAnalytics(d, (nama) => DARI_UP[nama] ?? nama),
-  };
+export type PostCachedUp = {
+  post_id: string;
+  platform: string; // nama versi APLIKASI (x → twitter)
+  post_url: string;
+  captured_at: string | null;
+  upload_timestamp: string | null;
+  media_type: string | null;
+  metrics: Record<string, unknown>;
+};
+
+export async function analitikPostCachedUp(
+  username: string,
+  opsi: { since?: string; until?: string; platformApp?: string; maksHalaman?: number; timeoutMs?: number } = {},
+): Promise<{ posts: PostCachedUp[]; mentah_halaman_pertama: unknown }> {
+  const { maksHalaman = 5, timeoutMs = 25000 } = opsi;
+  const q = new URLSearchParams({ user: username, limit: "200" });
+  if (opsi.since) q.set("since", opsi.since);
+  if (opsi.until) q.set("until", opsi.until);
+  if (opsi.platformApp) q.set("platform", KE_UP[opsi.platformApp] ?? opsi.platformApp);
+
+  const posts: PostCachedUp[] = [];
+  let mentahPertama: unknown = null;
+  let cursor: string | null = null;
+  for (let halaman = 0; halaman < maksHalaman; halaman++) {
+    if (cursor) q.set("cursor", cursor);
+    const d = await panggil<{
+      posts?: Record<string, unknown>[];
+      next_cursor?: string | null;
+      has_more?: boolean;
+    }>(`/uploadposts/post-analytics/cached?${q.toString()}`, { method: "GET", timeoutMs });
+    if (halaman === 0) mentahPertama = d;
+    for (const p of d.posts ?? []) {
+      const platformUp = String(p.platform ?? "").toLowerCase();
+      posts.push({
+        post_id: String(p.post_id ?? ""),
+        platform: DARI_UP[platformUp] ?? platformUp,
+        post_url: typeof p.post_url === "string" ? p.post_url : "",
+        captured_at: keIso(p.captured_at),
+        upload_timestamp: keIso(p.upload_timestamp),
+        media_type: typeof p.media_type === "string" ? p.media_type : null,
+        metrics: p.metrics && typeof p.metrics === "object" && !Array.isArray(p.metrics)
+          ? (p.metrics as Record<string, unknown>)
+          : {},
+      });
+    }
+    if (!d.has_more || !d.next_cursor) break;
+    cursor = String(d.next_cursor);
+  }
+  return { posts, mentah_halaman_pertama: mentahPertama };
 }
 
 export async function analitikPostUp(requestId: string, timeoutMs = 25000): Promise<Map<string, PostPastiUp>> {

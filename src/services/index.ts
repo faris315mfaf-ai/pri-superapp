@@ -1125,6 +1125,12 @@ export type MetrikPostUp = {
   jangkauan: number | null;
   simpan: number | null;
   post_url: string;
+  /** ID postingan di platformnya (dari upload-post). */
+  post_id?: string;
+  /** Kapan upload-post terakhir menarik angka ini dari platformnya. */
+  captured_at?: string | null;
+  /** Angka lain dari upload-post yang tidak masuk kolom baku — tetap ditampilkan. */
+  lain?: Record<string, number>;
 };
 
 export type TotalMetrikPostUp = {

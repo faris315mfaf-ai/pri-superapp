@@ -229,9 +229,22 @@ export function PanelInsightKategori() {
                         <div key={pf} className="flex items-center gap-1.5 text-[10.5px] text-teks-sekunder">
                           <PlatformIcon platform={pf} size={12} />
                           <span className="w-16 shrink-0 font-semibold text-teks-utama">{LABEL_PLATFORM[pf] ?? pf}</span>
-                          <span className="angka-tab min-w-0 flex-1 truncate">
+                          <span className="angka-tab min-w-0 flex-1">
                             {angka(m.suka)} suka · {angka(m.komentar)} komentar · {angka(m.bagikan)} dibagikan ·{" "}
                             {angka(m.tayangan)} tayang · {angka(m.impresi)} impresi · {angka(m.jangkauan)} jangkauan
+                            {m.simpan != null && ` · ${angka(m.simpan)} disimpan`}
+                            {/* Angka lain dari upload-post yang tidak masuk kolom baku:
+                                tetap ditampilkan apa adanya, bukan hilang diam-diam. */}
+                            {m.lain && Object.keys(m.lain).length > 0 && (
+                              <span className="block text-[10px] text-teks-sekunder/80">
+                                lainnya: {Object.entries(m.lain).map(([k, v]) => `${k} ${formatAngkaRingkas(v)}`).join(" · ")}
+                              </span>
+                            )}
+                            {m.captured_at && (
+                              <span className="block text-[10px] text-teks-sekunder/80">
+                                ditarik upload-post {jamWIB(m.captured_at)}
+                              </span>
+                            )}
                           </span>
                           {m.post_url && (
                             <a
