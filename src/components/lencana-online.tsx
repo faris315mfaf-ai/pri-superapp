@@ -11,8 +11,19 @@
 //
 // Sengaja tidak muncul saat angkanya nol atau satu: "1 online" yang
 // hanya berarti diri sendiri bukan kabar, cuma ramai di layar.
+//
+// BISA DIKLIK (12 Sep 2026) — oleh siapa pun, bukan hanya pengurus:
+// angka tanpa nama memancing pertanyaan "siapa?" yang selama ini tidak
+// ada jawabannya. Sekali ketuk, daftar namanya terbuka, lengkap dengan
+// tombol chat ke masing-masing orang.
+//
+// Panelnya dipegang lencana ini sendiri, bukan dioper dari luar, supaya
+// di mana pun lencana ini dipasang ia langsung bisa diketuk tanpa ada
+// yang perlu menyambungkan apa-apa lagi.
 // ============================================================
 
+import { useState } from "react";
+import { ModalStatus } from "@/components/modal-status";
 import { useAppStore } from "@/hooks/use-app-store";
 import { cn } from "@/lib/utils";
 
@@ -25,16 +36,21 @@ export function LencanaOnline({
   minimal?: number;
 }) {
   const jumlah = useAppStore((st) => st.hadir.length);
+  const [buka, setBuka] = useState(false);
   if (jumlah < minimal) return null;
 
   return (
-    <span
+    <>
+    <button
+      type="button"
+      onClick={() => setBuka(true)}
+      aria-label={`Lihat ${jumlah} orang yang sedang online`}
       className={cn(
-        "glass inline-flex items-center gap-1.5 rounded-full px-2.5 py-1",
+        "glass btn-tekan inline-flex items-center gap-1.5 rounded-full px-2.5 py-1",
         "text-[11px] font-bold text-teks-utama",
         className,
       )}
-      title="Perkiraan orang yang aplikasinya sedang terbuka"
+      title="Lihat siapa saja yang sedang membuka aplikasi"
     >
       <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
         {/* Denyut pelan: menandakan angkanya hidup, bukan sekadar tulisan.
@@ -44,6 +60,8 @@ export function LencanaOnline({
       </span>
       <span className="angka-tab">{jumlah}</span>
       <span className="font-semibold text-teks-sekunder">online</span>
-    </span>
+    </button>
+    {buka && <ModalStatus onTutup={() => setBuka(false)} />}
+    </>
   );
 }

@@ -126,6 +126,7 @@ import {
 } from "@/services";
 import type { Role, User } from "@/types";
 import { cn } from "@/lib/utils";
+import { PERISTIWA_BUKA_CHAT } from "@/lib/peristiwa";
 
 // ------------------------------------------------------------
 // Navigasi
@@ -737,6 +738,15 @@ export default function Page() {
     setSubLayar(null);
     setTab(t);
   }
+
+  // Tombol chat di daftar "sedang online" (12 Sep 2026). Panelnya ada
+  // jauh di dalam beranda, sementara yang bisa berpindah tab hanya
+  // halaman ini — jadi permintaannya dikirim lewat peristiwa.
+  useEffect(() => {
+    const keChat = () => pilihTab("chat");
+    window.addEventListener(PERISTIWA_BUKA_CHAT, keChat);
+    return () => window.removeEventListener(PERISTIWA_BUKA_CHAT, keChat);
+  }, []);
 
   const izinFitur = useAppStore((s) => s.izinFitur);
   const [ultahBuka, setUltahBuka] = useState(false);

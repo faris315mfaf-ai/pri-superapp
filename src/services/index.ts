@@ -3148,22 +3148,6 @@ export async function perangkatDukungSidikJari(): Promise<boolean> {
 // v1.22 — Mode Developer (impersonasi sesi)
 // ------------------------------------------------------------
 
-/** Masuk Mode Developer dengan peran/jabatan/divisi pilihan. */
-export async function masukDeveloper(data: {
-  password: string;
-  peran: string;
-  jabatan: string;
-  divisi: string;
-  sub_divisi: string;
-}): Promise<UserLengkap> {
-  const json = await fetchJson("/api/dev/masuk", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (json.token) simpanToken(json.token as string);
-  return json.user as UserLengkap;
-}
 
 // ------------------------------------------------------------
 // Verifikasi wajah (fitur 1.22/3) — absen & login berbasis wajah

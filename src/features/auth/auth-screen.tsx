@@ -26,10 +26,10 @@ import {
   Loader2,
   Lock,
   Mail,
+  MessageCircle,
   Phone,
   ScanFace,
   ShieldCheck,
-  TerminalSquare,
   User as IkonUser,
   UserPlus,
   X,
@@ -37,7 +37,6 @@ import {
 import { LogoPri } from "@/components/logo-pri";
 import { ThemeToggle } from "@/components/pri-ui";
 import { TombolGoogle } from "@/components/tombol-google";
-import { DevMode } from "@/features/auth/dev-mode";
 import { KameraWajah } from "@/features/profil/wajah-panel";
 import { toast } from "@/hooks/use-app-store";
 import { useEffect } from "react";
@@ -62,7 +61,7 @@ import { butuhSubDivisi } from "@/lib/struktur";
 import { PilihStrukturBanyak, type NilaiStruktur } from "@/features/pengguna/pilih-struktur";
 import { cn } from "@/lib/utils";
 
-type Langkah = "tertutup" | "masuk" | "daftar" | "otp" | "profil" | "menunggu" | "lupa" | "developer";
+type Langkah = "tertutup" | "masuk" | "daftar" | "otp" | "profil" | "menunggu" | "lupa";
 
 type AuthScreenProps = {
   onMasukBerhasil: (user: UserLengkap) => void;
@@ -161,17 +160,6 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
         </p>
       </motion.div>
 
-      {/* Tombol kecil "developer mode" (fitur 1.22/1) — di ujung bawah
-          layar, sengaja samar. Membuka mode impersonasi sesi (peran/
-          jabatan/divisi apa pun) yang digerbang password developer. */}
-      <button
-        type="button"
-        onClick={() => setLangkah("developer")}
-        className="mt-8 inline-flex items-center gap-1.5 text-[11px] font-medium text-teks-sekunder/60 transition-opacity hover:opacity-100"
-      >
-        <TerminalSquare className="h-3.5 w-3.5" aria-hidden="true" />
-        developer mode
-      </button>
 
       <AnimatePresence>
         {langkah !== "tertutup" && (
@@ -182,8 +170,7 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
             bisaTutup={
               langkah === "masuk" ||
               langkah === "daftar" ||
-              langkah === "lupa" ||
-              langkah === "developer"
+              langkah === "lupa"
             }
             onTutup={tutup}
             judul={
@@ -197,9 +184,7 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
                       ? "Lengkapi Profil"
                       : langkah === "lupa"
                         ? "Lupa Kata Sandi"
-                        : langkah === "developer"
-                          ? "Mode Developer"
-                          : "Menunggu Persetujuan"
+                        : "Menunggu Persetujuan"
             }
           >
             {langkah === "masuk" && (
@@ -212,7 +197,6 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
             {langkah === "lupa" && (
               <FormLupaSandi kembali={() => setLangkah("masuk")} />
             )}
-            {langkah === "developer" && <DevMode onBerhasil={lanjutkan} />}
             {langkah === "daftar" && (
               <FormDaftar
                 onTerkirim={(email, otpTerkirim, autoAktif) => {
@@ -1070,6 +1054,49 @@ function FormProfil({
 // Langkah: Lupa kata sandi (OTP ke EMAIL terdaftar)
 // ------------------------------------------------------------
 
+// Nomor WhatsApp developer, untuk orang yang benar-benar tidak bisa
+// masuk lagi: emailnya tidak aktif, nomornya ganti, atau akunnya
+// terlanjur kacau. Tanpa jalan ini, satu-satunya pilihan mereka adalah
+// menyerah — kode pemulihan dikirim ke email yang justru tidak bisa
+// mereka buka.
+const WA_DEVELOPER = "6287718123039";
+
+/** Pesan dibuat siap-kirim supaya developer tidak perlu bertanya ulang. */
+export function tautanBantuanWa(identitas: string): string {
+  const pesan =
+    "Halo, saya butuh bantuan masuk ke PRI SuperApp." +
+    (identitas.trim() ? ` Akun saya: ${identitas.trim()}.` : "") +
+    " Saya tidak bisa memulihkan kata sandi sendiri.";
+  return `https://wa.me/${WA_DEVELOPER}?text=${encodeURIComponent(pesan)}`;
+}
+
+function TombolBantuanDeveloper({ identitas }: { identitas: string }) {
+  return (
+    <>
+      <span className="mt-1 flex items-center gap-3" aria-hidden="true">
+        <span className="h-px flex-1 bg-teks-sekunder/20" />
+        <span className="text-[11px] font-semibold text-teks-sekunder">
+          masih tidak bisa masuk?
+        </span>
+        <span className="h-px flex-1 bg-teks-sekunder/20" />
+      </span>
+      <a
+        href={tautanBantuanWa(identitas)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="glass btn-tekan flex items-center justify-center gap-2 rounded-xl py-3 text-[13.5px] font-bold text-teks-utama"
+      >
+        <MessageCircle className="h-4.5 w-4.5 text-[#25D366]" aria-hidden="true" />
+        Chat Developer untuk Minta Bantuan
+      </a>
+      <p className="-mt-1 text-center text-[11px] leading-relaxed text-teks-sekunder">
+        Dibuka di WhatsApp, langsung ke developer aplikasi.
+      </p>
+    </>
+  );
+}
+
+
 function FormLupaSandi({ kembali }: { kembali: () => void }) {
   const [tahap, setTahap] = useState<"minta" | "setel" | "selesai">("minta");
   const [identitas, setIdentitas] = useState("");
@@ -1218,6 +1245,7 @@ function FormLupaSandi({ kembali }: { kembali: () => void }) {
         <ArrowLeft className="h-3.5 w-3.5" />
         Kembali ke Masuk
       </button>
+      <TombolBantuanDeveloper identitas={identitas} />
     </form>
   );
 }

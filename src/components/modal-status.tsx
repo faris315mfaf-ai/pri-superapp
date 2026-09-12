@@ -18,11 +18,13 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
-import { Cpu, HardDrive, MemoryStick, RefreshCw, Users, X } from "lucide-react";
+import { Cpu, HardDrive, Loader2, MemoryStick, MessageCircle, RefreshCw, Users, X } from "lucide-react";
 import { AvatarInisial, EmptyState, GlassSkeleton, TitikOnline } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
 import { GlassCard } from "@/components/glass-card";
-import { getStatus, type StatusAplikasi } from "@/services";
+import { getStatus, mulaiChat, type StatusAplikasi } from "@/services";
+import { toast, useAppStore } from "@/hooks/use-app-store";
+import { PERISTIWA_BUKA_CHAT } from "@/lib/peristiwa";
 import { cn } from "@/lib/utils";
 
 /** Hijau tenang → kuning → merah, mengikuti seberapa penuh. */
@@ -88,6 +90,25 @@ export function ModalStatus({ onTutup }: { onTutup: () => void }) {
   const [data, setData] = useState<StatusAplikasi | null>(null);
   const [galat, setGalat] = useState("");
   const [muat, setMuat] = useState(0);
+  // Diri sendiri tidak diberi tombol chat: mengirim pesan ke diri
+  // sendiri bukan hal yang pernah dimaksudkan siapa pun.
+  const idSaya = useAppStore((st) => st.user?.id);
+  const [chatId, setChatId] = useState<string | null>(null);
+
+  async function bukaChat(id: string, nama: string) {
+    if (chatId) return;
+    setChatId(id);
+    try {
+      await mulaiChat(id);
+      // Panel ditutup lebih dulu supaya layar chat tidak muncul di
+      // belakang panel yang masih menutupi.
+      onTutup();
+      window.dispatchEvent(new CustomEvent(PERISTIWA_BUKA_CHAT));
+    } catch (e) {
+      toast("error", `Gagal membuka chat dengan ${nama}`, e instanceof Error ? e.message : "");
+      setChatId(null);
+    }
+  }
 
   useEffect(() => {
     let hidup = true;
@@ -219,6 +240,21 @@ export function ModalStatus({ onTutup }: { onTutup: () => void }) {
                             </span>
                           )}
                         </span>
+                        {o.id !== idSaya && (
+                          <button
+                            type="button"
+                            onClick={() => void bukaChat(o.id, o.nama)}
+                            disabled={chatId !== null}
+                            aria-label={`Chat ${o.nama}`}
+                            className="glass btn-tekan flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-teks-utama disabled:opacity-50"
+                          >
+                            {chatId === o.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                            ) : (
+                              <MessageCircle className="h-4 w-4" aria-hidden="true" />
+                            )}
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>
