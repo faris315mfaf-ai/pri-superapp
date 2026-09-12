@@ -1182,6 +1182,27 @@ export type InsightKategori = {
   ditampilkan: number;
 };
 
+export type HasilTarikMetrik = {
+  post_id: number;
+  profil: string;
+  /** Berapa postingan profil ini yang dikembalikan upload-post. */
+  postingan_di_upload_post: number;
+  /** Berapa unggahan aplikasi milik profil ini yang berhasil terisi angkanya. */
+  unggahan_terisi: number;
+  unggahan_ini: { metrik: Record<string, MetrikPostUp> | null; metrik_pada: string | null } | null;
+  /** Hanya untuk master: jawaban upload-post apa adanya (halaman pertama). */
+  mentah_halaman_pertama?: unknown;
+};
+
+/** Tarik angka upload-post SEKARANG untuk profil pemilik satu unggahan. */
+export async function tarikMetrikPostSekarang(idUnggahan: string): Promise<HasilTarikMetrik> {
+  const json = await fetchJson(
+    `/api/tv-nasional/kategori?mentah=${encodeURIComponent(idUnggahan)}`,
+    { headers: headerToken() },
+  );
+  return json as unknown as HasilTarikMetrik;
+}
+
 export async function getInsightKategori(kategori: string): Promise<InsightKategori> {
   const json = await fetchJson(
     `/api/tv-nasional/kategori?kategori=${encodeURIComponent(kategori)}`,

@@ -26,7 +26,14 @@ import { GlassCard } from "@/components/glass-card";
 import { EmptyState, GlassSkeleton } from "@/components/pri-ui";
 import { PlatformIcon } from "@/components/platform-icon";
 import { formatAngkaRingkas, jamWIB } from "@/lib/format";
-import { getInsightKategori, getKeywordWajib, type InsightKategori } from "@/services";
+import { toast, useAppStore } from "@/hooks/use-app-store";
+import {
+  getInsightKategori,
+  getKeywordWajib,
+  tarikMetrikPostSekarang,
+  type HasilTarikMetrik,
+  type InsightKategori,
+} from "@/services";
 import { cn } from "@/lib/utils";
 
 const TILE_LAPORAN: { kunci: keyof InsightKategori["ringkasan"]["total"]; label: string }[] = [
@@ -63,6 +70,34 @@ export function PanelInsightKategori() {
   const [data, setData] = useState<InsightKategori | null>(null);
   const [galat, setGalat] = useState("");
   const [muat, setMuat] = useState(0);
+  // "Tarik sekarang" per unggahan (13 Sep 2026): menarik profil pemiliknya
+  // dari upload-post saat itu juga. Untuk master, jawaban mentahnya ikut
+  // ditampilkan di bawah — pengganti alamat API yang tidak bisa dibuka
+  // dari bilah alamat (butuh token login).
+  const peran = useAppStore((s) => s.user?.role);
+  const [tarikId, setTarikId] = useState<string | null>(null);
+  const [mentahTerakhir, setMentahTerakhir] = useState<HasilTarikMetrik | null>(null);
+
+  async function tarikSekarang(id: string) {
+    if (tarikId) return;
+    setTarikId(id);
+    try {
+      const h = await tarikMetrikPostSekarang(id);
+      setMentahTerakhir(h);
+      toast(
+        h.unggahan_terisi > 0 ? "sukses" : "info",
+        `upload-post: ${h.postingan_di_upload_post} postingan di profil ${h.profil}`,
+        h.unggahan_terisi > 0
+          ? `${h.unggahan_terisi} unggahan terisi angkanya.`
+          : "Tidak ada yang cocok dengan unggahan aplikasi — lihat rincian di bawah daftar.",
+      );
+      setMuat((n) => n + 1);
+    } catch (e) {
+      toast("error", "Gagal menarik dari upload-post", e instanceof Error ? e.message : "");
+    } finally {
+      setTarikId(null);
+    }
+  }
 
   useEffect(() => {
     let hidup = true;
@@ -222,6 +257,19 @@ export function PanelInsightKategori() {
                     <span className="angka-tab shrink-0 text-[11px] font-bold text-teks-utama">
                       {p.total.platform_terukur > 0 ? `${angka(p.total.tayangan)} tayang` : "–"}
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => void tarikSekarang(p.id)}
+                      disabled={tarikId !== null || !data.upload_post_siap}
+                      aria-label="Tarik angka dari upload-post sekarang"
+                      title="Tarik angka dari upload-post sekarang"
+                      className="glass btn-tekan flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-teks-utama disabled:opacity-50"
+                    >
+                      <RefreshCw
+                        className={cn("h-3.5 w-3.5", tarikId === p.id && "animate-spin")}
+                        aria-hidden="true"
+                      />
+                    </button>
                   </div>
                   {Object.keys(p.per_platform).length > 0 && (
                     <div className="mt-1.5 flex flex-col gap-1">
@@ -264,6 +312,30 @@ export function PanelInsightKategori() {
                 </li>
               ))}
             </ul>
+          )}
+
+          {/* Hasil "Tarik sekarang" terakhir — supaya yang tidak cocok bisa
+              dilihat sebabnya, bukan sekadar "–". Master juga melihat
+              jawaban upload-post apa adanya. */}
+          {mentahTerakhir && (
+            <details className="glass-soft mt-2 rounded-xl p-2.5 text-[10.5px] text-teks-sekunder">
+              <summary className="cursor-pointer font-bold text-teks-utama">
+                Rincian tarikan terakhir — profil {mentahTerakhir.profil}
+              </summary>
+              <p className="mt-1.5">
+                upload-post mengembalikan <b>{mentahTerakhir.postingan_di_upload_post}</b> postingan
+                untuk profil ini; <b>{mentahTerakhir.unggahan_terisi}</b> unggahan aplikasi terisi.
+                {mentahTerakhir.postingan_di_upload_post === 0 &&
+                  " Nol postingan berarti upload-post belum punya rekaman angka untuk profil ini — angka baru tersedia sehari setelah unggahan tayang."}
+                {mentahTerakhir.postingan_di_upload_post > 0 && mentahTerakhir.unggahan_terisi === 0 &&
+                  " Ada postingan, tapi tidak satu pun cocok dengan alamat yang tercatat di laporan — kirimkan rincian ini ke developer."}
+              </p>
+              {peran === "master" && mentahTerakhir.mentah_halaman_pertama !== undefined && (
+                <pre className="scrollbar-tipis mt-2 max-h-72 overflow-auto rounded-lg bg-black/5 p-2 text-[10px] leading-snug whitespace-pre-wrap break-all dark:bg-white/10">
+                  {JSON.stringify(mentahTerakhir.mentah_halaman_pertama, null, 1).slice(0, 12000)}
+                </pre>
+              )}
+            </details>
           )}
 
           {/* ===== 2. Laporan anggota (TikHub) ===== */}

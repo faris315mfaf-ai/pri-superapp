@@ -177,10 +177,11 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const db = supabase();
 
-    // ---- Diagnosa (master): tarik profil pemilik satu unggahan SEKARANG ----
+    // ---- "Tarik sekarang" untuk satu unggahan (tombol di panel) ----
+    // Siapa pun yang boleh membuka panel boleh menarik ulang; jawaban
+    // MENTAH upload-post hanya disertakan untuk master (bahan diagnosa).
     const idMentah = Number(url.searchParams.get("mentah") ?? 0);
     if (idMentah > 0) {
-      if (user.role !== "master") throw Object.assign(new Error("Halaman tidak ditemukan."), { status: 404 });
       if (!uploadPostSiap()) throw Object.assign(new Error("Kunci upload-post belum terpasang."), { status: 503 });
       const { data: p } = await db
         .from("tvrku_post")
@@ -197,8 +198,10 @@ export async function GET(request: Request) {
         profil,
         postingan_di_upload_post: hasil.posts,
         unggahan_terisi: hasil.terisi,
-        mentah_halaman_pertama: hasil.mentah,
         unggahan_ini: sesudah,
+        // Jawaban apa adanya dari upload-post: hanya master, dan hanya
+        // untuk membaca kolom-kolom yang mungkin belum dikenali pengurai.
+        mentah_halaman_pertama: user.role === "master" ? hasil.mentah : undefined,
       };
     }
 
