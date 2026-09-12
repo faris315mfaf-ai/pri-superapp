@@ -40,7 +40,6 @@ import { SeksiLipat } from "@/components/seksi-lipat";
 import { TataLetakModul } from "@/components/tata-letak-modul";
 import { KartuUltah } from "@/components/ultah";
 import { RunningTextJuara } from "./running-text-juara";
-import { JamDigital } from "@/components/jam-digital";
 import {
   getAbsensi,
   getLaporanKerja,
@@ -205,8 +204,6 @@ export function BerandaScreen({
           <p className="mt-1 text-[11px] text-teks-sekunder">
             {tanggalIndonesia(`${tanggalWibPerangkat()}T00:00:00+07:00`)}
           </p>
-          {/* Jam WIB berjalan tiap detik (spek 1.15) */}
-          <JamDigital className="mt-0.5 block font-heading text-lg font-extrabold tracking-tight text-teks-utama" />
           <LencanaOnline className="mt-1.5" />
         </div>
         <div className="flex max-w-[62%] shrink-0 flex-wrap items-center justify-end gap-2">

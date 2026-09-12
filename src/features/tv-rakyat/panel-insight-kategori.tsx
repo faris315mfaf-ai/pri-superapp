@@ -3,32 +3,46 @@
 // ============================================================
 // PanelInsightKategori (12 Sep 2026) — modul TV Rakyat Nasional.
 //
-// Pilih satu kategori (mis. BPJS) → seluruh video yang dilaporkan dengan
-// kategori itu, angka per video, dan totalnya.
+// Pilih satu kategori (mis. BPJS) → dua bagian yang sengaja DIPISAH
+// karena sumber dan artinya berbeda:
 //
-// Dua hal dijaga supaya panel ini tidak menyesatkan:
-//   • "N video · M punya angka" selalu ditulis. Angka per video hanya
-//     ada untuk TikTok & Instagram; video lain tetap dihitung, tanpa
-//     angka — total yang tampil adalah total dari yang TERUKUR, dan
-//     panel mengatakannya.
-//   • Daftar diurutkan yang punya angka dulu, terbesar di atas; yang
-//     belum terukur di bawah, ditandai jelas — bukan diam-diam nol.
+//  1. POSTINGAN LEWAT SUPERAPP — video yang diunggah lewat aplikasi dan
+//     diberi kategori saat unggah. Angkanya LANGSUNG dari upload-post
+//     (post-analytics), per postingan per platform: suka, komentar,
+//     dibagikan, tayangan, impresi, jangkauan. Inilah yang dipakai untuk
+//     pengiklan: "20 video bulan ini dapat berapa" dijawab dari sini,
+//     lengkap dengan jam penarikan angkanya.
+//  2. LAPORAN ANGGOTA — semua video yang dilaporkan dengan kategori itu;
+//     angkanya dari sapuan TikHub (TikTok & Instagram saja).
+//
+// Angka yang tidak diberikan sumbernya ditulis "–", bukan 0: nol berarti
+// benar-benar nol, "–" berarti tidak diketahui. Keduanya tidak boleh
+// tampak sama.
 // ============================================================
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, ExternalLink, Layers, RefreshCw } from "lucide-react";
+import { AlertTriangle, ExternalLink, Layers, RefreshCw, Upload } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { EmptyState, GlassSkeleton } from "@/components/pri-ui";
 import { PlatformIcon } from "@/components/platform-icon";
-import { formatAngkaRingkas } from "@/lib/format";
+import { formatAngkaRingkas, jamWIB } from "@/lib/format";
 import { getInsightKategori, getKeywordWajib, type InsightKategori } from "@/services";
 import { cn } from "@/lib/utils";
 
-const TILE: { kunci: keyof InsightKategori["ringkasan"]["total"]; label: string }[] = [
+const TILE_LAPORAN: { kunci: keyof InsightKategori["ringkasan"]["total"]; label: string }[] = [
   { kunci: "tayangan", label: "Tayangan" },
   { kunci: "suka", label: "Suka" },
   { kunci: "komentar", label: "Komentar" },
   { kunci: "bagikan", label: "Dibagikan" },
+];
+
+const TILE_UP: { kunci: "suka" | "komentar" | "bagikan" | "tayangan" | "impresi" | "jangkauan"; label: string }[] = [
+  { kunci: "suka", label: "Suka" },
+  { kunci: "komentar", label: "Komentar" },
+  { kunci: "bagikan", label: "Dibagikan" },
+  { kunci: "tayangan", label: "Tayangan" },
+  { kunci: "impresi", label: "Impresi" },
+  { kunci: "jangkauan", label: "Jangkauan" },
 ];
 
 const LABEL_PLATFORM: Record<string, string> = {
@@ -41,6 +55,8 @@ const LABEL_PLATFORM: Record<string, string> = {
   bilibili: "Bilibili",
 };
 
+const angka = (v: number | null | undefined) => (v == null ? "–" : formatAngkaRingkas(v));
+
 export function PanelInsightKategori() {
   const [daftar, setDaftar] = useState<string[] | null>(null);
   const [pilih, setPilih] = useState("");
@@ -48,8 +64,6 @@ export function PanelInsightKategori() {
   const [galat, setGalat] = useState("");
   const [muat, setMuat] = useState(0);
 
-  // Daftar kategori — dimuat sekali. Kategori pertama langsung dipilih
-  // supaya panel tidak terbuka dalam keadaan kosong.
   useEffect(() => {
     let hidup = true;
     void (async () => {
@@ -103,7 +117,7 @@ export function PanelInsightKategori() {
         <div className="min-w-0 flex-1">
           <p className="font-heading text-[15px] font-bold text-teks-utama">Insight per Kategori</p>
           <p className="mt-0.5 text-[11px] text-teks-sekunder">
-            Seluruh video yang dilaporkan dengan kategori itu, beserta angkanya
+            Angka per postingan dari upload-post, plus laporan anggota
           </p>
         </div>
         <button
@@ -116,7 +130,6 @@ export function PanelInsightKategori() {
         </button>
       </div>
 
-      {/* Pemilih kategori */}
       {daftar === null ? (
         <GlassSkeleton className="mt-3 h-8 w-2/3 rounded-full" />
       ) : daftar.length === 0 ? (
@@ -151,30 +164,114 @@ export function PanelInsightKategori() {
           onAksi={() => setMuat((n) => n + 1)}
         />
       ) : !data || !r ? (
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {TILE.map((t) => (
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {TILE_UP.map((t) => (
             <GlassSkeleton key={t.kunci} className="h-[62px] rounded-xl" />
           ))}
         </div>
       ) : (
         <>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {TILE.map((t) => (
+          {/* ===== 1. Postingan lewat SuperApp (upload-post) ===== */}
+          <h3 className="mt-4 flex items-center gap-1.5 font-heading text-[13px] font-bold text-teks-utama">
+            <Upload className="h-3.5 w-3.5 text-sky-500" aria-hidden="true" />
+            Postingan lewat SuperApp
+            <span className="text-[11px] font-semibold text-teks-sekunder">
+              · {data.postingan.length} unggahan · {data.postingan_terukur} punya angka
+            </span>
+          </h3>
+          {!data.upload_post_siap && (
+            <p className="mt-1 text-[10.5px] text-amber-600">
+              Kunci upload-post belum terpasang di server ini — angka tidak bisa ditarik.
+            </p>
+          )}
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {TILE_UP.map((t) => (
               <div key={t.kunci} className="glass-soft rounded-xl p-2.5 text-center">
-                <p className="angka-tab font-heading text-[17px] leading-none font-extrabold text-teks-utama">
+                <p className="angka-tab font-heading text-[16px] leading-none font-extrabold text-teks-utama">
+                  {data.postingan_terukur > 0 ? angka(data.total_up[t.kunci]) : "–"}
+                </p>
+                <p className="mt-1 text-[10px] font-semibold text-teks-sekunder">{t.label}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10.5px] leading-relaxed text-teks-sekunder">
+            Total dari {data.total_up.platform_terukur} platform yang memberi angka. Angka disegarkan
+            bertahap dari upload-post; unggahan yang belum ditarik menyusul di pembukaan berikutnya.
+          </p>
+
+          {data.postingan.length === 0 ? (
+            <p className="mt-2 text-[11.5px] text-teks-sekunder">
+              Belum ada unggahan lewat SuperApp dengan kategori ini.
+            </p>
+          ) : (
+            <ul className="mt-2 flex flex-col gap-1.5">
+              {data.postingan.map((p) => (
+                <li key={p.id} className="glass-soft rounded-xl p-2.5">
+                  <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12px] font-bold text-teks-utama">{p.judul || "(tanpa judul)"}</p>
+                      <p className="mt-0.5 truncate text-[10.5px] text-teks-sekunder">
+                        {[p.pengunggah, jamWIB(p.dibuat_pada)].filter(Boolean).join(" · ")}
+                        {p.metrik_pada
+                          ? ` · angka ${jamWIB(p.metrik_pada)}`
+                          : p.terlacak
+                            ? " · angka belum ditarik"
+                            : " · tidak terlacak (tanpa request_id)"}
+                      </p>
+                    </div>
+                    <span className="angka-tab shrink-0 text-[11px] font-bold text-teks-utama">
+                      {p.total.platform_terukur > 0 ? `${angka(p.total.tayangan)} tayang` : "–"}
+                    </span>
+                  </div>
+                  {Object.keys(p.per_platform).length > 0 && (
+                    <div className="mt-1.5 flex flex-col gap-1">
+                      {Object.entries(p.per_platform).map(([pf, m]) => (
+                        <div key={pf} className="flex items-center gap-1.5 text-[10.5px] text-teks-sekunder">
+                          <PlatformIcon platform={pf} size={12} />
+                          <span className="w-16 shrink-0 font-semibold text-teks-utama">{LABEL_PLATFORM[pf] ?? pf}</span>
+                          <span className="angka-tab min-w-0 flex-1 truncate">
+                            {angka(m.suka)} suka · {angka(m.komentar)} komentar · {angka(m.bagikan)} dibagikan ·{" "}
+                            {angka(m.tayangan)} tayang · {angka(m.impresi)} impresi · {angka(m.jangkauan)} jangkauan
+                          </span>
+                          {m.post_url && (
+                            <a
+                              href={m.post_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={`Buka di ${LABEL_PLATFORM[pf] ?? pf}`}
+                              className="shrink-0 text-teks-utama"
+                            >
+                              <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* ===== 2. Laporan anggota (TikHub) ===== */}
+          <h3 className="mt-5 font-heading text-[13px] font-bold text-teks-utama">
+            Laporan anggota
+            <span className="ml-1 text-[11px] font-semibold text-teks-sekunder">
+              · {r.jumlah_video} video · {r.jumlah_terukur} punya angka
+            </span>
+          </h3>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {TILE_LAPORAN.map((t) => (
+              <div key={t.kunci} className="glass-soft rounded-xl p-2.5 text-center">
+                <p className="angka-tab font-heading text-[16px] leading-none font-extrabold text-teks-utama">
                   {r.jumlah_terukur > 0 ? formatAngkaRingkas(r.total[t.kunci]) : "–"}
                 </p>
                 <p className="mt-1 text-[10px] font-semibold text-teks-sekunder">{t.label}</p>
               </div>
             ))}
           </div>
-
-          <p className="mt-2.5 text-[11px] leading-relaxed text-teks-sekunder">
-            <b className="text-teks-utama">{r.jumlah_video}</b> video berkategori{" "}
-            <b className="text-teks-utama">{data.kategori}</b> ·{" "}
-            <b className="text-teks-utama">{r.jumlah_terukur}</b> punya angka.
-            {r.jumlah_video > r.jumlah_terukur &&
-              " Angka per video baru tersedia untuk TikTok & Instagram; sisanya dihitung sebagai laporan saja."}
+          <p className="mt-1.5 text-[10.5px] leading-relaxed text-teks-sekunder">
+            Angka per video dari sapuan TikHub — hanya TikTok & Instagram; video lain dihitung sebagai laporan saja.
           </p>
 
           {Object.keys(r.per_platform).length > 0 && (
@@ -195,12 +292,8 @@ export function PanelInsightKategori() {
             </div>
           )}
 
-          {data.video.length === 0 ? (
-            <p className="mt-3 text-[11.5px] text-teks-sekunder">
-              Belum ada video yang dilaporkan dengan kategori ini.
-            </p>
-          ) : (
-            <ul className="mt-3 flex flex-col gap-1.5">
+          {data.video.length > 0 && (
+            <ul className="mt-2 flex flex-col gap-1.5">
               {data.video.map((v) => (
                 <li key={v.kunci} className="glass-soft flex items-center gap-2.5 rounded-xl p-2.5">
                   {v.thumbnail_url ? (
@@ -228,10 +321,8 @@ export function PanelInsightKategori() {
                     </p>
                     {v.metrik ? (
                       <p className="angka-tab mt-0.5 text-[10.5px] text-teks-sekunder">
-                        {formatAngkaRingkas(v.metrik.tayangan)} tayangan ·{" "}
-                        {formatAngkaRingkas(v.metrik.suka)} suka ·{" "}
-                        {formatAngkaRingkas(v.metrik.komentar)} komentar ·{" "}
-                        {formatAngkaRingkas(v.metrik.bagikan)} dibagikan
+                        {formatAngkaRingkas(v.metrik.tayangan)} tayangan · {formatAngkaRingkas(v.metrik.suka)} suka ·{" "}
+                        {formatAngkaRingkas(v.metrik.komentar)} komentar · {formatAngkaRingkas(v.metrik.bagikan)} dibagikan
                       </p>
                     ) : (
                       <p className="mt-0.5 text-[10.5px] text-amber-600">belum ada angka</p>

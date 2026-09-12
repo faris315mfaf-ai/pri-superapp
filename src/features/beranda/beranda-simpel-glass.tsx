@@ -36,7 +36,6 @@ import { TombolLonceng } from "@/components/tombol-lonceng";
 import { IkonStreak } from "@/components/ikon-streak";
 import { FotoBulat } from "@/components/foto-bulat";
 import { IkonSinyal } from "@/components/ikon-sinyal";
-import { JamDigital } from "@/components/jam-digital";
 import { KartuUltah } from "@/components/ultah";
 import { CincinJuara } from "@/features/peringkat/cincin-mythic";
 import { KartuPengumumanTerbaru } from "@/features/konten/beranda-anggota";
@@ -272,7 +271,6 @@ export function BerandaSimpelGlass({
           <p className="mt-1 text-[11px] text-teks-sekunder">
             {tanggalIndonesia(`${tanggalWibPerangkat()}T00:00:00+07:00`)}
           </p>
-          <JamDigital className="mt-0.5 block font-heading text-lg font-extrabold tracking-tight text-teks-utama" />
           <LencanaOnline className="mt-1.5" />
         </div>
         <div className="flex max-w-[62%] shrink-0 flex-wrap items-center justify-end gap-2">

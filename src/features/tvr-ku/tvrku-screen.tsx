@@ -647,16 +647,21 @@ export function TvrKuScreen({
 
   // Penautan sosmed sungguhan (spek 1.17): 1 pengguna = 1 profil penyedia.
   const [sedangHubung, setSedangHubung] = useState(false);
-  async function hubungkanSosmed() {
+  async function hubungkanSosmed(platform?: string) {
     if (sedangHubung) return;
     setSedangHubung(true);
     try {
-      const url = await hubungkanSosmedTvr();
+      const url = await hubungkanSosmedTvr(platform);
       window.open(url, "_blank", "noopener,noreferrer");
+      // Facebook: upload-post hanya menerima HALAMAN (Page). Orang yang
+      // memilih profil pribadi akan tersangkut tanpa tahu sebabnya —
+      // jadi petunjuknya diberikan sebelum, bukan sesudah.
       toast(
         "info",
-        "Halaman login sosmed dibuka",
-        "Tautkan akunmu di tab baru, lalu kembali & tekan Segarkan.",
+        platform === "facebook" ? "Halaman penautan Facebook dibuka" : "Halaman login sosmed dibuka",
+        platform === "facebook"
+          ? "Pilih HALAMAN (Page) Facebook Anda, bukan profil pribadi. Belum punya Halaman? Buat dulu di Facebook, lalu ulangi."
+          : "Tautkan akunmu di tab baru, lalu kembali & tekan Segarkan.",
       );
     } catch (e) {
       toast("error", "Gagal membuka penautan", e instanceof Error ? e.message : "");
@@ -829,6 +834,16 @@ export function TvrKuScreen({
               <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
             )}
             Hubungkan Sosmed (Login)
+          </button>
+          {/* Facebook khusus (12 Sep 2026): langsung ke pemilihan Halaman. */}
+          <button
+            type="button"
+            disabled={sedangHubung}
+            onClick={() => void hubungkanSosmed("facebook")}
+            className="glass btn-tekan flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-bold text-teks-utama disabled:opacity-60"
+          >
+            <PlatformIcon platform="facebook" size={14} />
+            Facebook Page
           </button>
           <button
             type="button"

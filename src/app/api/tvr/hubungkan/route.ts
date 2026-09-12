@@ -73,7 +73,13 @@ export async function POST(request: Request) {
       profil = baris;
     }
 
-    return { url: await penyedia.tautanHubungkan(profil.profile_key as string) };
+    // 12 Sep 2026: tombol "Facebook Page" meminta halaman penautan yang
+    // HANYA Facebook, supaya langsung ke pemilihan Halaman — bukan
+    // tersangkut di profil pribadi yang tidak diterima upload-post.
+    const body = (await request.json().catch(() => ({}))) as { platform?: string };
+    const platform = String(body.platform ?? "").trim().toLowerCase();
+    const platforms = PLATFORM_TVR.has(platform) ? [platform] : undefined;
+    return { url: await penyedia.tautanHubungkan(profil.profile_key as string, platforms) };
   });
 }
 

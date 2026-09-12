@@ -27,8 +27,9 @@ export interface PenyediaSosmed {
   buatProfil(judul: string): Promise<ProfilPenyedia>;
   /** Hapus profil (akun tertautnya ikut lepas). */
   hapusProfil(profileKey: string): Promise<void>;
-  /** URL halaman penautan sosmed untuk profil itu (dibuka di tab baru). */
-  tautanHubungkan(profileKey: string): Promise<string>;
+  /** URL halaman penautan sosmed untuk profil itu (dibuka di tab baru).
+   *  `platforms` (opsional) membatasi halamannya ke platform tertentu. */
+  tautanHubungkan(profileKey: string, platforms?: string[]): Promise<string>;
   /** Akun sosmed yang sudah tertaut di profil itu. */
   akunTertaut(profileKey: string): Promise<AkunTertautPenyedia[]>;
 }
@@ -81,7 +82,7 @@ const uploadPost: PenyediaSosmed = {
     return { profileKey: username, refId: username };
   },
   hapusProfil: (profileKey) => hapusProfilUp(profileKey),
-  tautanHubungkan: (profileKey) => tautanHubungkanUp(profileKey),
+  tautanHubungkan: (profileKey, platforms) => tautanHubungkanUp(profileKey, platforms),
   async akunTertaut(profileKey) {
     const akun = await akunTertautUp(profileKey);
     return Object.entries(akun).map(([platform, username]) => ({ platform, username }));

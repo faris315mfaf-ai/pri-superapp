@@ -1116,7 +1116,44 @@ export async function getKenaikanNasional(rentang: string): Promise<KenaikanNasi
   return json as unknown as KenaikanNasional;
 }
 
+export type MetrikPostUp = {
+  suka: number | null;
+  komentar: number | null;
+  bagikan: number | null;
+  tayangan: number | null;
+  impresi: number | null;
+  jangkauan: number | null;
+  simpan: number | null;
+  post_url: string;
+};
+
+export type TotalMetrikPostUp = {
+  suka: number;
+  komentar: number;
+  bagikan: number;
+  tayangan: number;
+  impresi: number;
+  jangkauan: number;
+  simpan: number;
+  platform_terukur: number;
+};
+
 export type InsightKategori = {
+  /** Postingan lewat SuperApp — angka dari upload-post per platform. */
+  postingan: {
+    id: string;
+    judul: string;
+    pengunggah: string;
+    platforms: string[];
+    dibuat_pada: string;
+    metrik_pada: string | null;
+    terlacak: boolean;
+    per_platform: Record<string, MetrikPostUp>;
+    total: TotalMetrikPostUp;
+  }[];
+  postingan_terukur: number;
+  total_up: TotalMetrikPostUp;
+  upload_post_siap: boolean;
   kategori: string;
   ringkasan: {
     jumlah_video: number;
@@ -4887,10 +4924,11 @@ export async function hapusProfilAnalisis(id: string): Promise<void> {
 }
 
 /** TVR Saya: siapkan profilku + URL halaman penautan sosmed. */
-export async function hubungkanSosmedTvr(): Promise<string> {
+export async function hubungkanSosmedTvr(platform?: string): Promise<string> {
   const json = await fetchJson("/api/tvr/hubungkan", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(platform ? { platform } : {}),
   });
   return json.url as string;
 }

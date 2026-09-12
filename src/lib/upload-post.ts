@@ -31,6 +31,8 @@
 // sarankan regenerate di dashboard upload-post bila tersedia.
 // ============================================================
 
+import { uraiJawabanPostAnalytics, type MetrikPost } from "@/lib/metrik-post-up";
+
 const DASAR = "https://api.upload-post.com/api";
 
 /** Peta platform aplikasi ↔ upload-post ("twitter" kita = "x" mereka). */
@@ -180,11 +182,21 @@ export async function hapusProfilUp(username: string): Promise<void> {
 }
 
 /** URL halaman penautan akun (berlaku 48 jam) untuk satu profil. */
-export async function tautanHubungkanUp(username: string): Promise<string> {
+export async function tautanHubungkanUp(
+  username: string,
+  /**
+   * Batasi halaman penautan ke platform tertentu (nama versi aplikasi).
+   * Dipakai tombol "Facebook Page" (12 Sep 2026): halaman penautan yang
+   * memuat semua platform sering membuat orang tersangkut di profil
+   * Facebook pribadi, padahal upload-post hanya menerima HALAMAN (Page).
+   */
+  platformsApp?: string[],
+): Promise<string> {
+  const platforms = (platformsApp ?? []).map((p) => KE_UP[p] ?? p).filter(Boolean);
   const d = await panggil<{ access_url?: string }>("/uploadposts/users/generate-jwt", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username }),
+    body: JSON.stringify(platforms.length > 0 ? { username, platforms } : { username }),
   });
   if (!d.access_url) throw new Error("upload-post tidak memberi tautan penautan.");
   return d.access_url;
@@ -491,6 +503,26 @@ function urlDari(o: Record<string, unknown> | undefined): string {
  * { platforms: { x: {...}, instagram: {...} } } atau daftar — keduanya dibaca.
  * Platform yang belum punya URL tidak dimasukkan.
  */
+/**
+ * ANGKA per postingan dari upload-post (12 Sep 2026): suka, komentar,
+ * dibagikan, tayangan, impresi, jangkauan — per platform. Endpoint yang
+ * sama dengan analitikPostUp; bedanya, di sini angkanya ikut dibaca dan
+ * jawaban MENTAH ikut dikembalikan supaya bisa disimpan & diperiksa.
+ */
+export async function metrikPostUp(
+  requestId: string,
+  timeoutMs = 25000,
+): Promise<{ mentah: unknown; per_platform: Record<string, MetrikPost> }> {
+  const d = await panggil<unknown>(`/uploadposts/post-analytics/${encodeURIComponent(requestId)}`, {
+    method: "GET",
+    timeoutMs: Math.max(3000, timeoutMs),
+  });
+  return {
+    mentah: d,
+    per_platform: uraiJawabanPostAnalytics(d, (nama) => DARI_UP[nama] ?? nama),
+  };
+}
+
 export async function analitikPostUp(requestId: string, timeoutMs = 25000): Promise<Map<string, PostPastiUp>> {
   const d = await panggil<Record<string, unknown>>(`/uploadposts/post-analytics/${encodeURIComponent(requestId)}`, { method: "GET", timeoutMs: Math.max(3000, timeoutMs) });
   const hasil = new Map<string, PostPastiUp>();
