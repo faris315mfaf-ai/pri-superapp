@@ -162,6 +162,8 @@ export function InsightKategoriScreen({
   onKembali: () => void;
 }) {
   const [daftar, setDaftar] = useState<string[] | null>(null);
+  // Kategori SELESAI tetap tampil (datanya tetap dibutuhkan), hanya ditandai.
+  const [selesai, setSelesai] = useState<Set<string>>(() => new Set());
   const [pilih, setPilih] = useState(kategoriAwal ?? "");
   const [platform, setPlatform] = useState("semua");
   const [data, setData] = useState<InsightKategori | null>(null);
@@ -183,6 +185,7 @@ export function InsightKategoriScreen({
         if (!hidup) return;
         const nama = k.data.filter((x) => x.aktif).map((x) => x.keyword);
         setDaftar(nama);
+        setSelesai(new Set(k.data.filter((x) => x.selesai === true).map((x) => x.keyword)));
         setPilih((p) => p || nama[0] || "");
       } catch (e) {
         if (!hidup) return;
@@ -334,6 +337,9 @@ export function InsightKategoriScreen({
               )}
             >
               {k}
+              {selesai.has(k) && (
+                <span className="ml-1 text-[10px] font-semibold opacity-80">· selesai</span>
+              )}
             </button>
           ))}
         </div>

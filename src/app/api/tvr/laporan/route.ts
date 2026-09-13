@@ -10,6 +10,7 @@
 // Kewajiban DIBEBASKAN bila izin/sakit hari itu disetujui.
 import { after } from "next/server";
 import { userEfektifTvr } from "@/lib/sebagai";
+import { pastikanKategoriBolehDipakai } from "@/lib/kategori-status";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { adalahHR } from "@/lib/hr";
@@ -402,6 +403,8 @@ export async function POST(request: Request) {
       if (!kategori) {
         throw Object.assign(new Error("Pilih kategori videonya dulu."), { status: 400 });
       }
+      // Kategori SELESAI / nonaktif / tidak dikenal ditolak (13 Sep 2026).
+      await pastikanKategoriBolehDipakai(kategori);
       // Sudah tercatat (otomatis/ACC sebelumnya)? Jangan minta ACC ulang.
       const { data: sudahAda } = await db
         .from("laporan_video")

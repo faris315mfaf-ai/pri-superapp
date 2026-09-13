@@ -71,6 +71,9 @@ export function PanelInsightKategori({
   onBukaHalaman?: (kategori: string) => void;
 } = {}) {
   const [daftar, setDaftar] = useState<string[] | null>(null);
+  // Kategori yang sudah SELESAI tetap tampil di insight (datanya justru
+  // yang dibutuhkan setelah acara usai) — hanya diberi tanda.
+  const [selesai, setSelesai] = useState<Set<string>>(() => new Set());
   const [pilih, setPilih] = useState("");
   const [data, setData] = useState<InsightKategori | null>(null);
   const [galat, setGalat] = useState("");
@@ -112,6 +115,7 @@ export function PanelInsightKategori({
         if (!hidup) return;
         const nama = k.data.filter((x) => x.aktif).map((x) => x.keyword);
         setDaftar(nama);
+        setSelesai(new Set(k.data.filter((x) => x.selesai === true).map((x) => x.keyword)));
         setPilih((p) => p || nama[0] || "");
       } catch (e) {
         if (!hidup) return;
@@ -201,6 +205,9 @@ export function PanelInsightKategori({
               )}
             >
               {k}
+              {selesai.has(k) && (
+                <span className="ml-1 text-[9.5px] font-semibold opacity-80">· selesai</span>
+              )}
             </button>
           ))}
         </div>

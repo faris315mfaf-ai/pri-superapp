@@ -28,6 +28,7 @@ import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { beriKoin } from "@/lib/koin";
 import { selesaikanRequest } from "@/lib/tvr-request";
+import { pastikanKategoriBolehDipakai } from "@/lib/kategori-status";
 import { BATAS_BERKAS_CLOUDINARY_MB, BATAS_KOMPRES_MB, hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
 import { kompresLaluSalinKeR2 } from "@/lib/kompres-r2";
 import { gagalDariBalasan } from "@/lib/upload-post";
@@ -421,6 +422,10 @@ export async function POST(request: Request) {
       if (!kategori) {
         throw Object.assign(new Error("Pilih kategori videonya dulu."), { status: 400 });
       }
+      // Kategori yang sudah SELESAI / nonaktif / tidak dikenal ditolak di
+      // sini — dropdown di layar bisa basi (dibuka sebelum ditandai
+      // selesai), dan yang lolos akan tercatat ke acara yang sudah usai.
+      await pastikanKategoriBolehDipakai(kategori);
       const platforms = (body.platforms ?? [])
         .map((p) => String(p).toLowerCase())
         .filter((p) => (PLATFORM_KPI as readonly string[]).includes(p));

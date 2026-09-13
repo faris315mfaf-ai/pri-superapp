@@ -1076,9 +1076,20 @@ export type KeywordWajib = {
   id: string;
   keyword: string;
   aktif: boolean;
+  /**
+   * SELESAI (13 Sep 2026): acaranya sudah lewat. Tidak bisa dipilih lagi
+   * saat mengunggah/melaporkan, tapi datanya tetap ada & tampil di insight.
+   */
+  selesai?: boolean;
+  selesai_pada?: string | null;
   /** Kategori tetap dari kode (mis. "Video Sendiri"): tidak bisa diubah/dihapus. */
   tetap?: boolean;
 };
+
+/** Kategori yang masih boleh dipilih kreator: aktif dan belum selesai. */
+export function kategoriBolehDipilih(k: KeywordWajib): boolean {
+  return k.aktif && k.selesai !== true;
+}
 
 export async function getKeywordWajib(): Promise<{
   data: KeywordWajib[];
@@ -1336,6 +1347,15 @@ export async function toggleKeyword(id: string): Promise<void> {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ id }),
+  });
+}
+
+/** Tandai kategori SELESAI (selesai=true) atau buka lagi (selesai=false). */
+export async function selesaikanKeyword(id: string, selesai: boolean): Promise<void> {
+  await fetchJson("/api/tv/keyword", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id, aksi: selesai ? "selesai" : "buka" }),
   });
 }
 

@@ -26,6 +26,7 @@ import { adalahPalugodam } from "@/lib/struktur";
 import { ModalEditOtomatis } from "./modal-edit-otomatis";
 import {
   getKeywordWajib,
+  kategoriBolehDipilih,
   batalkanJadwalTvrku,
   getJadwalTvrku,
   getRiwayatTvrkuPost,
@@ -259,7 +260,7 @@ export function UnggahSosmedSaya() {
     void (async () => {
       try {
         const d = await getKeywordWajib();
-        if (hidup) setDaftarKategori(d.data.filter((k) => k.aktif).map((k) => k.keyword));
+        if (hidup) setDaftarKategori(d.data.filter(kategoriBolehDipilih).map((k) => k.keyword));
       } catch {
         // Gagal memuat kategori tidak boleh mematikan seluruh panel;
         // tombol kirim tetap menahan karena kategorinya masih kosong.

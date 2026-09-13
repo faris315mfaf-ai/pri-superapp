@@ -32,6 +32,7 @@ import { GlassSkeleton } from "@/components/pri-ui";
 import { toast } from "@/hooks/use-app-store";
 import {
   getKeywordWajib,
+  kategoriBolehDipilih,
   getVideoWajib,
   hapusVideoWajib,
   tambahKeyword,
@@ -73,7 +74,7 @@ export function PanelVideoWajib() {
           // Daftar kategori hanya dibutuhkan yang membuat perintah.
           try {
             const k = await getKeywordWajib();
-            if (hidup) setKategori(k.data.filter((x) => x.aktif));
+            if (hidup) setKategori(k.data.filter(kategoriBolehDipilih));
           } catch {
             // Kategori gagal dimuat bukan alasan panelnya ikut gagal.
           }
@@ -99,7 +100,7 @@ export function PanelVideoWajib() {
     try {
       await tambahKeyword(nama);
       const k = await getKeywordWajib();
-      setKategori(k.data.filter((x) => x.aktif));
+      setKategori(k.data.filter(kategoriBolehDipilih));
       setKat(nama);
       setKatBaru("");
       toast("sukses", `Kategori "${nama}" ditambahkan`);

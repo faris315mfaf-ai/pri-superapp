@@ -69,6 +69,7 @@ import {
   type UnggahanMenunggu,
   kirimLaporanBatch,
   getKeywordWajib,
+  kategoriBolehDipilih,
   hubungkanSosmedTvr,
   sinkronSosmedTvr,
   type AnggotaKendali,
@@ -336,7 +337,7 @@ function ModalLaporanBatch({
     void (async () => {
       try {
         const d = await getKeywordWajib();
-        if (hidup) setKeywords(d.data.filter((k) => k.aktif).map((k) => k.keyword));
+        if (hidup) setKeywords(d.data.filter(kategoriBolehDipilih).map((k) => k.keyword));
       } catch {
         // keyword opsional; kegagalan memuat tak menghalangi laporan.
       }
