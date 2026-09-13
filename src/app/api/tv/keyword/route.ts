@@ -12,7 +12,10 @@
 //                                 sudah lewat, kreator tidak bisa memilihnya
 //                                 lagi; datanya TETAP tersimpan & tampil.
 // PATCH  { id, aksi:"buka" }    → buka lagi kategori yang selesai
-// DELETE { id }                 → hapus (Pimred)
+// DELETE                        → DITOLAK (13 Sep 2026): kategori tidak
+//                                 pernah dihapus — laporan & unggahan lama
+//                                 merujuk namanya. Sembunyikan sementara
+//                                 (nonaktif) atau tandai selesai.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
@@ -189,14 +192,13 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   return bungkus(async () => {
     await pastikanPengelola(request);
-    const body = (await request.json().catch(() => ({}))) as { id?: string | number };
-    if (kategoriTetap.adalahId(String(body.id ?? ""))) {
-      throw Object.assign(new Error("Kategori tetap tidak bisa diubah atau dihapus."), { status: 400 });
-    }
-    const id = Number(body.id ?? 0);
-    if (!id) throw Object.assign(new Error("Keyword tidak disebutkan."), { status: 400 });
-    const { error } = await supabase().from("keyword_wajib").delete().eq("id", id);
-    if (error) throw new Error("Gagal menghapus keyword.");
-    return { sukses: true };
+    // Menghapus kategori membuat ribuan laporan lama kehilangan
+    // pengelompokannya tanpa jejak. Dua jalan yang tersedia sudah cukup:
+    // nonaktif (disembunyikan sementara, bisa dinyalakan lagi) dan
+    // selesai (acara usai, data tetap tampil).
+    throw Object.assign(
+      new Error("Kategori tidak bisa dihapus. Nonaktifkan untuk menyembunyikannya sementara, atau tandai selesai."),
+      { status: 405 },
+    );
   });
 }

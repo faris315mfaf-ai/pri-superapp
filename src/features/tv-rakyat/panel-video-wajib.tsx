@@ -16,16 +16,18 @@
 // benar diizinkan.
 // ============================================================
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   CalendarDays,
   Download,
+  FileVideo,
   Loader2,
   Plus,
   Power,
   Trash2,
   Video,
+  X,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
@@ -35,13 +37,20 @@ import {
   kategoriBolehDipilih,
   getVideoWajib,
   hapusVideoWajib,
+  siapkanUnggahVideoWajib,
   tambahKeyword,
   tambahVideoWajib,
   toggleVideoWajib,
+  type BerkasVideoWajib,
   type KeywordWajib,
   type VideoWajib,
 } from "@/services";
+import { unggahKeUrlTanda } from "@/lib/unggah-video-klien";
 import { cn } from "@/lib/utils";
+
+function mb(byte: number): string {
+  return `${Math.max(1, Math.round(byte / 1048576))} MB`;
+}
 
 export function PanelVideoWajib() {
   const [data, setData] = useState<VideoWajib[] | null>(null);
@@ -55,6 +64,11 @@ export function PanelVideoWajib() {
   const [judul, setJudul] = useState("");
   const [keterangan, setKeterangan] = useState("");
   const [link, setLink] = useState("");
+  // 13 Sep 2026: bahan video DIUNGGAH di sini (pengganti Request Video).
+  const [sumber, setSumber] = useState("");
+  const [berkas, setBerkas] = useState<File | null>(null);
+  const [progres, setProgres] = useState<number | null>(null);
+  const inputBerkas = useRef<HTMLInputElement>(null);
   const [kat, setKat] = useState("");
   const [batas, setBatas] = useState("");
   // Kategori baru diketik di sini juga — tanpa harus pergi ke seksi lain
@@ -118,16 +132,31 @@ export function PanelVideoWajib() {
     }
     setSibuk("baru");
     try {
+      // Berkas naik DULU, barisnya menyusul: perintah tanpa bahannya
+      // (karena unggahan putus di tengah) lebih menyesatkan daripada
+      // tidak ada perintah sama sekali.
+      let berkasSiap: BerkasVideoWajib | null = null;
+      if (berkas) {
+        setProgres(0);
+        const s = await siapkanUnggahVideoWajib(berkas.name, berkas.size);
+        await unggahKeUrlTanda(s.url, berkas, setProgres);
+        berkasSiap = { cara: s.cara, key: s.key, nama: berkas.name, ukuran: berkas.size };
+      }
       await tambahVideoWajib({
         judul: judul.trim(),
         keterangan: keterangan.trim(),
         link_doksli: link.trim(),
+        sumber_video: sumber.trim(),
         kategori: kat,
         batas_waktu: batas,
+        berkas: berkasSiap,
       });
       setJudul("");
       setKeterangan("");
       setLink("");
+      setSumber("");
+      setBerkas(null);
+      if (inputBerkas.current) inputBerkas.current.value = "";
       setKat("");
       setBatas("");
       setFormBuka(false);
@@ -137,6 +166,7 @@ export function PanelVideoWajib() {
       toast("error", "Gagal menyimpan", e instanceof Error ? e.message : "");
     } finally {
       setSibuk(null);
+      setProgres(null);
     }
   }
 
@@ -213,10 +243,59 @@ export function PanelVideoWajib() {
             rows={3}
             className="glass-input w-full rounded-xl px-3 py-2 text-sm text-teks-utama"
           />
+          {/* Bahan video: unggah berkasnya ke SuperApp — kreator mengunduh
+              dari sini, bukan dari tautan luar yang bisa mati. */}
+          <input
+            ref={inputBerkas}
+            type="file"
+            accept="video/mp4,video/quicktime,video/x-m4v,video/webm,.mp4,.mov,.m4v,.webm"
+            className="hidden"
+            aria-label="Pilih berkas video bahan"
+            onChange={(e) => setBerkas(e.target.files?.[0] ?? null)}
+          />
+          <div className="glass-input flex h-10 items-center gap-2 rounded-xl px-3 text-[12.5px]">
+            <FileVideo className="h-4 w-4 shrink-0 text-pri" aria-hidden="true" />
+            <button
+              type="button"
+              onClick={() => inputBerkas.current?.click()}
+              disabled={sibuk === "baru"}
+              className="min-w-0 flex-1 truncate text-left text-teks-utama disabled:opacity-60"
+            >
+              {berkas ? `${berkas.name} · ${mb(berkas.size)}` : "Unggah video bahan (opsional)"}
+            </button>
+            {berkas && sibuk !== "baru" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBerkas(null);
+                  if (inputBerkas.current) inputBerkas.current.value = "";
+                }}
+                aria-label="Batalkan berkas"
+                className="btn-tekan p-1 text-teks-sekunder"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+          {progres !== null && (
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-teks-sekunder/15" aria-hidden="true">
+              <div
+                className="h-full rounded-full bg-pri transition-[width] duration-200 ease-out"
+                style={{ width: `${progres}%` }}
+              />
+            </div>
+          )}
+          <input
+            value={sumber}
+            onChange={(e) => setSumber(e.target.value)}
+            placeholder="Sumber video (mis. Doksli DPP, Kompas TV)"
+            aria-label="Sumber video"
+            className="glass-input h-10 w-full rounded-xl px-3 text-sm text-teks-utama"
+          />
           <input
             value={link}
             onChange={(e) => setLink(e.target.value)}
-            placeholder="Link bahan/doksli (https://…)"
+            placeholder="Link bahan tambahan (https://…) — opsional"
             inputMode="url"
             className="glass-input h-10 w-full rounded-xl px-3 text-sm text-teks-utama"
           />
@@ -290,7 +369,9 @@ export function PanelVideoWajib() {
             ) : (
               <Plus className="h-4 w-4" aria-hidden="true" />
             )}
-            Terbitkan Perintah
+            {sibuk === "baru" && progres !== null && progres < 100
+              ? `Mengunggah ${progres}%…`
+              : "Terbitkan Perintah"}
           </button>
         </div>
       )}
@@ -319,6 +400,11 @@ export function PanelVideoWajib() {
                   {v.keterangan && (
                     <p className="mt-0.5 text-[11.5px] leading-relaxed text-teks-sekunder">
                       {v.keterangan}
+                    </p>
+                  )}
+                  {v.sumber_video && (
+                    <p className="mt-1 text-[11px] text-teks-sekunder">
+                      Sumber: <b className="font-semibold text-teks-utama">{v.sumber_video}</b>
                     </p>
                   )}
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -364,16 +450,32 @@ export function PanelVideoWajib() {
                   </div>
                 )}
               </div>
+              {v.berkas_url && (
+                <a
+                  href={v.berkas_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download={v.berkas_nama || undefined}
+                  className="btn-tekan mt-2 flex items-center justify-center gap-2 rounded-xl py-2 text-[12.5px] font-bold text-white"
+                  style={{ background: "linear-gradient(135deg, #10B981, #059669)" }}
+                >
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  Unduh Video Bahan{v.berkas_ukuran > 0 ? ` · ${mb(v.berkas_ukuran)}` : ""}
+                </a>
+              )}
               {v.link_doksli && (
                 <a
                   href={v.link_doksli}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="btn-tekan mt-2 flex items-center justify-center gap-2 rounded-xl py-2 text-[12.5px] font-bold text-white"
-                  style={{ background: "linear-gradient(135deg, #10B981, #059669)" }}
+                  className={cn(
+                    "btn-tekan mt-2 flex items-center justify-center gap-2 rounded-xl py-2 text-[12.5px] font-bold",
+                    v.berkas_url ? "glass text-teks-utama" : "text-white",
+                  )}
+                  style={v.berkas_url ? undefined : { background: "linear-gradient(135deg, #10B981, #059669)" }}
                 >
                   <Download className="h-4 w-4" aria-hidden="true" />
-                  Unduh Bahan Video
+                  {v.berkas_url ? "Link Bahan Tambahan" : "Unduh Bahan Video"}
                 </a>
               )}
             </li>

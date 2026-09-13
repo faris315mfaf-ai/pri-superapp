@@ -68,6 +68,26 @@ function kirimXhr(
   });
 }
 
+/**
+ * Kirim satu berkas ke URL PUT bertanda tangan (R2 / bucket) dengan
+ * kemajuan. Dipakai bahan Video Wajib (13 Sep 2026) — bahan mentah
+ * TIDAK dikompres: kreator butuh kualitas aslinya.
+ */
+export async function unggahKeUrlTanda(
+  url: string,
+  berkas: File,
+  onProgres?: (p: number) => void,
+): Promise<void> {
+  const xhr = await kirimXhr("PUT", url, berkas, { "content-type": berkas.type || "video/mp4" }, onProgres);
+  if (xhr.status < 200 || xhr.status >= 300) {
+    throw new Error(
+      xhr.status === 413
+        ? "Penyimpanan menolak: ukuran video melebihi batas server saat ini."
+        : `Penyimpanan menolak berkas ini (${xhr.status}). Coba lagi.`,
+    );
+  }
+}
+
 export async function unggahVideoTvrku(
   berkas: File,
   opsi: { onProgres?: (p: number) => void; onTahap?: (t: TahapUnggahVideo) => void } = {},

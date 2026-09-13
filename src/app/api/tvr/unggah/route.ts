@@ -27,7 +27,6 @@ import { unggahVideoUp, uploadPostSiap } from "@/lib/upload-post";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { beriKoin } from "@/lib/koin";
-import { selesaikanRequest } from "@/lib/tvr-request";
 import { pastikanKategoriBolehDipakai } from "@/lib/kategori-status";
 import { BATAS_BERKAS_CLOUDINARY_MB, BATAS_KOMPRES_MB, hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
 import { kompresLaluSalinKeR2 } from "@/lib/kompres-r2";
@@ -558,14 +557,10 @@ export async function POST(request: Request) {
         .select("id")
         .single();
       if (error) console.error("[tvrku/unggah] simpan riwayat:", error.message);
-      // 5 Sep 2026: bonus koin unggah video + tutup request TV Rakyat yang
-      // sedang dikerjakan anggota ini (bila ada).
+      // 5 Sep 2026: bonus koin unggah video.
       if (baris?.id) {
         const idPost = Number(baris.id);
-        after(async () => {
-          await beriKoin(Number(user.id), "upload_video", `tvrku-${idPost}`);
-          await selesaikanRequest(Number(user.id), { tvrku_post_id: idPost });
-        });
+        after(() => beriKoin(Number(user.id), "upload_video", `tvrku-${idPost}`));
       }
       // Kegagalan yang sudah pasti saat ini juga → kabari anggota beserta solusinya
       // (yang baru ketahuan belakangan dikabari oleh rekonsiliasi KPI).

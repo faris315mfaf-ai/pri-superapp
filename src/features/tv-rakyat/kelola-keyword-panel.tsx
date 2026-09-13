@@ -8,12 +8,11 @@
 // ============================================================
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, Plus, RotateCcw, Tag, Trash2 } from "lucide-react";
+import { CheckCircle2, Loader2, Plus, RotateCcw, Tag } from "lucide-react";
 import { GlassSkeleton } from "@/components/pri-ui";
 import { toast } from "@/hooks/use-app-store";
 import {
   getKeywordWajib,
-  hapusKeyword,
   selesaikanKeyword,
   tambahKeyword,
   toggleKeyword,
@@ -105,15 +104,6 @@ export function KelolaKeywordPanel() {
     }
   }
 
-  async function hapus(id: string) {
-    try {
-      await hapusKeyword(id);
-      setMuatUlang((n) => n + 1);
-    } catch (e) {
-      toast("error", "Gagal menghapus", e instanceof Error ? e.message : "");
-    }
-  }
-
   if (!data) return <GlassSkeleton className="h-32 rounded-xl" />;
 
   return (
@@ -122,8 +112,10 @@ export function KelolaKeywordPanel() {
         Kategori video yang dipilih anggota saat mengunggah atau melaporkan
         videonya (mis. <b>BPJS</b>). <b>Video Sendiri</b> selalu ada dan tidak bisa
         dihapus — untuk video buatan anggota di luar tema mana pun.
-        Acara yang sudah lewat tandai <b>Selesai</b>: anggota tidak bisa memilihnya
-        lagi, tapi seluruh datanya tetap tersimpan dan tetap tampil di insight.
+        Kategori tidak bisa dihapus: <b>Nonaktif</b> menyembunyikannya sementara
+        (bisa dinyalakan lagi); acara yang sudah lewat tandai <b>Selesai</b> —
+        anggota tidak bisa memilihnya lagi, tapi seluruh datanya tetap tersimpan
+        dan tetap tampil di insight.
       </p>
 
       {/* Tambah keyword */}
@@ -219,14 +211,6 @@ export function KelolaKeywordPanel() {
                       className="btn-tekan rounded-lg bg-pri/12 px-2.5 py-1 text-[10.5px] font-bold text-pri"
                     >
                       Selesai
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void hapus(k.id)}
-                      aria-label={`Hapus ${k.keyword}`}
-                      className="btn-tekan p-1.5 text-teks-sekunder/70 hover:text-gagal"
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </>
                 )}

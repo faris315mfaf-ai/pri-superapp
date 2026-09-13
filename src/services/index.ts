@@ -1292,11 +1292,33 @@ export type VideoWajib = {
   judul: string;
   keterangan: string;
   link_doksli: string;
+  /** Dari mana bahannya (mis. "Doksli DPP", "Kompas TV") — 13 Sep 2026. */
+  sumber_video: string;
   kategori: string;
   batas_waktu: string;
   aktif: boolean;
   dibuat_pada: string;
+  /** URL unduh bertanda tangan (berlaku sehari); kosong bila tanpa berkas. */
+  berkas_url: string;
+  berkas_nama: string;
+  berkas_ukuran: number;
 };
+
+/** Berkas bahan yang sudah diunggah, dilaporkan saat menerbitkan perintah. */
+export type BerkasVideoWajib = { cara: "r2" | "supabase"; key: string; nama: string; ukuran: number };
+
+/** Langkah 1 unggah bahan video wajib: URL PUT bertanda tangan. */
+export async function siapkanUnggahVideoWajib(
+  nama: string,
+  ukuran: number,
+): Promise<{ cara: "r2" | "supabase"; key: string; url: string }> {
+  const json = await fetchJson("/api/tv/video-wajib", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "siapkan", nama, ukuran }),
+  });
+  return json as { cara: "r2" | "supabase"; key: string; url: string };
+}
 
 export async function getVideoWajib(): Promise<{ data: VideoWajib[]; boleh: boolean }> {
   const json = await fetchJson("/api/tv/video-wajib", { headers: headerToken() });
@@ -1307,8 +1329,10 @@ export async function tambahVideoWajib(isi: {
   judul: string;
   keterangan?: string;
   link_doksli?: string;
+  sumber_video?: string;
   kategori?: string;
   batas_waktu?: string;
+  berkas?: BerkasVideoWajib | null;
 }): Promise<VideoWajib> {
   const json = await fetchJson("/api/tv/video-wajib", {
     method: "POST",
@@ -1356,14 +1380,6 @@ export async function selesaikanKeyword(id: string, selesai: boolean): Promise<v
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ id, aksi: selesai ? "selesai" : "buka" }),
-  });
-}
-
-export async function hapusKeyword(id: string): Promise<void> {
-  await fetchJson("/api/tv/keyword", {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ id }),
   });
 }
 
@@ -6073,36 +6089,9 @@ export async function keluarLobi(): Promise<void> {
   await fetchJson("/api/pet/pasar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ aksi: "lobi_keluar" }) }).catch(() => undefined);
 }
 
-// ---- REQUEST VIDEO TV Rakyat, KIRIM LAPORAN WA, KELOLA LAPORAN KPI, REALTIME (5 Sep 2026) ----
-export type RequestVideo = {
-  id: string;
-  judul: string;
-  keterangan: string;
-  video_url: string;
-  pembuat: string;
-  aktif: boolean;
-  dibuat_pada: string;
-  jumlah_dikerjakan: number;
-  jumlah_selesai: number;
-  status_saya: "dikerjakan" | "selesai" | null;
-  kerja: { user_id: string; nama: string; status: string; pada: string }[];
-};
-export type DataRequestVideo = {
-  pimred: boolean;
-  aktif_saya: { id: string; kerja_id: string; judul: string } | null;
-  request: RequestVideo[];
-  pesan?: string;
-  id?: string;
-};
-export async function getRequestVideo(): Promise<DataRequestVideo> {
-  return (await fetchJson("/api/tvr/request")) as DataRequestVideo;
-}
-export async function requestVideoAksi(aksi: string, data: Record<string, unknown> = {}): Promise<DataRequestVideo> {
-  return (await fetchJson("/api/tvr/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ aksi, ...data }) })) as DataRequestVideo;
-}
-export async function siapkanRequestVideo(nama: string, ukuran: number): Promise<{ r2_key: string; url: string }> {
-  return (await fetchJson("/api/tvr/request", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ aksi: "siapkan", nama, ukuran }) })) as { r2_key: string; url: string };
-}
+// ---- KIRIM LAPORAN WA, KELOLA LAPORAN KPI, REALTIME (5 Sep 2026) ----
+// (Request Video TV Rakyat dihapus 13 Sep 2026 — bahan video kini
+//  diunggah langsung di Video Wajib.)
 
 export type LaporanAnggotaBaris = { id: string; user_id: string; platform: string; url_video: string; keyword: string | null; sumber: string | null; dibuat_pada: string; tanggal_wib: string };
 export type AnggotaLaporan = { id: string; nama: string; avatar_url: string; divisi: string; jumlah: number };

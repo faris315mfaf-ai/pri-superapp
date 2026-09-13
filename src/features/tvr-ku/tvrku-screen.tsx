@@ -81,7 +81,6 @@ import { PanelTugasSaya } from "./tugas-saya";
 import { KirimVideoManual } from "./kirim-video-manual";
 import { UnggahSosmedSaya } from "./unggah-sosmed-saya";
 import { VideoSiapUnggah } from "./video-siap-unggah";
-import { RequestVideoPanel } from "./request-video-panel";
 import { RekapAnggotaPalugodam } from "./rekap-anggota-palugodam";
 import { SiaranSerentak } from "./siaran-serentak";
 import { StudioPalugodam } from "./studio-palugodam";
@@ -800,13 +799,6 @@ export function TvrKuScreen({
       <FadeInUp delay={0.02}>
         <div className="mt-1">
           <PanelVideoWajib />
-        </div>
-      </FadeInUp>
-        ) },
-        { id: "request-video", pin: true, segmen: "Request Video", judul: "Request Video TV Rakyat", ikon: Radio, render: () => (
-      <FadeInUp delay={0.09}>
-        <div className="mt-1">
-          <RequestVideoPanel />
         </div>
       </FadeInUp>
         ) },

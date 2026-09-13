@@ -19,7 +19,6 @@ import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { beriKoin } from "@/lib/koin";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { solusiGagal } from "@/lib/batas-caption";
-import { selesaikanRequest } from "@/lib/tvr-request";
 import {
   bannedAktifPerUser,
   hitungKpi,
@@ -448,10 +447,6 @@ export async function POST(request: Request) {
       const idBaru = Number(data.id);
       // Koin diberikan di sini — di tempat yang dulu dilakukan saat ACC.
       after(() => beriKoin(Number(user.id), "laporan_video", `laporan-${idBaru}`));
-      // 5 Sep 2026: laporan link ini menutup request TV Rakyat yang sedang
-      // dikerjakan. Rujukan pending sengaja tidak diisi — kolom itu
-      // menunjuk ke tabel pending yang tidak lagi dipakai jalur ini.
-      after(() => selesaikanRequest(Number(user.id), {}));
       return { ...data, id: String(data.id), status: "disetujui" };
     }
 
