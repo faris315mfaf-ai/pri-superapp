@@ -225,9 +225,26 @@ export async function GET(request: Request) {
           }>,
       20_000,
     );
+    // Link yang ditambahkan LANGSUNG ke kategori (batch, sql/50) ikut
+    // dihitung sebagai video kategori — tanpa pelapor.
+    const { data: linkKategori } = await db
+      .from("tvr_kategori_link")
+      .select("id, platform, url, dibuat_pada")
+      .ilike("kategori", pola)
+      .order("dibuat_pada", { ascending: false })
+      .limit(1000);
+    const tautanKategori: LaporanKategori[] = (linkKategori ?? []).map((l) => ({
+      id: `k${l.id}`,
+      user_id: "",
+      platform: String(l.platform ?? ""),
+      url_video: String(l.url ?? ""),
+      tanggal_wib: String(l.dibuat_pada ?? "").slice(0, 10),
+      asal: "kategori" as const,
+    }));
+
     const kodeSemua = [
       ...new Set(
-        laporan
+        [...laporan, ...tautanKategori]
           .map((l) => kodeMetrik(String(l.platform), String(l.url_video)))
           .filter((k): k is string => Boolean(k)),
       ),
@@ -236,7 +253,9 @@ export async function GET(request: Request) {
     for (const bagian of potong(kodeSemua, 200)) {
       const { data } = await db
         .from("tvr_video_metrik")
-        .select("kode, platform, judul, url, thumbnail_url, nama_akun, akun_username, waktu_posting, tayangan, suka, komentar, bagikan")
+        .select(
+          "kode, platform, judul, url, thumbnail_url, nama_akun, akun_username, waktu_posting, tayangan, suka, komentar, bagikan, favorit, durasi_detik, sumber, diperbarui_pada",
+        )
         .in("kode", bagian);
       for (const m of data ?? []) {
         metrik.set(String(m.kode), {
@@ -252,6 +271,10 @@ export async function GET(request: Request) {
           suka: Number(m.suka ?? 0),
           komentar: Number(m.komentar ?? 0),
           bagikan: Number(m.bagikan ?? 0),
+          favorit: Number(m.favorit ?? 0),
+          durasi_detik: m.durasi_detik == null ? null : Number(m.durasi_detik),
+          sumber: String(m.sumber ?? "tikhub"),
+          diperbarui_pada: m.diperbarui_pada ? String(m.diperbarui_pada) : null,
         });
       }
     }
@@ -333,7 +356,7 @@ export async function GET(request: Request) {
       url_video: String(l.url_video ?? ""),
       tanggal_wib: String(l.tanggal_wib ?? ""),
     }));
-    const { video, ringkasan } = susunInsightKategori(laporanBersih, metrik, nama);
+    const { video, ringkasan } = susunInsightKategori([...laporanBersih, ...tautanKategori], metrik, nama);
 
     const daftarPost = postingan.map((p) => {
       const perPlatform = (p.metrik ?? {}) as Record<string, MetrikPostTerurai>;

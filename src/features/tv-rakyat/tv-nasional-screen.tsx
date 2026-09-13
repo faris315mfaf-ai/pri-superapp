@@ -1,7 +1,7 @@
 "use client";
 
 // ============================================================
-// TvNasionalScreen (12 Sep 2026) — modul TV Rakyat Nasional.
+// TvNasionalScreen (12–13 Sep 2026) — modul TV Rakyat Nasional.
 //
 // HANYA DASHBOARD. Kendali produksi (video wajib, unggah, kategori,
 // pengaturan) tetap di modul TV Rakyat Official — tempat tim itu bekerja
@@ -9,16 +9,20 @@
 // orang tidak pernah yakin mana yang "resmi", dan setiap perbaikan
 // harus dikerjakan dua kali.
 //
-// Dua panel:
+// Tiga panel + satu halaman penuh:
 //   • KENAIKAN nasional — hari ini, kemarin, sepekan, sebulan.
-//   • Dashboard nasional yang sudah ada — total per sosial media dan
-//     peringkat anggota. Dipakai ulang apa adanya, bukan disalin.
+//   • Insight per kategori (ringkas) → tombol "Halaman penuh" membuka
+//     layar kartu embed per sosial media, tarik data Chocodata, dan
+//     tambah link batch.
+//   • Dashboard nasional yang sudah ada — dipakai ulang apa adanya.
 // ============================================================
 
+import { useState } from "react";
 import { Radio } from "lucide-react";
 import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { TvNasionalDashboard } from "@/features/dashboard/tv-nasional-dashboard";
+import { InsightKategoriScreen } from "./insight-kategori-screen";
 import { PanelInsightKategori } from "./panel-insight-kategori";
 import { PanelKenaikanNasional } from "./panel-kenaikan-nasional";
 
@@ -27,6 +31,19 @@ export function TvNasionalScreen({
 }: {
   onBukaNotifikasi?: () => void;
 }) {
+  // Halaman penuh insight kategori — menutupi layar ini, bukan layar
+  // terpisah di navigasi: kembalinya ke tempat yang sama persis.
+  const [halamanKategori, setHalamanKategori] = useState<string | null>(null);
+
+  if (halamanKategori !== null) {
+    return (
+      <InsightKategoriScreen
+        kategoriAwal={halamanKategori}
+        onKembali={() => setHalamanKategori(null)}
+      />
+    );
+  }
+
   return (
     <div className="kolom-aplikasi px-4 pb-32">
       <header className="flex items-start justify-between gap-3 pt-5">
@@ -61,7 +78,7 @@ export function TvNasionalScreen({
       </FadeInUp>
 
       <FadeInUp delay={0.06} className="mt-4">
-        <PanelInsightKategori />
+        <PanelInsightKategori onBukaHalaman={(k) => setHalamanKategori(k)} />
       </FadeInUp>
 
       <FadeInUp delay={0.09} className="mt-4">

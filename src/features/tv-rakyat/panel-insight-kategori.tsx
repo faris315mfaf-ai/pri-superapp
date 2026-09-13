@@ -64,7 +64,12 @@ const LABEL_PLATFORM: Record<string, string> = {
 
 const angka = (v: number | null | undefined) => (v == null ? "–" : formatAngkaRingkas(v));
 
-export function PanelInsightKategori() {
+export function PanelInsightKategori({
+  onBukaHalaman,
+}: {
+  /** Buka halaman penuh (kartu embed per sosmed) untuk kategori terpilih. */
+  onBukaHalaman?: (kategori: string) => void;
+} = {}) {
   const [daftar, setDaftar] = useState<string[] | null>(null);
   const [pilih, setPilih] = useState("");
   const [data, setData] = useState<InsightKategori | null>(null);
@@ -155,6 +160,17 @@ export function PanelInsightKategori() {
             Angka per postingan dari upload-post, plus laporan anggota
           </p>
         </div>
+        {onBukaHalaman && (
+          <button
+            type="button"
+            onClick={() => pilih && onBukaHalaman(pilih)}
+            disabled={!pilih}
+            className="btn-tekan flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-bold text-white disabled:opacity-60"
+            style={{ background: "linear-gradient(135deg, #0EA5E9, #0369A1)" }}
+          >
+            Halaman penuh
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setMuat((n) => n + 1)}

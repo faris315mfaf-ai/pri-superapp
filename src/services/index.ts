@@ -1164,8 +1164,10 @@ export type InsightKategori = {
   ringkasan: {
     jumlah_video: number;
     jumlah_terukur: number;
-    per_platform: Record<string, { video: number; terukur: number }>;
-    total: { tayangan: number; suka: number; komentar: number; bagikan: number };
+    per_platform: Record<string, { video: number; terukur: number; tayangan: number }>;
+    total: { tayangan: number; suka: number; komentar: number; bagikan: number; favorit: number };
+    /** Total tayangan ÷ video terukur — rata-rata penayangan per video. */
+    rata_tayangan: number | null;
   };
   video: {
     kunci: string;
@@ -1175,12 +1177,75 @@ export type InsightKategori = {
     thumbnail_url: string;
     akun: string;
     pelapor: string;
+    /** "laporan" (anggota) atau "kategori" (ditambahkan langsung). */
+    asal: "laporan" | "kategori";
     tanggal_wib: string;
     waktu_posting: string | null;
-    metrik: { tayangan: number; suka: number; komentar: number; bagikan: number } | null;
+    metrik: {
+      tayangan: number;
+      suka: number;
+      komentar: number;
+      bagikan: number;
+      favorit: number;
+      durasi_detik: number | null;
+      sumber: string;
+      diperbarui_pada: string | null;
+    } | null;
   }[];
   ditampilkan: number;
 };
+
+/** Tambah banyak link (satu per baris) ke satu kategori. */
+export async function tambahLinkKategori(
+  kategori: string,
+  teks: string,
+): Promise<{ kategori: string; ditambahkan: number; sudah_ada: number; ditolak: { baris: string; alasan: string }[] }> {
+  const json = await fetchJson("/api/tv-nasional/kategori-link", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ kategori, teks }),
+  });
+  return json as unknown as { kategori: string; ditambahkan: number; sudah_ada: number; ditolak: { baris: string; alasan: string }[] };
+}
+
+export async function getLinkKategori(
+  kategori: string,
+): Promise<{ id: string; platform: string; url: string; kode: string; dibuat_pada: string }[]> {
+  const json = await fetchJson(`/api/tv-nasional/kategori-link?kategori=${encodeURIComponent(kategori)}`, {
+    headers: headerToken(),
+  });
+  return (json.data ?? []) as { id: string; platform: string; url: string; kode: string; dibuat_pada: string }[];
+}
+
+export async function hapusLinkKategori(id: string): Promise<void> {
+  await fetchJson("/api/tv-nasional/kategori-link", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id }),
+  });
+}
+
+export type HasilTarikKategori = {
+  kategori: string;
+  total_video: number;
+  tidak_didukung: number;
+  dikerjakan: number;
+  terisi: number;
+  gagal: { url: string; alasan: string }[];
+  /** Masih perlu ditarik setelah panggilan ini; panggil lagi sampai 0. */
+  sisa: number;
+  lama_ms: number;
+};
+
+/** Satu potongan tarik data Chocodata untuk satu kategori. */
+export async function tarikDataKategori(kategori: string, paksa = false): Promise<HasilTarikKategori> {
+  const json = await fetchJson("/api/tv-nasional/kategori-tarik", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ kategori, paksa }),
+  });
+  return json as unknown as HasilTarikKategori;
+}
 
 export type HasilTarikMetrik = {
   post_id: number;
