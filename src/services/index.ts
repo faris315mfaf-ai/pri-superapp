@@ -1657,7 +1657,8 @@ export async function getPeriodeList(): Promise<string[]> {
 }
 
 // ------------------------------------------------------------
-// Absensi (kamera depan + GPS; data terhapus otomatis 7 hari)
+// Absensi — PENAMPIL data SADAR (14 Sep 2026). Absen dilakukan di
+// sadar-pri.id; SuperApp menarik & menampilkan. Tidak ada kirimAbsen.
 // ------------------------------------------------------------
 
 export type AbsensiBaris = {
@@ -1668,36 +1669,61 @@ export type AbsensiBaris = {
   jenis: "masuk" | "pulang";
   waktu: string;
   tanggal_wib: string;
-  lat: number;
-  lng: number;
+  /** Hanya baris lama era swafoto; baris SADAR: null. */
+  lat: number | null;
+  lng: number | null;
   akurasi_m: number | null;
   alamat: string | null;
   foto_url: string;
+  /** "sadar" (cermin dari SADAR) atau "superapp" (baris lama). */
+  sumber: "sadar" | "superapp";
+  kode_pegawai: string;
+  status_sadar: string;
+  tipe_sadar: string;
+  verifikasi_sadar: string;
+};
+
+/** Kehadiran hari ini menurut SADAR — termasuk sakit/izin tanpa jam masuk. */
+export type KehadiranSadar = {
+  user_id: string;
+  jenis: "hadir" | "sakit" | "izin" | "alfa";
+  status: string;
+  tipe: string;
+  verifikasi: string;
+  jam_masuk: string | null;
+  jam_pulang: string | null;
+};
+
+export type InfoSadar = {
+  siap: boolean;
+  url: string;
+  disinkron: boolean;
+  galat: string;
+  /** Orang di SADAR hari ini yang emailnya tidak cocok akun SuperApp (HR saja). */
+  tidak_cocok: number;
 };
 
 export async function getAbsensi(semua = false): Promise<{
   data: AbsensiBaris[];
   tanggal_hari_ini: string;
+  kehadiran_hari_ini: KehadiranSadar[];
+  sadar: InfoSadar;
 }> {
   const json = await fetchJson(`/api/absensi${semua ? "?semua=1" : ""}`, {
     headers: headerToken(),
   });
-  return json as { data: AbsensiBaris[]; tanggal_hari_ini: string };
-}
-
-export async function kirimAbsen(data: {
-  jenis: "masuk" | "pulang";
-  lat: number;
-  lng: number;
-  akurasi?: number;
-  fotoDataUrl: string;
-}): Promise<AbsensiBaris> {
-  const json = await fetchJson("/api/absensi", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify(data),
-  });
-  return json.data as AbsensiBaris;
+  return {
+    data: (json.data ?? []) as AbsensiBaris[],
+    tanggal_hari_ini: String(json.tanggal_hari_ini ?? ""),
+    kehadiran_hari_ini: (json.kehadiran_hari_ini ?? []) as KehadiranSadar[],
+    sadar: {
+      siap: json.sadar?.siap === true,
+      url: String(json.sadar?.url ?? "https://sadar-pri.id"),
+      disinkron: json.sadar?.disinkron === true,
+      galat: String(json.sadar?.galat ?? ""),
+      tidak_cocok: Number(json.sadar?.tidak_cocok ?? 0) || 0,
+    },
+  };
 }
 
 // ------------------------------------------------------------

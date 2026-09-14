@@ -13,6 +13,7 @@
 // 2 perak, 3 perunggu di layar. Akses: siapa pun yang punya >= 1
 // sub-dashboard (atau HR/master/super) — konsisten dengan tab Dashboard.
 import { semuaBarisData } from "@/lib/semua-baris";
+import { sinkronAbsensiRentang } from "@/lib/absensi-sadar";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
@@ -80,6 +81,8 @@ export async function GET(request: Request) {
     const hariIni = tanggalWibSekarang();
     const awal = tanggalMundur(hariIni, hari - 1);
     const db = supabase();
+    // SADAR (14 Sep 2026): pastikan hari-hari terakhir sudah ditarik.
+    await sinkronAbsensiRentang(awal, hariIni, 4);
 
     // Jendela QC 17:00-16:59 (31 Agu 2026) + label lama utk riwayat.
     const daftarPeriode: string[] = [];

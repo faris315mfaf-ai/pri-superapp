@@ -13,6 +13,7 @@ import { userDariToken } from "@/lib/sesi";
 import { bolehDashboard } from "@/lib/dashboard-akses";
 import { adalahHR } from "@/lib/hr";
 import { tepatWaktu } from "@/lib/absensi-status";
+import { sinkronAbsensiRentang } from "@/lib/absensi-sadar";
 import { labelPeriodeUntukTanggal, periodeSaatIni } from "@/lib/periode-qc";
 
 import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
@@ -57,6 +58,9 @@ export async function GET(request: Request) {
 
     // ---------- Tren ABSENSI ----------
     if (jenis === "absensi") {
+      // SADAR (14 Sep 2026): lengkapi tanggal yang belum ditarik (maks 4
+      // per panggilan; cron 5 menit melengkapi sisanya).
+      await sinkronAbsensiRentang(awal, hariIni, 4);
       const [{ data: baris }, { data: izin }, { count: totalAnggota }] = await Promise.all([
         db
           .from("absensi")

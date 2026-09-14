@@ -127,9 +127,13 @@ fi
 echo "== 4/6 Membangun =="
 cd "$APP"
 docker compose build aplikasi
+# Penjadwal ikut dibangun ulang (14 Sep 2026): daftar tugas berkalanya
+# (jalankan.sh) dipanggang ke dalam image, jadi tugas baru — mis.
+# sinkron-absensi SADAR — tidak akan jalan bila image-nya tidak dibuat ulang.
+docker compose build jadwal
 
 echo "== 5/6 Mengganti yang sedang jalan =="
-docker compose up -d --force-recreate aplikasi
+docker compose up -d --force-recreate aplikasi jadwal
 echo -n "  menunggu aplikasi menjawab"
 SIAP=0
 for i in $(seq 1 40); do

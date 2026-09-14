@@ -34,6 +34,7 @@ import {
   buatRekapAbsensiPdf,
 } from "@/services";
 import { formatAngkaRingkas, jamWIB } from "@/lib/format";
+import { labelSadar } from "@/lib/sadar";
 import { cn } from "@/lib/utils";
 
 const PLATFORM_PILIHAN = [
@@ -167,9 +168,9 @@ type StatusHarian = {
   status: "masuk" | "izin" | "sakit" | "alfa" | "menunggu izin";
   jamMasuk: string | null;
   videoHariIni: number;
-  /** Bukti absen masuk hari ini (signed URL 1 jam) — utk modal detail */
-  fotoMasuk: string;
-  alamatMasuk: string;
+  /** Status/tipe/verifikasi menurut SADAR (14 Sep 2026) — utk modal detail */
+  statusSadar: string;
+  verifikasiSadar: string;
 };
 
 export function SeksiAbsensiHarian() {
@@ -202,13 +203,12 @@ export function SeksiAbsensiHarian() {
 
         const hariIni = absensi.tanggal_hari_ini;
         const masukPer = new Map<string, string>();
-        const buktiPer = new Map<string, { foto: string; alamat: string }>();
         for (const a of absensi.data) {
-          if (a.tanggal_wib === hariIni && a.jenis === "masuk") {
-            masukPer.set(a.user_id, a.waktu);
-            buktiPer.set(a.user_id, { foto: a.foto_url ?? "", alamat: a.alamat ?? "" });
-          }
+          if (a.tanggal_wib === hariIni && a.jenis === "masuk") masukPer.set(a.user_id, a.waktu);
         }
+        // SADAR (14 Sep 2026): sakit/izin yang dicatat di SADAR tidak punya
+        // jam masuk — tanpa peta ini mereka tampak "alfa".
+        const sadarPer = new Map(absensi.kehadiran_hari_ini.map((k) => [k.user_id, k]));
         const izinPer = new Map(
           izin.filter((i) => i.tanggal_wib === hariIni).map((i) => [i.user_id, i]),
         );
@@ -225,13 +225,16 @@ export function SeksiAbsensiHarian() {
             .map((u) => {
               const jamMasuk = masukPer.get(u.id) ?? null;
               const iz = izinPer.get(u.id);
+              const sd = sadarPer.get(u.id);
               const status: StatusHarian["status"] = jamMasuk
                 ? "masuk"
-                : iz?.status === "disetujui"
-                  ? (iz.jenis as "izin" | "sakit")
-                  : iz?.status === "menunggu"
-                    ? "menunggu izin"
-                    : "alfa";
+                : sd?.jenis === "sakit" || sd?.jenis === "izin"
+                  ? sd.jenis
+                  : iz?.status === "disetujui"
+                    ? (iz.jenis as "izin" | "sakit")
+                    : iz?.status === "menunggu"
+                      ? "menunggu izin"
+                      : "alfa";
               return {
                 id: u.id,
                 nama: u.nama,
@@ -239,8 +242,8 @@ export function SeksiAbsensiHarian() {
                 status,
                 jamMasuk,
                 videoHariIni: videoPer.get(u.id) ?? 0,
-                fotoMasuk: buktiPer.get(u.id)?.foto ?? "",
-                alamatMasuk: buktiPer.get(u.id)?.alamat ?? "",
+                statusSadar: sd ? labelSadar(sd.status, sd.tipe) : "",
+                verifikasiSadar: sd?.verifikasi ? labelSadar(sd.verifikasi, "") : "",
               };
             }),
         );
@@ -420,7 +423,7 @@ export function SeksiAbsensiHarian() {
 
 // ------------------------------------------------------------
 // ModalDetailAbsen — klik profil di daftar absensi (spek 1.15):
-// foto bukti absen, alamat, status telat, dan pintu setel KPI video.
+// status telat, catatan SADAR, dan pintu setel KPI video.
 // ------------------------------------------------------------
 
 function ModalDetailAbsen({
@@ -478,23 +481,22 @@ function ModalDetailAbsen({
           </p>
         )}
 
-        {/* Foto bukti absen (spek 1.15: klik profil -> lihat bukti) */}
-        {data.fotoMasuk ? (
-          <img
-            src={data.fotoMasuk}
-            alt={`Foto bukti absen ${data.nama}`}
-            className="mt-3 max-h-72 w-full rounded-xl object-contain"
-          />
-        ) : (
-          <p className="mt-3 rounded-xl bg-teks-sekunder/10 px-3 py-4 text-center text-[11.5px] text-teks-sekunder">
-            {data.jamMasuk ? "Foto bukti tidak tersedia." : "Belum ada foto — orang ini belum absen."}
-          </p>
-        )}
-        {data.alamatMasuk && (
-          <p className="mt-2 text-[11px] leading-relaxed text-teks-sekunder">
-            📍 {data.alamatMasuk}
-          </p>
-        )}
+        {/* Catatan SADAR (14 Sep 2026) — pengganti foto bukti: absen kini
+            dilakukan & diverifikasi di aplikasi SADAR. */}
+        <div className="mt-3 rounded-xl bg-teks-sekunder/10 px-3 py-3 text-[11.5px] text-teks-sekunder">
+          {data.statusSadar ? (
+            <>
+              <p>
+                Status SADAR: <b className="font-semibold text-teks-utama">{data.statusSadar}</b>
+              </p>
+              {data.verifikasiSadar && <p className="mt-0.5">Verifikasi: {data.verifikasiSadar}</p>}
+            </>
+          ) : (
+            <p className="text-center">
+              {data.jamMasuk ? "Absen lama (sebelum integrasi SADAR)." : "Belum tercatat di SADAR hari ini."}
+            </p>
+          )}
+        </div>
 
         {/* KPI video pindah ke sini (dulu di baris daftar) */}
         <button

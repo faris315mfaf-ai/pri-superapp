@@ -8,6 +8,7 @@
 // apa pun oleh master — sama dengan siapa yang melihat dashboard.
 import { waktuAmbilKomentarTerakhir } from "@/lib/kepatuhan";
 import { semuaBarisData } from "@/lib/semua-baris";
+import { sinkronAbsensiHariIni } from "@/lib/absensi-sadar";
 import { supabase } from "@/lib/supabase";
 import { bungkus, pastikanSukses } from "@/lib/api-helper";
 import { adalahPengurus, userDariToken } from "@/lib/sesi";
@@ -61,6 +62,8 @@ export async function GET(request: Request) {
     const db = supabase();
     const periode = periodeSaatIni();
     const tanggal = tanggalWibSekarang();
+    // SADAR (14 Sep 2026): angka kehadiran = cermin SADAR (dikekang 60 dtk).
+    await sinkronAbsensiHariIni();
 
     const [rKepatuhan, rAbsen, rRoster, rKerja, rVideo, bannedPer] = await Promise.all([
       // 1. Kepatuhan komen periode QC berjalan — view per kader

@@ -31,6 +31,7 @@ import {
   type Zona,
 } from "@/services";
 import { statusTelat, tepatWaktu } from "@/lib/absensi-status";
+import { labelSadar } from "@/lib/sadar";
 import { jamWIB } from "@/lib/format";
 import { DIVISI } from "@/lib/struktur";
 import { cn } from "@/lib/utils";
@@ -100,6 +101,8 @@ export function AbsensiHariIniScreen({
             .filter((i) => i.tanggal_wib === hariIni && i.status === "disetujui")
             .map((i) => [i.user_id, i.jenis] as [string, string]),
         );
+        // SADAR (14 Sep 2026): sakit/izin dicatat di SADAR tanpa jam masuk.
+        const sadarPer = new Map(absen.kehadiran_hari_ini.map((k) => [k.user_id, k]));
         const namaZonaPer = new Map<string, string>(
           zonaSemua.map((z) => [z.id, z.nama] as [string, string]),
         );
@@ -109,7 +112,8 @@ export function AbsensiHariIniScreen({
             .filter((u: PenggunaAdmin) => u.status === "aktif")
             .map((u) => {
               const waktu = masukPer.get(u.id) ?? null;
-              const jenisIzin = izinPer.get(u.id);
+              const sd = sadarPer.get(u.id);
+              const jenisIzin = sd?.jenis === "sakit" || sd?.jenis === "izin" ? sd.jenis : izinPer.get(u.id);
               const status: StatusAbsen = waktu
                 ? "hadir"
                 : jenisIzin === "sakit"
@@ -130,7 +134,9 @@ export function AbsensiHariIniScreen({
                   ? statusTelat(waktu)
                   : status === "alfa"
                     ? "Tanpa keterangan"
-                    : `${status === "sakit" ? "Sakit" : "Izin"} (disetujui)`,
+                    : sd
+                      ? `${labelSadar(sd.status, sd.tipe)} (SADAR)`
+                      : `${status === "sakit" ? "Sakit" : "Izin"} (disetujui)`,
               };
             }),
         );

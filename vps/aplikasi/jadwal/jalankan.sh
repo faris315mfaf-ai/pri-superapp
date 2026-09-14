@@ -11,6 +11,9 @@ cat > /etc/crontabs/root <<'JADWAL'
 */5  * * * * /panggil.sh sinkron-komen
 */10 * * * * /panggil.sh pantau-server
 */15 * * * * /panggil.sh rekonsiliasi-kpi
+# Absensi dari SADAR (14 Sep 2026): SuperApp hanya menampilkan; datanya
+# ditarik dari sadar-pri.id tiap 5 menit (hari ini + kemarin + susulan).
+*/5  * * * * /panggil.sh sinkron-absensi
 # Rekaman angka nasional TV Rakyat (12 Sep 2026). Sekali sehari sudah
 # cukup: yang dibutuhkan panel kenaikan adalah SATU titik pembanding
 # per hari. Pukul 23.50 WIB = 16.50 UTC — hampir tutup hari, jadi

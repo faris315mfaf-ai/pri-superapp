@@ -15,6 +15,8 @@ import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { kirimWa, kirimWaDenganLampiran, nomorWaSah, normalkanNomorWa } from "@/lib/fonnte";
 import { statusTelat } from "@/lib/absensi-status";
+import { sinkronAbsensiRentang } from "@/lib/absensi-sadar";
+import { jenisKehadiran, labelSadar } from "@/lib/sadar";
 
 export const dynamic = "force-dynamic";
 
@@ -70,9 +72,13 @@ export async function POST(request: Request) {
       throw Object.assign(new Error("Nomor WhatsApp tujuan tidak benar."), { status: 400 });
     }
 
-    // --- Data absensi rentang itu (+ perizinan sebagai keterangan) ---
+    // SADAR (14 Sep 2026): pastikan tanggal-tanggal rentang ini sudah
+    // ditarik (yang sudah segar dilewati; sisanya dilengkapi cron).
+    await sinkronAbsensiRentang(dari, sampai, 20);
+
+    // --- Data absensi rentang itu (+ perizinan & catatan SADAR) ---
     const db = supabase();
-    const [{ data: baris }, { data: izin }] = await Promise.all([
+    const [{ data: baris }, { data: izin }, { data: sadar }] = await Promise.all([
       db
         .from("absensi")
         .select("user_id, jenis, waktu, tanggal_wib, app_user(nama)")
@@ -88,6 +94,14 @@ export async function POST(request: Request) {
         .lte("tanggal_wib", sampai)
         .eq("status", "disetujui")
         .limit(2000),
+      // Sakit/izin menurut SADAR — tidak punya baris masuk/pulang.
+      db
+        .from("absensi_sadar")
+        .select("user_id, tanggal, hadir, status, tipe, jam_masuk, app_user(nama)")
+        .gte("tanggal", dari)
+        .lte("tanggal", sampai)
+        .not("user_id", "is", null)
+        .limit(5000),
     ]);
 
     type BarisAbsen = {
@@ -123,6 +137,29 @@ export async function POST(request: Request) {
         ada.pulang = jamWibDari(b.waktu);
       }
       peta.set(kunci, ada);
+    }
+    type BarisSadar = {
+      user_id: number;
+      tanggal: string;
+      hadir: boolean;
+      status: string;
+      tipe: string;
+      jam_masuk: string | null;
+      app_user?: { nama?: string } | { nama?: string }[];
+    };
+    for (const s of (sadar ?? []) as unknown as BarisSadar[]) {
+      const jenis = jenisKehadiran({ hadir: s.hadir, status: s.status, tipe: s.tipe, jamMasuk: s.jam_masuk ?? "" });
+      if (jenis !== "sakit" && jenis !== "izin") continue;
+      const kunci = `${s.tanggal}|${s.user_id}`;
+      if (!peta.has(kunci)) {
+        peta.set(kunci, {
+          tanggal: s.tanggal,
+          nama: nama({ ...s, jenis: "", waktu: "", tanggal_wib: s.tanggal }),
+          masuk: "-",
+          pulang: "-",
+          status: `${labelSadar(s.status, s.tipe)} (SADAR)`,
+        });
+      }
     }
     for (const i of (izin ?? []) as unknown as BarisAbsen[]) {
       const kunci = `${i.tanggal_wib}|${i.user_id}`;

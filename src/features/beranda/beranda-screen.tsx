@@ -295,7 +295,7 @@ export function BerandaScreen({
                                 ? "Memuat…"
                                 : absen.masuk
                                   ? `Masuk ${jamWIB(absen.masuk)}${absen.pulang ? ` · Pulang ${jamWIB(absen.pulang)}` : " · belum absen pulang"}`
-                                  : "Belum absen masuk — ketuk untuk absen"}
+                                  : "Belum tercatat di SADAR — absen di aplikasi SADAR"}
                             </p>
                           </div>
                           {absen?.masuk ? (
