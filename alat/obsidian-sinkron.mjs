@@ -150,11 +150,15 @@ function daftarSql() {
   }
 }
 
+// Stempel memakai waktu COMMIT TERAKHIR, bukan "sekarang". Kalau memakai
+// jam sekarang, kelima catatan ini ditulis ulang setiap kali skrip jalan
+// walau isinya sama — dan Obsidian menandainya "berubah" terus-menerus.
+// Waktu commit berubah tepat ketika ada yang benar-benar berubah.
 function stempel() {
-  const kini = new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta", dateStyle: "long", timeStyle: "short" });
   const sha = git("rev-parse", "--short", "HEAD") || "?";
   const cabang = git("rev-parse", "--abbrev-ref", "HEAD") || "?";
-  return `_Disinkron otomatis ${kini} WIB · versi kode \`${sha}\` (${cabang})._`;
+  const tanggal = git("log", "-1", "--date=format-local:%d %B %Y pukul %H.%M", "--pretty=%ad");
+  return `_Versi kode \`${sha}\` (${cabang})${tanggal ? ` — ${tanggal}` : ""}._`;
 }
 
 const BLOK = {
