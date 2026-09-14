@@ -54,6 +54,10 @@ Awalnya seluruhnya di n8n. Sekarang **terbelah dua**:
 Lihat [[AUTOMATION QC]]. Kunci rahasia **tidak ditulis di vault** —
 sempat bocor dan sudah dirotasi 14 Sep 2026.
 
+## Catatan ingatan Claude untuk proyek ini
+<!-- otomatis:ingatan:qc-sosmed -->
+<!-- /otomatis -->
+
 ## Terkait
 - [[AUTOMATION QC]] · [[PRI SuperApp]] · [[Supabase]] · [[Proyek Claude Code]]
 

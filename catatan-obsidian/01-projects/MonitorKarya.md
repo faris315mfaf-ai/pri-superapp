@@ -42,6 +42,10 @@ sendiri.
 - Terminal di komputer ini **PowerShell tanpa bash**. Perintah untuk
   dijalankan sendiri harus bentuk PowerShell, bukan bash.
 
+## Catatan ingatan Claude untuk proyek ini
+<!-- otomatis:ingatan:monitorkarya -->
+<!-- /otomatis -->
+
 ## Terkait
 - [[Proyek Claude Code]] · [[Supabase]]
 

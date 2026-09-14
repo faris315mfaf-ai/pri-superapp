@@ -261,16 +261,19 @@ const BLOK = {
   api: () => daftarApi(),
   modul: () => daftarModul(),
   changelog: () => daftarChangelog(),
+  ingatan: (awalan) => daftarIngatan(awalan),
   diperbarui: () => stempel(),
 };
 
 function isiBlokOtomatis(teks) {
+  // Bentuk blok: <!-- otomatis:nama --> atau <!-- otomatis:nama:argumen -->
   return teks.replace(
-    /<!--\s*otomatis:([a-z]+)\s*-->[\s\S]*?<!--\s*\/otomatis\s*-->/g,
-    (cocok, nama) => {
+    /<!--\s*otomatis:([a-z]+)(?::([a-z0-9-]+))?\s*-->[\s\S]*?<!--\s*\/otomatis\s*-->/g,
+    (cocok, nama, argumen) => {
       const buat = BLOK[nama];
       if (!buat) return cocok;
-      return `<!-- otomatis:${nama} -->\n${buat()}\n<!-- /otomatis -->`;
+      const kepala = argumen ? `otomatis:${nama}:${argumen}` : `otomatis:${nama}`;
+      return `<!-- ${kepala} -->\n${buat(argumen)}\n<!-- /otomatis -->`;
     },
   );
 }
@@ -298,31 +301,141 @@ function salinCatatan(vault) {
 
 // ---------------------------------------------------------------
 // 2. Arsip ingatan Claude Code
+//
+// Ingatan saling menaut sesamanya sejak awal, tapi TERPUTUS dari catatan
+// proyek — dua pulau di grafik Obsidian. Di sini jembatannya dipasang dua
+// arah: tiap arsip menaut ke catatan proyeknya, dan catatan proyek punya
+// blok <!-- otomatis:ingatan:<awalan> --> yang mendaftar ingatannya.
 // ---------------------------------------------------------------
-const KEPALA_ARSIP = [
-  "> [!info] Arsip otomatis",
-  "> Berkas ini SALINAN ingatan Claude Code. Menyuntingnya di sini tidak",
-  "> mengubah ingatan Claude — dan akan tertimpa pada sinkron berikutnya.",
-  "",
-  "",
-].join("\n");
+const INDEKS_INGATAN = "Indeks Ingatan";
 
-function salinIngatan(vault) {
+/** Catatan proyek yang memayungi sebuah ingatan. */
+function proyekUntukIngatan(folder, slug) {
+  if (/monitor-karya/.test(folder)) return "MonitorKarya";
+  if (slug.startsWith("pri-superapp-")) return "PRI SuperApp";
+  if (/(^|-)(qc|n8n|scraper|apify)(-|$)/.test(slug)) return "QC Sosmed - Catatan Teknis";
+  return "Proyek Claude Code";
+}
+
+/** Baca frontmatter ringkas sebuah berkas ingatan. */
+function bacaIngatan(jalur) {
+  const isi = fs.readFileSync(jalur, "utf8");
+  const ambil = (kunci) => {
+    const m = new RegExp(`^${kunci}:\\s*"?(.+?)"?\\s*$`, "m").exec(isi.slice(0, 1200));
+    return m ? m[1].trim() : "";
+  };
+  return { isi, deskripsi: ambil("description") };
+}
+
+/** Kumpulkan semua ingatan (dipakai indeks & blok otomatis). */
+function kumpulkanIngatan() {
   const akarProyek = path.join(os.homedir(), ".claude", "projects");
-  if (!fs.existsSync(akarProyek)) return;
+  const hasil = [];
+  if (!fs.existsSync(akarProyek)) return hasil;
   for (const proyek of fs.readdirSync(akarProyek)) {
     const dirMemori = path.join(akarProyek, proyek, "memory");
     if (!fs.existsSync(dirMemori)) continue;
-    const berkas = fs.readdirSync(dirMemori).filter((f) => f.endsWith(".md"));
-    if (berkas.length === 0) continue;
-    // Nama folder proyek dipendekkan: "c--Users-Admin-nama-project-kamu" →
+    // Nama folder dipendekkan: "c--Users-Admin-nama-project-kamu" →
     // "nama-project-kamu". Yang panjang itu penyandian jalur, bukan nama.
-    const nama = proyek.replace(/^[a-zA-Z]--(Users-[^-]+-)?/, "") || proyek;
-    for (const f of berkas) {
-      const isi = sensor(fs.readFileSync(path.join(dirMemori, f), "utf8"));
-      tulisBilaBeda(path.join(vault, ARSIP, nama, f), KEPALA_ARSIP + isi);
+    const folder = proyek.replace(/^[a-zA-Z]--(Users-[^-]+-)?/, "") || proyek;
+    for (const f of fs.readdirSync(dirMemori).filter((n) => n.endsWith(".md"))) {
+      const slug = f.replace(/\.md$/, "");
+      if (slug === "MEMORY") continue; // indeks bawaan Claude, digantikan indeks sendiri
+      const { isi, deskripsi } = bacaIngatan(path.join(dirMemori, f));
+      hasil.push({ folder, slug, deskripsi, isi, proyek: proyekUntukIngatan(folder, slug) });
     }
   }
+  return hasil.sort((a, b) => a.slug.localeCompare(b.slug));
+}
+
+let cacheIngatan = null;
+function ingatan() {
+  if (!cacheIngatan) cacheIngatan = kumpulkanIngatan();
+  return cacheIngatan;
+}
+
+/** Daftar ingatan untuk sebuah catatan proyek (dipakai blok otomatis). */
+function daftarIngatan(awalan) {
+  const peta = {
+    "pri-superapp": "PRI SuperApp",
+    "qc-sosmed": "QC Sosmed - Catatan Teknis",
+    monitorkarya: "MonitorKarya",
+    umum: "Proyek Claude Code",
+  };
+  const proyek = peta[awalan ?? ""] ?? null;
+  const daftar = ingatan().filter((m) => (proyek ? m.proyek === proyek : true));
+  if (daftar.length === 0) return "_Belum ada catatan ingatan untuk ini._";
+  const baris = daftar.map((m) => `- [[${m.slug}]]${m.deskripsi ? ` — ${m.deskripsi}` : ""}`);
+  return [`**${daftar.length} catatan ingatan.** Indeks lengkap: [[${INDEKS_INGATAN}]].`, "", ...baris].join("\n");
+}
+
+function kepalaArsip(m) {
+  return [
+    `> [!info] Arsip otomatis — bagian dari [[${m.proyek}]]`,
+    "> Berkas ini SALINAN ingatan Claude Code. Menyuntingnya di sini tidak",
+    "> mengubah ingatan Claude — dan akan tertimpa pada sinkron berikutnya.",
+    `> Indeks: [[${INDEKS_INGATAN}]] · Peta proyek: [[Proyek Claude Code]]`,
+    "",
+    "",
+  ].join("\n");
+}
+
+/** Indeks seluruh ingatan, dikelompokkan per proyek. */
+function tulisIndeksIngatan(vault) {
+  const semua = ingatan();
+  if (semua.length === 0) return;
+  const perProyek = new Map();
+  for (const m of semua) {
+    if (!perProyek.has(m.proyek)) perProyek.set(m.proyek, []);
+    perProyek.get(m.proyek).push(m);
+  }
+  const baris = [
+    "---",
+    "type: resource",
+    "status: active",
+    "area: PRI",
+    "tags: [claude, ingatan, indeks]",
+    "---",
+    "",
+    "<!-- Catatan ini DIBUAT MESIN oleh alat/obsidian-sinkron.mjs. Jangan disunting. -->",
+    "",
+    `Seluruh **${semua.length}** catatan ingatan Claude Code di komputer ini,`,
+    "dikelompokkan menurut proyek yang memayunginya. Isinya catatan kerja",
+    "Claude — sering teknis dan padat singkatan; catatan yang sudah dirapikan",
+    "untuk dibaca manusia ada di [[Proyek Claude Code]].",
+    "",
+  ];
+  for (const [proyek, daftar] of Array.from(perProyek).sort((a, b) => b[1].length - a[1].length)) {
+    baris.push(`## [[${proyek}]] — ${daftar.length} catatan`, "");
+    for (const m of daftar) {
+      baris.push(`- [[${m.slug}]]${m.deskripsi ? ` — ${m.deskripsi}` : ""}`);
+    }
+    baris.push("");
+  }
+  tulisBilaBeda(path.join(vault, ARSIP, `${INDEKS_INGATAN}.md`), baris.join("\n"));
+}
+
+function salinIngatan(vault) {
+  const folderTerpakai = new Set();
+  for (const m of ingatan()) {
+    folderTerpakai.add(m.folder);
+    tulisBilaBeda(path.join(vault, ARSIP, m.folder, `${m.slug}.md`), kepalaArsip(m) + sensor(m.isi));
+  }
+  // Salinan MEMORY.md dari versi skrip terdahulu: indeks bawaan Claude yang
+  // kini digantikan "Indeks Ingatan". Dibuang supaya tidak ada dua daftar
+  // yang saling bertentangan — hanya berkas yang DIBUAT skrip ini sendiri.
+  for (const folder of folderTerpakai) {
+    const usang = path.join(vault, ARSIP, folder, "MEMORY.md");
+    try {
+      if (fs.existsSync(usang)) {
+        fs.unlinkSync(usang);
+        jumlahTulis += 1;
+      }
+    } catch {
+      // Gagal menghapus bukan alasan menggagalkan sinkron.
+    }
+  }
+  tulisIndeksIngatan(vault);
 }
 
 // ---------------------------------------------------------------

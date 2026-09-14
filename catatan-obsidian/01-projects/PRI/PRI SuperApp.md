@@ -58,6 +58,13 @@ yang selama ini berjalan sendiri-sendiri.
 <!-- otomatis:modul -->
 <!-- /otomatis -->
 
+## Catatan ingatan Claude untuk proyek ini
+Catatan kerja mentah — teknis dan padat. Yang sudah dirapikan ada di daftar
+"Peta catatan" di atas.
+
+<!-- otomatis:ingatan:pri-superapp -->
+<!-- /otomatis -->
+
 ## Terkait
 - [[Proyek Claude Code]] — peta semua proyek di komputer ini
 - [[AUTOMATION QC]] · [[QC Sosmed - Catatan Teknis]]

@@ -8,7 +8,9 @@ tags: [project, claude, indeks]
 <!-- Catatan ini DISINKRON OTOMATIS dari repo pri-superapp.
      Sunting di sini akan tertimpa — ubah di catatan-obsidian/ pada repo. -->
 
-Peta semua proyek yang pernah dikerjakan lewat Claude Code di komputer ini.
+Peta semua proyek yang pernah dikerjakan lewat [[Claude]] Code di komputer
+ini — kodenya dibuka di [[VS CODE]], disimpan di GitHub, dijalankan di
+[[VPS Hostinger]].
 
 ## Daftar proyek
 
@@ -57,6 +59,12 @@ yang mungkin sudah usang.
 **AI & video** — [[DeepSeek]] · [[Creatomate]] · [[Luxand]]
 
 **Komunikasi & lainnya** — [[SADAR]] · [[Fonnte & Convia]] · [[n8n]]
+
+## Aturan kerja & jebakan lintas proyek
+Ingatan yang tidak terikat satu proyek — cara kerja, jebakan alat, keamanan.
+
+<!-- otomatis:ingatan:umum -->
+<!-- /otomatis -->
 
 ## Di mana catatan lain
 - Catatan proyek tulisan sendiri: [[AUTOMATION QC]], [[AUTOMATION TV RAKYAT]],
