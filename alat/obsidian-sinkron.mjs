@@ -161,9 +161,106 @@ function stempel() {
   return `_Versi kode \`${sha}\` (${cabang})${tanggal ? ` — ${tanggal}` : ""}._`;
 }
 
+/** Nama env yang DIBACA kode. Nama saja — nilainya tidak pernah disentuh. */
+function daftarEnv() {
+  const nama = new Set();
+  const antre = [path.join(AKAR, "src")];
+  const tambahan = [path.join(AKAR, "next.config.ts")];
+  while (antre.length > 0) {
+    const dir = antre.pop();
+    let isi;
+    try {
+      isi = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of isi) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) antre.push(p);
+      else if (/\.(ts|tsx|mjs|js)$/.test(e.name)) tambahan.push(p);
+    }
+  }
+  for (const berkas of tambahan) {
+    try {
+      for (const m of fs.readFileSync(berkas, "utf8").matchAll(/process\.env\.([A-Z0-9_]+)/g)) nama.add(m[1]);
+    } catch {
+      // Berkas hilang saat dibaca — lewati.
+    }
+  }
+  const abai = new Set(["NODE_ENV", "VERCEL"]);
+  const daftar = Array.from(nama).filter((n) => !abai.has(n)).sort();
+  if (daftar.length === 0) return "_Tidak terbaca._";
+  return daftar.map((n) => `- \`${n}\``).join("\n");
+}
+
+/** Rute API, dikelompokkan per folder teratas. */
+function daftarApi() {
+  const akarApi = path.join(AKAR, "src", "app", "api");
+  const rute = [];
+  const antre = [""];
+  while (antre.length > 0) {
+    const rel = antre.pop();
+    let isi;
+    try {
+      isi = fs.readdirSync(path.join(akarApi, rel), { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const e of isi) {
+      if (e.isDirectory()) antre.push(path.join(rel, e.name));
+      else if (e.name === "route.ts") rute.push(rel.replace(/\\/g, "/") || "(akar)");
+    }
+  }
+  if (rute.length === 0) return "_Tidak terbaca._";
+  const kelompok = new Map();
+  for (const r of rute.sort()) {
+    const atas = r.split("/")[0];
+    if (!kelompok.has(atas)) kelompok.set(atas, []);
+    kelompok.get(atas).push(r);
+  }
+  const baris = [`**${rute.length} rute.**`, ""];
+  for (const [atas, daftar] of Array.from(kelompok).sort()) {
+    baris.push(`- **/api/${atas}** — ${daftar.map((d) => `\`${d.slice(atas.length + 1) || "/"}\``).join(" · ")}`);
+  }
+  return baris.join("\n");
+}
+
+/** Modul layar (src/features). */
+function daftarModul() {
+  try {
+    return fs
+      .readdirSync(path.join(AKAR, "src", "features"), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => {
+        const n = fs.readdirSync(path.join(AKAR, "src", "features", e.name)).filter((f) => /\.tsx?$/.test(f)).length;
+        return `- \`${e.name}\` — ${n} berkas`;
+      })
+      .join("\n");
+  } catch {
+    return "_Tidak terbaca._";
+  }
+}
+
+/** Riwayat versi aplikasi dari src/lib/changelog.ts (yang dibaca pengguna). */
+function daftarChangelog() {
+  try {
+    const isi = fs.readFileSync(path.join(AKAR, "src", "lib", "changelog.ts"), "utf8");
+    const entri = [];
+    const pola = /versi:\s*"([^"]+)"[\s\S]{0,200}?tanggal:\s*"([^"]+)"[\s\S]{0,200}?judul:\s*"([^"]+)"/g;
+    for (const m of isi.matchAll(pola)) entri.push(`- **${m[1]}** · ${m[2]} — ${m[3]}`);
+    return entri.length > 0 ? entri.join("\n") : "_Tidak terbaca._";
+  } catch {
+    return "_Tidak terbaca._";
+  }
+}
+
 const BLOK = {
   riwayat: () => daftarRiwayat(),
   sql: () => daftarSql(),
+  env: () => daftarEnv(),
+  api: () => daftarApi(),
+  modul: () => daftarModul(),
+  changelog: () => daftarChangelog(),
   diperbarui: () => stempel(),
 };
 
