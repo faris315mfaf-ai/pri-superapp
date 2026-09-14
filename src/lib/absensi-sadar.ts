@@ -12,7 +12,7 @@
 // diberikan — saat baris MASUK seseorang pertama kali muncul di sini.
 // ============================================================
 import { supabase } from "@/lib/supabase";
-import { denganCache } from "@/lib/cache-bersama";
+import { denganCache, hapusCacheBersama } from "@/lib/cache-bersama";
 import { ambilAbsensiSadar, sadarSiap, waktuWibKeIso, type BarisSadar } from "@/lib/sadar";
 import { beriKoin } from "@/lib/koin";
 import { catatTugasStreak } from "@/lib/streak";
@@ -31,8 +31,41 @@ export type HasilSinkron = {
   galat?: string;
 };
 
+/**
+ * Kode pegawai SADAR → id akun SuperApp. Pemetaan MANUAL (sadar_pemetaan,
+ * dipasang HR dari Database Anggota) menang; sisanya lewat email.
+ */
+async function petaKodeKeUser(baris: Pick<BarisSadar, "kode" | "email">[]): Promise<Map<string, number>> {
+  const hasil = new Map<string, number>();
+  const kode = Array.from(new Set(baris.map((b) => b.kode).filter(Boolean)));
+  if (kode.length === 0) return hasil;
+  const db = supabase();
+  const dipetakan = new Set<number>();
+  for (let i = 0; i < kode.length; i += 200) {
+    const { data, error } = await db
+      .from("sadar_pemetaan")
+      .select("user_id, kode_pegawai")
+      .in("kode_pegawai", kode.slice(i, i + 200));
+    // Tabel belum ada (sql/54 belum dijalankan) → cukup lewat email.
+    if (error) break;
+    for (const m of data ?? []) {
+      hasil.set(String(m.kode_pegawai), Number(m.user_id));
+      dipetakan.add(Number(m.user_id));
+    }
+  }
+  const sisa = baris.filter((b) => !hasil.has(b.kode));
+  const lewatEmail = await petaEmailKeUser(sisa.map((b) => b.email));
+  for (const b of sisa) {
+    const uid = lewatEmail.get(b.email);
+    // Akun yang sudah dipetakan manual ke kode lain tidak boleh diambil
+    // lagi lewat email — satu akun satu pegawai.
+    if (uid !== undefined && !dipetakan.has(uid)) hasil.set(b.kode, uid);
+  }
+  return hasil;
+}
+
 /** Cocokkan email SADAR → id akun SuperApp (huruf kecil). */
-async function petaEmailKeUser(email: string[]): Promise<Map<string, number>> {
+export async function petaEmailKeUser(email: string[]): Promise<Map<string, number>> {
   const peta = new Map<string, number>();
   const unik = Array.from(new Set(email.filter(Boolean)));
   if (unik.length === 0) return peta;
@@ -71,7 +104,7 @@ export async function sinkronAbsensiTanggal(tanggal: string): Promise<HasilSinkr
   hasil.jumlah = baris.length;
 
   const db = supabase();
-  const peta = await petaEmailKeUser(baris.map((b) => b.email));
+  const peta = await petaKodeKeUser(baris);
 
   // 1. Cermin mentah — semua orang, cocok atau belum.
   if (baris.length > 0) {
@@ -81,7 +114,7 @@ export async function sinkronAbsensiTanggal(tanggal: string): Promise<HasilSinkr
         tanggal: b.tanggal,
         email: b.email,
         nama: b.nama,
-        user_id: peta.get(b.email) ?? null,
+        user_id: peta.get(b.kode) ?? null,
         hadir: b.hadir,
         status: b.status,
         tipe: b.tipe,
@@ -100,7 +133,7 @@ export async function sinkronAbsensiTanggal(tanggal: string): Promise<HasilSinkr
   }
 
   // 2. Cermin ke `absensi` (masuk/pulang) untuk yang cocok.
-  const cocok = baris.filter((b) => peta.has(b.email));
+  const cocok = baris.filter((b) => peta.has(b.kode));
   hasil.cocok = cocok.length;
   hasil.tidak_cocok = baris.length - cocok.length;
 
@@ -125,7 +158,7 @@ export async function sinkronAbsensiTanggal(tanggal: string): Promise<HasilSinkr
   const cermin: BarisAbsensi[] = [];
   const baruMasuk: number[] = [];
   for (const b of cocok) {
-    const uid = peta.get(b.email)!;
+    const uid = peta.get(b.kode)!;
     const dasar = {
       user_id: uid,
       tanggal_wib: b.tanggal,
@@ -209,6 +242,59 @@ export async function sinkronAbsensiRentang(dari: string, sampai: string, maks =
     hasil.push(await sinkronAbsensiTanggal(tanggal));
   }
   return hasil;
+}
+
+/**
+ * Setelah HR memasang/melepas pemetaan: tulis ulang user_id pada cermin
+ * mentah kode itu (60 hari) dan cermin `absensi`-nya — tanpa menunggu
+ * tarikan berikutnya. userId null = lepas: baris absensi dari kode itu
+ * dibuang, mentahnya tetap (bukan milik siapa-siapa lagi).
+ */
+export async function cerminkanUlangKode(kode: string, userId: number | null): Promise<void> {
+  const db = supabase();
+  const awal = new Date(Date.now() - 60 * 86_400_000).toISOString().slice(0, 10);
+  const { data: mentah } = await db
+    .from("absensi_sadar")
+    .select("tanggal, status, tipe, verifikasi, jam_masuk, jam_pulang, user_id")
+    .eq("kode_pegawai", kode)
+    .gte("tanggal", awal);
+  // Baris absensi milik pemilik lama (bila kode ini pindah orang) dibuang.
+  await db.from("absensi").delete().eq("sumber", "sadar").eq("kode_pegawai", kode);
+  await db.from("absensi_sadar").update({ user_id: userId }).eq("kode_pegawai", kode);
+  if (userId !== null && mentah && mentah.length > 0) {
+    const cermin: {
+      user_id: number;
+      tanggal_wib: string;
+      sumber: "sadar";
+      kode_pegawai: string;
+      status_sadar: string;
+      tipe_sadar: string;
+      verifikasi_sadar: string;
+      jenis: "masuk" | "pulang";
+      waktu: string;
+    }[] = [];
+    for (const m of mentah) {
+      const dasar = {
+        user_id: userId,
+        tanggal_wib: String(m.tanggal),
+        sumber: "sadar" as const,
+        kode_pegawai: kode,
+        status_sadar: String(m.status ?? ""),
+        tipe_sadar: String(m.tipe ?? ""),
+        verifikasi_sadar: String(m.verifikasi ?? ""),
+      };
+      const masuk = m.jam_masuk ? waktuWibKeIso(String(m.tanggal), String(m.jam_masuk)) : null;
+      const pulang = m.jam_pulang ? waktuWibKeIso(String(m.tanggal), String(m.jam_pulang)) : null;
+      if (masuk) cermin.push({ ...dasar, jenis: "masuk" as const, waktu: masuk });
+      if (pulang) cermin.push({ ...dasar, jenis: "pulang" as const, waktu: pulang });
+    }
+    if (cermin.length > 0) {
+      const { error } = await db.from("absensi").upsert(cermin, { onConflict: "user_id,tanggal_wib,jenis" });
+      if (error) console.error("[absensi-sadar] cermin ulang:", error.message);
+    }
+  }
+  // Tarikan hari ini berikutnya harus menghitung ulang, bukan memakai cache.
+  await hapusCacheBersama(`sadar:sinkron:${tanggalWibHariIni()}`);
 }
 
 /** Berapa orang SADAR pada tanggal itu yang belum punya akun SuperApp. */

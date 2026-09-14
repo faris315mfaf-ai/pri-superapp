@@ -1703,6 +1703,95 @@ export type InfoSadar = {
   tidak_cocok: number;
 };
 
+/** Satu baris SADAR apa adanya (tampilan "Absensi SADAR"). */
+export type BarisSadarTampil = {
+  kode: string;
+  tanggal: string;
+  nama: string;
+  email: string;
+  /** null = pegawai SADAR yang belum cocok dengan akun SuperApp mana pun. */
+  user_id: string | null;
+  nama_akun: string;
+  avatar_url: string;
+  jenis: "hadir" | "sakit" | "izin" | "alfa";
+  status: string;
+  tipe: string;
+  label: string;
+  verifikasi: string;
+  label_verifikasi: string;
+  jam_masuk: string;
+  jam_pulang: string;
+};
+export type RingkasanSadar = {
+  jumlah: number;
+  cocok: number;
+  tidak_cocok: number;
+  hadir: number;
+  sakit: number;
+  izin: number;
+  alfa: number;
+};
+
+export async function getAbsensiSadar(tanggal: string, semua = false): Promise<{
+  tanggal: string;
+  data: BarisSadarTampil[];
+  ringkasan: RingkasanSadar;
+  galat: string;
+}> {
+  const q = new URLSearchParams({ tanggal });
+  if (semua) q.set("semua", "1");
+  const json = await fetchJson(`/api/absensi/sadar?${q.toString()}`, { headers: headerToken() });
+  return {
+    tanggal: String(json.tanggal ?? tanggal),
+    data: (json.data ?? []) as BarisSadarTampil[],
+    ringkasan: json.ringkasan as RingkasanSadar,
+    galat: String(json.galat ?? ""),
+  };
+}
+
+// Pencocokan akun ↔ pegawai SADAR (HR Center → Database Anggota)
+export type AnggotaPencocokan = {
+  id: string;
+  nama: string;
+  email: string;
+  username: string;
+  divisi: string;
+  avatar_url: string;
+  cara: "email" | "manual" | "belum";
+  kode_sadar: string;
+  nama_sadar: string;
+  email_sadar: string;
+};
+export type DataPencocokanSadar = {
+  anggota: AnggotaPencocokan[];
+  sadar_belum: { kode: string; nama: string; email: string; terakhir: string }[];
+  ringkasan: {
+    anggota: number;
+    cocok_email: number;
+    cocok_manual: number;
+    belum: number;
+    sadar_belum: number;
+    pegawai_sadar: number;
+  };
+};
+export async function getPencocokanSadar(): Promise<DataPencocokanSadar> {
+  return (await fetchJson("/api/absensi/sadar/pencocokan", { headers: headerToken() })) as DataPencocokanSadar;
+}
+export async function pasangkanSadar(user_id: string, kode_pegawai: string): Promise<{ nama_sadar: string }> {
+  return (await fetchJson("/api/absensi/sadar/pencocokan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ user_id, kode_pegawai }),
+  })) as { nama_sadar: string };
+}
+export async function lepasPemetaanSadar(user_id: string): Promise<void> {
+  await fetchJson("/api/absensi/sadar/pencocokan", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ user_id }),
+  });
+}
+
 export async function getAbsensi(semua = false): Promise<{
   data: AbsensiBaris[];
   tanggal_hari_ini: string;

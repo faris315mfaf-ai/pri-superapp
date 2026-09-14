@@ -58,6 +58,15 @@ import { labelSadar } from "@/lib/sadar";
 import { statusTelat, tepatWaktu } from "@/lib/absensi-status";
 import type { KomponenIkon, User } from "@/types";
 import { cn } from "@/lib/utils";
+import { PanelAbsensiSadar } from "./panel-absensi-sadar";
+
+/**
+ * Dua tampilan (14 Sep 2026):
+ *  • "SuperApp" — cerminan yang sudah dicocokkan ke akun (jam masuk/pulang,
+ *    tepat waktu/telat, izin SuperApp) — bentuk yang dipakai beranda & KPI.
+ *  • "SADAR"    — seluruh isinya apa adanya dari SADAR, per tanggal.
+ */
+type TampilanAbsensi = "superapp" | "sadar";
 
 const PERAN_HR = new Set(["admin_hr", "super_admin", "master"]);
 
@@ -305,6 +314,7 @@ type AbsensiScreenProps = {
 
 export function AbsensiScreen({ user, onKembali }: AbsensiScreenProps) {
   const bolehLihatSemua = PERAN_HR.has(user.role);
+  const [tampilan, setTampilan] = useState<TampilanAbsensi>("superapp");
   const [modeSemua, setModeSemua] = useState(false);
   const [memuat, setMemuat] = useState(true);
   const [daftar, setDaftar] = useState<AbsensiBaris[]>([]);
@@ -400,6 +410,61 @@ export function AbsensiScreen({ user, onKembali }: AbsensiScreenProps) {
     <div className="kolom-aplikasi px-4 pt-5 pb-16">
       <ScreenHeader judul="Absensi" onKembali={onKembali} />
 
+      {/* Dua pilihan tampilan */}
+      <div className="mb-4 flex gap-2" role="tablist" aria-label="Tampilan absensi">
+        {(
+          [
+            ["superapp", "Absensi SuperApp"],
+            ["sadar", "Absensi SADAR"],
+          ] as const
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={tampilan === k}
+            onClick={() => setTampilan(k)}
+            className={cn(
+              "btn-tekan flex-1 rounded-full px-3 py-2 text-xs font-bold",
+              tampilan === k ? "text-white" : "glass text-teks-sekunder",
+            )}
+            style={tampilan === k ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" } : undefined}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tampilan === "sadar" ? (
+        <>
+          {bolehLihatSemua && (
+            <div className="mb-3 flex gap-2">
+              {[
+                { kunci: false, label: "Saya" },
+                { kunci: true, label: "Semua Anggota" },
+              ].map((s) => (
+                <button
+                  key={String(s.kunci)}
+                  type="button"
+                  onClick={() => setModeSemua(s.kunci)}
+                  className={cn(
+                    "btn-tekan flex-1 rounded-full px-3 py-1.5 text-[11.5px] font-bold",
+                    modeSemua === s.kunci ? "bg-pri text-white" : "glass-soft text-teks-sekunder",
+                  )}
+                >
+                  {s.kunci && <Users className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />}
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <PanelAbsensiSadar semua={bolehLihatSemua && modeSemua} />
+          <p className="mt-3 text-center text-[10px] text-teks-sekunder/80">
+            Seluruh data di tampilan ini apa adanya dari SADAR (sadar-pri.id)
+          </p>
+        </>
+      ) : (
+      <>
       {/* Kartu hari ini — cerminan SADAR */}
       <FadeInUp>
         <GlassCard className="p-4">
@@ -637,6 +702,9 @@ export function AbsensiScreen({ user, onKembali }: AbsensiScreenProps) {
           </div>
         )}
       </FadeInUp>
+
+      </>
+      )}
 
       <AnimatePresence>
         {modalIzin && (

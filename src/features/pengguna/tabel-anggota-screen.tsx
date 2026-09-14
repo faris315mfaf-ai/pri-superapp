@@ -21,19 +21,23 @@ import {
   KeyRound,
   Loader2,
   Search,
+  ShieldCheck,
   X,
 } from "lucide-react";
+import { PencocokanSadarScreen } from "./pencocokan-sadar-screen";
 import { GlassCard } from "@/components/glass-card";
 import { AvatarInisial, GlassSkeleton } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
 import { WhatsAppIcon } from "@/features/qc-konten/whatsapp-icon";
 import { toast } from "@/hooks/use-app-store";
 import {
+  getPencocokanSadar,
   getPengguna,
   getZona,
   tambahZona,
   tetapkanZonaAnggota,
   ubahPengguna,
+  type AnggotaPencocokan,
   type PenggunaAdmin,
   type Zona,
 } from "@/services";
@@ -68,18 +72,23 @@ export function TabelAnggotaScreen({ onKembali }: { onKembali: () => void }) {
   const [zonaUntuk, setZonaUntuk] = useState<PenggunaAdmin | null>(null);
   const [muatUlang, setMuatUlang] = useState(0);
   const versiSegar = useVersiSegar();
+  // Pencocokan SADAR (14 Sep 2026): lencana per baris + layar pemasangan.
+  const [layarSadar, setLayarSadar] = useState(false);
+  const [sadarPer, setSadarPer] = useState<Map<string, AnggotaPencocokan["cara"]> | null>(null);
 
   useEffect(() => {
     let hidup = true;
     void (async () => {
       try {
-        const [hasil, zonaSemua] = await Promise.all([
+        const [hasil, zonaSemua, cocok] = await Promise.all([
           getPengguna(),
           getZona().catch(() => []),
+          getPencocokanSadar().catch(() => null),
         ]);
         if (!hidup) return;
         setDaftar(hasil.data.filter((u) => u.status === "aktif"));
         setZonaList(zonaSemua);
+        setSadarPer(cocok ? new Map(cocok.anggota.map((a) => [a.id, a.cara])) : null);
       } catch (e) {
         if (hidup) {
           setDaftar([]);
@@ -90,7 +99,7 @@ export function TabelAnggotaScreen({ onKembali }: { onKembali: () => void }) {
     return () => {
       hidup = false;
     };
-  }, [muatUlang, versiSegar]);
+  }, [muatUlang, versiSegar, layarSadar]);
 
   const tersaring = useMemo(() => {
     const kunci = cari.trim().toLowerCase();
@@ -131,6 +140,10 @@ export function TabelAnggotaScreen({ onKembali }: { onKembali: () => void }) {
     { id: "zona", label: "Zona" },
   ];
 
+  if (layarSadar) return <PencocokanSadarScreen onKembali={() => setLayarSadar(false)} />;
+
+  const belumCocok = sadarPer ? Array.from(sadarPer.values()).filter((c) => c === "belum").length : 0;
+
   return (
     <div className="kolom-aplikasi px-4 pb-32">
       <header className="flex items-center gap-3 pt-5">
@@ -142,7 +155,7 @@ export function TabelAnggotaScreen({ onKembali }: { onKembali: () => void }) {
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="font-heading truncate text-xl font-extrabold tracking-tight text-teks-utama">
             Database Anggota
           </h1>
@@ -150,6 +163,18 @@ export function TabelAnggotaScreen({ onKembali }: { onKembali: () => void }) {
             {daftar ? `${tersaring.length} anggota` : "Memuat…"} · ganti sandi & chat WA
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => setLayarSadar(true)}
+          className="glass btn-tekan flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-[11.5px] font-bold text-teks-utama"
+          aria-label="Pencocokan SADAR"
+        >
+          <ShieldCheck className="h-4 w-4 text-pri" aria-hidden="true" />
+          SADAR
+          {belumCocok > 0 && (
+            <span className="rounded-full bg-gagal px-1.5 text-[10px] font-bold text-white">{belumCocok}</span>
+          )}
+        </button>
       </header>
 
       {/* Cari + per halaman */}
@@ -241,6 +266,16 @@ export function TabelAnggotaScreen({ onKembali }: { onKembali: () => void }) {
                   <p className="truncate text-[10.5px] text-teks-sekunder">
                     @{u.username ?? "-"} · {u.divisi || "Tanpa divisi"}
                     {namaZona(u) && ` · ${namaZona(u)}`}
+                    {sadarPer && (
+                      <span
+                        className={cn(
+                          "ml-1 font-bold",
+                          sadarPer.get(u.id) === "belum" ? "text-gagal" : "text-sukses",
+                        )}
+                      >
+                        · SADAR {sadarPer.get(u.id) === "belum" ? "belum cocok" : sadarPer.get(u.id) === "manual" ? "manual" : "cocok"}
+                      </span>
+                    )}
                   </p>
                 </div>
 
