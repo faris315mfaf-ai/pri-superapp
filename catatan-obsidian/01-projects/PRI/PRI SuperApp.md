@@ -40,6 +40,7 @@ menggantikan sekumpulan spreadsheet dan grup WhatsApp yang terpisah.
 <!-- /otomatis -->
 
 ## Terkait
+- [[Proyek Claude Code]] — peta semua proyek di komputer ini
 - [[PRI SuperApp - Tugas Menunggu]] ← **cek ini dulu kalau ada yang belum jalan**
 - [[PRI SuperApp - Cara Rilis]]
 - [[PRI SuperApp - Riwayat Rilis]]
