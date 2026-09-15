@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CalendarClock, Check, ChevronDown, History, Link2, Loader2, RotateCcw, Send, Share2, UploadCloud, Wand2, X } from "lucide-react";
 import { BATAS_CAPTION_TVR, LABEL_SOSMED, solusiGagal } from "@/lib/batas-caption";
+import { periksaJadwal } from "@/lib/jadwal-unggah";
 import { SeksiLipat } from "@/components/seksi-lipat";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
@@ -232,10 +233,12 @@ export function UnggahSosmedSaya() {
   if (pakaiJadwal) {
     if (!jadwal) kekurangan.push("Waktu jadwal belum diisi");
     else {
-      const t = Date.parse(jadwal);
-      if (!Number.isFinite(t)) kekurangan.push("Waktu jadwal tidak terbaca");
-      else if (t < Date.now() + 5 * 60_000) kekurangan.push("Jadwal minimal 5 menit dari sekarang");
-      else if (t > Date.now() + 7 * 86_400_000) kekurangan.push("Jadwal maksimal 7 hari ke depan");
+      // Aturan yang SAMA dengan server (lib/jadwal-unggah). Klien tidak
+      // tahu jalur penyimpanan mana yang akan dipakai sampai berkasnya
+      // disiapkan, jadi di sini dipakai batas yang longgar; server tetap
+      // penentunya dan pesannya menjelaskan bila jalurnya terbatas.
+      const p = periksaJadwal(jadwal, false);
+      if (!p.sah) kekurangan.push(p.pesan);
     }
   }
   const sah = kekurangan.length === 0;

@@ -18,6 +18,7 @@
 // penyapu mengenali kedua jenis berkas dari bentuk video_url-nya.
 import { after } from "next/server";
 import { userEfektifTvr } from "@/lib/sebagai";
+import { periksaJadwal } from "@/lib/jadwal-unggah";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
@@ -462,24 +463,16 @@ export async function POST(request: Request) {
         );
       }
 
-      // Jadwal (opsional): ISO dari klien; harus di masa depan < 30 hari.
+      // Jadwal (opsional). Batasnya BUKAN angka tetap: hanya jalur R2
+      // yang terkunci 7 hari, karena tautan bertanda tangannya memang
+      // tidak bisa dibuat berumur lebih dari itu (aturan SigV4). Jalur
+      // lain — bucket publik, Cloudinary, tautan milik sendiri — tidak
+      // punya batas itu, jadi di sana jadwalnya dibuka (15 Sep 2026).
       let jadwal: string | undefined;
       if (body.jadwal) {
-        const t = Date.parse(body.jadwal);
-        if (!Number.isFinite(t) || t < Date.now() + 4 * 60_000) {
-          throw Object.assign(
-            new Error("Waktu jadwal harus minimal 5 menit dari sekarang."),
-            { status: 400 },
-          );
-        }
-        // Maksimal 7 hari: URL video bertanda tangan R2 juga berumur
-        // 7 hari (batas SigV4), jadi jadwal tak boleh melewatinya.
-        if (t > Date.now() + 7 * 86_400_000) {
-          throw Object.assign(new Error("Jadwal maksimal 7 hari ke depan."), {
-            status: 400,
-          });
-        }
-        jadwal = new Date(t).toISOString();
+        const p = periksaJadwal(body.jadwal, pakaiR2);
+        if (!p.sah) throw Object.assign(new Error(p.pesan), { status: 400 });
+        jadwal = p.iso;
       }
 
       // URL yang diserahkan ke upload-post. R2: tautan bertanda tangan
