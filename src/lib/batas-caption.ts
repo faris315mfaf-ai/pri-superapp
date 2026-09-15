@@ -37,11 +37,30 @@ export function solusiGagal(platform: string, pesan: string): { ringkas: string;
   const nama = LABEL_SOSMED[p] ?? platform;
   const m = (pesan ?? "").toLowerCase();
   const ada = (...kata: string[]) => kata.some((k) => m.includes(k));
+  // Sebagian kata terlalu pendek untuk dicocokkan sebagai potongan:
+  // "cap" termuat di dalam "caption", sehingga caption TikTok yang
+  // kepanjangan dulu diberi saran yang sama sekali salah. Untuk kata
+  // seperti itu dipakai pencocokan KATA UTUH (15 Sep 2026).
+  const kata = new Set(m.split(/[^a-z0-9]+/).filter(Boolean));
 
+  // Batas harian yang menyebut ANGKA ("15/15", "limit 15 per day").
+  // Ditangani terpisah supaya angkanya ikut ditampilkan — orang perlu
+  // tahu jatahnya berapa, bukan cuma "dibatasi".
+  const angka = /(\d{1,4})\s*\/\s*(\d{1,4})/.exec(pesan ?? "");
+  if (angka && ada("limit", "quota", "kuota", "batas", "daily", "per day", "harian", "max")) {
+    return {
+      ringkas: `Jatah unggah ${nama} habis (${angka[1]}/${angka[2]} dalam 24 jam)`,
+      solusi: `${nama} hanya mengizinkan ${angka[2]} unggahan per 24 jam lewat aplikasi pihak ketiga. Batas ini milik ${nama} — tidak bisa dibuka dari sini, dan mengulang sekarang pasti ditolak lagi. Jalan keluarnya: pakai tombol JADWALKAN dan pilih waktu setelah jatahnya pulih (jendelanya berjalan, bukan reset tengah malam — jatah pertama pulih 24 jam setelah unggahan pertama tadi). Untuk yang mendesak, unggah langsung dari aplikasi ${nama}.`,
+    };
+  }
   if (p === "facebook" && ada("page", "halaman", "no facebook")) {
     return { ringkas: "Halaman Facebook belum dipilih", solusi: `${CARA_TAUTKAN_ULANG} Facebook dan pilih Halaman (Page) yang dipakai untuk posting.` };
   }
-  if (p === "tiktok" && ada("inbox", "cap", "unaudited", "active user", "private", "pending review")) {
+  // "cap" dulu dicocokkan sebagai POTONGAN kata — dan "caption" memuat
+  // "cap", sehingga caption TikTok yang kepanjangan diberi saran yang
+  // sama sekali salah ("buka Kotak Masuk TikTok"). Kini dicocokkan
+  // sebagai KATA utuh (15 Sep 2026).
+  if (p === "tiktok" && (ada("inbox", "unaudited", "active user", "private", "pending review") || kata.has("cap") || kata.has("caps"))) {
     return { ringkas: "TikTok menahan video di Kotak Masuk", solusi: "Buka aplikasi TikTok → Kotak Masuk/Notifikasi → terbitkan video itu secara manual (batasan TikTok untuk unggahan lewat API)." };
   }
   // YouTube lebih spesifik daripada kuota biasa: batas hariannya ketat
@@ -59,8 +78,8 @@ export function solusiGagal(platform: string, pesan: string): { ringkas: string;
   if (ada("too long", "character", "280", "caption", "title too", "length")) {
     return { ringkas: `Caption terlalu panjang untuk ${nama}`, solusi: `Isi caption khusus ${nama} yang lebih pendek (batas ${BATAS_CAPTION_TVR[p] ?? 2200} karakter) lewat "Caption per sosmed", lalu unggah ulang.` };
   }
-  if (ada("quota", "rate limit", "too many", "limit exceeded", "daily")) {
-    return { ringkas: `${nama} membatasi jumlah unggahan hari ini`, solusi: "Coba lagi beberapa jam lagi atau besok; kurangi jumlah unggahan beruntun." };
+  if (ada("quota", "rate limit", "too many", "limit exceeded", "daily limit", "daily", "per day", "harian", "429")) {
+    return { ringkas: `${nama} membatasi jumlah unggahan hari ini`, solusi: `Batas ini milik ${nama}, bukan aplikasi kita. Jatahnya pulih sendiri (umumnya 24 jam); untuk yang mendesak, unggah langsung dari aplikasi ${nama}.` };
   }
   if (ada("copyright", "music", "audio")) {
     return { ringkas: `${nama} menolak karena hak cipta musik/audio`, solusi: "Ganti musik latar dengan yang bebas hak cipta, lalu unggah ulang." };
