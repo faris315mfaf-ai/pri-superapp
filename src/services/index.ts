@@ -2576,6 +2576,8 @@ export async function jadwalkanPosting(data: {
   jadwal_pada: string;
   /** Sampul base64 jpg/png <2MB — YT/IG/TikTok/FB (opsional). */
   sampulDataUrl?: string;
+  /** Kode video di antrian produksi — agar catatannya ikut selesai saat tayang. */
+  kode?: string;
 }): Promise<{ id: string; status: string; ayrshare_id: string }> {
   const json = await fetchJson("/api/tv/jadwal", {
     method: "POST",

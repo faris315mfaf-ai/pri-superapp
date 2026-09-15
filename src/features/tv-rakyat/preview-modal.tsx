@@ -563,11 +563,15 @@ export function PreviewModal({
           judul_youtube: judulEdit.trim() || undefined,
           jadwal_pada: t.toISOString(),
           sampulDataUrl: sampul ?? undefined,
+          // Menjahit jadwal ke catatan videonya: tanpa kode ini, video
+          // tayang di sosmed tapi di aplikasi tetap "Siap Ditinjau"
+          // selamanya (lihat lib/jadwal-tayang).
+          kode: hasil.kode || undefined,
         });
         toast(
           "sukses",
           "Posting dijadwalkan",
-          "Ayrshare akan menayangkannya pada waktu yang Anda tentukan.",
+          "Catatan videonya ikut diperbarui otomatis saat waktunya tiba.",
         );
         onSelesaiUnggah(platformAktif.length);
       } catch (e) {

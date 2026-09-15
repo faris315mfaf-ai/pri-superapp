@@ -390,6 +390,46 @@ export async function unggahVideo(opsi: {
 }
 
 /**
+ * Keadaan SATU postingan Ayrshare (15 Sep 2026) — kontrak diverifikasi
+ * langsung ke API, bukan ditebak: `GET /post/{id}` membalas bentuk yang
+ * sama dengan jawaban POST (`status`, `scheduleDate`, `postIds[]`,
+ * `errors[]`), dan id yang tidak ada dibalas 400 kode 221.
+ *
+ * Dipakai pencocok jadwal tayang: Ayrshare menerbitkan postingan
+ * terjadwal sendiri tanpa memberi tahu siapa pun, jadi satu-satunya cara
+ * mengetahui hasilnya adalah menanyakannya.
+ */
+export async function statusPostingan(
+  idAyrshare: string,
+): Promise<{ status: string; hasil: HasilUnggahPlatform[] } | null> {
+  try {
+    const d = await panggil<BalasanPost>(`/post/${encodeURIComponent(idAyrshare)}`, {
+      method: "GET",
+      timeoutMs: 45000,
+    });
+    const hasil: HasilUnggahPlatform[] = (d.postIds ?? []).map((p) => ({
+      platform: (p.platform ?? "").toLowerCase(),
+      status: p.status ?? "success",
+      id: p.id ?? "",
+      postUrl: p.postUrl ?? "",
+      pesan: "",
+    }));
+    for (const e of d.errors ?? []) {
+      const platform = (e.platform ?? "").toLowerCase();
+      if (!platform) continue;
+      hasil.push({ platform, status: "error", id: "", postUrl: "", pesan: e.message ?? "Ditolak platform" });
+    }
+    return { status: String(d.status ?? ""), hasil };
+  } catch (e) {
+    // id yang sudah tidak dikenal Ayrshare (dihapus / kedaluwarsa) dijawab
+    // 4xx. Itu bukan gangguan sementara — pemanggil boleh menyerah.
+    const status = (e as { status?: number })?.status;
+    if (typeof status === "number" && status >= 400 && status < 500) return null;
+    throw e;
+  }
+}
+
+/**
  * Batalkan / hapus satu postingan Ayrshare berdasarkan id-nya (fitur
  * 1.22.x/3). Dipakai untuk MEMBATALKAN posting terjadwal yang belum
  * tayang — Ayrshare memakai endpoint DELETE /post yang sama untuk

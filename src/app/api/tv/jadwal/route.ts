@@ -116,6 +116,8 @@ export async function POST(request: Request) {
       jadwal_pada?: string;
       /** Sampul video base64 (jpg/png) — YT/IG/TikTok/FB. */
       sampulDataUrl?: string;
+      /** Kode video di antrian produksi — menjahit jadwal ke catatannya. */
+      kode?: string;
     };
 
     const caption = (body.caption ?? "").trim();
@@ -164,6 +166,8 @@ export async function POST(request: Request) {
     }
     const scheduleDate = t.toISOString().replace(/\.\d{3}Z$/, "Z");
 
+    const kodeVideo = (body.kode ?? "").trim().slice(0, 100);
+
     // idempotencyKey mencegah dobel jadwal bila permintaan diulang.
     const idemp = `jadwal-${pengguna.id}-${t.getTime()}-${[...platforms].sort().join(",")}`;
     // Sampul kustom ikut dijadwalkan (fitur 31 Agu 2026).
@@ -192,6 +196,9 @@ export async function POST(request: Request) {
         platforms,
         judul_youtube: (body.judul_youtube ?? "").trim() || null,
         jadwal_pada: t.toISOString(),
+        // Tanpa ini, video yang dijadwalkan tayang tidak pernah kembali
+        // menyentuh catatannya sendiri (lihat lib/jadwal-tayang).
+        video_kode: kodeVideo || null,
         status: hasil.idAyrshare ? "terjadwal" : "gagal",
         ayrshare_id: hasil.idAyrshare || null,
         hasil: hasil.hasil,
@@ -205,6 +212,18 @@ export async function POST(request: Request) {
     if (error) {
       console.error("[tv/jadwal] simpan:", error.message);
       throw new Error("Terjadwal di Ayrshare, tetapi catatannya gagal disimpan.");
+    }
+
+    // Tandai videonya "menunggu jadwal" supaya Riwayat Video menampilkan
+    // kapan ia akan tayang — tanpa ini videonya terlihat seperti belum
+    // diapa-apakan sampai jadwalnya tiba. Gagal menandai bukan alasan
+    // menggagalkan jadwal yang sudah diterima Ayrshare.
+    if (kodeVideo && hasil.idAyrshare) {
+      const { error: eTandai } = await supabase()
+        .from("video_antrian")
+        .update({ jadwal_pada: t.toISOString() })
+        .eq("kode", kodeVideo);
+      if (eTandai) console.error("[tv/jadwal] tandai video:", eTandai.message);
     }
 
     return {

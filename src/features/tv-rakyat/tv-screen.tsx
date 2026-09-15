@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Tv, Newspaper, Send, Clapperboard, Activity, History, ListChecks, Settings, Tag } from "lucide-react";
+import { Tv, Newspaper, Send, Clapperboard, Activity, History, ListChecks, Settings, Tag, CalendarClock } from "lucide-react";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
 import { BeritaPanel } from "./berita-panel";
@@ -31,6 +31,7 @@ import { EmbedTerbaru } from "./embed-terbaru";
 import type { Berita, HasilProsesVideo, User, VideoAntrian } from "@/types";
 import { adalahPimred } from "@/lib/jabatan";
 import { PanelVideoWajib } from "./panel-video-wajib";
+import { PanelJadwalTayang } from "./panel-jadwal-tayang";
 
 type FaseTv = "form" | "proses" | "pratinjau";
 
@@ -249,6 +250,16 @@ export function TvScreen({
               idTerpilih={videoSumber?.id ?? null}
             />
           </SeksiLipat>
+        ) },
+        bolehUpload && { id: "jadwal-tayang", judul: "Menunggu Jadwal Tayang", ikon: CalendarClock, render: () => (
+            <SeksiLipat
+              id="jadwal-tayang"
+              judul="Menunggu Jadwal Tayang"
+              ikon={CalendarClock}
+              keterangan="Video yang dijadwalkan tayang otomatis"
+            >
+              <PanelJadwalTayang />
+            </SeksiLipat>
         ) },
         pimred && { id: "kelola-keyword", judul: "Keyword Wajib Laporan", ikon: Tag, render: () => (
             <SeksiLipat

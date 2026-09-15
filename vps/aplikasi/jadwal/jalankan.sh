@@ -14,6 +14,10 @@ cat > /etc/crontabs/root <<'JADWAL'
 # Absensi dari SADAR (14 Sep 2026): SuperApp hanya menampilkan; datanya
 # ditarik dari sadar-pri.id tiap 5 menit (hari ini + kemarin + susulan).
 */5  * * * * /panggil.sh sinkron-absensi
+# Posting terjadwal TV Rakyat (15 Sep 2026): Ayrshare menerbitkan sendiri
+# tanpa memberi tahu aplikasi, jadi hasilnya ditanyakan berkala supaya
+# catatan videonya ikut selesai (status, kanal Konten, wajib komentar).
+*/5  * * * * /panggil.sh jadwal-tayang
 # Rekaman angka nasional TV Rakyat (12 Sep 2026). Sekali sehari sudah
 # cukup: yang dibutuhkan panel kenaikan adalah SATU titik pembanding
 # per hari. Pukul 23.50 WIB = 16.50 UTC — hampir tutup hari, jadi
