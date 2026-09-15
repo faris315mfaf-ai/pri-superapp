@@ -20,6 +20,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { SeksiKuota } from "./seksi-kuota";
+import { SeksiPenyediaTvr } from "./seksi-penyedia-tvr";
 import { SeksiServer } from "./seksi-server";
 import { SeksiBebasKewajiban } from "./seksi-bebas-kewajiban";
 import { SeksiSakelarBerat } from "./seksi-sakelar-berat";
@@ -585,6 +586,7 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
               Supabase / Cloudinary / upload-post dalam satu layar. */}
           <FadeInUp delay={0.2}>
             <SeksiKuota />
+            <SeksiPenyediaTvr />
             <SeksiEksporData />
             <SeksiServer />
             {/* Fitur berat & mode hemat + format laporan upload (4 Sep 2026) */}

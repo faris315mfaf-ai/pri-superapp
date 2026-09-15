@@ -24,14 +24,12 @@ import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { maksUploadMb } from "@/lib/pengaturan-tv";
-import { unggahVideoUp, uploadPostSiap } from "@/lib/upload-post";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { beriKoin } from "@/lib/koin";
 import { pastikanKategoriBolehDipakai } from "@/lib/kategori-status";
 import { BATAS_BERKAS_CLOUDINARY_MB, BATAS_KOMPRES_MB, hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
 import { kompresLaluSalinKeR2 } from "@/lib/kompres-r2";
-import { gagalDariBalasan } from "@/lib/upload-post";
 import { BATAS_CAPTION_TVR, LABEL_SOSMED, solusiGagal } from "@/lib/batas-caption";
 import { kirimKabar } from "@/lib/notifikasi";
 import { adalahPalugodam } from "@/lib/struktur";
@@ -45,7 +43,7 @@ import {
   presignR2,
   r2Siap,
 } from "@/lib/r2";
-import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
+import { PENYEDIA_ANGGOTA, unggahVideoAnggota, type IdPenyedia } from "@/lib/sosmed-penyedia";
 
 export const dynamic = "force-dynamic";
 // upload-post mengunduh video dari URL kita lalu memposting ke banyak
@@ -71,16 +69,26 @@ async function pastikanMasukLama(request: Request) {
   return user;
 }
 
-/** Profil upload-post milik user (dibuat lewat alur Hubungkan). */
-async function profilUp(userId: number): Promise<string | null> {
+/**
+ * Profil sosmed milik user (dibuat lewat alur Hubungkan) BESERTA
+ * penyedianya. Sejak Postiz jadi pilihan ketiga (15 Sep 2026), yang
+ * menentukan ke mana video dikirim bukan lagi tetapan global melainkan
+ * kolom `penyedia` pada baris profil orang itu sendiri.
+ */
+async function profilUp(
+  userId: number,
+): Promise<{ kunci: string; penyedia: IdPenyedia } | null> {
   const { data } = await supabase()
     .from("sosmed_profile")
-    .select("profile_key")
+    .select("profile_key, penyedia")
     .eq("jenis", "pengguna")
     .in("penyedia", PENYEDIA_ANGGOTA)
     .eq("user_id", userId)
     .maybeSingle();
-  return (data?.profile_key as string) ?? null;
+  const kunci = (data?.profile_key as string) ?? "";
+  if (!kunci) return null;
+  const p = String(data?.penyedia ?? "");
+  return { kunci, penyedia: p === "postiz" ? "postiz" : "upload-post" };
 }
 
 /**
@@ -486,16 +494,14 @@ export async function POST(request: Request) {
           : pakaiCloudinary
             ? videoUrlCloud
             : db.storage.from("tvrku").getPublicUrl(path).data.publicUrl;
-      // Hanya langkah ini yang butuh upload-post; validasi masukan dilakukan lebih
-      // dulu supaya pesan galatnya jelas (dan bisa diuji tanpa kunci upload-post).
-      if (!uploadPostSiap()) {
-        throw Object.assign(
-          new Error("upload-post belum diatur (UPLOAD_POST_API_KEY kosong). Hubungi pengelola."),
-          { status: 503 },
-        );
-      }
-      const hasil = await unggahVideoUp({
-        profil,
+      // Hanya langkah ini yang butuh penyedia luar; validasi masukan dilakukan
+      // lebih dulu supaya pesan galatnya jelas (dan bisa diuji tanpa kunci).
+      // Penyedianya mengikuti setelan master untuk ORANG INI — bila belum
+      // siap, galatnya menyebut penyedia itu dan TIDAK beralih diam-diam ke
+      // penyedia lain (video yang terbit di akun tak terduga tidak bisa
+      // ditarik kembali).
+      const hasil = await unggahVideoAnggota(profil.penyedia, {
+        profil: profil.kunci,
         videoUrl,
         judul,
         caption: body.caption ?? "",
@@ -503,8 +509,8 @@ export async function POST(request: Request) {
         scheduleDate: jadwal,
         captionPer: Object.keys(captionPer).length > 0 ? captionPer : undefined,
       });
-      // Platform yang langsung dinyatakan gagal oleh upload-post (balasan sinkron).
-      const gagalAwal = gagalDariBalasan(hasil.mentah);
+      // Platform yang langsung dinyatakan gagal oleh penyedia (balasan sinkron).
+      const gagalAwal = hasil.gagalAwal;
       const hasilSimpan = gagalAwal.length
         ? { ...hasil.mentah, kpi_gagal: gagalAwal.map((g) => g.platform), kpi_gagal_alasan: Object.fromEntries(gagalAwal.map((g) => [g.platform, g.pesan])) }
         : hasil.mentah;
@@ -544,6 +550,9 @@ export async function POST(request: Request) {
           jadwal: jadwal ?? null,
           hasil: hasilSimpan,
           request_id: hasil.request_id,
+          // Gerbang yang MENGIRIM baris ini — ikut dicatat supaya hasilnya
+          // nanti ditanyakan ke API yang benar walau anggotanya sudah pindah.
+          penyedia: profil.penyedia,
           // Kiriman TAUTAN: berkasnya milik anggota di layanan lain —
           // sistem tidak berhak menghapusnya, jadi tanpa jadwal sapu.
           hapus_media_pada: pakaiLink ? null : hapusPada,

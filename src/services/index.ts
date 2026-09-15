@@ -6512,3 +6512,43 @@ export async function getDetak(): Promise<HasilDetak> {
     jeda: Number.isFinite(jeda) ? Math.min(300, Math.max(5, jeda)) : 10,
   };
 }
+
+// ------------------------------------------------------------
+// Penyedia sosmed per anggota — master memilih siapa ikut uji coba
+// Postiz (15 Sep 2026). Postiz BUKAN pengganti upload-post.
+// ------------------------------------------------------------
+export type AnggotaPenyedia = {
+  id: string;
+  nama: string;
+  username: string;
+  avatar_url: string;
+  profil: string;
+  penyedia: string;
+  tertaut: number;
+  diubah_pada: string | null;
+};
+
+export type PenyediaTvrData = {
+  anggota: AnggotaPenyedia[];
+  bawaan: string;
+  postiz_siap: boolean;
+  upload_post_siap: boolean;
+  jumlah: { semua: number; postiz: number };
+};
+
+export async function getPenyediaTvr(): Promise<PenyediaTvrData> {
+  const json = await fetchJson("/api/master/penyedia-tvr", { headers: headerToken() });
+  return json as PenyediaTvrData;
+}
+
+export async function setPenyediaTvr(
+  userId: string,
+  penyedia: string,
+): Promise<{ penyedia: string; berubah: boolean; catatan?: string }> {
+  const json = await fetchJson("/api/master/penyedia-tvr", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ user_id: Number(userId), penyedia }),
+  });
+  return (json ?? {}) as { penyedia: string; berubah: boolean; catatan?: string };
+}

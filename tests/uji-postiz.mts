@@ -11,6 +11,7 @@ import {
   bacaIdPost,
   bacaIntegrasi,
   akunMilik,
+  pilihTujuanPostiz,
   bangunMuatanPostiz,
   gagalDariPost,
   headerAuthPostiz,
@@ -153,6 +154,26 @@ cek("spasi diabaikan", akunMilik(aStrip, "Budi Santoso"));
 cek("orang lain TIDAK ikut tercomot", !akunMilik(a0, "Siti"));
 cek("kunci kosong tidak mencocokkan apa pun", !akunMilik(a0, ""));
 cek("akun tanpa pelanggan tidak cocok ke siapa pun", !akunMilik(akun[1], "budi"));
+
+
+console.log("\n[I] Memilih tujuan kiriman — platform yang tidak ketemu TIDAK boleh hilang diam");
+const AKUN = bacaIntegrasi([
+  { id: "i-x", identifier: "x", name: "@budi", customer: { id: "c1", name: "budi" } },
+  { id: "i-tt", identifier: "tiktok", name: "budi", disabled: true, customer: { id: "c1", name: "budi" } },
+  { id: "i-ig", identifier: "instagram", name: "budi.ig", customer: { id: "c2", name: "siti" } },
+]);
+const pilih = pilihTujuanPostiz(AKUN, "budi", ["twitter", "tiktok", "youtube", "instagram"]);
+cek("hanya akun hidup milik orang itu yang dikirimi", pilih.tujuan.length === 1 && pilih.tujuan[0].id === "i-x", pilih.tujuan);
+cek("tiga platform lain dilaporkan hilang, bukan dilewati", pilih.hilang.length === 3, pilih.hilang);
+const pesanTt = pilih.hilang.find((h) => h.platform === "tiktok")?.pesan ?? "";
+cek("akun mati dijelaskan sebagai izin kedaluwarsa", /kedaluwarsa/i.test(pesanTt), pesanTt);
+const pesanYt = pilih.hilang.find((h) => h.platform === "youtube")?.pesan ?? "";
+cek("akun tak ada dijelaskan sebagai belum ditautkan", /belum ditautkan/i.test(pesanYt), pesanYt);
+cek("akun milik ORANG LAIN tidak pernah dipakai", !pilih.tujuan.some((t) => t.id === "i-ig"));
+cek("instagram orang lain tetap dilaporkan hilang bagi budi", pilih.hilang.some((h) => h.platform === "instagram"));
+cek("profil tanpa akun sama sekali → semua hilang, tujuan kosong",
+  pilihTujuanPostiz(AKUN, "tidak-ada", ["twitter"]).tujuan.length === 0);
+cek("daftar platform kosong → tidak melempar", pilihTujuanPostiz(AKUN, "budi", []).tujuan.length === 0);
 
 console.log(`\nHASIL: ${lulus} lulus, ${gagal} gagal`);
 process.exit(gagal ? 1 : 0);

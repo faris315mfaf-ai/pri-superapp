@@ -469,3 +469,118 @@ export async function unggahBerkasPostiz(
   const d = await panggil<unknown>("/upload", { method: "POST", body: form, timeoutMs });
   return bacaIdBerkas(d);
 }
+
+// ------------------------------------------------------------
+// Unggah video milik SATU anggota (setara unggahVideoUp)
+// ------------------------------------------------------------
+
+export type TujuanPostiz = {
+  /** integrasi yang siap dikirimi */
+  tujuan: { id: string; platform: string }[];
+  /** platform yang diminta tapi tidak ada/akunnya mati */
+  hilang: { platform: string; pesan: string }[];
+};
+
+/**
+ * Pilih integrasi mana yang dikirimi. MURNI — diuji tanpa jaringan.
+ *
+ * Bagian ini dipisah karena di sinilah kegagalan paling mudah menjadi
+ * DIAM: kalau sebuah platform tidak ketemu lalu hanya dilewati, anggota
+ * mengira videonya tayang di enam tempat padahal cuma empat. Maka
+ * platform yang tidak ketemu dikembalikan sebagai daftar "hilang" agar
+ * dicatat sebagai kegagalan yang terlihat, bukan dihilangkan.
+ */
+export function pilihTujuanPostiz(
+  akun: AkunPostiz[],
+  profil: string,
+  platforms: string[],
+): TujuanPostiz {
+  const milikku = akun.filter((a) => akunMilik(a, profil));
+  const tujuan: { id: string; platform: string }[] = [];
+  const hilang: { platform: string; pesan: string }[] = [];
+  for (const p of platforms) {
+    const cocok = milikku.filter((a) => a.platform === p);
+    const hidup = cocok.find((a) => !a.mati);
+    if (hidup) {
+      tujuan.push({ id: hidup.id, platform: p });
+    } else if (cocok.length > 0) {
+      hilang.push({
+        platform: p,
+        pesan: `Akun ${p} tertaut di Postiz tapi izinnya kedaluwarsa. Tautkan ulang dari dasbor Postiz.`,
+      });
+    } else {
+      hilang.push({
+        platform: p,
+        pesan: `Akun ${p} belum ditautkan di Postiz untuk profil "${profil}".`,
+      });
+    }
+  }
+  return { tujuan, hilang };
+}
+
+export type HasilUnggahPostiz = {
+  sukses: boolean;
+  mentah: Record<string, unknown>;
+  request_id: string | null;
+  gagalAwal: { platform: string; pesan: string }[];
+};
+
+/**
+ * Unggah satu video ke akun sosmed seorang anggota lewat Postiz.
+ * Bentuk hasilnya sengaja dibuat sama dengan unggahVideoUp supaya
+ * pemanggilnya (route unggah TVR Saya) tidak perlu tahu bedanya.
+ *
+ * Perbedaan cara kerja yang perlu diingat: upload-post MENARIK video
+ * dari URL yang kita beri, Postiz menyimpan medianya sendiri sehingga
+ * berkasnya harus dikirim lebih dulu. Untuk video 50 MB itu berarti
+ * berkasnya lewat server kita dua kali — sebab itu jalur ini hanya
+ * masuk akal dari container VPS yang sekamar dengan Postiz.
+ */
+export async function unggahVideoPostiz(opsi: {
+  profil: string;
+  videoUrl: string;
+  judul: string;
+  caption?: string;
+  platforms: string[];
+  scheduleDate?: string;
+  captionPer?: Record<string, string>;
+}): Promise<HasilUnggahPostiz> {
+  const akun = await integrasiPostiz();
+  const { tujuan, hilang } = pilihTujuanPostiz(akun, opsi.profil, opsi.platforms);
+  if (tujuan.length === 0) {
+    const sebab = hilang.map((h) => h.pesan).join(" ");
+    throw Object.assign(
+      new Error(
+        sebab || `Belum ada akun sosmed yang ditautkan di Postiz untuk profil "${opsi.profil}".`,
+      ),
+      { status: 409 },
+    );
+  }
+
+  // Berkas dikirim dulu; kalau gagal, biarkan galatnya naik — mengirim
+  // postingan tanpa video menghasilkan unggahan kosong di sosmed asli,
+  // dan itu jauh lebih merepotkan daripada gagal terang-terangan.
+  const berkasId = (await unggahBerkasPostiz(opsi.videoUrl)) ?? undefined;
+
+  const muatan = bangunMuatanPostiz({
+    tujuan,
+    judul: opsi.judul,
+    caption: opsi.caption,
+    captionPer: opsi.captionPer,
+    berkasId,
+    jadwalIso: opsi.scheduleDate ?? new Date().toISOString(),
+    terjadwal: Boolean(opsi.scheduleDate),
+  });
+  const hasil = await kirimPostPostiz(muatan);
+  return {
+    sukses: hasil.sukses,
+    mentah: {
+      penyedia: "postiz",
+      id: hasil.id,
+      dikirim_ke: tujuan.map((t) => t.platform),
+      balasan: hasil.mentah,
+    },
+    request_id: hasil.id,
+    gagalAwal: hilang,
+  };
+}

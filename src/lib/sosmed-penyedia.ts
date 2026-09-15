@@ -191,3 +191,106 @@ export function penyediaDenganId(id: string | null | undefined): PenyediaSosmed 
 export function postizTersedia(): boolean {
   return postizSiap();
 }
+
+// ============================================================
+// PENYEDIA PER ANGGOTA (15 Sep 2026)
+//
+// Postiz BUKAN pengganti upload-post — ia pilihan ketiga di samping
+// Ayrshare (TV Rakyat Official) dan upload-post. Yang menentukan siapa
+// memakai apa adalah MASTER, per orang, lewat Panel Master.
+//
+// Sumber kebenarannya satu: kolom `sosmed_profile.penyedia` pada baris
+// milik anggota itu (jenis = 'pengguna'). Disengaja TIDAK memakai
+// tabel daftar terpisah — satu anggota tetap punya TEPAT SATU baris
+// profil, sehingga 18 tempat yang menanyakan profil anggota tidak
+// pernah menerima dua baris dan salah pilih.
+//
+// Berpindah pun jadi murah: master mengubah satu kolom. Profil lama di
+// upload-post tidak dihapus dan `profile_key`-nya tidak berubah (kedua
+// penyedia memakai slug yang sama), jadi mengembalikan anggota ke
+// upload-post mengembalikan keadaannya persis seperti semula.
+// ============================================================
+import { supabase } from "@/lib/supabase";
+import { unggahVideoPostiz } from "@/lib/postiz";
+import { gagalDariBalasan, unggahVideoUp } from "@/lib/upload-post";
+
+/** Penyedia bawaan untuk anggota yang belum pernah disetel master. */
+export function idPenyediaBawaan(): IdPenyedia {
+  return penyediaAnggota().id;
+}
+
+/**
+ * Penyedia yang dipakai SATU anggota. Membaca baris profilnya; anggota
+ * yang belum punya baris memakai bawaan.
+ */
+export async function idPenyediaAnggota(userId: number): Promise<IdPenyedia> {
+  const { data } = await supabase()
+    .from("sosmed_profile")
+    .select("penyedia")
+    .eq("jenis", "pengguna")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const id = String(data?.penyedia ?? "");
+  if (id === "postiz" || id === "upload-post" || id === "ayrshare") return id;
+  return idPenyediaBawaan();
+}
+
+/** Adaptor profil untuk satu anggota (dipakai alur Hubungkan). */
+export async function penyediaUntukAnggota(userId: number): Promise<PenyediaSosmed> {
+  return penyediaDenganId(await idPenyediaAnggota(userId));
+}
+
+export type HasilUnggahAnggota = {
+  sukses: boolean;
+  mentah: Record<string, unknown>;
+  request_id: string | null;
+  /** Platform yang SUDAH pasti gagal saat balasan diterima. */
+  gagalAwal: { platform: string; pesan: string }[];
+};
+
+/**
+ * Unggah video anggota lewat penyedia yang ditetapkan untuknya.
+ *
+ * Bentuk hasilnya sama untuk semua penyedia supaya route pemanggilnya
+ * tidak bercabang. Yang TIDAK disamarkan: bila penyedianya belum siap,
+ * fungsi ini melempar galat yang menyebut penyedianya — tidak diam-diam
+ * beralih ke penyedia lain. Beralih diam-diam berarti video anggota
+ * terbit di akun yang tidak ia duga, dan itu tidak bisa ditarik kembali.
+ */
+export async function unggahVideoAnggota(
+  penyediaId: IdPenyedia,
+  opsi: {
+    profil: string;
+    videoUrl: string;
+    judul: string;
+    caption?: string;
+    platforms: string[];
+    scheduleDate?: string;
+    captionPer?: Record<string, string>;
+  },
+): Promise<HasilUnggahAnggota> {
+  if (penyediaId === "postiz") {
+    if (!postizSiap()) {
+      throw Object.assign(
+        new Error("Anggota ini disetel memakai Postiz, tetapi Postiz belum diatur di server (POSTIZ_URL / POSTIZ_API_KEY kosong)."),
+        { status: 503 },
+      );
+    }
+    const h = await unggahVideoPostiz(opsi);
+    return { sukses: h.sukses, mentah: h.mentah, request_id: h.request_id, gagalAwal: h.gagalAwal };
+  }
+
+  if (!uploadPostSiap()) {
+    throw Object.assign(
+      new Error("upload-post belum diatur (UPLOAD_POST_API_KEY kosong). Hubungi pengelola."),
+      { status: 503 },
+    );
+  }
+  const h = await unggahVideoUp(opsi);
+  return {
+    sukses: h.sukses,
+    mentah: h.mentah,
+    request_id: h.request_id,
+    gagalAwal: gagalDariBalasan(h.mentah),
+  };
+}
