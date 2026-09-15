@@ -57,6 +57,7 @@ import {
   simpanSumberDariLink,
   urlSumber,
 } from "@/lib/studio";
+import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 
 /** Link sumber yang diterima Studio (TikTok / Instagram). */
 const POLA_LINK_SUMBER =
@@ -122,7 +123,7 @@ async function profilPalugodam(): Promise<{
       db
         .from("sosmed_profile")
         .select("profile_key, user_id")
-        .eq("penyedia", "upload-post")
+        .in("penyedia", PENYEDIA_ANGGOTA)
         .eq("jenis", "pengguna")
         .not("user_id", "is", null),
       db
@@ -238,7 +239,7 @@ async function daftarAnggotaStudio() {
       db
         .from("sosmed_profile")
         .select("profile_key")
-        .eq("penyedia", "upload-post"),
+        .in("penyedia", PENYEDIA_ANGGOTA),
     ]);
   const akunPer = new Map<string, Record<string, string>>(
     up.profil.map((p) => [p.username, p.akun]),
@@ -658,7 +659,7 @@ export async function POST(request: Request) {
       const { data: milik } = await db
         .from("sosmed_profile")
         .select("id, profile_key")
-        .eq("penyedia", "upload-post")
+        .in("penyedia", PENYEDIA_ANGGOTA)
         .eq("jenis", "pengguna")
         .eq("user_id", uid)
         .maybeSingle();

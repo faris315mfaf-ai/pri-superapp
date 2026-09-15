@@ -32,6 +32,7 @@ import { analitikPostUp, postinganTerbaruUp, statusUnggahUp, uploadPostSiap, typ
 import { kanonikTautan, kunciVideo } from "@/lib/tautan-video";
 import { kirimKabar } from "@/lib/notifikasi";
 import { LABEL_SOSMED, solusiGagal } from "@/lib/batas-caption";
+import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 
 /** Toleransi mundur saat mencocokkan waktu terbit (jam beda server). */
 export const TOLERANSI_MENIT = 10;
@@ -231,7 +232,7 @@ export async function rekonsiliasiKpiRinci(userId: number, opsi: { anggaranMs?: 
       .from("sosmed_profile")
       .select("profile_key")
       .eq("jenis", "pengguna")
-      .eq("penyedia", "upload-post")
+      .in("penyedia", PENYEDIA_ANGGOTA)
       .eq("user_id", userId)
       .order("id", { ascending: true })
       .limit(1)

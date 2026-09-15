@@ -49,6 +49,7 @@ import {
   type TautanUnggahan,
 } from "@/lib/metrik-post-up";
 import { analitikPostCachedUp, uploadPostSiap } from "@/lib/upload-post";
+import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -158,7 +159,7 @@ async function profilMilik(userId: number): Promise<string> {
     .from("sosmed_profile")
     .select("profile_key")
     .eq("jenis", "pengguna")
-    .eq("penyedia", "upload-post")
+    .in("penyedia", PENYEDIA_ANGGOTA)
     .eq("user_id", userId)
     .maybeSingle();
   return String(data?.profile_key ?? "");

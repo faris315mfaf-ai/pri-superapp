@@ -16,6 +16,7 @@ import { daftarProfilUp, uploadPostSiap } from "@/lib/upload-post";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { MAKS_UMUR_URL_DETIK, presignR2, r2Siap } from "@/lib/r2";
 import { prosesSiaranSerentak } from "@/lib/siaran";
+import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 
 export const dynamic = "force-dynamic";
 // Pemrosesan di latar memanggil upload-post berulang — beri napas panjang.
@@ -185,7 +186,7 @@ export async function POST(request: Request) {
       db
         .from("sosmed_profile")
         .select("profile_key, user_id")
-        .eq("penyedia", "upload-post")
+        .in("penyedia", PENYEDIA_ANGGOTA)
         .eq("jenis", "pengguna")
         .in("profile_key", profilDiminta),
     ]);

@@ -12,6 +12,7 @@ import { pastikanMasuk } from "@/lib/sesi";
 import { rekonsiliasiKpiRinci } from "@/lib/kpi-otomatis";
 import { perbaikiLaporanSemua, perbaikiLaporanUser } from "@/lib/perbaikan-laporan";
 import { analitikPostUp, postinganTerbaruUp, statusUnggahUp, uploadPostSiap } from "@/lib/upload-post";
+import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -47,7 +48,7 @@ export async function GET(request: Request) {
     const { data: post } = await db.from("tvrku_post").select("id, user_id, platforms, kpi_tercatat, jadwal, dibuat_pada, request_id, judul").eq("id", postId).maybeSingle();
     if (!post) throw Object.assign(new Error("Unggahan tidak ditemukan."), { status: 404 });
     const [{ data: profil }, { data: laporan }] = await Promise.all([
-      db.from("sosmed_profile").select("profile_key").eq("jenis", "pengguna").eq("penyedia", "upload-post").eq("user_id", Number(post.user_id)).limit(1).maybeSingle(),
+      db.from("sosmed_profile").select("profile_key").eq("jenis", "pengguna").in("penyedia", PENYEDIA_ANGGOTA).eq("user_id", Number(post.user_id)).limit(1).maybeSingle(),
       db.from("laporan_video").select("platform, url_video, tanggal_wib, dibuat_pada").eq("tvrku_post_id", postId),
     ]);
     const requestId = post.request_id ? String(post.request_id) : "";

@@ -15,6 +15,7 @@ import { supabase } from "@/lib/supabase";
 import { pastikanMasuk } from "@/lib/sesi";
 import { kumpulkanAnggotaTvr } from "@/lib/tvr-peringkat";
 import { postinganTerbaruUp } from "@/lib/upload-post";
+import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -133,7 +134,7 @@ async function videoAnggota(userId: number): Promise<VideoGaleri[]> {
     db
       .from("sosmed_profile")
       .select("profile_key")
-      .eq("penyedia", "upload-post")
+      .in("penyedia", PENYEDIA_ANGGOTA)
       .eq("jenis", "pengguna")
       .eq("user_id", userId)
       .limit(1)

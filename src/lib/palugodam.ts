@@ -18,6 +18,7 @@
 import { supabase } from "@/lib/supabase";
 import { unggahVideoUp, uploadPostSiap } from "@/lib/upload-post";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
+import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 
 /** Maks pesanan yang diproses dalam satu sapuan (jaga waktu fungsi). */
 const MAKS_PER_SAPUAN = 3;
@@ -38,7 +39,7 @@ async function profilUp(userId: number): Promise<string | null> {
     .from("sosmed_profile")
     .select("profile_key")
     .eq("jenis", "pengguna")
-    .eq("penyedia", "upload-post")
+    .in("penyedia", PENYEDIA_ANGGOTA)
     .eq("user_id", userId)
     .maybeSingle();
   return (data?.profile_key as string) ?? null;

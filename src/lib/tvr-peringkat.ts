@@ -11,6 +11,7 @@
 // ============================================================
 import { supabase } from "@/lib/supabase";
 import { analitikProfilUp, PETA_PLATFORM_UP, uploadPostSiap } from "@/lib/upload-post";
+import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 
 export const PLATFORM_TVR = [
   "instagram",
@@ -95,7 +96,7 @@ export async function kumpulkanAnggotaTvr(): Promise<AnggotaTvr[]> {
     db
       .from("sosmed_profile")
       .select("user_id, profile_key, insight_cache, insight_pada")
-      .eq("penyedia", "upload-post")
+      .in("penyedia", PENYEDIA_ANGGOTA)
       .eq("jenis", "pengguna")
       .limit(500),
     db
@@ -263,7 +264,7 @@ export async function segarkanProfilTvrBasi(): Promise<void> {
     const { data } = await db
       .from("sosmed_profile")
       .select("id, profile_key, insight_pada")
-      .eq("penyedia", "upload-post")
+      .in("penyedia", PENYEDIA_ANGGOTA)
       .eq("jenis", "pengguna")
       .or(`insight_pada.is.null,insight_pada.lt.${batas}`)
       .order("insight_pada", { ascending: true, nullsFirst: true })

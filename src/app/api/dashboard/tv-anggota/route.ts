@@ -19,6 +19,7 @@ import {
   tautanHubungkanUp,
   uploadPostSiap,
 } from "@/lib/upload-post";
+import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
       const { data: baris } = await db
         .from("sosmed_profile")
         .select("id, profile_key, insight_cache, insight_pada")
-        .eq("penyedia", "upload-post")
+        .in("penyedia", PENYEDIA_ANGGOTA)
         .eq("jenis", "pengguna")
         .eq("profile_key", qProfil)
         .maybeSingle();
@@ -105,7 +106,7 @@ export async function GET(request: Request) {
         db
           .from("sosmed_profile")
           .select("user_id, profile_key, insight_cache, insight_pada")
-          .eq("penyedia", "upload-post")
+          .in("penyedia", PENYEDIA_ANGGOTA)
           .eq("jenis", "pengguna"),
         db
           .from("app_user")
@@ -256,7 +257,7 @@ export async function POST(request: Request) {
     const { data: milik } = await db
       .from("sosmed_profile")
       .select("id, profile_key")
-      .eq("penyedia", "upload-post")
+      .in("penyedia", PENYEDIA_ANGGOTA)
       .eq("jenis", "pengguna")
       .eq("user_id", userId)
       .maybeSingle();

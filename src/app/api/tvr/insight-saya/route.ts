@@ -11,6 +11,7 @@ import { userEfektifTvr } from "@/lib/sebagai";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { analitikProfilUp, uploadPostSiap } from "@/lib/upload-post";
+import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -33,7 +34,7 @@ export async function GET(request: Request) {
       .from("sosmed_profile")
       .select("id, profile_key, insight_cache, insight_pada")
       .eq("jenis", "pengguna")
-      .eq("penyedia", "upload-post")
+      .in("penyedia", PENYEDIA_ANGGOTA)
       .eq("user_id", Number(user.id))
       .maybeSingle();
     if (!profil) return { siap: true, profil: null, insight: null };

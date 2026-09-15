@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { buatSesi, keUserPublik, KOLOM_USER, pastikanMasuk, type BarisUser } from "@/lib/sesi";
 import { adalahAdminStudio, DIVISI_PALUGODAM } from "@/lib/struktur";
+import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export async function GET(request: Request) {
         .eq("aktif", true)
         .eq("status", "aktif")
         .order("nama", { ascending: true }),
-      db.from("sosmed_profile").select("user_id, profile_key").eq("penyedia", "upload-post").eq("jenis", "pengguna").not("user_id", "is", null),
+      db.from("sosmed_profile").select("user_id, profile_key").in("penyedia", PENYEDIA_ANGGOTA).eq("jenis", "pengguna").not("user_id", "is", null),
       db.from("akun_tvr_user").select("user_id").eq("terhubung", true),
     ]);
     const profilPer = new Map<number, string>();
