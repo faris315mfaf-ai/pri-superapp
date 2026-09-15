@@ -16,6 +16,7 @@ import {
   Crown,
   ClipboardList,
   Globe,
+  AtSign,
   KeyRound,
   Info,
   LogOut,
@@ -94,6 +95,7 @@ import {
   ModalAkunSosmed,
   ModalGantiFoto,
   ModalGantiSandi,
+  ModalGantiUsername,
   ModalVerifikasiWa,
   TombolAkunSosmed,
 } from "./pengaturan-akun";
@@ -479,6 +481,7 @@ export function ProfilScreen({
   const [versiSosmed, setVersiSosmed] = useState(0);
   const [modalFoto, setModalFoto] = useState(false);
   const [modalSandi, setModalSandi] = useState(false);
+  const [modalUsername, setModalUsername] = useState(false);
   const [modalVerifWa, setModalVerifWa] = useState(false);
   // Foto yang baru diunggah dipakai langsung supaya perubahannya
   // terlihat seketika, tanpa menunggu profil dimuat ulang dari server.
@@ -1011,7 +1014,21 @@ export function ProfilScreen({
 
           {tabPengaturan === "keamanan" && (
             <>
-              {/* Ganti kata sandi lewat OTP WhatsApp */}
+              {/* Dua identitas login diatur berdampingan: username dan
+                  kata sandi. Keduanya dipakai di layar masuk. */}
+              <BarisPengaturan
+                ikon={AtSign}
+                warnaIkon="#8B5CF6"
+                label="Ganti Username"
+                kanan={
+                  user.username ? (
+                    <span className="text-[12px] text-teks-sekunder">@{user.username}</span>
+                  ) : undefined
+                }
+                onClick={() => setModalUsername(true)}
+              />
+
+              {/* Ganti kata sandi lewat OTP email terdaftar */}
               <BarisPengaturan
                 ikon={KeyRound}
                 warnaIkon="#3B82F6"
@@ -1183,6 +1200,14 @@ export function ProfilScreen({
         <ModalVerifikasiWa onTutup={() => setModalVerifWa(false)} />
       )}
 
+      {modalUsername && (
+        <ModalGantiUsername
+          onTutup={() => setModalUsername(false)}
+          // Sama seperti ganti nama: salin ke store supaya username baru
+          // langsung terlihat di seluruh aplikasi tanpa memuat ulang.
+          onSelesai={(username) => setUser({ ...user, username })}
+        />
+      )}
       {modalSandi && <ModalGantiSandi onTutup={() => setModalSandi(false)} />}
 
       <ModalKaca

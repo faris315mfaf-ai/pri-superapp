@@ -58,6 +58,10 @@ export type User = {
   sub_divisi?: string;
   posisi_divisi?: "kepala" | "anggota";
   nama_panggilan?: string;
+  /** Salah satu identitas LOGIN (di samping email & nomor WA). Sudah ikut
+   *  di KOLOM_USER lib/sesi sejak awal; baru dideklarasikan 15 Sep 2026
+   *  saat anggota bisa menggantinya sendiri. */
+  username?: string | null;
   /** Modul per akun yang dibuka/ditutup master (10 Sep 2026); null = ikut peran. */
   modul_izin?: Record<string, boolean> | null;
   /** Jabatan di Sayap Partai (10 Sep 2026) — TERPISAH dari `jabatan` DPP. */

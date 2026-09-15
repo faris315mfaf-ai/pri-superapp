@@ -484,6 +484,38 @@ export async function gantiSandi(data: {
   });
 }
 
+// ------------------------------------------------------------
+// Ganti USERNAME login (15 Sep 2026)
+// ------------------------------------------------------------
+
+export type InfoUsername = {
+  username: string;
+  boleh_ganti: boolean;
+  /** 0 bila boleh sekarang. */
+  sisa_hari: number;
+  jeda_hari: number;
+};
+
+export async function getInfoUsername(): Promise<InfoUsername> {
+  const json = await fetchJson("/api/username", { headers: headerToken() });
+  return {
+    username: String(json.username ?? ""),
+    boleh_ganti: json.boleh_ganti === true,
+    sisa_hari: Number(json.sisa_hari ?? 0) || 0,
+    jeda_hari: Number(json.jeda_hari ?? 30) || 30,
+  };
+}
+
+/** Kata sandi diminta sebagai bukti kepemilikan — lihat /api/username. */
+export async function gantiUsername(username: string, sandi: string): Promise<string> {
+  const json = await fetchJson("/api/username", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ username, sandi }),
+  });
+  return String(json.username ?? username);
+}
+
 /** Ganti foto profil saja (sudah dipotong & dikompres di sisi klien) */
 export async function gantiFotoProfil(foto: string): Promise<UserLengkap> {
   const json = await fetchJson("/api/profil", {

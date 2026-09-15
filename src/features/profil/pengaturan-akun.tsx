@@ -31,6 +31,8 @@ import { toast, useAppStore } from "@/hooks/use-app-store";
 import {
   gantiFotoProfil,
   gantiSandi,
+  gantiUsername,
+  getInfoUsername,
   getAkunSosmed,
   hapusAkunSosmed,
   kirimKodeVerifikasiWa,
@@ -38,6 +40,7 @@ import {
   mintaOtpGantiSandi,
   tambahAkunSosmed,
   verifikasiWaBaru,
+  type InfoUsername,
   verifikasiWaSaya,
   ubahAkunSosmed,
   type AkunSosmed,
@@ -652,6 +655,121 @@ export function ModalGantiSandi({ onTutup }: { onTutup: () => void }) {
 // ------------------------------------------------------------
 // Bagian bersama
 // ------------------------------------------------------------
+
+export function ModalGantiUsername({
+  onTutup,
+  onSelesai,
+}: {
+  onTutup: () => void;
+  /** Dipanggil dengan username baru supaya layar pemanggil ikut segar. */
+  onSelesai?: (username: string) => void;
+}) {
+  const [info, setInfo] = useState<InfoUsername | null>(null);
+  const [baru, setBaru] = useState("");
+  const [sandi, setSandi] = useState("");
+  const [memuat, setMemuat] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let hidup = true;
+    void (async () => {
+      try {
+        const i = await getInfoUsername();
+        if (!hidup) return;
+        setInfo(i);
+        setBaru(i.username);
+      } catch (e) {
+        if (hidup) setError(e instanceof Error ? e.message : "Gagal memuat data username.");
+      }
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, []);
+
+  async function simpan(e: React.FormEvent) {
+    e.preventDefault();
+    if (memuat) return;
+    setError(null);
+    setMemuat(true);
+    try {
+      const hasil = await gantiUsername(baru, sandi);
+      toast("sukses", "Username diganti", `Mulai sekarang masuk dengan @${hasil}.`);
+      onSelesai?.(hasil);
+      onTutup();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal mengganti username.");
+    } finally {
+      setMemuat(false);
+    }
+  }
+
+  // Disamakan dengan aturan server (lib/username) supaya tombolnya tidak
+  // menjanjikan sesuatu yang pasti ditolak — tapi server tetap penentunya.
+  const bersih = baru.trim().toLowerCase();
+  const bentukSah = /^[a-z0-9._]{3,20}$/.test(bersih) && /[a-z]/.test(bersih);
+  const berubah = bersih !== (info?.username ?? "").toLowerCase();
+
+  return (
+    <Sheet judul="Ganti Username" onTutup={memuat ? undefined : onTutup}>
+      <form onSubmit={simpan} className="flex flex-col gap-3" noValidate>
+        <p className="text-[13px] leading-relaxed text-teks-sekunder">
+          Username dipakai untuk <span className="font-semibold text-teks-utama">masuk</span>{" "}
+          dan dikenali anggota lain. Anda tetap bisa masuk memakai email atau nomor WhatsApp.
+        </p>
+
+        {info && !info.boleh_ganti && (
+          <p className="rounded-xl bg-gagal/10 px-3 py-2 text-[12px] leading-snug text-teks-utama">
+            Baru bisa diganti lagi dalam {info.sisa_hari} hari — batas ini menjaga agar
+            orang lain tidak kehilangan jejak Anda.
+          </p>
+        )}
+
+        <div className="relative">
+          <AtSign className="pointer-events-none absolute top-1/2 left-3.5 h-4.5 w-4.5 -translate-y-1/2 text-teks-sekunder" />
+          <input
+            value={baru}
+            onChange={(e) => setBaru(e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, "").slice(0, 20))}
+            placeholder="username baru"
+            autoComplete="username"
+            inputMode="text"
+            aria-label="Username baru"
+            disabled={memuat || info === null}
+            className="glass-soft h-12 w-full rounded-xl pr-3.5 pl-11 text-[15px] text-teks-utama outline-none focus:ring-2 focus:ring-pri/50 disabled:opacity-60"
+          />
+        </div>
+        <p className="text-[11.5px] leading-relaxed text-teks-sekunder">
+          3–20 karakter: huruf kecil, angka, titik, garis bawah — dan{" "}
+          <b className="text-teks-utama">harus ada minimal satu huruf</b>. Username yang
+          seluruhnya angka akan dikira nomor WhatsApp saat login.
+        </p>
+
+        <div className="relative">
+          <Lock className="pointer-events-none absolute top-1/2 left-3.5 h-4.5 w-4.5 -translate-y-1/2 text-teks-sekunder" />
+          <input
+            type="password"
+            value={sandi}
+            onChange={(e) => setSandi(e.target.value)}
+            placeholder="Kata sandi Anda"
+            autoComplete="current-password"
+            aria-label="Kata sandi untuk memastikan"
+            disabled={memuat || info === null}
+            className="glass-soft h-12 w-full rounded-xl pr-3.5 pl-11 text-[15px] text-teks-utama outline-none focus:ring-2 focus:ring-pri/50 disabled:opacity-60"
+          />
+        </div>
+        <p className="text-[11.5px] leading-relaxed text-teks-sekunder">
+          Kata sandi diminta supaya orang lain yang memakai HP Anda tidak bisa mengganti
+          identitas login dan mengunci Anda di luar.
+        </p>
+
+        {error && <PesanError pesan={error} />}
+        <TombolMerah memuat={memuat} disabled={!bentukSah || !berubah || sandi.length === 0}>
+          Ganti Username
+        </TombolMerah>
+      </form>
+    </Sheet>
+  );
+}
 
 export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
   const user = useAppStore((s) => s.user);

@@ -9,6 +9,7 @@
 // Nomor WA sekarang hanya kolom data (untuk basis data & sebagai
 // identitas login alternatif bagi pengguna lama) — TIDAK ada OTP ke WA.
 import { supabase } from "@/lib/supabase";
+import { periksaUsername } from "@/lib/username";
 import { bungkus } from "@/lib/api-helper";
 import { hapusCacheUser } from "@/lib/cache-sesi";
 import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
       nama?: string;
     };
 
-    const username = (body.username ?? "").trim().toLowerCase();
+    let username = (body.username ?? "").trim().toLowerCase();
     const password = body.password ?? "";
     const email = normalkanEmail(body.email ?? "");
     const nama = (body.nama ?? "").trim();
@@ -60,12 +61,16 @@ export async function POST(request: Request) {
     if (nama.length < 2) {
       throw Object.assign(new Error("Nama (sesuai KTP) wajib diisi."), { status: 400 });
     }
-    if (!/^[a-z0-9._]{3,20}$/.test(username)) {
-      throw Object.assign(
-        new Error("Username 3–20 karakter: huruf kecil, angka, titik, atau garis bawah."),
-        { status: 400 },
-      );
+    // Aturan username dipakai BERSAMA dengan penggantian username
+    // (lib/username) supaya keduanya tidak pernah berbeda pendapat.
+    // Dulu di sini username yang seluruhnya angka lolos — padahal login
+    // membaca masukan tanpa huruf sebagai NOMOR WHATSAPP, sehingga
+    // pemiliknya tidak akan pernah bisa masuk dengan username itu.
+    const periksaNama = periksaUsername(username);
+    if (!periksaNama.sah) {
+      throw Object.assign(new Error(periksaNama.pesan), { status: 400 });
     }
+    username = periksaNama.bersih;
     if (password.length < 8) {
       throw Object.assign(new Error("Kata sandi minimal 8 karakter."), { status: 400 });
     }
