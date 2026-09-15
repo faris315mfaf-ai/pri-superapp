@@ -44,6 +44,12 @@ export function solusiGagal(platform: string, pesan: string): { ringkas: string;
   if (p === "tiktok" && ada("inbox", "cap", "unaudited", "active user", "private", "pending review")) {
     return { ringkas: "TikTok menahan video di Kotak Masuk", solusi: "Buka aplikasi TikTok → Kotak Masuk/Notifikasi → terbitkan video itu secara manual (batasan TikTok untuk unggahan lewat API)." };
   }
+  // YouTube lebih spesifik daripada kuota biasa: batas hariannya ketat
+  // untuk channel yang BELUM diverifikasi, dan verifikasi itulah jalan
+  // keluarnya — bukan sekadar menunggu.
+  if (p === "youtube" && ada("exceeded the number of videos", "uploadlimitexceeded", "upload limit", "daily")) {
+    return { ringkas: "Jatah unggah harian YouTube sudah habis", solusi: "YouTube membatasi jumlah video per hari untuk channel yang belum diverifikasi. Coba lagi besok, atau verifikasi channel-nya di youtube.com/verify supaya batasnya naik." };
+  }
   if (ada("token", "expired", "kedaluwarsa", "unauthorized", "401", "invalid_grant", "refresh", "not connected", "has no ", "no account", "not configured", "reconnect", "re-auth", "permission", "403")) {
     return { ringkas: `Akun ${nama} tidak tersambung / izinnya kedaluwarsa`, solusi: `${CARA_TAUTKAN_ULANG} ${nama}.` };
   }

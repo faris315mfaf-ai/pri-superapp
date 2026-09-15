@@ -10,6 +10,7 @@
 // sehingga caption khusus tiap platform yang disunting admin terpakai
 // dalam SATU permintaan, bukan mengunggah videonya berkali-kali.
 import { supabase } from "@/lib/supabase";
+import { bacaGalat, layakDiulang } from "@/lib/galat-unggah";
 import { pesanBagikanVideo } from "@/lib/format";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
@@ -260,9 +261,12 @@ export async function POST(request: Request) {
     // satu kunci; yang kalah ditolak. Kunci basi (>2 menit — proses
     // sebelumnya mati di tengah jalan) boleh direbut.
     const batasBasi = new Date(Date.now() - 2 * 60_000).toISOString();
+    // Stempel percobaan ini. Dipakai DUA kali: sebagai kunci proses, dan
+    // sebagai pembeda kunci anti-dobel di bawah — lihat alasannya di sana.
+    const stempelCoba = new Date().toISOString();
     const { data: kunciDapat } = await db
       .from("video_antrian")
-      .update({ sedang_unggah_pada: new Date().toISOString() })
+      .update({ sedang_unggah_pada: stempelCoba })
       .eq("kode", kode)
       .or(`sedang_unggah_pada.is.null,sedang_unggah_pada.lt.${batasBasi}`)
       .select("kode");
@@ -288,10 +292,23 @@ export async function POST(request: Request) {
 
     let idAyrshare: string;
     let hasil: HasilUnggahPlatform[];
-    // Kunci anti-dobel dipakai BAIK untuk percobaan pertama maupun ulang:
-    // sama persis, sehingga Ayrshare tidak memposting dua kali walau kita
-    // memanggilnya lagi setelah gangguan sementara.
-    const kunciDobel = `pri-${kode}-${siapKirim.slice().sort().join("_")}`;
+    // KUNCI ANTI-DOBEL — perbaikan 15 Sep 2026.
+    //
+    // Dulu kuncinya `pri-<kode>-<platform>` saja: SAMA PERSIS setiap kali
+    // tombol "Ulangi" ditekan untuk kumpulan platform yang sama. Ayrshare
+    // mengenalinya sebagai permintaan kembar, jadi percobaan ULANG KEDUA
+    // dan seterusnya tidak pernah benar-benar dikirim — tombolnya tampak
+    // bekerja tapi tidak terjadi apa-apa. Itu bug yang terlihat di
+    // produksi: video yang sama gagal berhari-hari di platform yang sama.
+    //
+    // Sekarang kuncinya memuat STEMPEL PERCOBAAN. Tiap percobaan baru =
+    // permintaan baru yang sungguh dikirim; sementara perlindungan dari
+    // dobel-posting tetap utuh lewat tiga lapis yang lain:
+    //   1. platform yang SUDAH tayang dibuang dari daftar kirim (di atas),
+    //   2. kunci proses 2 menit menahan klik ganda / dua admin bersamaan,
+    //   3. `unggahDenganUlang` mengulang sekali dengan kunci yang SAMA,
+    //      sehingga gangguan jaringan di tengah tidak melahirkan dua post.
+    const kunciDobel = `pri-${kode}-${siapKirim.slice().sort().join("_")}-${stempelCoba}`;
     try {
       // Ulangi SEKALI bila gagal karena hal sementara (jaringan/timeout/
       // 5xx). Karena idempotencyKey sama, ulangan ini AMAN — tidak akan
@@ -435,9 +452,16 @@ export async function POST(request: Request) {
     // dan alasannya, plus arahan ke tombol Ulangi di Riwayat Video.
     const gagalDaftar = hasil.filter((h) => h.status === "error");
     if (gagalDaftar.length > 0) {
+      // Notifikasi memakai keterangan Bahasa Indonesia, bukan kalimat
+      // mentah platform yang dipotong di tengah — yang dibaca orang di
+      // notifikasi HP tidak boleh berupa penggalan kalimat Inggris.
       const rincian = gagalDaftar
-        .map((h) => `${h.platform}${h.pesan ? ` (${h.pesan.slice(0, 80)})` : ""}`)
+        .map((h) => `${h.platform} (${bacaGalat(h.platform, h.pesan ?? "").ringkas})`)
         .join(", ");
+      const semuaPutusan = layakDiulang(gagalDaftar.map((h) => ({ platform: h.platform, pesan: h.pesan ?? "" })));
+      const ajakan = semuaPutusan.bolehUlang
+        ? "Buka TV Rakyat → Riwayat Video → tombol Ulangi untuk mencoba lagi."
+        : semuaPutusan.alasan;
       const penerima = Array.from(
         new Set(
           [Number(pengguna.id), Number(video.diupload_oleh_id ?? 0)].filter(Boolean),
@@ -445,7 +469,7 @@ export async function POST(request: Request) {
       );
       await kirimKabar({
         judul: `⚠ Video gagal tayang di ${gagalDaftar.length} platform`,
-        isi: `"${video.judul_overlay || video.judul || kode}" gagal di: ${rincian}. Buka TV Rakyat → Riwayat Video → tombol Ulangi untuk mencoba lagi.`,
+        isi: `"${video.judul_overlay || video.judul || kode}" gagal di: ${rincian}. ${ajakan}`,
         kategori: "peringatan",
         jenis_peristiwa: "tv_gagal",
         untukUserIds: penerima,

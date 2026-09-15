@@ -19,6 +19,7 @@ import {
 import { EmptyState, FadeInUp, GlassSkeleton, StatusBadge } from "@/components/pri-ui";
 import { GlassCard } from "@/components/glass-card";
 import { PlatformIcon } from "@/components/platform-icon";
+import { bacaGalat, layakDiulang } from "@/lib/galat-unggah";
 import { getVideoAntrian, hapusVideoAntrian, unggahVideoSosmed } from "@/services";
 import { toast } from "@/hooks/use-app-store";
 import { jamWIB, pesanBagikanVideo } from "@/lib/format";
@@ -596,37 +597,85 @@ function ItemVideo({
             {(() => {
               const gagal = platformGagal(video);
               if (gagal.length === 0) return null;
-              return (
+                // Terjemahkan alasannya. Kalimat mentah dari platform
+                // berbahasa Inggris dan panjang; dulu dipotong 90 huruf
+                // sehingga justru bagian yang menjelaskan ikut hilang.
+                const putusan = layakDiulang(gagal);
+                return (
                 <div className="mt-2 rounded-xl border border-gagal/30 bg-gagal/[0.05] p-2.5">
-                  {gagal.map((g) => (
-                    <p
-                      key={g.platform}
-                      className="flex items-start gap-1.5 text-[10.5px] leading-snug text-teks-utama"
+                  {gagal.map((g) => {
+                    const b = bacaGalat(g.platform, g.pesan);
+                    return (
+                      <div key={g.platform} className="mb-1.5 last:mb-0">
+                        <p className="flex items-start gap-1.5 text-[10.5px] leading-snug text-teks-utama">
+                          <PlatformIcon platform={g.platform} size={12} />
+                          <span className="min-w-0">
+                            <b className="capitalize">{g.platform}</b> — {b.ringkas}
+                          </span>
+                        </p>
+                        {b.solusi && (
+                          <p className="mt-0.5 pl-[18px] text-[10px] leading-snug text-teks-sekunder">
+                            {b.solusi}
+                          </p>
+                        )}
+                        {g.pesan && (
+                          <details className="mt-0.5 pl-[18px]">
+                            <summary className="cursor-pointer text-[9.5px] text-teks-sekunder/70">
+                              pesan asli dari platform
+                            </summary>
+                            <p className="mt-0.5 text-[9.5px] leading-snug text-teks-sekunder/80">
+                              {g.pesan}
+                            </p>
+                          </details>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {putusan.bolehUlang ? (
+                    <button
+                      type="button"
+                      disabled={mengulang}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void ulangiGagal(video);
+                      }}
+                      className="btn-tekan mt-2 flex h-8 w-full items-center justify-center gap-1.5 rounded-lg text-[11.5px] font-bold text-white disabled:opacity-60"
+                      style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
                     >
-                      <PlatformIcon platform={g.platform} size={12} />
-                      <span className="min-w-0">
-                        <b className="capitalize">{g.platform}</b> gagal
-                        {g.pesan ? ` — ${g.pesan.slice(0, 90)}` : ""}
-                      </span>
-                    </p>
-                  ))}
-                  <button
-                    type="button"
-                    disabled={mengulang}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void ulangiGagal(video);
-                    }}
-                    className="btn-tekan mt-2 flex h-8 w-full items-center justify-center gap-1.5 rounded-lg text-[11.5px] font-bold text-white disabled:opacity-60"
-                    style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
-                  >
-                    {mengulang ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-                    )}
-                    Ulangi {gagal.length} platform yang gagal
-                  </button>
+                      {mengulang ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                      )}
+                      Ulangi {gagal.length} platform yang gagal
+                    </button>
+                  ) : (
+                    <>
+                      {/* Mengulang di sini hampir pasti ditolak lagi — dikatakan
+                          terus terang, tapi tombolnya tidak dikunci: keadaannya
+                          bisa berubah (kuota pulih, akun diverifikasi). */}
+                      <p className="mt-2 rounded-lg bg-gagal/10 px-2 py-1.5 text-[10px] leading-snug text-teks-utama">
+                        {putusan.alasan}
+                      </p>
+                      <button
+                        type="button"
+                        disabled={mengulang}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void ulangiGagal(video);
+                        }}
+                        className="btn-tekan mt-1.5 flex h-7 w-full items-center justify-center gap-1.5 rounded-lg border border-gagal/40 text-[10.5px] font-semibold text-gagal disabled:opacity-60"
+                      >
+                        {mengulang ? (
+                          <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                        )}
+                        Coba ulangi saja
+                      </button>
+                    </>
+                  )}
                 </div>
               );
             })()}
