@@ -32,6 +32,8 @@
 // ============================================================
 
 
+import { KonfigurasiError } from "@/lib/supabase";
+
 const DASAR = "https://api.upload-post.com/api";
 
 /** Peta platform aplikasi ↔ upload-post ("twitter" kita = "x" mereka). */
@@ -50,9 +52,11 @@ const DARI_UP: Record<string, string> = Object.fromEntries(
  *  untuk pembaca insight_cache (dashboard TV Rakyat Nasional). */
 export const PETA_PLATFORM_UP: Readonly<Record<string, string>> = KE_UP;
 
-export class UploadPostBelumDiaturError extends Error {
+export class UploadPostBelumDiaturError extends KonfigurasiError {
   constructor() {
-    super("upload-post belum diatur. Isi UPLOAD_POST_API_KEY di pengaturan server.");
+    super(
+      "Penautan sosmed belum siap: kunci upload-post belum diisi di server. Hubungi pengelola.",
+    );
     this.name = "UploadPostBelumDiaturError";
   }
 }

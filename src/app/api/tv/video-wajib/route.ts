@@ -21,7 +21,7 @@
 // Siapa yang berwenang: seluruh anggota TV Rakyat (wewenangTv), Direktur
 // Eksekutif, Pimpinan Redaksi, dan jabatan TV Rakyat Nasional.
 import { supabase } from "@/lib/supabase";
-import { bungkus } from "@/lib/api-helper";
+import { bungkus, tabelBelumAda } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { bolehKelolaTvr } from "@/lib/tv-tim";
 import { maksUploadMb } from "@/lib/pengaturan-tv";
@@ -191,13 +191,20 @@ async function ambilBaris(hanyaAktif: boolean): Promise<Baris[]> {
   if (hanyaAktif) q = q.eq("aktif", true);
   const { data, error } = await q;
   if (!error) return (data ?? []) as Baris[];
+  console.error("[tv/video-wajib] select:", error.code, error.message);
+  // Migrasi sql/46 belum dijalankan: jangan jatuhkan seluruh modul TV.
+  if (tabelBelumAda(error)) return [];
   // Kolom baru belum ada (sql/52 belum dijalankan): tampilkan bentuk
   // lama daripada panel kosong dengan galat.
   if (error.code !== "42703") throw new Error("Gagal memuat video wajib.");
   let lama = db.from("tvr_video_wajib").select(KOLOM_LAMA).order("dibuat_pada", { ascending: false }).limit(50);
   if (hanyaAktif) lama = lama.eq("aktif", true);
   const ulang = await lama;
-  if (ulang.error) throw new Error("Gagal memuat video wajib.");
+  if (ulang.error) {
+    console.error("[tv/video-wajib] select-lama:", ulang.error.code, ulang.error.message);
+    if (tabelBelumAda(ulang.error)) return [];
+    throw new Error("Gagal memuat video wajib.");
+  }
   return (ulang.data ?? []) as Baris[];
 }
 
@@ -284,7 +291,16 @@ export async function POST(request: Request) {
       await hapusBerkas({ berkas_cara: berkas.cara, berkas_key: berkas.key });
       throw Object.assign(
         new Error("Kolom bahan video belum ada di database: jalankan pri-sql 52_video_wajib_berkas.sql dulu."),
-        { status: 503 },
+        { status: 503, pesanAman: true },
+      );
+    }
+    if (tabelBelumAda(error)) {
+      await hapusBerkas({ berkas_cara: berkas.cara, berkas_key: berkas.key });
+      throw Object.assign(
+        new Error(
+          "Tabel video wajib belum ada di database. Jalankan sql/46_tvr_nasional.sql lalu sql/52_video_wajib_berkas.sql di SQL Editor Supabase.",
+        ),
+        { status: 503, pesanAman: true },
       );
     }
     if (error || !data) throw new Error("Gagal menyimpan video wajib.");

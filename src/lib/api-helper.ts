@@ -69,3 +69,9 @@ export function pastikanSukses<T>(
   }
   return (hasil.data ?? []) as T;
 }
+
+/** Tabel belum ada di schema cache PostgREST (migrasi SQL belum dijalankan). */
+export function tabelBelumAda(error: { code?: string } | null | undefined): boolean {
+  const kode = error?.code;
+  return kode === "PGRST205" || kode === "42P01";
+}
