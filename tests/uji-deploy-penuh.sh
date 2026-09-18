@@ -203,6 +203,20 @@ cek "tetap lanjut ke langkah SQL" "$(echo "$OUT" | grep -q "Buku catatan migrasi
 buat_sql 7 "13_setelah.sql"
 OUT2="$(UJI_PEMILIK=pengguna-deploy jalankan --lewati-aplikasi --coba)"
 cek "berkas baru setelah itu tetap terdeteksi" "$(echo "$OUT2" | grep -q "13_setelah.sql" && echo 1 || echo 0)" "$(echo "$OUT2" | tail -4)"
+echo
+echo "[L] --status hanya melaporkan, tidak boleh mengubah apa pun"
+SEBELUM_STATUS="$(cat "$LEDGER")"
+buat_sql 8 "14_belum.sql"   # satu berkas sengaja belum pernah dijalankan
+OUT="$(jalankan --status)"; KODE=$?
+cek "keluar tanpa galat" "$([ "$KODE" = "0" ] && echo 1 || echo 0)" "kode=$KODE"
+cek "buku catatan TIDAK berubah" "$([ "$(cat "$LEDGER")" = "$SEBELUM_STATUS" ] && echo 1 || echo 0)"
+cek "menyebut yang BELUM dijalankan" "$(echo "$OUT" | grep -q "14_belum.sql" && echo 1 || echo 0)" "$(echo "$OUT" | tail -5)"
+cek "menyatakan tidak ada yang diubah" "$(echo "$OUT" | grep -q "Tidak ada yang diubah" && echo 1 || echo 0)"
+cek "TIDAK membangun ulang aplikasi" "$(echo "$OUT" | grep -q "Membangun" && echo 0 || echo 1)"
+rm -f "$T/sumber/sql/14_belum.sql" "$T/sumber/sql/13_setelah.sql"
+OUT="$(jalankan --status)"
+cek "kalau semua sudah jalan, dikatakan terang-terangan" "$(echo "$OUT" | grep -q "semuanya sudah dijalankan" && echo 1 || echo 0)" "$(echo "$OUT" | tail -5)"
+
 
 
 echo

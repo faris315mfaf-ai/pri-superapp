@@ -48,6 +48,7 @@
 #
 # CARA PAKAI (root, di VPS):
 #   pri-deploy                  # kode + SQL + aplikasi
+#   pri-deploy --status         # apa yang sudah & belum dijalankan (tidak mengubah)
 #   pri-deploy --coba           # hanya menampilkan apa yang AKAN dijalankan
 #   pri-deploy --lewati-sql     # hanya bangun ulang aplikasi
 #   pri-deploy --lewati-aplikasi# hanya jalankan SQL yang tertunda
@@ -64,12 +65,14 @@ KUNCI="${PRI_KUNCI:-/opt/pri-superapp/kunci.env}"
 SKRIP="${PRI_SKRIP:-/opt/pri-superapp/skrip}"
 
 COBA=0
+STATUS=0
 LEWATI_SQL=0
 LEWATI_APLIKASI=0
 DENGAN_INDEX=0
 for arg in "$@"; do
   case "$arg" in
     --coba) COBA=1 ;;
+    --status) STATUS=1 ;;
     --lewati-sql) LEWATI_SQL=1 ;;
     --lewati-aplikasi) LEWATI_APLIKASI=1 ;;
     --dengan-index) DENGAN_INDEX=1 ;;
@@ -85,6 +88,14 @@ if [ -z "${PRI_UJI:-}" ] && [ -f "$SKRIP/22-deploy-penuh.sh" ] \
   { ln -sf "$SKRIP/22-deploy-penuh.sh" "$PINTASAN" 2>/dev/null \
     && echo "  perintah pendek dipasang: pri-deploy"; } || true
 fi
+
+if [ "$STATUS" = "1" ]; then
+  LEWATI_APLIKASI=1
+fi
+
+if [ "$STATUS" = "1" ]; then
+  echo "== Status migrasi database =="
+else
 
 echo "== 1/6 Memeriksa kode di server =="
 command -v docker >/dev/null || { echo "Docker belum ada." >&2; exit 1; }
@@ -128,12 +139,14 @@ if [ -d "$SUMBER/vps" ]; then
   chmod +x "$SKRIP"/*.sh 2>/dev/null || true
 fi
 
+fi  # akhir langkah 1
+
 if [ "$LEWATI_SQL" = "1" ]; then
   echo
   echo "== 2-4/6 SQL DILEWATI (--lewati-sql) =="
 else
 
-echo "== 2/6 Mencari database =="
+[ "$STATUS" = "1" ] && echo "== Mencari database ==" || echo "== 2/6 Mencari database =="
 # Dicari lewat NAMA IMAGE, bukan nama container: nama container berbeda
 # tergantung cara Supabase dipasang, imagenya tetap.
 CT="$(docker ps --format '{{.Names}}\t{{.Image}}' \
@@ -149,7 +162,7 @@ echo "  container: $CT"
 # Menjalankan satu perintah SQL pendek dan mengembalikan hasilnya.
 psql_nilai() { docker exec -i "$CT" psql -qtAX -v ON_ERROR_STOP=1 "$URL" -c "$1"; }
 
-echo "== 3/6 Buku catatan migrasi =="
+[ "$STATUS" = "1" ] && echo "== Buku catatan migrasi ==" || echo "== 3/6 Buku catatan migrasi =="
 psql_nilai "
 create table if not exists public._migrasi_sql (
   berkas          text primary key,
@@ -159,9 +172,36 @@ create table if not exists public._migrasi_sql (
 comment on table public._migrasi_sql is
   'Catatan berkas sql/ yang sudah dijalankan di database ini. Diisi oleh vps/22-deploy-penuh.sh — jangan diubah tangan.';
 " >/dev/null
-SUDAH="$(psql_nilai "select count(*) from public._migrasi_sql;")"
+SUDAH="$(psql_nilai "select count(*) from public._migrasi_sql;" || true)"
+SUDAH="${SUDAH:-0}"
 echo "  $SUDAH berkas tercatat pernah dijalankan"
 [ "$SUDAH" = "0" ] && echo "  (buku catatan baru dibuat — jalan pertama akan menelusuri semuanya dari awal)"
+
+if [ "$STATUS" = "1" ]; then
+  echo
+  echo "  Sudah dijalankan (10 terbaru):"
+  psql_nilai "
+    select '    ' || to_char(dijalankan_pada at time zone 'Asia/Jakarta', 'DD Mon HH24:MI') || '  ' || berkas
+    from public._migrasi_sql order by dijalankan_pada desc limit 10;
+  " || true
+  echo
+  echo "  BELUM dijalankan:"
+  BELUM=0
+  for J in $(ls -1 "$SUMBER"/sql/[0-9]*_*.sql 2>/dev/null | sort -V); do
+    N="$(basename "$J")"
+    S="$(sha256sum "$J" | cut -c1-16)"
+    T="$(psql_nilai "select sidik from public._migrasi_sql where berkas = $(printf "%s" "'$N'");" || true)"
+    if [ "$T" != "$S" ]; then
+      BELUM=$((BELUM + 1))
+      printf "    %s%s
+" "$N" "$([ -n "$T" ] && echo '  (isinya berubah)' || echo '')"
+    fi
+  done
+  [ "$BELUM" -eq 0 ] && echo "    (tidak ada — semuanya sudah dijalankan)"
+  echo
+  echo "Tidak ada yang diubah oleh perintah ini."
+  exit 0
+fi
 
 echo "== 4/6 Menjalankan perubahan database yang tertunda =="
 DAFTAR="$(ls -1 "$SUMBER"/sql/[0-9]*_*.sql 2>/dev/null | sort -V || true)"
