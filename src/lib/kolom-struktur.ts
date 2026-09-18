@@ -16,6 +16,42 @@ import { supabase } from "@/lib/supabase";
 const jawaban = new Map<string, boolean>();
 const sedangPeriksa = new Map<string, Promise<boolean>>();
 
+/** Nama kolom yang ditolak PostgREST karena belum ada di schema. */
+export function namaKolomHilang(pesan: string): string | null {
+  const a = /Could not find the '([^']+)' column/i.exec(pesan);
+  if (a?.[1]) return a[1];
+  const b = /column \w+\.([a-z0-9_]+) does not exist/i.exec(pesan);
+  return b?.[1] ?? null;
+}
+
+/**
+ * INSERT yang mengulang tanpa kolom yang belum ada di database.
+ * Dipakai riwayat TVR Saya: migrasi sql/46+57 (keyword, penyedia, …)
+ * sering belum dijalankan, dan kegagalan insert sebelumnya hanya dicatat
+ * di log — video terbit di sosmed tapi riwayat/KPI tetap kosong.
+ */
+export async function sisipkanLonggar(
+  tabel: string,
+  isi: Record<string, unknown>,
+): Promise<{ data: { id: number } | null; error: { message: string; code?: string } | null }> {
+  const payload: Record<string, unknown> = { ...isi };
+  let terakhir: { message: string; code?: string } | null = null;
+  for (let i = 0; i < 8; i += 1) {
+    const { data, error } = await supabase()
+      .from(tabel)
+      .insert(payload)
+      .select("id")
+      .single();
+    if (!error) return { data: data as { id: number }, error: null };
+    terakhir = error;
+    const kolom = namaKolomHilang(error.message);
+    if (!kolom || !(kolom in payload)) break;
+    delete payload[kolom];
+    jawaban.set(`${tabel}.${kolom}`, false);
+  }
+  return { data: null, error: terakhir };
+}
+
 /** true bila kolom `tabel.nama` sudah terpasang di database. */
 export async function kolomTabelAda(tabel: string, nama: string): Promise<boolean> {
   const kunci = `${tabel}.${nama}`;

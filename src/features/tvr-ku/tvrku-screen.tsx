@@ -596,11 +596,10 @@ export function TvrKuScreen({
     void (async () => {
       try {
         // Empat sumber tidak saling bergantung — dimuat bersamaan.
-        const [a, l, k, r] = await Promise.all([
+        const [a, l, k] = await Promise.all([
           getAkunTvr(),
           getLaporanVideo(),
           getLaporanKerja().catch(() => null),
-          getRiwayatVideo7Hari().catch(() => null),
         ]);
         if (!hidup) return;
         setAkun(a);
@@ -612,6 +611,10 @@ export function TvrKuScreen({
         setKpiTercapai(l.kpi_tercapai ?? null);
         setDibebaskan(l.dibebaskan);
         if (k) setKpiRencana(k.kpi);
+        // Grafik 7 hari dibaca SETELAH laporan (yang menunggu tautan
+        // unggahan baru), supaya batang hari ini tidak tertinggal 0.
+        const r = await getRiwayatVideo7Hari().catch(() => null);
+        if (!hidup) return;
         if (r) setRiwayat7(r.data);
       } catch (e) {
         if (hidup) {

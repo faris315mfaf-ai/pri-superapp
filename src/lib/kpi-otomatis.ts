@@ -33,6 +33,7 @@ import { kanonikTautan, kunciVideo } from "@/lib/tautan-video";
 import { kirimKabar } from "@/lib/notifikasi";
 import { LABEL_SOSMED, solusiGagal } from "@/lib/batas-caption";
 import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
+import { namaKolomHilang } from "@/lib/kolom-struktur";
 
 /** Toleransi mundur saat mencocokkan waktu terbit (jam beda server). */
 export const TOLERANSI_MENIT = 10;
@@ -241,13 +242,30 @@ export async function rekonsiliasiKpiRinci(userId: number, opsi: { anggaranMs?: 
     if (!profil) return ringkas;
 
     const batas = new Date(Date.now() - BATAS_UMUR_JAM * 3600_000).toISOString();
-    const { data: postsMentah } = await db
+    const pilihPost =
+      "id, judul, platforms, kpi_tercatat, jadwal, dibuat_pada, request_id, hasil";
+    let { data: postsMentah, error: errPost } = await db
       .from("tvrku_post")
-      .select("id, judul, platforms, kpi_tercatat, jadwal, dibuat_pada, request_id, hasil")
+      .select(pilihPost)
       .eq("user_id", userId)
       .gte("dibuat_pada", batas)
       .order("dibuat_pada", { ascending: true })
       .limit(80);
+    if (errPost && namaKolomHilang(errPost.message) === "kpi_tercatat") {
+      const ulang = await db
+        .from("tvrku_post")
+        .select("id, judul, platforms, jadwal, dibuat_pada, request_id, hasil")
+        .eq("user_id", userId)
+        .gte("dibuat_pada", batas)
+        .order("dibuat_pada", { ascending: true })
+        .limit(80);
+      postsMentah = (ulang.data ?? []).map((p) => ({ ...p, kpi_tercatat: [] }));
+      errPost = ulang.error;
+    }
+    if (errPost) {
+      ringkas.catatan.push(`baca unggahan: ${errPost.message}`);
+      return ringkas;
+    }
     const daftarStr = (v: unknown) => (Array.isArray(v) ? v.map((x) => String(x).toLowerCase()) : []);
     const posts: PostTvrku[] = (postsMentah ?? []).map((p) => {
       const hasil = (p.hasil && typeof p.hasil === "object" && !Array.isArray(p.hasil) ? (p.hasil as Record<string, unknown>) : {}) as Record<string, unknown>;
@@ -390,7 +408,10 @@ export async function rekonsiliasiKpiRinci(userId: number, opsi: { anggaranMs?: 
       if (baruSet.join(",") !== lama.join(",")) ubah.kpi_tercatat = baruSet;
       if (jejak) ubah.hasil = { ...p.hasil, kpi_pasti: [...jejak.pasti].sort(), kpi_gagal: [...jejak.gagal].sort(), kpi_gagal_alasan: jejak.alasan };
       if (Object.keys(ubah).length > 0) {
-        await db.from("tvrku_post").update({ ...ubah, rekonsiliasi_pada: new Date().toISOString() }).eq("id", p.id);
+        const simpan = await db.from("tvrku_post").update({ ...ubah, rekonsiliasi_pada: new Date().toISOString() }).eq("id", p.id);
+        if (simpan.error && namaKolomHilang(simpan.error.message) === "rekonsiliasi_pada") {
+          await db.from("tvrku_post").update(ubah).eq("id", p.id);
+        }
       }
       ringkas.pending_tersisa += pendingDari(p).length;
     }

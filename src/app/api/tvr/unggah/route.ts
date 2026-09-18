@@ -44,7 +44,7 @@ import {
   r2Siap,
 } from "@/lib/r2";
 import { PENYEDIA_ANGGOTA, unggahVideoAnggota, type IdPenyedia } from "@/lib/sosmed-penyedia";
-import { kolomTabelAda } from "@/lib/kolom-struktur";
+import { kolomTabelAda, sisipkanLonggar } from "@/lib/kolom-struktur";
 
 export const dynamic = "force-dynamic";
 // upload-post mengunduh video dari URL kita lalu memposting ke banyak
@@ -153,12 +153,11 @@ export async function GET(request: Request) {
       .eq("user_id", Number(user.id))
       .order("id", { ascending: false })
       .limit(30);
-    // KPI OTOMATIS: tiap membuka riwayat, unggahan yang URL postingannya
-    // sudah terbit dicatat jadi laporan_video — tanpa lapor manual.
-    // 4 Sep 2026: sebagian DITUNGGU (anggaran 12 dtk) supaya tautan "Bagikan"
-    // sudah tampil pada pembukaan PERTAMA, bukan baru saat layar dibuka lagi;
-    // sisanya diteruskan di latar belakang.
-    await rekonsiliasiKpiOtomatis(Number(user.id), { anggaranMs: 12_000 });
+    // KPI OTOMATIS: unggahan yang URL-nya sudah terbit dicatat ke
+    // laporan_video. Jangan ditunggu di sini — dulu 12 dtk membuat
+    // riwayat terasa kosong/telat, padahal tautan yang sudah ada tetap
+    // terbaca dari laporan_video di bawah. Yang belum siap menyusul lewat
+    // after() + cron 15 menit + pantauan klien.
     after(() => rekonsiliasiKpiOtomatis(Number(user.id)));
     after(bersihkanVideoKedaluwarsa);
     // PALUGODAM: pesanan yang rendernya sudah selesai ikut diposting.
@@ -555,11 +554,7 @@ export async function POST(request: Request) {
       if (await kolomTabelAda("tvrku_post", "keyword")) isiRiwayat.keyword = kategori;
       if (await kolomTabelAda("tvrku_post", "penyedia")) isiRiwayat.penyedia = profil.penyedia;
 
-      const { data: baris, error } = await db
-        .from("tvrku_post")
-        .insert(isiRiwayat)
-        .select("id")
-        .single();
+      const { data: baris, error } = await sisipkanLonggar("tvrku_post", isiRiwayat);
       if (error) console.error("[tvrku/unggah] simpan riwayat:", error.message);
       // 5 Sep 2026: bonus koin unggah video.
       if (baris?.id) {
@@ -586,22 +581,25 @@ export async function POST(request: Request) {
         );
       }
 
-      // Coba catat KPI segera (platform cepat seperti YouTube/TikTok
-      // biasanya sudah punya URL); sisanya menyusul saat layar dibuka.
-      // 10 Sep 2026: dicoba DUA kali — sebagian sosmed baru memberi URL
-      // pasti puluhan detik setelah unggah; percobaan kedua menangkapnya
-      // supaya video langsung tampil di Laporan Video Hari Ini.
+      // Coba catat KPI segera. upload-post sering membalas "initiated in
+      // background" tanpa URL — YouTube kadang siap ~15 dtk, sosmed lain
+      // belasan detik sampai beberapa menit. Dulu hanya 2 percobaan,
+      // jadi KPI/rangkuman tetap 0 sampai cron 15 menit (atau tidak
+      // pernah, bila layar tidak dimuat ulang).
       if (!jadwal) {
         after(async () => {
-          await rekonsiliasiKpiOtomatis(Number(user.id));
-          await new Promise((r) => setTimeout(r, 25_000));
-          await rekonsiliasiKpiOtomatis(Number(user.id));
+          const jeda = [0, 20_000, 50_000, 90_000];
+          for (const ms of jeda) {
+            if (ms) await new Promise((r) => setTimeout(r, ms));
+            await rekonsiliasiKpiOtomatis(Number(user.id));
+          }
         });
       }
       after(bersihkanVideoKedaluwarsa);
       return {
         sukses: hasil.sukses,
         id: baris ? String(baris.id) : null,
+        riwayat_gagal: !baris,
         terjadwal: Boolean(jadwal),
         hasil: hasil.mentah,
       };

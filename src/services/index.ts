@@ -3407,6 +3407,8 @@ export async function postTvrku(data: {
 }): Promise<{
   sukses: boolean;
   terjadwal: boolean;
+  id?: string | null;
+  riwayat_gagal?: boolean;
   hasil: Record<string, unknown>;
 }> {
   const json = await fetchJson("/api/tvr/unggah", {
@@ -3417,6 +3419,8 @@ export async function postTvrku(data: {
   return json as {
     sukses: boolean;
     terjadwal: boolean;
+    id?: string | null;
+    riwayat_gagal?: boolean;
     hasil: Record<string, unknown>;
   };
 }

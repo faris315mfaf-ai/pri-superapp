@@ -23,6 +23,7 @@ import { SeksiLipat } from "@/components/seksi-lipat";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
 import { toast, useAppStore } from "@/hooks/use-app-store";
+import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { adalahPalugodam } from "@/lib/struktur";
 import { ModalEditOtomatis } from "./modal-edit-otomatis";
 import {
@@ -67,6 +68,7 @@ export function UnggahSosmedSaya() {
   // terbit beberapa saat kemudian → riwayat dipantau tiap 15 dtk (maks 4 mnt)
   // sampai tautannya ada, lalu tombol Bagikan muncul di riwayat.
   const [pantauSejak, setPantauSejak] = useState<number | null>(null);
+  const tautanTerakhir = useRef(0);
   useEffect(() => {
     if (pantauSejak === null) return;
     let hidup = true;
@@ -79,6 +81,11 @@ export function UnggahSosmedSaya() {
         .then((posts) => {
           if (!hidup) return;
           setRiwayat(posts);
+          const nTautan = posts.reduce((a, p) => a + Object.keys(p.tautan ?? {}).length, 0);
+          if (nTautan > tautanTerakhir.current) {
+            tautanTerakhir.current = nTautan;
+            useAppStore.getState().segarkanData();
+          }
           const terbaru = posts[0];
           if (terbaru && Object.keys(terbaru.tautan ?? {}).length >= terbaru.platforms.length) {
             setPantauSejak(null);
@@ -155,6 +162,7 @@ export function UnggahSosmedSaya() {
   const [bukaEditOtomatis, setBukaEditOtomatis] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const versiSegar = useVersiSegar();
   useEffect(() => {
     let hidup = true;
     void (async () => {
@@ -185,7 +193,7 @@ export function UnggahSosmedSaya() {
     return () => {
       hidup = false;
     };
-  }, []);
+  }, [versiSegar]);
 
   async function batalkanJadwal(job: JadwalTvrku) {
     if (sedangBatal) return;
@@ -274,6 +282,30 @@ export function UnggahSosmedSaya() {
     };
   }, []);
 
+  async function setelahPost(h: {
+    terjadwal: boolean;
+    sukses: boolean;
+    riwayat_gagal?: boolean;
+  }) {
+    if (h.riwayat_gagal) {
+      toast(
+        "peringatan",
+        "Video terkirim, riwayat belum tercatat",
+        "Muat ulang halaman. KPI menyusul setelah tautan sosmed terbit.",
+      );
+    } else if (h.terjadwal) {
+      toast("sukses", "Terjadwal", "Video akan diposting otomatis pada waktunya.");
+    } else if (h.sukses) {
+      toast("sukses", "Video terkirim", `Diposting ke ${pilih.size} platform Anda. KPI menyusul setelah tautan terbit.`);
+    } else {
+      toast("peringatan", "Sebagian gagal", "Cek rincian di riwayat — platform yang gagal bisa dicoba lagi.");
+    }
+    setRiwayat(await getRiwayatTvrkuPost().catch(() => riwayat ?? []));
+    setJadwalAntre(await getJadwalTvrku().catch(() => jadwalAntre ?? []));
+    useAppStore.getState().segarkanData();
+    if (!h.terjadwal) setPantauSejak(Date.now());
+  }
+
   async function kirim() {
     if (!sah || tahap) return;
     try {
@@ -290,13 +322,6 @@ export function UnggahSosmedSaya() {
           platforms: [...pilih],
           jadwal: pakaiJadwal && jadwal ? new Date(jadwal).toISOString() : undefined,
         });
-        if (h.terjadwal) {
-          toast("sukses", "Terjadwal", "Video akan diposting otomatis pada waktunya.");
-        } else if (h.sukses) {
-          toast("sukses", "Video terkirim", `Diposting ke ${pilih.size} platform Anda.`);
-        } else {
-          toast("peringatan", "Sebagian gagal", "Cek rincian di riwayat.");
-        }
         setTautan("");
         setJudul("");
         setKategori("");
@@ -305,8 +330,7 @@ export function UnggahSosmedSaya() {
         setPilih(new Set());
         setPakaiJadwal(false);
         setJadwal("");
-        setRiwayat(await getRiwayatTvrkuPost().catch(() => riwayat ?? []));
-        setJadwalAntre(await getJadwalTvrku().catch(() => jadwalAntre ?? []));
+        await setelahPost(h);
         return;
       }
 
@@ -332,17 +356,6 @@ export function UnggahSosmedSaya() {
         jadwal: pakaiJadwal && jadwal ? new Date(jadwal).toISOString() : undefined,
       });
 
-      if (hasil.terjadwal) {
-        toast("sukses", "Terjadwal", "Video akan diposting otomatis pada waktunya.");
-      } else if (hasil.sukses) {
-        toast("sukses", "Video terkirim", `Diposting ke ${pilih.size} platform Anda.`);
-      } else {
-        toast(
-          "peringatan",
-          "Sebagian gagal",
-          "Cek rincian di riwayat — platform yang gagal bisa dicoba lagi.",
-        );
-      }
       setBerkas(null);
       setJudul("");
       setKategori("");
@@ -352,10 +365,7 @@ export function UnggahSosmedSaya() {
       setPakaiJadwal(false);
       setJadwal("");
       if (inputRef.current) inputRef.current.value = "";
-      setRiwayat(await getRiwayatTvrkuPost().catch(() => riwayat ?? []));
-      setJadwalAntre(await getJadwalTvrku().catch(() => jadwalAntre ?? []));
-      // Tautan hasil terbit beberapa saat lagi → pantau supaya tombol Bagikan muncul.
-      if (!hasil.terjadwal) setPantauSejak(Date.now());
+      await setelahPost(hasil);
     } catch (e) {
       toast("error", "Gagal", e instanceof Error ? e.message : "Coba lagi sebentar.");
     } finally {

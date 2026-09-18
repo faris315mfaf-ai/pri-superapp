@@ -14,6 +14,7 @@ import { Copy, FileText, Loader2, RefreshCw, Send, Sparkles } from "lucide-react
 import { GlassCard } from "@/components/glass-card";
 import { PlatformIcon } from "@/components/platform-icon";
 import { toast } from "@/hooks/use-app-store";
+import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { getRangkumanLink, type RangkumanLink as DataRangkuman } from "@/services";
 import { tanggalIndonesia } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,7 @@ export function RangkumanLink({ userId, judul }: { /** Rekap anggota lain (admin
   // "Memuat" diturunkan dari state: data belum ada / masih milik tanggal lain.
   const memuat = data === null || data.tanggal !== tanggal;
 
+  const versiSegar = useVersiSegar();
   useEffect(() => {
     let hidup = true;
     getRangkumanLink(tanggal, userId)
@@ -63,7 +65,7 @@ export function RangkumanLink({ userId, judul }: { /** Rekap anggota lain (admin
     return () => {
       hidup = false;
     };
-  }, [tanggal, userId]);
+  }, [tanggal, userId, versiSegar]);
 
   function generate() {
     if (!data) return;
