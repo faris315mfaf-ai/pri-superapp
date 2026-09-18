@@ -25,7 +25,13 @@ DIR=/opt/pri-superapp/kunci-deploy
 NAMA=github-actions-pri-superapp
 PRIV="$DIR/github-actions"
 PUB="$PRIV.pub"
-AUTH=/root/.ssh/authorized_keys
+# GitHub masuk sebagai pengguna biasa (adminportalpri), bukan root.
+DEPLOY_USER="${SUDO_USER:-${DEPLOY_USER:-adminportalpri}}"
+if ! id "$DEPLOY_USER" >/dev/null 2>&1; then
+  DEPLOY_USER=root
+fi
+HOME_USER="$(getent passwd "$DEPLOY_USER" | cut -d: -f6)"
+AUTH="$HOME_USER/.ssh/authorized_keys"
 PERINTAH=/usr/local/bin/pri-perbarui
 CADANGAN=/opt/pri-superapp/skrip/12-perbarui.sh
 
@@ -37,10 +43,11 @@ if [ ! -x "$PERINTAH" ] && [ ! -x "$CADANGAN" ]; then
   exit 1
 fi
 command -v ssh-keygen >/dev/null || { echo "ssh-keygen tidak ada." >&2; exit 1; }
-mkdir -p /root/.ssh
-chmod 700 /root/.ssh
+mkdir -p "$HOME_USER/.ssh"
+chmod 700 "$HOME_USER/.ssh"
 touch "$AUTH"
 chmod 600 "$AUTH"
+chown -R "$DEPLOY_USER:$DEPLOY_USER" "$HOME_USER/.ssh"
 
 echo "== 2/4 Menyiapkan kunci SSH =="
 mkdir -p "$DIR"
@@ -59,9 +66,9 @@ echo "== 3/4 Memasang kunci di authorized_keys (hanya pri-perbarui) =="
 # command= dipasang di sisi SSH, jadi klien GitHub tidak bisa mengganti
 # perintah yang dijalankan.
 if [ -x "$PERINTAH" ]; then
-  JALAN="$PERINTAH"
+  JALAN="sudo -n $PERINTAH"
 else
-  JALAN="bash $CADANGAN"
+  JALAN="sudo -n bash $CADANGAN"
 fi
 PUBLIK="$(tr -d '\n' < "$PUB")"
 BARIS="command=\"$JALAN\",no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty $PUBLIK"
@@ -75,7 +82,8 @@ fi
 printf '%s\n' "$BARIS" >> "$TMP"
 mv "$TMP" "$AUTH"
 chmod 600 "$AUTH"
-echo "  kunci dipasang; SSH dengan kunci ini HANYA menjalankan pri-perbarui"
+chown "$DEPLOY_USER:$DEPLOY_USER" "$AUTH"
+echo "  kunci dipasang di $AUTH; SSH dengan kunci ini HANYA menjalankan pri-perbarui"
 
 echo "== 4/4 Nilai untuk GitHub =="
 HOST="$(hostname -I 2>/dev/null | awk '{print $1}')"
@@ -91,7 +99,7 @@ echo "  Nama : VPS_HOST"
 echo "  Isi  : $HOST"
 echo
 echo "  Nama : VPS_USER"
-echo "  Isi  : root"
+echo "  Isi  : $DEPLOY_USER"
 echo
 echo "  Nama : VPS_SSH_KEY"
 echo "  Isi  : (seluruh blok di bawah, termasuk baris BEGIN/END)"

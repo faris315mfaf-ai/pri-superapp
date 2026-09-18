@@ -66,13 +66,13 @@ jobs:
           script: |
             set -euo pipefail
             if command -v pri-perbarui >/dev/null 2>&1; then
-              pri-perbarui
+              sudo -n pri-perbarui
             elif [ -x /opt/pri-superapp/skrip/12-perbarui.sh ]; then
-              bash /opt/pri-superapp/skrip/12-perbarui.sh
+              sudo -n bash /opt/pri-superapp/skrip/12-perbarui.sh
             elif [ -x /opt/pri-skrip/12-perbarui.sh ]; then
-              bash /opt/pri-skrip/12-perbarui.sh
+              sudo -n bash /opt/pri-skrip/12-perbarui.sh
             else
               echo "Perintah pri-perbarui belum ada di server." >&2
-              echo "Jalankan dulu pemasangan aplikasi (vps/11-pasang-aplikasi.sh)." >&2
+              echo "Jalankan dulu pemasangan aplikasi di VPS." >&2
               exit 1
             fi
