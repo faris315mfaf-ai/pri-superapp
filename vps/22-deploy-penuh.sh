@@ -86,18 +86,39 @@ if [ -z "${PRI_UJI:-}" ] && [ -f "$SKRIP/22-deploy-penuh.sh" ] \
     && echo "  perintah pendek dipasang: pri-deploy"; } || true
 fi
 
-echo "== 1/6 Mengambil kode terbaru =="
+echo "== 1/6 Memeriksa kode di server =="
 command -v docker >/dev/null || { echo "Docker belum ada." >&2; exit 1; }
 [ -d "$SUMBER/.git" ] || { echo "Kode sumber tidak ada di $SUMBER." >&2; exit 1; }
+
+# Git menolak bekerja di folder milik pengguna lain ("detected dubious
+# ownership") — dan sejak deploy otomatis berjalan sebagai pengguna
+# deploy, folder ini memang bukan milik root. Izinkan sekali, idempoten:
+# `--add` yang polos akan menumpuk baris yang sama tiap kali dijalankan.
+git config --global --get-all safe.directory 2>/dev/null | grep -qxF "$SUMBER"   || git config --global --add safe.directory "$SUMBER" 2>/dev/null || true
+
+PEMILIK="$(stat -c '%U' "$SUMBER" 2>/dev/null || echo '?')"
+SAYA="$(id -un)"
 SEBELUM="$(git -C "$SUMBER" rev-parse --short HEAD 2>/dev/null || echo '?')"
-git -C "$SUMBER" fetch --quiet origin main
-git -C "$SUMBER" pull --quiet --ff-only origin main
-SESUDAH="$(git -C "$SUMBER" rev-parse --short HEAD)"
+
+if [ "$PEMILIK" = "$SAYA" ]; then
+  git -C "$SUMBER" fetch --quiet origin main
+  git -C "$SUMBER" pull --quiet --ff-only origin main
+else
+  # SENGAJA TIDAK menarik kode di sini. Menarik sebagai root di folder
+  # milik orang lain meninggalkan berkas milik root, dan deploy otomatis
+  # berikutnya gagal dengan galat izin yang sama sekali tidak menyebut
+  # sebabnya. Lagi pula kodenya memang sudah disegarkan sendiri oleh
+  # GitHub Actions tiap kali ada push.
+  echo "  folder ini milik \"$PEMILIK\", bukan \"$SAYA\" — penarikan kode dilewati."
+  echo "  (kodenya sudah disegarkan otomatis oleh deploy GitHub tiap push)"
+fi
+
+SESUDAH="$(git -C "$SUMBER" rev-parse --short HEAD 2>/dev/null || echo '?')"
 if [ "$SEBELUM" = "$SESUDAH" ]; then
-  echo "  sudah versi terbaru: $(git -C "$SUMBER" log --oneline -1)"
+  echo "  versi di server: $(git -C "$SUMBER" log --oneline -1 2>/dev/null || echo '?')"
 else
   echo "  $SEBELUM -> $SESUDAH"
-  git -C "$SUMBER" log --oneline "$SEBELUM..$SESUDAH" | sed 's/^/    /' | head -20
+  git -C "$SUMBER" log --oneline "$SEBELUM..$SESUDAH" 2>/dev/null | sed 's/^/    /' | head -20
 fi
 # Skrip di /opt/pri-superapp/skrip ikut disegarkan supaya perbaikan pada skrip
 # deploy ini sendiri ikut turun tanpa langkah terpisah.

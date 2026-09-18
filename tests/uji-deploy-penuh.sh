@@ -92,7 +92,16 @@ for a in "$@"; do
 done
 exit 0
 SH
-chmod +x "$T/bin/docker" "$T/bin/git"
+cat > "$T/bin/stat" <<'SH'
+#!/usr/bin/env bash
+# Kalau UJI_PEMILIK diisi, laporkan pemilik itu; kalau tidak, teruskan
+# ke stat asli supaya perilaku normal tetap apa adanya.
+if [ -n "${UJI_PEMILIK:-}" ] && [ "$1" = "-c" ] && [ "$2" = "%U" ]; then
+  echo "$UJI_PEMILIK"; exit 0
+fi
+exec /usr/bin/stat "$@"
+SH
+chmod +x "$T/bin/docker" "$T/bin/git" "$T/bin/stat"
 
 buat_sql() { printf -- "-- uji\nselect %s;\n" "$1" > "$T/sumber/sql/$2"; }
 buat_sql 1 "01_awal.sql"
@@ -181,6 +190,20 @@ echo "[J] Pilihan yang salah ketik ditolak, bukan diabaikan"
 OUT="$(jalankan --lewati-sqll 2>&1)"; KODE=$?
 cek "keluar dengan kode galat" "$([ "$KODE" != "0" ] && echo 1 || echo 0)" "kode=$KODE"
 cek "menyebut pilihannya tidak dikenal" "$(echo "$OUT" | grep -q 'tidak dikenal' && echo 1 || echo 0)"
+echo
+echo "[K] Folder sumber milik pengguna LAIN — jangan menarik kode sebagai root"
+# Ini persis galat yang muncul di server: "detected dubious ownership".
+# Menarik kode sebagai root di folder milik orang lain meninggalkan
+# berkas milik root dan mematikan deploy otomatis berikutnya.
+OUT="$(UJI_PEMILIK=pengguna-deploy jalankan --lewati-aplikasi --coba)"; KODE=$?
+cek "tidak berhenti karena kepemilikan" "$([ "$KODE" = "0" ] && echo 1 || echo 0)" "kode=$KODE"
+cek "memberi tahu penarikan kode dilewati" "$(echo "$OUT" | grep -q "penarikan kode dilewati" && echo 1 || echo 0)"
+cek "menyebut nama pemiliknya" "$(echo "$OUT" | grep -q "pengguna-deploy" && echo 1 || echo 0)"
+cek "tetap lanjut ke langkah SQL" "$(echo "$OUT" | grep -q "Buku catatan migrasi" && echo 1 || echo 0)" "$(echo "$OUT" | tail -3)"
+buat_sql 7 "13_setelah.sql"
+OUT2="$(UJI_PEMILIK=pengguna-deploy jalankan --lewati-aplikasi --coba)"
+cek "berkas baru setelah itu tetap terdeteksi" "$(echo "$OUT2" | grep -q "13_setelah.sql" && echo 1 || echo 0)" "$(echo "$OUT2" | tail -4)"
+
 
 echo
 echo "HASIL: $lulus lulus, $gagal gagal"
