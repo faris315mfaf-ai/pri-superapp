@@ -31,11 +31,15 @@ order by u.id, s.platform, s.id;
 alter view public.v_app_kader set (security_invoker = true);
 
 -- ------------------------------------------------------------
+-- 18 Sep 2026: create table/index diberi IF NOT EXISTS supaya berkas ini
+-- aman dijalankan ulang oleh pemasang menyeluruh (vps/20-deploy-penuh.sh).
+-- Sebelumnya ia satu-satunya migrasi yang GAGAL bila dijalankan dua kali,
+-- dan satu kegagalan menghentikan seluruh rangkaian.
 -- B. Absensi (kamera depan + GPS + geotag; retensi 7 hari)
 --    Waktu = jam server; pembersihan otomatis dijalankan oleh
 --    /api/absensi setiap kali dipakai (tanpa cron).
 -- ------------------------------------------------------------
-create table public.absensi (
+create table if not exists public.absensi (
   id           bigint generated always as identity primary key,
   user_id      bigint not null references public.app_user(id) on delete cascade,
   jenis        text   not null check (jenis in ('masuk','pulang')),
@@ -49,7 +53,7 @@ create table public.absensi (
   dibuat_pada  timestamptz not null default now(),
   unique (user_id, tanggal_wib, jenis)
 );
-create index idx_absensi_tanggal on public.absensi (tanggal_wib desc, user_id);
+create index if not exists idx_absensi_tanggal on public.absensi (tanggal_wib desc, user_id);
 alter table public.absensi enable row level security;
 
 -- Bucket privat foto absen; disajikan lewat signed URL dari API.
@@ -62,7 +66,7 @@ on conflict (id) do nothing;
 --    KPI = rencana selesai / total rencana; 'tambahan' dihitung
 --    terpisah. Stempel dibuat_pada/dilaporkan_pada dari server.
 -- ------------------------------------------------------------
-create table public.kerja_item (
+create table if not exists public.kerja_item (
   id                bigint generated always as identity primary key,
   user_id           bigint not null references public.app_user(id) on delete cascade,
   tanggal_wib       date   not null,
@@ -74,7 +78,7 @@ create table public.kerja_item (
   dibuat_pada       timestamptz not null default now(),
   dilaporkan_pada   timestamptz
 );
-create index idx_kerja_item_tanggal on public.kerja_item (tanggal_wib desc, user_id);
+create index if not exists idx_kerja_item_tanggal on public.kerja_item (tanggal_wib desc, user_id);
 alter table public.kerja_item enable row level security;
 
 create view public.v_kerja_kpi as
