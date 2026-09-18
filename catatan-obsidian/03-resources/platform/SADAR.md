@@ -34,7 +34,7 @@ berbeda dipasangkan manual oleh HR di SuperApp → HR Center → Database Anggot
 → tombol **SADAR** — tanpa perlu mengubah email di aplikasi mana pun.
 
 ## Autentikasi
-- Key disimpan di: `/opt/pri/aplikasi/env.txt` pada VPS, baris `SADAR_API_TOKEN=`
+- Key disimpan di: `/opt/pri-superapp/aplikasi/env.txt` pada VPS, baris `SADAR_API_TOKEN=`
 - Dikirim sebagai header `Authorization: Bearer <token>` (cara lain ditolak 401)
 - Cara generate ulang kalau expired: minta token baru dari pengelola sadar-pri.id,
   ganti barisnya di `env.txt`, lalu `pri-perbarui`

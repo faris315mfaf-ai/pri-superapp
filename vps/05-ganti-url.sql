@@ -9,10 +9,10 @@
 -- JALANKAN SETELAH langkah 4 selesai (berkas sudah ada di VPS),
 -- di dalam satu transaksi — kalau ada yang gagal, semua batal.
 --
--- CARA PAKAI (root, di VPS, dari folder /opt/pri/supabase):
---   . /opt/pri/kunci.env
+-- CARA PAKAI (root, di VPS, dari folder /opt/pri-superapp/supabase):
+--   . /opt/pri-superapp/kunci.env
 --   docker compose exec -T db psql "postgresql://postgres:$PG_PASS@localhost:5432/postgres" \
---     -v baru=https://db.domainanda.com -f - < /opt/pri/skrip/05-ganti-url.sql
+--     -v baru=https://db.domainanda.com -f - < /opt/pri-superapp/skrip/05-ganti-url.sql
 -- =====================================================================
 
 -- Alamat lama boleh dioper dari luar (-v lama=...). Kalau tidak

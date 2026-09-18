@@ -23,8 +23,8 @@ set -euo pipefail
 
 [ "$(id -u)" -eq 0 ] || { echo "Jalankan sebagai root: sudo bash $0" >&2; exit 1; }
 
-SUMBER=/opt/pri/sumber
-APP=/opt/pri/aplikasi
+SUMBER=/opt/pri-superapp/sumber
+APP=/opt/pri-superapp/aplikasi
 SQL="$SUMBER/sql/45_perbaiki-alamat-berkas.sql"
 
 LAMA=pichnkyjepsirpclofhs.supabase.co

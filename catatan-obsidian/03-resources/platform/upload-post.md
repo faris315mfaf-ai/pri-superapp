@@ -51,7 +51,7 @@ Alamat dasar `https://api.upload-post.com/api`, auth lewat header
   dan membuat metrik "tidak terbaca" berhari-hari.
 
 ## Autentikasi
-- Key disimpan di: `/opt/pri/aplikasi/env.txt`, baris `UPLOAD_POST_API_KEY=`
+- Key disimpan di: `/opt/pri-superapp/aplikasi/env.txt`, baris `UPLOAD_POST_API_KEY=`
 - Cara generate ulang: dashboard upload-post. Kunci pernah tertulis di chat —
   sebaiknya sudah diganti.
 

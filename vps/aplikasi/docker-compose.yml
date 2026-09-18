@@ -19,8 +19,10 @@ name: pri
 services:
   aplikasi:
     build:
-      context: /opt/pri/sumber
-      dockerfile: /opt/pri/aplikasi/Dockerfile
+      # Relatif ke berkas ini (folder aplikasi/). Tetap benar di
+      # /opt/pri lama maupun /opt/pri-superapp.
+      context: ../sumber
+      dockerfile: ../aplikasi/Dockerfile
       args:
         # Dibutuhkan saat build: daftar host gambar next/image.
         SUPABASE_URL: ${SUPABASE_URL}
@@ -28,7 +30,7 @@ services:
     container_name: pri-aplikasi
     restart: unless-stopped
     env_file:
-      - /opt/pri/aplikasi/env.txt
+      - ./env.txt
     environment:
       # Cache bersama ada di dalam server, bukan menyeberang internet.
       REDIS_URL: redis://redis:6379
@@ -96,7 +98,7 @@ services:
 
   jadwal:
     build:
-      context: /opt/pri/aplikasi/jadwal
+      context: ./jadwal
     image: pri-jadwal:terbaru
     container_name: pri-jadwal
     restart: unless-stopped

@@ -10,9 +10,9 @@
 # Jadi bocornya kunci di GitHub tidak langsung berarti penguasaan server.
 #
 # CARA PAKAI (root, di VPS):
-#   bash /opt/pri/sumber/vps/17-pasang-deploy-otomatis.sh
+#   bash /opt/pri-superapp/sumber/vps/17-pasang-deploy-otomatis.sh
 #   # atau, setelah skrip perawatan disalin:
-#   bash /opt/pri-skrip/17-pasang-deploy-otomatis.sh
+#   bash /opt/pri-superapp/skrip/17-pasang-deploy-otomatis.sh
 #
 # Lalu tempel tiga nilai yang dicetak ke GitHub
 # (Settings → Secrets and variables → Actions).
@@ -21,19 +21,19 @@ set -euo pipefail
 
 [ "$(id -u)" -eq 0 ] || { echo "Jalankan sebagai root: sudo bash $0" >&2; exit 1; }
 
-DIR=/opt/pri/kunci-deploy
+DIR=/opt/pri-superapp/kunci-deploy
 NAMA=github-actions-pri-superapp
 PRIV="$DIR/github-actions"
 PUB="$PRIV.pub"
 AUTH=/root/.ssh/authorized_keys
 PERINTAH=/usr/local/bin/pri-perbarui
-CADANGAN=/opt/pri-skrip/12-perbarui.sh
+CADANGAN=/opt/pri-superapp/skrip/12-perbarui.sh
 
 echo "== 1/4 Memeriksa syarat =="
 if [ ! -x "$PERINTAH" ] && [ ! -x "$CADANGAN" ]; then
   echo "pri-perbarui belum terpasang." >&2
   echo "Pasang aplikasi dulu (vps/11-pasang-aplikasi.sh), atau jalankan" >&2
-  echo "sekali: bash /opt/pri/sumber/vps/12-perbarui.sh --skrip-saja" >&2
+  echo "sekali: bash /opt/pri-superapp/sumber/vps/12-perbarui.sh --skrip-saja" >&2
   exit 1
 fi
 command -v ssh-keygen >/dev/null || { echo "ssh-keygen tidak ada." >&2; exit 1; }

@@ -23,16 +23,16 @@ set -euo pipefail
 : "${DOMAIN_APP:?Isi DOMAIN_APP, contoh: DOMAIN_APP=pri-superapp.com bash $0}"
 
 SKRIP_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP=/opt/pri/aplikasi
-SUMBER=/opt/pri/sumber
+APP=/opt/pri-superapp/aplikasi
+SUMBER=/opt/pri-superapp/sumber
 PORT="${PORT_APLIKASI:-3001}"
 
 echo "== 1/8 Memeriksa syarat =="
 command -v docker >/dev/null || { echo "Docker belum ada — jalankan 01-siapkan-vps.sh dulu." >&2; exit 1; }
 command -v caddy  >/dev/null || { echo "Caddy belum ada — jalankan 01-siapkan-vps.sh dulu." >&2; exit 1; }
-[ -f /opt/pri/kunci.env ] || { echo "Supabase belum terpasang — jalankan 02-pasang-supabase.sh dulu." >&2; exit 1; }
+[ -f /opt/pri-superapp/kunci.env ] || { echo "Supabase belum terpasang — jalankan 02-pasang-supabase.sh dulu." >&2; exit 1; }
 # shellcheck disable=SC1091
-. /opt/pri/kunci.env
+. /opt/pri-superapp/kunci.env
 # Caddy bisa berupa layanan sistem ATAU container milik aplikasi lain,
 # dan berkas pengaturannya beda tempat. Dikenali dulu, baru dibaca —
 # membaca /etc/caddy/Caddyfile begitu saja bisa mengambil berkas yang
@@ -40,9 +40,9 @@ command -v caddy  >/dev/null || { echo "Caddy belum ada — jalankan 01-siapkan-
 # shellcheck disable=SC1091
 . "$SKRIP_DIR/blok-caddy.sh"
 kenali_caddy || exit 1
-DOMAIN_DB="$(grep -m1 '^API_EXTERNAL_URL=' /opt/pri/supabase/.env 2>/dev/null | cut -d= -f2- | sed 's#^https\?://##; s#/.*$##')"
+DOMAIN_DB="$(grep -m1 '^API_EXTERNAL_URL=' /opt/pri-superapp/supabase/.env 2>/dev/null | cut -d= -f2- | sed 's#^https\?://##; s#/.*$##')"
 [ -n "${DOMAIN_DB:-}" ] || {
-  echo "Alamat Supabase tidak terbaca dari /opt/pri/supabase/.env." >&2
+  echo "Alamat Supabase tidak terbaca dari /opt/pri-superapp/supabase/.env." >&2
   echo "Jalankan 02-pasang-supabase.sh dulu." >&2
   exit 1
 }

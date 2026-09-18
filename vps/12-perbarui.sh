@@ -25,7 +25,7 @@
 set -euo pipefail
 
 # --- Melindungi diri dari ditimpa saat sedang berjalan ----------------
-# Langkah 2 menyalin seluruh isi vps/ ke /opt/pri-skrip — termasuk berkas
+# Langkah 2 menyalin seluruh isi vps/ ke /opt/pri-superapp/skrip — termasuk berkas
 # skrip INI kalau ia dijalankan dari sana. Bash membaca skrip sambil
 # menjalankannya, jadi berkas yang ditimpa di tengah jalan membuat sisa
 # perintahnya terbaca ngawur: yang dijalankan bukan lagi yang tertulis,
@@ -43,9 +43,35 @@ case "$0" in /tmp/*) trap 'rm -f "$0"' EXIT ;; esac
 
 [ "$(id -u)" -eq 0 ] || { echo "Jalankan sebagai root: sudo $PRI_BERKAS_ASLI" >&2; exit 1; }
 
-SUMBER=/opt/pri/sumber
-APP=/opt/pri/aplikasi
-SKRIP=/opt/pri-skrip
+# Folder lama /opt/pri → /opt/pri-superapp, sekali. Dilakukan SEBELUM
+# path di bawah dipakai, supaya git pull & docker compose melihat tempat baru.
+if [ ! -d /opt/pri-superapp ] && [ -d /opt/pri ]; then
+  echo "== 0/6 Mengganti nama folder /opt/pri -> /opt/pri-superapp =="
+  if [ -f /opt/pri/aplikasi/docker-compose.yml ]; then
+    docker compose -f /opt/pri/aplikasi/docker-compose.yml stop || true
+  fi
+  if [ -f /opt/pri/supabase/docker-compose.yml ]; then
+    echo "  database dihentikan sebentar — datanya tidak dihapus"
+    docker compose -f /opt/pri/supabase/docker-compose.yml stop || true
+  fi
+  mv /opt/pri /opt/pri-superapp
+  mkdir -p /opt/pri-superapp/skrip
+  if [ -d /opt/pri-skrip ]; then
+    cp -a /opt/pri-skrip/. /opt/pri-superapp/skrip/ || true
+    rm -rf /opt/pri-skrip
+  fi
+  if [ -f /etc/cron.d/pri-cadangan ]; then
+    sed -i 's|/opt/pri-skrip|/opt/pri-superapp/skrip|g; s|/opt/pri/|/opt/pri-superapp/|g' /etc/cron.d/pri-cadangan || true
+  fi
+  if [ -f /opt/pri-superapp/supabase/docker-compose.yml ]; then
+    docker compose -f /opt/pri-superapp/supabase/docker-compose.yml up -d
+  fi
+  echo "  folder sekarang /opt/pri-superapp"
+fi
+
+SUMBER=/opt/pri-superapp/sumber
+APP=/opt/pri-superapp/aplikasi
+SKRIP=/opt/pri-superapp/skrip
 PORT="$(grep -m1 '^PORT_APLIKASI=' "$APP/.env" 2>/dev/null | cut -d= -f2- || echo 3001)"
 PORT="${PORT:-3001}"
 TARIK=1

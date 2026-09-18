@@ -16,7 +16,7 @@
 # terjadi apa-apa.
 #
 # Cara pakai:
-#   . /opt/pri-skrip/blok-caddy.sh
+#   . /opt/pri-superapp/skrip/blok-caddy.sh
 #   kenali_caddy                       # mengisi CADDY_MODE, CADDYFILE, CADDY_CT
 #   pasang_blok_caddy "PRI Supabase" /tmp/blok.caddy
 # =====================================================================

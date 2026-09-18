@@ -13,7 +13,7 @@
 #
 # CARA PAKAI (root, di VPS):
 #   DOMAIN_LAMA=srv1954653.hstgr.cloud DOMAIN_BARU=db.domainanda.com \
-#     bash /opt/pri/skrip/08-ganti-domain.sh
+#     bash /opt/pri-superapp/skrip/08-ganti-domain.sh
 #
 # Setelah aplikasi di Vercel memakai nama baru dan semua normal
 # (tunggu beberapa hari), nama lama boleh dihapus dari /etc/caddy/Caddyfile.
@@ -23,9 +23,9 @@ set -euo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "Jalankan sebagai root." >&2; exit 1; }
 : "${DOMAIN_LAMA:?Isi DOMAIN_LAMA, nama yang dipakai sekarang}"
 : "${DOMAIN_BARU:?Isi DOMAIN_BARU, domain baru Anda}"
-DIR=/opt/pri/supabase
+DIR=/opt/pri-superapp/supabase
 # shellcheck disable=SC1091
-. /opt/pri/kunci.env
+. /opt/pri-superapp/kunci.env
 TUJUAN="postgresql://postgres:${PG_PASS}@localhost:5432/postgres"
 cd "$DIR"
 
@@ -40,7 +40,7 @@ echo "DNS cocok."
 echo "== 2/5 Mengubah pengaturan Supabase =="
 DOMAIN_BARU="$DOMAIN_BARU" python3 - <<'PY'
 import os, re, pathlib
-berkas = pathlib.Path("/opt/pri/supabase/.env")
+berkas = pathlib.Path("/opt/pri-superapp/supabase/.env")
 baru = f"https://{os.environ['DOMAIN_BARU']}"
 ubah = {"SITE_URL": baru, "API_EXTERNAL_URL": baru, "SUPABASE_PUBLIC_URL": baru}
 keluar = []

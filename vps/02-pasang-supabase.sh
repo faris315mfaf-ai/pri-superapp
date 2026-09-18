@@ -17,8 +17,8 @@ set -euo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "Jalankan sebagai root." >&2; exit 1; }
 : "${DOMAIN:?Isi DOMAIN, contoh: DOMAIN=db.domainanda.com bash $0}"
 
-DIR=/opt/pri/supabase
-SRC=/opt/pri/supabase-src
+DIR=/opt/pri-superapp/supabase
+SRC=/opt/pri-superapp/supabase-src
 # Lokasi skrip disimpan SEBAGAI JALUR PENUH di awal, sebelum `cd` mana
 # pun. Memakai $(dirname "$0") belakangan menghasilkan jalur relatif
 # yang sudah tidak berlaku begitu skrip pindah folder kerja.
@@ -109,10 +109,10 @@ PY
 # kunci.txt berarti setiap kegagalan di tengah akan membuat kunci baru
 # di percobaan berikutnya — dan database yang sudah terlanjur dibangun
 # dengan sandi lama langsung menolak semua sambungan.
-if [ -f /opt/pri/kunci.env ]; then
-  echo "Kunci sudah pernah dibuat — memakai yang lama (/opt/pri/kunci.env)."
+if [ -f /opt/pri-superapp/kunci.env ]; then
+  echo "Kunci sudah pernah dibuat — memakai yang lama (/opt/pri-superapp/kunci.env)."
   # shellcheck disable=SC1091
-  . /opt/pri/kunci.env
+  . /opt/pri-superapp/kunci.env
 else
   PG_PASS="$(acak 24)"
   JWT_SECRET="$(acak 32)"
@@ -122,7 +122,7 @@ else
   VAULT_ENC_KEY="$(acak 16)"
   DASH_PASS="$(acak 12)"
   umask 077
-  cat > /opt/pri/kunci.env <<EOF
+  cat > /opt/pri-superapp/kunci.env <<EOF
 PG_PASS='$PG_PASS'
 JWT_SECRET='$JWT_SECRET'
 ANON_KEY='$ANON_KEY'
@@ -137,7 +137,7 @@ export PG_PASS JWT_SECRET ANON_KEY SERVICE_KEY SECRET_KEY_BASE VAULT_ENC_KEY DAS
 echo "== 5/8 Menulis konfigurasi (.env) =="
 python3 - <<'PY'
 import os, re, pathlib
-berkas = pathlib.Path("/opt/pri/supabase/.env")
+berkas = pathlib.Path("/opt/pri-superapp/supabase/.env")
 domain = os.environ["DOMAIN"]
 ubah = {
     "POSTGRES_PASSWORD": os.environ["PG_PASS"],
@@ -186,7 +186,7 @@ echo "== 6/8 Mengunci port ke localhost =="
 PG_TAG="$PG_TAG" python3 - <<'PY'
 import json, os, subprocess, pathlib
 cfg = json.loads(subprocess.check_output(
-    ["docker", "compose", "config", "--format", "json"], cwd="/opt/pri/supabase"))
+    ["docker", "compose", "config", "--format", "json"], cwd="/opt/pri-superapp/supabase"))
 layanan = {}
 for nama, s in cfg.get("services", {}).items():
     port = s.get("ports") or []
@@ -354,7 +354,7 @@ for nama, nilai in layanan.items():
         for d in nilai["ports"]:
             isi.append(f'      - "{d}"')
 isi.append("")
-pathlib.Path("/opt/pri/supabase/docker-compose.override.yml").write_text("\n".join(isi))
+pathlib.Path("/opt/pri-superapp/supabase/docker-compose.override.yml").write_text("\n".join(isi))
 kunci_port = [n for n, v in layanan.items() if "ports" in v]
 print("  layanan yang portnya dikunci:", ", ".join(kunci_port) or "(tidak ada)")
 PY
@@ -450,7 +450,7 @@ echo "== 8/8 HTTPS (Caddy) =="
 # skrip pemasang aplikasi.
 [ -f "$SKRIP_DIR/blok-caddy.sh" ] || {
   echo "Berkas pembantu hilang: $SKRIP_DIR/blok-caddy.sh" >&2
-  echo "Salin ulang: cp -r /opt/pri/sumber/vps/* $SKRIP_DIR/" >&2
+  echo "Salin ulang: cp -r /opt/pri-superapp/sumber/vps/* $SKRIP_DIR/" >&2
   exit 1
 }
 . "$SKRIP_DIR/blok-caddy.sh"
@@ -500,7 +500,7 @@ else
 fi
 
 umask 077
-cat > /opt/pri/kunci.txt <<EOF
+cat > /opt/pri-superapp/kunci.txt <<EOF
 === ISI KE VERCEL (Environment Variables) ===
 SUPABASE_URL=https://$DOMAIN
 SUPABASE_SECRET_KEY=$SERVICE_KEY
@@ -512,5 +512,5 @@ Sandi DB   : $PG_PASS
 JWT secret : $JWT_SECRET
 EOF
 echo
-echo "SELESAI. Kunci tersimpan di /opt/pri/kunci.txt (tampilkan: cat /opt/pri/kunci.txt)"
+echo "SELESAI. Kunci tersimpan di /opt/pri-superapp/kunci.txt (tampilkan: cat /opt/pri-superapp/kunci.txt)"
 echo "Lanjut: LANGKAH 3 — pindahkan data (03-pindah-data.sh)."

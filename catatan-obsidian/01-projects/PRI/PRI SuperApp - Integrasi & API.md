@@ -34,7 +34,7 @@ Layanan luar yang dipakai [[PRI SuperApp]], dan untuk apa masing-masing.
 
 > [!danger] Kunci hanya hidup di env server
 > Tidak pernah di kode, tidak pernah di Git, tidak pernah di catatan ini,
-> tidak pernah di chat. Tempatnya `/opt/pri/aplikasi/env.txt` di VPS.
+> tidak pernah di chat. Tempatnya `/opt/pri-superapp/aplikasi/env.txt` di VPS.
 > Mengubahnya: edit berkas itu lalu `pri-perbarui --tanpa-tarik`.
 
 **Kontrak API diverifikasi, tidak ditebak.** Beberapa bug nyata di proyek ini

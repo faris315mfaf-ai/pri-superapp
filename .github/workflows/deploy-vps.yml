@@ -67,6 +67,8 @@ jobs:
             set -euo pipefail
             if command -v pri-perbarui >/dev/null 2>&1; then
               pri-perbarui
+            elif [ -x /opt/pri-superapp/skrip/12-perbarui.sh ]; then
+              bash /opt/pri-superapp/skrip/12-perbarui.sh
             elif [ -x /opt/pri-skrip/12-perbarui.sh ]; then
               bash /opt/pri-skrip/12-perbarui.sh
             else

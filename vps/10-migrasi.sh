@@ -21,23 +21,23 @@ set -euo pipefail
 
 PERINTAH="${1:-semua}"
 SKRIP_DIR="$(cd "$(dirname "$0")" && pwd)"
-ISIAN=/opt/pri/migrasi.txt
-KERJA=/opt/pri/kerja
+ISIAN=/opt/pri-superapp/migrasi.txt
+KERJA=/opt/pri-superapp/kerja
 
 # ---------------------------------------------------------------------
 # 1. Nilai dari sisi VPS diambil otomatis — tidak usah diketik ulang.
 # ---------------------------------------------------------------------
-[ -f /opt/pri/kunci.env ] || { echo "Belum ada /opt/pri/kunci.env. Jalankan 02-pasang-supabase.sh dulu." >&2; exit 1; }
+[ -f /opt/pri-superapp/kunci.env ] || { echo "Belum ada /opt/pri-superapp/kunci.env. Jalankan 02-pasang-supabase.sh dulu." >&2; exit 1; }
 # shellcheck disable=SC1091
-. /opt/pri/kunci.env
+. /opt/pri-superapp/kunci.env
 
 # Alamat dibaca dari pengaturan Supabase sendiri, BUKAN dari Caddyfile.
 # Caddy di server ini ternyata berupa container dengan berkas pengaturan
 # di tempat lain, jadi menebak /etc/caddy/Caddyfile membaca berkas yang
 # tidak dipakai siapa pun. API_EXTERNAL_URL adalah sumber yang benar.
-DOMAIN="$(grep -m1 '^API_EXTERNAL_URL=' /opt/pri/supabase/.env 2>/dev/null | cut -d= -f2- | sed 's#^https\?://##; s#/.*$##')"
+DOMAIN="$(grep -m1 '^API_EXTERNAL_URL=' /opt/pri-superapp/supabase/.env 2>/dev/null | cut -d= -f2- | sed 's#^https\?://##; s#/.*$##')"
 [ -n "$DOMAIN" ] || {
-  echo "Alamat Supabase tidak terbaca dari /opt/pri/supabase/.env." >&2
+  echo "Alamat Supabase tidak terbaca dari /opt/pri-superapp/supabase/.env." >&2
   echo "Jalankan 02-pasang-supabase.sh dulu." >&2
   exit 1
 }

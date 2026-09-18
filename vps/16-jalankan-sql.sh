@@ -20,9 +20,9 @@ set -euo pipefail
 
 [ "$(id -u)" -eq 0 ] || { echo "Jalankan sebagai root: sudo $0 $*" >&2; exit 1; }
 
-SUMBER=/opt/pri/sumber
-KUNCI=/opt/pri/kunci.env
-SKRIP=/opt/pri-skrip
+SUMBER=/opt/pri-superapp/sumber
+KUNCI=/opt/pri-superapp/kunci.env
+SKRIP=/opt/pri-superapp/skrip
 TARIK=1
 
 if [ "${1:-}" = "--tanpa-tarik" ]; then

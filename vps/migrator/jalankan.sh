@@ -26,7 +26,7 @@ mkdir -p "$DUMP"
 wajib() {
   for k in "$@"; do
     if [ -z "${!k:-}" ]; then
-      echo "Nilai $k belum diisi. Periksa /opt/pri/migrasi.txt di VPS." >&2
+      echo "Nilai $k belum diisi. Periksa /opt/pri-superapp/migrasi.txt di VPS." >&2
       exit 1
     fi
   done

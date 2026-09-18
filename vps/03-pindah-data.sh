@@ -11,7 +11,7 @@
 # lebih dulu lalu diisi ulang dari hasil dump terbaru.
 #
 # SYARAT: tulis dulu alamat koneksi Supabase Cloud ke satu berkas
-#   nano /opt/pri/sumber-db.txt
+#   nano /opt/pri-superapp/sumber-db.txt
 # Isinya satu baris, ambil dari Supabase Dashboard > Connect >
 # "Session pooler", contoh bentuknya:
 #   postgresql://postgres.abcdefghij:SANDI@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres
@@ -29,14 +29,14 @@
 set -euo pipefail
 
 [ "$(id -u)" -eq 0 ] || { echo "Jalankan sebagai root." >&2; exit 1; }
-DIR=/opt/pri/supabase
-[ -f /opt/pri/kunci.env ] || { echo "Belum ada kunci. Jalankan 02-pasang-supabase.sh dulu." >&2; exit 1; }
+DIR=/opt/pri-superapp/supabase
+[ -f /opt/pri-superapp/kunci.env ] || { echo "Belum ada kunci. Jalankan 02-pasang-supabase.sh dulu." >&2; exit 1; }
 # shellcheck disable=SC1091
-. /opt/pri/kunci.env
-[ -s /opt/pri/sumber-db.txt ] || { echo "Isi dulu /opt/pri/sumber-db.txt (lihat keterangan di atas)." >&2; exit 1; }
-SUMBER="$(tr -d '[:space:]' < /opt/pri/sumber-db.txt)"
+. /opt/pri-superapp/kunci.env
+[ -s /opt/pri-superapp/sumber-db.txt ] || { echo "Isi dulu /opt/pri-superapp/sumber-db.txt (lihat keterangan di atas)." >&2; exit 1; }
+SUMBER="$(tr -d '[:space:]' < /opt/pri-superapp/sumber-db.txt)"
 TUJUAN="postgresql://postgres:${PG_PASS}@localhost:5432/postgres"
-CAP="/opt/pri/dump/public-$(date +%Y%m%d-%H%M).dump"
+CAP="/opt/pri-superapp/dump/public-$(date +%Y%m%d-%H%M).dump"
 cd "$DIR"
 
 jalankan_sql() { docker compose exec -T db psql "$TUJUAN" -v ON_ERROR_STOP=1 -tAc "$1"; }
@@ -58,7 +58,7 @@ echo "Berkas salinan: $CAP ($((BYTE / 1024 / 1024)) MB)"
 [ "$BYTE" -gt 100000 ] || { echo "Salinan terlalu kecil — kemungkinan gagal. Hentikan." >&2; exit 1; }
 
 echo "== 3/6 Memulihkan ke database VPS =="
-LOG=/opt/pri/dump/restore.log
+LOG=/opt/pri-superapp/dump/restore.log
 set +e
 docker compose exec -T db pg_restore --dbname "$TUJUAN" --no-owner --clean --if-exists < "$CAP" > "$LOG" 2>&1
 set -e

@@ -59,8 +59,8 @@ cadangan**, sertifikat HTTPS, waktu jawab, port terbuka.
 > Supabase Cloud punya; VPS tidak. Skrip cadangan harian **wajib** terpasang.
 
 ## Autentikasi
-- Kunci database & aplikasi: `/opt/pri/kunci.env` dan
-  `/opt/pri/aplikasi/env.txt` — hanya di server, tidak pernah di Git.
+- Kunci database & aplikasi: `/opt/pri-superapp/kunci.env` dan
+  `/opt/pri-superapp/aplikasi/env.txt` — hanya di server, tidak pernah di Git.
 - Masuk ke server: lewat konsol browser Hostinger atau SSH.
 
 ## Project/area terkait

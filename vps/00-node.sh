@@ -14,12 +14,12 @@
 # sebagai cara manual, untuk kalau ingin menjalankan satu langkah saja
 # tanpa container.
 #
-# Membaca kunci dari /opt/pri/skrip/env-migrasi.txt (buat dari contoh).
+# Membaca kunci dari /opt/pri-superapp/skrip/env-migrasi.txt (buat dari contoh).
 # =====================================================================
 set -euo pipefail
 
 SKRIP="${1:?Sebutkan berkas .mjs, contoh: bash 00-node.sh 04-pindah-storage.mjs}"
-DIR=/opt/pri/skrip
+DIR=/opt/pri-superapp/skrip
 [ -f "$DIR/$SKRIP" ] || { echo "Tidak ada $DIR/$SKRIP" >&2; exit 1; }
 [ -s "$DIR/env-migrasi.txt" ] || { echo "Isi dulu $DIR/env-migrasi.txt (contoh: env-migrasi.contoh.txt)" >&2; exit 1; }
 

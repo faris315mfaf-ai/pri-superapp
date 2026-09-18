@@ -232,7 +232,7 @@ export async function PATCH(request: Request) {
       .eq("id", Number(user.id))
       .maybeSingle();
 
-    return { sukses: true, user: keUserPublik(segar as BarisUser) };
+    return { sukses: true, user: keUserPublik(segar as unknown as BarisUser) };
   });
 }
 
@@ -343,7 +343,7 @@ export async function POST(request: Request) {
       .eq("id", Number(user.id))
       .maybeSingle();
 
-    return { sukses: true, user: keUserPublik(segar as BarisUser) };
+    return { sukses: true, user: keUserPublik(segar as unknown as BarisUser) };
   });
 }
 

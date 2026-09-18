@@ -38,7 +38,7 @@ Kalau dilewati, yang terjadi:
 
 ## 2. Kunci yang perlu ditambahkan
 ```
-nano /opt/pri/aplikasi/env.txt
+nano /opt/pri-superapp/aplikasi/env.txt
 ```
 Tambahkan barisnya beserta nilai, simpan `Ctrl+O` → `Enter` → `Ctrl+X`.
 

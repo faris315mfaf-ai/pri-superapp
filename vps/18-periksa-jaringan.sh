@@ -14,7 +14,7 @@
 #      dan skrip ini mengatakannya terang-terangan alih-alih menebak.
 #
 # CARA PAKAI (root, di VPS):
-#   bash /opt/pri/sumber/vps/18-periksa-jaringan.sh
+#   bash /opt/pri-superapp/sumber/vps/18-periksa-jaringan.sh
 # =====================================================================
 set -uo pipefail
 

@@ -20,7 +20,7 @@ set -euo pipefail
 
 [ "$(id -u)" -eq 0 ] || { echo "Jalankan sebagai root: sudo bash $0" >&2; exit 1; }
 
-SUMBER=/opt/pri/sumber
+SUMBER=/opt/pri-superapp/sumber
 SQL="$SUMBER/sql/44_solidkan.sql"
 [ -f "$SQL" ] || { echo "Berkas tidak ada: $SQL (jalankan git pull dulu)" >&2; exit 1; }
 
@@ -51,7 +51,7 @@ echo
 echo "== 3/3 Memastikan cadangan harian terpasang =="
 if [ -f /etc/cron.d/pri-cadangan ] || crontab -l 2>/dev/null | grep -q 'cadangan'; then
   echo "  sudah terpasang"
-  TERBARU="$(ls -t /opt/pri/cadangan/*.sql.gz 2>/dev/null | head -1 || true)"
+  TERBARU="$(ls -t /opt/pri-superapp/cadangan/*.sql.gz 2>/dev/null | head -1 || true)"
   if [ -n "$TERBARU" ]; then
     echo "  cadangan terakhir: $(basename "$TERBARU") ($(du -h "$TERBARU" | cut -f1), $(( ( $(date +%s) - $(stat -c %Y "$TERBARU") ) / 3600 )) jam lalu)"
   else

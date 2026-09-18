@@ -17,8 +17,8 @@
 # =====================================================================
 set -uo pipefail
 
-SUMBER=/opt/pri/sumber
-APP=/opt/pri/aplikasi
+SUMBER=/opt/pri-superapp/sumber
+APP=/opt/pri-superapp/aplikasi
 CT=pri-aplikasi
 
 echo "===== 1. KODE DI FOLDER SUMBER ====="

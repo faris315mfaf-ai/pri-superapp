@@ -18,7 +18,7 @@ Deploy manual tetap ada: masuk ke VPS, ketik `pri-perbarui`. Dipakai kalau Actio
 ### Pemasangan sekali (deploy otomatis)
 Di VPS:
 ```
-bash /opt/pri/sumber/vps/17-pasang-deploy-otomatis.sh
+bash /opt/pri-superapp/sumber/vps/17-pasang-deploy-otomatis.sh
 ```
 Skrip itu mencetak tiga nilai. Tempel ke GitHub → Settings → Secrets and variables → Actions:
 `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`.
@@ -54,6 +54,7 @@ sama sekali, itu butuh dua container bergantian — belum dibuat.
 | `pri-perbarui` | tarik + bangun + nyalakan (aplikasi & penjadwal), cadangan jika Actions tidak jalan |
 | `pri-perbarui --tanpa-tarik` | bangun ulang tanpa menarik (mis. setelah ubah kunci) |
 | `pri-sql <berkas.sql>` | jalankan satu migrasi database |
+| `bash vps/20-ganti-nama-folder.sh` | sekali: `/opt/pri` → `/opt/pri-superapp` |
 
 ## Skrip pemeriksa & perbaikan
 Dijalankan dengan `bash vps/<nama>` dari folder sumber di VPS.
@@ -74,7 +75,7 @@ Skrip pemasangan awal (sudah dijalankan, disimpan untuk rujukan):
 ## Mengubah kunci rahasia
 Tidak lewat Git. Edit langsung di VPS:
 ```
-nano /opt/pri/aplikasi/env.txt
+nano /opt/pri-superapp/aplikasi/env.txt
 pri-perbarui --tanpa-tarik
 ```
 

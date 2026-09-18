@@ -7,7 +7,7 @@
 # ini. Jangan lewati langkah ini.
 #
 # Isi cadangan: database (pg_dump) + seluruh berkas Storage.
-# Disimpan 14 hari terakhir di /opt/pri/cadangan.
+# Disimpan 14 hari terakhir di /opt/pri-superapp/cadangan.
 #
 # CARA PAKAI:
 #   bash 07-cadangan-harian.sh              -> cadangkan sekarang
@@ -16,14 +16,14 @@
 set -euo pipefail
 
 [ "$(id -u)" -eq 0 ] || { echo "Jalankan sebagai root." >&2; exit 1; }
-DIR=/opt/pri/supabase
-TUJUAN_DIR=/opt/pri/cadangan
+DIR=/opt/pri-superapp/supabase
+TUJUAN_DIR=/opt/pri-superapp/cadangan
 SIMPAN_HARI=14
 
 if [ "${1:-}" = "--pasang-cron" ]; then
   cat > /etc/cron.d/pri-cadangan <<'EOF'
 # Cadangan harian PRI SuperApp — 02.30 WIB (server memakai zona Asia/Jakarta).
-30 2 * * * root /usr/bin/env bash /opt/pri/skrip/07-cadangan-harian.sh >> /var/log/pri-cadangan.log 2>&1
+30 2 * * * root /usr/bin/env bash /opt/pri-superapp/skrip/07-cadangan-harian.sh >> /var/log/pri-cadangan.log 2>&1
 EOF
   chmod 644 /etc/cron.d/pri-cadangan
   systemctl restart cron 2>/dev/null || systemctl restart crond 2>/dev/null || true
@@ -32,7 +32,7 @@ EOF
 fi
 
 # shellcheck disable=SC1091
-. /opt/pri/kunci.env
+. /opt/pri-superapp/kunci.env
 mkdir -p "$TUJUAN_DIR"
 CAP="$(date +%Y%m%d-%H%M)"
 cd "$DIR"

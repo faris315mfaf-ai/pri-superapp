@@ -144,8 +144,8 @@ else
 fi
 
 echo "== 9/9 Folder kerja =="
-mkdir -p /opt/pri/skrip /opt/pri/cadangan /opt/pri/dump
-chmod 700 /opt/pri
+mkdir -p /opt/pri-superapp/skrip /opt/pri-superapp/cadangan /opt/pri-superapp/dump
+chmod 700 /opt/pri-superapp
 
 echo
 echo "SELESAI. VPS siap."

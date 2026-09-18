@@ -15,8 +15,8 @@
 # =====================================================================
 set -uo pipefail
 
-DIR=/opt/pri/supabase
-CADANGAN=/opt/pri/cadangan
+DIR=/opt/pri-superapp/supabase
+CADANGAN=/opt/pri-superapp/cadangan
 MERAH=0
 KUNING=0
 
@@ -43,7 +43,7 @@ SISA=$(df -Ph / | awk 'NR==2 {print $4}')
 if   [ "$PAKAI" -ge 90 ]; then nilai "Pemakaian disk" "${PAKAI}% terpakai, sisa $SISA" bahaya
 elif [ "$PAKAI" -ge 75 ]; then nilai "Pemakaian disk" "${PAKAI}% terpakai, sisa $SISA" perhatikan
 else                           nilai "Pemakaian disk" "${PAKAI}% terpakai, sisa $SISA" baik; fi
-nilai "Ukuran data Supabase" "$(du -sh /opt/pri/supabase/volumes 2>/dev/null | cut -f1 || echo '?')" info
+nilai "Ukuran data Supabase" "$(du -sh /opt/pri-superapp/supabase/volumes 2>/dev/null | cut -f1 || echo '?')" info
 
 echo
 echo "2. MEMORI"
