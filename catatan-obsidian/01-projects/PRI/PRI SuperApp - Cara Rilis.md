@@ -9,20 +9,29 @@ tags: [project, pri, superapp, rilis]
      Sunting di sini akan tertimpa — ubah di catatan-obsidian/ pada repo. -->
 
 ## Alurnya
-1. Kode diedit → diuji (pemeriksa tipe + lint + build) → commit → **push ke GitHub**
-2. Saya masuk ke VPS, ketik **`pri-perbarui`**
-3. VPS menarik kode terbaru dari GitHub, membangun, mengganti yang jalan
+1. Kode diedit → diuji (pemeriksa tipe + lint + build) → commit → **push ke GitHub `main`**
+2. GitHub Actions masuk ke VPS dan menjalankan **`pri-perbarui`** sendiri
+3. VPS menarik kode terbaru, membangun, mengganti yang jalan; kalau gagal, versi lama dikembalikan otomatis
 
-Artinya komputer mana pun boleh dipakai — VPS mengambil kode dari GitHub,
-bukan dari komputer saya.
+Deploy manual tetap ada: masuk ke VPS, ketik `pri-perbarui`. Dipakai kalau Actions sedang bermasalah, atau untuk `--tanpa-tarik` setelah ubah kunci.
+
+### Pemasangan sekali (deploy otomatis)
+Di VPS:
+```
+bash /opt/pri/sumber/vps/17-pasang-deploy-otomatis.sh
+```
+Skrip itu mencetak tiga nilai. Tempel ke GitHub → Settings → Secrets and variables → Actions:
+`VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`.
+
+Uji lewat tab Actions → **Deploy VPS** → Run workflow. Push berikutnya ke `main` men-deploy sendiri. Perubahan hanya catatan/markdown tidak memicu deploy.
 
 ## Kalau ada migrasi database
-**Selalu `pri-sql` dulu, baru `pri-perbarui`.** Terbalik tidak merusak, tapi
+**Selalu `pri-sql` dulu, baru push ke `main`.** Terbalik tidak merusak, tapi
 fiturnya akan memberi pesan "jalankan migrasi dulu" sampai dijalankan.
 
 ```
 pri-sql 53_absensi_sadar.sql
-pri-perbarui
+# lalu push ke main — Actions yang menjalankan pri-perbarui
 ```
 
 ## Jaring pengaman `pri-perbarui`
@@ -41,7 +50,8 @@ sama sekali, itu butuh dua container bergantian — belum dibuat.
 ## Perintah di VPS
 | Perintah | Gunanya |
 |---|---|
-| `pri-perbarui` | tarik + bangun + nyalakan (aplikasi & penjadwal) |
+| *(otomatis)* | push ke `main` → GitHub Actions → `pri-perbarui` |
+| `pri-perbarui` | tarik + bangun + nyalakan (aplikasi & penjadwal), cadangan jika Actions tidak jalan |
 | `pri-perbarui --tanpa-tarik` | bangun ulang tanpa menarik (mis. setelah ubah kunci) |
 | `pri-sql <berkas.sql>` | jalankan satu migrasi database |
 

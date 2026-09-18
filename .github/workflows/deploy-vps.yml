@@ -1,0 +1,76 @@
+# Deploy otomatis ke VPS setelah kode masuk ke main.
+#
+# Yang terjadi: GitHub menyambung SSH ke server, lalu menjalankan
+# `pri-perbarui` — skrip yang sudah ada, yang menarik kode, membangun
+# container, mengganti yang jalan, dan mengembalikan versi lama sendiri
+# kalau yang baru tidak menjawab.
+#
+# RAHASIA yang harus diisi di GitHub
+# (Settings → Secrets and variables → Actions):
+#   VPS_HOST     alamat server, mis. 187.77.113.63
+#   VPS_USER     biasanya root
+#   VPS_SSH_KEY  isi kunci privat hasil vps/17-pasang-deploy-otomatis.sh
+#   VPS_PORT     opsional, bawaan 22
+#
+# Pemasangan sekali di server: bash vps/17-pasang-deploy-otomatis.sh
+name: Deploy VPS
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "catatan-obsidian/**"
+      - "docs/**"
+      - "apk/**"
+      - "**/*.md"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Perbarui VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Pastikan rahasia terisi
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          USER: ${{ secrets.VPS_USER }}
+          KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          kurang=0
+          [ -n "$HOST" ] || { echo "Rahasia VPS_HOST belum diisi."; kurang=1; }
+          [ -n "$USER" ] || { echo "Rahasia VPS_USER belum diisi."; kurang=1; }
+          [ -n "$KEY" ] || { echo "Rahasia VPS_SSH_KEY belum diisi."; kurang=1; }
+          if [ "$kurang" -ne 0 ]; then
+            echo "Isi di GitHub → Settings → Secrets and variables → Actions."
+            echo "Kunci SSH dibuat sekali di VPS: bash vps/17-pasang-deploy-otomatis.sh"
+            exit 1
+          fi
+
+      - name: Jalankan pri-perbarui di VPS
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          command_timeout: 45m
+          script_stop: true
+          script: |
+            set -euo pipefail
+            if command -v pri-perbarui >/dev/null 2>&1; then
+              pri-perbarui
+            elif [ -x /opt/pri-skrip/12-perbarui.sh ]; then
+              bash /opt/pri-skrip/12-perbarui.sh
+            else
+              echo "Perintah pri-perbarui belum ada di server." >&2
+              echo "Jalankan dulu pemasangan aplikasi (vps/11-pasang-aplikasi.sh)." >&2
+              exit 1
+            fi

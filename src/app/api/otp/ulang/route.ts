@@ -14,7 +14,7 @@ import {
   hapusCacheUser,
   userDariToken,
   keUserPublik,
-  KOLOM_USER,
+  kolomUser,
   type BarisUser,
 } from "@/lib/sesi";
 import { FonnteBelumDiaturError } from "@/lib/fonnte";
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
 
     const { data: segar } = await db
       .from("app_user")
-      .select(KOLOM_USER)
+      .select(await kolomUser())
       .eq("id", Number(user.id))
       .maybeSingle();
 

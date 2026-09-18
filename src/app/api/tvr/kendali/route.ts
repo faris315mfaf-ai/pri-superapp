@@ -4,7 +4,7 @@
 // Hanya admin Studio (master / super_admin / kepala Divisi PALUGODAM).
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
-import { buatSesi, keUserPublik, KOLOM_USER, pastikanMasuk, type BarisUser } from "@/lib/sesi";
+import { buatSesi, keUserPublik, kolomUser, pastikanMasuk, type BarisUser } from "@/lib/sesi";
 import { adalahAdminStudio, DIVISI_PALUGODAM } from "@/lib/struktur";
 import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     const targetId = Number(body.user_id ?? 0);
     if (!Number.isFinite(targetId) || targetId <= 0) throw Object.assign(new Error("user_id tidak sah."), { status: 400 });
     if (targetId === Number(admin.id)) throw Object.assign(new Error("Itu akun Anda sendiri."), { status: 400 });
-    const { data } = await supabase().from("app_user").select(KOLOM_USER).eq("id", targetId).maybeSingle();
+    const { data } = await supabase().from("app_user").select(await kolomUser()).eq("id", targetId).maybeSingle();
     if (!data) throw Object.assign(new Error("Akun tujuan tidak ditemukan."), { status: 404 });
     const b = data as unknown as BarisUser;
     if (b.aktif !== true || String(b.status) !== "aktif") throw Object.assign(new Error("Akun itu tidak aktif."), { status: 403 });

@@ -20,7 +20,7 @@ import {
   simpanCacheSesi,
 } from "@/lib/cache-sesi";
 
-import { kolomStrukturLainAda } from "@/lib/kolom-struktur";
+import { kolomJabatanTvrAda, kolomStrukturLainAda } from "@/lib/kolom-struktur";
 import { bacaStrukturLain } from "@/lib/struktur";
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
@@ -127,20 +127,20 @@ export function keUserPublik(b: BarisUser): UserPublik {
   };
 }
 
-const KOLOM_USER =
-  "id, email, nama, role, jabatan, avatar_url, status, profil_lengkap, aktif, username, nomor_wa, wa_terverifikasi, divisi, sub_divisi, posisi_divisi, nama_panggilan, tanggal_lahir, google_linked, google_avatar, sembunyi_kewajiban, modul_izin, jabatan_sayap, jabatan_tvr";
-// Sama persis, plus struktur tambahan (11 Sep 2026). Ditulis LENGKAP,
-// bukan dirakit, karena supabase-js hanya bisa mengurai daftar kolom
-// yang berupa teks tetap. Dipakai hanya bila kolomnya sudah terpasang
-// (sql/43); sebelum itu daftar lama yang dipakai, jadi tidak ada
-// permintaan yang gagal hanya karena SQL-nya belum dijalankan.
-const KOLOM_USER_PLUS =
-  "id, email, nama, role, jabatan, avatar_url, status, profil_lengkap, aktif, username, nomor_wa, wa_terverifikasi, divisi, sub_divisi, posisi_divisi, nama_panggilan, tanggal_lahir, google_linked, google_avatar, sembunyi_kewajiban, modul_izin, jabatan_sayap, jabatan_tvr, struktur_lain";
+const KOLOM_USER_DASAR =
+  "id, email, nama, role, jabatan, avatar_url, status, profil_lengkap, aktif, username, nomor_wa, wa_terverifikasi, divisi, sub_divisi, posisi_divisi, nama_panggilan, tanggal_lahir, google_linked, google_avatar, sembunyi_kewajiban, modul_izin, jabatan_sayap";
 
 /** Daftar kolom akun yang aman dipakai pada keadaan database saat ini. */
-async function kolomUser(): Promise<typeof KOLOM_USER | typeof KOLOM_USER_PLUS> {
-  return (await kolomStrukturLainAda()) ? KOLOM_USER_PLUS : KOLOM_USER;
+export async function kolomUser(): Promise<string> {
+  let k = KOLOM_USER_DASAR;
+  if (await kolomJabatanTvrAda()) k += ", jabatan_tvr";
+  if (await kolomStrukturLainAda()) k += ", struktur_lain";
+  return k;
 }
+
+/** Daftar penuh (termasuk kolom opsional). Jangan dipakai di select
+ *  langsung — pakai `kolomUser()` supaya database lama tidak gagal. */
+const KOLOM_USER = `${KOLOM_USER_DASAR}, jabatan_tvr`;
 
 /**
  * Tukar token perangkat dengan data akun.

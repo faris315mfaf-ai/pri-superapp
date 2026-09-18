@@ -9,7 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import { pastikanBukanPerbaikan } from "@/lib/perbaikan";
-import { buatSesi, keUserPublik, KOLOM_USER, type BarisUser } from "@/lib/sesi";
+import { buatSesi, keUserPublik, kolomUser, type BarisUser } from "@/lib/sesi";
 import { identifikasiWajah, WajahBelumDiaturError, WajahLayananError, wajahSiap } from "@/lib/wajah";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     const db = supabase();
     const { data } = await db
       .from("app_user")
-      .select(KOLOM_USER)
+      .select(await kolomUser())
       .eq("id", Number(hasil.userId))
       .maybeSingle();
     const baris = data as BarisUser | null;

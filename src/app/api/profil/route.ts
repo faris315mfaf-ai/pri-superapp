@@ -11,7 +11,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import {
   hapusCacheUser,
-  KOLOM_USER,
+  kolomUser,
   keUserPublik,
   userDariTokenLonggar,
   type BarisUser,
@@ -228,7 +228,7 @@ export async function PATCH(request: Request) {
 
     const { data: segar } = await db
       .from("app_user")
-      .select(KOLOM_USER)
+      .select(await kolomUser())
       .eq("id", Number(user.id))
       .maybeSingle();
 
@@ -339,7 +339,7 @@ export async function POST(request: Request) {
 
     const { data: segar } = await db
       .from("app_user")
-      .select(KOLOM_USER)
+      .select(await kolomUser())
       .eq("id", Number(user.id))
       .maybeSingle();
 

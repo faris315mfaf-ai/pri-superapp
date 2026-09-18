@@ -14,7 +14,7 @@ import {
   hapusCacheUser,
   buatSesi,
   keUserPublik,
-  KOLOM_USER,
+  kolomUser,
   type BarisUser,
 } from "@/lib/sesi";
 
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     const db = supabase();
     const { data } = await db
       .from("app_user")
-      .select(KOLOM_USER)
+      .select(await kolomUser())
       .eq("email", email)
       .maybeSingle();
 

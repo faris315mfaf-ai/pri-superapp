@@ -9,7 +9,7 @@ import { bungkus } from "@/lib/api-helper";
 import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import { pastikanBukanPerbaikan } from "@/lib/perbaikan";
 import { normalkanNomorWa } from "@/lib/fonnte";
-import { buatSesi, keUserPublik, KOLOM_USER, type BarisUser } from "@/lib/sesi";
+import { buatSesi, keUserPublik, kolomUser, type BarisUser } from "@/lib/sesi";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +70,7 @@ export async function POST(request: Request) {
     }
 
     const db = supabase();
+    const kolomLogin = `${await kolomUser()}, password_hash`;
 
     // Tebak jenis identitasnya, lalu cari dengan cara yang sesuai.
     // Nomor dinormalkan dulu supaya 0812… dan 62812… menemukan akun
@@ -81,21 +82,21 @@ export async function POST(request: Request) {
       const nomor = normalkanNomorWa(identitas);
       const { data } = await db
         .from("app_user")
-        .select(KOLOM_USER + ", password_hash")
+        .select(kolomLogin)
         .eq("nomor_wa", nomor)
         .maybeSingle();
       baris = data as BarisUser | null;
     } else if (identitas.includes("@")) {
       const { data } = await db
         .from("app_user")
-        .select(KOLOM_USER + ", password_hash")
+        .select(kolomLogin)
         .eq("email", identitas.toLowerCase())
         .maybeSingle();
       baris = data as BarisUser | null;
     } else {
       const { data } = await db
         .from("app_user")
-        .select(KOLOM_USER + ", password_hash")
+        .select(kolomLogin)
         .ilike("username", identitas)
         .maybeSingle();
       baris = data as BarisUser | null;
