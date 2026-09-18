@@ -18,10 +18,14 @@
 #   1. fail2ban memblokir alamat runner GitHub (alamatnya ribuan dan
 #      berganti terus, jadi mudah dianggap penyerang baru).
 #   2. sshd menolak sambungan baru karena antrean "belum login" penuh
-#      (MaxStartups). Port 22 yang terbuka ke internet dihujani bot
-#      sepanjang hari; antreannya bisa penuh oleh mereka, lalu
-#      sambungan SAH ikut dibuang secara acak. Ini paling cocok dengan
-#      gejala "kadang gagal, kadang berhasil".
+#      (MaxStartups). Begitu antrean itu penuh, sambungan BARU dibuang
+#      secara ACAK — termasuk yang sah. Ini paling cocok dengan gejala
+#      "kadang gagal, kadang berhasil".
+#      CATATAN (18 Sep): di server ini antreannya penuh BUKAN karena
+#      hujan bot — percobaan login gagal cuma 19 dalam 24 jam. Jadi
+#      langkah 3 ikut menampilkan alamat penyumbangnya, karena "siapa
+#      yang memenuhi antrean" menentukan apakah cukup melapangkan
+#      antrean atau ada hal lain yang perlu dikejar.
 #   3. Firewall server atau firewall Hostinger membatasi laju sambungan.
 #   4. Tabel conntrack penuh.
 #
@@ -39,7 +43,7 @@
 # =====================================================================
 set -uo pipefail
 
-[ "$(id -u)" -eq 0 ] || { echo "Jalankan sebagai root: sudo bash $0 $*" >&2; exit 1; }
+[ "$(id -u)" -eq 0 ] || [ -n "${PRI_UJI:-}" ] || { echo "Jalankan sebagai root: sudo bash $0 $*" >&2; exit 1; }
 
 # Jam kegagalan (UTC). Bawaannya dua kejadian yang sudah tercatat.
 JAM_GAGAL=("$@")
@@ -133,6 +137,17 @@ THROT="$( { journalctl -u ssh -u sshd --since '48 hours ago' 2>/dev/null || cat 
 echo "  jejak pembuangan sambungan (48 jam): ${THROT:-0} baris"
 if [ "${THROT:-0}" -gt 0 ]; then
   catat "TERBUKTI: sshd membuang sambungan karena antreannya penuh (MaxStartups). Inilah yang paling cocok dengan 'kadang gagal, kadang berhasil'."
+  # Jumlah saja belum cukup: yang menentukan obatnya adalah SIAPA yang
+  # memenuhi antrean. Kalau sumbernya banyak alamat asing = hujan bot;
+  # kalau terpusat di satu-dua alamat = ada yang membuka sambungan
+  # bertubi-tubi, dan itu masalah lain.
+  echo "  contoh barisnya:"
+  { journalctl -u ssh -u sshd --since '48 hours ago' 2>/dev/null || cat /var/log/auth.log 2>/dev/null; } \
+    | grep -iE 'beginning MaxStartups throttling|drop connection #' | tail -5 | sed 's/^/      /'
+  echo "  alamat penyumbang terbanyak:"
+  { journalctl -u ssh -u sshd --since '48 hours ago' 2>/dev/null || cat /var/log/auth.log 2>/dev/null; } \
+    | grep -oiE 'from [0-9a-f.:]+ port' | awk '{print $2}' \
+    | sort | uniq -c | sort -rn | head -5 | sed 's/^/      /'
 fi
 
 GAGAL_AUTH="$( { journalctl -u ssh -u sshd --since '24 hours ago' 2>/dev/null || cat /var/log/auth.log 2>/dev/null; } \
@@ -158,14 +173,36 @@ if command -v nft >/dev/null 2>&1 && nft list ruleset 2>/dev/null | grep -q 'dpo
   echo "  aturan nftables yang menyentuh port 22:"
   nft list ruleset 2>/dev/null | grep -B2 'dport 22' | head -12 | sed 's/^/      /'
 fi
-IPT="$(iptables -S 2>/dev/null | grep -E '\-\-dport 22|recent|hashlimit|limit' | head -8)"
-if [ -n "$IPT" ]; then
-  echo "  aturan iptables yang menyentuh port 22 / pembatas laju:"
-  echo "$IPT" | sed 's/^/      /'
-  echo "$IPT" | grep -qE 'recent|hashlimit|limit' && \
-    catat "Ada aturan PEMBATAS LAJU di iptables pada port 22 — pembatas semacam ini membuang paket diam-diam, persis menghasilkan 'i/o timeout'."
+# PENTING — jangan tertipu kata "limit". ufw SELALU memasang aturan
+# `-m limit --limit 3/min ... -j LOG`, dan itu membatasi seberapa sering
+# BARIS LOG ditulis, bukan sambungan. Aturan semacam itu tidak membuang
+# satu paket pun. Yang benar-benar membuang adalah aturan yang berakhir
+# di -j DROP / -j REJECT / -j ufw-user-limit. (Versi pertama skrip ini
+# salah di sini dan melaporkan pembatas laju yang sebenarnya tidak ada.)
+IPT_ASLI="$(iptables -S 2>/dev/null || true)"
+IPT_BUANG="$(printf '%s\n' "$IPT_ASLI" \
+  | grep -E '\-\-dport 22|ufw-user-limit' \
+  | grep -E '\-j (DROP|REJECT|ufw-user-limit)' \
+  | grep -vE '\-j (LOG|RETURN)' | head -8)"
+IPT_LAJU="$(printf '%s\n' "$IPT_ASLI" \
+  | grep -E '\-m (recent|hashlimit)' \
+  | grep -vE '\-j (LOG|RETURN)' | head -8)"
+
+if [ -n "$IPT_BUANG" ] || [ -n "$IPT_LAJU" ]; then
+  echo "  aturan yang benar-benar MEMBUANG paket di port 22:"
+  printf '%s\n%s\n' "$IPT_BUANG" "$IPT_LAJU" | grep -v '^$' | sed 's/^/      /'
+  catat "Ada aturan iptables yang membuang paket di port 22 — pembatas semacam ini menghasilkan 'i/o timeout' persis seperti gejalanya."
 else
-  echo "  tidak ada aturan iptables khusus port 22."
+  echo "  tidak ada aturan iptables yang membuang paket di port 22."
+  # Isi rantai ufw-user-limit ditampilkan supaya terlihat ia memang kosong.
+  ISI_LIMIT="$(printf '%s\n' "$IPT_ASLI" | grep -E '^-A ufw-user-limit' | head -4)"
+  if [ -n "$ISI_LIMIT" ]; then
+    echo "  (rantai ufw-user-limit berisi:)"; printf '%s\n' "$ISI_LIMIT" | sed 's/^/      /'
+  else
+    echo "  (rantai ufw-user-limit ada tapi KOSONG — ufw selalu membuatnya, tidak berarti dipakai)"
+  fi
+  JML_LOG="$(printf '%s\n' "$IPT_ASLI" | grep -cE '\-m limit .*-j (LOG|RETURN)' || true)"
+  [ "${JML_LOG:-0}" -gt 0 ] && echo "  (${JML_LOG} aturan '--limit' lain hanya membatasi PENULISAN LOG, bukan sambungan)"
 fi
 garis
 

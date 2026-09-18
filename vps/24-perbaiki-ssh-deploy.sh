@@ -119,11 +119,13 @@ if [ "$MAXSTARTUPS" = "1" ]; then
       [ -f "$DROPIN" ] && { CADANGAN="$DROPIN.cadangan-$(date +%Y%m%d-%H%M%S)"; cp -a "$DROPIN" "$CADANGAN"; }
       cat > "$DROPIN" <<EOF
 $PENANDA
-# Port 22 yang terbuka ke internet dihujani bot sepanjang hari. Dengan
-# nilai bawaan (10:30:100), antrean "belum login" cepat penuh oleh
-# mereka, lalu sshd membuang sambungan BARU secara acak — termasuk
-# sambungan sah dari GitHub Actions. Gejalanya di GitHub: "i/o timeout",
-# kadang gagal kadang berhasil.
+# Dengan nilai bawaan (10:30:100), begitu ada 10 sambungan yang belum
+# selesai login, sshd mulai membuang sambungan BARU secara ACAK —
+# termasuk sambungan sah dari GitHub Actions. Gejalanya di GitHub:
+# "i/o timeout", kadang gagal kadang berhasil.
+# Di server ini pembuangan itu TERBUKTI terjadi (69 kejadian dalam 48
+# jam, 18 Sep) meski percobaan login gagal hanya 19 per hari — jadi
+# antreannya penuh bukan karena hujan bot, melainkan karena sempit.
 # Menaikkan angka ini tidak melonggarkan keamanan sedikit pun: siapa
 # yang boleh masuk sama sekali tidak diatur di sini.
 MaxStartups 100:30:200
