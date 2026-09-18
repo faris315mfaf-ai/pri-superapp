@@ -147,20 +147,80 @@ if [ "$LEWATI_SQL" = "1" ]; then
 else
 
 [ "$STATUS" = "1" ] && echo "== Mencari database ==" || echo "== 2/6 Mencari database =="
-# Dicari lewat NAMA IMAGE, bukan nama container: nama container berbeda
-# tergantung cara Supabase dipasang, imagenya tetap.
+# DUA KEADAAN yang harus didukung, karena server ini pernah berubah:
+#
+#   A. Supabase SWAKELOLA di server ini  -> ada container ber-image
+#      supabase/postgres, dihubungi lewat docker exec.
+#   B. Database di TEMPAT LAIN (Supabase cloud atau server lain)
+#      -> tidak ada containernya sama sekali; alamatnya ada di env
+#      aplikasi. Dihubungi dengan psql sekali pakai lewat docker run.
+#
+# Versi pertama skrip ini hanya tahu keadaan A, lalu berhenti dengan
+# "Container database tidak ditemukan" — yang terbaca seperti ada yang
+# rusak, padahal databasenya memang sudah tidak di sini.
 CT="$(docker ps --format '{{.Names}}\t{{.Image}}' \
       | awk -F'\t' 'index($2, "supabase/postgres") { print $1; exit }')"
-[ -n "$CT" ] || { echo "Container database tidak ditemukan (image supabase/postgres)." >&2; docker ps --format '  {{.Names}}  ({{.Image}})' >&2; exit 1; }
-[ -f "$KUNCI" ] || { echo "Berkas kunci tidak ada: $KUNCI" >&2; exit 1; }
-# shellcheck disable=SC1090
-. "$KUNCI"
-[ -n "${PG_PASS:-}" ] || { echo "PG_PASS tidak ada di $KUNCI" >&2; exit 1; }
-URL="postgresql://postgres:${PG_PASS}@127.0.0.1:5432/postgres"
-echo "  container: $CT"
 
-# Menjalankan satu perintah SQL pendek dan mengembalikan hasilnya.
-psql_nilai() { docker exec -i "$CT" psql -qtAX -v ON_ERROR_STOP=1 "$URL" -c "$1"; }
+ENV_APP="${PRI_ENV_APP:-/opt/pri-superapp/aplikasi/env.txt}"
+URL=""
+CARA=""
+
+if [ -n "$CT" ]; then
+  [ -f "$KUNCI" ] || { echo "Berkas kunci tidak ada: $KUNCI" >&2; exit 1; }
+  # shellcheck disable=SC1090
+  . "$KUNCI"
+  [ -n "${PG_PASS:-}" ] || { echo "PG_PASS tidak ada di $KUNCI" >&2; exit 1; }
+  URL="postgresql://postgres:${PG_PASS}@127.0.0.1:5432/postgres"
+  CARA="container"
+  echo "  Supabase swakelola di server ini — container: $CT"
+else
+  # Alamat sambungan dicari di env aplikasi. Nama yang lazim dipakai,
+  # diambil yang pertama ketemu. Isinya TIDAK PERNAH dicetak: di
+  # dalamnya ada sandi database.
+  if [ -r "$ENV_APP" ]; then
+    for N in DATABASE_URL POSTGRES_URL SUPABASE_DB_URL DIRECT_URL POSTGRES_URL_NON_POOLING; do
+      V="$(grep -m1 "^${N}=" "$ENV_APP" 2>/dev/null | cut -d= -f2- || true)"
+      V="${V%\"}"; V="${V#\"}"      # buang kutip ganda di ujung
+      V="${V%\'}"; V="${V#\'}"      # buang kutip tunggal di ujung
+      V="$(printf '%s' "$V" | tr -d '\r')"   # berkas env bisa berakhiran CRLF
+      if [ -n "$V" ]; then URL="$V"; CARA="env:$N"; break; fi
+    done
+  fi
+  if [ -z "$URL" ]; then
+    echo >&2
+    echo "Tidak ada container Supabase di server ini, dan alamat sambungan database" >&2
+    echo "juga tidak ditemukan di $ENV_APP." >&2
+    echo >&2
+    echo "Container yang sedang jalan:" >&2
+    docker ps --format '  {{.Names}}  ({{.Image}})' >&2
+    echo >&2
+    echo "Artinya databasenya ada di luar server ini (mis. Supabase cloud)." >&2
+    echo "Supaya migrasi bisa dijalankan dari sini, tambahkan SATU baris di" >&2
+    echo "$ENV_APP yang berisi alamat sambungan Postgres-nya:" >&2
+    echo "  DATABASE_URL=postgresql://postgres:<sandi>@<host>:5432/postgres" >&2
+    echo >&2
+    echo "Di Supabase cloud: Project Settings -> Database -> Connection string" >&2
+    echo "-> URI. Pakai yang port 5432 (session), BUKAN 6543 (transaction) —" >&2
+    echo "perubahan skema tidak bisa lewat pooler transaksi." >&2
+    exit 1
+  fi
+  # Host tujuan dicetak tanpa sandinya, supaya jelas menyasar ke mana.
+  TUJUAN="$(printf '%s' "$URL" | sed 's#.*@##; s#/.*##')"
+  echo "  database DI LUAR server ini — tujuan: $TUJUAN  (dari $CARA)"
+  echo "  dihubungi dengan psql sekali pakai (image postgres:17-alpine)"
+fi
+
+# Satu pintu untuk menjalankan psql, apa pun caranya. Yang berbeda
+# hanya di mana psql-nya hidup; perintahnya sama persis.
+jalankan_psql() {   # $@ = argumen psql tambahan; SQL dari stdin bila perlu
+  if [ "$CARA" = "container" ]; then
+    docker exec -i "$CT" psql "$@"
+  else
+    docker run --rm -i --network host postgres:17-alpine psql "$@"
+  fi
+}
+
+psql_nilai() { jalankan_psql -qtAX -v ON_ERROR_STOP=1 "$URL" -c "$1"; }
 
 [ "$STATUS" = "1" ] && echo "== Buku catatan migrasi ==" || echo "== 3/6 Buku catatan migrasi =="
 psql_nilai "
@@ -238,7 +298,7 @@ while IFS= read -r JALUR; do
   # --single-transaction: satu perintah gagal -> SEMUA isi berkas itu
   # dibatalkan. Skema setengah jadi jauh lebih sulit diperbaiki
   # daripada skema yang belum disentuh.
-  if docker exec -i "$CT" psql -v ON_ERROR_STOP=1 --single-transaction "$URL" \
+  if jalankan_psql -v ON_ERROR_STOP=1 --single-transaction "$URL" \
        < "$JALUR" > /tmp/deploy-sql.log 2>&1; then
     psql_nilai "
       insert into public._migrasi_sql (berkas, sidik)
@@ -288,8 +348,8 @@ echo
 echo "SELESAI."
 echo "  Versi kode : $(git -C "$SUMBER" log --oneline -1)"
 if [ "$LEWATI_SQL" != "1" ]; then
-  echo "  Database   : $(docker exec -i "$CT" psql -qtAX "$URL" -c 'select count(*) from public._migrasi_sql;' 2>/dev/null || echo '?') berkas SQL tercatat"
-  echo "  Riwayatnya : docker exec -i $CT psql \"\$URL\" -c 'select * from _migrasi_sql order by dijalankan_pada desc limit 10;'"
+  echo "  Database   : $(psql_nilai 'select count(*) from public._migrasi_sql;' 2>/dev/null || echo '?') berkas SQL tercatat"
+  echo "  Riwayatnya : pri-deploy --status"
 fi
 echo
 echo "Yang TETAP manual (disengaja):"

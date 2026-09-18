@@ -38,10 +38,11 @@ cat > "$T/bin/docker" <<'SH'
 #!/usr/bin/env bash
 LEDGER="${UJI_LEDGER:?}"
 if [ "$1" = "ps" ]; then
-  printf 'supabase-db\tsupabase/postgres:15.8\n'
+  [ "${UJI_TANPA_SUPABASE:-0}" = "1" ] || printf 'supabase-db\tsupabase/postgres:15.8\n'
   printf 'pri-aplikasi\tpri-aplikasi:terbaru\n'
   exit 0
 fi
+if [ "$1" = "run" ]; then set -- exec "$@"; fi
 if [ "$1" = "exec" ]; then
   # Cari argumen setelah -c (bila ada). Tanpa -c berarti SQL dari stdin.
   SQL=""; PUNYA_C=0
@@ -216,6 +217,32 @@ cek "TIDAK membangun ulang aplikasi" "$(echo "$OUT" | grep -q "Membangun" && ech
 rm -f "$T/sumber/sql/14_belum.sql" "$T/sumber/sql/13_setelah.sql"
 OUT="$(jalankan --status)"
 cek "kalau semua sudah jalan, dikatakan terang-terangan" "$(echo "$OUT" | grep -q "semuanya sudah dijalankan" && echo 1 || echo 0)" "$(echo "$OUT" | tail -5)"
+echo
+echo "[M] Database DI LUAR server (tidak ada container Supabase)"
+ENVAPP="$T/env-aplikasi.txt"
+printf 'SUPABASE_URL=https://abc.supabase.co\nDATABASE_URL=postgresql://postgres:SANDI-RAHASIA@db.abc.supabase.co:5432/postgres\n' > "$ENVAPP"
+jalankan_luar() {
+  PATH="$T/bin:$PATH" UJI_LEDGER="$LEDGER" PRI_UJI=1 UJI_TANPA_SUPABASE=1 \
+    PRI_SUMBER="$T/sumber" PRI_KUNCI="$T/kunci.env" PRI_SKRIP="$T/skrip" PRI_ENV_APP="$ENVAPP" \
+    bash "$SKRIP_UJI" "$@" 2>&1
+}
+OUT="$(jalankan_luar --status)"; KODE=$?
+cek "tidak berhenti walau tanpa container Supabase" "$([ "$KODE" = "0" ] && echo 1 || echo 0)" "kode=$KODE"
+cek "menyatakan database di luar server" "$(echo "$OUT" | grep -q "DI LUAR server" && echo 1 || echo 0)" "$(echo "$OUT" | head -6)"
+cek "menyebut tujuannya" "$(echo "$OUT" | grep -q "db.abc.supabase.co:5432" && echo 1 || echo 0)"
+cek "menyebut dari mana alamatnya dibaca" "$(echo "$OUT" | grep -q "env:DATABASE_URL" && echo 1 || echo 0)"
+cek "SANDI TIDAK ikut tercetak" "$(echo "$OUT" | grep -q "SANDI-RAHASIA" && echo 0 || echo 1)" "SANDI BOCOR DI LAYAR"
+
+echo
+echo "[N] Tanpa container DAN tanpa alamat — berhenti dengan penjelasan berguna"
+printf 'SUPABASE_URL=https://abc.supabase.co\n' > "$ENVAPP"
+OUT="$(jalankan_luar --status)"; KODE=$?
+cek "berhenti dengan kode galat" "$([ "$KODE" != "0" ] && echo 1 || echo 0)" "kode=$KODE"
+cek "TIDAK sekadar bilang container tidak ditemukan" "$(echo "$OUT" | grep -q "Container database tidak ditemukan" && echo 0 || echo 1)"
+cek "menjelaskan databasenya ada di luar" "$(echo "$OUT" | grep -q "di luar server ini" && echo 1 || echo 0)" "$(echo "$OUT" | tail -5)"
+cek "memberi contoh baris yang harus ditambahkan" "$(echo "$OUT" | grep -q "DATABASE_URL=postgresql" && echo 1 || echo 0)"
+cek "memperingatkan pooler 6543 tidak untuk skema" "$(echo "$OUT" | grep -q "6543" && echo 1 || echo 0)"
+
 
 
 
