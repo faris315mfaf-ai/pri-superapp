@@ -51,7 +51,22 @@ export async function GET(request: Request) {
     if (diminta.some((x) => !sudah.has(x)) || belumCek) perlu.set(Number(p.user_id), (perlu.get(Number(p.user_id)) ?? 0) + 1);
   }
   // Yang unggahannya paling banyak belum tercatat didahulukan.
-  const antre = [...perlu.entries()].sort((a, b) => b[1] - a[1]).map(([uid]) => uid);
+  const antrePending = [...perlu.entries()].sort((a, b) => b[1] - a[1]).map(([uid]) => uid);
+  // Anggota yang posting native di akun tertaut tidak punya baris tvrku_post,
+  // jadi tidak masuk antre di atas. Mereka tetap harus di-scan (lapis 3).
+  const { data: profils } = await db
+    .from("sosmed_profile")
+    .select("user_id")
+    .eq("jenis", "pengguna");
+  const ekstra: number[] = [];
+  const sudahAntre = new Set(antrePending);
+  for (const p of profils ?? []) {
+    const uid = Number(p.user_id);
+    if (!uid || sudahAntre.has(uid)) continue;
+    sudahAntre.add(uid);
+    ekstra.push(uid);
+  }
+  const antre = [...antrePending, ...ekstra];
 
   let diproses = 0;
   let baru = 0;

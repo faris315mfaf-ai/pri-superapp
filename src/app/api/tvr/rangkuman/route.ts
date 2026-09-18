@@ -10,6 +10,7 @@
 // diunggahkan admin (Studio/Siaran Serentak) sering tidak pernah membuka layar
 // itu, jadi rangkumannya selalu kosong. Sekarang rekonsiliasi DITUNGGU di sini
 // dulu (dengan anggaran waktu) sebelum laporan disusun.
+import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { targetKendali, userEfektifTvr } from "@/lib/sebagai";
@@ -48,13 +49,12 @@ export async function GET(request: Request) {
     ).trim();
     const tanggal = /^\d{4}-\d{2}-\d{2}$/.test(mentah) ? mentah : tanggalWib();
 
-    // Tautan unggahan yang baru terbit dicatat dulu, supaya sekali ketuk
-    // Generate sudah lengkap (tidak perlu buka Riwayat lebih dulu).
-    // Hanya untuk tanggal hari ini — laporan tanggal lama sudah final.
+    // Baca tautan yang SUDAH tercatat dulu. Dulu GET ini menunggu
+    // rekonsiliasi sampai 30 dtk — proxy/Caddy sering memutus, jadi
+    // rangkuman hari ini tampil kosong padahal barisnya sudah ada.
+    // Rekonsiliasi tetap jalan setelah respons; klien menyegarkan.
     if (tanggal === tanggalWib()) {
-      await rekonsiliasiKpiOtomatis(uid, {
-        anggaranMs: ANGGARAN_REKONSILIASI_MS,
-      });
+      after(() => rekonsiliasiKpiOtomatis(uid, { anggaranMs: ANGGARAN_REKONSILIASI_MS }));
     }
 
     const [{ data: tercatat }, { data: pending }] = await Promise.all([

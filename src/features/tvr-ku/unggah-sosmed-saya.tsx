@@ -31,6 +31,7 @@ import {
   kategoriBolehDipilih,
   batalkanJadwalTvrku,
   getJadwalTvrku,
+  getAkunTvr,
   getRiwayatTvrkuPost,
   postTvrku,
   sinkronSosmedTvr,
@@ -166,29 +167,25 @@ export function UnggahSosmedSaya() {
   useEffect(() => {
     let hidup = true;
     void (async () => {
-      try {
-        // Sumber kebenaran = upload-post LANGSUNG (bukan tabel lokal):
-        // begitu satu platform di-login, toggle-nya langsung terbuka di
-        // sini. Ini juga yang memperbaiki bug "Insight sudah membaca
-        // YouTube tapi menu unggah bilang belum ada akun tertaut".
-        const [sinkron, posts, antre] = await Promise.all([
-          sinkronSosmedTvr().catch(() => ({ terhubung: [] as { platform: string }[] })),
-          getRiwayatTvrkuPost(),
-          getJadwalTvrku().catch(() => [] as JadwalTvrku[]),
-        ]);
-        if (!hidup) return;
-        setJadwalAntre(antre);
-        const t = sinkron.terhubung
-          .map((a) => a.platform)
-          .filter((p) => p !== "website");
-        setTertaut([...new Set(t)]);
-        setRiwayat(posts);
-      } catch {
-        if (hidup) {
-          setTertaut([]);
-          setRiwayat([]);
-        }
-      }
+      // Riwayat dan akun tertaut tidak boleh saling menggugurkan:
+      // dulu gagal GET riwayat mengosongkan tertaut, lalu panel
+      // "belum ada akun" MENYEMBUNYIKAN riwayat yang sebenarnya ada.
+      const [sinkron, posts, antre, akun] = await Promise.all([
+        sinkronSosmedTvr().catch(() => ({ terhubung: [] as { platform: string }[] })),
+        getRiwayatTvrkuPost().catch(() => [] as TvrkuPost[]),
+        getJadwalTvrku().catch(() => [] as JadwalTvrku[]),
+        getAkunTvr().catch(() => [] as { platform: string; terhubung?: boolean }[]),
+      ]);
+      if (!hidup) return;
+      setJadwalAntre(antre);
+      const dariSinkron = sinkron.terhubung
+        .map((a) => a.platform)
+        .filter((p) => p !== "website");
+      const dariAkun = akun
+        .filter((a) => a.terhubung && a.platform !== "website")
+        .map((a) => a.platform);
+      setTertaut([...new Set([...dariSinkron, ...dariAkun])]);
+      setRiwayat(posts);
     })();
     return () => {
       hidup = false;
@@ -375,21 +372,20 @@ export function UnggahSosmedSaya() {
 
   if (tertaut === null) return <GlassSkeleton className="h-40 rounded-2xl" />;
 
-  if (tertaut.length === 0) {
-    return (
-      <GlassCard className="p-4">
-        <p className="text-[13px] leading-relaxed text-teks-sekunder">
-          Belum ada akun sosmed yang tertaut. Tekan <b>Hubungkan Sosmed (Login)</b> di
-          seksi Akun TV Rakyat Saya dulu — setelah login, platformnya muncul di sini
-          dan Anda bisa memposting langsung dari aplikasi. Cukup login satu platform
-          pun sudah bisa dipakai; platform lain menyusul saat Anda login.
-        </p>
-      </GlassCard>
-    );
-  }
+  const kartuBelumTaut = tertaut.length === 0 && (
+    <GlassCard className="p-4">
+      <p className="text-[13px] leading-relaxed text-teks-sekunder">
+        Belum ada akun sosmed yang tertaut. Tekan <b>Hubungkan Sosmed (Login)</b> di
+        seksi Akun TV Rakyat Saya dulu — setelah login, platformnya muncul di sini
+        dan Anda bisa memposting langsung dari aplikasi. Cukup login satu platform
+        pun sudah bisa dipakai; platform lain menyusul saat Anda login.
+      </p>
+    </GlassCard>
+  );
 
   return (
     <div className="flex flex-col gap-3">
+      {kartuBelumTaut}
       {/* PALUGODAM: satu pintu untuk edit + upload otomatis */}
       {bolehLink && (
         <button
@@ -429,6 +425,7 @@ export function UnggahSosmedSaya() {
         />
       )}
 
+      {tertaut.length > 0 && (
       <GlassCard className="p-4">
         {/* PALUGODAM: pilih cara kirim — unggah berkas atau tempel tautan */}
         {bolehLink && (
@@ -791,6 +788,7 @@ export function UnggahSosmedSaya() {
           )}
         </button>
       </GlassCard>
+      )}
 
       {/* Antrean terjadwal (2 Sep 2026) — belum tayang, bisa dibatalkan */}
       {jadwalAntre !== null && jadwalAntre.length > 0 && (
@@ -834,7 +832,15 @@ export function UnggahSosmedSaya() {
         </GlassCard>
       )}
 
-      {/* Riwayat */}
+      {/* Riwayat — selalu ditampilkan, termasuk kosong, supaya unggahan
+          tidak "lenyap" hanya karena sinkron akun tertaut gagal. */}
+      {riwayat !== null && riwayat.length === 0 && (
+        <p className="px-1 text-[12px] leading-relaxed text-teks-sekunder">
+          Belum ada riwayat post di akun yang sedang dibuka. Unggahan tercatat
+          pada akun yang memposting — bila Anda admin, buka akun anggota lewat
+          Kendali Akun.
+        </p>
+      )}
       {riwayat !== null && riwayat.length > 0 && (
         <SeksiLipat id="tvrku-riwayat-post" judul="Riwayat Post Saya" ikon={History} bawaanTerbuka>
           <div className="mt-2 flex flex-col gap-2">

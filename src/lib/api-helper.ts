@@ -14,12 +14,13 @@ import { KonfigurasiError } from "@/lib/supabase";
 export async function bungkus<T>(
   isi: () => Promise<T>,
 ): Promise<NextResponse> {
+  const tanpaCache = { headers: { "Cache-Control": "no-store" } };
   try {
-    return NextResponse.json(await isi());
+    return NextResponse.json(await isi(), tanpaCache);
   } catch (e) {
     if (e instanceof KonfigurasiError) {
       // 503 = layanan belum siap; membedakannya dari salah ketik URL
-      return NextResponse.json({ error: e.message }, { status: 503 });
+      return NextResponse.json({ error: e.message }, { status: 503, ...tanpaCache });
     }
     const pesan =
       e instanceof Error && e.message
@@ -51,7 +52,7 @@ export async function bungkus<T>(
         ? "Terjadi kesalahan di server. Silakan coba beberapa saat lagi."
         : pesan;
 
-    return NextResponse.json({ error: pesanAman }, { status });
+    return NextResponse.json({ error: pesanAman }, { status, ...tanpaCache });
   }
 }
 

@@ -24,6 +24,7 @@ import { supabase } from "@/lib/supabase";
 import { unggahVideoUp, uploadPostSiap } from "@/lib/upload-post";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { dariR2, hapusVideoR2 } from "@/lib/r2";
+import { sisipkanLonggar } from "@/lib/kolom-struktur";
 
 /** Timeout terlama satu panggilan upload-post (lihat unggahVideoUp). */
 const PANGGILAN_TERLAMA_MS = 180_000;
@@ -165,7 +166,7 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
 
         // Riwayat TVR Saya milik pemilik profil + KPI otomatis.
         if (item.user_id) {
-          await db.from("tvrku_post").insert({
+          const { error } = await sisipkanLonggar("tvrku_post", {
             user_id: Number(item.user_id),
             judul: judulItem.slice(0, 100),
             caption: captionItem.slice(0, 2200),
@@ -177,6 +178,7 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
             request_id: hasil.request_id,
             hapus_media_pada: null,
           });
+          if (error) console.error("[siaran] simpan riwayat:", error.message);
         }
       } catch (e) {
         await db

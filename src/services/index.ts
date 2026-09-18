@@ -87,6 +87,7 @@ async function fetchJson(path: string, init?: RequestInit): Promise<any> {
   // terbuka tanpa login. Sekarang kebalikannya: aman secara bawaan.
   const res = await fetch(path, {
     ...init,
+    cache: init?.cache ?? "no-store",
     headers: {
       ...headerToken(),
       ...((init?.headers ?? {}) as Record<string, string>),

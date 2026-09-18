@@ -12,7 +12,7 @@
 // (23505) lalu DIANGGAP BERES tanpa tautan. Terbukti di data: ~33 dari 105
 // unggahan per platform "ditandai tercatat" tapi tanpa baris laporan.
 //
-// CARA KERJA BARU (deterministik, tiga lapis):
+// CARA KERJA BARU (deterministik, tiga lapis + tautan native hari ini):
 //  1. SUMBER PASTI: upload-post menyimpan URL tiap postingan per request →
 //     GET /uploadposts/post-analytics/{request_id} mengembalikan post_url
 //     per platform. Itu yang dicatat (tanpa tebak-tebakan).
@@ -22,6 +22,9 @@
 //     media itu dan belum punya tautan; URL yang sudah tercatat dilewati.
 //  3. PENYEMBUHAN: platform yang dulu "ditandai tercatat" tapi TIDAK punya
 //     baris laporan_video terkait dibuka lagi supaya dicoba ulang.
+//  4. MEDIA HARI INI: tautan yang sudah terbit di akun tertaut hari ini
+//     ikut dicatat meskipun tidak ada baris tvrku_post (unggah native HP
+//     / riwayat SuperApp gagal tersimpan).
 //
 // Penjaga kejujuran (tetap): hanya media yang terbit >= waktu unggah
 // (minus toleransi) yang diakui; laporan_video UNIK per (user_id, url_video);
@@ -34,6 +37,7 @@ import { kirimKabar } from "@/lib/notifikasi";
 import { LABEL_SOSMED, solusiGagal } from "@/lib/batas-caption";
 import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 import { namaKolomHilang } from "@/lib/kolom-struktur";
+import { PLATFORM_KPI } from "@/lib/kpi-video";
 
 /** Toleransi mundur saat mencocokkan waktu terbit (jam beda server). */
 export const TOLERANSI_MENIT = 10;
@@ -159,30 +163,50 @@ async function catatLaporan(
   const url = kanonikTautan(platform, urlMentah, ctx.usernamePer[platform]).slice(0, 500);
   const kunci = kunciVideo(platform, url);
   // X memecah satu unggahan jadi utas → satu baris per unggahan sudah cukup.
-  if (ctx.kunciSudah.has(kunci) || (platform === "twitter" && ctx.adaTerkait.has(`${postId}|twitter`))) return "dobel";
+  if (ctx.kunciSudah.has(kunci) || (platform === "twitter" && postId > 0 && ctx.adaTerkait.has(`${postId}|twitter`))) return "dobel";
   // 10 Sep 2026: dulu INSERT biasa, lalu galat 23505 ("sudah ada")
   // dianggap wajar. Akibatnya rekonsiliasi menembakkan ~955 penulisan
   // GAGAL per hari ke database — beban dan log galat yang sia-sia.
   // Kini konflik ditangani Postgres sendiri (ON CONFLICT DO NOTHING):
   // tidak ada galat, dan baris balasan yang kosong = memang sudah ada.
+  const isi: Record<string, unknown> = {
+    user_id: userId,
+    platform,
+    url_video: url,
+    keyword: null,
+    tanggal_wib: tanggalWibDari(waktu),
+    sumber: "otomatis",
+  };
+  if (postId > 0) isi.tvrku_post_id = postId;
   const { data: barisBaru, error } = await db
     .from("laporan_video")
-    .upsert(
-      {
-        user_id: userId,
-        platform,
-        url_video: url,
-        keyword: null,
-        tanggal_wib: tanggalWibDari(waktu),
-        sumber: "otomatis",
-        tvrku_post_id: postId,
-      },
-      { onConflict: "user_id,url_video", ignoreDuplicates: true },
-    )
+    .upsert(isi, { onConflict: "user_id,url_video", ignoreDuplicates: true })
     .select("id");
-  if (error) return "gagal";
+  if (error) {
+    if (namaKolomHilang(error.message) === "keyword") {
+      delete isi.keyword;
+      const ulang = await db
+        .from("laporan_video")
+        .upsert(isi, { onConflict: "user_id,url_video", ignoreDuplicates: true })
+        .select("id");
+      if (ulang.error) return "gagal";
+      ctx.kunciSudah.add(kunci);
+      if (postId > 0) ctx.adaTerkait.add(`${postId}|${platform}`);
+      if ((ulang.data ?? []).length > 0) {
+        await db
+          .from("laporan_video_pending")
+          .update({ status: "disetujui", catatan: "Terdeteksi otomatis dari unggahan aplikasi", diputus_oleh: "sistem", diputus_pada: new Date().toISOString() })
+          .eq("user_id", userId)
+          .eq("url_video", url)
+          .eq("status", "menunggu");
+        return "baru";
+      }
+      return "dobel";
+    }
+    return "gagal";
+  }
   ctx.kunciSudah.add(kunci);
-  ctx.adaTerkait.add(`${postId}|${platform}`);
+  if (postId > 0) ctx.adaTerkait.add(`${postId}|${platform}`);
   if ((barisBaru ?? []).length > 0) {
     // Bila anggota sempat melaporkan link ini MANUAL (menunggu ACC HR),
     // deteksi otomatis = bukti sah → langsung disetujui (2 Sep 2026).
@@ -283,12 +307,15 @@ export async function rekonsiliasiKpiRinci(userId: number, opsi: { anggaranMs?: 
         hasil,
       };
     });
-    if (posts.length === 0) return ringkas;
-
     // Baris laporan yang SUDAH terkait unggahan-unggahan ini + semua tautan
     // milik user (dibandingkan lewat ID video, bukan teks URL) + akun tertaut.
+    // Tetap dijalankan meski tidak ada tvrku_post: unggahan native di akun
+    // tertaut hari ini tetap harus masuk KPI (insiden 18 Sep 2026).
+    const idPost = posts.map((p) => p.id);
     const [{ data: terkait }, { data: semuaUrl }, { data: akunTertaut }] = await Promise.all([
-      db.from("laporan_video").select("tvrku_post_id, platform").eq("user_id", userId).in("tvrku_post_id", posts.map((p) => p.id)),
+      idPost.length
+        ? db.from("laporan_video").select("tvrku_post_id, platform").eq("user_id", userId).in("tvrku_post_id", idPost)
+        : Promise.resolve({ data: [] as { tvrku_post_id: unknown; platform: unknown }[] }),
       db.from("laporan_video").select("platform, url_video").eq("user_id", userId).order("id", { ascending: false }).limit(3000),
       db.from("akun_tvr_user").select("platform, username").eq("user_id", userId).eq("aktif", true).order("id", { ascending: true }),
     ]);
@@ -377,12 +404,14 @@ export async function rekonsiliasiKpiRinci(userId: number, opsi: { anggaranMs?: 
     // LAPIS 2: cadangan — media profil per platform, satu-satu kronologis.
     const platformPending = new Set<string>();
     for (const p of posts) for (const pf of pendingDari(p)) platformPending.add(pf);
+    const mediaPer = new Map<string, Awaited<ReturnType<typeof postinganTerbaruUp>>>();
     for (const pf of platformPending) {
       if (!cukup()) break;
       const pending = posts.filter((p) => pendingDari(p).includes(pf));
       if (pending.length === 0) continue;
       try {
         const media = await postinganTerbaruUp(profil, pf, BATAS_MEDIA, Math.min(20_000, sisa()));
+        mediaPer.set(pf, media);
         const pasangan = cocokkanMedia(pending, media, sudahTercatat(pf));
         for (const c of pasangan) {
           const r = await catatLaporan(db, userId, pf, c.url, c.waktu, c.post_id, ctx);
@@ -395,6 +424,37 @@ export async function rekonsiliasiKpiRinci(userId: number, opsi: { anggaranMs?: 
         }
       } catch (e) {
         ringkas.catatan.push(`media ${pf}: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+
+    // LAPIS 3: tautan yang SUDAH TERBIT hari ini di akun tertaut, termasuk
+    // yang tidak lewat tombol SuperApp (unggah native HP / insert riwayat
+    // gagal). Tanpa lapis ini, KPI hanya melihat Luthfi padahal banyak
+    // anggota lain sudah posting di Instagram tertaut.
+    const awalHariMs = Date.parse(`${tanggalWibDari(null)}T00:00:00+07:00`);
+    const platformAkun = [...new Set([...PLATFORM_KPI, ...Object.keys(usernamePer)])].filter(
+      (p) => p !== "website" && p !== "bilibili",
+    );
+    for (const pf of platformAkun) {
+      if (!cukup()) break;
+      try {
+        let media = mediaPer.get(pf);
+        if (!media) {
+          media = await postinganTerbaruUp(profil, pf, BATAS_MEDIA, Math.min(20_000, sisa()));
+          mediaPer.set(pf, media);
+        }
+        for (const m of media) {
+          if (!m.permalink || !m.waktu) continue;
+          const t = Date.parse(m.waktu);
+          if (!Number.isFinite(t) || t < awalHariMs) continue;
+          const r = await catatLaporan(db, userId, pf, m.permalink, m.waktu, 0, ctx);
+          if (r === "baru") {
+            ringkas.baru += 1;
+            ringkas.dari_media += 1;
+          }
+        }
+      } catch (e) {
+        ringkas.catatan.push(`media-hari ${pf}: ${e instanceof Error ? e.message : e}`);
       }
     }
 

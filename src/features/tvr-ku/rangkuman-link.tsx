@@ -61,7 +61,25 @@ export function RangkumanLink({ userId, judul }: { /** Rekap anggota lain (admin
     let hidup = true;
     getRangkumanLink(tanggal, userId)
       .then((d) => hidup && setData(d))
-      .catch((e) => hidup && toast("error", "Gagal memuat tautan", e instanceof Error ? e.message : ""));
+      .catch((e) => {
+        if (!hidup) return;
+        toast("error", "Gagal memuat tautan", e instanceof Error ? e.message : "");
+        setData({
+          nama: "",
+          tanggal,
+          per_platform: {
+            instagram: [],
+            tiktok: [],
+            twitter: [],
+            facebook: [],
+            youtube: [],
+            threads: [],
+            bilibili: [],
+          },
+          jumlah: 0,
+          menunggu: [],
+        });
+      });
     return () => {
       hidup = false;
     };
@@ -121,7 +139,7 @@ export function RangkumanLink({ userId, judul }: { /** Rekap anggota lain (admin
         />
       </div>
       <p className="mt-1 text-[11px] leading-relaxed text-teks-sekunder">
-        Semua tautan video Anda pada tanggal itu dikumpulkan per sosmed (unggahan lewat aplikasi otomatis tercatat,
+        Semua tautan video {data?.nama ? `akun ${data.nama}` : "Anda"} pada tanggal itu dikumpulkan per sosmed (unggahan lewat aplikasi otomatis tercatat,
         laporan manual ikut setelah disetujui HR), lalu disusun jadi laporan siap kirim ke grup WhatsApp.
       </p>
 
@@ -139,7 +157,7 @@ export function RangkumanLink({ userId, judul }: { /** Rekap anggota lain (admin
         })}
       </div>
       <p className="mt-1.5 text-[11px] text-teks-sekunder">
-        {memuat ? "Memuat tautan…" : `${jumlah} tautan tercatat`}
+        {memuat ? "Memuat tautan…" : `${jumlah} tautan tercatat${data?.nama ? ` · ${data.nama}` : ""}`}
         {data && data.menunggu.length > 0 ? ` · ${data.menunggu.length} laporan manual masih menunggu ACC HR (belum masuk rangkuman)` : ""}
       </p>
 

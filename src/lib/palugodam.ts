@@ -19,6 +19,7 @@ import { supabase } from "@/lib/supabase";
 import { unggahVideoUp, uploadPostSiap } from "@/lib/upload-post";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
+import { sisipkanLonggar } from "@/lib/kolom-struktur";
 
 /** Maks pesanan yang diproses dalam satu sapuan (jaga waktu fungsi). */
 const MAKS_PER_SAPUAN = 3;
@@ -144,7 +145,7 @@ export async function prosesPesananPalugodam(userId?: number): Promise<void> {
 
         // Catat juga di riwayat TVR Saya supaya muncul di layar anggota
         // dan ikut terhitung KPI otomatis seperti unggahan biasa.
-        await db.from("tvrku_post").insert({
+        const { error } = await sisipkanLonggar("tvrku_post", {
           user_id: Number(p.user_id),
           judul: p.caption_umum.slice(0, 100) || "Video PALUGODAM",
           caption: p.caption_umum.slice(0, 2200),
@@ -156,6 +157,7 @@ export async function prosesPesananPalugodam(userId?: number): Promise<void> {
           request_id: hasil.request_id,
           hapus_media_pada: null,
         });
+        if (error) console.error("[palugodam] simpan riwayat:", error.message);
       } catch (e) {
         await db
           .from("palugodam_pesanan")

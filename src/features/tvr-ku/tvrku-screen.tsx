@@ -63,6 +63,7 @@ import {
   ubahAkunTvr,
   ubahLaporanVideo,
   type AkunTvr,
+  type BalasanLaporanVideo,
   type KerjaKpi,
   type LaporanVideo,
   type LaporanPending,
@@ -582,7 +583,16 @@ export function TvrKuScreen({
   const [kpiTercapai, setKpiTercapai] = useState<boolean | null>(null);
   const [dibebaskan, setDibebaskan] = useState<string | null>(null);
   const [kpiRencana, setKpiRencana] = useState<KerjaKpi | null>(null);
-  const [riwayat7, setRiwayat7] = useState<{ tanggal: string; jumlah: number }[]>([]);
+  const [riwayat7, setRiwayat7] = useState<{ tanggal: string; jumlah: number }[]>(() => {
+    const hariIni = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+    const isi: { tanggal: string; jumlah: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(`${hariIni}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() - i);
+      isi.push({ tanggal: d.toISOString().slice(0, 10), jumlah: 0 });
+    }
+    return isi;
+  });
   const [memuat, setMemuat] = useState(true);
   const [muatUlang, setMuatUlang] = useState(0);
   const versiSegar = useVersiSegar();
@@ -595,11 +605,31 @@ export function TvrKuScreen({
     let hidup = true;
     void (async () => {
       try {
-        // Empat sumber tidak saling bergantung — dimuat bersamaan.
-        const [a, l, k] = await Promise.all([
-          getAkunTvr(),
-          getLaporanVideo(),
+        // Sumber tidak saling menggugurkan: gagal KPI tidak boleh
+        // mengosongkan akun, dan gagal 7-hari tidak boleh menyembunyikan
+        // tautan hari ini yang sudah tercatat.
+        const [a, l, k, r] = await Promise.all([
+          getAkunTvr().catch((e) => {
+            if (hidup) toast("error", "Gagal memuat akun TVR", e instanceof Error ? e.message : "");
+            return [] as Awaited<ReturnType<typeof getAkunTvr>>;
+          }),
+          getLaporanVideo().catch((e) => {
+            if (hidup) toast("error", "Gagal memuat laporan video", e instanceof Error ? e.message : "");
+            return {
+              tanggal: "",
+              hari_ini: "",
+              data: [] as LaporanVideo[],
+              kpi_target: 30,
+              kpi_persen: 0,
+              kpi_tercapai: false,
+              per_platform: [],
+              dibebaskan: null,
+              menunggu: [] as LaporanPending[],
+              unggahan: [] as UnggahanMenunggu[],
+            } satisfies BalasanLaporanVideo;
+          }),
           getLaporanKerja().catch(() => null),
+          getRiwayatVideo7Hari().catch(() => null),
         ]);
         if (!hidup) return;
         setAkun(a);
@@ -611,10 +641,6 @@ export function TvrKuScreen({
         setKpiTercapai(l.kpi_tercapai ?? null);
         setDibebaskan(l.dibebaskan);
         if (k) setKpiRencana(k.kpi);
-        // Grafik 7 hari dibaca SETELAH laporan (yang menunggu tautan
-        // unggahan baru), supaya batang hari ini tidak tertinggal 0.
-        const r = await getRiwayatVideo7Hari().catch(() => null);
-        if (!hidup) return;
         if (r) setRiwayat7(r.data);
       } catch (e) {
         if (hidup) {
@@ -1083,12 +1109,15 @@ export function TvrKuScreen({
           </ProgressRing>
           <div className="min-w-0 flex-1">
             <p className="font-heading text-sm font-bold text-teks-utama">KPI Video Hari Ini</p>
+            <p className="mt-0.5 text-[11px] text-teks-sekunder">Akun: {_user.nama}</p>
             <p className="mt-1 text-xs leading-relaxed text-teks-sekunder">
               {dibebaskan
                 ? `Kewajiban dibebaskan — status ${dibebaskan} Anda hari ini disetujui.`
                 : targetTercapai
                   ? `Target ${kpiTarget} video tercapai. Kerja bagus!`
-                  : `Lengkapi ${Math.max(0, kpiTarget - jumlahHariIni)} video lagi — minimal 5 di TIAP sosmed aktif.`}
+                  : jumlahHariIni === 0
+                    ? `Belum ada tautan tercatat untuk ${_user.nama} hari ini. KPI ini milik akun yang sedang dibuka — unggahan lewat akun anggota lain tidak masuk ke sini.`
+                    : `Lengkapi ${Math.max(0, kpiTarget - jumlahHariIni)} video lagi — minimal 5 di TIAP sosmed aktif.`}
             </p>
             {kpiRencana && kpiRencana.rencana_total > 0 && (
               <p className="mt-1.5 text-[11px] text-teks-sekunder">
@@ -1173,7 +1202,7 @@ export function TvrKuScreen({
             <EmptyState
               ikon={Link2}
               judul="Belum Ada Laporan"
-              keterangan={`Unggah lewat aplikasi (otomatis tercatat) atau laporkan linknya di sini — link manual dihitung setelah ACC Divisi HR. Target: ${kpiTarget} video per hari.`}
+              keterangan={`Tidak ada tautan tercatat untuk ${_user.nama} hari ini. Unggahan lewat aplikasi masuk ke akun yang memposting. Admin: buka Rekap Anggota atau Masuk sebagai akun itu.`}
               labelAksi="Tambah Laporan"
               onAksi={() => setModalLaporan(true)}
               className="py-5"
@@ -1304,7 +1333,7 @@ export function TvrKuScreen({
             })}
           </div>
           <p className="mt-2 text-center text-[10px] text-teks-sekunder/80">
-            Hijau = target {kpiTarget} video tercapai
+            Akun {_user.nama} · hijau = target {kpiTarget} video tercapai
           </p>
         </SeksiLipat>
         </div>

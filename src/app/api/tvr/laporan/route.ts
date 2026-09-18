@@ -18,6 +18,7 @@ import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { beriKoin } from "@/lib/koin";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
+import { namaKolomHilang } from "@/lib/kolom-struktur";
 import { solusiGagal } from "@/lib/batas-caption";
 import {
   bannedAktifPerUser,
@@ -200,8 +201,8 @@ export async function GET(request: Request) {
     // UNGGAHAN HARI INI YANG BELUM TERCATAT (10 Sep 2026): setiap video yang
     // diunggah lewat aplikasi WAJIB tampil di daftar — walau sosmednya belum
     // memberi tautan pasti. Statusnya per platform: menunggu / gagal /
-    // terjadwal. Bila masih ada yang menunggu, tautannya dicoba diambil
-    // SEKARANG (anggaran 8 dtk) supaya pembukaan pertama sudah lengkap.
+    // terjadwal. Rekonsiliasi tautan jalan SETELAH respons (after), bukan
+    // ditunggu di GET — dulu anggaran 8 dtk membuat KPI/rangkuman kosong.
     const uid = Number(user.id);
     const awalHari = new Date(`${tanggal}T00:00:00+07:00`).toISOString();
     const akhirHari = new Date(`${tanggal}T23:59:59.999+07:00`).toISOString();
@@ -214,7 +215,7 @@ export async function GET(request: Request) {
       .or(filterHari)
       .order("id", { ascending: false })
       .limit(40);
-    if (errPost?.code === "42703") {
+    if (errPost && namaKolomHilang(errPost.message) === "kpi_tercatat") {
       const ulang = await db
         .from("tvrku_post")
         .select("id, judul, platforms, jadwal, dibuat_pada, hasil")
@@ -223,6 +224,11 @@ export async function GET(request: Request) {
         .order("id", { ascending: false })
         .limit(40);
       postHariIni = (ulang.data ?? []).map((p) => ({ ...p, kpi_tercatat: null }));
+      errPost = ulang.error;
+    }
+    if (errPost) {
+      console.error("[tvr/laporan] baca unggahan:", errPost.message);
+      postHariIni = [];
     }
     const daftarStr = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
     const posts = (postHariIni ?? []).map((p) => {
@@ -239,15 +245,11 @@ export async function GET(request: Request) {
         dibuat_pada: String(p.dibuat_pada),
       };
     });
-    const adaMenunggu = posts.some(
-      (p) => !(p.jadwal && Date.parse(p.jadwal) > Date.now()) && p.platforms.some((pf) => !p.tercatat.has(pf) && !p.gagal.has(pf)),
-    );
-    if (adaMenunggu) await rekonsiliasiKpiOtomatis(uid, { anggaranMs: 8_000 }).catch(() => 0);
-
-    const [{ data, error }, jenisBebas, targetKu, bannedKu] = await Promise.all([
+    const pilihLaporan = "id, platform, url_video, keyword, tanggal_wib, dibuat_pada";
+    const [{ data: lvMentah, error: lvError }, jenisBebas, targetKu, bannedKu] = await Promise.all([
       db
         .from("laporan_video")
-        .select("id, platform, url_video, keyword, tanggal_wib, dibuat_pada")
+        .select(pilihLaporan)
         .eq("user_id", Number(user.id))
         .eq("tanggal_wib", tanggal)
         .order("id"),
@@ -255,6 +257,18 @@ export async function GET(request: Request) {
       targetKpiUser(Number(user.id)),
       bannedAktifPerUser([Number(user.id)]),
     ]);
+    let data = lvMentah as { id: unknown; platform: string; url_video: string; keyword?: string | null; tanggal_wib: string; dibuat_pada: string }[] | null;
+    let error = lvError;
+    if (error && namaKolomHilang(error.message) === "keyword") {
+      const ulang = await db
+        .from("laporan_video")
+        .select("id, platform, url_video, tanggal_wib, dibuat_pada")
+        .eq("user_id", Number(user.id))
+        .eq("tanggal_wib", tanggal)
+        .order("id");
+      data = ulang.data as typeof data;
+      error = ulang.error;
+    }
     if (error) {
       console.error("[tvr/laporan] baca:", error.message);
       throw new Error("Gagal memuat laporan video.");
