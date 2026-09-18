@@ -222,7 +222,7 @@ export async function GET(request: Request) {
         .or(filterHari)
         .order("id", { ascending: false })
         .limit(40);
-      postHariIni = ulang.data;
+      postHariIni = (ulang.data ?? []).map((p) => ({ ...p, kpi_tercatat: null }));
     }
     const daftarStr = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
     const posts = (postHariIni ?? []).map((p) => {
