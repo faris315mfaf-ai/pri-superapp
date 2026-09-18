@@ -178,30 +178,72 @@ else
   # diambil yang pertama ketemu. Isinya TIDAK PERNAH dicetak: di
   # dalamnya ada sandi database.
   if [ -r "$ENV_APP" ]; then
-    for N in DATABASE_URL POSTGRES_URL SUPABASE_DB_URL DIRECT_URL POSTGRES_URL_NON_POOLING; do
+    # HARUS DIVALIDASI, bukan sekadar "ada isinya". Di server ini
+    # DATABASE_URL ternyata berisi "file:..." — punya aplikasi lain yang
+    # menumpang berkas env yang sama. Dipakai mentah-mentah, psql jatuh
+    # ke soket lokal dan gagal dengan pesan yang tidak menyebut sebabnya
+    # sama sekali.
+    DITOLAK=""
+    for N in MIGRASI_DB_URL DATABASE_URL POSTGRES_URL SUPABASE_DB_URL DIRECT_URL POSTGRES_URL_NON_POOLING; do
       V="$(grep -m1 "^${N}=" "$ENV_APP" 2>/dev/null | cut -d= -f2- || true)"
       V="${V%\"}"; V="${V#\"}"      # buang kutip ganda di ujung
       V="${V%\'}"; V="${V#\'}"      # buang kutip tunggal di ujung
       V="$(printf '%s' "$V" | tr -d '\r')"   # berkas env bisa berakhiran CRLF
-      if [ -n "$V" ]; then URL="$V"; CARA="env:$N"; break; fi
+      [ -n "$V" ] || continue
+      case "$V" in
+        postgres://*|postgresql://*) URL="$V"; CARA="env:$N"; break ;;
+        *)
+          # Hanya SKEMA-nya yang dicatat, bukan isinya: nilai itu bisa
+          # memuat sandi milik aplikasi lain.
+          SKEMA="$(printf '%s' "$V" | cut -d: -f1)"
+          DITOLAK="$DITOLAK  - $N berisi '${SKEMA}:...', bukan alamat Postgres
+"
+          ;;
+      esac
     done
   fi
   if [ -z "$URL" ]; then
     echo >&2
-    echo "Tidak ada container Supabase di server ini, dan alamat sambungan database" >&2
-    echo "juga tidak ditemukan di $ENV_APP." >&2
+    echo "Tidak ada container Supabase di server ini, dan tidak ada alamat" >&2
+    echo "sambungan Postgres yang sah di $ENV_APP." >&2
+    if [ -n "$DITOLAK" ]; then
+      echo >&2
+      echo "Ada, tapi isinya bukan alamat Postgres:" >&2
+      printf '%s' "$DITOLAK" >&2
+      echo "(kemungkinan besar milik aplikasi lain yang menumpang berkas env ini)" >&2
+    fi
+    # Alamat Supabase BUKAN rahasia (dipakai peramban), dan justru inilah
+    # petunjuk paling berguna: ia menyebut databasenya ada di mana.
+    SB="$(grep -m1 -E "^(NEXT_PUBLIC_)?SUPABASE_URL=" "$ENV_APP" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || true)"
+    if [ -n "$SB" ]; then
+      echo >&2
+      echo "Databasenya ada di: $SB" >&2
+      case "$SB" in
+        *.supabase.co*)
+          REF="$(printf '%s' "$SB" | sed 's#https://##; s#\.supabase\.co.*##')"
+          echo >&2
+          echo "Itu Supabase CLOUD, proyek: $REF" >&2
+          echo "Ambil alamat sambungannya di:" >&2
+          echo "  https://supabase.com/dashboard/project/$REF/settings/database" >&2
+          echo "  -> Connection string -> URI" >&2
+          ;;
+        *)
+          echo "Ambil alamat sambungan Postgres dari tempat itu." >&2
+          ;;
+      esac
+    else
+      echo >&2
+      echo "Alamat Supabase juga tidak terbaca dari berkas env." >&2
+      echo "Container yang sedang jalan:" >&2
+      docker ps --format '  {{.Names}}  ({{.Image}})' >&2
+    fi
     echo >&2
-    echo "Container yang sedang jalan:" >&2
-    docker ps --format '  {{.Names}}  ({{.Image}})' >&2
+    echo "Lalu tambahkan SATU baris di $ENV_APP:" >&2
+    echo "  MIGRASI_DB_URL=postgresql://postgres:<sandi>@<host>:5432/postgres" >&2
     echo >&2
-    echo "Artinya databasenya ada di luar server ini (mis. Supabase cloud)." >&2
-    echo "Supaya migrasi bisa dijalankan dari sini, tambahkan SATU baris di" >&2
-    echo "$ENV_APP yang berisi alamat sambungan Postgres-nya:" >&2
-    echo "  DATABASE_URL=postgresql://postgres:<sandi>@<host>:5432/postgres" >&2
-    echo >&2
-    echo "Di Supabase cloud: Project Settings -> Database -> Connection string" >&2
-    echo "-> URI. Pakai yang port 5432 (session), BUKAN 6543 (transaction) —" >&2
-    echo "perubahan skema tidak bisa lewat pooler transaksi." >&2
+    echo "PENTING: pakai port 5432 (session), BUKAN 6543 (transaction)." >&2
+    echo "Perubahan struktur tabel tidak bisa lewat pooler transaksi, dan" >&2
+    echo "gagalnya membingungkan — bukan pesan yang menyebut poolernya." >&2
     exit 1
   fi
   # Host tujuan dicetak tanpa sandinya, supaya jelas menyasar ke mana.

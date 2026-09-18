@@ -239,9 +239,30 @@ printf 'SUPABASE_URL=https://abc.supabase.co\n' > "$ENVAPP"
 OUT="$(jalankan_luar --status)"; KODE=$?
 cek "berhenti dengan kode galat" "$([ "$KODE" != "0" ] && echo 1 || echo 0)" "kode=$KODE"
 cek "TIDAK sekadar bilang container tidak ditemukan" "$(echo "$OUT" | grep -q "Container database tidak ditemukan" && echo 0 || echo 1)"
-cek "menjelaskan databasenya ada di luar" "$(echo "$OUT" | grep -q "di luar server ini" && echo 1 || echo 0)" "$(echo "$OUT" | tail -5)"
-cek "memberi contoh baris yang harus ditambahkan" "$(echo "$OUT" | grep -q "DATABASE_URL=postgresql" && echo 1 || echo 0)"
+cek "menjelaskan tidak ada alamat Postgres yang sah" "$(echo "$OUT" | grep -q "bukan alamat Postgres\|tidak ada alamat" && echo 1 || echo 0)" "$(echo "$OUT" | tail -5)"
+cek "memberi contoh baris yang harus ditambahkan" "$(echo "$OUT" | grep -q "MIGRASI_DB_URL=postgresql" && echo 1 || echo 0)"
 cek "memperingatkan pooler 6543 tidak untuk skema" "$(echo "$OUT" | grep -q "6543" && echo 1 || echo 0)"
+echo
+echo "[O] DATABASE_URL berisi file:... — kasus PERSIS dari server, harus DITOLAK"
+printf 'SUPABASE_URL=https://pichnkyjepsirpclofhs.supabase.co\nDATABASE_URL=file:./dev.db\n' > "$ENVAPP"
+OUT="$(jalankan_luar --status)"; KODE=$?
+cek "berhenti, tidak memakai file:" "$([ "$KODE" != "0" ] && echo 1 || echo 0)" "kode=$KODE"
+cek "menyebut DATABASE_URL ditolak" "$(echo "$OUT" | grep -q "DATABASE_URL berisi" && echo 1 || echo 0)" "$(echo "$OUT" | head -12)"
+cek "menyebut skemanya file" "$(echo "$OUT" | grep -q "file:" && echo 1 || echo 0)"
+cek "isi nilainya TIDAK ikut tercetak" "$(echo "$OUT" | grep -q "dev.db" && echo 0 || echo 1)" "nilai env bocor"
+cek "memberi tahu databasenya di mana" "$(echo "$OUT" | grep -q "pichnkyjepsirpclofhs.supabase.co" && echo 1 || echo 0)"
+cek "mengenali itu Supabase cloud" "$(echo "$OUT" | grep -q "Supabase CLOUD" && echo 1 || echo 0)"
+cek "memberi tautan dashboard proyeknya" "$(echo "$OUT" | grep -q "supabase.com/dashboard/project/pichnkyjepsirpclofhs" && echo 1 || echo 0)" "$(echo "$OUT" | tail -12)"
+
+echo
+echo "[P] MIGRASI_DB_URL yang sah didahulukan dan dipakai"
+printf 'DATABASE_URL=file:./dev.db\nMIGRASI_DB_URL=postgresql://postgres:RAHASIA@db.xyz.supabase.co:5432/postgres\n' > "$ENVAPP"
+OUT="$(jalankan_luar --status)"; KODE=$?
+cek "jalan tanpa galat" "$([ "$KODE" = "0" ] && echo 1 || echo 0)" "kode=$KODE"
+cek "memakai MIGRASI_DB_URL, bukan DATABASE_URL" "$(echo "$OUT" | grep -q "env:MIGRASI_DB_URL" && echo 1 || echo 0)" "$(echo "$OUT" | head -6)"
+cek "tujuannya benar" "$(echo "$OUT" | grep -q "db.xyz.supabase.co:5432" && echo 1 || echo 0)"
+cek "sandi tidak tercetak" "$(echo "$OUT" | grep -q "RAHASIA" && echo 0 || echo 1)" "SANDI BOCOR"
+
 
 
 
