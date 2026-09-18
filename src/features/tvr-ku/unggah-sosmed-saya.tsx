@@ -164,7 +164,7 @@ export function UnggahSosmedSaya() {
         // sini. Ini juga yang memperbaiki bug "Insight sudah membaca
         // YouTube tapi menu unggah bilang belum ada akun tertaut".
         const [sinkron, posts, antre] = await Promise.all([
-          sinkronSosmedTvr(),
+          sinkronSosmedTvr().catch(() => ({ terhubung: [] as { platform: string }[] })),
           getRiwayatTvrkuPost(),
           getJadwalTvrku().catch(() => [] as JadwalTvrku[]),
         ]);

@@ -44,6 +44,7 @@ import {
   r2Siap,
 } from "@/lib/r2";
 import { PENYEDIA_ANGGOTA, unggahVideoAnggota, type IdPenyedia } from "@/lib/sosmed-penyedia";
+import { kolomTabelAda } from "@/lib/kolom-struktur";
 
 export const dynamic = "force-dynamic";
 // upload-post mengunduh video dari URL kita lalu memposting ke banyak
@@ -523,12 +524,9 @@ export async function POST(request: Request) {
         dasarMs + UMUR_MEDIA_JAM * 3600_000,
       ).toISOString();
 
-      const { data: baris, error } = await db
-        .from("tvrku_post")
-        .insert({
+      const isiRiwayat: Record<string, unknown> = {
           user_id: Number(user.id),
           judul,
-          keyword: kategori,
           caption: (body.caption ?? "").slice(0, 2200),
           platforms,
           // video_path menampung penunjuk berkas sesuai generasinya:
@@ -550,13 +548,16 @@ export async function POST(request: Request) {
           jadwal: jadwal ?? null,
           hasil: hasilSimpan,
           request_id: hasil.request_id,
-          // Gerbang yang MENGIRIM baris ini — ikut dicatat supaya hasilnya
-          // nanti ditanyakan ke API yang benar walau anggotanya sudah pindah.
-          penyedia: profil.penyedia,
           // Kiriman TAUTAN: berkasnya milik anggota di layanan lain —
           // sistem tidak berhak menghapusnya, jadi tanpa jadwal sapu.
           hapus_media_pada: pakaiLink ? null : hapusPada,
-        })
+        };
+      if (await kolomTabelAda("tvrku_post", "keyword")) isiRiwayat.keyword = kategori;
+      if (await kolomTabelAda("tvrku_post", "penyedia")) isiRiwayat.penyedia = profil.penyedia;
+
+      const { data: baris, error } = await db
+        .from("tvrku_post")
+        .insert(isiRiwayat)
         .select("id")
         .single();
       if (error) console.error("[tvrku/unggah] simpan riwayat:", error.message);

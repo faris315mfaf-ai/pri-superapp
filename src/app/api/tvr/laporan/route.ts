@@ -205,15 +205,25 @@ export async function GET(request: Request) {
     const uid = Number(user.id);
     const awalHari = new Date(`${tanggal}T00:00:00+07:00`).toISOString();
     const akhirHari = new Date(`${tanggal}T23:59:59.999+07:00`).toISOString();
-    const { data: postHariIni } = await db
+    const filterHari =
+      `and(jadwal.is.null,dibuat_pada.gte.${awalHari},dibuat_pada.lte.${akhirHari}),and(jadwal.gte.${awalHari},jadwal.lte.${akhirHari})`;
+    let { data: postHariIni, error: errPost } = await db
       .from("tvrku_post")
       .select("id, judul, platforms, kpi_tercatat, jadwal, dibuat_pada, hasil")
       .eq("user_id", uid)
-      .or(
-        `and(jadwal.is.null,dibuat_pada.gte.${awalHari},dibuat_pada.lte.${akhirHari}),and(jadwal.gte.${awalHari},jadwal.lte.${akhirHari})`,
-      )
+      .or(filterHari)
       .order("id", { ascending: false })
       .limit(40);
+    if (errPost?.code === "42703") {
+      const ulang = await db
+        .from("tvrku_post")
+        .select("id, judul, platforms, jadwal, dibuat_pada, hasil")
+        .eq("user_id", uid)
+        .or(filterHari)
+        .order("id", { ascending: false })
+        .limit(40);
+      postHariIni = ulang.data;
+    }
     const daftarStr = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
     const posts = (postHariIni ?? []).map((p) => {
       const hasil = (p.hasil && typeof p.hasil === "object" && !Array.isArray(p.hasil) ? p.hasil : {}) as Record<string, unknown>;

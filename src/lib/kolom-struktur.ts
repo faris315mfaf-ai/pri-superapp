@@ -16,27 +16,33 @@ import { supabase } from "@/lib/supabase";
 const jawaban = new Map<string, boolean>();
 const sedangPeriksa = new Map<string, Promise<boolean>>();
 
-/** true bila kolom `app_user.<nama>` sudah terpasang di database. */
-export async function kolomAppUserAda(nama: string): Promise<boolean> {
-  const cache = jawaban.get(nama);
+/** true bila kolom `tabel.nama` sudah terpasang di database. */
+export async function kolomTabelAda(tabel: string, nama: string): Promise<boolean> {
+  const kunci = `${tabel}.${nama}`;
+  const cache = jawaban.get(kunci);
   if (cache !== undefined) return cache;
-  const jalan = sedangPeriksa.get(nama);
+  const jalan = sedangPeriksa.get(kunci);
   if (jalan) return jalan;
   const p = (async () => {
     try {
-      const { error } = await supabase().from("app_user").select(nama).limit(1);
+      const { error } = await supabase().from(tabel).select(nama).limit(1);
       const ok = !error;
-      jawaban.set(nama, ok);
+      jawaban.set(kunci, ok);
       return ok;
     } catch {
-      jawaban.set(nama, false);
+      jawaban.set(kunci, false);
       return false;
     } finally {
-      sedangPeriksa.delete(nama);
+      sedangPeriksa.delete(kunci);
     }
   })();
-  sedangPeriksa.set(nama, p);
+  sedangPeriksa.set(kunci, p);
   return p;
+}
+
+/** true bila kolom `app_user.<nama>` sudah terpasang di database. */
+export async function kolomAppUserAda(nama: string): Promise<boolean> {
+  return kolomTabelAda("app_user", nama);
 }
 
 /** true bila kolom `struktur_lain` sudah terpasang di database. */
