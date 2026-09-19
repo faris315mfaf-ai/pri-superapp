@@ -75,3 +75,6 @@ apk/*.idsig
 
 # Kredensial Cloudflare (jangan pernah di-commit)
 .env.cloudflare
+
+# Sisa alat: "nul" lahir dari perintah Windows yang salah menulis "> nul".
+nul

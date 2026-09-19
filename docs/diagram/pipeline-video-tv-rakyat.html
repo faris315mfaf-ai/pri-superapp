@@ -1,0 +1,905 @@
+<title>Pipeline Video TV Rakyat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --paper:      #EFF1F4;
+    --surface:    #FFFFFF;
+    --surface-2:  #E7EAEF;
+    --ink:        #0E131A;
+    --ink-2:      #4B5563;
+    --ink-3:      #7A8492;
+    --line:       #D5DAE1;
+    --line-2:     #C2C9D2;
+    --signal:     #C8102E;
+    --signal-bg:  #FBE8EB;
+    --saved:      #0B6E5F;
+    --saved-bg:   #E0F0EC;
+    --verify:     #9A5B00;
+    --verify-bg:  #F8EDDC;
+    --shadow:     0 1px 2px rgba(14,19,26,.06), 0 8px 24px rgba(14,19,26,.05);
+
+    --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --body: "Newsreader", Georgia, "Times New Roman", serif;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:     #0B0F15;
+      --surface:   #141A22;
+      --surface-2: #1B222C;
+      --ink:       #E9EDF2;
+      --ink-2:     #A0AAB8;
+      --ink-3:     #717C8B;
+      --line:      #242C38;
+      --line-2:    #313B49;
+      --signal:    #FF5A6E;
+      --signal-bg: #2A1218;
+      --saved:     #45C4AC;
+      --saved-bg:  #0D2420;
+      --verify:    #E2A34A;
+      --verify-bg: #2A2013;
+      --shadow:    0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.3);
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:     #0B0F15;
+    --surface:   #141A22;
+    --surface-2: #1B222C;
+    --ink:       #E9EDF2;
+    --ink-2:     #A0AAB8;
+    --ink-3:     #717C8B;
+    --line:      #242C38;
+    --line-2:    #313B49;
+    --signal:    #FF5A6E;
+    --signal-bg: #2A1218;
+    --saved:     #45C4AC;
+    --saved-bg:  #0D2420;
+    --verify:    #E2A34A;
+    --verify-bg: #2A2013;
+    --shadow:    0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.3);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 24px 96px;
+  }
+
+  .col {
+    max-width: 68ch;
+  }
+
+  /* ---------- masthead ---------- */
+
+  header.masthead {
+    padding: 72px 0 36px;
+    border-bottom: 2px solid var(--ink);
+    margin-bottom: 8px;
+  }
+
+  .eyebrow {
+    font-family: var(--display);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--signal);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  .eyebrow .sep { color: var(--ink-3); font-weight: 400; }
+
+  h1 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(34px, 5.2vw, 54px);
+    line-height: 1.04;
+    letter-spacing: -.025em;
+    margin: 0 0 20px;
+    text-wrap: balance;
+    max-width: 16ch;
+  }
+
+  .standfirst {
+    font-size: clamp(18px, 2.3vw, 21px);
+    line-height: 1.5;
+    color: var(--ink-2);
+    max-width: 60ch;
+    margin: 0;
+  }
+  .standfirst strong { color: var(--ink); font-weight: 500; }
+
+  /* ---------- fact strip ---------- */
+
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border-bottom: 1px solid var(--line);
+    margin: 0 0 64px;
+  }
+  .fact {
+    background: var(--paper);
+    padding: 20px 20px 22px;
+  }
+  .fact dt {
+    font-family: var(--display);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 8px;
+  }
+  .fact dd {
+    margin: 0;
+    font-family: var(--display);
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  .fact dd span {
+    display: block;
+    font-family: var(--body);
+    font-size: 14.5px;
+    font-weight: 400;
+    letter-spacing: 0;
+    color: var(--ink-2);
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+
+  /* ---------- sections ---------- */
+
+  section { margin-bottom: 68px; }
+
+  .sec-label {
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .sec-label::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+
+  h2 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: clamp(24px, 3.2vw, 32px);
+    line-height: 1.15;
+    letter-spacing: -.022em;
+    margin: 0 0 18px;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 18px;
+    letter-spacing: -.01em;
+    margin: 36px 0 10px;
+  }
+
+  p { margin: 0 0 18px; }
+  p:last-child { margin-bottom: 0; }
+
+  a { color: var(--signal); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, .row:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+
+  strong { font-weight: 500; color: var(--ink); }
+  em { font-style: italic; }
+
+  ul, ol { margin: 0 0 18px; padding-left: 22px; }
+  li { margin-bottom: 8px; }
+  li::marker { color: var(--ink-3); }
+
+  code {
+    font-family: var(--mono);
+    font-size: .845em;
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* ---------- thesis callout ---------- */
+
+  .thesis {
+    border-left: 3px solid var(--signal);
+    padding: 4px 0 4px 24px;
+    margin: 0 0 32px;
+    font-size: 19.5px;
+    line-height: 1.5;
+    max-width: 60ch;
+  }
+  .thesis strong { font-weight: 500; }
+
+  /* ---------- layer diagram ---------- */
+
+  .diagram-wrap {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 28px 24px 20px;
+    margin: 32px 0;
+    overflow-x: auto;
+    box-shadow: var(--shadow);
+  }
+  .diagram-wrap svg { display: block; min-width: 660px; width: 100%; height: auto; }
+
+  .d-box { fill: var(--surface-2); stroke: var(--line-2); stroke-width: 1; }
+  .d-box-accent { fill: var(--signal-bg); stroke: var(--signal); stroke-width: 1.5; }
+  .d-box-saved { fill: var(--saved-bg); stroke: var(--saved); stroke-width: 1.5; }
+  .d-title { fill: var(--ink); font-family: var(--display); font-size: 13px; font-weight: 600; }
+  .d-sub { fill: var(--ink-2); font-family: var(--display); font-size: 11px; font-weight: 400; }
+  .d-tag { fill: var(--ink-3); font-family: var(--display); font-size: 10px; font-weight: 600; letter-spacing: .1em; }
+  .d-num { fill: var(--ink); font-family: var(--display); font-size: 11.5px; font-weight: 600; }
+  .d-line { stroke: var(--line-2); stroke-width: 1.5; fill: none; }
+  .d-arrow { fill: var(--line-2); }
+
+  .caption {
+    font-size: 14.5px;
+    color: var(--ink-2);
+    line-height: 1.5;
+    margin-top: 14px;
+    max-width: 66ch;
+  }
+
+  /* ---------- layer cards ---------- */
+
+  .layers {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin: 28px 0;
+  }
+  .layer {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--signal);
+    border-radius: 3px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .layer:nth-child(2) { border-top-color: var(--saved); }
+  .layer:nth-child(3) { border-top-color: var(--ink-3); }
+  .layer .l-tag {
+    font-family: var(--display);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .layer h4 {
+    font-family: var(--display);
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -.01em;
+  }
+  .layer p { font-size: 15px; line-height: 1.5; margin: 0; color: var(--ink-2); }
+  .layer .tool {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink);
+    background: var(--surface-2);
+    padding: 6px 9px;
+    border-radius: 3px;
+    margin-top: auto;
+  }
+
+  /* ---------- tables ---------- */
+
+  .table-wrap {
+    overflow-x: auto;
+    margin: 26px 0;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: var(--surface);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--display);
+    font-size: 14.5px;
+    min-width: 620px;
+  }
+  th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 10.5px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line-2);
+    white-space: nowrap;
+  }
+  td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+    line-height: 1.45;
+  }
+  tr:last-child td { border-bottom: none; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .scen { font-weight: 600; color: var(--ink); }
+  .scen small {
+    display: block;
+    font-weight: 400;
+    color: var(--ink-3);
+    font-size: 12.5px;
+    margin-top: 3px;
+    white-space: normal;
+  }
+
+  .pill {
+    display: inline-block;
+    font-family: var(--display);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    padding: 3px 8px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .pill-ok { background: var(--saved-bg); color: var(--saved); }
+  .pill-warn { background: var(--verify-bg); color: var(--verify); }
+  .pill-bad { background: var(--signal-bg); color: var(--signal); }
+
+  /* ---------- code recipes ---------- */
+
+  .recipe {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    margin: 18px 0;
+    overflow: hidden;
+  }
+  .recipe-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-2);
+  }
+  .recipe-head b {
+    font-family: var(--display);
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+  .recipe-head span {
+    font-family: var(--display);
+    font-size: 12px;
+    color: var(--ink-2);
+  }
+  .recipe pre {
+    margin: 0;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: var(--ink);
+  }
+
+  /* ---------- rules list ---------- */
+
+  .rules {
+    display: grid;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    margin: 26px 0;
+  }
+  .rule {
+    background: var(--surface);
+    padding: 18px 20px;
+    display: grid;
+    grid-template-columns: 30px 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+  .rule .r-mark {
+    font-family: var(--display);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--signal);
+    padding-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .rule h4 {
+    font-family: var(--display);
+    font-size: 15.5px;
+    font-weight: 600;
+    margin: 0 0 5px;
+    letter-spacing: -.005em;
+  }
+  .rule p { font-size: 15px; margin: 0; color: var(--ink-2); line-height: 1.5; }
+
+  /* ---------- phases ---------- */
+
+  .phases { display: grid; gap: 14px; margin: 28px 0; }
+  .phase {
+    display: grid;
+    grid-template-columns: 46px 1fr;
+    gap: 18px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 18px 20px;
+  }
+  .phase .p-num {
+    font-family: var(--display);
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--line-2);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .phase h4 {
+    font-family: var(--display);
+    font-size: 16.5px;
+    font-weight: 600;
+    margin: 0 0 6px;
+  }
+  .phase p { font-size: 15px; color: var(--ink-2); margin: 0 0 8px; line-height: 1.5; }
+  .phase .outcome {
+    font-family: var(--display);
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--saved);
+    display: block;
+  }
+
+  /* ---------- verify box ---------- */
+
+  .verify-box {
+    background: var(--verify-bg);
+    border: 1px solid var(--verify);
+    border-radius: 3px;
+    padding: 22px 24px;
+    margin: 28px 0;
+  }
+  .verify-box h3 {
+    margin: 0 0 12px;
+    font-size: 16px;
+    color: var(--verify);
+  }
+  .verify-box ol { margin: 0; padding-left: 20px; }
+  .verify-box li { font-size: 15.5px; margin-bottom: 10px; }
+  .verify-box li:last-child { margin-bottom: 0; }
+
+  /* ---------- footer ---------- */
+
+  footer {
+    border-top: 1px solid var(--line);
+    padding-top: 28px;
+    margin-top: 20px;
+    font-size: 14.5px;
+    color: var(--ink-2);
+  }
+  footer h3 {
+    font-family: var(--display);
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 12px;
+    font-weight: 600;
+  }
+  footer ul { padding-left: 18px; }
+  footer li { margin-bottom: 5px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+
+  @media (max-width: 640px) {
+    body { font-size: 16px; }
+    .page { padding: 0 18px 64px; }
+    header.masthead { padding-top: 48px; }
+    .rule { grid-template-columns: 24px 1fr; gap: 10px; }
+    .phase { grid-template-columns: 32px 1fr; gap: 12px; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="eyebrow">
+      <span>Arsitektur Operasional</span><span class="sep">/</span>
+      <span>Produksi Video TV Rakyat</span><span class="sep">/</span>
+      <span>September 2026</span>
+    </div>
+    <h1>Satu render, enam varian, satu distribusi</h1>
+    <p class="standfirst">Menata ulang alur produksi video berita otomatis agar <strong>Creatomate berhenti mengerjakan pekerjaan yang seharusnya dikerjakan kuota FFmpeg 10.000 menit yang sudah Anda bayar</strong> — sekaligus menyiapkan jalur pindah ke Remotion tanpa membongkar pipeline dua kali.</p>
+  </header>
+
+  <dl class="facts">
+    <div class="fact">
+      <dt>Kuota terpakai saat ini</dt>
+      <dd>0<span>dari 10.000 menit/bulan FFmpeg Editor API di tier Business Upload-Post</span></dd>
+    </div>
+    <div class="fact">
+      <dt>Plafon kapasitas kuota</dt>
+      <dd>±37<span>berita/hari, masing-masing 6 varian platform, pada video rata-rata 1,5 menit</span></dd>
+    </div>
+    <div class="fact">
+      <dt>Pemakaian kredit render</dt>
+      <dd>−83%<span>saat varian platform dipindah dari Creatomate ke lapis FFmpeg</span></dd>
+    </div>
+    <div class="fact">
+      <dt>Ambang pindah Remotion</dt>
+      <dd>±900<span>render/bulan — di bawah itu Creatomate masih lebih murah</span></dd>
+    </div>
+  </dl>
+
+  <section class="col">
+    <div class="sec-label">Temuan</div>
+    <h2>Yang mahal bukan mengedit video, tapi mengedit video yang sama enam kali</h2>
+
+    <p class="thesis">Satu berita yang tayang di 6 platform tidak butuh 6 render bertemplate. Ia butuh <strong>1 render bertemplate</strong> (banner, lower-third, outro — pekerjaan kreatif) lalu <strong>6 transformasi geometri</strong> (rasio, resolusi, durasi, codec — pekerjaan mekanis). Dua pekerjaan ini beda sifat, beda biaya, dan seharusnya dikerjakan alat yang berbeda.</p>
+
+    <p>Creatomate menagih per render, dihitung dari kredit bulanan. Kalau template Anda dipanggil ulang untuk tiap rasio platform, biaya render naik linier terhadap jumlah platform — padahal yang berubah antar-varian cuma bingkai dan durasi, bukan isi kreatifnya.</p>
+
+    <p>Di sisi lain, tier Business Upload-Post yang sudah Anda bayar menyertakan <strong>FFmpeg Editor API dengan kuota 10.000 menit/bulan</strong>. Dari dokumentasi teknisnya, API ini bukan sekadar preset crop — ia menerima <strong>perintah FFmpeg bebas</strong> lewat parameter <code>full_command</code> dengan placeholder <code>{input}</code> dan <code>{output}</code>. Artinya kuota itu adalah mesin pemroses video umum, dan sejauh terlihat dari alur Anda sekarang, belum dipakai sama sekali.</p>
+
+    <p>Jadi pekerjaan mekanis yang saat ini membakar kredit render sebetulnya punya rumah yang sudah dibayar dan menganggur.</p>
+  </section>
+
+  <section>
+    <div class="col">
+      <div class="sec-label">Arsitektur</div>
+      <h2>Tiga lapis, dengan batas tugas yang tegas</h2>
+      <p>Aturan pembagiannya satu kalimat: <strong>apa pun yang punya identitas visual dikerjakan di lapis render; apa pun yang cuma soal bentuk berkas dikerjakan di lapis transformasi.</strong> Logo, bumper, tipografi, animasi masuk lapis A. Rasio, resolusi, trim durasi, normalisasi audio, codec masuk lapis B.</p>
+    </div>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 900 300" role="img" aria-label="Diagram tiga lapis: satu master render menghasilkan enam varian platform lewat FFmpeg, lalu didistribusikan ke enam platform lewat Upload-Post">
+        <text x="20" y="24" class="d-tag">LAPIS A · RENDER</text>
+        <text x="330" y="24" class="d-tag">LAPIS B · TRANSFORMASI</text>
+        <text x="660" y="24" class="d-tag">LAPIS C · DISTRIBUSI</text>
+
+        <line x1="310" y1="12" x2="310" y2="288" class="d-line" stroke-dasharray="3 5"></line>
+        <line x1="640" y1="12" x2="640" y2="288" class="d-line" stroke-dasharray="3 5"></line>
+
+        <rect x="20" y="112" width="240" height="86" rx="3" class="d-box-accent"></rect>
+        <text x="38" y="142" class="d-title">1× Master berita</text>
+        <text x="38" y="162" class="d-sub">Template: banner, lower-third, outro</text>
+        <text x="38" y="180" class="d-sub">16:9 · 1080p · master tunggal</text>
+
+        <text x="38" y="222" class="d-num">≈10 kredit / berita</text>
+        <text x="38" y="240" class="d-sub">Creatomate hari ini → Remotion nanti</text>
+
+        <path d="M262 155 L296 155" class="d-line"></path>
+        <path d="M296 150 l12 5 -12 5 z" class="d-arrow"></path>
+
+        <g>
+          <rect x="330" y="42" width="200" height="34" rx="3" class="d-box-saved"></rect>
+          <text x="344" y="64" class="d-sub">9:16 · Reels / Shorts / TikTok</text>
+
+          <rect x="330" y="84" width="200" height="34" rx="3" class="d-box-saved"></rect>
+          <text x="344" y="106" class="d-sub">1:1 · Feed Instagram / Facebook</text>
+
+          <rect x="330" y="126" width="200" height="34" rx="3" class="d-box-saved"></rect>
+          <text x="344" y="148" class="d-sub">16:9 · YouTube utama</text>
+
+          <rect x="330" y="168" width="200" height="34" rx="3" class="d-box-saved"></rect>
+          <text x="344" y="190" class="d-sub">9:16 potong 60 dtk · Shorts</text>
+
+          <rect x="330" y="210" width="200" height="34" rx="3" class="d-box"></rect>
+          <text x="344" y="232" class="d-sub">+ varian platform lain</text>
+        </g>
+
+        <text x="330" y="272" class="d-num">1 job = 1 varian = durasi input</text>
+
+        <path d="M534 143 L620 143" class="d-line"></path>
+        <path d="M620 138 l12 5 -12 5 z" class="d-arrow"></path>
+
+        <rect x="660" y="112" width="220" height="86" rx="3" class="d-box"></rect>
+        <text x="678" y="142" class="d-title">Upload-Post publish</text>
+        <text x="678" y="162" class="d-sub">6 platform × N profil</text>
+        <text x="678" y="180" class="d-sub">Upload tak terbatas di tier Business</text>
+
+        <text x="678" y="222" class="d-num">Status → Supabase</text>
+        <text x="678" y="240" class="d-sub">Diorkestrasi n8n, throttled</text>
+      </svg>
+      <p class="caption">Lapis B memakai kuota yang sudah dibayar dan tidak menyentuh kredit render sama sekali. Yang bertambah saat platform bertambah hanyalah job FFmpeg — bukan render bertemplate.</p>
+    </div>
+
+    <div class="layers">
+      <div class="layer">
+        <span class="l-tag">Lapis A · Render</span>
+        <h4>Identitas visual</h4>
+        <p>Banner, lower-third, bumper, outro, animasi teks, warna brand. Satu master per berita — bukan per platform.</p>
+        <div class="tool">Creatomate → Remotion</div>
+      </div>
+      <div class="layer">
+        <span class="l-tag">Lapis B · Transformasi</span>
+        <h4>Bentuk berkas</h4>
+        <p>Rasio, resolusi, trim durasi sesuai batas platform, loudness audio, codec dan faststart. Tanpa elemen kreatif apa pun.</p>
+        <div class="tool">FFmpeg Editor API · 10.000 mnt</div>
+      </div>
+      <div class="layer">
+        <span class="l-tag">Lapis C · Distribusi</span>
+        <h4>Penayangan</h4>
+        <p>Publish/schedule per profil per platform, tarik status, tulis balik ke basis data laporan.</p>
+        <div class="tool">Upload-Post · n8n · Supabase</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <div class="sec-label">Kapasitas</div>
+      <h2>Berapa yang muat, dan di mana batasnya</h2>
+      <p>Kuota FFmpeg dihitung dari <strong>durasi media input per job</strong>, bukan durasi output atau berat pemrosesan. Dengan asumsi video berita rata-rata 1,5 menit dan 6 varian per berita, kuota 10.000 menit setara ±6.600 job — atau <strong>±37 berita per hari</strong>. Kalau rata-rata video 1 menit, plafonnya naik ke ±55 berita/hari.</p>
+      <p>Empat skenario di bawah memakai KPI yang sudah tercatat di dokumen TV Rakyat (5 video berbeda per hari) dan ekstrapolasi 38 provinsi untuk skenario personalisasi.</p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Skenario</th>
+            <th>Render/bulan</th>
+            <th>Kredit</th>
+            <th>Menit FFmpeg</th>
+            <th>Konsekuensi</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="scen">A. Render per platform<small>Pola yang biasa terjadi kalau template dipanggil per rasio</small></td>
+            <td class="num">900</td>
+            <td class="num">≈9.000</td>
+            <td class="num">0 / 10.000</td>
+            <td><span class="pill pill-warn">Growth $129</span><br><small style="color:var(--ink-3)">Kredit hampir mentok, kuota mubazir</small></td>
+          </tr>
+          <tr>
+            <td class="scen">B. Master + varian FFmpeg<small>Rancangan yang disarankan untuk sekarang</small></td>
+            <td class="num">150</td>
+            <td class="num">≈1.500</td>
+            <td class="num">1.350 / 10.000</td>
+            <td><span class="pill pill-ok">Essential $54</span><br><small style="color:var(--ink-3)">Headroom kredit 5×, kuota 87% sisa</small></td>
+          </tr>
+          <tr>
+            <td class="scen">C. Personalisasi 38 provinsi<small>Tiap DPD dapat versi bernama sendiri, tetap di Creatomate</small></td>
+            <td class="num">5.700</td>
+            <td class="num">≈57.000</td>
+            <td class="num">51.300 / 10.000</td>
+            <td><span class="pill pill-bad">Tidak muat</span><br><small style="color:var(--ink-3)">Di atas tier tertinggi; kuota jebol 5×</small></td>
+          </tr>
+          <tr>
+            <td class="scen">D. Personalisasi dengan Remotion<small>Master per provinsi di Lambda, varian di worker FFmpeg sendiri</small></td>
+            <td class="num">5.700</td>
+            <td class="num">—</td>
+            <td class="num">10.000 + VPS</td>
+            <td><span class="pill pill-ok">≈$214 + VPS</span><br><small style="color:var(--ink-3)">$100 lisensi + ≈$114 compute Lambda</small></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>Dua hal yang paling penting dibaca dari tabel ini. Pertama, <strong>langkah A→B tidak butuh ganti vendor sama sekali</strong> — cuma menata ulang siapa mengerjakan apa, dan efeknya turun satu tier langganan. Kedua, <strong>kuota 10.000 menit adalah bantalan, bukan fondasi</strong>: begitu personalisasi per DPD dijalankan, angka menit yang dibutuhkan lompat 5× di atas kuota, dan jawabannya bukan beli kuota lebih besar melainkan menaruh worker FFmpeg di server sendiri — pekerjaan geometri video itu murah di hardware sendiri, dan tim Anda sudah pegang infra untuk n8n dan Supabase.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <div class="sec-label">Aturan operasi</div>
+      <h2>Empat aturan yang menentukan kuota habis atau awet</h2>
+    </div>
+
+    <div class="rules">
+      <div class="rule">
+        <div class="r-mark">01</div>
+        <div>
+          <h4>Satu varian = satu job, jangan bertingkat</h4>
+          <p>Kuota dipotong per durasi input setiap job. Crop lalu trim lalu normalisasi sebagai tiga job berurutan memotong kuota tiga kali untuk satu video. Gabungkan semuanya jadi satu rantai filter dalam satu <code>full_command</code>.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="r-mark">02</div>
+        <div>
+          <h4>Pastikan metadata durasi terbaca</h4>
+          <p>Kalau durasi input tidak terdeteksi, sistem menghitungnya sebagai 60 detik. Untuk klip 15 detik itu berarti membayar 4× lipat. Selalu keluarkan master dengan container rapi (<code>-movflags +faststart</code>) sebelum masuk lapis transformasi.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="r-mark">03</div>
+        <div>
+          <h4>Logo dan bumper tetap di lapis render</h4>
+          <p>Endpoint FFmpeg menerima satu berkas input per job, jadi menempel watermark dari berkas kedua atau menyambung outro terpisah tidak lurus di sini. Bakar elemen brand di master — hasilnya juga lebih konsisten karena posisinya diatur template, bukan koordinat overlay.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="r-mark">04</div>
+        <div>
+          <h4>Throttle fan-out, jangan enam job sekaligus</h4>
+          <p>Pola yang sama sudah jadi catatan di arsitektur distribusi TV Rakyat: burst paralel penuh memicu rate limit di lapis mana pun. Antrikan job varian dengan jeda dan tangani gagal per-item, supaya satu varian gagal tidak menggagalkan lima lainnya.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="col">
+      <div class="sec-label">Resep</div>
+      <h2>Perintah untuk tiap varian</h2>
+      <p>Semua dikirim ke <code>POST /api/uploadposts/ffmpeg/jobs/upload</code> dengan <code>file</code>, <code>full_command</code>, dan <code>output_extension</code>; statusnya dipantau lewat <code>GET /jobs/{job_id}</code> lalu diunduh dari <code>/download</code>. Perhatikan bahwa tiap resep di bawah menyelesaikan seluruh transformasi dalam satu lintasan — sesuai aturan 01.</p>
+    </div>
+
+    <div class="col">
+      <div class="recipe">
+        <div class="recipe-head"><b>9:16 dari master 16:9</b> <span>TikTok · Reels · Shorts · latar blur, wajah presenter tidak terpotong</span></div>
+        <pre>-i {input} -filter_complex
+"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,
+ crop=1080:1920,boxblur=28:4[bg];
+ [0:v]scale=1080:-2[fg];
+ [bg][fg]overlay=(W-w)/2:(H-h)/2"
+-af loudnorm=I=-14:TP=-1.5:LRA=11
+-c:v libx264 -preset veryfast -crf 21 -pix_fmt yuv420p
+-movflags +faststart {output}</pre>
+      </div>
+
+      <div class="recipe">
+        <div class="recipe-head"><b>1:1 dari master 16:9</b> <span>Feed Instagram / Facebook</span></div>
+        <pre>-i {input} -vf "crop=ih:ih,scale=1080:1080"
+-af loudnorm=I=-14:TP=-1.5:LRA=11
+-c:v libx264 -preset veryfast -crf 21 -pix_fmt yuv420p
+-movflags +faststart {output}</pre>
+      </div>
+
+      <div class="recipe">
+        <div class="recipe-head"><b>Potongan 60 detik</b> <span>Shorts / batas durasi platform — trim di depan supaya lebih hemat</span></div>
+        <pre>-ss 0 -t 60 -i {input}
+-vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
+-c:v libx264 -preset veryfast -crf 21 -pix_fmt yuv420p
+-movflags +faststart {output}</pre>
+      </div>
+
+      <p class="caption"><code>loudnorm=I=-14</code> menyamakan kenyaringan ke standar yang dipakai platform sosial — ini yang membuat satu berita tidak terdengar lebih pelan dari berita sebelumnya di feed yang sama, dan biasanya jadi keluhan paling sering setelah rasio.</p>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="sec-label">Orkestrasi</div>
+    <h2>Alur di n8n</h2>
+    <p>Rangkaiannya menempel di pola yang sudah dipakai TV Rakyat — Supabase sebagai sumber kebenaran, n8n sebagai lapis otomasi di luar request-response, kunci API hanya di sisi server:</p>
+    <ol>
+      <li><strong>Naskah/berita masuk</strong> — baris baru di tabel laporan memicu Database Webhook Supabase.</li>
+      <li><strong>Render master</strong> — n8n memanggil Creatomate dengan props berita (judul, lower-third, sumber), menunggu callback selesai, menyimpan master ke storage.</li>
+      <li><strong>Fan-out varian</strong> — antrian job FFmpeg per platform, dengan jeda antar-job, menulis <code>job_id</code> ke tabel agar bisa direkonsiliasi kalau n8n restart.</li>
+      <li><strong>Unduh &amp; publikasi</strong> — tiap varian selesai langsung dikirim ke endpoint publish Upload-Post untuk profil dan platform yang sesuai.</li>
+      <li><strong>Tulis status</strong> — hasil per platform disimpan ke tabel <code>video_uploads</code>, gagal per-item dicatat dengan <code>error_detail</code>, bukan membatalkan seluruh berita.</li>
+    </ol>
+    <p>Satu tabel pencatat pemakaian menit (durasi input × jumlah job per hari) layak ditambahkan sejak awal — tanpa itu, kuota 10.000 menit habis tanpa ada yang tahu kapan tren pemakaiannya berubah.</p>
+  </section>
+
+  <section>
+    <div class="col">
+      <div class="sec-label">Migrasi</div>
+      <h2>Kapan Remotion benar-benar layak dipasang</h2>
+      <p>Perlu dikatakan terus terang: <strong>begitu restrukturisasi lapis A/B dijalankan, alasan finansial untuk pindah ke Remotion justru melemah.</strong> Volume render turun ke ±150/bulan, dan di angka itu Creatomate Essential ($54) lebih murah daripada Remotion yang punya minimum lisensi $100/bulan. Yang tersisa adalah alasan-alasan lain, dan itu semua sah:</p>
+      <ul>
+        <li><strong>Volume di atas ±900 render/bulan</strong> — di sinilah biaya per render Remotion mulai menang telak, dan makin jauh menang seiring volume naik.</li>
+        <li><strong>Personalisasi per DPD/provinsi</strong> — pemicu paling nyata di roadmap Anda; skenario C di tabel di atas tidak punya jalan keluar di Creatomate.</li>
+        <li><strong>Template jadi kode</strong> — versioning di git, review perubahan, satu komponen dipakai banyak program acara, tanpa kunci vendor pada berkas template.</li>
+        <li><strong>Varian pindah ke composition</strong> — di Remotion, 9:16 dan 1:1 cukup jadi composition berbeda dari props yang sama, sehingga lapis B menyusut jadi cadangan, bukan jalur utama.</li>
+      </ul>
+    </div>
+
+    <div class="phases">
+      <div class="phase">
+        <div class="p-num">1</div>
+        <div>
+          <h4>Pisahkan master dari varian — tanpa ganti vendor</h4>
+          <p>Rapikan template Creatomate jadi satu komposisi master 16:9 yang berisi seluruh elemen brand. Hentikan pemanggilan template per rasio.</p>
+          <span class="outcome">Efek langsung: pemakaian kredit turun ±83%, kemungkinan turun satu tier langganan</span>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="p-num">2</div>
+        <div>
+          <h4>Nyalakan lapis FFmpeg di n8n</h4>
+          <p>Uji satu berita nyata jadi 6 varian, ukur pemakaian menit sebenarnya, bandingkan dengan asumsi 1,5 menit/job di dokumen ini. Angka nyata inilah yang menentukan plafon harian Anda.</p>
+          <span class="outcome">Keluaran: angka kapasitas riil, bukan estimasi</span>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="p-num">3</div>
+        <div>
+          <h4>Port template ke Remotion, jalankan berdampingan</h4>
+          <p>Bangun ulang master sebagai komponen React berparameter, render berita yang sama lewat dua jalur, bandingkan hasil sisi ke sisi sampai tim redaksi tidak bisa membedakan.</p>
+          <span class="outcome">Tidak ada risiko tayang: Creatomate tetap jalur produksi</span>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="p-num">4</div>
+        <div>
+          <h4>Pindahkan render ke Remotion Lambda</h4>
+          <p>Cutover bertahap per program acara, bukan sekaligus. Varian mulai dipindah ke composition; lapis FFmpeg turun pangkat jadi jalur cadangan dan pekerjaan ringan (thumbnail, normalisasi audio).</p>
+          <span class="outcome">Kuota 10.000 menit berubah fungsi jadi bantalan lonjakan</span>
+        </div>
+      </div>
+      <div class="phase">
+        <div class="p-num">5</div>
+        <div>
+          <h4>Hentikan Creatomate setelah satu siklus penuh</h4>
+          <p>Jangan matikan langganan sebelum satu siklus billing berjalan mulus di Remotion, termasuk melewati satu hari dengan volume puncak.</p>
+          <span class="outcome">Pola yang sama dipakai pada rencana migrasi distribusi sosmed</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="sec-label">Validasi</div>
+    <h2>Yang harus dipastikan sebelum dieksekusi</h2>
+    <div class="verify-box">
+      <h3>Empat hal yang belum bisa dipastikan dari dokumentasi</h3>
+      <ol>
+        <li><strong>Apakah job FFmpeg bisa menerima input kedua?</strong> Dokumentasi hanya menunjukkan satu berkas <code>file</code> per job. Kalau ternyata bisa (misalnya via URL), menyambung outro terpisah di lapis B jadi mungkin — dan itu mengubah sebagian rancangan aturan 03.</li>
+        <li><strong>Apakah job gagal tetap memotong kuota?</strong> Penting untuk retry policy: kalau memotong, retry harus dibatasi ketat dan validasi input dilakukan sebelum kirim.</li>
+        <li><strong>Berapa job FFmpeg yang boleh jalan bersamaan di tier Business?</strong> Menentukan seberapa agresif throttle di n8n boleh disetel.</li>
+        <li><strong>Berapa kredit persisnya satu render Creatomate Anda?</strong> Angka ±10 kredit di dokumen ini diturunkan dari klaim paket ("10.000 kredit ≈ 1.000+ video"), bukan dari formula resmi. Cek pemakaian nyata di dashboard untuk 10 render terakhir — kalau template Anda lebih berat, seluruh angka kredit di tabel kapasitas bergeser naik.</li>
+      </ol>
+    </div>
+    <p>Tiga yang pertama cukup dijawab satu email ke support Upload-Post; yang keempat bisa dijawab sendiri dalam lima menit dari dashboard Creatomate, dan itu yang paling menentukan apakah tier bisa benar-benar diturunkan setelah fase 1.</p>
+  </section>
+
+  <footer class="col">
+    <h3>Sumber</h3>
+    <ul>
+      <li><a href="https://docs.upload-post.com/api/ffmpeg-editor">Upload-Post — FFmpeg Editor API</a> (endpoint, <code>full_command</code>, penghitungan kuota menit)</li>
+      <li><a href="https://www.upload-post.com/pricing/">Upload-Post — Pricing</a> (tier Business: 10.000 menit/bulan, upload tak terbatas)</li>
+      <li><a href="https://creatomate.com/pricing">Creatomate — Pricing</a> · <a href="https://creatomate.com/docs/api/reference/limits-and-concurrency">Limits &amp; concurrency</a></li>
+      <li><a href="https://www.remotion.dev/docs/license/pricing">Remotion — License &amp; pricing</a> · <a href="https://www.remotion.dev/docs/lambda/cost-example">Biaya Remotion Lambda</a></li>
+      <li>Project doc internal — <em>Arsitektur migrasi distribusi sosmed TV Rakyat</em> (KPI 5 video × 6 platform, pola n8n + Supabase, konfirmasi tier Business)</li>
+    </ul>
+  </footer>
+
+</div>
