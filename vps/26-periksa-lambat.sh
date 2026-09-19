@@ -10,12 +10,14 @@
 #
 # DUA TERSANGKA, dan obatnya BERBEDA — makanya harus dipisahkan dulu:
 #
-#   A. REDIS TIDAK TERPAKAI. /api/sehat melaporkan
-#      `"batas_terpusat":"memori"`, artinya aplikasi TIDAK memakai Redis
-#      walau containernya hidup. Tanpa cache bersama, SETIAP pemeriksaan
-#      sesi jatuh ke database. Ini persis insiden 7 Sep 2026 (35
-#      permintaan/detik, 55%-nya cuma cek sesi) — dan waktu itu sebabnya
-#      REDIS_URL tidak pernah benar-benar dipakai.
+#   A. CACHE SESI TIDAK TERPAKAI. Tanpa cache bersama, SETIAP
+#      pemeriksaan sesi jatuh ke database. Ini persis insiden 7 Sep 2026
+#      (35 permintaan/detik, 55%-nya cuma cek sesi).
+#      JANGAN salah baca petunjuknya: `"batas_terpusat":"memori"` di
+#      /api/sehat melaporkan PEMBATAS LAJU, yang memang butuh Upstash
+#      (REST). Di VPS tanpa Upstash, "memori" di situ NORMAL dan BUKAN
+#      tanda Redis rusak. Cache sesi memakai jalur lain (REDIS_URL, TCP)
+#      dan kini dilaporkan terpisah sebagai `cache_bersama`.
 #
 #   B. DATABASENYA SENDIRI yang lambat. Sejak aplikasi kembali memakai
 #      Supabase CLOUD, tiap kueri menyeberang internet. Kalau proyek
@@ -72,7 +74,7 @@ s.on(\"error\",e=>{console.log(\"GAGAL \"+e.code+\" ke \"+host+\":\"+port);proce
 "' 2>&1 | tail -2)"
   echo "  dari dalam container aplikasi: ${UJI:-(tidak terbaca)}"
   case "$UJI" in
-    *SAMBUNG_OK*) catat "Redis BISA disambung dari container aplikasi — jadi kalau /api/sehat masih bilang 'memori', masalahnya di pengaturan/kode, bukan jaringan." ;;
+    *SAMBUNG_OK*) catat "Redis BISA disambung dari container aplikasi. Kalau /api/sehat tetap melaporkan cache_bersama=memori, masalahnya di pengaturan (REDIS_URL), bukan jaringan." ;;
     *GAGAL*|*TIMEOUT*) catat "Container aplikasi TIDAK BISA menyambung ke Redis. Inilah kenapa cache bersama mati dan beban jatuh semua ke database." ;;
   esac
 else

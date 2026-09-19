@@ -16,6 +16,7 @@
 // pesan galat mentah, dan tanpa nama tabel.
 import { supabase } from "@/lib/supabase";
 import { batasTerpusatAktif } from "@/lib/rate-limit";
+import { cacheBersamaAktif } from "@/lib/redis";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,16 @@ export async function GET() {
     sehat: dbSehat,
     database: dbSehat ? "ok" : "gagal",
     // Berguna saat menelusuri: apakah pembatas terpusat sudah hidup.
+    // CATATAN: ini melaporkan PEMBATAS LAJU, yang memang butuh Upstash
+    // (REST). Di VPS tanpa Upstash, "memori" itu NORMAL — bukan tanda
+    // Redis rusak. Jangan dibaca sebagai "cache mati" (19 Sep 2026).
     batas_terpusat: batasTerpusatAktif() ? "redis" : "memori",
+    // CACHE SESI — inilah yang menentukan beban database. Tanpa cache
+    // bersama, SETIAP pemeriksaan sesi menembak database; insiden
+    // 7 Sep 2026 menunjukkan 55% lalu lintas Supabase hanyalah itu.
+    // Sebelumnya tidak dilaporkan di mana pun, jadi tidak ada cara tahu
+    // ia hidup atau tidak tanpa membaca kode.
+    cache_bersama: cacheBersamaAktif() ? "redis" : "memori",
     versi: process.env.NEXT_PUBLIC_VERSI_APLIKASI ?? "?",
     ms: Date.now() - mulai,
     ...(dbSehat ? {} : { sebab }),
