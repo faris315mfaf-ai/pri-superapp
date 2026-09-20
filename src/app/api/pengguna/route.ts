@@ -16,10 +16,20 @@ import { adalahHR, diDivisiHR } from "@/lib/hr";
 
 import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 import { nilaiSayapTambahan } from "@/lib/sayap";
-import { kolomStrukturLainAda } from "@/lib/kolom-struktur";
+import { kolomJabatanTvrAda, kolomStrukturLainAda } from "@/lib/kolom-struktur";
 import { pastikanDaftarStrukturSah } from "@/lib/struktur-banyak";
 import { bacaStrukturLain } from "@/lib/struktur";
 export const dynamic = "force-dynamic";
+
+/** Kolom daftar akun — tanpa jabatan_tvr bila migrasi sql/46 belum jalan. */
+const KOLOM_PENGGUNA_DASAR =
+  "id, nama, nama_panggilan, email, username, nomor_wa, role, jabatan, bidang_jabatan, divisi, sub_divisi, posisi_divisi, zona_id, zona:zona(nama), avatar_url, status, aktif, wa_terverifikasi, profil_lengkap, created_at, disetujui_oleh, disetujui_pada, modul_izin, jabatan_sayap";
+
+async function kolomDaftarPengguna(): Promise<string> {
+  return (await kolomJabatanTvrAda())
+    ? `${KOLOM_PENGGUNA_DASAR}, jabatan_tvr`
+    : KOLOM_PENGGUNA_DASAR;
+}
 
 // Peran yang bisa DIPILIH dari panel kini hanya Ketua dan Anggota.
 // super_admin / admin_hr / admin_tv DISEMBUNYIKAN dari pemilih — akun
@@ -72,11 +82,13 @@ export async function GET(request: Request) {
       }
     }
 
-    const { data, error } = await supabase()
+    // Select yang aman terhadap migrasi belum jalan (pola sama sesi/login).
+    // Kalau embed zona gagal (relasi ambigu / tabel belum ada), ulangi tanpa
+    // join supaya daftar akun tetap terbuka.
+    const kolom = await kolomDaftarPengguna();
+    let { data, error } = await supabase()
       .from("app_user")
-      .select(
-        "id, nama, nama_panggilan, email, username, nomor_wa, role, jabatan, bidang_jabatan, divisi, sub_divisi, posisi_divisi, zona_id, zona:zona(nama), avatar_url, status, aktif, wa_terverifikasi, profil_lengkap, created_at, disetujui_oleh, disetujui_pada, modul_izin, jabatan_sayap, jabatan_tvr",
-      )
+      .select(kolom)
       // Yang menunggu persetujuan ditaruh paling atas — itu yang
       // butuh tindakan, bukan sekadar daftar.
       // Peran master tidak pernah tampil di panel mana pun — disaring
@@ -87,7 +99,23 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false })
       .limit(500);
 
-    if (error) throw new Error("Gagal memuat daftar pengguna");
+    if (error && /zona|relationship|Could not find/i.test(error.message)) {
+      const tanpaZona = kolom.replace("zona_id, zona:zona(nama), ", "zona_id, ");
+      const ulang = await supabase()
+        .from("app_user")
+        .select(tanpaZona)
+        .not("role", "in", PERAN_TERSEMBUNYI_IN)
+        .order("status", { ascending: true })
+        .order("created_at", { ascending: false })
+        .limit(500);
+      data = ulang.data;
+      error = ulang.error;
+    }
+
+    if (error) {
+      console.error("[pengguna] daftar:", error.message);
+      throw new Error("Gagal memuat daftar pengguna");
+    }
 
     // STRUKTUR GANDA (11 Sep 2026): diambil terpisah, satu kueri ringan,
     // dan hanya bila kolomnya sudah terpasang (sql/43). Digabung ulang

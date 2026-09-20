@@ -739,12 +739,11 @@ export type AntrianQc = {
 export async function getAntrianQc(periode: string): Promise<AntrianQc | null> {
   if (!periode) return null;
   try {
-    const res = await fetch(
+    // Wajib kirim token: /api/analisis dilindungi pastikanMasuk.
+    // Tanpa Authorization selalu 401 di konsol (walau layar diam).
+    const json = await fetchJson(
       "/api/analisis?periode=" + encodeURIComponent(periode),
-      { cache: "no-store" },
     );
-    if (!res.ok) return null;
-    const json = await res.json();
     return (json?.antrian ?? null) as AntrianQc | null;
   } catch {
     // Gangguan sesaat tidak perlu meledak di layar -- pemanggilan
@@ -896,6 +895,7 @@ export async function pantauAnalisisQc(
       const res = await fetch("/api/analisis", {
         signal: opsi.signal,
         cache: "no-store",
+        headers: headerToken(),
       });
       if (!res.ok) continue; // gangguan sesaat bukan berarti analisisnya gagal
       const json = await res.json();
