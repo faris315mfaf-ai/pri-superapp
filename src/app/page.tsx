@@ -288,6 +288,20 @@ export default function Page() {
       ? tabAwalDenganRestor(tersimpan.role, tersimpan.id)
       : "beranda";
   });
+  // Tab yang sudah pernah dibuka — isinya dipasang sekali lalu dipertahankan.
+  // PENTING: jangan pasang SEMUA tab sejak login. Tab Dashboard/QC memuat
+  // API pengurus; kalau ikut hidup di latar untuk anggota biasa, konsol
+  // penuh 403 padahal layar beranda sendiri baik-baik saja.
+  const [tabPernahDibuka, setTabPernahDibuka] = useState<Set<KunciTab>>(
+    () => new Set([
+      useAppStore.getState().user
+        ? tabAwalDenganRestor(
+            useAppStore.getState().user!.role,
+            useAppStore.getState().user!.id,
+          )
+        : "beranda",
+    ]),
+  );
   const [subLayar, setSubLayar] = useState<SubLayar | null>(() => {
     // Refresh peramban: buka lagi sub-layar terakhir (fitur 1 Sep 2026).
     const tersimpan = useAppStore.getState().user;
@@ -706,6 +720,17 @@ export default function Page() {
     s.notifikasi.reduce((n, item) => (item.dibaca ? n : n + 1), 0),
   );
 
+  // Catat tab aktif sebagai "pernah dibuka" supaya state-nya tetap hidup
+  // setelah pindah, tanpa memasang tab yang belum disentuh.
+  useEffect(() => {
+    setTabPernahDibuka((sebelum) => {
+      if (sebelum.has(tabEfektif)) return sebelum;
+      const lanjut = new Set(sebelum);
+      lanjut.add(tabEfektif);
+      return lanjut;
+    });
+  }, [tabEfektif]);
+
   // ------------------------------------------------------------
   // Aksi navigasi
   // ------------------------------------------------------------
@@ -720,7 +745,9 @@ export default function Page() {
     // Bila datang dari halaman tunggu (baru disetujui), tandanya dibuang.
     setMenungguUser(null);
     setUser(userBaru);
-    setTab(TAB_AWAL[userBaru.role]);
+    const awal = TAB_AWAL[userBaru.role];
+    setTab(awal);
+    setTabPernahDibuka(new Set([awal]));
     setSubLayar(null);
     // Sesi baru: lupakan daftar id yang pernah dilihat, supaya pemuatan
     // pertama milik pengguna berikutnya juga tidak memunculkan banner.
@@ -739,6 +766,7 @@ export default function Page() {
     useAppStore.getState().setNotifikasi([]);
     setSubLayar(null);
     setTab("beranda");
+    setTabPernahDibuka(new Set(["beranda"]));
     // Sesi baru: lupakan daftar id yang pernah dilihat, supaya pemuatan
     // pertama milik pengguna berikutnya juga tidak memunculkan banner.
     idPernahDilihat.current = null;
@@ -1265,8 +1293,10 @@ export default function Page() {
             tabs={tabBoleh}
           />
 
-          {/* Tumpukan layar tab — semua terpasang, state terjaga.
-              Di PC digeser ke kanan selebar rel navigasi samping. */}
+          {/* Tumpukan layar tab — yang sudah dibuka tetap terpasang
+              (state terjaga), yang belum dibuka belum di-mount supaya
+              API pengurus di tab Dashboard/QC tidak ikut terpanggil
+              saat anggota biasa baru login. */}
           <div className="relative lg:pl-60">
             {layarTab.map(({ kunci, isi }) => (
               <div
@@ -1279,7 +1309,9 @@ export default function Page() {
                     : "invisible pointer-events-none absolute inset-0 overflow-hidden opacity-0",
                 )}
               >
-                <PagarGalat nama={kunci}>{isi}</PagarGalat>
+                {tabPernahDibuka.has(kunci) ? (
+                  <PagarGalat nama={kunci}>{isi}</PagarGalat>
+                ) : null}
               </div>
             ))}
           </div>
