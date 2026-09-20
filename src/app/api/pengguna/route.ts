@@ -31,6 +31,19 @@ async function kolomDaftarPengguna(): Promise<string> {
     : KOLOM_PENGGUNA_DASAR;
 }
 
+/** Bentuk baris daftar — select dinamis membuat supabase-js kehilangan tipe. */
+type BarisDaftar = {
+  id: number | string;
+  avatar_url?: string | null;
+  jabatan?: string | null;
+  bidang_jabatan?: string | null;
+  divisi?: string | null;
+  sub_divisi?: string | null;
+  posisi_divisi?: string | null;
+  status?: string;
+  [kunci: string]: unknown;
+};
+
 // Peran yang bisa DIPILIH dari panel kini hanya Ketua dan Anggota.
 // super_admin / admin_hr / admin_tv DISEMBUNYIKAN dari pemilih — akun
 // lama yang sudah memegangnya tetap berfungsi penuh, tapi tidak ada
@@ -85,8 +98,9 @@ export async function GET(request: Request) {
     // Select yang aman terhadap migrasi belum jalan (pola sama sesi/login).
     // Kalau embed zona gagal (relasi ambigu / tabel belum ada), ulangi tanpa
     // join supaya daftar akun tetap terbuka.
+    // Cast wajib: `.select(string)` dinamis = tipe GenericStringError di TS.
     const kolom = await kolomDaftarPengguna();
-    let { data, error } = await supabase()
+    let hasil = await supabase()
       .from("app_user")
       .select(kolom)
       // Yang menunggu persetujuan ditaruh paling atas — itu yang
@@ -99,23 +113,23 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false })
       .limit(500);
 
-    if (error && /zona|relationship|Could not find/i.test(error.message)) {
+    if (hasil.error && /zona|relationship|Could not find/i.test(hasil.error.message)) {
       const tanpaZona = kolom.replace("zona_id, zona:zona(nama), ", "zona_id, ");
-      const ulang = await supabase()
+      hasil = await supabase()
         .from("app_user")
         .select(tanpaZona)
         .not("role", "in", PERAN_TERSEMBUNYI_IN)
         .order("status", { ascending: true })
         .order("created_at", { ascending: false })
         .limit(500);
-      data = ulang.data;
-      error = ulang.error;
     }
 
-    if (error) {
-      console.error("[pengguna] daftar:", error.message);
+    if (hasil.error) {
+      console.error("[pengguna] daftar:", hasil.error.message);
       throw new Error("Gagal memuat daftar pengguna");
     }
+
+    const data = (hasil.data ?? []) as unknown as BarisDaftar[];
 
     // STRUKTUR GANDA (11 Sep 2026): diambil terpisah, satu kueri ringan,
     // dan hanya bila kolomnya sudah terpasang (sql/43). Digabung ulang
@@ -126,13 +140,13 @@ export async function GET(request: Request) {
       const { data: baris } = await supabase()
         .from("app_user")
         .select("id, struktur_lain")
-        .in("id", (data ?? []).map((u) => u.id));
+        .in("id", data.map((u) => u.id));
       for (const b of baris ?? []) {
         strukturLain.set(String(b.id), bacaStrukturLain(b.struktur_lain));
       }
     }
 
-    const daftar = (data ?? []).map((u) => ({
+    const daftar = data.map((u) => ({
       ...u,
       id: String(u.id),
       avatar_url: u.avatar_url ?? "",
