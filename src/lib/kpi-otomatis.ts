@@ -137,6 +137,8 @@ export function cocokkanMedia(
   return hasil;
 }
 
+type BarisLaporanKunci = { id: number; postId: number | null; url: string; waktu: string | null };
+
 type KonteksCatat = {
   /** username akun tertaut per platform — untuk bentuk tautan kanonik */
   usernamePer: Record<string, string>;
@@ -144,7 +146,42 @@ type KonteksCatat = {
   kunciSudah: Set<string>;
   /** "<post_id>|<platform>" yang sudah punya baris laporan */
   adaTerkait: Set<string>;
+  /**
+   * Baris laporan per kunci video. Dipakai menautkan ORPHAN
+   * (tvrku_post_id null) ke unggahan yang menunggu — akar bug
+   * "30 tercatat · N menunggu" (21 Sep 2026): lapis 3 mencatat KPI
+   * tanpa mengaitkan ke tvrku_post, lalu status menunggu tak hilang.
+   */
+  barisPerKunci: Map<string, BarisLaporanKunci>;
 };
+
+/** Tautkan baris orphan ke unggahan. Mengembalikan "baru" bila berhasil. */
+async function tautkanOrphanKePost(
+  db: ReturnType<typeof supabase>,
+  platform: string,
+  kunci: string,
+  postId: number,
+  ctx: KonteksCatat,
+): Promise<"baru" | "dobel"> {
+  if (postId <= 0) return "dobel";
+  const baris = ctx.barisPerKunci.get(kunci);
+  if (!baris) return "dobel";
+  if (baris.postId === postId) {
+    ctx.adaTerkait.add(`${postId}|${platform}`);
+    return "dobel";
+  }
+  if (baris.postId != null && baris.postId > 0) return "dobel";
+  const { data, error } = await db
+    .from("laporan_video")
+    .update({ tvrku_post_id: postId })
+    .eq("id", baris.id)
+    .is("tvrku_post_id", null)
+    .select("id");
+  if (error || !(data ?? []).length) return "dobel";
+  baris.postId = postId;
+  ctx.adaTerkait.add(`${postId}|${platform}`);
+  return "baru";
+}
 
 /**
  * Catat satu tautan. Tautan disimpan dalam bentuk KANONIK dan dibandingkan
@@ -163,7 +200,11 @@ async function catatLaporan(
   const url = kanonikTautan(platform, urlMentah, ctx.usernamePer[platform]).slice(0, 500);
   const kunci = kunciVideo(platform, url);
   // X memecah satu unggahan jadi utas → satu baris per unggahan sudah cukup.
-  if (ctx.kunciSudah.has(kunci) || (platform === "twitter" && postId > 0 && ctx.adaTerkait.has(`${postId}|twitter`))) return "dobel";
+  if (platform === "twitter" && postId > 0 && ctx.adaTerkait.has(`${postId}|twitter`)) return "dobel";
+  if (ctx.kunciSudah.has(kunci)) {
+    // Sudah ada baris: bila orphan + ada unggahan target → tautkan, jangan diam.
+    return tautkanOrphanKePost(db, platform, kunci, postId, ctx);
+  }
   // 10 Sep 2026: dulu INSERT biasa, lalu galat 23505 ("sudah ada")
   // dianggap wajar. Akibatnya rekonsiliasi menembakkan ~955 penulisan
   // GAGAL per hari ke database — beban dan log galat yang sia-sia.
@@ -191,8 +232,10 @@ async function catatLaporan(
         .select("id");
       if (ulang.error) return "gagal";
       ctx.kunciSudah.add(kunci);
-      if (postId > 0) ctx.adaTerkait.add(`${postId}|${platform}`);
       if ((ulang.data ?? []).length > 0) {
+        const idBaru = Number(ulang.data![0].id);
+        ctx.barisPerKunci.set(kunci, { id: idBaru, postId: postId > 0 ? postId : null, url, waktu });
+        if (postId > 0) ctx.adaTerkait.add(`${postId}|${platform}`);
         await db
           .from("laporan_video_pending")
           .update({ status: "disetujui", catatan: "Terdeteksi otomatis dari unggahan aplikasi", diputus_oleh: "sistem", diputus_pada: new Date().toISOString() })
@@ -201,13 +244,15 @@ async function catatLaporan(
           .eq("status", "menunggu");
         return "baru";
       }
-      return "dobel";
+      return tautkanOrphanKePost(db, platform, kunci, postId, ctx);
     }
     return "gagal";
   }
   ctx.kunciSudah.add(kunci);
-  if (postId > 0) ctx.adaTerkait.add(`${postId}|${platform}`);
   if ((barisBaru ?? []).length > 0) {
+    const idBaru = Number(barisBaru![0].id);
+    ctx.barisPerKunci.set(kunci, { id: idBaru, postId: postId > 0 ? postId : null, url, waktu });
+    if (postId > 0) ctx.adaTerkait.add(`${postId}|${platform}`);
     // Bila anggota sempat melaporkan link ini MANUAL (menunggu ACC HR),
     // deteksi otomatis = bukti sah → langsung disetujui (2 Sep 2026).
     await db
@@ -218,7 +263,8 @@ async function catatLaporan(
       .eq("status", "menunggu");
     return "baru";
   }
-  return "dobel";
+  // Upsert bentrok (URL sudah ada) — coba tautkan orphan ke unggahan ini.
+  return tautkanOrphanKePost(db, platform, kunci, postId, ctx);
 }
 
 export type RingkasanRekonsiliasi = {
@@ -334,18 +380,45 @@ export async function rekonsiliasiKpiRinci(
       idPost.length
         ? db.from("laporan_video").select("tvrku_post_id, platform").eq("user_id", userId).in("tvrku_post_id", idPost)
         : Promise.resolve({ data: [] as { tvrku_post_id: unknown; platform: unknown }[] }),
-      db.from("laporan_video").select("platform, url_video").eq("user_id", userId).order("id", { ascending: false }).limit(3000),
+      db
+        .from("laporan_video")
+        .select("id, platform, url_video, tvrku_post_id, dibuat_pada")
+        .eq("user_id", userId)
+        .order("id", { ascending: false })
+        .limit(3000),
       db.from("akun_tvr_user").select("platform, username").eq("user_id", userId).eq("aktif", true).order("id", { ascending: true }),
     ]);
     const adaTerkait = new Set((terkait ?? []).map((t) => `${t.tvrku_post_id}|${String(t.platform).toLowerCase()}`));
-    const kunciSudah = new Set((semuaUrl ?? []).map((u) => kunciVideo(String(u.platform ?? ""), String(u.url_video))));
+    const kunciSudah = new Set<string>();
+    const barisPerKunci = new Map<string, BarisLaporanKunci>();
+    for (const u of semuaUrl ?? []) {
+      const pf = String(u.platform ?? "").toLowerCase();
+      const url = String(u.url_video ?? "");
+      const kunci = kunciVideo(pf, url);
+      kunciSudah.add(kunci);
+      const postIdMentah = u.tvrku_post_id == null ? null : Number(u.tvrku_post_id);
+      const postId = postIdMentah && postIdMentah > 0 ? postIdMentah : null;
+      const lama = barisPerKunci.get(kunci);
+      // Pertahankan baris yang sudah terkait unggahan bila ada dobel kunci.
+      if (lama?.postId && !postId) continue;
+      barisPerKunci.set(kunci, {
+        id: Number(u.id),
+        postId,
+        url,
+        waktu: u.dibuat_pada ? String(u.dibuat_pada) : null,
+      });
+    }
     const usernamePer: Record<string, string> = {};
     for (const a of akunTertaut ?? []) {
       const pf = String(a.platform ?? "").toLowerCase();
       if (!usernamePer[pf] && a.username) usernamePer[pf] = String(a.username);
     }
-    const ctx: KonteksCatat = { usernamePer, kunciSudah, adaTerkait };
-    const sudahTercatat = (pf: string) => (url: string) => kunciSudah.has(kunciVideo(pf, url));
+    const ctx: KonteksCatat = { usernamePer, kunciSudah, adaTerkait, barisPerKunci };
+    // URL yang SUDAH terkait unggahan dilewati; orphan boleh dipasangkan lagi.
+    const sudahTerkaitPost = (pf: string) => (url: string) => {
+      const baris = barisPerKunci.get(kunciVideo(pf, url));
+      return Boolean(baris?.postId);
+    };
 
     // PENYEMBUHAN: platform "ditandai" tanpa baris terkait → buka lagi.
     const tercatatEfektif = new Map<number, Set<string>>();
@@ -430,7 +503,7 @@ export async function rekonsiliasiKpiRinci(
       try {
         const media = await postinganTerbaruUp(profil, pf, BATAS_MEDIA, Math.min(20_000, sisa()));
         mediaPer.set(pf, media);
-        const pasangan = cocokkanMedia(pending, media, sudahTercatat(pf));
+        const pasangan = cocokkanMedia(pending, media, sudahTerkaitPost(pf));
         for (const c of pasangan) {
           const r = await catatLaporan(db, userId, pf, c.url, c.waktu, c.post_id, ctx);
           if (r === "baru") {
@@ -445,10 +518,57 @@ export async function rekonsiliasiKpiRinci(
       }
     }
 
+    // LAPIS 2.5: tautkan ORPHAN (laporan_video tanpa tvrku_post_id) ke
+    // unggahan yang masih menunggu, berurutan waktu. Tanpa filter caption —
+    // barisnya sudah milik akun anggota ini; yang kurang hanya kaitannya
+    // ke unggahan aplikasi (insiden 21 Sep 2026).
+    const orphanPer = new Map<string, PostinganUp[]>();
+    for (const [kunci, baris] of barisPerKunci) {
+      if (baris.postId) continue;
+      const pf = kunci.split("|")[0] ?? "";
+      if (!pf || !posts.some((p) => pendingDari(p).includes(pf))) continue;
+      // Pakai waktu terbit dari media bila ada; dibuat_pada orphan sering
+      // hanya waktu cron mencatat, bukan waktu postingan.
+      let waktu = baris.waktu;
+      const mediaPf = mediaPer.get(pf) ?? [];
+      for (const m of mediaPf) {
+        if (m.permalink && kunciVideo(pf, m.permalink) === kunci && m.waktu) {
+          waktu = m.waktu;
+          break;
+        }
+      }
+      const daftar = orphanPer.get(pf) ?? [];
+      daftar.push({
+        id: String(baris.id),
+        permalink: baris.url,
+        caption: "",
+        jenis: "",
+        waktu,
+        thumbnail: "",
+      });
+      orphanPer.set(pf, daftar);
+    }
+    for (const [pf, orphanMedia] of orphanPer) {
+      const pending = posts
+        .filter((p) => pendingDari(p).includes(pf))
+        .map((p) => ({ ...p, judul: "" })); // tanpa filter caption
+      if (pending.length === 0 || orphanMedia.length === 0) continue;
+      const pasangan = cocokkanMedia(pending, orphanMedia, sudahTerkaitPost(pf));
+      for (const c of pasangan) {
+        const r = await catatLaporan(db, userId, pf, c.url, c.waktu, c.post_id, ctx);
+        if (r === "baru") {
+          ringkas.baru += 1;
+          ringkas.dari_media += 1;
+          ringkas.disembuhkan += 1;
+          tercatatEfektif.get(c.post_id)!.add(pf);
+        }
+      }
+    }
+
     // LAPIS 3: tautan yang SUDAH TERBIT hari ini di akun tertaut, termasuk
     // yang tidak lewat tombol SuperApp (unggah native HP / insert riwayat
-    // gagal). Tanpa lapis ini, KPI hanya melihat Luthfi padahal banyak
-    // anggota lain sudah posting di Instagram tertaut.
+    // gagal). Sebelum mencatat sebagai orphan (post_id=0), coba pasangkan
+    // dulu ke unggahan yang masih menunggu — supaya status "menunggu" hilang.
     const awalHariMs = Date.parse(`${tanggalWibDari(null)}T00:00:00+07:00`);
     const platformAkun = [...new Set([...PLATFORM_KPI, ...Object.keys(usernamePer)])].filter(
       (p) => p !== "website" && p !== "bilibili",
@@ -461,10 +581,29 @@ export async function rekonsiliasiKpiRinci(
           media = await postinganTerbaruUp(profil, pf, BATAS_MEDIA, Math.min(20_000, sisa()));
           mediaPer.set(pf, media);
         }
+        const pending = posts
+          .filter((p) => pendingDari(p).includes(pf))
+          .map((p) => ({ ...p, judul: "" }));
+        if (pending.length > 0) {
+          const pasangan = cocokkanMedia(pending, media, sudahTerkaitPost(pf));
+          for (const c of pasangan) {
+            const r = await catatLaporan(db, userId, pf, c.url, c.waktu, c.post_id, ctx);
+            if (r === "baru") {
+              ringkas.baru += 1;
+              ringkas.dari_media += 1;
+              tercatatEfektif.get(c.post_id)!.add(pf);
+            }
+          }
+        }
         for (const m of media) {
           if (!m.permalink || !m.waktu) continue;
           const t = Date.parse(m.waktu);
           if (!Number.isFinite(t) || t < awalHariMs) continue;
+          if (sudahTerkaitPost(pf)(m.permalink)) continue;
+          // Masih pending di platform ini → jangan buat orphan baru; biarkan
+          // pemanggilan berikutnya (cron) memasangkannya. Native murni
+          // (tidak ada unggahan menunggu) tetap dicatat ke KPI.
+          if (posts.some((p) => pendingDari(p).includes(pf))) continue;
           const r = await catatLaporan(db, userId, pf, m.permalink, m.waktu, 0, ctx);
           if (r === "baru") {
             ringkas.baru += 1;
