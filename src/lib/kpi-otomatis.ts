@@ -232,19 +232,37 @@ export type RingkasanRekonsiliasi = {
   catatan: string[];
 };
 
+const JEDA_REKON_MS = 60_000;
+const jedaRekon = new Map<number, number>();
+
 /**
  * Rekonsiliasi unggahan seorang anggota → laporan_video otomatis.
  * TIDAK melempar; mengembalikan jumlah laporan baru (kompatibel pemanggil lama).
  * `anggaranMs`: batas waktu; sisa unggahan menyusul pada pemanggilan berikutnya.
+ * `paksa`: lewati jeda 60 detik (dipakai sekali setelah unggah berhasil).
  */
-export async function rekonsiliasiKpiOtomatis(userId: number, opsi: { anggaranMs?: number } = {}): Promise<number> {
+
+export async function rekonsiliasiKpiOtomatis(
+  userId: number,
+  opsi: { anggaranMs?: number; paksa?: boolean } = {},
+): Promise<number> {
   const r = await rekonsiliasiKpiRinci(userId, opsi);
   return r.baru;
 }
 
-export async function rekonsiliasiKpiRinci(userId: number, opsi: { anggaranMs?: number } = {}): Promise<RingkasanRekonsiliasi> {
+export async function rekonsiliasiKpiRinci(
+  userId: number,
+  opsi: { anggaranMs?: number; paksa?: boolean } = {},
+): Promise<RingkasanRekonsiliasi> {
   const ringkas: RingkasanRekonsiliasi = { baru: 0, dari_pasti: 0, dari_media: 0, disembuhkan: 0, gagal_terbit: 0, pending_tersisa: 0, catatan: [] };
   if (!uploadPostSiap()) return ringkas;
+  // Buka riwayat / polling 15 dtk dulu memanggil ini tiap kali. Satu API key
+  // dipakai semua anggota, jadi tanpa jeda upload-post membalas 429 dan
+  // unggahan sungguhan ikut tertolak.
+  const kini = Date.now();
+  const lalu = jedaRekon.get(userId) ?? 0;
+  if (!opsi.paksa && kini - lalu < JEDA_REKON_MS) return ringkas;
+  jedaRekon.set(userId, kini);
   const tenggat = opsi.anggaranMs ? Date.now() + opsi.anggaranMs : Infinity;
   // Sisa anggaran (ms) — dipakai sebagai batas waktu TIAP panggilan upload-post
   // supaya jalur interaktif (Generate laporan, anggaran 30 dtk) tidak

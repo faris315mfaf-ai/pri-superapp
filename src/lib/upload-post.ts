@@ -32,6 +32,7 @@
 // ============================================================
 
 
+import { denganCache, hapusCacheBersama } from "@/lib/cache-bersama";
 import { KonfigurasiError } from "@/lib/supabase";
 
 const DASAR = "https://api.upload-post.com/api";
@@ -93,6 +94,17 @@ async function panggil<T>(
     json = null;
   }
   if (!res.ok) {
+    // 429 = kuota laju API key bersama. Jangan teruskan kalimat Inggris
+    // mentah: layar unggah mengulang permintaan, dan tiap ulang makin
+    // memperparah penolakan.
+    if (res.status === 429) {
+      throw Object.assign(
+        new Error(
+          "Penyedia unggahan sedang membatasi permintaan. Tunggu sekitar satu menit, lalu coba sekali — jangan menekan berulang.",
+        ),
+        { status: 429, pesanAman: true },
+      );
+    }
     const pesan =
       (json as { message?: string })?.message ??
       `upload-post menolak permintaan (${res.status})`;
@@ -149,22 +161,26 @@ function petaAkun(social: Record<string, unknown> | undefined): Record<string, s
   return hasil;
 }
 
-/** Semua profil + kuota. */
+const KUNCI_CACHE_PROFIL = "upload-post:profil";
+
+/** Semua profil + kuota. Di-cache singkat supaya buka layar tidak menembak ulang. */
 export async function daftarProfilUp(): Promise<{
   profil: ProfilUp[];
   kuota: number;
   paket: string;
 }> {
-  const d = await panggil<BalasanUsers>("/uploadposts/users", { method: "GET" });
-  return {
-    profil: (d.profiles ?? []).map((p) => ({
-      username: String(p.username ?? ""),
-      akun: petaAkun(p.social_accounts),
-      dibuat: String(p.created_at ?? ""),
-    })),
-    kuota: Number(d.limit ?? 0),
-    paket: String(d.plan ?? ""),
-  };
+  return denganCache(KUNCI_CACHE_PROFIL, 20, async () => {
+    const d = await panggil<BalasanUsers>("/uploadposts/users", { method: "GET" });
+    return {
+      profil: (d.profiles ?? []).map((p) => ({
+        username: String(p.username ?? ""),
+        akun: petaAkun(p.social_accounts),
+        dibuat: String(p.created_at ?? ""),
+      })),
+      kuota: Number(d.limit ?? 0),
+      paket: String(d.plan ?? ""),
+    };
+  });
 }
 
 /** Buat profil baru (username unik, huruf kecil/angka/strip). */
@@ -174,6 +190,7 @@ export async function buatProfilUp(username: string): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username }),
   });
+  await hapusCacheBersama(KUNCI_CACHE_PROFIL);
 }
 
 export async function hapusProfilUp(username: string): Promise<void> {
@@ -182,6 +199,7 @@ export async function hapusProfilUp(username: string): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username }),
   });
+  await hapusCacheBersama(KUNCI_CACHE_PROFIL);
 }
 
 /** URL halaman penautan akun (berlaku 48 jam) untuk satu profil. */

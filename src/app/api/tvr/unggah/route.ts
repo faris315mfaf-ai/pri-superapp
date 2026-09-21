@@ -587,12 +587,13 @@ export async function POST(request: Request) {
       // jadi KPI/rangkuman tetap 0 sampai cron 15 menit (atau tidak
       // pernah, bila layar tidak dimuat ulang).
       if (!jadwal) {
+        // Dua kali cukup: segera, lalu sekali lagi semenit kemudian.
+        // Empat tembakan berturut-turut (0/20/50/90 dtk) plus polling
+        // riwayat membuat API key kena 429 sebelum video sempat terbit.
         after(async () => {
-          const jeda = [0, 20_000, 50_000, 90_000];
-          for (const ms of jeda) {
-            if (ms) await new Promise((r) => setTimeout(r, ms));
-            await rekonsiliasiKpiOtomatis(Number(user.id));
-          }
+          await rekonsiliasiKpiOtomatis(Number(user.id), { paksa: true, anggaranMs: 20_000 });
+          await new Promise((r) => setTimeout(r, 60_000));
+          await rekonsiliasiKpiOtomatis(Number(user.id), { paksa: true, anggaranMs: 20_000 });
         });
       }
       after(bersihkanVideoKedaluwarsa);

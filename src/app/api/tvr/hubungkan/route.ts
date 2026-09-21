@@ -92,9 +92,31 @@ export async function GET(request: Request) {
     const profil = await profilKu(Number(user.id), penyedia.id);
     if (!profil) return { terhubung: [], tersinkron: 0, konflik: [] };
 
-    const tertaut = (await penyedia.akunTertaut(profil.profile_key as string)).filter((a) =>
-      PLATFORM_TVR.has(a.platform),
-    );
+    let tertaut: { platform: string; username: string }[];
+    try {
+      tertaut = (await penyedia.akunTertaut(profil.profile_key as string)).filter((a) =>
+        PLATFORM_TVR.has(a.platform),
+      );
+    } catch (e) {
+      // Kuota upload-post habis sesaat: jangan gagalkan layar unggah.
+      // Akun yang sudah tersimpan di database tetap ditampilkan.
+      if ((e as { status?: number }).status !== 429) throw e;
+      const { data: simpanan } = await db
+        .from("akun_tvr_user")
+        .select("platform, username")
+        .eq("user_id", Number(user.id))
+        .eq("terhubung", true);
+      return {
+        terhubung: (simpanan ?? [])
+          .filter((a) => PLATFORM_TVR.has(String(a.platform)))
+          .map((a) => ({
+            platform: String(a.platform),
+            username: String(a.username ?? "").toLowerCase().replace(/^@+/, ""),
+          })),
+        tersinkron: 0,
+        konflik: [],
+      };
+    }
 
     // Sinkron ke akun_tvr_user: tambah yang belum ada (terhubung=true);
     // yang sudah kupunya ditandai terhubung; milik orang lain = konflik.
