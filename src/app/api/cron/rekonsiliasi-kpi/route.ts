@@ -72,7 +72,8 @@ export async function GET(request: Request) {
   let baru = 0;
   for (const uid of antre) {
     if (Date.now() - mulai > ANGGARAN_TOTAL_MS) break;
-    baru += await rekonsiliasiKpiOtomatis(uid, { anggaranMs: ANGGARAN_PER_ORANG_MS });
+    // `paksa`: jeda 60 dtk hanya untuk spam layar interaktif, bukan cron.
+    baru += await rekonsiliasiKpiOtomatis(uid, { anggaranMs: ANGGARAN_PER_ORANG_MS, paksa: true });
     diproses += 1;
   }
   return Response.json(
