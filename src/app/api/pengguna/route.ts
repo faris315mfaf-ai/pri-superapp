@@ -441,7 +441,9 @@ export async function PATCH(request: Request) {
         // dan TIDAK menggugurkan jabatan mana pun — itulah seluruh
         // alasan keberadaannya. Hanya diubah bila field-nya memang
         // dikirim, supaya pemanggil lama tidak diam-diam mencabutnya.
-        if (body.jabatan_tvr !== undefined) {
+        // Kolom `jabatan_tvr` hanya ada setelah sql/46 — tanpa cek ini,
+        // ubah jabatan biasa ikut 500 ("column not in schema cache").
+        if (body.jabatan_tvr !== undefined && (await kolomJabatanTvrAda())) {
           const jtvr = (body.jabatan_tvr ?? "").trim();
           if (jtvr && jtvr !== JABATAN_TVR_NASIONAL) {
             throw Object.assign(new Error("Jabatan TV Rakyat tidak dikenal."), { status: 400 });
