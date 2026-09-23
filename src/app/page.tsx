@@ -33,7 +33,6 @@ import { AccountDetailScreen } from "@/features/qc-konten/account-detail-screen"
 import { PostDetailScreen } from "@/features/qc-konten/post-detail-screen";
 import { TvScreen } from "@/features/tv-rakyat/tv-screen";
 import { TvNasionalScreen } from "@/features/tv-rakyat/tv-nasional-screen";
-import { KelolaPenggunaScreen } from "@/features/pengguna/kelola-pengguna-screen";
 import { PengumumanScreen } from "@/features/pengguna/pengumuman-screen";
 import { PersetujuanKpiScreen } from "@/features/pengguna/persetujuan-kpi-screen";
 import { KontenScreen } from "@/features/konten/konten-screen";
@@ -979,6 +978,12 @@ export default function Page() {
   const bolehKelolaKpi = Boolean(
     user && (user.role === "master" || user.role === "super_admin" || user.role === "superadmin" || adalahHR(user) || adalahPimred(user)),
   );
+  // Database Anggota = gabungan Kelola Pengguna (23 Sep 2026). Bagian kelola
+  // (persetujuan, peran, jabatan, struktur, hapus) mengikuti hak server:
+  // super admin, master, dan orang HR. superadmin tersembunyi tidak ikut.
+  const bolehKelolaAnggota = Boolean(
+    user && (user.role === "master" || user.role === "super_admin" || adalahHR(user)),
+  );
   if (user) {
     // Tab yang tersedia mengikuti TAB_ROLE — satu sumber kebenaran,
     // supaya daftar tab di navigasi bawah dan layar yang dipasang di
@@ -1340,8 +1345,15 @@ export default function Page() {
               >
                 <MeshBackground />
                 <PagarGalat nama={subLayar.nama}>
-                  {subLayar.nama === "kelola-pengguna" ? (
-                    <KelolaPenggunaScreen onKembali={() => setSubLayar(null)} />
+                  {subLayar.nama === "kelola-pengguna" || subLayar.nama === "tabel-anggota" ? (
+                    // Kelola Pengguna DIGABUNG ke Database Anggota (23 Sep 2026):
+                    // rute lama tetap hidup (kartu beranda) dan membuka layar yang
+                    // sama, langsung ke pendaftar yang menunggu bila ada.
+                    <TabelAnggotaScreen
+                      onKembali={() => setSubLayar(null)}
+                      bolehKelola={bolehKelolaAnggota}
+                      utamakanPendaftar={subLayar.nama === "kelola-pengguna"}
+                    />
                   ) : subLayar.nama === "database" ? (
                     <DatabaseScreen onKembali={() => setSubLayar(null)} />
                   ) : subLayar.nama === "pengaturan-fitur" ? (
@@ -1369,8 +1381,6 @@ export default function Page() {
                       onBerubah={() => setVersiPet((v) => v + 1)}
                       tabAwal={subLayar.tab}
                     />
-                  ) : subLayar.nama === "tabel-anggota" ? (
-                    <TabelAnggotaScreen onKembali={() => setSubLayar(null)} />
                   ) : subLayar.nama === "absensi-hari-ini" ? (
                     <AbsensiHariIniScreen onKembali={() => setSubLayar(null)} />
                   ) : subLayar.nama === "dashboard-kpi" ? (

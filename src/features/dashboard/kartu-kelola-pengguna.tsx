@@ -1,7 +1,8 @@
 "use client";
 
 // ============================================================
-// KartuKelolaPengguna — pintu masuk panel super admin di beranda.
+// KartuKelolaPengguna — pintu masuk Database Anggota di beranda.
+// (Layar Kelola Pengguna digabung ke Database Anggota, 23 Sep 2026.)
 //
 // Menampilkan berapa pendaftar yang menunggu persetujuan. Angka itu
 // yang membuat kartunya berguna: tanpa penanda, pendaftar baru bisa
@@ -41,7 +42,7 @@ export function KartuKelolaPengguna({ onBuka }: { onBuka: () => void }) {
         type="button"
         onClick={onBuka}
         className="btn-tekan flex w-full items-center gap-3 p-4 text-left"
-        aria-label="Buka kelola pengguna"
+        aria-label="Buka database anggota"
       >
         <span
           className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
@@ -60,11 +61,11 @@ export function KartuKelolaPengguna({ onBuka }: { onBuka: () => void }) {
 
         <span className="min-w-0 flex-1">
           <span className="font-heading block text-[15px] font-bold text-teks-utama">
-            Kelola Pengguna
+            Database Anggota
           </span>
           <span className="block text-[12px] leading-snug text-teks-sekunder">
             {menunggu === null
-              ? "Setujui pendaftar & atur peran"
+              ? "Setujui pendaftar, atur peran & struktur"
               : ada
                 ? `${menunggu} pendaftar menunggu persetujuan`
                 : "Tidak ada pendaftar baru"}

@@ -27,7 +27,6 @@ import {
   ScanSearch,
   UsersRound,
   TrendingUp,
-  UserCog,
   Megaphone,
   X,
 } from "lucide-react";
@@ -299,8 +298,10 @@ export function QcScreen({
         {riwayatBuka && <RiwayatAnalisisModal onTutup={() => setRiwayatBuka(false)} />}
       </AnimatePresence>
 
-      {/* Menu halaman HR Center (spek 1.18: 2.2 / 2.4 / 2.5) + Kelola
-          Pengguna & Kirim Pengumuman untuk orang HR (fitur 1.22.x/1). */}
+      {/* Menu halaman HR Center (spek 1.18: 2.2 / 2.4 / 2.5) + Kirim
+          Pengumuman untuk orang HR (fitur 1.22.x/1). Kelola Pengguna
+          DIGABUNG ke Database Anggota (23 Sep 2026) — satu pintu untuk
+          persetujuan, peran, jabatan, struktur, zona, dan sandi. */}
       {onBukaHalaman && (
         <div className="mt-4 grid grid-cols-3 gap-2">
           {(
@@ -315,7 +316,6 @@ export function QcScreen({
               // dihitung, tidak lagi menunggu persetujuan HR. Layarnya masih
               // ada di kode untuk membereskan sisa antrean lama bila perlu.
               ["persetujuan-kpi", "ACC KPI", ClipboardCheck, false],
-              ["kelola-pengguna", "Kelola Pengguna", UserCog, bolehHR],
               ["pengumuman", "Kirim Pengumuman", Megaphone, bolehHR],
             ] as const
           )

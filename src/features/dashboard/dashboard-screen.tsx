@@ -324,7 +324,7 @@ export function DashboardScreen({
               [
                 onBukaKelolaPengguna && {
                   id: "kelola",
-                  judul: "Kelola Pengguna",
+                  judul: "Database Anggota",
                   ikon: Users,
                   render: () => <KartuKelolaPengguna onBuka={onBukaKelolaPengguna} />,
                 },

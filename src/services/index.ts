@@ -2097,6 +2097,8 @@ export type LaporanVideo = {
   keyword: string | null;
   tanggal_wib: string;
   dibuat_pada: string;
+  /** otomatis (unggahan aplikasi) | manual | manual-acc | admin */
+  sumber?: string | null;
 };
 
 /** Rincian capaian satu platform (aturan KPI 5x6). */
@@ -2119,7 +2121,7 @@ export type BalasanLaporanVideo = {
   kpi_tercapai: boolean;
   per_platform: RincianPlatformKpi[];
   dibebaskan: string | null;
-  /** Laporan manual (link) yang menunggu ACC HR / ditolak 7 hari terakhir. */
+  /** Selalu kosong sejak ACC HR ditiadakan (23 Sep 2026) — sisa klien lama. */
   menunggu?: LaporanPending[];
   /**
    * Unggahan lewat aplikasi HARI INI yang tautannya belum tercatat per

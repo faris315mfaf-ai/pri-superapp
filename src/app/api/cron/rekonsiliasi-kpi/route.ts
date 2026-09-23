@@ -10,6 +10,7 @@
 import { supabase } from "@/lib/supabase";
 import { BATAS_UMUR_JAM, belumPasti, rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { uploadPostSiap } from "@/lib/upload-post";
+import { luluskanLaporanTertahan } from "@/lib/laporan-tertahan";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -26,7 +27,14 @@ export async function GET(request: Request) {
   const ua = (request.headers.get("user-agent") ?? "").toLowerCase();
   const sah = rahasia ? tokenDari(request) === rahasia : ua.includes("vercel-cron");
   if (!sah) return Response.json({ error: "Tidak berwenang." }, { status: 403 });
-  if (!uploadPostSiap()) return Response.json({ jalan: false, alasan: "upload-post belum tersambung" });
+  // ACC HR ditiadakan (23 Sep 2026): sisa antrean laporan manual lama
+  // diluluskan sedikit demi sedikit (50 per putaran, berurutan) — sengaja
+  // dicicil supaya tidak membebani database sekaligus. Jalan walau
+  // upload-post belum tersambung karena tidak bergantung padanya.
+  const antreanLamaDiluluskan = await luluskanLaporanTertahan(undefined, 50);
+  if (!uploadPostSiap()) {
+    return Response.json({ jalan: false, alasan: "upload-post belum tersambung", antrean_lama_diluluskan: antreanLamaDiluluskan });
+  }
 
   const mulai = Date.now();
   const db = supabase();
@@ -77,7 +85,7 @@ export async function GET(request: Request) {
     diproses += 1;
   }
   return Response.json(
-    { jalan: true, unggahan_diperiksa: (posts ?? []).length, pengguna_perlu: antre.length, pengguna_diproses: diproses, laporan_baru: baru, sisa: antre.length - diproses, durasi_ms: Date.now() - mulai },
+    { jalan: true, antrean_lama_diluluskan: antreanLamaDiluluskan, unggahan_diperiksa: (posts ?? []).length, pengguna_perlu: antre.length, pengguna_diproses: diproses, laporan_baru: baru, sisa: antre.length - diproses, durasi_ms: Date.now() - mulai },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

@@ -18,6 +18,7 @@ import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { beriKoin } from "@/lib/koin";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
+import { luluskanLaporanTertahan } from "@/lib/laporan-tertahan";
 import { namaKolomHilang } from "@/lib/kolom-struktur";
 import { solusiGagal } from "@/lib/batas-caption";
 import {
@@ -245,7 +246,11 @@ export async function GET(request: Request) {
         dibuat_pada: String(p.dibuat_pada),
       };
     });
-    const pilihLaporan = "id, platform, url_video, keyword, tanggal_wib, dibuat_pada";
+    // ACC HR DITIADAKAN (23 Sep 2026): sisa antrean lama milik orang ini
+    // diluluskan dulu supaya ikut terbaca di bawah dan tak ada lagi status
+    // "menunggu HR" di layar. Kosong = satu kueri ringan saja.
+    await luluskanLaporanTertahan(uid, 50);
+    const pilihLaporan = "id, platform, url_video, keyword, tanggal_wib, dibuat_pada, sumber";
     const [{ data: lvMentah, error: lvError }, jenisBebas, targetKu, bannedKu] = await Promise.all([
       db
         .from("laporan_video")
@@ -257,12 +262,12 @@ export async function GET(request: Request) {
       targetKpiUser(Number(user.id)),
       bannedAktifPerUser([Number(user.id)]),
     ]);
-    let data = lvMentah as { id: unknown; platform: string; url_video: string; keyword?: string | null; tanggal_wib: string; dibuat_pada: string }[] | null;
+    let data = lvMentah as { id: unknown; platform: string; url_video: string; keyword?: string | null; tanggal_wib: string; dibuat_pada: string; sumber?: string | null }[] | null;
     let error = lvError;
     if (error && namaKolomHilang(error.message) === "keyword") {
       const ulang = await db
         .from("laporan_video")
-        .select("id, platform, url_video, tanggal_wib, dibuat_pada")
+        .select("id, platform, url_video, tanggal_wib, dibuat_pada, sumber")
         .eq("user_id", Number(user.id))
         .eq("tanggal_wib", tanggal)
         .order("id");
@@ -274,17 +279,6 @@ export async function GET(request: Request) {
       throw new Error("Gagal memuat laporan video.");
     }
     const daftar = (data ?? []).map((d) => ({ ...d, id: String(d.id) }));
-
-    // Laporan MANUAL yang masih menunggu ACC HR (+ yang ditolak 7 hari
-    // terakhir supaya alasannya terbaca) — TIDAK dihitung KPI (2 Sep 2026).
-    const batasTolak = new Date(Date.now() - 7 * 86_400_000).toISOString();
-    const { data: pending } = await db
-      .from("laporan_video_pending")
-      .select("id, platform, url_video, keyword, tanggal_wib, dibuat_pada, status, catatan")
-      .eq("user_id", Number(user.id))
-      .or(`status.eq.menunggu,and(status.eq.ditolak,diputus_pada.gte.${batasTolak})`)
-      .order("dibuat_pada", { ascending: false })
-      .limit(50);
 
     // Aturan ketat 5x6: hitung per platform, platform banned dikecualikan.
     const perPlatform = new Map<string, number>();
@@ -325,7 +319,8 @@ export async function GET(request: Request) {
       tanggal,
       hari_ini: tanggalWibSekarang(),
       data: daftar,
-      menunggu: (pending ?? []).map((d) => ({ ...d, id: String(d.id) })),
+      // Tetap dikirim (kosong) supaya klien lama tidak rusak.
+      menunggu: [],
       unggahan,
       // kpi_target kini TOTAL (per-platform x platform aktif) supaya
       // tampilan "x/target" langsung benar tanpa mengubah pemanggil lama.
@@ -410,11 +405,9 @@ export async function POST(request: Request) {
     const db = supabase();
     const tanggal = tanggalWibSekarang();
 
-    // ALUR BARU (2 Sep 2026): laporan MANUAL lewat link TIDAK langsung
-    // dihitung KPI. Ia masuk `laporan_video_pending` (menunggu ACC HR);
-    // disetujui → disalin ke laporan_video oleh /api/tvr/persetujuan.
-    // Latar belakang: deteksi otomatis kadang luput, jadi jalur manual
-    // tetap ada — tapi harus diverifikasi HR supaya tak disalahgunakan.
+    // Laporan MANUAL langsung tercatat di laporan_video dan langsung
+    // dihitung KPI (tanpa ACC HR sejak 12 Sep 2026; antrean lamanya
+    // ditiadakan total 23 Sep 2026 — lihat lib/laporan-tertahan).
     async function ajukan(platformMentah: string, urlMentah: string, keywordMentah?: string) {
       const { platform, urlBersih } = validasiLink(platformMentah, urlMentah);
       // KATEGORI WAJIB (12 Sep 2026). Tanpa ini video tidak bisa
@@ -428,7 +421,7 @@ export async function POST(request: Request) {
       }
       // Kategori SELESAI / nonaktif / tidak dikenal ditolak (13 Sep 2026).
       await pastikanKategoriBolehDipakai(kategori);
-      // Sudah tercatat (otomatis/ACC sebelumnya)? Jangan minta ACC ulang.
+      // Sudah tercatat (otomatis/laporan sebelumnya)? Jangan dicatat dobel.
       const { data: sudahAda } = await db
         .from("laporan_video")
         .select("id")
@@ -436,14 +429,6 @@ export async function POST(request: Request) {
         .eq("url_video", urlBersih)
         .maybeSingle();
       if (sudahAda) throw Object.assign(new Error("sudah tercatat di KPI Anda"), { status: 409 });
-      const { data: sudahMenunggu } = await db
-        .from("laporan_video_pending")
-        .select("id")
-        .eq("user_id", Number(user.id))
-        .eq("url_video", urlBersih)
-        .eq("status", "menunggu")
-        .maybeSingle();
-      if (sudahMenunggu) throw Object.assign(new Error("sudah menunggu ACC HR"), { status: 409 });
       // TANPA ACC HR (12 Sep 2026): laporan langsung masuk laporan_video
       // dan langsung dihitung KPI. Meja ACC dulu dibuat karena deteksi
       // otomatis kadang luput dan HR ingin memeriksa link satu per satu;

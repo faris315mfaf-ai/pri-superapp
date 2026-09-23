@@ -184,7 +184,7 @@ export async function POST(request: Request) {
       // tidak boleh terlewat.
       await kirimKabar({
         judul: "Pendaftar baru tanpa verifikasi email",
-        isi: `${nama} mendaftar, tetapi OTP email gagal terkirim. Periksa dan setujui manual di Kelola Pengguna bila memang sah.`,
+        isi: `${nama} mendaftar, tetapi OTP email gagal terkirim. Periksa dan setujui manual di HR Center → Database Anggota bila memang sah.`,
         kategori: "peringatan",
         jenis_peristiwa: "pendaftar_tanpa_verifikasi",
         untukRole: ["admin_hr", "super_admin", "master"],

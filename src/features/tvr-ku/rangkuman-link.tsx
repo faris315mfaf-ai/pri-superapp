@@ -7,10 +7,17 @@
 // + kotak kendala → Generate → teks BISA DIEDIT/DITULIS ULANG (6 Sep 2026)
 // → Salin / Bagikan ke WhatsApp (pengguna memilih grup tujuan di aplikasi
 // WhatsApp-nya sendiri). Tidak ada pengiriman otomatis lewat bot.
+//
+// 23 Sep 2026: setelah Generate, tombol bagikan langsung digulir ke depan
+// mata; menekan "Bagikan ke WhatsApp" membuka konfirmasi dulu — pengguna
+// menyatakan sudah memeriksa semua link. Laporan manual kini langsung
+// dihitung tanpa ACC HR, jadi pemeriksaan terakhir ada di tangan pelapor.
 // ============================================================
 
-import { useEffect, useState } from "react";
-import { Copy, FileText, Loader2, RefreshCw, Send, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { CheckSquare, Copy, FileText, Loader2, RefreshCw, Send, ShieldCheck, Sparkles, Square } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { PlatformIcon } from "@/components/platform-icon";
 import { toast } from "@/hooks/use-app-store";
@@ -53,6 +60,10 @@ export function RangkumanLink({ userId, judul }: { /** Rekap anggota lain (admin
   const [data, setData] = useState<DataRangkuman | null>(null);
   const [kendala, setKendala] = useState("");
   const [teks, setTeks] = useState("");
+  const [konfirmasi, setKonfirmasi] = useState(false);
+  // Naik tiap Generate → memicu gulir ke tombol bagikan (lihat efek di bawah).
+  const [kaliGenerate, setKaliGenerate] = useState(0);
+  const tombolBagikanRef = useRef<HTMLDivElement>(null);
   // "Memuat" diturunkan dari state: data belum ada / masih milik tanggal lain.
   const memuat = data === null || data.tanggal !== tanggal;
 
@@ -88,8 +99,19 @@ export function RangkumanLink({ userId, judul }: { /** Rekap anggota lain (admin
   function generate() {
     if (!data) return;
     setTeks(susunLaporan(data, kendala));
+    setKaliGenerate((n) => n + 1);
     toast("sukses", "Laporan tersusun", "Periksa, lalu Salin atau Bagikan ke WhatsApp.");
   }
+
+  // Tombol bagikan muncul di bawah teks yang panjang — tanpa digulir,
+  // pengguna di ponsel tidak melihat bahwa tombolnya sudah ada.
+  useEffect(() => {
+    if (kaliGenerate === 0) return;
+    const el = tombolBagikanRef.current;
+    if (!el) return;
+    const halus = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: halus ? "smooth" : "auto", block: "center" });
+  }, [kaliGenerate]);
 
   async function salin() {
     try {
@@ -140,7 +162,7 @@ export function RangkumanLink({ userId, judul }: { /** Rekap anggota lain (admin
       </div>
       <p className="mt-1 text-[11px] leading-relaxed text-teks-sekunder">
         Semua tautan video {data?.nama ? `akun ${data.nama}` : "Anda"} pada tanggal itu dikumpulkan per sosmed (unggahan lewat aplikasi otomatis tercatat,
-        laporan manual ikut setelah disetujui HR), lalu disusun jadi laporan siap kirim ke grup WhatsApp.
+        laporan manual langsung ikut), lalu disusun jadi laporan siap kirim ke grup WhatsApp.
       </p>
 
       {/* Ringkasan per platform */}
@@ -158,7 +180,6 @@ export function RangkumanLink({ userId, judul }: { /** Rekap anggota lain (admin
       </div>
       <p className="mt-1.5 text-[11px] text-teks-sekunder">
         {memuat ? "Memuat tautan…" : `${jumlah} tautan tercatat${data?.nama ? ` · ${data.nama}` : ""}`}
-        {data && data.menunggu.length > 0 ? ` · ${data.menunggu.length} laporan manual masih menunggu ACC HR (belum masuk rangkuman)` : ""}
       </p>
 
       <textarea
@@ -190,7 +211,14 @@ export function RangkumanLink({ userId, judul }: { /** Rekap anggota lain (admin
             className="glass-input mt-3 w-full rounded-xl px-3 py-2 font-mono text-[11.5px] leading-relaxed whitespace-pre text-teks-utama"
           />
           <p className="mt-1 text-[10.5px] text-teks-sekunder">Teks di atas bisa Anda ubah atau tambah langsung sebelum disalin/dibagikan. Tekan Generate lagi untuk menyusun ulang dari data.</p>
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <motion.div
+            key={kaliGenerate}
+            ref={tombolBagikanRef}
+            className="mt-2 grid scroll-mt-4 grid-cols-2 gap-2"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
+          >
             <button
               type="button"
               onClick={() => void salin()}
@@ -200,18 +228,138 @@ export function RangkumanLink({ userId, judul }: { /** Rekap anggota lain (admin
             </button>
             <button
               type="button"
-              onClick={() => void bagikan()}
+              onClick={() => setKonfirmasi(true)}
               className="btn-tekan flex h-11 items-center justify-center gap-1.5 rounded-xl text-[12.5px] font-bold text-white"
               style={{ background: "linear-gradient(135deg, #25D366, #128C7E)" }}
             >
               <Send className="h-4 w-4" /> Bagikan ke WhatsApp
             </button>
-          </div>
+          </motion.div>
           <p className="mt-1.5 flex items-center gap-1 text-[10.5px] text-teks-sekunder">
             <RefreshCw className="h-3 w-3" /> Setelah menekan Bagikan, pilih grup tujuan di WhatsApp Anda.
           </p>
         </>
       ) : null}
+      {/* Portal ke body: GlassCard memakai backdrop-filter, yang membuat
+          `position: fixed` di dalamnya menempel ke kartu, bukan ke layar. */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {konfirmasi && (
+              <KonfirmasiBagikan
+                jumlah={jumlah}
+                onBatal={() => setKonfirmasi(false)}
+                onYakin={() => {
+                  setKonfirmasi(false);
+                  // Dipanggil langsung di klik (tanpa await sebelumnya) supaya
+                  // izin "gerakan pengguna" untuk navigator.share masih berlaku.
+                  void bagikan();
+                }}
+              />
+            )}
+          </AnimatePresence>,
+          document.body,
+        )}
     </GlassCard>
+  );
+}
+
+// ------------------------------------------------------------
+// KonfirmasiBagikan — pernyataan terakhir sebelum laporan dibagikan.
+// Centang wajib: tombol bagikan baru aktif setelah pengguna menyatakan
+// sudah memeriksa semuanya, bukan sekadar menekan "OK" tanpa membaca.
+// ------------------------------------------------------------
+
+function KonfirmasiBagikan({
+  jumlah,
+  onBatal,
+  onYakin,
+}: {
+  jumlah: number;
+  onBatal: () => void;
+  onYakin: () => void;
+}) {
+  const [yakin, setYakin] = useState(false);
+
+  useEffect(() => {
+    const tutup = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onBatal();
+    };
+    window.addEventListener("keydown", tutup);
+    return () => window.removeEventListener("keydown", tutup);
+  }, [onBatal]);
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-6 backdrop-blur-md"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      onClick={onBatal}
+    >
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="judul-konfirmasi-bagikan"
+        className="glass-strong w-full max-w-[340px] rounded-2xl p-5"
+        initial={{ scale: 0.95, opacity: 0, y: 12 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.96, opacity: 0, y: 8 }}
+        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-500/15 text-amber-500">
+          <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <h3 id="judul-konfirmasi-bagikan" className="mt-3 font-heading text-base font-bold text-teks-utama">
+          Sudah dipastikan benar?
+        </h3>
+        <p className="mt-1 text-[12px] leading-relaxed text-teks-sekunder">
+          Laporan berisi <b className="text-teks-utama">{jumlah} tautan</b> dan langsung terhitung KPI tanpa
+          diperiksa HR. Sebelum dibagikan, pastikan:
+        </p>
+        <ul className="mt-2 flex flex-col gap-1 text-[11.5px] leading-snug text-teks-utama">
+          <li>• Setiap link membuka video Anda sendiri.</li>
+          <li>• Link berada di bagian sosmed yang benar.</li>
+          <li>• Tidak ada link salah, dobel, atau yang terlewat.</li>
+          <li>• Nama, tanggal, dan kendala sudah sesuai.</li>
+        </ul>
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={yakin}
+          onClick={() => setYakin((v) => !v)}
+          className="glass-soft btn-tekan mt-3 flex w-full items-start gap-2 rounded-xl px-3 py-2.5 text-left"
+        >
+          {yakin ? (
+            <CheckSquare className="mt-px h-4 w-4 shrink-0 text-sukses" aria-hidden="true" />
+          ) : (
+            <Square className="mt-px h-4 w-4 shrink-0 text-teks-sekunder" aria-hidden="true" />
+          )}
+          <span className="text-[11.5px] leading-snug font-semibold text-teks-utama">
+            Saya sudah memeriksa dan memastikan semua isi laporan ini benar.
+          </span>
+        </button>
+        <div className="mt-4 flex gap-2.5">
+          <button
+            type="button"
+            onClick={onBatal}
+            className="glass btn-tekan flex-1 rounded-xl py-2.5 text-[13px] font-semibold text-teks-utama"
+          >
+            Periksa lagi
+          </button>
+          <button
+            type="button"
+            onClick={onYakin}
+            disabled={!yakin}
+            className="btn-tekan flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold text-white disabled:opacity-45"
+            style={{ background: "linear-gradient(135deg, #25D366, #128C7E)" }}
+          >
+            <Send className="h-4 w-4" aria-hidden="true" /> Bagikan
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }

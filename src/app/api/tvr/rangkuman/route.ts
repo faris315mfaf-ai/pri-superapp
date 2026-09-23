@@ -1,7 +1,7 @@
 // /api/tvr/rangkuman — RANGKUMAN LINK HARIAN (TVR Saya, 3 Sep 2026).
 // Semua tautan video yang tercatat atas nama pengguna pada satu tanggal WIB
 // (laporan_video: otomatis dari unggahan aplikasi + laporan manual yang
-// disetujui), dikelompokkan per sosmed — bahan laporan WhatsApp.
+// langsung tercatat), dikelompokkan per sosmed — bahan laporan WhatsApp.
 // GET ?tanggal=YYYY-MM-DD (bawaan: hari ini WIB)
 //
 // PERBAIKAN 4 Sep 2026 (bug: "video sudah diupload tapi laporan kosong"):
@@ -16,6 +16,7 @@ import { bungkus } from "@/lib/api-helper";
 import { targetKendali, userEfektifTvr } from "@/lib/sebagai";
 import { pastikanMasuk } from "@/lib/sesi";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
+import { luluskanLaporanTertahan } from "@/lib/laporan-tertahan";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -57,22 +58,16 @@ export async function GET(request: Request) {
       after(() => rekonsiliasiKpiOtomatis(uid, { anggaranMs: ANGGARAN_REKONSILIASI_MS }));
     }
 
-    const [{ data: tercatat }, { data: pending }] = await Promise.all([
-      db
-        .from("laporan_video")
-        .select("platform, url_video, dibuat_pada")
-        .eq("user_id", uid)
-        .eq("tanggal_wib", tanggal)
-        .order("dibuat_pada", { ascending: true })
-        .limit(500),
-      db
-        .from("laporan_video_pending")
-        .select("platform, url_video")
-        .eq("user_id", uid)
-        .eq("tanggal_wib", tanggal)
-        .eq("status", "menunggu")
-        .limit(100),
-    ]);
+    // ACC HR ditiadakan (23 Sep 2026): antrean lama orang ini diluluskan
+    // dulu supaya link manualnya ikut masuk rangkuman.
+    await luluskanLaporanTertahan(uid, 50);
+    const { data: tercatat } = await db
+      .from("laporan_video")
+      .select("platform, url_video, dibuat_pada")
+      .eq("user_id", uid)
+      .eq("tanggal_wib", tanggal)
+      .order("dibuat_pada", { ascending: true })
+      .limit(500);
 
     const perPlatform: Record<string, string[]> = {};
     for (const p of URUTAN_PLATFORM) perPlatform[p] = [];
@@ -91,10 +86,8 @@ export async function GET(request: Request) {
       tanggal,
       per_platform: perPlatform,
       jumlah,
-      menunggu: (pending ?? []).map((b) => ({
-        platform: String(b.platform ?? ""),
-        url: String(b.url_video ?? ""),
-      })),
+      // Tetap dikirim (kosong) supaya klien lama tidak rusak.
+      menunggu: [] as { platform: string; url: string }[],
     };
   });
 }

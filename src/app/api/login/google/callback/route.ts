@@ -190,7 +190,7 @@ export async function GET(request: Request) {
       // Pengurus dikabari supaya pendaftar tidak menunggu terlalu lama.
       await kirimKabar({
         judul: "Pendaftar baru lewat Google",
-        isi: `${info.name || email} (${email}) mendaftar via Google — menunggu persetujuan di Kelola Pengguna.`,
+        isi: `${info.name || email} (${email}) mendaftar via Google — menunggu persetujuan di HR Center → Database Anggota.`,
         kategori: "peringatan",
         jenis_peristiwa: "keamanan",
         untukRole: ["admin_hr", "super_admin", "master"],

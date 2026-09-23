@@ -66,7 +66,6 @@ import {
   type BalasanLaporanVideo,
   type KerjaKpi,
   type LaporanVideo,
-  type LaporanPending,
   type UnggahanMenunggu,
   kirimLaporanBatch,
   getKeywordWajib,
@@ -311,6 +310,30 @@ function ModalWebsite({
 }
 
 // ------------------------------------------------------------
+// CatatanCrosscheck — pengingat memeriksa link (23 Sep 2026). Laporan
+// kini LANGSUNG dihitung KPI tanpa diperiksa HR, jadi ketelitian
+// memeriksa link pindah ke pelapor sendiri.
+// ------------------------------------------------------------
+
+function CatatanCrosscheck({ className }: { className?: string }) {
+  return (
+    <div
+      role="note"
+      className={cn(
+        "flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2",
+        className,
+      )}
+    >
+      <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" aria-hidden="true" />
+      <p className="text-[10.5px] leading-snug text-teks-utama">
+        <b>Crosscheck selalu.</b> Laporan langsung masuk KPI tanpa diperiksa HR — pastikan tiap
+        link benar: buka videonya, cek akunnya milik Anda dan sosmednya sesuai.
+      </p>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------
 // ModalLaporanBatch — laporkan video: satu link ATAU banyak sekaligus
 // (spek 3.3). "Add" menumpuk link ke daftar; "Simpan" mengirim semua.
 // Platform tiap link ditebak server dari alamatnya.
@@ -416,6 +439,7 @@ function ModalLaporanBatch({
           Pilih <b>kategori</b> videonya di kiri dan tempel{" "}
           <b>link video</b> di kanan, lalu tekan + untuk menumpuk beberapa.
         </p>
+        <CatatanCrosscheck className="mt-2.5" />
         {keywords.length === 0 && (
           <p className="mt-1 text-[10.5px] leading-snug text-teks-sekunder">
             Belum ada kategori dari tim TV Rakyat Official. Hubungi mereka
@@ -574,7 +598,6 @@ export function TvrKuScreen({
   const bolehAccKomen = adalahPalugodam(userAsli);
   const [akun, setAkun] = useState<AkunTvr[] | null>(null);
   const [laporan, setLaporan] = useState<LaporanVideo[]>([]);
-  const [menunggu, setMenunggu] = useState<LaporanPending[]>([]);
   // Unggahan hari ini yang tautannya belum tercatat (10 Sep 2026).
   const [unggahan, setUnggahan] = useState<UnggahanMenunggu[]>([]);
   const [kpiTarget, setKpiTarget] = useState(5);
@@ -624,7 +647,6 @@ export function TvrKuScreen({
               kpi_tercapai: false,
               per_platform: [],
               dibebaskan: null,
-              menunggu: [] as LaporanPending[],
               unggahan: [] as UnggahanMenunggu[],
             } satisfies BalasanLaporanVideo;
           }),
@@ -634,7 +656,6 @@ export function TvrKuScreen({
         if (!hidup) return;
         setAkun(a);
         setLaporan(l.data);
-        setMenunggu(l.menunggu ?? []);
         setUnggahan(l.unggahan ?? []);
         setKpiTarget(l.kpi_target);
         setKpiPersen(l.kpi_persen ?? null);
@@ -1162,6 +1183,7 @@ export function TvrKuScreen({
           </button>
           </div>
         </div>
+        <CatatanCrosscheck className="mt-2" />
         {unggahan.length > 0 && (
           <div className="mt-2 flex flex-col gap-2">
             {unggahan.map((u) => (
@@ -1224,7 +1246,9 @@ export function TvrKuScreen({
                         {l.keyword}
                       </span>
                     )}
-                    dilaporkan {jamWIB(l.dibuat_pada)}
+                    {l.sumber === "otomatis" ? "otomatis dari unggahan" : l.sumber === "admin" ? "ditambah admin" : "laporan manual"}
+                    {" · "}
+                    {jamWIB(l.dibuat_pada)}
                   </p>
                 </div>
                 <a
@@ -1260,49 +1284,6 @@ export function TvrKuScreen({
                 </button>
               </GlassCard>
             ))}
-          </div>
-        )}
-        {menunggu.length > 0 && (
-          <div className="mt-3">
-            <p className="flex items-center gap-1.5 text-[11px] font-bold text-teks-sekunder">
-              <Hourglass className="h-3.5 w-3.5 text-amber-500" aria-hidden="true" />
-              Laporan lama yang masih tercatat menunggu — belum dihitung KPI
-            </p>
-            <div className="mt-1.5 flex flex-col gap-2">
-              {menunggu.map((m) => (
-                <GlassCard key={m.id} className="flex items-center gap-3 p-3">
-                  <PlatformIcon platform={m.platform} size={15} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-semibold text-teks-utama">{m.url_video}</p>
-                    <p className="mt-0.5 text-[10px] text-teks-sekunder">
-                      {m.status === "ditolak"
-                        ? `ditolak${m.catatan ? `: ${m.catatan}` : ""}`
-                        : `dikirim ${jamWIB(m.dibuat_pada)}`}
-                    </p>
-                  </div>
-                  <StatusBadge
-                    label={m.status === "ditolak" ? "ditolak" : "menunggu HR"}
-                    warna={m.status === "ditolak" ? "merah" : "kuning"}
-                  />
-                  {m.status === "menunggu" && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void hapusLaporanVideo(m.id, true)
-                          .then(() => setMuatUlang((n) => n + 1))
-                          .catch((e) =>
-                            toast("error", "Gagal menarik", e instanceof Error ? e.message : ""),
-                          );
-                      }}
-                      aria-label="Tarik laporan"
-                      className="btn-tekan p-1.5 text-teks-sekunder/70"
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  )}
-                </GlassCard>
-              ))}
-            </div>
           </div>
         )}
         </SeksiLipat>
