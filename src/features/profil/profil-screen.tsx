@@ -345,6 +345,14 @@ function BarisPengaturan({
 // ProfilScreen
 // ------------------------------------------------------------
 
+// Seksi profil yang disembunyikan (24 Sep 2026, permintaan user) — sakelar,
+// bukan penghapusan: kodenya tetap, cukup ubah ke true untuk memunculkan.
+const TAMPIL_PROFIL = {
+  videoSaya: false,
+  momenTerbaik: false,
+  petRobot: false,
+} as const;
+
 export function ProfilScreen({
   user,
   onLogout,
@@ -698,7 +706,7 @@ export function ProfilScreen({
 
       {/* TV Rakyat Saya di profil (spek 1.15): username + video embed */}
       {momen &&
-        (momen.akun_tvr.length > 0 || momen.video_terbaru.length > 0) && (
+        (momen.akun_tvr.length > 0 || (TAMPIL_PROFIL.videoSaya && momen.video_terbaru.length > 0)) && (
           <FadeInUp delay={0.05}>
             {momen.akun_tvr.length > 0 && (
               <>
@@ -726,7 +734,7 @@ export function ProfilScreen({
                 </div>
               </>
             )}
-            {momen.video_terbaru.length > 0 && (
+            {TAMPIL_PROFIL.videoSaya && momen.video_terbaru.length > 0 && (
               <>
                 <SectionTitle judul="Video Saya" className="mt-5" />
                 <VideoEmbedMini video={momen.video_terbaru} />
@@ -736,6 +744,7 @@ export function ProfilScreen({
         )}
 
       {/* Momen Terbaik PRI (spek 4.3) */}
+      {TAMPIL_PROFIL.momenTerbaik && (
       <FadeInUp delay={0.06}>
         <SectionTitle judul="Momen Terbaik PRI" className="mt-6" />
         {momen === null ? (
@@ -748,9 +757,10 @@ export function ProfilScreen({
           />
         )}
       </FadeInUp>
+      )}
 
       {/* Pet Robot — terbuka untuk semua pengguna (3 Sep 2026) */}
-      {onBukaPet && (
+      {TAMPIL_PROFIL.petRobot && onBukaPet && (
         <FadeInUp delay={0.02}>
           <button
             type="button"
