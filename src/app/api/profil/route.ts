@@ -16,7 +16,7 @@ import {
   userDariTokenLonggar,
   type BarisUser,
 } from "@/lib/sesi";
-import { DIVISI_SAYAP, pastikanStrukturSah } from "@/lib/struktur";
+import { DIVISI_SAYAP, pastikanStrukturSah, subTersimpan } from "@/lib/struktur";
 
 import { nilaiSayapTambahan } from "@/lib/sayap";
 import { kolomStrukturLainAda } from "@/lib/kolom-struktur";
@@ -259,7 +259,7 @@ export async function POST(request: Request) {
     const panggilan = (body.nama_panggilan ?? "").trim();
     const tanggalLahir = (body.tanggal_lahir ?? "").trim();
     const divisi = (body.divisi ?? "").trim();
-    const subDivisi = (body.sub_divisi ?? "").trim();
+    const subDivisi = subTersimpan(divisi, (body.sub_divisi ?? "").trim());
 
     if (nama.length < 2) {
       throw Object.assign(new Error("Nama minimal 2 karakter."), { status: 400 });

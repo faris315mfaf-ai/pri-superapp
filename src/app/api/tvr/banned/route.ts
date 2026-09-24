@@ -11,7 +11,8 @@
 import { supabase } from "@/lib/supabase";
 import { userEfektifTvr } from "@/lib/sebagai";
 import { bungkus } from "@/lib/api-helper";
-import { adalahHR, DIVISI_HR } from "@/lib/hr";
+import { adalahHR } from "@/lib/hr";
+import { penerimaKabarHR } from "@/lib/penerima-hr";
 import { userDariToken } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
@@ -169,22 +170,6 @@ export async function POST(request: Request) {
 
     return { sukses: true, id: String(data.id) };
   });
-}
-
-/** Anggota Divisi HR + master yang aktif — pemutus permohonan blokir. */
-async function penerimaKabarHR(): Promise<number[]> {
-  const { data, error } = await supabase()
-    .from("app_user")
-    .select("id")
-    .or(`divisi.eq."${DIVISI_HR}",role.eq.master`)
-    .eq("aktif", true)
-    .eq("status", "aktif")
-    .limit(200);
-  if (error) {
-    console.error("[tvr/banned] penerima kabar:", error.message);
-    return [];
-  }
-  return (data ?? []).map((u) => Number(u.id)).filter((n) => n > 0);
 }
 
 export async function PATCH(request: Request) {

@@ -32,7 +32,37 @@ export const DIVISI = [
   // mendapat alur unggah+jadwal sendiri di modul TV Rakyat Saya,
   // setara TV Rakyat Official tapi ke sosmed pribadi masing-masing.
   "Divisi PALUGODAM",
+  // Kepengurusan daerah (24 Sep 2026): dipilih saat mendaftar. Nama
+  // daerahnya (mis. "Jawa Barat") disimpan di sub_divisi, isian bebas.
+  "DPD",
+  "DPC",
 ] as const;
+
+/** Dewan Pimpinan Daerah / Cabang — sub_divisi = nama daerahnya (bebas). */
+export const DIVISI_DPD = "DPD";
+export const DIVISI_DPC = "DPC";
+/** Panjang nama DPD/DPC yang diterima. */
+export const NAMA_DAERAH_MIN = 2;
+export const NAMA_DAERAH_MAKS = 80;
+
+/** true bila divisi ini DPD/DPC (sub-divisinya isian bebas, bukan pilihan). */
+export function adalahDaerah(divisi?: string | null): boolean {
+  const d = (divisi ?? "").trim();
+  return d === DIVISI_DPD || d === DIVISI_DPC;
+}
+
+/**
+ * Rapikan nama daerah ketikan orang: spasi berlebih dibuang, awalan
+ * "DPD"/"DPC" yang ikut diketik dilepas (label menambahkannya sendiri).
+ */
+export function rapikanNamaDaerah(nama: string): string {
+  return nama
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^(dpd|dpc)(?![a-z])[\s.:-]*/i, "")
+    .trim()
+    .slice(0, NAMA_DAERAH_MAKS);
+}
 
 /** Divisi produksi konten mandiri (fitur khusus di TV Rakyat Saya). */
 export const DIVISI_PALUGODAM = "Divisi PALUGODAM";
@@ -47,16 +77,22 @@ export const KATEGORI_STRUKTUR = [
   { kunci: "zona", label: "Zona", keterangan: "Wilayah kerja partai" },
   { kunci: "sayap", label: "Sayap", keterangan: "Organisasi sayap partai" },
   { kunci: "divisi", label: "Divisi", keterangan: "Divisi kerja pusat" },
+  { kunci: "dpd", label: "DPD", keterangan: "Dewan Pimpinan Daerah" },
+  { kunci: "dpc", label: "DPC", keterangan: "Dewan Pimpinan Cabang" },
 ] as const;
 export type KategoriStruktur = (typeof KATEGORI_STRUKTUR)[number]["kunci"];
 /** Divisi kerja biasa (tanpa Zona & Sayap yang punya kategori sendiri). */
-export const DIVISI_BIASA = DIVISI.filter((d) => d !== DIVISI_ZONA && d !== DIVISI_SAYAP);
+export const DIVISI_BIASA = DIVISI.filter(
+  (d) => d !== DIVISI_ZONA && d !== DIVISI_SAYAP && d !== "DPD" && d !== "DPC",
+);
 /** Kategori dari nilai `divisi` tersimpan; null bila belum memilih. */
 export function kategoriStruktur(divisi?: string | null): KategoriStruktur | null {
   const d = (divisi ?? "").trim();
   if (!d) return null;
   if (d === DIVISI_ZONA) return "zona";
   if (d === DIVISI_SAYAP) return "sayap";
+  if (d === DIVISI_DPD) return "dpd";
+  if (d === DIVISI_DPC) return "dpc";
   return "divisi";
 }
 
@@ -143,9 +179,14 @@ export function adalahPengurusSayap(u: {
   return (u.divisi ?? "").trim() === DIVISI_SAYAP && Boolean((u.jabatan_sayap ?? "").trim());
 }
 
+/** Bentuk sub-divisi yang disimpan: nama DPD/DPC dirapikan, lainnya apa adanya. */
+export function subTersimpan(divisi: string, sub: string): string {
+  return adalahDaerah(divisi) ? rapikanNamaDaerah(sub) : sub;
+}
+
 /** true bila divisi ini mewajibkan pilihan sub-divisi. */
 export function butuhSubDivisi(divisi: string): boolean {
-  return divisi === "Divisi Sayap Partai" || divisi === "Divisi Zona";
+  return divisi === "Divisi Sayap Partai" || divisi === "Divisi Zona" || adalahDaerah(divisi);
 }
 
 /**
@@ -174,6 +215,14 @@ export function pastikanStrukturSah(
   if (!divisi) return; // belum memilih itu boleh; yang salah yang ditolak
   if (!(DIVISI as readonly string[]).includes(divisi)) {
     throw Object.assign(new Error("Divisi tidak dikenal."), { status: 400 });
+  }
+  // DPD/DPC: nama daerah isian bebas, bukan dari daftar.
+  if (adalahDaerah(divisi)) {
+    const n = rapikanNamaDaerah(subDivisi);
+    if (n.length < NAMA_DAERAH_MIN) {
+      throw Object.assign(new Error(`Isi nama ${divisi}-nya (mis. Jawa Barat).`), { status: 400 });
+    }
+    return;
   }
   const pilihan = pilihanSubDivisi(
     divisi,
@@ -329,6 +378,8 @@ export function deskripsiStruktur(u: {
   // "Kepala Zona Sumatera", "Anggota Sayap PERI" — bukan "Divisi Zona · …".
   if (d === DIVISI_ZONA) return `${awalan}Zona${sub ? ` ${sub}` : ""}`;
   if (d === DIVISI_SAYAP) return `Anggota Sayap${sub ? ` ${sub}` : ""}`;
+  // DPD/DPC dibaca sebagai nama kepengurusannya: "DPD Jawa Barat".
+  if (adalahDaerah(d)) return `${awalan}${d}${sub ? ` ${sub}` : ""}`;
   return `${awalan}${d}${sub ? ` · ${sub}` : ""}`;
 }
 

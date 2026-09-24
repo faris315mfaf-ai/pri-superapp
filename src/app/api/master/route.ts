@@ -38,7 +38,7 @@ import { buatHashSandi } from "@/lib/sandi";
 import { AKTIVITAS_KOIN } from "@/lib/koin";
 
 import { JABATAN_PARTAI, KUOTA_JABATAN } from "@/lib/jabatan";
-import { deskripsiStruktur, DIVISI_SAYAP, jabatanSayapSah, pastikanStrukturSah } from "@/lib/struktur";
+import { deskripsiStruktur, DIVISI_SAYAP, jabatanSayapSah, pastikanStrukturSah, subTersimpan } from "@/lib/struktur";
 import { nilaiSayapTambahan } from "@/lib/sayap";
 import { bersihkanModulIzin } from "@/lib/peran";
 import { daftarHadir } from "@/lib/kehadiran";
@@ -351,7 +351,7 @@ export async function POST(request: Request) {
       const jabatan = String(body.jabatan ?? "").trim();
       const bidang = String(body.bidang_jabatan ?? "").trim();
       const divisi = String(body.divisi ?? "").trim();
-      const sub = String(body.sub_divisi ?? "").trim();
+      const sub = subTersimpan(divisi, String(body.sub_divisi ?? "").trim());
       const posisi = body.posisi_divisi === "kepala" ? "kepala" : "anggota";
       const diSayap = divisi === DIVISI_SAYAP;
       const jabatanSayap = (body.jabatan_sayap ?? "").trim();

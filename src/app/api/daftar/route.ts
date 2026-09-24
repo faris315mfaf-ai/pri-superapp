@@ -1,5 +1,15 @@
-// POST /api/daftar — langkah 1 pendaftaran: NAMA (KTP), USERNAME, sandi,
-// EMAIL (wajib), nomor WA (OPSIONAL, hanya database — tak dikirimi OTP).
+// POST /api/daftar — pendaftaran akun baru.
+//
+// ALUR BARU (24 Sep 2026): TANPA EMAIL. Pendaftar memilih kategori dulu —
+// SEKRETARIAT, DPD, atau DPC — lalu mengisi nama (KTP), username, sandi,
+// nomor WA (opsional). DPD/DPC ikut mengisi nama DPD/DPC-nya, yang langsung
+// menjadi struktur akunnya (divisi "DPD"/"DPC", sub_divisi = nama daerah).
+// Akun dibuat berstatus 'menunggu' (kecuali sakelar bypass menyala) dan
+// sesi langsung diberikan supaya pendaftar bisa melengkapi profil lalu
+// menunggu persetujuan HR — pengganti verifikasi email.
+//
+// ALUR LAMA (masih diterima demi klien lama yang tersimpan di cache): bila
+// `email` dikirim, perilakunya sama seperti sebelumnya (OTP ke email).
 //
 // OTP kini dikirim ke EMAIL (bukan WhatsApp). Akun dibuat berstatus
 // 'menunggu' dengan email_verified_at kosong, lalu kode OTP dikirim ke
@@ -18,6 +28,13 @@ import { normalkanNomorWa, nomorWaSah } from "@/lib/fonnte";
 import { kirimOtpEmail, emailSah, normalkanEmail } from "@/lib/otp-email";
 import { EmailBelumDiaturError } from "@/lib/email";
 import { kirimKabar } from "@/lib/notifikasi";
+import { buatSesi, keUserPublik, kolomUser, type BarisUser } from "@/lib/sesi";
+import { penerimaKabarHR } from "@/lib/penerima-hr";
+import { DIVISI_DPC, DIVISI_DPD, NAMA_DAERAH_MIN, rapikanNamaDaerah } from "@/lib/struktur";
+
+/** Kategori pendaftar (24 Sep 2026). */
+const KATEGORI_DAFTAR = ["sekretariat", "dpd", "dpc"] as const;
+type KategoriDaftar = (typeof KATEGORI_DAFTAR)[number];
 
 export const dynamic = "force-dynamic";
 
@@ -47,11 +64,24 @@ export async function POST(request: Request) {
       email?: string;
       nomor_wa?: string;
       nama?: string;
+      /** sekretariat | dpd | dpc (alur baru tanpa email) */
+      kategori?: string;
+      /** Nama DPD/DPC, mis. "Jawa Barat" */
+      nama_daerah?: string;
+      nama_perangkat?: string;
     };
 
+    // Username TIDAK BOLEH berspasi (24 Sep 2026): spasi di mana pun ditolak
+    // tegas — bukan dibuang diam-diam — supaya pendaftar tahu username yang
+    // dipakainya masuk persis seperti yang ia ketik.
+    if (/\s/.test((body.username ?? "").trim())) {
+      throw Object.assign(new Error("Username tidak boleh memakai spasi."), { status: 400 });
+    }
     let username = (body.username ?? "").trim().toLowerCase();
     const password = body.password ?? "";
     const email = normalkanEmail(body.email ?? "");
+    // Tanpa email = alur baru (kategori + sesi langsung).
+    const alurBaru = !(body.email ?? "").trim();
     const nama = (body.nama ?? "").trim();
     // Nomor WA OPSIONAL: dinormalkan hanya bila diisi.
     const nomorMentah = (body.nomor_wa ?? "").trim();
@@ -73,6 +103,17 @@ export async function POST(request: Request) {
     username = periksaNama.bersih;
     if (password.length < 8) {
       throw Object.assign(new Error("Kata sandi minimal 8 karakter."), { status: 400 });
+    }
+    if (alurBaru) {
+      return await daftarTanpaEmail({
+        nama,
+        username,
+        password,
+        nomor,
+        kategori: String(body.kategori ?? "").trim().toLowerCase(),
+        namaDaerah: rapikanNamaDaerah(String(body.nama_daerah ?? "")),
+        namaPerangkat: body.nama_perangkat,
+      });
     }
     if (!emailSah(email)) {
       throw Object.assign(
@@ -194,3 +235,124 @@ export async function POST(request: Request) {
     return { sukses: true, email, otp_terkirim: otpTerkirim, auto_aktif: autoAktif };
   });
 }
+
+/**
+ * Alur baru (24 Sep 2026): tanpa email & tanpa OTP. Akun dibuat, sesi
+ * diberikan (pendaftar melengkapi profil lalu menunggu persetujuan), dan
+ * HR dikabari — persetujuan HR menggantikan verifikasi email.
+ */
+async function daftarTanpaEmail(isian: {
+  nama: string;
+  username: string;
+  password: string;
+  nomor: string;
+  kategori: string;
+  namaDaerah: string;
+  namaPerangkat?: string;
+}) {
+  const { nama, username, password, nomor, namaPerangkat } = isian;
+  if (!(KATEGORI_DAFTAR as readonly string[]).includes(isian.kategori)) {
+    throw Object.assign(new Error("Pilih dulu: SEKRETARIAT, DPD, atau DPC."), { status: 400 });
+  }
+  const kategori = isian.kategori as KategoriDaftar;
+  const daerah = kategori === "sekretariat" ? "" : isian.namaDaerah;
+  if (kategori !== "sekretariat" && daerah.length < NAMA_DAERAH_MIN) {
+    throw Object.assign(
+      new Error(`Isi nama ${kategori.toUpperCase()}-nya (mis. ${kategori === "dpd" ? "Jawa Barat" : "Kota Bandung"}).`),
+      { status: 400 },
+    );
+  }
+  if (password.length < 8) {
+    throw Object.assign(new Error("Kata sandi minimal 8 karakter."), { status: 400 });
+  }
+  if (nomor && !nomorWaSah(nomor)) {
+    throw Object.assign(
+      new Error("Nomor WhatsApp tidak benar. Kosongkan bila tidak ingin mengisi."),
+      { status: 400 },
+    );
+  }
+
+  const db = supabase();
+  const autoAktif = await daftarAutoAktif(db);
+
+  // Tanpa email tidak ada bukti kepemilikan, jadi pendaftaran yang
+  // bentrok TIDAK boleh ditimpa (dulu boleh bila emailnya belum
+  // terverifikasi) — siapa pun bisa mengambil alih pendaftaran orang lain.
+  const orFilter = [`username.eq.${username}`];
+  if (nomor) orFilter.push(`nomor_wa.eq.${nomor}`);
+  const { data: bentrok } = await db
+    .from("app_user")
+    .select("id, username, nomor_wa")
+    .or(orFilter.join(","))
+    .limit(1)
+    .maybeSingle();
+  if (bentrok) {
+    throw Object.assign(
+      new Error(
+        nomor && bentrok.nomor_wa === nomor
+          ? "Nomor WhatsApp ini sudah terdaftar. Silakan masuk."
+          : "Username ini sudah dipakai. Pilih yang lain.",
+      ),
+      { status: 409 },
+    );
+  }
+
+  // Kolom email wajib & unik di database: diisi alamat SINTETIS
+  // @pri.internal — seluruh aplikasi sudah mengenalinya sebagai "bukan
+  // email sungguhan" (tidak ditampilkan, tidak dikirimi OTP).
+  const acak = Math.random().toString(36).slice(2, 8);
+  const emailSintetis = `${username}.${Date.now().toString(36)}${acak}@pri.internal`;
+  const { data: baru, error } = await db
+    .from("app_user")
+    .insert({
+      email: emailSintetis,
+      username,
+      nomor_wa: nomor || null,
+      nama,
+      password_hash: await buatHashSandi(password),
+      role: "anggota",
+      jabatan: "",
+      avatar_url: "",
+      status: autoAktif ? "aktif" : "menunggu",
+      profil_lengkap: false,
+      wa_terverifikasi: false,
+      aktif: true,
+      // DPD/DPC langsung menjadi struktur akunnya.
+      divisi: kategori === "dpd" ? DIVISI_DPD : kategori === "dpc" ? DIVISI_DPC : "",
+      sub_divisi: daerah,
+    })
+    .select(await kolomUser())
+    .single();
+  if (error || !baru) {
+    if (error?.code === "23505") {
+      throw Object.assign(new Error("Username ini sudah dipakai. Pilih yang lain."), { status: 409 });
+    }
+    console.error("[daftar] gagal insert (tanpa email):", error?.message);
+    throw new Error("Gagal membuat akun. Coba lagi sebentar.");
+  }
+  const user = baru as unknown as BarisUser;
+  const token = await buatSesi(user.id, namaPerangkat);
+
+  if (!autoAktif) {
+    const label =
+      kategori === "sekretariat" ? "Sekretariat" : `${kategori.toUpperCase()} ${daerah}`;
+    const penerima = await penerimaKabarHR();
+    await kirimKabar({
+      judul: "Pendaftar baru menunggu persetujuan",
+      isi: `${nama} (@${username}, ${label}) mendaftar. Setujui di HR Center → Database Anggota.`,
+      kategori: "info",
+      jenis_peristiwa: "pendaftar_baru",
+      ...(penerima.length > 0 ? { untukUserIds: penerima } : { untukRole: ["master"] }),
+    });
+  }
+
+  return {
+    sukses: true,
+    tanpa_email: true,
+    otp_terkirim: false,
+    auto_aktif: autoAktif,
+    token,
+    user: keUserPublik(user),
+  };
+}
+

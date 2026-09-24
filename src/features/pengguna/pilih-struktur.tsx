@@ -13,11 +13,15 @@
 // (Divisi HR / superadmin / master) bisa menambah sayap baru di tempat.
 // ============================================================
 import { useEffect, useState } from "react";
-import { Building2, Check, Feather, Loader2, MapPinned, Plus, X } from "lucide-react";
+import { Building2, Check, Feather, Landmark, Loader2, MapPinned, Plus, Store, X } from "lucide-react";
 import { toast } from "@/hooks/use-app-store";
 import {
   DIVISI_BIASA,
+  DIVISI_DPC,
+  DIVISI_DPD,
   DIVISI_SAYAP,
+  NAMA_DAERAH_MAKS,
+  adalahDaerah,
   DIVISI_ZONA,
   JABATAN_SAYAP,
   KATEGORI_STRUKTUR,
@@ -49,6 +53,7 @@ function labelSatu(s: NilaiStruktur): string {
     const j = (s.jabatan_sayap ?? "").trim();
     return j ? gelarSayap(sub, j) : `Sayap ${sub || "belum dipilih"}`;
   }
+  if (adalahDaerah(d)) return `${d} ${sub || "belum diisi"}`;
   return d || "belum dipilih";
 }
 
@@ -56,6 +61,8 @@ const IKON: Record<KategoriStruktur, KomponenIkon> = {
   zona: MapPinned,
   sayap: Feather,
   divisi: Building2,
+  dpd: Landmark,
+  dpc: Store,
 };
 
 export function PilihStruktur({
@@ -114,6 +121,8 @@ export function PilihStruktur({
     setFormTambah(false);
     if (k === "zona") onUbah({ divisi: DIVISI_ZONA, sub_divisi: "", jabatan_sayap: "" });
     else if (k === "sayap") onUbah({ divisi: DIVISI_SAYAP, sub_divisi: "", jabatan_sayap: nilai.jabatan_sayap ?? "" });
+    else if (k === "dpd") onUbah({ divisi: DIVISI_DPD, sub_divisi: "", jabatan_sayap: "" });
+    else if (k === "dpc") onUbah({ divisi: DIVISI_DPC, sub_divisi: "", jabatan_sayap: "" });
     else onUbah({ divisi: "", sub_divisi: "", jabatan_sayap: "" });
   }
 
@@ -149,7 +158,7 @@ export function PilihStruktur({
   return (
     <div className="flex flex-col gap-2.5">
       {/* Langkah 1: kategori */}
-      <div className="grid grid-cols-3 gap-2" role="group" aria-label="Kategori struktur">
+      <div className="grid grid-cols-5 gap-1.5" role="group" aria-label="Kategori struktur">
         {KATEGORI_STRUKTUR.map((k) => {
           const Ikon = IKON[k.kunci];
           const aktif = kategori === k.kunci;
@@ -302,6 +311,23 @@ export function PilihStruktur({
             </div>
           )}
         </>
+      )}
+      {(kategori === "dpd" || kategori === "dpc") && (
+        // DPD/DPC (24 Sep 2026): nama daerah diketik bebas, mis. "Jawa Barat".
+        <input
+          value={nilai.sub_divisi}
+          disabled={disabled}
+          onChange={(e) =>
+            onUbah({
+              divisi: kategori === "dpd" ? DIVISI_DPD : DIVISI_DPC,
+              sub_divisi: e.target.value.slice(0, NAMA_DAERAH_MAKS),
+              jabatan_sayap: "",
+            })
+          }
+          placeholder={kategori === "dpd" ? "Nama DPD, mis. Jawa Barat" : "Nama DPC, mis. Kota Bandung"}
+          aria-label={kategori === "dpd" ? "Nama DPD" : "Nama DPC"}
+          className={cn(kelasSelect, "placeholder:text-teks-sekunder/60")}
+        />
       )}
       {kategori === "divisi" && (
         <select

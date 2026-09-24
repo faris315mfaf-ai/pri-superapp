@@ -256,20 +256,36 @@ export async function keluar(semuaPerangkat = false): Promise<void> {
 // ------------------------------------------------------------
 
 /** Langkah 1 — kirim data diri, kode OTP dikirim ke EMAIL. Nomor WA opsional. */
+/** Kategori pendaftar (24 Sep 2026): pilihan pertama saat mendaftar. */
+export type KategoriDaftar = "sekretariat" | "dpd" | "dpc";
+
 export async function daftar(data: {
   username: string;
   password: string;
-  email: string;
+  /** Alur lama (OTP email). Alur baru TIDAK mengirim email. */
+  email?: string;
   nama: string;
   nomor_wa?: string;
-}): Promise<{ email: string; otp_terkirim: boolean; auto_aktif: boolean }> {
+  kategori?: KategoriDaftar;
+  /** Nama DPD/DPC, mis. "Jawa Barat" */
+  nama_daerah?: string;
+}): Promise<{
+  email: string;
+  otp_terkirim: boolean;
+  auto_aktif: boolean;
+  /** Alur tanpa email: akun + sesi langsung dibuat. */
+  user: UserLengkap | null;
+}> {
   const json = await fetchJson("/api/daftar", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
+    body: JSON.stringify({ ...data, nama_perangkat: namaPerangkat() }),
   });
+  // Alur tanpa email: server langsung memberi sesi.
+  if (json.token) simpanToken(json.token as string);
   return {
-    email: json.email as string,
+    user: (json.user as UserLengkap | undefined) ?? null,
+    email: String(json.email ?? ""),
     // false = OTP gagal terkirim; pengguna lanjut ke layar menunggu
     // persetujuan tanpa verifikasi email (lihat /api/daftar).
     otp_terkirim: json.otp_terkirim !== false,

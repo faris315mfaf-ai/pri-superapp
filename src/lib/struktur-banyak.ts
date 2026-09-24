@@ -10,6 +10,7 @@ import {
   MAKS_STRUKTUR,
   kunciStruktur,
   pastikanStrukturSah,
+  subTersimpan,
   type StrukturSatuan,
 } from "@/lib/struktur";
 
@@ -37,7 +38,7 @@ export function pastikanDaftarStrukturSah(
     const o = (x ?? {}) as Record<string, unknown>;
     const divisi = String(o.divisi ?? "").trim();
     if (!divisi) continue;
-    const sub = String(o.sub_divisi ?? "").trim();
+    const sub = subTersimpan(divisi, String(o.sub_divisi ?? "").trim());
     pastikanStrukturSah(divisi, sub, sayapTambahan);
     const satu: StrukturSatuan = {
       divisi,

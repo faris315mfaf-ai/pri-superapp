@@ -11,7 +11,7 @@ import { buatHashSandi } from "@/lib/sandi";
 import { periksaUsername } from "@/lib/username";
 import { kirimKabar } from "@/lib/notifikasi";
 import { JABATAN_TVR_NASIONAL, JABATAN_PARTAI, KUOTA_JABATAN } from "@/lib/jabatan";
-import { DIVISI_SAYAP, jabatanSayapSah, pastikanStrukturSah } from "@/lib/struktur";
+import { DIVISI_SAYAP, jabatanSayapSah, pastikanStrukturSah, subTersimpan } from "@/lib/struktur";
 import { aksesDashboardRole } from "@/lib/dashboard-akses";
 import { adalahHR, diDivisiHR } from "@/lib/hr";
 
@@ -524,7 +524,7 @@ export async function PATCH(request: Request) {
         // Divisi + sub + posisi Kepala/Anggota — HANYA lewat panel ini;
         // anggota cuma bisa memilih divisinya sendiri (tanpa posisi).
         const divisi = (body.divisi ?? "").trim();
-        const sub = (body.sub_divisi ?? "").trim();
+        const sub = subTersimpan(divisi, (body.sub_divisi ?? "").trim());
         pastikanStrukturSah(divisi, sub, await nilaiSayapTambahan());
         const posisi = body.posisi_divisi === "kepala" ? "kepala" : "anggota";
         const diSayap = divisi === DIVISI_SAYAP;

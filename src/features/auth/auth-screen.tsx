@@ -6,8 +6,9 @@
 // Layar utama hanya berisi identitas partai dan dua tombol besar.
 // Semua pengisian terjadi di dalam pop-up, sesuai permintaan:
 //   Masuk  → email / username / nomor WhatsApp + kata sandi
-//   Daftar → nama, username, sandi, email → OTP EMAIL → profil
-//            (nomor WhatsApp opsional, hanya data — tanpa OTP)
+//   Daftar → pilih SEKRETARIAT / DPD / DPC → nama, username, sandi
+//            (+ nama DPD/DPC) → profil. TANPA email & OTP (24 Sep 2026);
+//            nomor WhatsApp opsional, hanya data.
 //
 // Setelah pendaftaran, akun berstatus "menunggu" sampai super admin
 // menyetujui dan menetapkan perannya.
@@ -23,14 +24,16 @@ import {
   Eye,
   EyeOff,
   Fingerprint,
+  Landmark,
   Loader2,
   Lock,
-  Mail,
   MessageCircle,
   Phone,
   ScanFace,
   ShieldCheck,
+  Store,
   User as IkonUser,
+  Building2,
   UserPlus,
   X,
 } from "lucide-react";
@@ -55,13 +58,14 @@ import {
   perangkatDukungSidikJari,
   verifikasiOtpEmail,
   wajahLoginTersedia,
+  type KategoriDaftar,
   type UserLengkap,
 } from "@/services";
-import { butuhSubDivisi } from "@/lib/struktur";
+import { adalahDaerah, butuhSubDivisi, NAMA_DAERAH_MAKS, rapikanNamaDaerah } from "@/lib/struktur";
 import { PilihStrukturBanyak, type NilaiStruktur } from "@/features/pengguna/pilih-struktur";
 import { cn } from "@/lib/utils";
 
-type Langkah = "tertutup" | "masuk" | "daftar" | "otp" | "profil" | "menunggu" | "lupa";
+type Langkah = "tertutup" | "masuk" | "kategori" | "daftar" | "otp" | "profil" | "menunggu" | "lupa";
 
 type AuthScreenProps = {
   onMasukBerhasil: (user: UserLengkap) => void;
@@ -79,6 +83,8 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
   const [langkah, setLangkah] = useState<Langkah>(awalMenunggu ? "menunggu" : "tertutup");
   // Email yang sedang diverifikasi, dibawa dari langkah daftar ke OTP.
   const [emailOtp, setEmailOtp] = useState("");
+  // Kategori pendaftar — langkah PERTAMA mendaftar (24 Sep 2026).
+  const [kategori, setKategori] = useState<KategoriDaftar>("sekretariat");
   const [userSementara, setUserSementara] = useState<UserLengkap | null>(awalMenunggu);
 
   function tutup() {
@@ -145,7 +151,7 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
           </button>
           <button
             type="button"
-            onClick={() => setLangkah("daftar")}
+            onClick={() => setLangkah("kategori")}
             className="glass btn-tekan flex items-center justify-center gap-2 rounded-2xl py-3.5 text-[15px] font-bold text-teks-utama"
           >
             <UserPlus className="h-5 w-5" />
@@ -154,9 +160,9 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
         </div>
 
         <p className="mt-6 text-center text-[11.5px] leading-relaxed text-teks-sekunder">
-          Pendaftaran diverifikasi lewat email dan perlu
+          Akun baru perlu persetujuan pengurus
           <br />
-          persetujuan pengurus sebelum dapat digunakan.
+          sebelum dapat digunakan.
         </p>
       </motion.div>
 
@@ -169,6 +175,7 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
             // di tengah jalan — pendaftarannya jadi menggantung.
             bisaTutup={
               langkah === "masuk" ||
+              langkah === "kategori" ||
               langkah === "daftar" ||
               langkah === "lupa"
             }
@@ -176,8 +183,14 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
             judul={
               langkah === "masuk"
                 ? "Masuk"
-                : langkah === "daftar"
-                  ? "Buat Akun Baru"
+                : langkah === "kategori"
+                  ? "Daftar Sebagai"
+                  : langkah === "daftar"
+                  ? kategori === "dpd"
+                    ? "Daftar — DPD"
+                    : kategori === "dpc"
+                      ? "Daftar — DPC"
+                      : "Daftar — Sekretariat"
                   : langkah === "otp"
                     ? "Verifikasi Email"
                     : langkah === "profil"
@@ -190,15 +203,33 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
             {langkah === "masuk" && (
               <FormMasuk
                 onBerhasil={lanjutkan}
-                keDaftar={() => setLangkah("daftar")}
+                keDaftar={() => setLangkah("kategori")}
                 keLupa={() => setLangkah("lupa")}
               />
             )}
             {langkah === "lupa" && (
               <FormLupaSandi kembali={() => setLangkah("masuk")} />
             )}
+            {langkah === "kategori" && (
+              <PilihKategoriDaftar
+                onPilih={(k) => {
+                  setKategori(k);
+                  setLangkah("daftar");
+                }}
+                keMasuk={() => setLangkah("masuk")}
+              />
+            )}
             {langkah === "daftar" && (
               <FormDaftar
+                kategori={kategori}
+                kembali={() => setLangkah("kategori")}
+                onAkunDibuat={(u) => {
+                  if (u.status === "aktif" && u.profil_lengkap) {
+                    onMasukBerhasil(u);
+                    return;
+                  }
+                  lanjutkan(u);
+                }}
                 onTerkirim={(email, otpTerkirim, autoAktif) => {
                   setEmailOtp(email);
                   if (otpTerkirim) {
@@ -584,29 +615,99 @@ function FormMasuk({
 // Langkah: Daftar
 // ------------------------------------------------------------
 
+// ------------------------------------------------------------
+// Langkah pertama daftar: SEKRETARIAT / DPD / DPC (24 Sep 2026)
+// ------------------------------------------------------------
+
+const PILIHAN_KATEGORI: {
+  kunci: KategoriDaftar;
+  label: string;
+  keterangan: string;
+  Ikon: typeof Building2;
+}[] = [
+  { kunci: "sekretariat", label: "SEKRETARIAT", keterangan: "Pengurus & staf pusat — pendaftaran biasa", Ikon: Building2 },
+  { kunci: "dpd", label: "DPD", keterangan: "Dewan Pimpinan Daerah — isi nama DPD Anda", Ikon: Landmark },
+  { kunci: "dpc", label: "DPC", keterangan: "Dewan Pimpinan Cabang — isi nama DPC Anda", Ikon: Store },
+];
+
+function PilihKategoriDaftar({
+  onPilih,
+  keMasuk,
+}: {
+  onPilih: (k: KategoriDaftar) => void;
+  keMasuk: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[13px] leading-relaxed text-teks-sekunder">
+        Pilih dulu Anda mendaftar sebagai apa.
+      </p>
+      {PILIHAN_KATEGORI.map(({ kunci, label, keterangan, Ikon }) => (
+        <button
+          key={kunci}
+          type="button"
+          onClick={() => onPilih(kunci)}
+          className="glass-soft btn-tekan flex items-center gap-3 rounded-2xl p-4 text-left"
+        >
+          <span
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white"
+            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+            aria-hidden="true"
+          >
+            <Ikon className="h-6 w-6" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-heading text-[16px] font-extrabold tracking-wide text-teks-utama">{label}</span>
+            <span className="block text-[12px] leading-snug text-teks-sekunder">{keterangan}</span>
+          </span>
+          <ArrowRight className="h-4.5 w-4.5 shrink-0 text-teks-sekunder" aria-hidden="true" />
+        </button>
+      ))}
+      <p className="mt-1 text-center text-[12.5px] text-teks-sekunder">
+        Sudah punya akun?{" "}
+        <button type="button" onClick={keMasuk} className="font-semibold text-pri underline-offset-4 hover:underline">
+          Masuk di sini
+        </button>
+      </p>
+    </div>
+  );
+}
+
 function FormDaftar({
+  kategori,
+  kembali,
+  onAkunDibuat,
   onTerkirim,
   keMasuk,
 }: {
+  kategori: KategoriDaftar;
+  kembali: () => void;
+  /** Alur tanpa email: akun + sesi sudah dibuat server. */
+  onAkunDibuat: (user: UserLengkap) => void;
+  /** Cadangan alur lama (server meminta OTP email). */
   onTerkirim: (email: string, otpTerkirim: boolean, autoAktif: boolean) => void;
   keMasuk: () => void;
 }) {
+  const daerah = kategori === "dpd" || kategori === "dpc";
+  const labelDaerah = kategori.toUpperCase();
+  const [namaDaerah, setNamaDaerah] = useState("");
   const [nama, setNama] = useState("");
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
+  // Ada spasi yang diketik di username → diberi tahu, bukan dibuang diam-diam.
+  const [adaSpasi, setAdaSpasi] = useState(false);
   const [sandi, setSandi] = useState("");
   const [nomor, setNomor] = useState("");
   const [lihat, setLihat] = useState(false);
   const [memuat, setMemuat] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const usernameSah = /^[a-z0-9._]{3,20}$/.test(username.trim());
-  const emailSah = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim().toLowerCase());
+  const usernameSah = /^[a-z0-9._]{3,20}$/.test(username) && /[a-z]/.test(username);
+  const daerahSah = !daerah || namaDaerah.trim().length >= 2;
   // Nomor WA OPSIONAL: kosong = sah; kalau diisi harus berformat benar.
   const nomorBersih = nomor.replace(/[^0-9]/g, "");
   const nomorSah = nomorBersih === "" || /^0?8[0-9]{8,12}$/.test(nomorBersih);
   const sandiSah = sandi.length >= 8;
-  const sah = usernameSah && emailSah && sandiSah && nama.trim().length >= 2 && nomorSah;
+  const sah = usernameSah && daerahSah && sandiSah && nama.trim().length >= 2 && nomorSah;
 
   async function kirim(e: React.FormEvent) {
     e.preventDefault();
@@ -614,13 +715,23 @@ function FormDaftar({
     setError(null);
     setMemuat(true);
     try {
-      const { email: emailKembali, otp_terkirim, auto_aktif } = await daftarService({
+      const { user, email: emailKembali, otp_terkirim, auto_aktif } = await daftarService({
         nama: nama.trim(),
-        username: username.trim(),
+        username,
         password: sandi,
-        email: email.trim().toLowerCase(),
         nomor_wa: nomor.trim() || undefined,
+        kategori,
+        nama_daerah: daerah ? namaDaerah.trim() : undefined,
       });
+      if (user) {
+        toast(
+          "sukses",
+          "Akun dibuat",
+          auto_aktif ? "Lengkapi profil Anda." : "Lengkapi profil, lalu tunggu persetujuan pengurus.",
+        );
+        onAkunDibuat(user);
+        return;
+      }
       if (otp_terkirim) {
         toast("sukses", "Kode terkirim", "Cek email Anda untuk kode 6 angka.");
       } else if (!auto_aktif) {
@@ -640,6 +751,25 @@ function FormDaftar({
 
   return (
     <form onSubmit={kirim} className="flex flex-col gap-3" noValidate>
+      {daerah && (
+        <div>
+          <label htmlFor="d-daerah" className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
+            Nama {labelDaerah}
+          </label>
+          <Kolom
+            id="d-daerah"
+            ikon={kategori === "dpd" ? Landmark : Store}
+            value={namaDaerah}
+            onChange={(e) => setNamaDaerah(e.target.value.slice(0, NAMA_DAERAH_MAKS))}
+            placeholder={kategori === "dpd" ? "mis. Jawa Barat" : "mis. Kota Bandung"}
+            disabled={memuat}
+          />
+          <p className="mt-1 text-[11px] text-teks-sekunder">
+            Tercatat sebagai struktur akun Anda: {labelDaerah} {rapikanNamaDaerah(namaDaerah) || "…"}
+          </p>
+        </div>
+      )}
+
       <div>
         <label htmlFor="d-nama" className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
           Nama Lengkap
@@ -664,36 +794,28 @@ function FormDaftar({
           ikon={AtSign}
           type="text"
           value={username}
-          onChange={(e) =>
-            setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._]/g, ""))
-          }
+          onChange={(e) => {
+            const mentah = e.target.value;
+            setAdaSpasi(/\s/.test(mentah));
+            setUsername(mentah.toLowerCase().replace(/[^a-z0-9._]/g, ""));
+          }}
           placeholder="username_anda"
           autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           disabled={memuat}
         />
-        <p className="mt-1 text-[11px] text-teks-sekunder">
-          Dipakai untuk masuk. 3–20 karakter: huruf kecil, angka, titik, garis bawah.
-        </p>
-      </div>
-
-      <div>
-        <label htmlFor="d-email" className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
-          Email
-        </label>
-        <Kolom
-          id="d-email"
-          ikon={Mail}
-          type="email"
-          inputMode="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="email.anda@gmail.com"
-          autoComplete="email"
-          disabled={memuat}
-        />
-        <p className="mt-1 text-[11.5px] text-pri">
-          Pastikan email benar — kode verifikasi 6 angka akan dikirim ke sini.
-        </p>
+        {adaSpasi ? (
+          <p className="mt-1 text-[11.5px] font-semibold text-gagal">
+            Username tidak boleh memakai spasi — spasinya sudah dihapus.
+          </p>
+        ) : (
+          <p className="mt-1 text-[11px] text-teks-sekunder">
+            Dipakai untuk masuk. 3–20 karakter tanpa spasi: huruf kecil, angka, titik, garis bawah
+            (minimal satu huruf).
+          </p>
+        )}
       </div>
 
       <div>
@@ -749,9 +871,19 @@ function FormDaftar({
       <PesanError pesan={error} />
 
       <TombolUtama type="submit" memuat={memuat} disabled={!sah}>
-        Kirim Kode ke Email
+        Daftar
         <ArrowRight className="h-4.5 w-4.5" />
       </TombolUtama>
+
+      <button
+        type="button"
+        onClick={kembali}
+        disabled={memuat}
+        className="inline-flex items-center justify-center gap-1 text-[12.5px] font-semibold text-teks-sekunder"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Ganti pilihan (Sekretariat / DPD / DPC)
+      </button>
 
       {/* Daftar lewat Google (fitur 1.19.1): tanpa isi formulir & OTP —
           akun dibuat otomatis berstatus menunggu persetujuan. */}
@@ -882,11 +1014,16 @@ function FormProfil({
   const [nama, setNama] = useState(awal?.nama ?? "");
   const [panggilan, setPanggilan] = useState("");
   const [tanggalLahir, setTanggalLahir] = useState("");
-  const [divisi, setDivisi] = useState("");
-  const [subDivisi, setSubDivisi] = useState("");
+  const [divisi, setDivisi] = useState(awal?.divisi ?? "");
+  const [subDivisi, setSubDivisi] = useState(awal?.sub_divisi ?? "");
   // Struktur ganda (11 Sep 2026): yang PERTAMA jadi struktur utama,
   // dan itulah yang tetap dikirim lewat divisi/sub_divisi seperti dulu.
-  const [strukturDaftar, setStrukturDaftar] = useState<NilaiStruktur[]>([]);
+  // Pendaftar DPD/DPC (24 Sep 2026) sudah membawa strukturnya dari
+  // langkah daftar — dipakai apa adanya, tidak dipilih ulang.
+  const [strukturDaftar, setStrukturDaftar] = useState<NilaiStruktur[]>(() =>
+    awal?.divisi ? [{ divisi: awal.divisi, sub_divisi: awal.sub_divisi ?? "" }] : [],
+  );
+  const strukturTetap = adalahDaerah(awal?.divisi);
   const [foto, setFoto] = useState<string>("");
   const [memuat, setMemuat] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1019,9 +1156,20 @@ function FormProfil({
         />
       </div>
 
+      {strukturTetap ? (
+        <div className="glass-soft rounded-xl px-3.5 py-3">
+          <p className="text-[11.5px] font-semibold text-teks-sekunder">Struktur</p>
+          <p className="mt-0.5 text-[15px] font-bold text-teks-utama">
+            {awal?.divisi} {awal?.sub_divisi}
+          </p>
+          <p className="mt-1 text-[11px] text-teks-sekunder">
+            Dari pilihan saat mendaftar. Bila keliru, minta pengurus HR mengubahnya.
+          </p>
+        </div>
+      ) : (
       <div>
         <p className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
-          Struktur: Zona · Sayap · Divisi
+          Struktur: Zona · Sayap · Divisi · DPD · DPC
         </p>
         {/* 10 Sep 2026: pilih kategori dulu (Zona / Sayap / Divisi), baru
             isinya. 11 Sep 2026: boleh lebih dari satu struktur. */}
@@ -1039,6 +1187,7 @@ function FormProfil({
           Jabatan resmi & posisi Kepala/Anggota diatur pengurus, bukan diisi sendiri.
         </p>
       </div>
+      )}
 
       <PesanError pesan={error} />
 
