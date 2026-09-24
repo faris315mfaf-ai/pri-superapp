@@ -17,6 +17,7 @@ import { deskripsiStruktur } from "@/lib/struktur";
 
 import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 import { bolehDashboard } from "@/lib/dashboard-akses";
+import { adalahHR } from "@/lib/hr";
 export const dynamic = "force-dynamic";
 
 const HARI_RIWAYAT = 7;
@@ -45,7 +46,9 @@ export async function GET(request: Request) {
     // 10 Sep 2026: peran anggota boleh bila ia pemegang jabatan / dibuka
     // master (dashboard "Database Anggota" menyala) — dashboard penuh untuk
     // seluruh pemegang jabatan.
-    const lewatDashboard = await bolehDashboard(user, "anggota");
+    // Orang HR (Divisi HR / modul HR Center) selalu boleh — Detail Anggota
+    // adalah menu HR Center (24 Sep 2026).
+    const lewatDashboard = adalahHR(user) || (await bolehDashboard(user, "anggota"));
     if (user.role === "anggota" && !lewatDashboard) {
       throw Object.assign(new Error("Anda tidak berhak membuka database anggota."), {
         status: 403,

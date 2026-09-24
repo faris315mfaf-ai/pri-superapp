@@ -104,7 +104,7 @@ const TvAnalitikDashboardLayar = dynamic(
 );
 import { SetelKpiScreen } from "@/features/pengguna/setel-kpi-screen";
 import { modulUntukDivisi } from "@/lib/modul-divisi";
-import { adalahHR } from "@/lib/hr";
+import { adalahHR, diDivisiHR } from "@/lib/hr";
 import { KUNCI_CHANGELOG_DILIHAT } from "@/lib/changelog";
 import { VERSI_APLIKASI } from "@/lib/versi";
 import { toast, useAppStore } from "@/hooks/use-app-store";
@@ -527,6 +527,12 @@ export default function Page() {
           if (i >= 0) dasar.splice(i, 1);
         }
       }
+      dasar.sort((a, b) => URUTAN_TAB.indexOf(a) - URUTAN_TAB.indexOf(b));
+    }
+    // Divisi HR SELALU punya HR Center (24 Sep 2026) — modul per akun tidak
+    // boleh menutupnya bagi orang yang memang bertugas di sana.
+    if (diDivisiHR(user) && !dasar.includes("qc")) {
+      dasar.push("qc");
       dasar.sort((a, b) => URUTAN_TAB.indexOf(a) - URUTAN_TAB.indexOf(b));
     }
     return dasar;

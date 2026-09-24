@@ -6,6 +6,14 @@
 // ============================================================
 import { supabase } from "@/lib/supabase";
 import { bolehFitur, type KunciFitur, type PetaIzin } from "@/lib/fitur";
+import { adalahHR } from "@/lib/hr";
+
+/**
+ * Fitur milik HR Center (24 Sep 2026, "seluruh pengguna Divisi HR mendapat
+ * modul HR Center seluruh fitur"): orang HR tidak dijegal matriks izin
+ * per peran — matriks itu untuk peran biasa (anggota/ketua).
+ */
+const FITUR_HR_CENTER = new Set<KunciFitur>(["database.detail", "qc.analisis", "absensi.approval"]);
 
 /** Izin efektif satu peran: hanya memuat fitur yang DIMATIKAN. */
 export async function izinPeran(peran: string): Promise<PetaIzin> {
@@ -32,10 +40,11 @@ export async function izinPeran(peran: string): Promise<PetaIzin> {
  * endpoint-nya masih bisa dipanggil langsung.
  */
 export async function pastikanFiturAktif(
-  user: { role: string; divisi?: string | null },
+  user: { role: string; divisi?: string | null; modul_izin?: unknown; struktur_lain?: unknown },
   kunci: KunciFitur,
   pesan?: string,
 ): Promise<void> {
+  if (FITUR_HR_CENTER.has(kunci) && adalahHR(user)) return;
   // Spek 1.16: fitur bisa dimatikan per PERAN dan per DIVISI — yang
   // paling ketat menang (mati di salah satunya = mati).
   const izin = await izinGabungan(user.role, user.divisi ?? null);

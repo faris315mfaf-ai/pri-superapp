@@ -181,7 +181,10 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   return bungkus(async () => {
-    const admin = await pastikanSuperAdmin(request);
+    // Setujui semua pendaftar: super admin, master, dan Divisi HR (24 Sep
+    // 2026) — sama dengan hak setujui satu per satu di PATCH.
+    const pemanggil = await userDariToken(tokenDari(request));
+    const admin = pemanggil && diDivisiHR(pemanggil) ? pemanggil : await pastikanSuperAdmin(request);
     const db = supabase();
 
     const { data, error } = await db
