@@ -1363,6 +1363,7 @@ export default function Page() {
                       onKembali={() => setSubLayar(null)}
                       bolehKelola={bolehKelolaAnggota}
                       utamakanPendaftar={subLayar.nama === "kelola-pengguna"}
+                      bolehBeriSuperadmin={user?.role === "master" && !user.superadmin}
                     />
                   ) : subLayar.nama === "database" ? (
                     <DatabaseScreen onKembali={() => setSubLayar(null)} />
@@ -1382,7 +1383,10 @@ export default function Page() {
                       onKembali={() => setSubLayar(null)}
                     />
                   ) : subLayar.nama === "panel-master" ? (
-                    <PanelMasterScreen onKembali={() => setSubLayar(null)} />
+                    // Superadmin (peran efektif master) tidak membuka Panel Master.
+                    user?.role === "master" && !user.superadmin ? (
+                      <PanelMasterScreen onKembali={() => setSubLayar(null)} />
+                    ) : null
                   ) : subLayar.nama === "ludo" ? (
                     <LudoScreen onKembali={() => setSubLayar(null)} />
                   ) : subLayar.nama === "pet" ? (

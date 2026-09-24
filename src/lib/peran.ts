@@ -23,8 +23,17 @@ export function peranTersembunyi(role?: string | null): boolean {
   return (PERAN_TERSEMBUNYI as readonly string[]).includes(role ?? "");
 }
 
-export function adalahSuperadmin(u: { role?: string | null } | null | undefined): boolean {
-  return u?.role === "superadmin";
+export function adalahSuperadmin(u: { role?: string | null; superadmin?: boolean } | null | undefined): boolean {
+  return u?.superadmin === true || u?.role === "superadmin";
+}
+
+/**
+ * Master SESUNGGUHNYA (24 Sep 2026) — bukan superadmin yang dipetakan ke
+ * peran master. Dipakai Panel Master & pemberian jabatan Superadmin:
+ * dua hal yang hanya boleh dilakukan pemilik sistem.
+ */
+export function adalahMasterAsli(u: { role?: string | null; superadmin?: boolean } | null | undefined): boolean {
+  return u?.role === "master" && u?.superadmin !== true;
 }
 
 /**

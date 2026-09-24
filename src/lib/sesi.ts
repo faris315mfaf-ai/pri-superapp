@@ -100,11 +100,17 @@ export type UserPublik = User & {
 };
 
 export function keUserPublik(b: BarisUser): UserPublik {
+  // SUPERADMIN (24 Sep 2026): menguasai seluruh aplikasi seperti master
+  // KECUALI Panel Master. Satu titik pemetaan ini membuat ratusan
+  // pemeriksaan `role === "master"` berlaku juga baginya; Panel Master
+  // sendiri memeriksa adalahMasterAsli() yang menolak penanda ini.
+  const superadmin = b.role === "superadmin";
   return {
     id: String(b.id),
     nama: b.nama,
     email: b.email,
-    role: b.role as Role,
+    role: (superadmin ? "master" : b.role) as Role,
+    superadmin,
     avatar_url: b.avatar_url ?? "",
     jabatan: b.jabatan ?? "",
     status: b.status,
@@ -206,7 +212,7 @@ export async function userDariToken(token: string): Promise<UserPublik | null> {
   // "Ketua Umum" — tidak lagi ditetapkan manual. Peran DB boleh apa saja
   // (anggota/ketua); yang berubah hanya peran EFEKTIF yang dilihat sistem.
   // Master tak diutak-atik (kuasa tertinggi, tersembunyi).
-  if (u.role !== "master" && (u.jabatan ?? "").trim() === "Ketua Umum") {
+  if (u.role !== "master" && u.role !== "superadmin" && (u.jabatan ?? "").trim() === "Ketua Umum") {
     u.role = "super_admin";
   }
 

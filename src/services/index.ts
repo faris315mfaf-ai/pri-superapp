@@ -619,6 +619,15 @@ export async function tolakPendaftar(id: string, alasan: string): Promise<void> 
   });
 }
 
+/** Beri / cabut jabatan Superadmin — KHUSUS master (24 Sep 2026). */
+export async function ubahSuperadmin(id: string, nilai: boolean): Promise<void> {
+  await fetchJson("/api/pengguna", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id, tindakan: "ubah_superadmin", nilai }),
+  });
+}
+
 export async function getPengguna(): Promise<{
   data: PenggunaAdmin[];
   ringkasan: Record<string, number>;

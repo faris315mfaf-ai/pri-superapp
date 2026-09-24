@@ -29,6 +29,7 @@ import {
 import { skinHewanDariKode } from "@/lib/pet-katalog-v5";
 import { adalahKunciFiturBerat, resetCacheSakelar, simpanSakelar } from "@/lib/sakelar";
 import { adalahKunciModul } from "@/lib/sakelar-modul";
+import { adalahMasterAsli } from "@/lib/peran";
 import { pantauServer } from "@/lib/pantau-server";
 import { KUNCI_FORMAT_LAPORAN, validasiTemplate } from "@/lib/template-laporan";
 import { bungkus } from "@/lib/api-helper";
@@ -80,7 +81,9 @@ async function pastikanMaster(request: Request) {
   const user = await userDariToken(tokenDari(request));
   if (!user)
     throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
-  if (user.role !== "master") {
+  // Superadmin (peran efektif master) TIDAK boleh — Panel Master khusus
+  // pemilik sistem (24 Sep 2026).
+  if (!adalahMasterAsli(user)) {
     // Pesan sengaja netral: keberadaan panel ini tidak perlu
     // diiklankan kepada peran lain.
     throw Object.assign(new Error("Halaman tidak ditemukan."), { status: 404 });

@@ -66,6 +66,7 @@ import {
   setujuiSemuaPendaftar,
   tambahZona,
   tolakPendaftar,
+  ubahSuperadmin,
   tetapkanZonaAnggota,
   ubahPengguna,
   type AnggotaPencocokan,
@@ -116,8 +117,11 @@ export function TabelAnggotaScreen({
   onKembali,
   bolehKelola = false,
   utamakanPendaftar = false,
+  bolehBeriSuperadmin = false,
 }: {
   onKembali: () => void;
+  /** Master asli: dialog Jabatan memuat sakelar Superadmin (24 Sep 2026). */
+  bolehBeriSuperadmin?: boolean;
   /** Tampilkan persetujuan, peran, jabatan, struktur, hapus (HR/master). */
   bolehKelola?: boolean;
   /** Dibuka dari kartu pendaftar: langsung ke saringan Menunggu bila ada. */
@@ -281,6 +285,25 @@ export function TabelAnggotaScreen({
       setMuatUlang((n) => n + 1);
     } catch (err) {
       toast("error", "Gagal menyimpan", err instanceof Error ? err.message : "Coba lagi sebentar.");
+    } finally {
+      setSedangProses(null);
+    }
+  }
+
+  async function simpanSuperadmin(u: PenggunaAdmin, nilai: boolean) {
+    if (sedangProses) return;
+    setSedangProses(u.id);
+    try {
+      await ubahSuperadmin(u.id, nilai);
+      toast(
+        "sukses",
+        nilai ? `${namaDepan(u)} kini Superadmin` : `Superadmin ${namaDepan(u)} dicabut`,
+        "Sesinya diperbarui — ia perlu masuk lagi.",
+      );
+      setMemilihJabatan(null);
+      setMuatUlang((n) => n + 1);
+    } catch (err) {
+      toast("error", "Gagal mengubah Superadmin", err instanceof Error ? err.message : "");
     } finally {
       setSedangProses(null);
     }
@@ -537,7 +560,9 @@ export function TabelAnggotaScreen({
             const jumlahTertaut = petaAkun
               ? new Set((akunU?.tvr_akun ?? []).map((a) => a.platform)).size
               : null;
-            const statusLabel = menunggu
+            const statusLabel = u.role === "superadmin"
+              ? { teks: "Superadmin", kelas: "text-violet-600 dark:text-violet-300" }
+              : menunggu
               ? { teks: "Menunggu", kelas: "text-amber-500" }
               : u.status === "ditolak"
                 ? { teks: u.alasan_tolak ? `Ditolak: ${u.alasan_tolak}` : "Ditolak", kelas: "text-gagal" }
@@ -823,6 +848,11 @@ export function TabelAnggotaScreen({
             pengguna={memilihJabatan}
             sedangProses={sedangProses === memilihJabatan.id}
             onTutup={() => setMemilihJabatan(null)}
+            superadmin={
+              bolehBeriSuperadmin
+                ? { onUbah: (nilai) => void simpanSuperadmin(memilihJabatan, nilai) }
+                : undefined
+            }
             onPilih={(jabatan, bidang, tvrNasional) =>
               void jalankan(
                 memilihJabatan,

@@ -818,7 +818,8 @@ export function ProfilScreen({
       )}
 
       {/* Panel Master — hanya untuk peran master, tidak untuk yang lain */}
-      {user.role === "master" && onBukaPanelMaster && (
+      {/* Superadmin (peran efektif master) tidak melihat Panel Master. */}
+      {user.role === "master" && !user.superadmin && onBukaPanelMaster && (
         <FadeInUp delay={0.03}>
           <button
             type="button"

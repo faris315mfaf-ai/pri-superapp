@@ -13,6 +13,7 @@ import { rekonsiliasiKpiRinci } from "@/lib/kpi-otomatis";
 import { perbaikiLaporanSemua, perbaikiLaporanUser } from "@/lib/perbaikan-laporan";
 import { analitikPostUp, postinganTerbaruUp, statusUnggahUp, uploadPostSiap } from "@/lib/upload-post";
 import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
+import { adalahMasterAsli } from "@/lib/peran";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -20,7 +21,7 @@ export const maxDuration = 120;
 export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
-    if (user.role !== "master") throw Object.assign(new Error("Halaman tidak ditemukan."), { status: 404 });
+    if (!adalahMasterAsli(user)) throw Object.assign(new Error("Halaman tidak ditemukan."), { status: 404 });
     const url = new URL(request.url);
     const db = supabase();
 

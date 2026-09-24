@@ -43,6 +43,7 @@ export const PERAN_LAMA: typeof PERAN = [
   { id: "super_admin", label: "Super Admin", singkat: "Super", ikon: ShieldCheck, warna: "#DC2626" },
   { id: "admin_tv", label: "Admin TV Rakyat", singkat: "TV", ikon: Tv, warna: "#10B981" },
   { id: "admin_hr", label: "Admin HR", singkat: "HR", ikon: Users, warna: "#F59E0B" },
+  { id: "superadmin", label: "Superadmin", singkat: "SA", ikon: ShieldCheck, warna: "#7C3AED" },
 ];
 
 export function labelPeran(id: string): string {
@@ -351,12 +352,20 @@ export function PilihJabatan({
   sedangProses,
   onPilih,
   onTutup,
+  superadmin,
 }: {
   pengguna: PenggunaAdmin;
   sedangProses: boolean;
   onPilih: (jabatan: string, bidang?: string, tvrNasional?: boolean) => void;
   onTutup: () => void;
+  /**
+   * Hanya diisi untuk MASTER (24 Sep 2026): beri/cabut jabatan Superadmin
+   * — kuasa penuh kecuali Panel Master. Server menolak selain master.
+   */
+  superadmin?: { onUbah: (nilai: boolean) => void };
 }) {
+  const adalahSa = pengguna.role === "superadmin";
+  const [yakinSa, setYakinSa] = useState(false);
   const [terpilih, setTerpilih] = useState<string>(pengguna.jabatan || "");
   const [bidang, setBidang] = useState<string>(pengguna.bidang_jabatan ?? "");
   // Jabatan TV Rakyat Nasional: BERDAMPINGAN, bukan menggantikan —
@@ -398,6 +407,68 @@ export function PilihJabatan({
         </p>
 
         <div className="scrollbar-tipis mt-4 flex flex-col gap-2 overflow-y-auto">
+          {superadmin && (
+            <div
+              className={cn(
+                "rounded-2xl border px-3.5 py-3",
+                adalahSa ? "border-violet-500/50 bg-violet-500/10" : "border-violet-500/25 bg-violet-500/5",
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white"
+                  style={{ background: "linear-gradient(135deg, #7C3AED, #4F46E5)" }}
+                  aria-hidden="true"
+                >
+                  <ShieldCheck className="h-4.5 w-4.5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold text-teks-utama">
+                    Superadmin {adalahSa && <span className="text-violet-600 dark:text-violet-300">· aktif</span>}
+                  </span>
+                  <span className="block text-[11px] leading-snug text-teks-sekunder">
+                    Menguasai seluruh aplikasi kecuali Panel Master. Hanya master yang bisa memberi.
+                  </span>
+                </span>
+              </div>
+              {yakinSa ? (
+                <div className="mt-2.5 flex gap-2">
+                  <button
+                    type="button"
+                    disabled={sedangProses}
+                    onClick={() => {
+                      setYakinSa(false);
+                      superadmin.onUbah(!adalahSa);
+                    }}
+                    className="btn-tekan flex-1 rounded-xl py-2 text-[12.5px] font-bold text-white disabled:opacity-50"
+                    style={{ background: adalahSa ? "linear-gradient(135deg, #DC2626, #B91C1C)" : "linear-gradient(135deg, #7C3AED, #4F46E5)" }}
+                  >
+                    {adalahSa ? "Ya, cabut Superadmin" : "Ya, jadikan Superadmin"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setYakinSa(false)}
+                    className="glass btn-tekan rounded-xl px-3 text-[12.5px] font-bold text-teks-utama"
+                  >
+                    Batal
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={sedangProses}
+                  onClick={() => setYakinSa(true)}
+                  className={cn(
+                    "btn-tekan mt-2.5 w-full rounded-xl py-2 text-[12.5px] font-bold disabled:opacity-50",
+                    adalahSa ? "border border-gagal/40 bg-gagal/5 text-gagal" : "text-white",
+                  )}
+                  style={adalahSa ? undefined : { background: "linear-gradient(135deg, #7C3AED, #4F46E5)" }}
+                >
+                  {adalahSa ? "Cabut Superadmin" : "Jadikan Superadmin"}
+                </button>
+              )}
+            </div>
+          )}
           {JABATAN_PARTAI.map((j) => (
             <button
               key={j}

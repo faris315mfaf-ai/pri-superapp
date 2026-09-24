@@ -50,6 +50,12 @@ export type User = {
   nama: string;
   email: string;
   role: Role;
+  /**
+   * SUPERADMIN (24 Sep 2026): peran DB "superadmin" dilihat sistem sebagai
+   * `role: "master"` + penanda ini — kuasa penuh KECUALI Panel Master.
+   * Lihat keUserPublik (lib/sesi) & adalahMasterAsli (lib/peran).
+   */
+  superadmin?: boolean;
   avatar_url: string;
   jabatan: string;
   /** Struktur divisi (lihat src/lib/struktur.ts) — opsional karena

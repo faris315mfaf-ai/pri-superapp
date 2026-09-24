@@ -16,7 +16,7 @@ import { DIVISI_SAYAP, jabatanSayapSah, pastikanStrukturSah, subTersimpan } from
 import { aksesDashboardRole } from "@/lib/dashboard-akses";
 import { adalahHR, diDivisiHR } from "@/lib/hr";
 
-import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
+import { adalahMasterAsli, PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 import { nilaiSayapTambahan } from "@/lib/sayap";
 import { kolomJabatanTvrAda, kolomStrukturLainAda } from "@/lib/kolom-struktur";
 import { pastikanDaftarStrukturSah } from "@/lib/struktur-banyak";
@@ -102,6 +102,9 @@ export async function GET(request: Request) {
     // join supaya daftar akun tetap terbuka.
     // Cast wajib: `.select(string)` dinamis = tipe GenericStringError di TS.
     const kolom = await kolomDaftarPengguna();
+    // Master asli melihat akun SUPERADMIN (24 Sep 2026) supaya bisa
+    // mencabutnya lewat dialog Jabatan; selain itu tetap tersembunyi.
+    const saringTersembunyi = adalahMasterAsli(pembaca) ? "(master)" : PERAN_TERSEMBUNYI_IN;
     let hasil = await supabase()
       .from("app_user")
       .select(kolom)
@@ -110,7 +113,7 @@ export async function GET(request: Request) {
       // Peran master tidak pernah tampil di panel mana pun — disaring
       // di server, bukan disembunyikan di layar, supaya tidak bisa
       // dilihat lewat pemeriksaan jaringan.
-      .not("role", "in", PERAN_TERSEMBUNYI_IN)
+      .not("role", "in", saringTersembunyi)
       .order("status", { ascending: true })
       .order("created_at", { ascending: false })
       .limit(500);
@@ -120,7 +123,7 @@ export async function GET(request: Request) {
       hasil = await supabase()
         .from("app_user")
         .select(tanpaZona)
-        .not("role", "in", PERAN_TERSEMBUNYI_IN)
+        .not("role", "in", saringTersembunyi)
         .order("status", { ascending: true })
         .order("created_at", { ascending: false })
         .limit(500);
@@ -236,12 +239,15 @@ export async function PATCH(request: Request) {
         | "ubah_jabatan"
         | "ubah_divisi"
         | "ganti_sandi"
-        | "ganti_username";
+        | "ganti_username"
+        | "ubah_superadmin";
       role?: string;
       /** ganti_username: username login baru (23 Sep 2026). */
       username?: string;
       /** tolak: alasan penolakan, ditunjukkan ke pendaftar (24 Sep 2026). */
       alasan?: string;
+      /** ubah_superadmin: true = jadikan superadmin, false = cabut. */
+      nilai?: boolean;
       jabatan?: string;
       bidang?: string;
       divisi?: string;
@@ -326,6 +332,55 @@ export async function PATCH(request: Request) {
       .maybeSingle();
     if (sasaran?.role === "master") {
       throw Object.assign(new Error("Akun tidak ditemukan"), { status: 404 });
+    }
+    // SUPERADMIN (24 Sep 2026): jabatan ini HANYA diberi/dicabut/diubah
+    // oleh master asli. Superadmin lain maupun HR tidak bisa menyentuh
+    // akun superadmin (tersembunyi seperti master).
+    if (sasaran?.role === "superadmin" && !adalahMasterAsli(pemanggil)) {
+      throw Object.assign(new Error("Akun tidak ditemukan"), { status: 404 });
+    }
+    if (body.tindakan === "ubah_superadmin") {
+      if (!adalahMasterAsli(pemanggil)) {
+        throw Object.assign(new Error("Jabatan Superadmin hanya bisa diberikan oleh master."), { status: 403 });
+      }
+      if (!sasaran) throw Object.assign(new Error("Akun tidak ditemukan"), { status: 404 });
+      const jadi = body.nilai === true;
+      const { error: eSa } = await db
+        .from("app_user")
+        .update(
+          jadi
+            ? { role: "superadmin", status: "aktif", aktif: true }
+            : { role: "anggota" },
+        )
+        .eq("id", id);
+      if (eSa) {
+        console.error("[pengguna] ubah superadmin:", eSa.message);
+        throw new Error("Gagal menyimpan jabatan Superadmin.");
+      }
+      // Peran berubah = sesi lama dibuang supaya kuasa baru/dicabut
+      // berlaku seketika di semua perangkatnya.
+      await cabutSemuaSesi(id);
+      await hapusCacheUser(id);
+      await db.from("log_audit").insert({
+        aktor_id: Number(pemanggil.id),
+        aktor_nama: pemanggil.nama,
+        aksi: jadi ? "beri_superadmin" : "cabut_superadmin",
+        target_id: id,
+        target_nama: String(sasaran.nama ?? ""),
+        detail: jadi
+          ? "Dijadikan Superadmin (kuasa penuh kecuali Panel Master)."
+          : "Jabatan Superadmin dicabut; peran kembali Anggota.",
+      });
+      await kirimKabar({
+        judul: jadi ? "Anda kini Superadmin" : "Jabatan Superadmin dicabut",
+        isi: jadi
+          ? "Master memberi Anda jabatan Superadmin. Masuk lagi untuk memakai kuasa barunya."
+          : "Jabatan Superadmin Anda dicabut master. Masuk lagi untuk melanjutkan.",
+        kategori: "info",
+        jenis_peristiwa: "keamanan",
+        untukUserIds: [id],
+      });
+      return { sukses: true, superadmin: jadi };
     }
 
     const perubahan: Record<string, unknown> = {};
