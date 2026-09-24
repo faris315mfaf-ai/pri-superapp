@@ -22,6 +22,7 @@ import { daftarJadwalUp, uploadPostSiap } from "@/lib/upload-post";
 import { hapusVideoCloudinary } from "@/lib/cloudinary";
 import { dariR2, hapusVideoR2 } from "@/lib/r2";
 import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
+import { saringJadwalMenunggu, waktuJadwal, type BarisPost } from "@/lib/jadwal-tvrku";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -66,24 +67,28 @@ export async function GET(request: Request) {
     // (request_id menampung job_id balasan post terjadwal).
     const { data: baris } = await db
       .from("tvrku_post")
-      .select("request_id, video_path, video_url")
+      .select("request_id, video_path, jadwal, hasil")
       .eq("user_id", Number(user.id))
       .not("request_id", "is", null)
+      .order("id", { ascending: false })
       .limit(200);
-    const peta = new Map(
-      (baris ?? []).map((b) => [String(b.request_id), b as { video_path: string; video_url: string }]),
-    );
+    // Job dicocokkan lewat request_id DAN hasil.job_id: "Post Sekarang"
+    // menyimpan request_id async, sedangkan antrean upload-post memakai job_id.
+    const peta = new Map<string, BarisPost>();
+    for (const b of baris ?? []) {
+      const isi: BarisPost = { jadwal: b.jadwal ? String(b.jadwal) : null, video_path: b.video_path ? String(b.video_path) : null };
+      peta.set(String(b.request_id), isi);
+      const hasil = (b.hasil && typeof b.hasil === "object" ? b.hasil : {}) as Record<string, unknown>;
+      if (hasil.job_id) peta.set(String(hasil.job_id), isi);
+    }
 
-    const data = semua
-      .filter((j) => j.profil === profil)
-      .map((j) => {
-        const milik = peta.get(j.job_id);
-        return {
-          ...j,
-          // Hanya kiriman berkas milik kita yang bisa dibatalkan.
-          bisa_batal: Boolean(milik?.video_path),
-        };
-      });
+    // Hanya yang benar-benar MENUNGGU tayang (lib/jadwal-tvrku): posting
+    // langsung yang masih diproses upload-post tidak ikut, dan tidak bisa
+    // "dibatalkan" (itu akan menghapus video yang masih dipakai).
+    const data = saringJadwalMenunggu(
+      semua.filter((j) => j.profil === profil),
+      peta,
+    );
     return { data };
   });
 }
@@ -96,14 +101,35 @@ export async function DELETE(request: Request) {
     if (!jobId) throw Object.assign(new Error("job_id wajib diisi."), { status: 400 });
 
     const db = supabase();
-    const { data: baris } = await db
+    // job_id antrean upload-post tersimpan di hasil.job_id (request_id
+    // berisi id lain) — dicari di keduanya (24 Sep 2026).
+    const kolomBatal = "id, video_path, video_url, jadwal";
+    let { data: baris } = await db
       .from("tvrku_post")
-      .select("id, video_path, video_url")
+      .select(kolomBatal)
       .eq("user_id", Number(user.id))
       .eq("request_id", jobId)
       .maybeSingle();
     if (!baris) {
+      ({ data: baris } = await db
+        .from("tvrku_post")
+        .select(kolomBatal)
+        .eq("user_id", Number(user.id))
+        .eq("hasil->>job_id", jobId)
+        .maybeSingle());
+    }
+    if (!baris) {
       throw Object.assign(new Error("Jadwal tidak ditemukan."), { status: 404 });
+    }
+    // Penjaga (24 Sep 2026): hanya posting TERJADWAL yang waktunya belum
+    // tiba. Menghapus berkas posting yang sedang diproses membuat sosmed
+    // yang belum selesai gagal terbit.
+    const waktu = baris.jadwal ? waktuJadwal(String(baris.jadwal)) : NaN;
+    if (!Number.isFinite(waktu) || waktu <= Date.now()) {
+      throw Object.assign(
+        new Error("Posting ini sudah atau sedang tayang — tidak bisa dibatalkan lagi."),
+        { status: 409 },
+      );
     }
     const jalur = String(baris.video_path ?? "");
     const url = String(baris.video_url ?? "");
