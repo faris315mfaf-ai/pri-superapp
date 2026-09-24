@@ -48,6 +48,7 @@ import { bebasKewajiban } from "@/lib/jabatan";
 import { getAbsensi, getKomentarSaya, getLaporanVideo, getStreakSaya } from "@/services";
 import type { KomponenIkon, User } from "@/types";
 import { RunningTextJuara } from "./running-text-juara";
+import { useModulAktif } from "@/hooks/use-modul";
 
 import { LencanaOnline } from "@/components/lencana-online";
 import { ModalStatus } from "@/components/modal-status";
@@ -70,6 +71,7 @@ function Ubin({
   Ikon,
   onKlik,
   aria,
+  lebar,
 }: {
   label: string;
   nilai: string;
@@ -78,6 +80,8 @@ function Ubin({
   Ikon: KomponenIkon;
   onKlik?: () => void;
   aria: string;
+  /** Mengisi dua kolom (dipakai saat jumlah ubin ganjil). */
+  lebar?: boolean;
 }) {
   return (
     <button
@@ -85,7 +89,7 @@ function Ubin({
       onClick={onKlik}
       disabled={!onKlik}
       aria-label={aria}
-      className="btn-tekan text-left disabled:cursor-default"
+      className={`btn-tekan text-left disabled:cursor-default${lebar ? " col-span-2" : ""}`}
     >
       <GlassCard className="ubin-beranda flex min-h-[118px] flex-col justify-between rounded-2xl p-3.5">
         <div className="flex items-start justify-between gap-2">
@@ -196,11 +200,14 @@ export function BerandaSimpelGlass({
 }) {
   const izin = useAppStore((s) => s.izinFitur);
   const sakelarFitur = useAppStore((s) => s.sakelar.fitur);
+  // Semua bagian komentar ikut sakelar modul kepatuhan_komen (24 Sep 2026,
+  // bawaan mati) — termasuk tidak memuat data komentar sama sekali.
+  const komenAktif = useModulAktif("kepatuhan_komen");
   const boleh = (k: Parameters<typeof bolehFitur>[1]) => bolehFitur(izin, k, user.role);
 
   const bebas = bebasKewajiban(user);
   const mauVideo = boleh("beranda.kpi_video") && !bebas;
-  const mauKomentar = boleh("beranda.kpi_komentar") && !bebas;
+  const mauKomentar = komenAktif && boleh("beranda.kpi_komentar") && !bebas;
   const mauAbsen = boleh("beranda.absensi") && !bebas;
 
 
@@ -303,13 +310,13 @@ export function BerandaSimpelGlass({
       </header>
 
       <KartuUltah idKu={user.id} />
-      {sakelarFitur.juara_efek !== false && <RunningTextJuara />}
+      {komenAktif && sakelarFitur.juara_efek !== false && <RunningTextJuara />}
 
       {/* Pintasan: Pengumuman · Leaderboard Komen (ikon toa & mahkota Mode Simpel) */}
       <FadeInUp>
         <div className="mt-4 flex gap-2">
           <Pintasan label="Pengumuman" Ikon={Megaphone} onKlik={onBukaPengumuman} />
-          <Pintasan label="Leaderboard Komen" Ikon={Crown} onKlik={onBukaLeaderboard} emas />
+          {komenAktif && <Pintasan label="Leaderboard Komen" Ikon={Crown} onKlik={onBukaLeaderboard} emas />}
         </div>
       </FadeInUp>
 
@@ -331,6 +338,7 @@ export function BerandaSimpelGlass({
             onKlik={mauVideo ? () => onBukaTvrKu?.("laporan") : undefined}
             aria="KPI video, buka laporan video"
           />
+          {komenAktif && (
           <Ubin
             label="KPI Komen"
             nilai={bebas ? "Bebas" : komentar ? `${komentar.sudah}/${komentar.total}` : "…"}
@@ -346,6 +354,7 @@ export function BerandaSimpelGlass({
             onKlik={mauKomentar ? onBukaKonten : undefined}
             aria="KPI komen, buka komen video"
           />
+          )}
           <Ubin
             label="Absen"
             nilai={
@@ -377,6 +386,7 @@ export function BerandaSimpelGlass({
             Ikon={Link2}
             onKlik={() => setModalAkun(true)}
             aria="Kaitkan akun sosmed"
+            lebar={!komenAktif}
           />
         </div>
       </FadeInUp>
@@ -384,12 +394,14 @@ export function BerandaSimpelGlass({
       {/* Modul utama — satu baris satu tujuan */}
       <FadeInUp delay={0.08}>
         <div className="mt-3 flex flex-col gap-2.5">
-          <BarisModul
-            label="Komen Video"
-            keterangan="Postingan wajib komen hari ini"
-            Ikon={MessageSquareText}
-            onKlik={onBukaKonten}
-          />
+          {komenAktif && (
+            <BarisModul
+              label="Komen Video"
+              keterangan="Postingan wajib komen hari ini"
+              Ikon={MessageSquareText}
+              onKlik={onBukaKonten}
+            />
+          )}
           <BarisModul
             label="Laporan Video"
             keterangan="Link video yang sudah tercatat hari ini"

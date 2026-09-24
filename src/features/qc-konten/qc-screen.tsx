@@ -61,6 +61,7 @@ import { RiwayatUpdateKomentar } from "./riwayat-update-komentar";
 import { TataLetakModul, type SeksiModul } from "@/components/tata-letak-modul";
 import { SeksiLipat } from "@/components/seksi-lipat";
 import { TombolLonceng } from "@/components/tombol-lonceng";
+import { useModulAktif } from "@/hooks/use-modul";
 import { cn } from "@/lib/utils";
 
 // ------------------------------------------------------------
@@ -101,12 +102,7 @@ const CHIP_PLATFORM = [
 // Komponen utama
 // ------------------------------------------------------------
 
-export function QcScreen({
-  onBukaAkun,
-  onBukaNotifikasi,
-  onBukaHalaman,
-  bolehHR = false,
-}: {
+type PropsQc = {
   onBukaAkun: (akunWajib: string, periode?: string) => void;
   onBukaNotifikasi?: () => void;
   /** Buka halaman HR Center (tabel-anggota / absensi-hari-ini / setel-kpi
@@ -115,29 +111,49 @@ export function QcScreen({
   /** Orang HR (peran admin_hr / Divisi HR) — memunculkan menu Kelola
    *  Pengguna & Kirim Pengumuman (fitur 1.22.x/1). */
   bolehHR?: boolean;
-}) {
+};
+
+/**
+ * HR Center. Bagian kepatuhan komentar (riwayat, siapa sudah/belum komen,
+ * kemajuan pemeriksaan, ringkasan per sosmed) ikut sakelar modul
+ * "kepatuhan_komen" (24 Sep 2026, bawaan MATI). Saat mati, layar penuh
+ * tidak dipasang sama sekali — tidak ada satu pun permintaan data QC.
+ */
+export function QcScreen(props: PropsQc) {
+  const komenAktif = useModulAktif("kepatuhan_komen");
+  if (komenAktif) return <QcScreenPenuh {...props} />;
+  const { onBukaNotifikasi, onBukaHalaman, bolehHR = false } = props;
+  return (
+    <div className="kolom-aplikasi px-4 pb-32">
+      <header className="flex items-start justify-between gap-3 pt-5">
+        <div>
+          <h1 className="font-heading text-2xl font-extrabold tracking-tight text-teks-utama">
+            HR Center
+          </h1>
+          <p className="mt-0.5 text-xs text-teks-sekunder">Data anggota, absensi, KPI, dan pengumuman</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <TombolLonceng onBuka={onBukaNotifikasi} />
+          <ThemeToggle />
+        </div>
+      </header>
+      {onBukaHalaman && <MenuHrCenter onBukaHalaman={onBukaHalaman} bolehHR={bolehHR} />}
+    </div>
+  );
+}
+
+function QcScreenPenuh({
+  onBukaAkun,
+  onBukaNotifikasi,
+  onBukaHalaman,
+  bolehHR = false,
+}: PropsQc) {
   // PERIODE TERPILIH — jantung fitur Riwayat: semua data layar mengikuti
   // label periode ini. Bawaan = jendela QC yang SEDANG berjalan
   // (19:00→18:59 WIB, lib/periode-qc). Diubah lewat pemilih tanggal ATAU
   // dengan mengeklik entri riwayat (memakai label PERSIS entri itu, jadi
   // data berlabel lama 00:00-23:59 pun tetap terbuka).
   const [periodePilih, setPeriodePilih] = useState<string>(() => periodeSaatIni());
-  // Permohonan sosmed terblokir yang menunggu — lencana di menu supaya
-  // HR tahu ada yang harus diputus (23 Sep 2026). Gagal = tanpa lencana.
-  const [jumlahBlokir, setJumlahBlokir] = useState(0);
-  // Boolean, bukan fungsinya: page.tsx membuat fungsi baru tiap render,
-  // dan efek yang bergantung padanya akan memanggil API berulang-ulang.
-  const adaMenuHalaman = Boolean(onBukaHalaman);
-  useEffect(() => {
-    if (!adaMenuHalaman) return;
-    let hidup = true;
-    getPersetujuanKpi(true)
-      .then((d) => hidup && setJumlahBlokir(d.banned.length))
-      .catch(() => undefined);
-    return () => {
-      hidup = false;
-    };
-  }, [adaMenuHalaman]);
   const tanggalPilih = periodePilih.slice(0, 10);
   const hariIni = periodePilih === periodeSaatIni();
 
@@ -315,54 +331,7 @@ export function QcScreen({
         {riwayatBuka && <RiwayatAnalisisModal onTutup={() => setRiwayatBuka(false)} />}
       </AnimatePresence>
 
-      {/* Menu halaman HR Center (spek 1.18: 2.2 / 2.4 / 2.5) + Kirim
-          Pengumuman untuk orang HR (fitur 1.22.x/1). Kelola Pengguna
-          DIGABUNG ke Database Anggota (23 Sep 2026) — satu pintu untuk
-          persetujuan, peran, jabatan, struktur, zona, dan sandi. */}
-      {onBukaHalaman && (
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          {(
-            [
-              ["tabel-anggota", "Database Anggota", UsersRound, true],
-              // Pindah dari Dashboard (11 Sep 2026): detail per orang —
-              // kewajiban komentar, KPI kerja, absensi, laporan video.
-              ["database", "Detail Anggota", Database, true],
-              ["absensi-hari-ini", "Absensi Hari Ini", CalendarDays, true],
-              ["setel-kpi", "Setel KPI", TrendingUp, true],
-              // Dulu "ACC KPI". Laporan video kini langsung dihitung (12 &
-              // 23 Sep 2026); yang tersisa untuk HR hanya permohonan akun
-              // sosmed terblokir — menu ini sempat tersembunyi sehingga
-              // permohonan itu tak bisa diputus siapa pun.
-              ["persetujuan-kpi", "Sosmed Terblokir", Ban, true],
-              ["pengumuman", "Kirim Pengumuman", Megaphone, bolehHR],
-            ] as const
-          )
-            .filter(([, , , tampil]) => tampil)
-            .map(([id, label, Ikon]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => onBukaHalaman(id)}
-                className="glass btn-tekan flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3"
-              >
-                <span className="relative">
-                  <Ikon className="h-5 w-5 text-pri" aria-hidden="true" />
-                  {id === "persetujuan-kpi" && jumlahBlokir > 0 && (
-                    <span className="absolute -top-2 -right-3 flex h-4 min-w-4 items-center justify-center rounded-full bg-gagal px-1 text-[9.5px] font-bold text-white">
-                      {jumlahBlokir}
-                    </span>
-                  )}
-                </span>
-                <span className="text-center text-[10.5px] leading-tight font-bold text-teks-utama">
-                  {label}
-                  {id === "persetujuan-kpi" && jumlahBlokir > 0 && (
-                    <span className="sr-only"> ({jumlahBlokir} menunggu)</span>
-                  )}
-                </span>
-              </button>
-            ))}
-        </div>
-      )}
+      {onBukaHalaman && <MenuHrCenter onBukaHalaman={onBukaHalaman} bolehHR={bolehHR} />}
 
       {/* Atur Tata Letak (fitur 1.22.x): seret/sembunyikan/lipat tiap seksi.
           Seksi Mulai Analisis / Akun Belum Tertaut / Tingkat / Tren /
@@ -929,6 +898,81 @@ export function QcScreen({
  * atau gagal dimuat — URL avatar CDN bisa kedaluwarsa — jatuh kembali ke
  * lingkaran inisial seperti desain lama, jadi tidak pernah ada kotak kosong.
  */
+// ------------------------------------------------------------
+// MenuHrCenter — tombol halaman HR Center. Dipakai layar penuh maupun
+// layar ringkas (saat modul kepatuhan komentar mati).
+// ------------------------------------------------------------
+
+function MenuHrCenter({
+  onBukaHalaman,
+  bolehHR,
+}: {
+  onBukaHalaman: (nama: string) => void;
+  bolehHR: boolean;
+}) {
+  // Permohonan sosmed terblokir yang menunggu — lencana di menu supaya
+  // HR tahu ada yang harus diputus (23 Sep 2026). Gagal = tanpa lencana.
+  const [jumlahBlokir, setJumlahBlokir] = useState(0);
+  useEffect(() => {
+    let hidup = true;
+    getPersetujuanKpi(true)
+      .then((d) => hidup && setJumlahBlokir(d.banned.length))
+      .catch(() => undefined);
+    return () => {
+      hidup = false;
+    };
+  }, []);
+
+  // Menu halaman HR Center (spek 1.18: 2.2 / 2.4 / 2.5) + Kirim
+  // Pengumuman untuk orang HR (fitur 1.22.x/1). Kelola Pengguna DIGABUNG
+  // ke Database Anggota (23 Sep 2026) — satu pintu untuk persetujuan,
+  // peran, jabatan, struktur, zona, dan sandi.
+  return (
+    <div className="mt-4 grid grid-cols-3 gap-2">
+      {(
+        [
+          ["tabel-anggota", "Database Anggota", UsersRound, true],
+          // Pindah dari Dashboard (11 Sep 2026): detail per orang —
+          // kewajiban komentar, KPI kerja, absensi, laporan video.
+          ["database", "Detail Anggota", Database, true],
+          ["absensi-hari-ini", "Absensi Hari Ini", CalendarDays, true],
+          ["setel-kpi", "Setel KPI", TrendingUp, true],
+          // Dulu "ACC KPI". Laporan video kini langsung dihitung (12 &
+          // 23 Sep 2026); yang tersisa untuk HR hanya permohonan akun
+          // sosmed terblokir — menu ini sempat tersembunyi sehingga
+          // permohonan itu tak bisa diputus siapa pun.
+          ["persetujuan-kpi", "Sosmed Terblokir", Ban, true],
+          ["pengumuman", "Kirim Pengumuman", Megaphone, bolehHR],
+        ] as const
+      )
+        .filter(([, , , tampil]) => tampil)
+        .map(([id, label, Ikon]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onBukaHalaman(id)}
+            className="glass btn-tekan flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3"
+          >
+            <span className="relative">
+              <Ikon className="h-5 w-5 text-pri" aria-hidden="true" />
+              {id === "persetujuan-kpi" && jumlahBlokir > 0 && (
+                <span className="absolute -top-2 -right-3 flex h-4 min-w-4 items-center justify-center rounded-full bg-gagal px-1 text-[9.5px] font-bold text-white">
+                  {jumlahBlokir}
+                </span>
+              )}
+            </span>
+            <span className="text-center text-[10.5px] leading-tight font-bold text-teks-utama">
+              {label}
+              {id === "persetujuan-kpi" && jumlahBlokir > 0 && (
+                <span className="sr-only"> ({jumlahBlokir} menunggu)</span>
+              )}
+            </span>
+          </button>
+        ))}
+    </div>
+  );
+}
+
 function AvatarAkunWajib({ akun, urut }: { akun: AkunWajibWithStats; urut: number }) {
   const [gagalGambar, setGagalGambar] = useState(false);
 

@@ -127,6 +127,7 @@ import {
 import type { Role, User } from "@/types";
 import { cn } from "@/lib/utils";
 import { PERISTIWA_BUKA_CHAT } from "@/lib/peristiwa";
+import { useModulAktif } from "@/hooks/use-modul";
 
 // ------------------------------------------------------------
 // Navigasi
@@ -268,6 +269,7 @@ export default function Page() {
   const setUser = useAppStore((s) => s.setUser);
   const sakelar = useAppStore((s) => s.sakelar);
   const setSakelar = useAppStore((s) => s.setSakelar);
+  const komenAktif = useModulAktif("kepatuhan_komen");
   const tema = useAppStore((s) => s.tema);
   const skalaFont = useAppStore((s) => s.skalaFont);
   const tvAnggota = useAppStore((s) => s.tvAnggota);
@@ -599,7 +601,7 @@ export default function Page() {
       ]);
       if (!hidup) return;
       setAksesDashboard(boleh);
-      if (sakelar) setSakelar({ fitur: sakelar.fitur, hemat: sakelar.hemat });
+      if (sakelar) setSakelar({ fitur: sakelar.fitur, hemat: sakelar.hemat, modul: sakelar.modul });
       // Asisten AI ikut sakelar fitur berat.
       setBolehAsisten(asisten.boleh && (sakelar ? sakelar.fitur.asisten !== false : true));
       // Susunan footer pilihan pengguna (fitur 1.20/4)
@@ -1269,10 +1271,12 @@ export default function Page() {
       {/* Tutorial interaktif daftar akun → Kepatuhan Komen (3 Sep 2026);
           menunggu changelog ditutup dulu supaya tidak bertumpuk. */}
       {/* Perayaan reset periode + juara komentar (3 Sep 2026) */}
-      {aplikasiAktif && !changelogBuka && sakelar.fitur.juara_efek !== false && <ModalKembangApi />}
+      {/* Juara komentar ikut sakelar modul kepatuhan_komen (24 Sep 2026). */}
+      {aplikasiAktif && !changelogBuka && komenAktif && sakelar.fitur.juara_efek !== false && <ModalKembangApi />}
       {/* Hadiah login harian (v5, 5 Sep 2026): sekali per hari, diperiksa sekali per sesi. */}
       {aplikasiAktif && user && <ModalHadiahHarian tunda={changelogBuka} />}
-      {aplikasiAktif && !changelogBuka && <TurPemandu />}
+      {/* Tutorial ini menuntun ke Kepatuhan Komen — ikut sakelar modulnya. */}
+      {aplikasiAktif && !changelogBuka && komenAktif && <TurPemandu />}
 
       {/* Pemilih ucapan ulang tahun (dari notifikasi ultah yang diklik) */}
       {siap && user && !menyambut && ultahBuka && (

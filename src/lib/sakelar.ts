@@ -14,6 +14,7 @@
 // Dibaca dengan cache 60 detik per instans server.
 // ============================================================
 import { supabase } from "@/lib/supabase";
+import { DAFTAR_MODUL, nilaiModul, type KunciModul } from "@/lib/sakelar-modul";
 
 export const DAFTAR_FITUR_BERAT = [
   {
@@ -48,6 +49,8 @@ export type PetaSakelar = {
   hemat: boolean;
   hemat_otomatis: boolean;
   tur: boolean;
+  /** Sakelar modul (lib/sakelar-modul) — TIDAK terpengaruh mode hemat. */
+  modul: Record<KunciModul, boolean>;
   diperbarui: string;
 };
 
@@ -61,7 +64,11 @@ export function resetCacheSakelar(): void {
 
 export async function bacaSakelar(segar = false): Promise<PetaSakelar> {
   if (!segar && cache && Date.now() - cache.pada < TTL_MS) return cache.peta;
-  const kunci = [...DAFTAR_FITUR_BERAT.map((f) => `fitur_${f.kunci}`), ...KUNCI_TAMBAHAN];
+  const kunci = [
+    ...DAFTAR_FITUR_BERAT.map((f) => `fitur_${f.kunci}`),
+    ...DAFTAR_MODUL.map((m) => `modul_${m.kunci}`),
+    ...KUNCI_TAMBAHAN,
+  ];
   let peta: Map<string, string> = new Map();
   try {
     const { data } = await supabase().from("pengaturan_sistem").select("kunci, nilai").in("kunci", kunci);
@@ -76,12 +83,15 @@ export async function bacaSakelar(segar = false): Promise<PetaSakelar> {
     pilihan[f.kunci] = peta.get(`fitur_${f.kunci}`) !== "false";
     fitur[f.kunci] = !hemat && pilihan[f.kunci];
   }
+  const modul = {} as Record<KunciModul, boolean>;
+  for (const m of DAFTAR_MODUL) modul[m.kunci] = nilaiModul(peta.get(`modul_${m.kunci}`), m.kunci);
   const hasil: PetaSakelar = {
     fitur,
     pilihan,
     hemat,
     hemat_otomatis: peta.get("hemat_otomatis") !== "false",
     tur: peta.get("tur_aktif") !== "false",
+    modul,
     diperbarui: new Date().toISOString(),
   };
   cache = { peta: hasil, pada: Date.now() };
@@ -91,6 +101,11 @@ export async function bacaSakelar(segar = false): Promise<PetaSakelar> {
 /** Fitur berat ini sedang boleh dipakai? (memperhitungkan mode hemat) */
 export async function fiturBeratAktif(kunci: KunciFiturBerat): Promise<boolean> {
   return (await bacaSakelar()).fitur[kunci];
+}
+
+/** Modul ini sedang nyala? (lib/sakelar-modul; mode hemat tidak berpengaruh) */
+export async function modulAktifServer(kunci: KunciModul): Promise<boolean> {
+  return (await bacaSakelar()).modul[kunci];
 }
 
 /** Simpan satu kunci sakelar ('true'/'false') lalu buang cache. */

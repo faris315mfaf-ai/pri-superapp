@@ -35,6 +35,7 @@ import { CincinJuara } from "@/features/peringkat/cincin-mythic";
 
 import { LencanaOnline } from "@/components/lencana-online";
 import { ModalStatus } from "@/components/modal-status";
+import { useModulAktif } from "@/hooks/use-modul";
 type DashboardScreenProps = {
   user: User;
   /** Buka HR Center — kosong bila pemakai tidak punya modulnya (10 Sep 2026). */
@@ -71,6 +72,7 @@ export function DashboardScreen({
   onBukaKepatuhan,
   onBukaTvAnalitik,
 }: DashboardScreenProps) {
+  const komenAktif = useModulAktif("kepatuhan_komen");
 
   const [statusBuka, setStatusBuka] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
@@ -242,7 +244,8 @@ export function DashboardScreen({
         const tujuan: Record<string, (() => void) | undefined> = {
           absensi: onBukaAbsensi,
           kpi: onBukaKpiVideo,
-          kepatuhan: onBukaKepatuhan,
+          // Ikut sakelar modul kepatuhan_komen (24 Sep 2026, bawaan mati).
+          kepatuhan: komenAktif ? onBukaKepatuhan : undefined,
           tv: onBukaTvAnalitik,
           tvnasional: onBukaTvNasional,
         };

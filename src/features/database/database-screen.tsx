@@ -41,6 +41,7 @@ import {
 } from "@/services";
 import { jamWIB, tanggalIndonesia } from "@/lib/format";
 import { labelPlatform } from "@/components/platform-icon";
+import { useModulAktif } from "@/hooks/use-modul";
 
 const PER_HALAMAN = 10;
 
@@ -50,6 +51,7 @@ const PER_HALAMAN = 10;
 
 function DetailPengguna({ id, onKembali }: { id: string; onKembali: () => void }) {
   const [data, setData] = useState<DbDetailPengguna | null>(null);
+  const komenAktif = useModulAktif("kepatuhan_komen");
 
   useEffect(() => {
     let hidup = true;
@@ -91,7 +93,9 @@ function DetailPengguna({ id, onKembali }: { id: string; onKembali: () => void }
         </GlassCard>
       </FadeInUp>
 
-      {/* Kewajiban komentar hari ini */}
+      {/* Kewajiban komentar hari ini — ikut sakelar modul kepatuhan_komen
+          (24 Sep 2026, bawaan mati). */}
+      {komenAktif && (
       <FadeInUp delay={0.04}>
         <SectionTitle judul="Kewajiban Komentar Hari Ini" className="mt-5" />
         <GlassCard className="p-4">
@@ -116,6 +120,7 @@ function DetailPengguna({ id, onKembali }: { id: string; onKembali: () => void }
           )}
         </GlassCard>
       </FadeInUp>
+      )}
 
       {/* KPI kerja 7 hari */}
       <FadeInUp delay={0.08}>
@@ -220,6 +225,7 @@ function DetailPengguna({ id, onKembali }: { id: string; onKembali: () => void }
 // ------------------------------------------------------------
 
 export function DatabaseScreen({ onKembali }: { onKembali: () => void }) {
+  const komenAktif = useModulAktif("kepatuhan_komen");
   const [daftar, setDaftar] = useState<DbRingkasPengguna[] | null>(null);
   const [cari, setCari] = useState("");
   const [halaman, setHalaman] = useState(1);
@@ -264,7 +270,11 @@ export function DatabaseScreen({ onKembali }: { onKembali: () => void }) {
             Database Anggota
           </h1>
           <p className="text-xs text-teks-sekunder">
-            {terpilih ? "Detail aktivitas" : "Kewajiban, KPI, absen, dan video per orang"}
+            {terpilih
+              ? "Detail aktivitas"
+              : komenAktif
+                ? "Kewajiban, KPI, absen, dan video per orang"
+                : "KPI, absen, dan video per orang"}
           </p>
         </div>
         <Database className="h-5 w-5 shrink-0 text-pri" aria-hidden="true" />
@@ -315,8 +325,8 @@ export function DatabaseScreen({ onKembali }: { onKembali: () => void }) {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] font-bold text-teks-utama">{u.nama}</p>
                       <p className="mt-0.5 truncate text-[10.5px] text-teks-sekunder">
-                        {u.struktur || "Tanpa divisi"} · komen {u.komentar_sudah}/
-                        {u.komentar_total} · video {u.video}/5
+                        {u.struktur || "Tanpa divisi"}
+                        {komenAktif ? ` · komen ${u.komentar_sudah}/${u.komentar_total}` : ""} · video {u.video}/5
                       </p>
                     </div>
                     <StatusBadge

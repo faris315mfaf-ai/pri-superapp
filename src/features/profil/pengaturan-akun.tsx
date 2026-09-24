@@ -5,7 +5,7 @@
 //   • TombolAkunSosmed / ModalAkunSosmed — kelola username IG/TikTok
 //     (boleh lebih dari satu per platform), acuan pemeriksaan QC
 //   • ModalGantiFoto  — pilih foto, potong, kecilkan ke ~100 KB
-//   • ModalGantiSandi — ganti sandi lewat OTP EMAIL terdaftar, 1x seminggu
+//   • ModalGantiSandi — ganti sandi cukup dengan sandi lama (24 Sep 2026)
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
@@ -30,14 +30,13 @@ import {
 import { toast, useAppStore } from "@/hooks/use-app-store";
 import {
   gantiFotoProfil,
-  gantiSandi,
+  gantiSandiDenganLama,
   gantiUsername,
   getInfoUsername,
   getAkunSosmed,
   hapusAkunSosmed,
   kirimKodeVerifikasiWa,
   kirimKodeWaBaru,
-  mintaOtpGantiSandi,
   tambahAkunSosmed,
   verifikasiWaBaru,
   type InfoUsername,
@@ -554,44 +553,31 @@ export function ModalGantiFoto({
 }
 
 // ------------------------------------------------------------
-// Ganti kata sandi (OTP WhatsApp)
+// Ganti kata sandi — cukup KATA SANDI LAMA (24 Sep 2026)
+//
+// Dulu lewat kode OTP ke email terdaftar, yang gagal bagi anggota tanpa
+// email aktif. Kini cukup sandi lama; perangkat LAIN dikeluarkan, perangkat
+// ini tetap masuk. Master bisa mematikannya (Panel Master → Sakelar Modul).
 // ------------------------------------------------------------
 
 export function ModalGantiSandi({ onTutup }: { onTutup: () => void }) {
-  const [langkah, setLangkah] = useState<"mulai" | "kode">("mulai");
-  const [kode, setKode] = useState("");
+  const [sandiLama, setSandiLama] = useState("");
   const [sandiBaru, setSandiBaru] = useState("");
+  const [ulangi, setUlangi] = useState("");
   const [memuat, setMemuat] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function minta(e: React.FormEvent) {
-    e.preventDefault();
-    if (memuat) return;
-    setError(null);
-    setMemuat(true);
-    try {
-      await mintaOtpGantiSandi();
-      toast("sukses", "Kode terkirim", "Cek email terdaftar Anda (termasuk folder Spam).");
-      setLangkah("kode");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal mengirim kode.");
-    } finally {
-      setMemuat(false);
-    }
-  }
+  const cocok = sandiBaru === ulangi;
+  const siap = sandiLama.length > 0 && sandiBaru.length >= 8 && cocok && sandiBaru !== sandiLama;
 
   async function ganti(e: React.FormEvent) {
     e.preventDefault();
-    if (memuat) return;
+    if (memuat || !siap) return;
     setError(null);
     setMemuat(true);
     try {
-      await gantiSandi({ kode, sandi_baru: sandiBaru });
-      toast(
-        "sukses",
-        "Kata sandi diganti",
-        "Perangkat lain otomatis dikeluarkan demi keamanan.",
-      );
+      await gantiSandiDenganLama({ sandi_lama: sandiLama, sandi_baru: sandiBaru });
+      toast("sukses", "Kata sandi diganti", "Perangkat lain otomatis dikeluarkan demi keamanan.");
       onTutup();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal mengganti sandi.");
@@ -600,54 +586,65 @@ export function ModalGantiSandi({ onTutup }: { onTutup: () => void }) {
     }
   }
 
+  const kelasInput =
+    "glass-soft h-12 w-full rounded-xl pr-3.5 pl-11 text-[15px] text-teks-utama outline-none focus:ring-2 focus:ring-pri/50 disabled:opacity-60";
+
   return (
     <Sheet judul="Ganti Kata Sandi" onTutup={memuat ? undefined : onTutup}>
-      {langkah === "mulai" ? (
-        <form onSubmit={minta} className="flex flex-col gap-3" noValidate>
-          <p className="text-[13px] leading-relaxed text-teks-sekunder">
-            Demi keamanan, kode verifikasi 6 angka dikirim ke{" "}
-            <span className="font-semibold text-teks-utama">email yang terdaftar</span>{" "}
-            pada akun ini. Tekan tombol di bawah untuk mengirim kode.
-          </p>
-          {error && <PesanError pesan={error} />}
-          <p className="text-[11.5px] leading-relaxed text-teks-sekunder">
-            Kata sandi hanya boleh diganti sekali dalam seminggu.
-          </p>
-          <TombolMerah memuat={memuat}>Kirim Kode ke Email</TombolMerah>
-        </form>
-      ) : (
-        <form onSubmit={ganti} className="flex flex-col gap-3" noValidate>
+      <form onSubmit={ganti} className="flex flex-col gap-3" noValidate>
+        <p className="text-[13px] leading-relaxed text-teks-sekunder">
+          Cukup masukkan kata sandi lama — tanpa kode email atau WhatsApp. Perangkat lain
+          yang masuk ke akun ini akan dikeluarkan.
+        </p>
+        <div className="relative">
+          <Lock className="pointer-events-none absolute top-1/2 left-3.5 h-4.5 w-4.5 -translate-y-1/2 text-teks-sekunder" />
           <input
-            value={kode}
-            onChange={(e) => setKode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            placeholder="······"
-            aria-label="Kode 6 angka"
+            type="password"
+            value={sandiLama}
+            onChange={(e) => setSandiLama(e.target.value)}
+            placeholder="Kata sandi lama"
+            autoComplete="current-password"
+            aria-label="Kata sandi lama"
             disabled={memuat}
-            className="glass-soft h-14 w-full rounded-xl text-center font-mono text-[26px] tracking-[0.45em] text-teks-utama outline-none placeholder:text-teks-sekunder/40 focus:ring-2 focus:ring-pri/50 disabled:opacity-60"
+            className={kelasInput}
           />
-          <div className="relative">
-            <Lock className="pointer-events-none absolute top-1/2 left-3.5 h-4.5 w-4.5 -translate-y-1/2 text-teks-sekunder" />
-            <input
-              type="password"
-              value={sandiBaru}
-              onChange={(e) => setSandiBaru(e.target.value)}
-              placeholder="Kata sandi baru (min. 8)"
-              autoComplete="new-password"
-              disabled={memuat}
-              className="glass-soft h-12 w-full rounded-xl pr-3.5 pl-11 text-[15px] text-teks-utama outline-none focus:ring-2 focus:ring-pri/50 disabled:opacity-60"
-            />
-          </div>
-          {error && <PesanError pesan={error} />}
-          <TombolMerah
-            memuat={memuat}
-            disabled={kode.length !== 6 || sandiBaru.length < 8}
-          >
-            Ganti Kata Sandi
-          </TombolMerah>
-        </form>
-      )}
+        </div>
+        <div className="relative">
+          <Lock className="pointer-events-none absolute top-1/2 left-3.5 h-4.5 w-4.5 -translate-y-1/2 text-teks-sekunder" />
+          <input
+            type="password"
+            value={sandiBaru}
+            onChange={(e) => setSandiBaru(e.target.value)}
+            placeholder="Kata sandi baru (min. 8)"
+            autoComplete="new-password"
+            aria-label="Kata sandi baru"
+            disabled={memuat}
+            className={kelasInput}
+          />
+        </div>
+        <div className="relative">
+          <Lock className="pointer-events-none absolute top-1/2 left-3.5 h-4.5 w-4.5 -translate-y-1/2 text-teks-sekunder" />
+          <input
+            type="password"
+            value={ulangi}
+            onChange={(e) => setUlangi(e.target.value)}
+            placeholder="Ulangi kata sandi baru"
+            autoComplete="new-password"
+            aria-label="Ulangi kata sandi baru"
+            disabled={memuat}
+            className={kelasInput}
+          />
+        </div>
+        {ulangi.length > 0 && !cocok ? (
+          <p className="text-[11.5px] font-semibold text-gagal">Kata sandi baru dan ulangannya belum sama.</p>
+        ) : sandiBaru.length > 0 && sandiBaru === sandiLama ? (
+          <p className="text-[11.5px] font-semibold text-gagal">Kata sandi baru harus berbeda dari yang lama.</p>
+        ) : null}
+        {error && <PesanError pesan={error} />}
+        <TombolMerah memuat={memuat} disabled={!siap}>
+          Ganti Kata Sandi
+        </TombolMerah>
+      </form>
     </Sheet>
   );
 }

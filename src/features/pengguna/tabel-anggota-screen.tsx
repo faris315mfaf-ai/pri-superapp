@@ -32,6 +32,7 @@ import {
   CheckCheck,
   ChevronRight,
   KeyRound,
+  Link2,
   Loader2,
   MapPin,
   Search,
@@ -42,6 +43,7 @@ import {
   X,
 } from "lucide-react";
 import { PencocokanSadarScreen } from "./pencocokan-sadar-screen";
+import { ModalAkunAnggota } from "@/features/dashboard/anggota-kelengkapan-dashboard";
 import {
   KonfirmasiHapus,
   labelPeran,
@@ -56,6 +58,7 @@ import { FotoBulat } from "@/components/foto-bulat";
 import { WhatsAppIcon } from "@/features/qc-konten/whatsapp-icon";
 import { toast } from "@/hooks/use-app-store";
 import {
+  getDashboardAnggota,
   getPencocokanSadar,
   getPengguna,
   getZona,
@@ -65,6 +68,7 @@ import {
   tetapkanZonaAnggota,
   ubahPengguna,
   type AnggotaPencocokan,
+  type KelengkapanAnggota,
   type PenggunaAdmin,
   type Zona,
 } from "@/services";
@@ -129,6 +133,12 @@ export function TabelAnggotaScreen({
   const [halaman, setHalaman] = useState(1);
   const [gantiUntuk, setGantiUntuk] = useState<PenggunaAdmin | null>(null);
   const [usernameUntuk, setUsernameUntuk] = useState<PenggunaAdmin | null>(null);
+  // Akun tertaut (24 Sep 2026): popup yang SAMA dengan dashboard Database
+  // Anggota. Datanya satu permintaan untuk semua orang, dimuat saat tombol
+  // pertama kali ditekan lalu disimpan untuk klik berikutnya.
+  const [petaAkun, setPetaAkun] = useState<Map<string, KelengkapanAnggota> | null>(null);
+  const [akunUntuk, setAkunUntuk] = useState<KelengkapanAnggota | null>(null);
+  const [memuatAkun, setMemuatAkun] = useState<string | null>(null);
   // Zona (spek 2.6): daftar utk penetapan per anggota
   const [zonaList, setZonaList] = useState<Zona[]>([]);
   const [zonaUntuk, setZonaUntuk] = useState<PenggunaAdmin | null>(null);
@@ -163,6 +173,9 @@ export function TabelAnggotaScreen({
         // Tanpa hak kelola, layar ini tetap buku anggota AKTIF seperti dulu.
         setDaftar(bolehKelola ? hasil.data : hasil.data.filter((u) => u.status === "aktif"));
         setRingkasan(hasil.ringkasan ?? {});
+        // Data akun tertaut ikut basi saat daftar disegarkan — dimuat ulang
+        // saat tombolnya ditekan berikutnya.
+        setPetaAkun(null);
         setZonaList(zonaSemua);
         setSadarPer(cocok ? new Map(cocok.anggota.map((a) => [a.id, a.cara])) : null);
         if (bolehKelola && utamakanPendaftar && !sudahDiarahkan.current) {
@@ -180,6 +193,7 @@ export function TabelAnggotaScreen({
       hidup = false;
     };
   }, [muatUlang, versiSegar, layarSadar, bolehKelola, utamakanPendaftar]);
+
 
   const tersaring = useMemo(() => {
     const kunci = cari.trim().toLowerCase();
@@ -218,6 +232,30 @@ export function TabelAnggotaScreen({
       setSortKolom(kolom);
       setSortNaik(true);
     }
+  }
+
+  async function bukaAkunTertaut(u: PenggunaAdmin) {
+    if (memuatAkun) return;
+    let peta = petaAkun;
+    if (!peta) {
+      setMemuatAkun(u.id);
+      try {
+        const semua = await getDashboardAnggota();
+        peta = new Map(semua.map((a) => [String(a.id), a]));
+        setPetaAkun(peta);
+      } catch (e) {
+        toast("error", "Gagal memuat akun tertaut", e instanceof Error ? e.message : "");
+        return;
+      } finally {
+        setMemuatAkun(null);
+      }
+    }
+    const data = peta.get(String(u.id));
+    if (!data) {
+      toast("info", "Data akun belum tersedia", `${namaDepan(u)} belum tercatat di data akun tertaut.`);
+      return;
+    }
+    setAkunUntuk(data);
   }
 
   async function jalankan(
@@ -557,6 +595,22 @@ export function TabelAnggotaScreen({
                   </span>
                 )}
 
+                {/* Akun tertaut (24 Sep 2026) — popup sama dengan dashboard. */}
+                <button
+                  type="button"
+                  onClick={() => void bukaAkunTertaut(u)}
+                  disabled={memuatAkun !== null}
+                  aria-label={`Lihat akun tertaut ${u.nama}`}
+                  title="Akun tertaut"
+                  className="glass btn-tekan flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-pri disabled:opacity-60"
+                >
+                  {memuatAkun === u.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                </button>
+
                 {proses ? (
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center" aria-label="Menyimpan…">
                     <Loader2 className="h-4 w-4 animate-spin text-teks-sekunder" aria-hidden="true" />
@@ -685,6 +739,10 @@ export function TabelAnggotaScreen({
           }}
         />
       )}
+
+      <AnimatePresence>
+        {akunUntuk && <ModalAkunAnggota anggota={akunUntuk} onTutup={() => setAkunUntuk(null)} />}
+      </AnimatePresence>
 
       {/* Lembar tindakan per anggota — pintu ke semua dialog kelola. */}
       <AnimatePresence>

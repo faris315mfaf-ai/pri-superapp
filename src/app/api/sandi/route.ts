@@ -1,5 +1,8 @@
-// PUT  /api/sandi — minta kode OTP EMAIL untuk mengganti kata sandi
-// POST /api/sandi — ganti kata sandi dengan kode tersebut
+// PUT   /api/sandi — minta kode OTP EMAIL untuk mengganti kata sandi
+// POST  /api/sandi — ganti kata sandi dengan kode tersebut
+// PATCH /api/sandi — ganti kata sandi dengan KATA SANDI LAMA, tanpa kode
+//                    email/WA (24 Sep 2026). Hanya saat modul
+//                    "ganti_akun_profil" nyala (Panel Master → Sakelar Modul).
 //
 // Dua penjaga yang disengaja:
 //  1. Kode dikirim ke EMAIL yang TERDAFTAR pada akun (bukan alamat yang
@@ -9,10 +12,12 @@
 //     sesi dicuri, dan mencegah email dibanjiri kode.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
-import { buatHashSandi } from "@/lib/sandi";
+import { buatHashSandi, cocokkanSandi } from "@/lib/sandi";
 import { kirimOtpEmail, verifikasiOtpEmail, emailSah, normalkanEmail } from "@/lib/otp-email";
 import { EmailBelumDiaturError } from "@/lib/email";
-import { hapusCacheUser, cabutSemuaSesi, userDariToken } from "@/lib/sesi";
+import { hapusCacheUser, cabutSemuaSesi, cabutSesiLain, userDariToken } from "@/lib/sesi";
+import { modulAktifServer } from "@/lib/sakelar";
+import { cekBatas } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -129,6 +134,68 @@ export async function POST(request: Request) {
     // Sandi berganti = semua perangkat lain harus keluar.
     await cabutSemuaSesi(Number(user.id));
 
+    return { sukses: true };
+  });
+}
+
+export async function PATCH(request: Request) {
+  return bungkus(async () => {
+    const user = await pastikanMasuk(request);
+    if (!(await modulAktifServer("ganti_akun_profil"))) {
+      throw Object.assign(
+        new Error("Ganti kata sandi dari Profil sedang dimatikan master. Hubungi HR bila perlu."),
+        { status: 423 },
+      );
+    }
+    // Penebakan sandi lama lewat sesi yang dicuri: 5 percobaan / 15 menit
+    // per akun. Tanpa jeda mingguan — sandi lama sudah jadi penjaganya.
+    const batas = await cekBatas(`ganti-sandi|${user.id}`, 5, 15 * 60);
+    if (!batas.boleh) {
+      throw Object.assign(
+        new Error(`Terlalu banyak percobaan. Coba lagi dalam ${Math.ceil(batas.cobaLagiDetik / 60)} menit.`),
+        { status: 429 },
+      );
+    }
+
+    const body = (await request.json().catch(() => ({}))) as {
+      sandi_lama?: string;
+      sandi_baru?: string;
+    };
+    const sandiLama = body.sandi_lama ?? "";
+    const sandiBaru = body.sandi_baru ?? "";
+    if (!sandiLama) {
+      throw Object.assign(new Error("Masukkan kata sandi lama Anda."), { status: 400 });
+    }
+    if (sandiBaru.length < 8) {
+      throw Object.assign(new Error("Kata sandi baru minimal 8 karakter."), { status: 400 });
+    }
+    if (sandiBaru === sandiLama) {
+      throw Object.assign(new Error("Kata sandi baru harus berbeda dari yang lama."), { status: 400 });
+    }
+
+    const { data } = await supabase()
+      .from("app_user")
+      .select("password_hash")
+      .eq("id", Number(user.id))
+      .maybeSingle();
+    const hash = String(data?.password_hash ?? "");
+    if (!hash || !(await cocokkanSandi(sandiLama, hash))) {
+      throw Object.assign(new Error("Kata sandi lama salah."), { status: 403 });
+    }
+
+    const { error } = await supabase()
+      .from("app_user")
+      .update({
+        password_hash: await buatHashSandi(sandiBaru),
+        sandi_diubah_pada: new Date().toISOString(),
+      })
+      .eq("id", Number(user.id));
+    if (error) {
+      console.error("[sandi] ganti (sandi lama):", error.message);
+      throw new Error("Gagal menyimpan kata sandi baru.");
+    }
+    // Perangkat LAIN dikeluarkan; perangkat ini tetap masuk.
+    await cabutSesiLain(Number(user.id), tokenDari(request));
     return { sukses: true };
   });
 }

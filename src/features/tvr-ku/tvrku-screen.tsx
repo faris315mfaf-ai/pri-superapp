@@ -86,6 +86,7 @@ import { SiaranSerentak } from "./siaran-serentak";
 import { StudioPalugodam } from "./studio-palugodam";
 import { InsightSayaPanel } from "./insight-saya-panel";
 import { cn } from "@/lib/utils";
+import { useModulAktif } from "@/hooks/use-modul";
 import { PanelVideoWajib } from "@/features/tv-rakyat/panel-video-wajib";
 
 const PLATFORM_TVR = [
@@ -596,6 +597,7 @@ export function TvrKuScreen({
   const bolehStudio = adalahAdminStudio(userAsli);
   // ACC ajuan komentar (3 Sep 2026): seluruh anggota Divisi PALUGODAM + pengurus.
   const bolehAccKomen = adalahPalugodam(userAsli);
+  const komenAktif = useModulAktif("kepatuhan_komen");
   const [akun, setAkun] = useState<AkunTvr[] | null>(null);
   const [laporan, setLaporan] = useState<LaporanVideo[]>([]);
   // Unggahan hari ini yang tautannya belum tercatat (10 Sep 2026).
@@ -1057,7 +1059,8 @@ export function TvrKuScreen({
               },
             ]
           : []),
-        ...(bolehAccKomen
+        // Ajuan komentar ikut sakelar modul kepatuhan_komen (24 Sep 2026).
+        ...(bolehAccKomen && komenAktif
           ? [
               {
                 id: "acc-ajuan-komen",

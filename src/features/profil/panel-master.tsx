@@ -24,6 +24,7 @@ import { SeksiPenyediaTvr } from "./seksi-penyedia-tvr";
 import { SeksiServer } from "./seksi-server";
 import { SeksiBebasKewajiban } from "./seksi-bebas-kewajiban";
 import { SeksiSakelarBerat } from "./seksi-sakelar-berat";
+import { SeksiSakelarModul } from "./seksi-sakelar-modul";
 import { SeksiTokoPet } from "./seksi-toko-pet";
 import { SeksiFormatLaporan } from "./seksi-format-laporan";
 import { AnimatePresence, motion } from "framer-motion";
@@ -595,6 +596,11 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
               pengaturan={data.pengaturan}
               sedangProses={sedangProses}
               onSelesai={() => setMuatUlang((n) => n + 1)}
+            />
+            <SeksiSakelarModul
+              pengaturan={data.pengaturan}
+              sedangProses={sedangProses}
+              onJalankan={jalankan}
             />
             <SeksiSakelarBerat
               pengaturan={data.pengaturan}

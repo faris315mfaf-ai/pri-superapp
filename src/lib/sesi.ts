@@ -362,6 +362,25 @@ export async function cabutSemuaSesi(userId: number | string): Promise<void> {
   await hapusCacheUser(userId);
 }
 
+/**
+ * Cabut semua sesi seseorang KECUALI perangkat yang sedang dipakai
+ * (24 Sep 2026, ganti sandi dari Profil): orang yang baru mengganti
+ * sandinya tidak perlu ikut dikeluarkan dari HP-nya sendiri.
+ */
+export async function cabutSesiLain(userId: number | string, tokenSekarang: string): Promise<void> {
+  const bersih = (tokenSekarang ?? "").trim();
+  if (!bersih) {
+    await cabutSemuaSesi(userId);
+    return;
+  }
+  await supabase()
+    .from("sesi_perangkat")
+    .delete()
+    .eq("user_id", Number(userId))
+    .neq("token_hash", hashToken(bersih));
+  await hapusCacheUser(userId);
+}
+
 export { KOLOM_USER };
 // Diekspor ulang agar route API cukup mengimpor dari satu tempat.
 export { hapusCacheUser } from "@/lib/cache-sesi";

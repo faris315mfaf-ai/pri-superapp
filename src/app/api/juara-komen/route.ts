@@ -13,7 +13,7 @@
 // selesai; total komentar tetap ditampilkan sebagai info.
 import { hitungJuaraKomen } from "@/lib/juara-komen";
 import { denganCache } from "@/lib/cache-bersama";
-import { fiturBeratAktif } from "@/lib/sakelar";
+import { fiturBeratAktif, modulAktifServer } from "@/lib/sakelar";
 import { bungkus } from "@/lib/api-helper";
 import { pastikanMasuk } from "@/lib/sesi";
 import { periodeSaatIni } from "@/lib/periode-qc";
@@ -25,7 +25,8 @@ export async function GET(request: Request) {
     await pastikanMasuk(request);
     // Sakelar fitur berat (4 Sep 2026): efek juara dimatikan → tidak ada juara
     // yang dikirim, jadi running text & kembang api tidak tampil.
-    if (!(await fiturBeratAktif("juara_efek"))) {
+    // Juara komentar juga ikut sakelar modul kepatuhan_komen (24 Sep 2026).
+    if (!(await fiturBeratAktif("juara_efek")) || !(await modulAktifServer("kepatuhan_komen"))) {
       return { periode: null, tanggal: null, periode_kini: periodeSaatIni(), juara: [], nonaktif: true };
     }
     // 7 Sep 2026: cache bersama 120 dtk (sama untuk semua pengguna).

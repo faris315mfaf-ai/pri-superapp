@@ -16,6 +16,7 @@
 //    belum ada komentar). Komentarnya diperiksa pada sinkron berkala.
 // ============================================================
 import { supabase } from "@/lib/supabase";
+import { modulAktifServer } from "@/lib/sakelar";
 import { ambilAkunTertaut, ayrshareSiap } from "@/lib/ayrshare";
 import {
   idPostinganKanonik,
@@ -95,7 +96,10 @@ export async function sinkronKontenTvTerjadwal(): Promise<void> {
     // Mesin melempar 409 bila tak ada akun tertaut — itu normal (belum
     // ditautkan), cukup dicatat, bukan alasan menggagalkan apa pun.
     try {
-      await jalankanAnalisisAyrshare({ olehUserId: null });
+      await jalankanAnalisisAyrshare({
+        olehUserId: null,
+        tanpaKomentar: !(await modulAktifServer("kepatuhan_komen")),
+      });
     } catch (e) {
       // GAGAL → LEPASKAN klaim jendela ini (3 Sep 2026) supaya permintaan
       // berikutnya di jendela yang sama boleh mencoba lagi; tanpa ini satu
@@ -282,6 +286,7 @@ export async function sinkronKontenTvPaksa(
   if (!ayrshareSiap()) return { jalan: false, alasan: "Ayrshare belum tersambung." };
   const lease = await ambilLease(db);
   if (!lease) return { jalan: false, alasan: "Pekerja lain sedang menarik komentar (lease aktif)." };
+  const komenAktif = await modulAktifServer("kepatuhan_komen");
 
   let putaran = 0;
   let terakhir: Awaited<ReturnType<typeof jalankanAnalisisAyrshare>> | null = null;
@@ -297,6 +302,8 @@ export async function sinkronKontenTvPaksa(
       try {
         terakhir = await jalankanAnalisisAyrshare({
           olehUserId: null,
+          // Modul kepatuhan komentar mati → feed saja, komentar tidak ditarik.
+          tanpaKomentar: !komenAktif,
           anggaranMs: Math.min(sisaWaktu - 10_000, 120_000),
           segarMs: SEGAR_REALTIME_MS,
         });

@@ -28,6 +28,7 @@ import {
 } from "@/lib/pet";
 import { skinHewanDariKode } from "@/lib/pet-katalog-v5";
 import { adalahKunciFiturBerat, resetCacheSakelar, simpanSakelar } from "@/lib/sakelar";
+import { adalahKunciModul } from "@/lib/sakelar-modul";
 import { pantauServer } from "@/lib/pantau-server";
 import { KUNCI_FORMAT_LAPORAN, validasiTemplate } from "@/lib/template-laporan";
 import { bungkus } from "@/lib/api-helper";
@@ -547,6 +548,14 @@ export async function POST(request: Request) {
       const kunci = String(body.kunci ?? "");
       if (!adalahKunciFiturBerat(kunci)) throw Object.assign(new Error("Fitur tidak dikenal."), { status: 400 });
       await simpanSakelar(`fitur_${kunci}`, body.nilai === true);
+      return { sukses: true, kunci, nyala: body.nilai === true };
+    }
+    // Sakelar modul (24 Sep 2026, lib/sakelar-modul) — terpisah dari fitur
+    // berat: tidak ikut mode hemat dan bawaannya bisa mati.
+    if (body.aksi === "sakelar_modul") {
+      const kunci = String(body.kunci ?? "");
+      if (!adalahKunciModul(kunci)) throw Object.assign(new Error("Modul tidak dikenal."), { status: 400 });
+      await simpanSakelar(`modul_${kunci}`, body.nilai === true);
       return { sukses: true, kunci, nyala: body.nilai === true };
     }
     if (body.aksi === "mode_hemat") {

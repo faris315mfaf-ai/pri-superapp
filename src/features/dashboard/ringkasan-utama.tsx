@@ -20,6 +20,8 @@ import { GlassSkeleton } from "@/components/pri-ui";
 import { getRingkasUtama, type RingkasUtama } from "@/services";
 import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 import { waktuJelasWIB, warnaKepatuhan } from "@/lib/format";
+import { useModulAktif } from "@/hooks/use-modul";
+import { cn } from "@/lib/utils";
 
 type Props = {
   onBukaKomen?: () => void;
@@ -36,6 +38,8 @@ export function RingkasanUtama({
 }: Props) {
   const [data, setData] = useState<RingkasUtama | null>(null);
   const [gagal, setGagal] = useState(false);
+  // Kartu Kepatuhan Komen ikut sakelar modul (24 Sep 2026, bawaan mati).
+  const komenAktif = useModulAktif("kepatuhan_komen");
 
   // Muat pertama + penyegaran otomatis DIAM-DIAM (tanpa skeleton
   // ulang — angka lama tetap tampil sampai angka baru tiba).
@@ -71,7 +75,7 @@ export function RingkasanUtama({
     );
   }
 
-  const kartu = [
+  const semuaKartu = [
     {
       kunci: "komen",
       label: "Kepatuhan Komen",
@@ -113,17 +117,23 @@ export function RingkasanUtama({
       onKlik: onBukaVideo,
     },
   ];
+  const kartu = komenAktif ? semuaKartu : semuaKartu.filter((k) => k.kunci !== "komen");
 
   return (
     <div className="grid grid-cols-2 gap-2.5">
-      {kartu.map((k) => (
+      {kartu.map((k, i) => (
         <button
           key={k.kunci}
           type="button"
           onClick={k.onKlik}
           disabled={!k.onKlik}
           aria-label={`Buka detail ${k.label}`}
-          className="btn-tekan text-left disabled:cursor-default"
+          // Jumlah kartu ganjil (Kepatuhan Komen disembunyikan) → kartu
+          // terakhir melebar supaya tidak ada lubang di kisi.
+          className={cn(
+            "btn-tekan text-left disabled:cursor-default",
+            kartu.length % 2 === 1 && i === kartu.length - 1 && "col-span-2",
+          )}
         >
           <GlassCard className="h-full p-3">
             <div className="flex items-center gap-1.5">

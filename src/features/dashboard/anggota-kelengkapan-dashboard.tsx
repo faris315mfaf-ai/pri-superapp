@@ -37,6 +37,7 @@ import { FotoBulat } from "@/components/foto-bulat";
 import { toast } from "@/hooks/use-app-store";
 import { getDashboardAnggota, type KelengkapanAnggota } from "@/services";
 import { cn } from "@/lib/utils";
+import { useModulAktif } from "@/hooks/use-modul";
 import { urlProfilSosmed } from "@/lib/format";
 import { PlatformIcon } from "@/components/platform-icon";
 
@@ -73,12 +74,18 @@ function TabelAkunTertaut({
   );
   const totalTvr = daftar.filter((a) => (a.tvr_akun ?? []).length > 0).length;
   const totalQc = daftar.filter((a) => (a.qc_akun ?? []).length > 0).length;
+  // Kolom Akun QC (akun komentar) ikut sakelar modul kepatuhan_komen.
+  const komenAktif = useModulAktif("kepatuhan_komen");
   return (
     <GlassCard className="overflow-hidden p-0">
       <p className="px-3 pt-3 text-[10.5px] leading-relaxed text-teks-sekunder">
         Siapa yang sudah <b>menautkan akun TV Rakyat pribadi</b> (login upload-post) per
-        sosmed, dan siapa yang sudah <b>mendaftarkan akun komentar</b> untuk QC. Klik nama
-        untuk melihat username-nya.
+        sosmed{komenAktif ? (
+          <>
+            , dan siapa yang sudah <b>mendaftarkan akun komentar</b> untuk QC
+          </>
+        ) : null}
+        . Klik nama untuk melihat username-nya.
       </p>
       <div className="scrollbar-tipis overflow-x-auto">
         <table className="w-full min-w-[640px] text-left text-xs">
@@ -91,7 +98,7 @@ function TabelAkunTertaut({
                 </th>
               ))}
               <th className="px-2 py-2.5 text-center">TVR</th>
-              <th className="px-2 py-2.5 text-center">Akun QC</th>
+              {komenAktif && <th className="px-2 py-2.5 text-center">Akun QC</th>}
             </tr>
             <tr className="border-b border-glass-border bg-black/[0.03] text-[10px] text-teks-sekunder dark:bg-white/5">
               <td className="px-3 py-1.5 font-semibold">Sudah tertaut</td>
@@ -101,13 +108,15 @@ function TabelAkunTertaut({
                 </td>
               ))}
               <td className="angka-tab px-2 py-1.5 text-center font-bold text-teks-utama">{totalTvr}</td>
-              <td className="angka-tab px-2 py-1.5 text-center font-bold text-teks-utama">{totalQc}</td>
+              {komenAktif && (
+                <td className="angka-tab px-2 py-1.5 text-center font-bold text-teks-utama">{totalQc}</td>
+              )}
             </tr>
           </thead>
           <tbody>
             {daftar.length === 0 ? (
               <tr>
-                <td colSpan={PLATFORM_TVR.length + 3} className="px-3 py-6 text-center text-teks-sekunder">
+                <td colSpan={PLATFORM_TVR.length + (komenAktif ? 3 : 2)} className="px-3 py-6 text-center text-teks-sekunder">
                   Tidak ada anggota.
                 </td>
               </tr>
@@ -152,6 +161,7 @@ function TabelAkunTertaut({
                     >
                       {n}/6
                     </td>
+                    {komenAktif && (
                     <td className="px-2 py-2 text-center">
                       {qc > 0 ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-sukses/12 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
@@ -163,6 +173,7 @@ function TabelAkunTertaut({
                         </span>
                       )}
                     </td>
+                    )}
                   </tr>
                 );
               })
@@ -576,162 +587,181 @@ export function AnggotaKelengkapanDashboard() {
       </GlassCard>
       )}
 
-      {/* MODAL DETAIL ANGGOTA (31 Agu 2026): kontak, fitur login aktif,
-          akun TV Rakyat pribadi (klik -> profil), & username komentar QC. */}
+      {/* MODAL DETAIL ANGGOTA (31 Agu 2026) — kini komponen bersama,
+          dipakai juga Database Anggota di HR Center (24 Sep 2026). */}
       <AnimatePresence>
-        {dibuka && (
-          <motion.div
-            className="fixed inset-0 z-[90] flex items-end justify-center sm:items-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <div
-              className="absolute inset-0 bg-black/55 backdrop-blur-sm"
-              onClick={() => setDibuka(null)}
-            />
-            <motion.div
-              initial={{ y: 24, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 24, opacity: 0 }}
-              className="glass relative max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-t-3xl p-4 sm:rounded-3xl"
-            >
-              <div className="flex items-center gap-3">
-                {dibuka.avatar_url ? (
-                  <FotoBulat src={dibuka.avatar_url} ukuran={44} />
-                ) : (
-                  <AvatarInisial nama={dibuka.nama} ukuran={44} />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-teks-utama">{dibuka.nama}</p>
-                  <p className="truncate text-[11px] text-teks-sekunder">
-                    {dibuka.divisi || "(tanpa divisi)"}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setDibuka(null)}
-                  aria-label="Tutup"
-                  className="glass btn-tekan shrink-0 rounded-lg p-1.5 text-teks-utama"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              {/* Kontak */}
-              <div className="glass-soft mt-3 rounded-xl p-3">
-                <p className="text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">
-                  Kontak
-                </p>
-                <p className="mt-1 text-[12.5px] text-teks-utama">
-                  <span className="text-teks-sekunder">Email:</span>{" "}
-                  {dibuka.email || (
-                    <span className="text-teks-sekunder">belum ada email asli</span>
-                  )}
-                </p>
-                <p className="mt-0.5 text-[12.5px] text-teks-utama">
-                  <span className="text-teks-sekunder">Nomor WA:</span>{" "}
-                  {dibuka.nomor_wa || <span className="text-teks-sekunder">-</span>}
-                </p>
-              </div>
-
-              {/* Fitur login aktif */}
-              <div className="glass-soft mt-2 rounded-xl p-3">
-                <p className="text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">
-                  Fitur Login Aktif
-                </p>
-                <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-                  {(
-                    [
-                      ["Email terverifikasi", dibuka.login_aktif?.email],
-                      ["Google tertaut", dibuka.login_aktif?.google],
-                      ["Face recognition", dibuka.login_aktif?.wajah],
-                      ["Sidik jari", dibuka.login_aktif?.sidik_jari],
-                    ] as const
-                  ).map(([label, aktif]) => (
-                    <span
-                      key={label}
-                      className={cn(
-                        "flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold",
-                        aktif
-                          ? "bg-sukses/12 text-emerald-600 dark:text-emerald-400"
-                          : "bg-black/5 text-teks-sekunder dark:bg-white/10",
-                      )}
-                    >
-                      {aktif ? (
-                        <Check className="h-3 w-3 shrink-0" />
-                      ) : (
-                        <X className="h-3 w-3 shrink-0" />
-                      )}
-                      {label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Akun TV Rakyat pribadi */}
-              <div className="glass-soft mt-2 rounded-xl p-3">
-                <p className="text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">
-                  Akun TV Rakyat Pribadi ({dibuka.tvr_akun?.length ?? 0}/6 login)
-                </p>
-                {(dibuka.tvr_akun ?? []).length === 0 ? (
-                  <p className="mt-1 text-[11.5px] text-teks-sekunder">
-                    Belum ada akun yang login lewat upload-post.
-                  </p>
-                ) : (
-                  <div className="mt-1.5 flex flex-col gap-1">
-                    {(dibuka.tvr_akun ?? []).map((a) => (
-                      <a
-                        key={`${a.platform}-${a.username}`}
-                        href={urlProfilSosmed(a.platform, a.username)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn-tekan flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
-                      >
-                        <PlatformIcon platform={a.platform} size={13} />
-                        <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-teks-utama">
-                          @{a.username}
-                        </span>
-                        <ExternalLink className="h-3 w-3 shrink-0 text-teks-sekunder" />
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Username komentar QC */}
-              <div className="glass-soft mt-2 rounded-xl p-3">
-                <p className="text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">
-                  Username Komentar QC ({dibuka.qc_akun?.length ?? 0})
-                </p>
-                {(dibuka.qc_akun ?? []).length === 0 ? (
-                  <p className="mt-1 text-[11.5px] text-teks-sekunder">
-                    Belum mendaftarkan username sosmed untuk komentar.
-                  </p>
-                ) : (
-                  <div className="mt-1.5 flex flex-col gap-1">
-                    {(dibuka.qc_akun ?? []).map((a) => (
-                      <a
-                        key={`${a.platform}-${a.username}`}
-                        href={urlProfilSosmed(a.platform, a.username)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn-tekan flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
-                      >
-                        <PlatformIcon platform={a.platform} size={13} />
-                        <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-teks-utama">
-                          @{a.username}
-                        </span>
-                        <ExternalLink className="h-3 w-3 shrink-0 text-teks-sekunder" />
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
+        {dibuka && <ModalAkunAnggota anggota={dibuka} onTutup={() => setDibuka(null)} />}
       </AnimatePresence>
     </div>
+  );
+}
+
+// ------------------------------------------------------------
+// ModalAkunAnggota — kontak, fitur login aktif, akun TV Rakyat pribadi
+// (klik → profil), & username komentar QC. Dipakai dashboard Database
+// Anggota dan tombol akun tertaut di HR Center → Database Anggota.
+// ------------------------------------------------------------
+
+export function ModalAkunAnggota({
+  anggota,
+  onTutup,
+}: {
+  anggota: KelengkapanAnggota;
+  onTutup: () => void;
+}) {
+  const komenAktif = useModulAktif("kepatuhan_komen");
+  return (
+    <motion.div
+      className="fixed inset-0 z-[90] flex items-end justify-center sm:items-center"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <div
+        className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+        onClick={() => onTutup()}
+      />
+      <motion.div
+        initial={{ y: 24, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 24, opacity: 0 }}
+        className="glass relative max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-t-3xl p-4 sm:rounded-3xl"
+      >
+        <div className="flex items-center gap-3">
+          {anggota.avatar_url ? (
+            <FotoBulat src={anggota.avatar_url} ukuran={44} />
+          ) : (
+            <AvatarInisial nama={anggota.nama} ukuran={44} />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-bold text-teks-utama">{anggota.nama}</p>
+            <p className="truncate text-[11px] text-teks-sekunder">
+              {anggota.divisi || "(tanpa divisi)"}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onTutup()}
+            aria-label="Tutup"
+            className="glass btn-tekan shrink-0 rounded-lg p-1.5 text-teks-utama"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Kontak */}
+        <div className="glass-soft mt-3 rounded-xl p-3">
+          <p className="text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">
+            Kontak
+          </p>
+          <p className="mt-1 text-[12.5px] text-teks-utama">
+            <span className="text-teks-sekunder">Email:</span>{" "}
+            {anggota.email || (
+              <span className="text-teks-sekunder">belum ada email asli</span>
+            )}
+          </p>
+          <p className="mt-0.5 text-[12.5px] text-teks-utama">
+            <span className="text-teks-sekunder">Nomor WA:</span>{" "}
+            {anggota.nomor_wa || <span className="text-teks-sekunder">-</span>}
+          </p>
+        </div>
+
+        {/* Fitur login aktif */}
+        <div className="glass-soft mt-2 rounded-xl p-3">
+          <p className="text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">
+            Fitur Login Aktif
+          </p>
+          <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+            {(
+              [
+                ["Email terverifikasi", anggota.login_aktif?.email],
+                ["Google tertaut", anggota.login_aktif?.google],
+                ["Face recognition", anggota.login_aktif?.wajah],
+                ["Sidik jari", anggota.login_aktif?.sidik_jari],
+              ] as const
+            ).map(([label, aktif]) => (
+              <span
+                key={label}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold",
+                  aktif
+                    ? "bg-sukses/12 text-emerald-600 dark:text-emerald-400"
+                    : "bg-black/5 text-teks-sekunder dark:bg-white/10",
+                )}
+              >
+                {aktif ? (
+                  <Check className="h-3 w-3 shrink-0" />
+                ) : (
+                  <X className="h-3 w-3 shrink-0" />
+                )}
+                {label}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Akun TV Rakyat pribadi */}
+        <div className="glass-soft mt-2 rounded-xl p-3">
+          <p className="text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">
+            Akun TV Rakyat Pribadi ({anggota.tvr_akun?.length ?? 0}/6 login)
+          </p>
+          {(anggota.tvr_akun ?? []).length === 0 ? (
+            <p className="mt-1 text-[11.5px] text-teks-sekunder">
+              Belum ada akun yang login lewat upload-post.
+            </p>
+          ) : (
+            <div className="mt-1.5 flex flex-col gap-1">
+              {(anggota.tvr_akun ?? []).map((a) => (
+                <a
+                  key={`${a.platform}-${a.username}`}
+                  href={urlProfilSosmed(a.platform, a.username)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-tekan flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                >
+                  <PlatformIcon platform={a.platform} size={13} />
+                  <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-teks-utama">
+                    @{a.username}
+                  </span>
+                  <ExternalLink className="h-3 w-3 shrink-0 text-teks-sekunder" />
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Username komentar QC — ikut sakelar modul kepatuhan_komen (24 Sep 2026). */}
+        {komenAktif && (
+        <div className="glass-soft mt-2 rounded-xl p-3">
+          <p className="text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">
+            Username Komentar QC ({anggota.qc_akun?.length ?? 0})
+          </p>
+          {(anggota.qc_akun ?? []).length === 0 ? (
+            <p className="mt-1 text-[11.5px] text-teks-sekunder">
+              Belum mendaftarkan username sosmed untuk komentar.
+            </p>
+          ) : (
+            <div className="mt-1.5 flex flex-col gap-1">
+              {(anggota.qc_akun ?? []).map((a) => (
+                <a
+                  key={`${a.platform}-${a.username}`}
+                  href={urlProfilSosmed(a.platform, a.username)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-tekan flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
+                >
+                  <PlatformIcon platform={a.platform} size={13} />
+                  <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-teks-utama">
+                    @{a.username}
+                  </span>
+                  <ExternalLink className="h-3 w-3 shrink-0 text-teks-sekunder" />
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+        )}
+      </motion.div>
+    </motion.div>
   );
 }

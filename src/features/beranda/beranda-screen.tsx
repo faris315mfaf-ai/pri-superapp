@@ -40,6 +40,7 @@ import { SeksiLipat } from "@/components/seksi-lipat";
 import { TataLetakModul } from "@/components/tata-letak-modul";
 import { KartuUltah } from "@/components/ultah";
 import { RunningTextJuara } from "./running-text-juara";
+import { useModulAktif } from "@/hooks/use-modul";
 import {
   getAbsensi,
   getLaporanKerja,
@@ -107,6 +108,7 @@ export function BerandaScreen({
 }) {
   const izin = useAppStore((s) => s.izinFitur);
   const sakelarFitur = useAppStore((s) => s.sakelar.fitur);
+  const komenAktif = useModulAktif("kepatuhan_komen");
   const boleh = (k: Parameters<typeof bolehFitur>[1]) => bolehFitur(izin, k, user.role);
 
 
@@ -128,7 +130,7 @@ export function BerandaScreen({
   const ketum = bebasKewajiban(user);
   const mauKerja = boleh("beranda.kpi_kerja") && !ketum;
   const mauVideo = boleh("beranda.kpi_video") && !ketum;
-  const mauKomentar = boleh("beranda.kpi_komentar") && !ketum;
+  const mauKomentar = komenAktif && boleh("beranda.kpi_komentar") && !ketum;
   const mauAbsen = boleh("beranda.absensi") && !ketum;
 
   // Penyegaran otomatis (1 Sep 2026): angka KPI/absen/komentar beranda
@@ -244,7 +246,7 @@ export function BerandaScreen({
       <KartuUltah idKu={user.id} />
 
       {/* Running text juara komentar periode terakhir (3 Sep 2026) */}
-      {sakelarFitur.juara_efek !== false && <RunningTextJuara />}
+      {komenAktif && sakelarFitur.juara_efek !== false && <RunningTextJuara />}
 
       {/* Seksi-seksi Beranda dalam kerangka TATA LETAK (fitur 1.20/1&2):
           semua bisa dilipat, diurutkan ulang, dan disembunyikan lewat

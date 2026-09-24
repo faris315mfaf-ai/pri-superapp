@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 // tinggal membalik konstanta bila ingin ditampilkan lagi.
 const TAMPILKAN_KERJA_HARI_INI = false;
 import { bebasKewajiban } from "@/lib/jabatan";
+import { useModulAktif } from "@/hooks/use-modul";
 import type { User } from "@/types";
 
 function tanggalWibPerangkat(): string {
@@ -164,6 +165,8 @@ export function BerandaAnggotaPanel({
   const versiSegar = useVersiSegar();
   const [kpiKerja, setKpiKerja] = useState<KerjaKpi | null>(null);
   const [komentar, setKomentar] = useState<{ total: number; sudah: number } | null>(null);
+  // Kartu Wajib Komentar ikut sakelar modul kepatuhan_komen (24 Sep 2026).
+  const komenAktif = useModulAktif("kepatuhan_komen");
 
   useEffect(() => {
     let hidup = true;
@@ -173,7 +176,7 @@ export function BerandaAnggotaPanel({
       const [kerja, rekap] = await Promise.allSettled([
         getLaporanKerja(),
         // Dihitung SERVER per pengguna (perbaikan 0/0; /api/rekap?saya=1).
-        getKomentarSaya(),
+        komenAktif ? getKomentarSaya() : Promise.resolve(null),
       ]);
       if (!hidup) return;
 
@@ -189,7 +192,7 @@ export function BerandaAnggotaPanel({
     return () => {
       hidup = false;
     };
-  }, [user.nama, versiSegar]);
+  }, [user.nama, versiSegar, komenAktif]);
 
   const persenKerja =
     kpiKerja && kpiKerja.rencana_total > 0 ? (kpiKerja.kpi_persen ?? 0) : 0;
@@ -199,14 +202,15 @@ export function BerandaAnggotaPanel({
       : 0;
 
   // Bebas kewajiban (Panel Master, 3 Sep 2026): hanya pengumuman, tanpa kartu KPI/komentar.
-  if (bebasKewajiban(user)) return <KartuPengumumanTerbaru />;
+  // Tanpa kartu kerja & tanpa modul komentar pun sama: hanya pengumuman.
+  if (bebasKewajiban(user) || (!komenAktif && !TAMPILKAN_KERJA_HARI_INI)) return <KartuPengumumanTerbaru />;
 
   return (
     <>
       <KartuPengumumanTerbaru />
 
       <FadeInUp delay={0.05}>
-        <div className={cn("mt-4 grid gap-2.5", TAMPILKAN_KERJA_HARI_INI ? "grid-cols-2" : "grid-cols-1")}>
+        <div className={cn("mt-4 grid gap-2.5", TAMPILKAN_KERJA_HARI_INI && komenAktif ? "grid-cols-2" : "grid-cols-1")}>
           {/* Kerja hari ini → pintasan Laporan Kerja (disembunyikan) */}
           {TAMPILKAN_KERJA_HARI_INI && (
           <button
@@ -235,6 +239,7 @@ export function BerandaAnggotaPanel({
           )}
 
           {/* KPI kewajiban komentar konten */}
+          {komenAktif && (
           <GlassCard className="flex h-full items-center gap-3 p-3.5">
             <ProgressRing value={persenKomentar} size={52} strokeWidth={5}>
               <MessageCircle className="h-4 w-4 text-pri" aria-hidden="true" />
@@ -251,6 +256,7 @@ export function BerandaAnggotaPanel({
               </p>
             </div>
           </GlassCard>
+          )}
         </div>
       </FadeInUp>
     </>

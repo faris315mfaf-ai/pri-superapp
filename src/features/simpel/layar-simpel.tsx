@@ -13,6 +13,7 @@ import { AvatarInisial } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
 import { PlatformIcon, labelPlatform } from "@/components/platform-icon";
 import { ModalGantiSandi } from "@/features/profil/pengaturan-akun";
+import { useModulAktif } from "@/hooks/use-modul";
 import { toast, useAppStore } from "@/hooks/use-app-store";
 import { urlEmbedDari } from "@/lib/embed-sosmed";
 import { dengarkanRealtime } from "@/lib/realtime-klien";
@@ -529,6 +530,8 @@ export function PengaturanSimpel({ onKembali, namaUser }: { onKembali: () => voi
   const tema = useAppStore((s) => s.tema);
   const toggleTema = useAppStore((s) => s.toggleTema);
   const [modalSandi, setModalSandi] = useState(false);
+  // Ganti sandi ikut sakelar modul ganti_akun_profil (24 Sep 2026).
+  const bolehGantiAkun = useModulAktif("ganti_akun_profil");
   const [konfirmasiKeluar, setKonfirmasiKeluar] = useState(false);
   const [sedangKeluar, setSedangKeluar] = useState(false);
 
@@ -558,10 +561,12 @@ export function PengaturanSimpel({ onKembali, namaUser }: { onKembali: () => voi
           <span className="flex-1">Mode {gelap ? "malam" : "siang"}</span>
           <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] normal-case tracking-normal">ketuk untuk {gelap ? "siang" : "malam"}</span>
         </button>
-        <button type="button" onClick={() => setModalSandi(true)} className={kelasTombol} style={{ background: BIRU_SIMPEL }}>
-          <KeyRound className="h-5 w-5" aria-hidden="true" />
-          Ganti kata sandi
-        </button>
+        {bolehGantiAkun ? (
+          <button type="button" onClick={() => setModalSandi(true)} className={kelasTombol} style={{ background: BIRU_SIMPEL }}>
+            <KeyRound className="h-5 w-5" aria-hidden="true" />
+            Ganti kata sandi
+          </button>
+        ) : null}
         {konfirmasiKeluar ? (
           <div className="rounded-xl border border-red-300 bg-red-50 p-3 dark:border-red-800 dark:bg-red-900/20">
             <p className="text-[13px] font-bold text-slate-900 dark:text-white">Keluar dari akun di perangkat ini?</p>

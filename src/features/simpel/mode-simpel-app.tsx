@@ -29,7 +29,8 @@ import { TvrKuScreen } from "@/features/tvr-ku/tvrku-screen";
 import { useAppStore } from "@/hooks/use-app-store";
 import { bebasKewajiban } from "@/lib/jabatan";
 import { matikanModeSimpel, tandaiModeSimpel } from "@/lib/mode-simpel";
-import { getKomentarSaya, getLaporanVideo, getNotifikasi, masukOtomatis } from "@/services";
+import { getKomentarSaya, getLaporanVideo, getNotifikasi, getSakelar, masukOtomatis } from "@/services";
+import { useModulAktif } from "@/hooks/use-modul";
 import type { User } from "@/types";
 import { BIRU_SIMPEL, KepalaSimpel, KomenVideoSimpel, LeaderboardSimpel, PengaturanSimpel, PengumumanSimpel } from "./layar-simpel";
 
@@ -48,6 +49,10 @@ export function ModeSimpelApp() {
   const setUser = useAppStore((s) => s.setUser);
   const setNotifikasi = useAppStore((s) => s.setNotifikasi);
   const belumBaca = useAppStore((s) => s.notifikasi.reduce((n, item) => (item.dibaca ? n : n + 1), 0));
+  const setSakelar = useAppStore((s) => s.setSakelar);
+  // Sakelar modul (24 Sep 2026): Mode Simpel tidak memuat page.tsx, jadi
+  // keadaan sakelar dimuat sendiri di sini (lihat muatSakelar).
+  const komenAktif = useModulAktif("kepatuhan_komen");
 
   const [user, setUserLokal] = useState<User | null>(null);
   const [keadaan, setKeadaan] = useState<"memeriksa" | "siap" | "perbaikan" | "menunggu">("memeriksa");
@@ -84,6 +89,15 @@ export function ModeSimpelApp() {
     });
   }, []);
 
+  const muatSakelar = useCallback(async () => {
+    try {
+      const s = await getSakelar();
+      setSakelar({ fitur: s.fitur, hemat: s.hemat, modul: s.modul });
+    } catch {
+      // Gagal = nilai bawaan tiap modul.
+    }
+  }, [setSakelar]);
+
   const muatNotifikasi = useCallback(async () => {
     try {
       setNotifikasi(await getNotifikasi());
@@ -115,11 +129,12 @@ export function ModeSimpelApp() {
       setKeadaan("siap");
       void muatRingkas();
       void muatNotifikasi();
+      void muatSakelar();
     })();
     return () => {
       hidup = false;
     };
-  }, [setUser, muatRingkas, muatNotifikasi]);
+  }, [setUser, muatRingkas, muatNotifikasi, muatSakelar]);
 
   // Kembali ke menu: segarkan angka KPI bila sudah > 1 menit.
   function keBeranda() {
@@ -193,14 +208,16 @@ export function ModeSimpelApp() {
                 >
                   <Megaphone className="h-5.5 w-5.5" aria-hidden="true" />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setLayar("leaderboard")}
-                  aria-label="Leaderboard kepatuhan komen"
-                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-amber-500 active:opacity-70 dark:bg-slate-800"
-                >
-                  <Crown className="h-5.5 w-5.5" aria-hidden="true" />
-                </button>
+                {komenAktif ? (
+                  <button
+                    type="button"
+                    onClick={() => setLayar("leaderboard")}
+                    aria-label="Leaderboard kepatuhan komen"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-amber-500 active:opacity-70 dark:bg-slate-800"
+                  >
+                    <Crown className="h-5.5 w-5.5" aria-hidden="true" />
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={matikanModeSimpel}
@@ -215,18 +232,20 @@ export function ModeSimpelApp() {
 
               {/* Dashboard singkat */}
               <div className="mt-3 grid grid-cols-2 gap-2.5">
-                <button type="button" onClick={() => setLayar("laporan")} className={KELAS_TOMBOL} style={{ background: BIRU_SIMPEL }} aria-label="KPI video, buka laporan video">
+                <button type="button" onClick={() => setLayar("laporan")} className={`${KELAS_TOMBOL}${komenAktif ? "" : " col-span-2"}`} style={{ background: BIRU_SIMPEL }} aria-label="KPI video, buka laporan video">
                   KPI Video
                   <span className="mt-0.5 text-[12px] font-bold normal-case tracking-normal text-white/90">
                     {bebas ? "Bebas kewajiban" : v ? (v.dibebaskan ? `Dibebaskan (${v.dibebaskan})` : `${v.jumlah}/${v.target} video${v.persen != null ? ` · ${v.persen}%` : ""}`) : "…"}
                   </span>
                 </button>
-                <button type="button" onClick={() => setLayar("komen")} className={KELAS_TOMBOL} style={{ background: BIRU_SIMPEL }} aria-label="KPI komen, buka komen video">
-                  KPI Komen
-                  <span className="mt-0.5 text-[12px] font-bold normal-case tracking-normal text-white/90">
-                    {bebas ? "Bebas kewajiban" : k ? `${k.sudah}/${k.total} postingan${k.total > 0 ? ` · ${Math.round((100 * k.sudah) / k.total)}%` : ""}` : "…"}
-                  </span>
-                </button>
+                {komenAktif ? (
+                  <button type="button" onClick={() => setLayar("komen")} className={KELAS_TOMBOL} style={{ background: BIRU_SIMPEL }} aria-label="KPI komen, buka komen video">
+                    KPI Komen
+                    <span className="mt-0.5 text-[12px] font-bold normal-case tracking-normal text-white/90">
+                      {bebas ? "Bebas kewajiban" : k ? `${k.sudah}/${k.total} postingan${k.total > 0 ? ` · ${Math.round((100 * k.sudah) / k.total)}%` : ""}` : "…"}
+                    </span>
+                  </button>
+                ) : null}
                 <button type="button" onClick={() => setLayar("absen")} className={KELAS_TOMBOL} style={{ background: "linear-gradient(180deg, #2E6FBF 0%, #1E4E8C 55%, #163B6B 100%)" }}>
                   Absen
                 </button>
@@ -237,9 +256,11 @@ export function ModeSimpelApp() {
 
               {/* Modul utama */}
               <div className="mt-2.5 flex flex-col gap-2.5">
-                <button type="button" onClick={() => setLayar("komen")} className={KELAS_TOMBOL} style={{ background: BIRU_SIMPEL }}>
-                  Komen Video
-                </button>
+                {komenAktif ? (
+                  <button type="button" onClick={() => setLayar("komen")} className={KELAS_TOMBOL} style={{ background: BIRU_SIMPEL }}>
+                    Komen Video
+                  </button>
+                ) : null}
                 <button type="button" onClick={() => setLayar("laporan")} className={KELAS_TOMBOL} style={{ background: BIRU_SIMPEL }}>
                   Laporan Video
                 </button>

@@ -227,6 +227,13 @@ export async function jalankanAnalisisAyrshare(opsi: {
   anggaranMs?: number;
   /** Postingan yang diperiksa < ini dilewati (ms); bawaan 10 menit. */
   segarMs?: number;
+  /**
+   * true = hanya tarik postingan (feed_konten + postingan), TANPA membaca
+   * komentar. Dipakai saat modul kepatuhan_komen dimatikan (24 Sep 2026):
+   * feed Konten tetap segar, tetapi panggilan komentar Ayrshare — bagian
+   * yang paling mahal — berhenti.
+   */
+  tanpaKomentar?: boolean;
 }): Promise<HasilAnalisisAyrshare> {
   const db = supabase();
   const anggaranMs = opsi.anggaranMs ?? ANGGARAN_MS;
@@ -490,6 +497,7 @@ export async function jalankanAnalisisAyrshare(opsi: {
     }
 
     // 2. Komentar per postingan → cocokkan ke anggota
+    if (opsi.tanpaKomentar) continue;
     for (const post of postPeriode) {
       const idKanonik = idPostinganKanonik(akun.platform, post.id, post.url);
 

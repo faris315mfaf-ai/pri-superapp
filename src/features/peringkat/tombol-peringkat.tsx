@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { CincinMythic, FITUR_PERINGKAT_AKTIF, LabelMythic } from "./cincin-mythic";
 import { PanelKoinTerkaya, PanelTopMingguan } from "./panel-koin-mingguan";
 import { ModalKepatuhanDetail } from "./modal-kepatuhan-detail";
+import { useModulAktif } from "@/hooks/use-modul";
 
 const LABEL_INDIKATOR: Record<keyof MetrikNasional, string> = {
   pengikut: "Pengikut",
@@ -427,7 +428,12 @@ const MODE_LEADERBOARD: [ModeLeaderboard, string][] = [
 ];
 
 function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
-  const [mode, setMode] = useState<ModeLeaderboard>("tvr");
+  const [modePilih, setMode] = useState<ModeLeaderboard>("tvr");
+  // Panel Kepatuhan ikut sakelar modul kepatuhan_komen (24 Sep 2026,
+  // bawaan mati): tab-nya hilang dan datanya tidak pernah dimuat.
+  const komenAktif = useModulAktif("kepatuhan_komen");
+  const mode: ModeLeaderboard = modePilih === "komen" && !komenAktif ? "tvr" : modePilih;
+  const daftarMode = komenAktif ? MODE_LEADERBOARD : MODE_LEADERBOARD.filter(([k]) => k !== "komen");
   const [komen, setKomen] = useState<KepatuhanKomenLeaderboard | null>(null);
   const [detailNama, setDetailNama] = useState<string | null>(null);
   const [platformKomen, setPlatformKomen] = useState("");
@@ -540,9 +546,9 @@ function PopupPeringkat({ onTutup }: { onTutup: () => void }) {
         {/* Mode: TV Rakyat | Kepatuhan Komen (2 Sep 2026) */}
         <div
           className="mx-4 mb-1 grid gap-1 rounded-xl bg-black/5 p-1 dark:bg-white/10"
-          style={{ gridTemplateColumns: `repeat(${MODE_LEADERBOARD.length}, minmax(0, 1fr))` }}
+          style={{ gridTemplateColumns: `repeat(${daftarMode.length}, minmax(0, 1fr))` }}
         >
-          {MODE_LEADERBOARD.map(([k, label]) => (
+          {daftarMode.map(([k, label]) => (
             <button
               key={k}
               type="button"

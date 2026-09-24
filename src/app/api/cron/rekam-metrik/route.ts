@@ -12,6 +12,7 @@
 // `Authorization: Bearer`; bila tidak, hanya user-agent penjadwal.
 import { rekamMetrikHarian } from "@/lib/tvr-nasional";
 import { beriKoinJuaraKomenHarian } from "@/lib/juara-komen";
+import { modulAktifServer } from "@/lib/sakelar";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -33,7 +34,10 @@ async function jalankan(request: Request) {
     // keduanya urusan terpisah yang kebetulan berjalan di jam yang sama.
     let juara: unknown = null;
     try {
-      juara = await beriKoinJuaraKomenHarian();
+      // Modul kepatuhan komentar mati (24 Sep 2026) → tak ada juara dibayar.
+      juara = (await modulAktifServer("kepatuhan_komen"))
+        ? await beriKoinJuaraKomenHarian()
+        : { dilewati: "modul kepatuhan komentar mati" };
     } catch (e) {
       juara = { error: e instanceof Error ? e.message : "gagal" };
     }

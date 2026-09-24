@@ -104,6 +104,7 @@ import { VERSI_APLIKASI, VERSI_TAMPIL } from "@/lib/versi";
 import { ModalChangelog } from "./modal-changelog";
 import { AntreanAccTim, KartuTim, MenuUpdateAplikasi } from "./keanggotaan-tim";
 import { BarisUkuranTeks, SeksiMasukan } from "./masukan-dan-font";
+import { useModulAktif } from "@/hooks/use-modul";
 
 // ------------------------------------------------------------
 // Tipe & konstanta
@@ -357,6 +358,8 @@ export function ProfilScreen({
   onBukaPengaturanFitur,
   onBukaAturMenu,
 }: ProfilScreenProps) {
+  const komenAktif = useModulAktif("kepatuhan_komen");
+  const bolehGantiAkun = useModulAktif("ganti_akun_profil");
   const tema = useAppStore((s) => s.tema);
   const toggleTema = useAppStore((s) => s.toggleTema);
   const setUser = useAppStore((s) => s.setUser);
@@ -1016,25 +1019,29 @@ export function ProfilScreen({
             <>
               {/* Dua identitas login diatur berdampingan: username dan
                   kata sandi. Keduanya dipakai di layar masuk. */}
-              <BarisPengaturan
-                ikon={AtSign}
-                warnaIkon="#8B5CF6"
-                label="Ganti Username"
-                kanan={
-                  user.username ? (
-                    <span className="text-[12px] text-teks-sekunder">@{user.username}</span>
-                  ) : undefined
-                }
-                onClick={() => setModalUsername(true)}
-              />
-
-              {/* Ganti kata sandi lewat OTP email terdaftar */}
-              <BarisPengaturan
-                ikon={KeyRound}
-                warnaIkon="#3B82F6"
-                label="Ganti Kata Sandi"
-                onClick={() => setModalSandi(true)}
-              />
+              {/* Ganti username & sandi cukup dengan sandi lama, tanpa kode
+                  email/WA (24 Sep 2026) — ikut sakelar modul ganti_akun_profil. */}
+              {bolehGantiAkun && (
+                <>
+                  <BarisPengaturan
+                    ikon={AtSign}
+                    warnaIkon="#8B5CF6"
+                    label="Ganti Username"
+                    kanan={
+                      user.username ? (
+                        <span className="text-[12px] text-teks-sekunder">@{user.username}</span>
+                      ) : undefined
+                    }
+                    onClick={() => setModalUsername(true)}
+                  />
+                  <BarisPengaturan
+                    ikon={KeyRound}
+                    warnaIkon="#3B82F6"
+                    label="Ganti Kata Sandi"
+                    onClick={() => setModalSandi(true)}
+                  />
+                </>
+              )}
 
               {/* Verifikasi nomor WhatsApp akun (≈ "tautkan WhatsApp") */}
               <BarisPengaturan
@@ -1098,13 +1105,16 @@ export function ProfilScreen({
                 versiData={versiSosmed}
               />
 
-              {/* Tutorial interaktif daftar akun → cek Kepatuhan Komen (3 Sep 2026) */}
-              <BarisPengaturan
-                ikon={GraduationCap}
-                warnaIkon="#F59E0B"
-                label="Tutorial daftar akun & cek kepatuhan"
-                onClick={mulaiTur}
-              />
+              {/* Tutorial interaktif daftar akun → cek Kepatuhan Komen (3 Sep 2026);
+                  ikut sakelar modul kepatuhan_komen (24 Sep 2026). */}
+              {komenAktif && (
+                <BarisPengaturan
+                  ikon={GraduationCap}
+                  warnaIkon="#F59E0B"
+                  label="Tutorial daftar akun & cek kepatuhan"
+                  onClick={mulaiTur}
+                />
+              )}
 
               {/* Bug / kritik / saran → pengembang; SA juga punya kotak masuk */}
               <SeksiMasukan user={user} />

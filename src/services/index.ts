@@ -409,13 +409,20 @@ export async function getTurAktif(): Promise<boolean> {
 }
 
 /** Sakelar fitur berat (Panel Master / mode hemat, 4 Sep 2026). */
-export type SakelarFitur = { fitur: Record<string, boolean>; hemat: boolean; tur: boolean };
+export type SakelarFitur = {
+  fitur: Record<string, boolean>;
+  hemat: boolean;
+  tur: boolean;
+  /** Sakelar modul (lib/sakelar-modul, 24 Sep 2026). */
+  modul: Record<string, boolean>;
+};
 export async function getSakelar(): Promise<SakelarFitur> {
   const json = await fetchJson("/api/sakelar");
   return {
     fitur: (json.fitur ?? {}) as Record<string, boolean>,
     hemat: json.hemat === true,
     tur: json.tur !== false,
+    modul: (json.modul ?? {}) as Record<string, boolean>,
   };
 }
 
@@ -480,6 +487,21 @@ export async function gantiSandi(data: {
 }): Promise<void> {
   await fetchJson("/api/sandi", {
     method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(data),
+  });
+}
+
+/**
+ * Ganti kata sandi cukup dengan sandi lama, tanpa OTP (24 Sep 2026).
+ * Perangkat lain dikeluarkan; perangkat ini tetap masuk.
+ */
+export async function gantiSandiDenganLama(data: {
+  sandi_lama: string;
+  sandi_baru: string;
+}): Promise<void> {
+  await fetchJson("/api/sandi", {
+    method: "PATCH",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify(data),
   });

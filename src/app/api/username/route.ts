@@ -19,6 +19,7 @@ import { bungkus } from "@/lib/api-helper";
 import { cocokkanSandi } from "@/lib/sandi";
 import { hapusCacheUser, userDariToken } from "@/lib/sesi";
 import { periksaUsername } from "@/lib/username";
+import { modulAktifServer } from "@/lib/sakelar";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +94,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
+    if (!(await modulAktifServer("ganti_akun_profil"))) {
+      throw Object.assign(
+        new Error("Ganti username dari Profil sedang dimatikan master. Hubungi HR bila perlu."),
+        { status: 423 },
+      );
+    }
     const body = (await request.json().catch(() => ({}))) as {
       username?: string;
       sandi?: string;
@@ -136,7 +143,8 @@ export async function POST(request: Request) {
     const { data: dipakai } = await supabase()
       .from("app_user")
       .select("id")
-      .ilike("username", baru)
+      // "_" dan "%" adalah wildcard ILIKE — di-escape (24 Sep 2026).
+      .ilike("username", baru.replace(/[\\%_]/g, (c) => `\\${c}`))
       .neq("id", Number(user.id))
       .maybeSingle();
     if (dipakai) {

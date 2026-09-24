@@ -85,8 +85,8 @@ type AppState = {
    * ludo / pet_beranda / juara_efek / asisten. Kunci yang tidak ada = nyala.
    * `hemat` = mode hemat server sedang menyala.
    */
-  sakelar: { fitur: Record<string, boolean>; hemat: boolean };
-  setSakelar: (s: { fitur: Record<string, boolean>; hemat: boolean }) => void;
+  sakelar: { fitur: Record<string, boolean>; hemat: boolean; modul?: Record<string, boolean> };
+  setSakelar: (s: { fitur: Record<string, boolean>; hemat: boolean; modul?: Record<string, boolean> }) => void;
 
   /** true bila pengguna anggota tim TV Rakyat (buka modul TV) */
   tvAnggota: boolean;

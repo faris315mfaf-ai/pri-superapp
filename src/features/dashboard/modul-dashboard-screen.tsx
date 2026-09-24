@@ -21,6 +21,7 @@ import { Lock, Settings2 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { FadeInUp, GlassSkeleton } from "@/components/pri-ui";
 import { KATALOG_DASHBOARD } from "@/lib/dashboard-katalog";
+import { useModulAktif } from "@/hooks/use-modul";
 import type { User } from "@/types";
 import { cn } from "@/lib/utils";
 import { RingkasanUtama } from "./ringkasan-utama";
@@ -70,7 +71,11 @@ type ModulDashboardScreenProps = {
 };
 
 export function ModulDashboardScreen({ user, boleh, onBukaKelola }: ModulDashboardScreenProps) {
-  const daftar = KATALOG_DASHBOARD.filter((d) => boleh.includes(d.kunci));
+  // Sub-dashboard Kepatuhan Komen ikut sakelar modul (24 Sep 2026).
+  const komenAktif = useModulAktif("kepatuhan_komen");
+  const daftar = KATALOG_DASHBOARD.filter(
+    (d) => boleh.includes(d.kunci) && (komenAktif || d.kunci !== "kepatuhan"),
+  );
   const [subAktif, setSubAktif] = useState<string | null>(null);
   const pengatur = user.role === "master" || user.role === "super_admin";
 
