@@ -13,7 +13,13 @@ import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { bolehDashboard } from "@/lib/dashboard-akses";
 import { adalahHR } from "@/lib/hr";
-import { sinkronAbsensiHariIni, sinkronAbsensiRentang } from "@/lib/absensi-sadar";
+import {
+  petaKodeKeUser,
+  sadarLangsung,
+  sinkronAbsensiHariIni,
+  sinkronAbsensiRentang,
+  tabelSadarAda,
+} from "@/lib/absensi-sadar";
 import { jenisKehadiran, labelSadar, sadarSiap } from "@/lib/sadar";
 import { tanggalWibHariIni } from "@/lib/format";
 
@@ -54,6 +60,9 @@ export async function GET(request: Request) {
     if (tanggal < batasMundur) {
       throw Object.assign(new Error(`Riwayat SADAR di sini maksimal ${MAKS_HARI_MUNDUR} hari ke belakang.`), { status: 400 });
     }
+
+    // Tanpa tabel cermin (sql/53) → baca langsung dari SADAR (24 Sep 2026).
+    if (!(await tabelSadarAda())) return susunLangsung(user.id, mauSemua, tanggal, hariIni);
 
     let galat = "";
     if (sadarSiap()) {
@@ -131,3 +140,60 @@ export async function GET(request: Request) {
     return { tanggal, hari_ini: hariIni, data: daftar, ringkasan, disinkron_pada: disinkron, galat };
   });
 }
+
+/**
+ * Jalur langsung (24 Sep 2026): database belum punya tabel absensi_sadar
+ * (sql/53). Data tanggal itu dibaca dari API SADAR (cache bersama) lalu
+ * dicocokkan ke akun lewat email/pemetaan — bentuk balasan sama persis
+ * dengan jalur tabel, jadi layar tidak perlu tahu bedanya.
+ */
+async function susunLangsung(userId: string, mauSemua: boolean, tanggal: string, hariIni: string) {
+  const { baris, galat } = await sadarLangsung(tanggal);
+  const peta = await petaKodeKeUser(baris);
+  const ids = Array.from(new Set(Array.from(peta.values())));
+  const akun = new Map<number, { nama: string; avatar_url: string }>();
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data } = await supabase().from("app_user").select("id, nama, avatar_url").in("id", ids.slice(i, i + 200));
+    for (const u of data ?? []) akun.set(Number(u.id), { nama: String(u.nama ?? ""), avatar_url: String(u.avatar_url ?? "") });
+  }
+  const ringkasan = { jumlah: 0, cocok: 0, tidak_cocok: 0, hadir: 0, sakit: 0, izin: 0, alfa: 0 };
+  const tampil = mauSemua ? baris : baris.filter((b) => String(peta.get(b.kode) ?? "") === String(userId));
+  const daftar = tampil
+    .map((b) => {
+      const uid = peta.get(b.kode);
+      const a = uid !== undefined ? akun.get(uid) : undefined;
+      const jenis = jenisKehadiran({ hadir: b.hadir, status: b.status, tipe: b.tipe, jamMasuk: b.jamMasuk });
+      ringkasan.jumlah += 1;
+      if (uid !== undefined) ringkasan.cocok += 1;
+      else ringkasan.tidak_cocok += 1;
+      ringkasan[jenis] += 1;
+      return {
+        kode: b.kode,
+        tanggal: b.tanggal,
+        nama: b.nama,
+        email: mauSemua ? b.email : "",
+        user_id: uid !== undefined ? String(uid) : null,
+        nama_akun: a?.nama ?? "",
+        avatar_url: a?.avatar_url ?? "",
+        jenis,
+        status: b.status,
+        tipe: b.tipe,
+        label: labelSadar(b.status, b.tipe),
+        verifikasi: b.verifikasi,
+        label_verifikasi: labelSadar(b.verifikasi, ""),
+        jam_masuk: b.jamMasuk ? b.jamMasuk.slice(0, 5) : "",
+        jam_pulang: b.jamPulang ? b.jamPulang.slice(0, 5) : "",
+      };
+    })
+    // Urutan sama dengan jalur tabel: jam masuk naik, tanpa jam di akhir.
+    .sort((x, y) => (x.jam_masuk || "99").localeCompare(y.jam_masuk || "99"));
+  return {
+    tanggal,
+    hari_ini: hariIni,
+    data: daftar,
+    ringkasan,
+    disinkron_pada: galat ? "" : new Date().toISOString(),
+    galat,
+  };
+}
+

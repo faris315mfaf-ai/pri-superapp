@@ -21,6 +21,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { bolehDashboard } from "@/lib/dashboard-akses";
+import { semuaBaris } from "@/lib/semua-baris";
 import { ambilInsight, ayrshareSiap, type InsightProfil } from "@/lib/ayrshare";
 import {
   INDIKATOR_TVR,
@@ -172,6 +173,41 @@ export async function GET(request: Request) {
     let totalSemua = metrikKosong();
     for (const plat of PLATFORMS) totalSemua = jumlahkan(totalSemua, perPlatform[plat].total);
 
+    // ---------- AKUN TERHUBUNG per sosmed (24 Sep 2026) ----------
+    // Dihitung dari akun_tvr_user (terhubung = login upload-post), BUKAN
+    // dari akun yang angkanya sudah terbaca — akun baru tersambung ikut
+    // terhitung walau insight-nya belum ditarik. Official dihitung satu
+    // per sosmed bila akun resminya terbaca lewat Ayrshare.
+    const barisAkun = await semuaBaris<{ user_id: unknown; platform: unknown }>((a, b) =>
+      supabase()
+        .from("akun_tvr_user")
+        .select("user_id, platform")
+        .eq("terhubung", true)
+        .neq("platform", "website")
+        .order("user_id")
+        .range(a, b),
+    );
+    const unikPer = new Map<string, Set<number>>();
+    const orangTerhubung = new Set<number>();
+    for (const r of barisAkun) {
+      const plat = String(r.platform ?? "");
+      if (!PLATFORMS.includes(plat as (typeof PLATFORMS)[number])) continue;
+      const uid = Number(r.user_id);
+      if (!Number.isFinite(uid)) continue;
+      const set = unikPer.get(plat) ?? new Set<number>();
+      set.add(uid);
+      unikPer.set(plat, set);
+      orangTerhubung.add(uid);
+    }
+    const akunTerhubung: Record<string, { pengguna: number; official: boolean }> = {};
+    let totalAkun = 0;
+    for (const plat of PLATFORMS) {
+      const pengguna = unikPer.get(plat)?.size ?? 0;
+      const adaOfficial = official[plat] !== null;
+      akunTerhubung[plat] = { pengguna, official: adaOfficial };
+      totalAkun += pengguna + (adaOfficial ? 1 : 0);
+    }
+
     // Penyegaran latar untuk profil basi — dashboard berikutnya lebih segar.
     after(segarkanProfilTvrBasi);
 
@@ -180,6 +216,11 @@ export async function GET(request: Request) {
       platforms: PLATFORMS,
       total: totalSemua,
       per_platform: perPlatform,
+      akun_terhubung: {
+        total: totalAkun,
+        orang: orangTerhubung.size,
+        per_platform: akunTerhubung,
+      },
       anggota,
       cakupan: {
         profil_total: anggota.length,

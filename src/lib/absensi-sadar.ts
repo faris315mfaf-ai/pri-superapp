@@ -21,6 +21,47 @@ import { tanggalWibHariIni } from "@/lib/format";
 const JEDA_HARI_INI_DETIK = 60;
 const SEGAR_LAMPAU_JAM = 6;
 
+// ------------------------------------------------------------
+// JALUR LANGSUNG (24 Sep 2026): database cloud belum punya tabel cermin
+// SADAR (sql/53). Sampai migrasi itu dijalankan, sinkron dilewati dan
+// layar yang butuh data HARI INI membacanya langsung dari API SADAR
+// (dikekang 60 dtk lewat cache bersama). Riwayat hari lampau baru
+// tersedia setelah sql/53 dijalankan.
+// ------------------------------------------------------------
+
+export const PESAN_TANPA_TABEL =
+  "Tabel cermin SADAR belum dibuat (sql/53) — data hari ini dibaca langsung dari SADAR.";
+
+let cekTabel: { ada: boolean; pada: number } | null = null;
+
+/** Tabel cermin SADAR (sql/53) sudah ada? Dicek ulang tiap 5 menit per proses. */
+export async function tabelSadarAda(): Promise<boolean> {
+  if (cekTabel && Date.now() - cekTabel.pada < 300_000) return cekTabel.ada;
+  const { error } = await supabase().from("absensi_sadar").select("id").limit(1);
+  // PGRST205 (PostgREST) / 42P01 (Postgres) = tabel belum ada. Galat lain
+  // (jaringan) dianggap ADA supaya jalur normal yang memutuskan.
+  const ada = !(error && (error.code === "PGRST205" || error.code === "42P01"));
+  cekTabel = { ada, pada: Date.now() };
+  return ada;
+}
+
+/** Absensi SADAR satu tanggal langsung dari API (tanpa tabel). Tidak pernah melempar. */
+export async function sadarLangsung(tanggal: string): Promise<{ baris: BarisSadar[]; galat: string }> {
+  if (!sadarSiap()) return { baris: [], galat: "SADAR_API_TOKEN belum diatur." };
+  const hariIni = tanggalWibHariIni();
+  const ttl = tanggal === hariIni ? JEDA_HARI_INI_DETIK : SEGAR_LAMPAU_JAM * 3600;
+  return denganCache(`sadar:langsung:${tanggal}`, ttl, async () => {
+    try {
+      const r = await ambilAbsensiSadar(tanggal === hariIni ? undefined : tanggal);
+      // `mentah` dibuang: tidak dipakai jalur ini dan hanya membengkakkan cache.
+      const baris = r.baris.filter((b) => b.tanggal === tanggal).map((b) => ({ ...b, mentah: {} }));
+      return { baris, galat: "" };
+    } catch (e) {
+      return { baris: [] as BarisSadar[], galat: e instanceof Error ? e.message : "Gagal menghubungi SADAR." };
+    }
+  });
+}
+
 export type HasilSinkron = {
   tanggal: string;
   jalan: boolean;
@@ -35,7 +76,7 @@ export type HasilSinkron = {
  * Kode pegawai SADAR → id akun SuperApp. Pemetaan MANUAL (sadar_pemetaan,
  * dipasang HR dari Database Anggota) menang; sisanya lewat email.
  */
-async function petaKodeKeUser(baris: Pick<BarisSadar, "kode" | "email">[]): Promise<Map<string, number>> {
+export async function petaKodeKeUser(baris: Pick<BarisSadar, "kode" | "email">[]): Promise<Map<string, number>> {
   const hasil = new Map<string, number>();
   const kode = Array.from(new Set(baris.map((b) => b.kode).filter(Boolean)));
   if (kode.length === 0) return hasil;
@@ -92,6 +133,8 @@ export async function petaEmailKeUser(email: string[]): Promise<Map<string, numb
 export async function sinkronAbsensiTanggal(tanggal: string): Promise<HasilSinkron> {
   const hasil: HasilSinkron = { tanggal, jalan: false, jumlah: 0, cocok: 0, tidak_cocok: 0, baru_masuk: 0 };
   if (!sadarSiap()) return { ...hasil, galat: "SADAR_API_TOKEN belum diatur." };
+  // Tanpa tabel cermin tidak ada yang bisa ditulis — jangan panggil SADAR sia-sia.
+  if (!(await tabelSadarAda())) return { ...hasil, galat: PESAN_TANPA_TABEL };
   const hariIni = tanggalWibHariIni();
   let baris: BarisSadar[];
   try {
@@ -217,6 +260,7 @@ export async function sinkronAbsensiHariIni(): Promise<HasilSinkron> {
  */
 export async function sinkronAbsensiRentang(dari: string, sampai: string, maks = 6): Promise<HasilSinkron[]> {
   if (!sadarSiap()) return [];
+  if (!(await tabelSadarAda())) return [];
   const hariIni = tanggalWibHariIni();
   const db = supabase();
   const { data: sudah } = await db

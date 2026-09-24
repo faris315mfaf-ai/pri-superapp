@@ -8,7 +8,7 @@
 // apa pun oleh master — sama dengan siapa yang melihat dashboard.
 import { waktuAmbilKomentarTerakhir } from "@/lib/kepatuhan";
 import { semuaBarisData } from "@/lib/semua-baris";
-import { sinkronAbsensiHariIni } from "@/lib/absensi-sadar";
+import { petaKodeKeUser, sadarLangsung, sinkronAbsensiHariIni, tabelSadarAda } from "@/lib/absensi-sadar";
 import { supabase } from "@/lib/supabase";
 import { bungkus, pastikanSukses } from "@/lib/api-helper";
 import { adalahPengurus, userDariToken } from "@/lib/sesi";
@@ -129,6 +129,13 @@ export async function GET(request: Request) {
     const hadir = new Set(
       absen.filter((a) => a.jenis === "masuk").map((a) => Number(a.user_id)),
     );
+    // Tabel cermin SADAR belum ada (sql/53) → yang sudah absen masuk hari
+    // ini dibaca langsung dari SADAR (24 Sep 2026).
+    if (!(await tabelSadarAda())) {
+      const { baris } = await sadarLangsung(tanggal);
+      const peta = await petaKodeKeUser(baris);
+      for (const b of baris) if (b.jamMasuk && peta.has(b.kode)) hadir.add(peta.get(b.kode)!);
+    }
     const totalAnggota = roster.length;
 
     // --- 3. KPI kerja: yang sudah menyusun rencana/laporan + rata skor ---

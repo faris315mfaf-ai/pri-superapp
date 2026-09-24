@@ -14,7 +14,8 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { adalahHR } from "@/lib/hr";
-import { cerminkanUlangKode, petaEmailKeUser } from "@/lib/absensi-sadar";
+import { cerminkanUlangKode, petaEmailKeUser, sadarLangsung, tabelSadarAda } from "@/lib/absensi-sadar";
+import { tanggalWibHariIni } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,16 @@ type Pegawai = { kode: string; nama: string; email: string; terakhir: string };
 
 /** Pegawai SADAR yang muncul 31 hari terakhir (unik per kode, terbaru). */
 async function pegawaiSadar(): Promise<Map<string, Pegawai>> {
+  // Tabel cermin belum ada (sql/53) → pegawai yang muncul HARI INI langsung
+  // dari API SADAR (24 Sep 2026). Cukup untuk pencocokan email harian.
+  if (!(await tabelSadarAda())) {
+    const { baris } = await sadarLangsung(tanggalWibHariIni());
+    const peta = new Map<string, Pegawai>();
+    for (const b of baris) {
+      if (!peta.has(b.kode)) peta.set(b.kode, { kode: b.kode, nama: b.nama, email: b.email, terakhir: b.tanggal });
+    }
+    return peta;
+  }
   const awal = new Date(Date.now() - 31 * 86_400_000).toISOString().slice(0, 10);
   const { data } = await supabase()
     .from("absensi_sadar")
@@ -70,6 +81,8 @@ export async function GET(request: Request) {
       db.from("sadar_pemetaan").select("user_id, kode_pegawai, email_sadar, nama_sadar"),
       pegawaiSadar(),
     ]);
+    // Tabel pemetaan belum ada (PGRST205) → lanjut tanpa pemetaan manual;
+    // pencocokan email tetap jalan. 42P01 lama tetap dilaporkan.
     if (ePemetaan && ePemetaan.code === "42P01") {
       throw Object.assign(new Error("Tabel pemetaan belum ada: jalankan pri-sql 54_sadar_pemetaan.sql dulu."), { status: 503 });
     }
@@ -176,8 +189,12 @@ export async function POST(request: Request) {
       dibuat_oleh_id: Number(hr.id),
     });
     if (error) {
-      if (error.code === "42P01") {
-        throw Object.assign(new Error("Tabel pemetaan belum ada: jalankan pri-sql 54_sadar_pemetaan.sql dulu."), { status: 503 });
+      // PGRST205 = kode PostgREST untuk tabel yang belum ada (42P01 = Postgres).
+      if (error.code === "42P01" || error.code === "PGRST205") {
+        throw Object.assign(
+          new Error("Pasangkan manual butuh tabel sql/54_sadar_pemetaan.sql di Supabase (belum dijalankan). Pencocokan lewat email tetap berjalan."),
+          { status: 503 },
+        );
       }
       throw new Error("Gagal menyimpan pemetaan.");
     }

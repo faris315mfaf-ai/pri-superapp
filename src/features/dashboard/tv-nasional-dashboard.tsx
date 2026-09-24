@@ -124,6 +124,49 @@ export function TvNasionalDashboard() {
               </div>
             ))}
           </div>
+
+          {/* Akun sosmed yang terhubung, per sosmed (24 Sep 2026) */}
+          {data.akun_terhubung && (
+            <div className="mt-3 border-t border-black/5 pt-3 dark:border-white/10">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-[12px] font-bold text-teks-utama">Akun Terhubung</p>
+                <p className="angka-tab text-[11px] text-teks-sekunder">
+                  <b className="text-[13px] text-teks-utama">
+                    {data.akun_terhubung.total.toLocaleString("id-ID")}
+                  </b>{" "}
+                  akun · {data.akun_terhubung.orang.toLocaleString("id-ID")} anggota
+                </p>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
+                {data.platforms.map((plat) => {
+                  const a = data.akun_terhubung?.per_platform[plat];
+                  if (!a) return null;
+                  const jumlah = a.pengguna + (a.official ? 1 : 0);
+                  return (
+                    <div
+                      key={plat}
+                      className="glass-soft flex items-center gap-2 rounded-xl px-2.5 py-2"
+                      title={`${LABEL_PLATFORM[plat] ?? plat}: ${a.pengguna} akun pengguna${a.official ? " + 1 Official" : ""}`}
+                    >
+                      <PlatformIcon platform={plat} size={14} />
+                      <div className="min-w-0">
+                        <p className="angka-tab font-heading text-[15px] leading-none font-extrabold text-teks-utama">
+                          {jumlah.toLocaleString("id-ID")}
+                        </p>
+                        <p className="mt-0.5 truncate text-[9.5px] font-semibold text-teks-sekunder">
+                          {LABEL_PLATFORM[plat] ?? plat}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[10px] leading-snug text-teks-sekunder">
+                Termasuk satu akun Official per sosmed yang tersambung. Akun pengguna = yang sudah
+                login lewat TV Rakyat Saya.
+              </p>
+            </div>
+          )}
         </GlassCard>
       </FadeInUp>
 

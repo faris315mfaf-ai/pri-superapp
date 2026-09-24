@@ -164,18 +164,19 @@ export function TabelAnggotaScreen({
     let hidup = true;
     void (async () => {
       try {
-        const [hasil, zonaSemua, cocok] = await Promise.all([
+        const [hasil, zonaSemua, cocok, akunSemua] = await Promise.all([
           getPengguna(),
           getZona().catch(() => []),
           getPencocokanSadar().catch(() => null),
+          // Akun tertaut semua orang — satu permintaan, untuk angka di
+          // ikon rantai tiap baris (24 Sep 2026). Gagal = tanpa angka.
+          getDashboardAnggota().catch(() => null),
         ]);
         if (!hidup) return;
         // Tanpa hak kelola, layar ini tetap buku anggota AKTIF seperti dulu.
         setDaftar(bolehKelola ? hasil.data : hasil.data.filter((u) => u.status === "aktif"));
         setRingkasan(hasil.ringkasan ?? {});
-        // Data akun tertaut ikut basi saat daftar disegarkan — dimuat ulang
-        // saat tombolnya ditekan berikutnya.
-        setPetaAkun(null);
+        setPetaAkun(akunSemua ? new Map(akunSemua.map((a) => [String(a.id), a])) : null);
         setZonaList(zonaSemua);
         setSadarPer(cocok ? new Map(cocok.anggota.map((a) => [a.id, a.cara])) : null);
         if (bolehKelola && utamakanPendaftar && !sudahDiarahkan.current) {
@@ -528,6 +529,11 @@ export function TabelAnggotaScreen({
             const nomorWa = nomorWaInternasional(u.nomor_wa);
             const menunggu = u.status === "menunggu";
             const proses = sedangProses === u.id;
+            // Sosmed unik yang tertaut (null = data akun belum termuat).
+            const akunU = petaAkun?.get(String(u.id));
+            const jumlahTertaut = petaAkun
+              ? new Set((akunU?.tvr_akun ?? []).map((a) => a.platform)).size
+              : null;
             const statusLabel = menunggu
               ? { teks: "Menunggu", kelas: "text-amber-500" }
               : u.status === "ditolak"
@@ -595,19 +601,35 @@ export function TabelAnggotaScreen({
                   </span>
                 )}
 
-                {/* Akun tertaut (24 Sep 2026) — popup sama dengan dashboard. */}
+                {/* Akun tertaut (24 Sep 2026) — popup sama dengan dashboard;
+                    angka = jumlah sosmed TV Rakyat pribadi yang sudah tertaut. */}
                 <button
                   type="button"
                   onClick={() => void bukaAkunTertaut(u)}
                   disabled={memuatAkun !== null}
-                  aria-label={`Lihat akun tertaut ${u.nama}`}
+                  aria-label={
+                    jumlahTertaut === null
+                      ? `Lihat akun tertaut ${u.nama}`
+                      : `Lihat akun tertaut ${u.nama}, ${jumlahTertaut} dari 6 sosmed`
+                  }
                   title="Akun tertaut"
-                  className="glass btn-tekan flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-pri disabled:opacity-60"
+                  className="glass btn-tekan relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-pri disabled:opacity-60"
                 >
                   {memuatAkun === u.id ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
                   ) : (
                     <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  {jumlahTertaut !== null && (
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "angka-tab absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9.5px] leading-none font-extrabold text-white ring-2 ring-white dark:ring-slate-900",
+                        jumlahTertaut >= 6 ? "bg-emerald-500" : jumlahTertaut > 0 ? "bg-amber-500" : "bg-slate-400",
+                      )}
+                    >
+                      {jumlahTertaut}
+                    </span>
                   )}
                 </button>
 

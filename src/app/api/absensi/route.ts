@@ -23,8 +23,14 @@ import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { bolehDashboard } from "@/lib/dashboard-akses";
 import { adalahHR } from "@/lib/hr";
-import { jumlahTidakCocok, sinkronAbsensiHariIni } from "@/lib/absensi-sadar";
-import { jenisKehadiran, sadarSiap, SADAR_URL_BAWAAN } from "@/lib/sadar";
+import {
+  jumlahTidakCocok,
+  petaKodeKeUser,
+  sadarLangsung,
+  sinkronAbsensiHariIni,
+  tabelSadarAda,
+} from "@/lib/absensi-sadar";
+import { jenisKehadiran, sadarSiap, SADAR_URL_BAWAAN, waktuWibKeIso } from "@/lib/sadar";
 import { tanggalWibHariIni } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -150,7 +156,9 @@ export async function GET(request: Request) {
 
     // Segarkan hari ini dari SADAR (dikekang 60 dtk; gagal = pakai cermin
     // terakhir — layar tidak boleh kosong hanya karena SADAR lambat).
-    const sinkron = sadarSiap() ? await sinkronAbsensiHariIni() : null;
+    // Tanpa tabel cermin (sql/53 belum dijalankan) → jalur langsung di bawah.
+    const adaTabel = await tabelSadarAda();
+    const sinkron = sadarSiap() && adaTabel ? await sinkronAbsensiHariIni() : null;
 
     const db = supabase();
     const hariIni = tanggalWibHariIni();
@@ -174,6 +182,7 @@ export async function GET(request: Request) {
 
     // Kehadiran hari ini menurut SADAR — juga yang SAKIT/IZIN tanpa jam
     // masuk (tidak punya baris di `absensi`, tapi bukan alfa).
+    if (!adaTabel) return jalurLangsung(user.id, mauSemua, hariIni, daftar);
     let qSadar = db
       .from("absensi_sadar")
       .select("user_id, hadir, status, tipe, verifikasi, jam_masuk, jam_pulang")
@@ -220,4 +229,83 @@ export async function POST(request: Request) {
       { status: 410 },
     );
   });
+}
+
+type BarisRapi = Awaited<ReturnType<typeof rapikan>>[number];
+
+/**
+ * JALUR LANGSUNG (24 Sep 2026) — database belum punya tabel cermin SADAR
+ * (sql/53). Absensi HARI INI disusun dari API SADAR (cache 60 dtk) dalam
+ * bentuk yang sama dengan jalur normal: baris masuk/pulang untuk akun yang
+ * cocok (email / pemetaan) + kehadiran_hari_ini (termasuk sakit/izin).
+ * Tidak ada yang ditulis ke database.
+ */
+async function jalurLangsung(userId: string, mauSemua: boolean, hariIni: string, dariTabel: BarisRapi[]) {
+  const siap = sadarSiap();
+  const langsung = siap ? await sadarLangsung(hariIni) : { baris: [], galat: "SADAR_API_TOKEN belum diatur." };
+  const peta = await petaKodeKeUser(langsung.baris);
+  const semua = langsung.baris.filter((b) => peta.has(b.kode));
+  const milik = mauSemua ? semua : semua.filter((b) => String(peta.get(b.kode)) === String(userId));
+
+  // Nama/jabatan untuk baris yang ditampilkan.
+  const ids = Array.from(new Set(milik.map((b) => peta.get(b.kode)!)));
+  const orang = new Map<number, { nama: string; jabatan: string }>();
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data } = await supabase().from("app_user").select("id, nama, jabatan").in("id", ids.slice(i, i + 200));
+    for (const u of data ?? []) orang.set(Number(u.id), { nama: String(u.nama ?? ""), jabatan: String(u.jabatan ?? "") });
+  }
+
+  const baris: BarisRapi[] = [];
+  for (const b of milik) {
+    const uid = peta.get(b.kode)!;
+    const o = orang.get(uid);
+    const dasar = {
+      user_id: String(uid),
+      nama: o?.nama ?? b.nama,
+      jabatan: o?.jabatan ?? "",
+      tanggal_wib: b.tanggal,
+      lat: null,
+      lng: null,
+      akurasi_m: null,
+      alamat: null,
+      foto_url: "",
+      sumber: "sadar",
+      kode_pegawai: b.kode,
+      status_sadar: b.status,
+      tipe_sadar: b.tipe,
+      verifikasi_sadar: b.verifikasi,
+    };
+    const masuk = b.jamMasuk ? waktuWibKeIso(b.tanggal, b.jamMasuk) : null;
+    const pulang = b.jamPulang ? waktuWibKeIso(b.tanggal, b.jamPulang) : null;
+    if (masuk) baris.push({ ...dasar, id: `sadar-${b.kode}-masuk`, jenis: "masuk", waktu: masuk });
+    if (pulang) baris.push({ ...dasar, id: `sadar-${b.kode}-pulang`, jenis: "pulang", waktu: pulang });
+  }
+  // Baris lama dari tabel tetap ikut (riwayat sebelum SADAR), kecuali hari
+  // ini milik orang yang sudah terbaca dari SADAR — satu sumber per hari.
+  const dariSadar = new Set(baris.map((b) => `${b.user_id}|${b.jenis}`));
+  const lama = dariTabel.filter((b) => !(b.tanggal_wib === hariIni && dariSadar.has(`${b.user_id}|${b.jenis}`)));
+  const daftar = [...baris, ...lama].sort((a, b) => (a.waktu < b.waktu ? 1 : a.waktu > b.waktu ? -1 : 0));
+
+  const kehadiran = milik.map((b) => ({
+    user_id: String(peta.get(b.kode)),
+    jenis: jenisKehadiran({ hadir: b.hadir, status: b.status, tipe: b.tipe, jamMasuk: b.jamMasuk }),
+    status: b.status,
+    tipe: b.tipe,
+    verifikasi: b.verifikasi,
+    jam_masuk: b.jamMasuk || null,
+    jam_pulang: b.jamPulang || null,
+  }));
+
+  return {
+    data: daftar,
+    tanggal_hari_ini: hariIni,
+    kehadiran_hari_ini: kehadiran,
+    sadar: {
+      siap,
+      url: process.env.SADAR_APP_URL || process.env.SADAR_API_URL || SADAR_URL_BAWAAN,
+      disinkron: siap && !langsung.galat,
+      galat: langsung.galat,
+      tidak_cocok: mauSemua ? langsung.baris.length - semua.length : 0,
+    },
+  };
 }

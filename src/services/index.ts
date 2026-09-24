@@ -1605,6 +1605,15 @@ export type TvNasional = {
       akun_terbaca: number;
     }
   >;
+  /**
+   * Akun sosmed yang TERHUBUNG (24 Sep 2026): per sosmed jumlah akun
+   * pengguna + apakah akun Official tersambung. Opsional untuk respons lama.
+   */
+  akun_terhubung?: {
+    total: number;
+    orang: number;
+    per_platform: Record<string, { pengguna: number; official: boolean }>;
+  };
   anggota: AnggotaTvrNasional[];
   cakupan: {
     profil_total: number;
