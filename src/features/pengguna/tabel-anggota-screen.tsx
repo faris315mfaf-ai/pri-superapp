@@ -65,6 +65,7 @@ import {
   gantiUsernameAnggota,
   setujuiSemuaPendaftar,
   tambahZona,
+  tolakPendaftar,
   tetapkanZonaAnggota,
   ubahPengguna,
   type AnggotaPencocokan,
@@ -133,6 +134,8 @@ export function TabelAnggotaScreen({
   const [halaman, setHalaman] = useState(1);
   const [gantiUntuk, setGantiUntuk] = useState<PenggunaAdmin | null>(null);
   const [usernameUntuk, setUsernameUntuk] = useState<PenggunaAdmin | null>(null);
+  // Tolak pendaftar dengan alasan tertulis (24 Sep 2026).
+  const [tolakUntuk, setTolakUntuk] = useState<PenggunaAdmin | null>(null);
   // Akun tertaut (24 Sep 2026): popup yang SAMA dengan dashboard Database
   // Anggota. Datanya satu permintaan untuk semua orang, dimuat saat tombol
   // pertama kali ditekan lalu disimpan untuk klik berikutnya.
@@ -537,7 +540,7 @@ export function TabelAnggotaScreen({
             const statusLabel = menunggu
               ? { teks: "Menunggu", kelas: "text-amber-500" }
               : u.status === "ditolak"
-                ? { teks: "Ditolak", kelas: "text-gagal" }
+                ? { teks: u.alasan_tolak ? `Ditolak: ${u.alasan_tolak}` : "Ditolak", kelas: "text-gagal" }
                 : !u.aktif
                   ? { teks: "Nonaktif", kelas: "text-teks-sekunder" }
                   : null;
@@ -652,7 +655,7 @@ export function TabelAnggotaScreen({
                     </button>
                     <button
                       type="button"
-                      onClick={() => void jalankan(u, "tolak", undefined, "Pendaftaran ditolak")}
+                      onClick={() => setTolakUntuk(u)}
                       aria-label={`Tolak ${u.nama}`}
                       className="btn-tekan flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gagal/40 bg-gagal/5 text-gagal"
                     >
@@ -739,6 +742,16 @@ export function TabelAnggotaScreen({
 
       {gantiUntuk && (
         <ModalGantiSandi target={gantiUntuk} onTutup={() => setGantiUntuk(null)} />
+      )}
+      {tolakUntuk && (
+        <ModalTolak
+          target={tolakUntuk}
+          onTutup={() => setTolakUntuk(null)}
+          onBerubah={() => {
+            setTolakUntuk(null);
+            setMuatUlang((n) => n + 1);
+          }}
+        />
       )}
       {usernameUntuk && (
         <ModalGantiUsername
@@ -1091,6 +1104,117 @@ function ModalGantiSandi({
               <KeyRound className="h-4 w-4" aria-hidden="true" />
             )}
             Simpan
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------
+// ModalTolak — tolak pendaftar dengan alasan (24 Sep 2026). Alasan
+// ditunjukkan ke pendaftar saat ia mencoba masuk, jadi tulis yang bisa
+// ia perbaiki. Pilihan cepat mengisi kotak; boleh diubah atau ditambah.
+// ------------------------------------------------------------
+
+const ALASAN_CEPAT = [
+  "Nama tidak sesuai KTP",
+  "Username tidak pantas / tidak jelas",
+  "Bukan anggota / pengurus PRI",
+  "Akun ganda — sudah punya akun",
+  "Data DPD/DPC tidak sesuai",
+] as const;
+
+function ModalTolak({
+  target,
+  onTutup,
+  onBerubah,
+}: {
+  target: PenggunaAdmin;
+  onTutup: () => void;
+  onBerubah: () => void;
+}) {
+  const [alasan, setAlasan] = useState("");
+  const [sedang, setSedang] = useState(false);
+
+  function tambahCepat(a: string) {
+    setAlasan((lama) => {
+      if (lama.toLowerCase().includes(a.toLowerCase())) return lama;
+      return (lama.trim() ? `${lama.trim()}; ${a}` : a).slice(0, 300);
+    });
+  }
+
+  async function simpan() {
+    if (sedang) return;
+    setSedang(true);
+    try {
+      await tolakPendaftar(target.id, alasan.trim());
+      toast("sukses", "Pendaftaran ditolak", alasan.trim() ? "Alasannya akan terlihat saat ia mencoba masuk." : undefined);
+      onBerubah();
+    } catch (e) {
+      toast("error", "Gagal menolak", e instanceof Error ? e.message : "");
+    } finally {
+      setSedang(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[95] flex items-center justify-center px-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Tolak pendaftaran ${target.nama}`}
+    >
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={onTutup} />
+      <div className="glass-strong relative w-full max-w-[360px] rounded-2xl p-5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-bold text-teks-utama">Tolak pendaftaran {target.nama}</p>
+          <button type="button" onClick={onTutup} aria-label="Tutup" className="btn-tekan p-1 text-teks-sekunder">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="mt-1 text-[11.5px] leading-snug text-teks-sekunder">
+          Tulis alasannya — pendaftar melihat alasan ini saat mencoba masuk, jadi tulis yang bisa ia perbaiki.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {ALASAN_CEPAT.map((a) => (
+            <button
+              key={a}
+              type="button"
+              onClick={() => tambahCepat(a)}
+              className="glass-soft btn-tekan rounded-full px-2.5 py-1 text-[11px] font-semibold text-teks-utama"
+            >
+              + {a}
+            </button>
+          ))}
+        </div>
+        <textarea
+          value={alasan}
+          onChange={(e) => setAlasan(e.target.value.slice(0, 300))}
+          rows={3}
+          maxLength={300}
+          placeholder="Mis. Nama tidak sesuai KTP — daftar ulang memakai nama lengkap sesuai KTP."
+          aria-label="Alasan penolakan"
+          className="glass-input mt-2.5 w-full rounded-xl px-3 py-2 text-[13px] text-teks-utama placeholder:text-teks-sekunder/60"
+        />
+        <p className="mt-1 text-right text-[10.5px] text-teks-sekunder">{alasan.length}/300</p>
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={onTutup}
+            className="glass btn-tekan flex-1 rounded-xl py-2.5 text-sm font-semibold text-teks-utama"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            disabled={sedang}
+            onClick={() => void simpan()}
+            className="btn-tekan flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-bold text-white disabled:opacity-50"
+            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+          >
+            {sedang ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <X className="h-4 w-4" aria-hidden="true" />}
+            {alasan.trim() ? "Tolak" : "Tolak tanpa alasan"}
           </button>
         </div>
       </div>

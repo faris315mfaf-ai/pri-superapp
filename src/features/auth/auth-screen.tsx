@@ -1454,8 +1454,9 @@ function LayarMenunggu({
             Pendaftaran ditolak
           </p>
           <p className="mt-1.5 text-[13px] leading-relaxed text-teks-sekunder">
-            Mohon maaf, pendaftaran Anda tidak disetujui pengurus. Silakan hubungi
-            HRD bila merasa ini keliru.
+            Mohon maaf, pendaftaran Anda tidak disetujui pengurus. Coba{" "}
+            <b className="text-teks-utama">Masuk</b> dengan username & kata sandi Anda untuk melihat
+            alasannya, atau hubungi HRD bila merasa ini keliru.
           </p>
         </div>
         <button

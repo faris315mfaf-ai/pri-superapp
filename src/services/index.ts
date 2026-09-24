@@ -603,7 +603,21 @@ export type PenggunaAdmin = {
   posisi_divisi?: string;
   /** Struktur tambahan di luar yang utama (11 Sep 2026). */
   struktur_lain?: { divisi: string; sub_divisi: string; jabatan_sayap?: string }[];
+  /** Alasan penolakan dari HR (24 Sep 2026); kosong bila tak ada. */
+  alasan_tolak?: string;
 };
+
+/**
+ * Tolak pendaftar dengan alasan (24 Sep 2026). Alasan ditunjukkan ke
+ * pendaftar saat ia mencoba masuk; boleh kosong.
+ */
+export async function tolakPendaftar(id: string, alasan: string): Promise<void> {
+  await fetchJson("/api/pengguna", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id, tindakan: "tolak", alasan }),
+  });
+}
 
 export async function getPengguna(): Promise<{
   data: PenggunaAdmin[];

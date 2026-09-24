@@ -4,6 +4,7 @@
 // ada di database. Berhasil masuk = dapat token perangkat, yang dipakai
 // aplikasi untuk masuk otomatis di pembukaan berikutnya.
 import { supabase } from "@/lib/supabase";
+import { bacaAlasanTolak } from "@/lib/alasan-tolak";
 import { cocokkanSandi } from "@/lib/sandi";
 import { bungkus } from "@/lib/api-helper";
 import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
@@ -117,7 +118,15 @@ export async function POST(request: Request) {
       throw errorStatus("Akun ini dinonaktifkan. Hubungi pengurus.", 403);
     }
     if (baris.status === "ditolak") {
-      throw errorStatus("Permohonan akun Anda ditolak. Hubungi pengurus.", 403);
+      // Alasan dari HR (24 Sep 2026) ditunjukkan — hanya setelah sandi
+      // terbukti benar, jadi tidak bocor ke orang yang menebak akun.
+      const a = await bacaAlasanTolak(Number(baris.id));
+      throw errorStatus(
+        a
+          ? `Pendaftaran Anda ditolak pengurus. Alasan: ${a.alasan}. Hubungi HR bila perlu diperbaiki.`
+          : "Permohonan akun Anda ditolak. Hubungi pengurus.",
+        403,
+      );
     }
 
     // Mode perbaikan: sandi benar pun, selain master ditolak masuk.

@@ -9,6 +9,7 @@ import { bungkus } from "@/lib/api-helper";
 import { hapusCacheUser, userDariToken, cabutSemuaSesi } from "@/lib/sesi";
 import { buatHashSandi } from "@/lib/sandi";
 import { periksaUsername } from "@/lib/username";
+import { hapusAlasanTolak, semuaAlasanTolak, simpanAlasanTolak } from "@/lib/alasan-tolak";
 import { kirimKabar } from "@/lib/notifikasi";
 import { JABATAN_TVR_NASIONAL, JABATAN_PARTAI, KUOTA_JABATAN } from "@/lib/jabatan";
 import { DIVISI_SAYAP, jabatanSayapSah, pastikanStrukturSah, subTersimpan } from "@/lib/struktur";
@@ -147,8 +148,11 @@ export async function GET(request: Request) {
       }
     }
 
+    // Alasan penolakan (24 Sep 2026) untuk akun berstatus ditolak.
+    const alasanTolak = data.some((u) => u.status === "ditolak") ? await semuaAlasanTolak() : new Map();
     const daftar = data.map((u) => ({
       ...u,
+      alasan_tolak: u.status === "ditolak" ? (alasanTolak.get(String(u.id))?.alasan ?? "") : "",
       id: String(u.id),
       avatar_url: u.avatar_url ?? "",
       jabatan: u.jabatan ?? "",
@@ -236,6 +240,8 @@ export async function PATCH(request: Request) {
       role?: string;
       /** ganti_username: username login baru (23 Sep 2026). */
       username?: string;
+      /** tolak: alasan penolakan, ditunjukkan ke pendaftar (24 Sep 2026). */
+      alasan?: string;
       jabatan?: string;
       bidang?: string;
       divisi?: string;
@@ -315,7 +321,7 @@ export async function PATCH(request: Request) {
     // Tolak di server supaya tidak bisa dinonaktifkan dari luar.
     const { data: sasaran } = await db
       .from("app_user")
-      .select("role")
+      .select("role, nama")
       .eq("id", id)
       .maybeSingle();
     if (sasaran?.role === "master") {
@@ -624,6 +630,24 @@ export async function PATCH(request: Request) {
       body.tindakan === "ubah_peran"
     ) {
       await cabutSemuaSesi(id);
+    }
+
+    // ALASAN PENOLAKAN (24 Sep 2026): disimpan untuk ditunjukkan ke
+    // pendaftar saat mencoba masuk + dicatat di jejak audit. Disetujui /
+    // diaktifkan lagi = catatan alasannya dibuang.
+    if (body.tindakan === "tolak") {
+      const alasan = String(body.alasan ?? "").trim();
+      await simpanAlasanTolak(id, alasan, admin.nama);
+      await db.from("log_audit").insert({
+        aktor_id: Number(admin.id),
+        aktor_nama: admin.nama,
+        aksi: "tolak_pendaftar",
+        target_id: id,
+        target_nama: String(sasaran?.nama ?? ""),
+        detail: alasan ? `Pendaftaran ditolak: ${alasan.slice(0, 300)}` : "Pendaftaran ditolak tanpa alasan tertulis.",
+      });
+    } else if (body.tindakan === "setujui" || body.tindakan === "aktifkan") {
+      await hapusAlasanTolak(id);
     }
 
     return { sukses: true };
