@@ -624,6 +624,19 @@ export async function ubahPengguna(
   });
 }
 
+/**
+ * Ganti username login seorang anggota (HR/super admin/master, 24 Sep 2026).
+ * Tanpa sandi & jeda — tercatat di jejak audit dan pemiliknya dikabari.
+ */
+export async function gantiUsernameAnggota(id: string, username: string): Promise<string> {
+  const json = await fetchJson("/api/pengguna", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id, tindakan: "ganti_username", username }),
+  });
+  return String(json?.username ?? username);
+}
+
 // ------------------------------------------------------------
 // QC Konten — akun wajib, kader, postingan, komentar, rekap
 // ------------------------------------------------------------
@@ -5476,8 +5489,8 @@ export type PersetujuanKpi = {
   }[];
 };
 
-export async function getPersetujuanKpi(): Promise<PersetujuanKpi> {
-  const json = await fetchJson("/api/tvr/persetujuan", {
+export async function getPersetujuanKpi(hanyaBanned = false): Promise<PersetujuanKpi> {
+  const json = await fetchJson(`/api/tvr/persetujuan${hanyaBanned ? "?hanya=banned" : ""}`, {
     headers: headerToken(),
   });
   return {

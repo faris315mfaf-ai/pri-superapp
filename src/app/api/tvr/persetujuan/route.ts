@@ -58,13 +58,19 @@ export async function GET(request: Request) {
   return bungkus(async () => {
     await pastikanHR(request);
     const db = supabase();
+    // ?hanya=banned (23 Sep 2026): meja kini hanya untuk permohonan blokir;
+    // antrean laporan lama diluluskan otomatis, tak perlu dibaca lagi.
+    const hanyaBanned = new URL(request.url).searchParams.get("hanya") === "banned";
+    const kosong = Promise.resolve({ data: [] as { id: unknown; user_id: unknown }[] });
     const [{ data: laporan }, { data: banned }] = await Promise.all([
-      db
-        .from("laporan_video_pending")
-        .select("id, user_id, platform, url_video, keyword, tanggal_wib, dibuat_pada")
-        .eq("status", "menunggu")
-        .order("dibuat_pada", { ascending: true })
-        .limit(300),
+      hanyaBanned
+        ? kosong
+        : db
+            .from("laporan_video_pending")
+            .select("id, user_id, platform, url_video, keyword, tanggal_wib, dibuat_pada")
+            .eq("status", "menunggu")
+            .order("dibuat_pada", { ascending: true })
+            .limit(300),
       db
         .from("tvr_banned")
         .select("id, user_id, platform, bukti_url, keterangan, dibuat_pada")

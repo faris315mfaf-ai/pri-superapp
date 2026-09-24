@@ -25,6 +25,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   ArrowUpDown,
+  AtSign,
   Briefcase,
   Building2,
   Check,
@@ -58,6 +59,7 @@ import {
   getPencocokanSadar,
   getPengguna,
   getZona,
+  gantiUsernameAnggota,
   setujuiSemuaPendaftar,
   tambahZona,
   tetapkanZonaAnggota,
@@ -68,6 +70,7 @@ import {
 } from "@/services";
 import { DIVISI, DIVISI_SAYAP, gelarSayap } from "@/lib/struktur";
 import { JABATAN_TVR_NASIONAL, jabatanLengkap } from "@/lib/jabatan";
+import { periksaUsername } from "@/lib/username";
 import { cn } from "@/lib/utils";
 
 type KolomSort = "nama" | "username" | "divisi" | "zona";
@@ -125,6 +128,7 @@ export function TabelAnggotaScreen({
   const [perHalaman, setPerHalaman] = useState(20);
   const [halaman, setHalaman] = useState(1);
   const [gantiUntuk, setGantiUntuk] = useState<PenggunaAdmin | null>(null);
+  const [usernameUntuk, setUsernameUntuk] = useState<PenggunaAdmin | null>(null);
   // Zona (spek 2.6): daftar utk penetapan per anggota
   const [zonaList, setZonaList] = useState<Zona[]>([]);
   const [zonaUntuk, setZonaUntuk] = useState<PenggunaAdmin | null>(null);
@@ -660,6 +664,16 @@ export function TabelAnggotaScreen({
       {gantiUntuk && (
         <ModalGantiSandi target={gantiUntuk} onTutup={() => setGantiUntuk(null)} />
       )}
+      {usernameUntuk && (
+        <ModalGantiUsername
+          target={usernameUntuk}
+          onTutup={() => setUsernameUntuk(null)}
+          onBerubah={() => {
+            setUsernameUntuk(null);
+            setMuatUlang((n) => n + 1);
+          }}
+        />
+      )}
       {zonaUntuk && (
         <ModalZona
           target={zonaUntuk}
@@ -686,6 +700,7 @@ export function TabelAnggotaScreen({
               else if (aksi === "struktur") setMemilihDivisi(u);
               else if (aksi === "zona") setZonaUntuk(u);
               else if (aksi === "sandi") setGantiUntuk(u);
+              else if (aksi === "username") setUsernameUntuk(u);
               else if (aksi === "hapus") setKonfirmasiHapus(u);
               else if (aksi === "nonaktifkan") void jalankan(u, "nonaktifkan", undefined, "Akun dinonaktifkan");
               else void jalankan(u, "aktifkan", undefined, "Akun diaktifkan");
@@ -774,7 +789,7 @@ export function TabelAnggotaScreen({
 // menyebut keadaan sekarang supaya HR tahu apa yang akan diubah.
 // ------------------------------------------------------------
 
-type AksiKelola = "peran" | "jabatan" | "struktur" | "zona" | "sandi" | "nonaktifkan" | "aktifkan" | "hapus";
+type AksiKelola = "username" | "sandi" | "peran" | "jabatan" | "struktur" | "zona" | "nonaktifkan" | "aktifkan" | "hapus";
 
 function LembarKelola({
   pengguna: u,
@@ -795,6 +810,10 @@ function LembarKelola({
     bahaya?: boolean;
     mati?: boolean;
   }[] = [
+    // Akun login di urutan teratas (24 Sep 2026) — paling sering dicari HR
+    // saat anggota lupa sandi atau salah ketik username waktu mendaftar.
+    { aksi: "username", label: "Ganti Username", keterangan: u.username ? `Sekarang: @${u.username}` : "Belum punya username", ikon: AtSign },
+    { aksi: "sandi", label: "Ganti Kata Sandi", keterangan: "Semua sesinya dicabut; tercatat di jejak audit", ikon: KeyRound },
     {
       aksi: "peran",
       label: disetujui ? "Ubah Peran" : "Setujui & Beri Peran",
@@ -819,7 +838,6 @@ function LembarKelola({
       ikon: Building2,
     },
     { aksi: "zona", label: "Zona", keterangan: namaZona(u) || "Belum ada zona", ikon: MapPin },
-    { aksi: "sandi", label: "Ganti Sandi", keterangan: "Semua sesinya dicabut; tercatat di jejak audit", ikon: KeyRound },
     u.aktif
       ? { aksi: "nonaktifkan", label: "Nonaktifkan", keterangan: "Cabut akses sementara — data tetap tersimpan", ikon: UserX, bahaya: true }
       : { aksi: "aktifkan", label: "Aktifkan", keterangan: "Pulihkan akses akun ini", ikon: Check },
@@ -991,6 +1009,119 @@ function ModalGantiSandi({
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             ) : (
               <KeyRound className="h-4 w-4" aria-hidden="true" />
+            )}
+            Simpan
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------
+// ModalGantiUsername — HR mengganti username login anggota (24 Sep
+// 2026). Aturan bentuk dari lib/username (sama dengan pendaftaran);
+// server memeriksa ulang + bentrok, mencatat audit, mengabari pemiliknya.
+// ------------------------------------------------------------
+
+function ModalGantiUsername({
+  target,
+  onTutup,
+  onBerubah,
+}: {
+  target: PenggunaAdmin;
+  onTutup: () => void;
+  onBerubah: () => void;
+}) {
+  const [nilai, setNilai] = useState(target.username ?? "");
+  const [sedang, setSedang] = useState(false);
+  const periksa = periksaUsername(nilai);
+  const sama = periksa.sah && periksa.bersih === (target.username ?? "").toLowerCase();
+  const boleh = periksa.sah && !sama && !sedang;
+
+  async function simpan() {
+    if (!boleh || !periksa.sah) return;
+    setSedang(true);
+    try {
+      const baru = await gantiUsernameAnggota(target.id, periksa.bersih);
+      toast(
+        "sukses",
+        `Username ${target.nama.split(" ")[0]} kini @${baru}`,
+        "Pemiliknya dikabari; kata sandinya tidak berubah.",
+      );
+      onBerubah();
+    } catch (e) {
+      toast("error", "Gagal mengganti username", e instanceof Error ? e.message : "");
+    } finally {
+      setSedang(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[95] flex items-center justify-center px-8"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Ganti username ${target.nama}`}
+    >
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={onTutup} />
+      <div className="glass-strong relative w-full max-w-[320px] rounded-2xl p-5">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-bold text-teks-utama">Ganti username {target.nama}</p>
+          <button type="button" onClick={onTutup} aria-label="Tutup" className="btn-tekan p-1 text-teks-sekunder">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] text-teks-sekunder">
+          Sekarang: {target.username ? <b className="text-teks-utama">@{target.username}</b> : "belum ada"}
+        </p>
+        <div className="relative mt-3">
+          <AtSign
+            className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-teks-sekunder"
+            aria-hidden="true"
+          />
+          <input
+            value={nilai}
+            onChange={(e) => setNilai(e.target.value.slice(0, 30))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void simpan();
+            }}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            placeholder="username baru…"
+            aria-label="Username baru"
+            className="glass h-11 w-full rounded-xl pr-3 pl-9 text-sm text-teks-utama placeholder:text-teks-sekunder/60 focus:outline-none"
+          />
+        </div>
+        {nilai.trim() && !periksa.sah ? (
+          <p className="mt-1.5 text-[11px] font-semibold text-gagal">{periksa.pesan}</p>
+        ) : sama ? (
+          <p className="mt-1.5 text-[11px] text-teks-sekunder">Itu username yang sekarang.</p>
+        ) : (
+          <p className="mt-1.5 text-[11px] text-teks-sekunder">
+            3–20 karakter: huruf kecil, angka, titik, garis bawah. Kata sandinya tidak berubah.
+          </p>
+        )}
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={onTutup}
+            className="glass btn-tekan flex-1 rounded-xl py-2.5 text-sm font-semibold text-teks-utama"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            disabled={!boleh}
+            onClick={() => void simpan()}
+            className="btn-tekan flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-bold text-white disabled:opacity-50"
+            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+          >
+            {sedang ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <AtSign className="h-4 w-4" aria-hidden="true" />
             )}
             Simpan
           </button>

@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { hapusCacheUser, userDariToken, cabutSemuaSesi } from "@/lib/sesi";
 import { buatHashSandi } from "@/lib/sandi";
+import { periksaUsername } from "@/lib/username";
 import { kirimKabar } from "@/lib/notifikasi";
 import { JABATAN_TVR_NASIONAL, JABATAN_PARTAI, KUOTA_JABATAN } from "@/lib/jabatan";
 import { DIVISI_SAYAP, jabatanSayapSah, pastikanStrukturSah } from "@/lib/struktur";
@@ -227,8 +228,11 @@ export async function PATCH(request: Request) {
         | "hapus"
         | "ubah_jabatan"
         | "ubah_divisi"
-        | "ganti_sandi";
+        | "ganti_sandi"
+        | "ganti_username";
       role?: string;
+      /** ganti_username: username login baru (23 Sep 2026). */
+      username?: string;
       jabatan?: string;
       bidang?: string;
       divisi?: string;
@@ -318,6 +322,67 @@ export async function PATCH(request: Request) {
     const perubahan: Record<string, unknown> = {};
 
     switch (body.tindakan) {
+      // --- Ganti username anggota (24 Sep 2026: HR/super/master) ---
+      // Beda dengan /api/username (milik sendiri): tanpa sandi & tanpa jeda
+      // 30 hari, karena pelakunya pengurus — sebagai gantinya dicatat di
+      // jejak audit dan pemiliknya dikabari. username_diubah_pada SENGAJA
+      // tidak disentuh: perbaikan oleh HR tidak boleh memakan jatah ganti
+      // milik anggota itu sendiri.
+      case "ganti_username": {
+        const periksa = periksaUsername(body.username ?? "");
+        if (!periksa.sah) throw Object.assign(new Error(periksa.pesan), { status: 400 });
+        const baru = periksa.bersih;
+        const { data: target } = await db
+          .from("app_user")
+          .select("id, nama, username")
+          .eq("id", id)
+          .maybeSingle();
+        if (!target) throw Object.assign(new Error("Akun tidak ditemukan."), { status: 404 });
+        const lama = String(target.username ?? "");
+        if (baru === lama.toLowerCase()) {
+          throw Object.assign(new Error("Username itu sudah dipakai akun ini."), { status: 400 });
+        }
+        // "_" dan "%" adalah wildcard ILIKE — di-escape supaya "a_b" tidak
+        // dianggap bentrok dengan "acb".
+        const pola = baru.replace(/[\\%_]/g, (c) => `\\${c}`);
+        const { data: dipakai } = await db
+          .from("app_user")
+          .select("id")
+          .ilike("username", pola)
+          .neq("id", id)
+          .limit(1);
+        if ((dipakai ?? []).length > 0) {
+          throw Object.assign(new Error(`Username "${baru}" sudah dipakai anggota lain.`), { status: 409 });
+        }
+        const { error: eNama } = await db.from("app_user").update({ username: baru }).eq("id", id);
+        if (eNama) {
+          if (eNama.code === "23505") {
+            throw Object.assign(new Error(`Username "${baru}" sudah dipakai anggota lain.`), { status: 409 });
+          }
+          console.error("[pengguna] ganti username:", eNama.message);
+          throw new Error("Gagal mengganti username.");
+        }
+        // Sesi TIDAK dicabut (sama seperti /api/username): token tidak
+        // terikat username. Cache dibuang supaya nama baru langsung tampil.
+        await hapusCacheUser(id);
+        await db.from("log_audit").insert({
+          aktor_id: Number(pemanggil.id),
+          aktor_nama: pemanggil.nama,
+          aksi: "ganti_username",
+          target_id: id,
+          target_nama: target.nama,
+          detail: `Username diganti lewat Database Anggota: ${lama || "(kosong)"} → ${baru}.`,
+        });
+        await kirimKabar({
+          judul: "Username akun Anda diganti pengurus",
+          isi: `Mulai sekarang masuk dengan username "${baru}". Kata sandi Anda tidak berubah.`,
+          kategori: "peringatan",
+          jenis_peristiwa: "keamanan",
+          untukUserIds: [id],
+        });
+        return { sukses: true, username: baru };
+      }
+
       // --- Ganti sandi anggota (spek 1.18/2.2: HR/super/master) ---
       case "ganti_sandi": {
         const sandiBaru = String(body.role ?? ""); // dititipkan di kolom role

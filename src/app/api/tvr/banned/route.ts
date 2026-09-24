@@ -11,7 +11,7 @@
 import { supabase } from "@/lib/supabase";
 import { userEfektifTvr } from "@/lib/sebagai";
 import { bungkus } from "@/lib/api-helper";
-import { adalahHR } from "@/lib/hr";
+import { adalahHR, DIVISI_HR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
@@ -154,17 +154,37 @@ export async function POST(request: Request) {
     }
 
     // Kabari HR — target KPI BELUM berubah sampai disetujui.
+    // Dikirim per ORANG (23 Sep 2026): dulu sasarannya peran admin_hr +
+    // master, padahal peran admin_hr sudah tidak dipakai — yang berwenang
+    // kini anggota Divisi HR, jadi kabarnya hanya sampai ke master.
+    const penerima = await penerimaKabarHR();
     await kirimKabar({
       judul: "Permohonan sosmed terblokir",
-      isi: `${user.nama} mengajukan akun ${platform}-nya terblokir. Periksa bukti & putuskan di HR Center → ACC KPI.`,
+      isi: `${user.nama} mengajukan akun ${platform}-nya terblokir. Periksa bukti & putuskan di HR Center → Sosmed Terblokir.`,
       kategori: "peringatan",
       jenis_peristiwa: "tvr_banned",
       // Ketua Umum (super_admin) SENGAJA tidak dikabari (permintaan 2 Sep 2026).
-        untukRole: ["admin_hr", "master"],
+      ...(penerima.length > 0 ? { untukUserIds: penerima } : { untukRole: ["master"] }),
     });
 
     return { sukses: true, id: String(data.id) };
   });
+}
+
+/** Anggota Divisi HR + master yang aktif — pemutus permohonan blokir. */
+async function penerimaKabarHR(): Promise<number[]> {
+  const { data, error } = await supabase()
+    .from("app_user")
+    .select("id")
+    .or(`divisi.eq."${DIVISI_HR}",role.eq.master`)
+    .eq("aktif", true)
+    .eq("status", "aktif")
+    .limit(200);
+  if (error) {
+    console.error("[tvr/banned] penerima kabar:", error.message);
+    return [];
+  }
+  return (data ?? []).map((u) => Number(u.id)).filter((n) => n > 0);
 }
 
 export async function PATCH(request: Request) {

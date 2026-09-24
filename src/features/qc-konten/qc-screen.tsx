@@ -19,7 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   CalendarDays,
-  ClipboardCheck,
+  Ban,
   Check,
   ChevronRight,
   Database,
@@ -43,6 +43,7 @@ import { ProgressRing } from "@/components/progress-ring";
 import { PlatformIcon } from "@/components/platform-icon";
 import {
   getAkunWajib,
+  getPersetujuanKpi,
   getAntrianQc,
   getRingkasPlatformQc,
   setAmbangTindak,
@@ -121,6 +122,22 @@ export function QcScreen({
   // dengan mengeklik entri riwayat (memakai label PERSIS entri itu, jadi
   // data berlabel lama 00:00-23:59 pun tetap terbuka).
   const [periodePilih, setPeriodePilih] = useState<string>(() => periodeSaatIni());
+  // Permohonan sosmed terblokir yang menunggu — lencana di menu supaya
+  // HR tahu ada yang harus diputus (23 Sep 2026). Gagal = tanpa lencana.
+  const [jumlahBlokir, setJumlahBlokir] = useState(0);
+  // Boolean, bukan fungsinya: page.tsx membuat fungsi baru tiap render,
+  // dan efek yang bergantung padanya akan memanggil API berulang-ulang.
+  const adaMenuHalaman = Boolean(onBukaHalaman);
+  useEffect(() => {
+    if (!adaMenuHalaman) return;
+    let hidup = true;
+    getPersetujuanKpi(true)
+      .then((d) => hidup && setJumlahBlokir(d.banned.length))
+      .catch(() => undefined);
+    return () => {
+      hidup = false;
+    };
+  }, [adaMenuHalaman]);
   const tanggalPilih = periodePilih.slice(0, 10);
   const hariIni = periodePilih === periodeSaatIni();
 
@@ -312,10 +329,11 @@ export function QcScreen({
               ["database", "Detail Anggota", Database, true],
               ["absensi-hari-ini", "Absensi Hari Ini", CalendarDays, true],
               ["setel-kpi", "Setel KPI", TrendingUp, true],
-              // ACC KPI DIMATIKAN (12 Sep 2026): laporan video kini langsung
-              // dihitung, tidak lagi menunggu persetujuan HR. Layarnya masih
-              // ada di kode untuk membereskan sisa antrean lama bila perlu.
-              ["persetujuan-kpi", "ACC KPI", ClipboardCheck, false],
+              // Dulu "ACC KPI". Laporan video kini langsung dihitung (12 &
+              // 23 Sep 2026); yang tersisa untuk HR hanya permohonan akun
+              // sosmed terblokir — menu ini sempat tersembunyi sehingga
+              // permohonan itu tak bisa diputus siapa pun.
+              ["persetujuan-kpi", "Sosmed Terblokir", Ban, true],
               ["pengumuman", "Kirim Pengumuman", Megaphone, bolehHR],
             ] as const
           )
@@ -327,9 +345,19 @@ export function QcScreen({
                 onClick={() => onBukaHalaman(id)}
                 className="glass btn-tekan flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3"
               >
-                <Ikon className="h-5 w-5 text-pri" aria-hidden="true" />
+                <span className="relative">
+                  <Ikon className="h-5 w-5 text-pri" aria-hidden="true" />
+                  {id === "persetujuan-kpi" && jumlahBlokir > 0 && (
+                    <span className="absolute -top-2 -right-3 flex h-4 min-w-4 items-center justify-center rounded-full bg-gagal px-1 text-[9.5px] font-bold text-white">
+                      {jumlahBlokir}
+                    </span>
+                  )}
+                </span>
                 <span className="text-center text-[10.5px] leading-tight font-bold text-teks-utama">
                   {label}
+                  {id === "persetujuan-kpi" && jumlahBlokir > 0 && (
+                    <span className="sr-only"> ({jumlahBlokir} menunggu)</span>
+                  )}
                 </span>
               </button>
             ))}
