@@ -1,16 +1,13 @@
 # Deploy otomatis ke VPS setelah kode masuk ke main.
 #
-# Yang terjadi: GitHub menyambung SSH ke server, lalu menjalankan
-# `pri-perbarui` — skrip yang sudah ada, yang menarik kode, membangun
-# container, mengganti yang jalan, dan mengembalikan versi lama sendiri
-# kalau yang baru tidak menjawab.
+# Alur: GitHub Actions SSH ke server → ambil kode main dengan token
+# job ini (repo privat) → `pri-perbarui --tanpa-tarik` membangun &
+# mengganti container (dengan rollback otomatis bila tidak sehat).
 #
-# RAHASIA yang harus diisi di GitHub
-# (Settings → Secrets and variables → Actions):
+# RAHASIA (Settings → Secrets and variables → Actions):
 #   VPS_HOST     alamat server, mis. 187.77.113.63
-#   VPS_USER     biasanya root
-#   VPS_SSH_KEY  isi kunci privat hasil vps/17-pasang-deploy-otomatis.sh
-#   VPS_PORT     opsional, bawaan 22
+#   VPS_USER     biasanya adminportalpri
+#   VPS_SSH_KEY  kunci privat hasil vps/17-pasang-deploy-otomatis.sh
 #
 # Pemasangan sekali di server: bash vps/17-pasang-deploy-otomatis.sh
 name: Deploy VPS
@@ -56,20 +53,46 @@ jobs:
 
       - name: Jalankan pri-perbarui di VPS
         uses: appleboy/ssh-action@v1.2.2
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
           command_timeout: 45m
+          envs: GH_TOKEN
           script: |
             set -euo pipefail
+            SUMBER=/opt/pri-superapp/sumber
+            if [ ! -d "$SUMBER/.git" ]; then
+              echo "Folder sumber belum ada di $SUMBER" >&2
+              exit 1
+            fi
+            # Repo privat: VPS tidak punya login HTTPS. Pakai token job
+            # Actions (kedaluwarsa setelah workflow) hanya untuk fetch,
+            # tanpa menyimpannya di remote URL.
+            cd "$SUMBER"
+            git remote set-url origin https://github.com/faris315mfaf-ai/pri-superapp.git
+            AUTH="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0 2>/dev/null || printf 'x-access-token:%s' "$GH_TOKEN" | base64)"
+            git -c http.extraHeader="AUTHORIZATION: basic ${AUTH}" fetch --quiet origin main
+            LAMA="$(git rev-parse --short HEAD)"
+            BARU="$(git rev-parse --short origin/main)"
+            if [ "$LAMA" != "$BARU" ]; then
+              echo "  $LAMA -> $BARU"
+              git --no-pager log --oneline "$LAMA..origin/main" | sed 's/^/    /'
+              # merge lokal dari origin/main yang baru di-fetch — jangan
+              # `git pull` lagi (itu akan minta login HTTPS kedua kali).
+              git merge --ff-only --quiet origin/main
+            else
+              echo "  sudah versi terbaru ($LAMA)"
+            fi
             if command -v pri-perbarui >/dev/null 2>&1; then
-              sudo -n pri-perbarui
+              sudo -n pri-perbarui --tanpa-tarik
             elif [ -x /opt/pri-superapp/skrip/12-perbarui.sh ]; then
-              sudo -n bash /opt/pri-superapp/skrip/12-perbarui.sh
+              sudo -n bash /opt/pri-superapp/skrip/12-perbarui.sh --tanpa-tarik
             elif [ -x /opt/pri-skrip/12-perbarui.sh ]; then
-              sudo -n bash /opt/pri-skrip/12-perbarui.sh
+              sudo -n bash /opt/pri-skrip/12-perbarui.sh --tanpa-tarik
             else
               echo "Perintah pri-perbarui belum ada di server." >&2
               echo "Jalankan dulu pemasangan aplikasi di VPS." >&2
