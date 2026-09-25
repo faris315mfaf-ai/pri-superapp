@@ -24,6 +24,7 @@ import {
 import { kodeMetrik, susunInsightKategori } from "@/lib/insight-kategori";
 import { uraiMetrikPost } from "@/lib/metrik-post-up";
 import { akunDariTautan, idVideo, kanonikTautan } from "@/lib/tautan-video";
+import { adalahTautanPendek, alamatDariPengalihan, kodeTautanPendek } from "@/lib/tautan-pendek";
 
 let lulus = 0;
 let gagal = 0;
@@ -252,6 +253,40 @@ cek("video sama dari dua sumber dihitung sekali", s.ringkasan.jumlah_video === 2
 cek("atribusi ke unggahan (sumber pertama)", s.video.find((v) => v.platform === "tiktok")?.asal === "unggahan" && s.video.find((v) => v.platform === "tiktok")?.pelapor === "Pengunggah");
 cek("total hanya dari video terukur", s.ringkasan.total.tayangan === 225 && s.ringkasan.jumlah_terukur === 1);
 cek("video tanpa angka tetap tampil", s.video.some((v) => v.platform === "youtube" && v.metrik === null));
+
+// ---------------------------------------------------------------
+console.log("link pendek (share FB/Threads, vt.tiktok)");
+cek("vt.tiktok dikenali", kodeTautanPendek("tiktok", "https://vt.tiktok.com/ZSb1GF5MW/") === "ZSb1GF5MW" && adalahTautanPendek("tiktok", "https://vm.tiktok.com/ZMabc123/"));
+cek("tiktok.com/t/<huruf> pendek, /t/<angka> BUKAN", adalahTautanPendek("tiktok", "https://www.tiktok.com/t/ZTabc123/") && !adalahTautanPendek("tiktok", "https://www.tiktok.com/t/7689494343802998036"));
+cek("share Facebook r/v & fb.watch", adalahTautanPendek("facebook", "https://www.facebook.com/share/r/1JtEzXALhn/") && adalahTautanPendek("facebook", "https://m.facebook.com/share/v/19MpKvY5Wg/") && adalahTautanPendek("facebook", "https://fb.watch/v/1BbJMBxhVD/"));
+cek("share Threads", kodeTautanPendek("threads", "https://www.threads.com/share/HNQZ9C51L/") === "HNQZ9C51L");
+cek("link lengkap bukan link pendek", !adalahTautanPendek("facebook", "https://www.facebook.com/reel/946158698557752/") && !adalahTautanPendek("tiktok", "https://www.tiktok.com/@a/video/7551234567890123456") && !adalahTautanPendek("threads", "https://www.threads.com/@a/post/DdsjhEDmq7z"));
+cek("platform salah → bukan", !adalahTautanPendek("instagram", "https://vt.tiktok.com/ZSb1GF5MW/"));
+cek("kode alias link pendek TikTok/Threads", kodeMetrik("tiktok", "https://vt.tiktok.com/ZSb1GF5MW/") === "tt_s_ZSb1GF5MW" && kodeMetrik("threads", "https://www.threads.com/share/HNQZ9C51L/") === "th_s_HNQZ9C51L");
+cek("kode share FB tetap seperti dulu", kodeMetrik("facebook", "https://www.facebook.com/share/r/1JtEzXALhn/") === "fb_1JtEzXALhn");
+cek("pengalihan FB reel diterima", alamatDariPengalihan("facebook", "https://www.facebook.com/reel/28533999269595951/?rdid=Y940&share_url=x") !== null);
+cek("pengalihan FB /videos/ diterima", alamatDariPengalihan("facebook", "https://www.facebook.com/61589337332504/videos/viral-judul/1234567890123/") !== null);
+cek("pengalihan ke halaman masuk ditolak", alamatDariPengalihan("facebook", "https://www.facebook.com/login/?next=x") === null && alamatDariPengalihan("facebook", "/share/r/x") === null);
+cek("pengalihan Threads & TikTok diterima", alamatDariPengalihan("threads", "https://www.threads.com/@tvindependenid/post/DdsjhEDmq7z?xmt=AQG") !== null && alamatDariPengalihan("tiktok", "https://www.tiktok.com/@tvrakyat.berandalive/video/7688364863449517320?_r=1") !== null);
+cek("pengalihan postingan FB (story.php) → kode story_fbid", kodeMetrik("facebook", alamatDariPengalihan("facebook", "https://www.facebook.com/story.php?story_fbid=122112724167461305&id=61593839156737&rdid=x") ?? "") === "fb_122112724167461305");
+cek("hasil urai → kode video asli", kodeMetrik("facebook", alamatDariPengalihan("facebook", "https://www.facebook.com/reel/946158698557752/?rdid=e") ?? "") === "fb_946158698557752");
+
+console.log("susunInsightKategori — alias link pendek tidak dobel");
+const kodeFb = "fb_946158698557752";
+const angkaFb = { kode: kodeFb, platform: "facebook", judul: "", url: "https://www.facebook.com/reel/946158698557752", thumbnail_url: "", nama_akun: "", akun_username: "", waktu_posting: null, tayangan: 90, suka: 5, komentar: 1, bagikan: 0, favorit: 0, durasi_detik: null, sumber: "", diperbarui_pada: "2026-09-25T00:00:00Z" };
+const s2 = susunInsightKategori(
+  [
+    { id: "1", user_id: "7", platform: "facebook", url_video: "https://www.facebook.com/share/r/19MpKvY5Wg/", tanggal_wib: "2026-09-23", asal: "laporan" },
+    { id: "2", user_id: "8", platform: "facebook", url_video: "https://www.facebook.com/reel/946158698557752/", tanggal_wib: "2026-09-23", asal: "laporan" },
+  ],
+  new Map([
+    ["fb_19MpKvY5Wg", { ...angkaFb, kode: "fb_19MpKvY5Wg" }],
+    [kodeFb, angkaFb],
+  ]),
+  new Map(),
+);
+cek("link bagikan + link lengkap video sama = 1 video", s2.ringkasan.jumlah_video === 1 && s2.ringkasan.total.tayangan === 90, s2.ringkasan);
+cek("kartu link bagikan berangka & beralamat asli", s2.video[0]?.metrik?.tayangan === 90 && s2.video[0]?.url === "https://www.facebook.com/reel/946158698557752");
 
 console.log(`\n${lulus} lulus, ${gagal} gagal`);
 if (gagal > 0) process.exit(1);

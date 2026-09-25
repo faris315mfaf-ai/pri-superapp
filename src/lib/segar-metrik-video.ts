@@ -33,6 +33,7 @@ import { akunDariTautan, idVideo, kanonikTautan } from "@/lib/tautan-video";
 import { klienCache } from "@/lib/redis";
 import { semuaBaris } from "@/lib/semua-baris";
 import { KATEGORI_TETAP } from "@/lib/kategori-tetap";
+import { adalahTautanPendek, alamatDariPengalihan } from "@/lib/tautan-pendek";
 import { analitikPostAsliUp, analitikPostLiveUp, daftarMediaUp, uploadPostSiap } from "@/lib/upload-post";
 import {
   aturSiklus,
@@ -554,19 +555,156 @@ async function idMediaUntuk(
   return peta[kode] ?? null;
 }
 
-type ItemLaporan = { laporan: BarisLaporan; kode: string; platform: string; pemilik: number; profil: string };
+// ------------------------------------------------------------
+// Link pendek (vt.tiktok, share Facebook/Threads, fb.watch) → alamat asli
+// ------------------------------------------------------------
+//
+// Diverifikasi dari server VPS (25 Sep 2026): dengan user-agent crawler
+// Facebook, ketiganya menjawab 302 ke alamat video yang lengkap (FB
+// /reel/<ID angka>, Threads /@akun/post/<kode>, TikTok /@akun/video/<ID>).
+// Peramban biasa ditolak Facebook (400). Hasil diingat 30 hari (gagal:
+// 6 jam) — link yang sama tidak diurai berulang-ulang.
 
-/** Saring & lengkapi laporan: hanya video akun tersambung yang bisa ditanyakan. */
-function siapkanLaporan(l: BarisLaporan, ctx: Konteks): ItemLaporan | null {
+const UA_CRAWLER = "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)";
+const UA_CADANGAN = "Twitterbot/1.0";
+const UMUR_PENDEK_MS = 30 * 86_400_000;
+const UMUR_PENDEK_GAGAL_MS = 6 * 3600_000;
+const pendekDiingat = new Map<string, { sampai: number; url: string }>();
+
+async function bacaPendek(kunci: string): Promise<string | null | undefined> {
+  const m = pendekDiingat.get(kunci);
+  if (m && m.sampai > Date.now()) return m.url || null;
+  const redis = klienCache();
+  if (!redis) return undefined;
+  try {
+    const r = await redis.get<{ u?: string }>(`mv:pendek:${kunci}`);
+    if (r && typeof r === "object" && typeof r.u === "string") {
+      pendekDiingat.set(kunci, { sampai: Date.now() + UMUR_PENDEK_GAGAL_MS, url: r.u });
+      return r.u || null;
+    }
+  } catch {
+    // Redis bermasalah → urai ulang.
+  }
+  return undefined;
+}
+
+async function simpanPendek(kunci: string, url: string): Promise<void> {
+  const umur = url ? UMUR_PENDEK_MS : UMUR_PENDEK_GAGAL_MS;
+  if (pendekDiingat.size > 5000) pendekDiingat.clear();
+  pendekDiingat.set(kunci, { sampai: Date.now() + Math.min(umur, UMUR_PENDEK_GAGAL_MS), url });
+  const redis = ujiKeringAktif ? null : klienCache();
+  if (!redis) return;
+  try {
+    await redis.set(`mv:pendek:${kunci}`, { u: url }, { ex: Math.floor(umur / 1000) });
+  } catch {
+    // Gagal mengingat bukan alasan menghentikan penyegaran.
+  }
+}
+
+/** Ikuti pengalihan (maks 4 langkah) sampai ketemu alamat video asli. */
+async function ikutiPengalihan(platform: string, url: string, ua: string): Promise<string | null> {
+  let kini = url;
+  for (let i = 0; i < 4; i++) {
+    const r = await fetch(kini, {
+      redirect: "manual",
+      headers: { "User-Agent": ua, Accept: "text/html" },
+      signal: AbortSignal.timeout(10_000),
+      cache: "no-store",
+    });
+    const lokasi = r.headers.get("location");
+    if (lokasi && r.status >= 300 && r.status < 400) {
+      await r.body?.cancel().catch(() => undefined);
+      const lanjut = new URL(lokasi, kini).toString();
+      const asli = alamatDariPengalihan(platform, lanjut);
+      if (asli) return asli;
+      kini = lanjut;
+      continue;
+    }
+    if (r.status !== 200) {
+      await r.body?.cancel().catch(() => undefined);
+      return null;
+    }
+    // Tanpa pengalihan: sebagian halaman memuat alamat aslinya di og:url.
+    const teks = (await r.text()).slice(0, 400_000);
+    const og =
+      /<meta[^>]+property=["']og:url["'][^>]+content=["']([^"']+)["']/i.exec(teks)?.[1] ??
+      /<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i.exec(teks)?.[1] ??
+      "";
+    return alamatDariPengalihan(platform, og.replace(/&amp;/g, "&"));
+  }
+  return null;
+}
+
+/**
+ * Alamat asli sebuah link pendek; null bila tidak bisa diurai. Alamat
+ * yang BUKAN link pendek dikembalikan apa adanya.
+ */
+export async function alamatAsli(platform: string, url: string): Promise<string | null> {
+  if (!adalahTautanPendek(platform, url)) return url;
+  const kunci = `${platform}|${url.trim().replace(/[?#].*$/, "")}`;
+  const ada = await bacaPendek(kunci);
+  if (ada !== undefined) return ada;
+  let asli: string | null = null;
+  try {
+    asli = await ikutiPengalihan(platform, url, UA_CRAWLER);
+    if (!asli) asli = await ikutiPengalihan(platform, url, UA_CADANGAN);
+  } catch {
+    asli = null;
+  }
+  await simpanPendek(kunci, asli ?? "");
+  return asli;
+}
+
+/** Urai semua link pendek di satu jendela laporan (4 bersamaan). */
+async function uraiPendekJendela(baris: BarisLaporan[], ctrl: Pengendali): Promise<Map<string, string | null>> {
+  const hasil = new Map<string, string | null>();
+  const perlu = baris.filter((l) => adalahTautanPendek(platformApp(String(l.platform ?? "")), String(l.url_video ?? "")));
+  for (let i = 0; i < perlu.length; i += PARALEL) {
+    if (ctrl.sisaWaktu() < 15_000) break;
+    const kelompok = perlu.slice(i, i + PARALEL);
+    const r = await Promise.all(
+      kelompok.map((l) => alamatAsli(platformApp(String(l.platform ?? "")), String(l.url_video ?? ""))),
+    );
+    kelompok.forEach((l, j) => hasil.set(String(l.id), r[j]));
+  }
+  return hasil;
+}
+
+type ItemLaporan = {
+  laporan: BarisLaporan;
+  /** Kode video ASLI (setelah link pendek diurai). */
+  kode: string;
+  /** Kode link pendek yang dilaporkan — angkanya ikut disimpan di bawahnya. */
+  kodeAlias: string | null;
+  /** Alamat video asli. */
+  url: string;
+  platform: string;
+  pemilik: number;
+  profil: string;
+};
+
+/**
+ * Saring & lengkapi laporan: hanya video akun tersambung yang bisa
+ * ditanyakan. `urlAsli`: hasil urai link pendek (undefined = belum
+ * sempat diurai → item ditunda; null = tidak bisa diurai).
+ */
+function siapkanLaporan(l: BarisLaporan, ctx: Konteks, urlAsli?: string | null): ItemLaporan | null | "tunda" {
   if (l.tvrku_post_id != null && Number(l.tvrku_post_id) > 0) return null; // ditangani jalur unggahan
   if (!ctx.kategori.has(String(l.keyword ?? "").trim().toUpperCase())) return null;
   const platform = platformApp(String(l.platform ?? ""));
-  const url = String(l.url_video ?? "");
-  if (!platformDidukung(platform) || !url) return null;
+  const dilaporkan = String(l.url_video ?? "");
+  if (!platformDidukung(platform) || !dilaporkan) return null;
+  let url = dilaporkan;
+  let kodeAlias: string | null = null;
+  if (adalahTautanPendek(platform, dilaporkan)) {
+    if (urlAsli === undefined) return "tunda";
+    if (!urlAsli) return null;
+    url = urlAsli;
+    kodeAlias = kodeMetrik(platform, dilaporkan);
+  }
   const kode = kodeMetrik(platform, url);
   if (!kode) return null;
-  // Link bagikan Facebook (/share/r/<kode acak>) tidak memuat ID video,
-  // jadi tidak mungkin cocok dengan daftar media — jangan buang kuota.
+  // Facebook: hanya ID video angka yang bisa dicocokkan dengan daftar media.
   if (platform === "facebook" && !/^fb_\d{6,}$/.test(kode)) return null;
   const pelapor = Number(l.user_id);
   const nama = akunDariTautan(platform, url);
@@ -580,7 +718,7 @@ function siapkanLaporan(l: BarisLaporan, ctx: Konteks): ItemLaporan | null {
   }
   const profil = pemilik ? ctx.profilPer.get(pemilik) : undefined;
   if (!pemilik || !profil) return null;
-  return { laporan: l, kode, platform, pemilik, profil };
+  return { laporan: l, kode, kodeAlias: kodeAlias && kodeAlias !== kode ? kodeAlias : null, url, platform, pemilik, profil };
 }
 
 async function kerjakanLaporan(
@@ -590,7 +728,7 @@ async function kerjakanLaporan(
   draf: DraftBaris[],
   catat: { terisi: number; galat: number; dilewati: number },
 ): Promise<HasilItem> {
-  const url = String(it.laporan.url_video);
+  const url = it.url;
   let ppid: string | null = idPlatformDariUrl(it.platform, idVideo(it.platform, url));
   if (!ppid && perluDaftarMedia(it.platform)) {
     const r = await idMediaUntuk(it.profil, it.platform, it.kode, ctrl);
@@ -618,6 +756,9 @@ async function kerjakanLaporan(
       : null;
     if (d) {
       draf.push(d);
+      // Salinan di bawah kode link pendek yang dilaporkan, dengan alamat
+      // asli — kartu laporan itu langsung berangka.
+      if (it.kodeAlias) draf.push({ ...d, kode: it.kodeAlias });
       catat.terisi += 1;
     } else {
       catat.galat += 1;
@@ -761,12 +902,15 @@ async function jalurLaporan(
       if (!segar) j = majukanUtama(j, null, true);
       break;
     }
-    // Video yang sudah disegarkan siklus ini (oleh jalur unggahan atau
-    // laporan lain atas video yang sama) tidak ditanya lagi.
-    const siap = baris.map((l) => siapkanLaporan(l, ctx));
-    const kodeCek = [...new Set(siap.filter((x): x is ItemLaporan => x !== null).map((x) => x.kode))].filter(
-      (k) => !sudahKode.has(k),
-    );
+    // Link pendek diurai dulu (tanpa kuota upload-post). Video yang sudah
+    // disegarkan siklus ini (oleh jalur unggahan atau laporan lain atas
+    // video yang sama) tidak ditanya lagi.
+    const asli = await uraiPendekJendela(baris, ctrl);
+    const siap = baris.map((l) => siapkanLaporan(l, ctx, asli.has(String(l.id)) ? asli.get(String(l.id)) : undefined));
+    const itemSiap = siap.filter((x): x is ItemLaporan => x !== null && x !== "tunda");
+    const kodeCek = [
+      ...new Set(itemSiap.flatMap((x) => (x.kodeAlias ? [x.kode, x.kodeAlias] : [x.kode]))),
+    ].filter((k) => !sudahKode.has(k));
     if (kodeCek.length > 0) {
       const { data: segarData } = await db
         .from("tvr_video_metrik")
@@ -780,16 +924,20 @@ async function jalurLaporan(
     const hasil = await kerjakanKelompok(
       baris.map((l, i) => ({ l, it: siap[i] })),
       async ({ it }) => {
+        if (it === "tunda") return "tunda";
         if (!it) {
           catat.dilewati += 1;
           return "selesai";
         }
-        if (sudahKode.has(it.kode)) {
+        if (sudahKode.has(it.kode) && (!it.kodeAlias || sudahKode.has(it.kodeAlias))) {
           catat.dilewati += 1;
           return "selesai";
         }
         const h = await kerjakanLaporan(it, ctx, ctrl, draf, catat);
-        if (h === "selesai") sudahKode.add(it.kode);
+        if (h === "selesai") {
+          sudahKode.add(it.kode);
+          if (it.kodeAlias) sudahKode.add(it.kodeAlias);
+        }
         return h;
       },
       ctrl,
@@ -837,7 +985,7 @@ async function idTerbesar(db: Db, tabel: "tvrku_post" | "laporan_video"): Promis
 }
 
 export async function putaranSegarMetrik(
-  opsi: { anggaranMs?: number; maksPermintaan?: number; ujiKering?: boolean } = {},
+  opsi: { anggaranMs?: number; maksPermintaan?: number; ujiKering?: boolean; ujiSiklusBaru?: boolean } = {},
 ): Promise<RingkasanPutaran> {
   const mulai = Date.now();
   const kosong: RingkasanPutaran = { jalan: false, diminta: 0, terisi: 0, tersimpan: 0, galat: 0, dilewati: 0, durasi_ms: 0 };
@@ -854,7 +1002,8 @@ export async function putaranSegarMetrik(
       idTerbesar(db, "laporan_video"),
       bacaNilai(db, KUNCI_SIKLUS),
     ]);
-    const { siklus, baru } = aturSiklus(tersimpan, Date.now(), maksUnggahan, maksLaporan);
+    // ujiSiklusBaru (hanya bersama ujiKering): abaikan status tersimpan.
+    const { siklus, baru } = aturSiklus(kering && opsi.ujiSiklusBaru ? null : tersimpan, Date.now(), maksUnggahan, maksLaporan);
     if (siklus.jeda_sampai && Date.parse(siklus.jeda_sampai) > Date.now()) {
       if (!kering) await simpanSiklus(db, siklus);
       return {
@@ -1047,6 +1196,8 @@ export type HasilSegarKategori = {
   sisa: number;
   /** true = direm kuota; tunggu beberapa menit sebelum menekan lagi. */
   direm: boolean;
+  /** Link pendek yang diurai di tekan ini (belum tentu sudah ditarik angkanya). */
+  diurai: number;
   lama_ms: number;
 };
 
@@ -1097,10 +1248,22 @@ export async function segarkanKategori(kategori: string, polaIlike: string): Pro
       kodePerPost.set(pid, [...(kodePerPost.get(pid) ?? []), k]);
     }
   }
+  // Link pendek diurai dulu (diingat 30 hari, jadi tekan berikutnya cepat).
+  const kendaliUrai = new Pengendali(0, 25_000);
+  const asli = await uraiPendekJendela(laporan, kendaliUrai);
   const itemLaporan = new Map<string, ItemLaporan>();
+  // Link pendek yang belum sempat diurai di tekan ini → dihitung sisa.
+  const belumDiurai = new Set<string>();
   for (const l of laporan) {
-    const it = siapkanLaporan(l, ctx);
-    if (it && !itemLaporan.has(it.kode)) itemLaporan.set(it.kode, it);
+    const it = siapkanLaporan(l, ctx, asli.has(String(l.id)) ? asli.get(String(l.id)) : undefined);
+    if (it === "tunda") {
+      belumDiurai.add(kodeMetrik(platformApp(String(l.platform ?? "")), String(l.url_video ?? "")) ?? String(l.id));
+      continue;
+    }
+    if (!it) continue;
+    // Kunci = kode yang dilaporkan: alias link pendek ikut terisi.
+    const kunciItem = it.kodeAlias ?? it.kode;
+    if (!itemLaporan.has(kunciItem)) itemLaporan.set(kunciItem, it);
   }
 
   // Yang angkanya masih segar (< 6 jam) atau baru saja gagal dilewati.
@@ -1117,13 +1280,16 @@ export async function segarkanKategori(kategori: string, polaIlike: string): Pro
     const kode = kodePerPost.get(Number(p.id)) ?? [];
     return kode.length === 0 || !kode.every(masihSegar);
   });
-  const antreLaporan = [...itemLaporan.values()].filter((it) => !baruGagal(`l:${it.kode}`) && !masihSegar(it.kode));
-  const total = unggahan.length + itemLaporan.size;
-  const perlu = antreUnggahan.length + antreLaporan.length;
+  const antreLaporan = [...itemLaporan.values()].filter(
+    (it) => !baruGagal(`l:${it.kodeAlias ?? it.kode}`) && !masihSegar(it.kodeAlias ?? it.kode),
+  );
+  const total = unggahan.length + itemLaporan.size + belumDiurai.size;
+  const diurai = asli.size;
+  const perlu = antreUnggahan.length + antreLaporan.length + belumDiurai.size;
 
   const jatah = jatahManual(MAKS_PER_TEKAN);
   if (perlu > 0 && jatah < 1) {
-    return { kategori, total, dikerjakan: 0, terisi: 0, galat: 0, sisa: perlu, direm: true, lama_ms: Date.now() - mulai };
+    return { kategori, total, dikerjakan: 0, terisi: 0, galat: 0, sisa: perlu, direm: true, diurai, lama_ms: Date.now() - mulai };
   }
   const ctrl = new Pengendali(jatah, 55_000, { saatAmbil: pakaiJatahManual, lebihMs: 15_000 });
   const draf: DraftBaris[] = [];
@@ -1152,7 +1318,7 @@ export async function segarkanKategori(kategori: string, polaIlike: string): Pro
       const h = await kerjakanLaporan(it, ctx, ctrl, draf, catat);
       if (h === "selesai") {
         dikerjakan += 1;
-        if (catat.terisi === 0) tandaiGagal(`l:${it.kode}`);
+        if (catat.terisi === 0) tandaiGagal(`l:${it.kodeAlias ?? it.kode}`);
       }
       terisi += catat.terisi;
       galat += catat.galat;
@@ -1161,7 +1327,7 @@ export async function segarkanKategori(kategori: string, polaIlike: string): Pro
     ctrl,
   );
   await tulisDraf(db, draf, ctx.kolom);
-  const sisa = [...hasilU, ...hasilL].filter((h) => h === "tunda").length;
+  const sisa = [...hasilU, ...hasilL].filter((h) => h === "tunda").length + belumDiurai.size;
   return {
     kategori,
     total,
@@ -1170,6 +1336,7 @@ export async function segarkanKategori(kategori: string, polaIlike: string): Pro
     galat,
     sisa,
     direm: ctrl.berhenti || (sisa > 0 && jatahManual(1) < 1),
+    diurai,
     lama_ms: Date.now() - mulai,
   };
 }

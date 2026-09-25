@@ -1413,6 +1413,8 @@ export type HasilSegarKategori = {
   sisa: number;
   /** true = jatah tarik manual/kuota upload-post sedang direm. */
   direm: boolean;
+  /** Link pendek (share FB/Threads, vt.tiktok) yang diurai di panggilan ini. */
+  diurai?: number;
   lama_ms: number;
 };
 

@@ -18,6 +18,7 @@
 // Berkas ini murni: tanpa database, tanpa jaringan — supaya bisa diuji.
 // ============================================================
 import { idVideo } from "@/lib/tautan-video";
+import { kodeTautanPendek } from "@/lib/tautan-pendek";
 
 export type MetrikVideoKategori = {
   kode: string;
@@ -76,7 +77,12 @@ export function kodeMetrik(platform: string, url: string): string | null {
   const awalan = AWALAN_KODE[p];
   if (!awalan) return null;
   const id = idVideo(p, url);
-  return id ? `${awalan}${id}` : null;
+  if (id) return `${awalan}${id}`;
+  // Link pendek (vt.tiktok, threads share, …) tetap punya kode sendiri
+  // ("s_" = pendek): angkanya disimpan juga di bawah kode ini setelah
+  // linknya diurai penyegar (25 Sep 2026), jadi kartunya tetap berangka.
+  const pendek = kodeTautanPendek(p, url);
+  return pendek ? `${awalan}s_${pendek}` : null;
 }
 
 /** Tebak platform dari nama host URL; "" bila tidak dikenal. */
@@ -148,10 +154,14 @@ export function susunInsightKategori(
   for (const l of laporan) {
     const platform = l.platform.trim().toLowerCase() === "x" ? "twitter" : l.platform.trim().toLowerCase();
     const kode = kodeMetrik(platform, l.url_video);
-    const kunci = kode ?? `${platform}:${l.url_video.trim().toLowerCase()}`;
+    const m = kode ? metrik.get(kode) : undefined;
+    // Baris angka link pendek membawa alamat ASLI videonya: kuncinya kode
+    // asli itu, supaya link pendek & link lengkap video yang sama tidak
+    // dihitung dua kali.
+    const kodeAsli = m?.url ? (kodeMetrik(platform, m.url) ?? kode) : kode;
+    const kunci = kodeAsli ?? `${platform}:${l.url_video.trim().toLowerCase()}`;
     if (perKunci.has(kunci)) continue;
 
-    const m = kode ? metrik.get(kode) : undefined;
     perKunci.set(kunci, {
       kunci,
       platform,

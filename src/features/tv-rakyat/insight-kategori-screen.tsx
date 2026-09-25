@@ -248,7 +248,8 @@ export function InsightKategoriScreen({
           direm = true;
           break;
         }
-        if (h.sisa <= 0 || h.dikerjakan === 0) break;
+        // Panggilan yang hanya mengurai link pendek tetap maju — lanjutkan.
+        if (h.sisa <= 0 || (h.dikerjakan === 0 && !h.diurai)) break;
       }
       if (direm && sisa > 0) {
         toast(
