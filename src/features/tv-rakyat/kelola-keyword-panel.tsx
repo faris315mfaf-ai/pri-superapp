@@ -5,10 +5,15 @@
 // menetapkan keyword/tema yang WAJIB diangkat seluruh anggota di laporan
 // videonya (mis. "BPJS"). Jadi acuan bersama; anggota memilih keyword ini
 // saat melaporkan videonya di modul TVR Saya.
+//
+// SELESAI = DISEMBUNYIKAN (26 Sep 2026): kategori hilang dari daftar ini
+// dan dari pilihan anggota, datanya tetap tersimpan. Hanya Pimpinan
+// Redaksi / Superadmin yang melihat bagian "Disembunyikan" dan bisa
+// memunculkannya lagi.
 // ============================================================
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Loader2, Plus, RotateCcw, Tag } from "lucide-react";
+import { CheckCircle2, ChevronDown, EyeOff, Loader2, Plus, RotateCcw, Tag } from "lucide-react";
 import { GlassSkeleton } from "@/components/pri-ui";
 import { toast } from "@/hooks/use-app-store";
 import {
@@ -29,6 +34,9 @@ function formatTanggalSelesai(iso: string): string {
 
 export function KelolaKeywordPanel() {
   const [data, setData] = useState<KeywordWajib[] | null>(null);
+  // Pimpinan Redaksi / Superadmin / master: boleh memunculkan lagi.
+  const [bolehMunculkan, setBolehMunculkan] = useState(false);
+  const [bukaTersembunyi, setBukaTersembunyi] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [sibuk, setSibuk] = useState(false);
   const [muatUlang, setMuatUlang] = useState(0);
@@ -44,7 +52,10 @@ export function KelolaKeywordPanel() {
     void (async () => {
       try {
         const d = await getKeywordWajib();
-        if (hidup) setData(d.data);
+        if (hidup) {
+          setData(d.data);
+          setBolehMunculkan(d.bolehMunculkan);
+        }
       } catch (e) {
         if (hidup) {
           setData([]);
@@ -92,8 +103,10 @@ export function KelolaKeywordPanel() {
       await selesaikanKeyword(id, selesai);
       toast(
         "sukses",
-        selesai ? "Kategori ditandai selesai" : "Kategori dibuka lagi",
-        selesai ? "Anggota tidak bisa memilihnya lagi. Datanya tetap tersimpan." : "",
+        selesai ? "Kategori disembunyikan" : "Kategori dimunculkan lagi",
+        selesai
+          ? "Tidak bisa dipilih anggota lagi. Datanya tetap tersimpan — Pimpinan Redaksi/Superadmin bisa memunculkannya lagi."
+          : "Anggota bisa memilihnya lagi.",
       );
       setKonfirmasiSelesai(null);
       setMuatUlang((n) => n + 1);
@@ -105,6 +118,8 @@ export function KelolaKeywordPanel() {
   }
 
   if (!data) return <GlassSkeleton className="h-32 rounded-xl" />;
+  const tampil = data.filter((k) => !k.selesai);
+  const tersembunyi = data.filter((k) => k.selesai);
 
   return (
     <div className="flex flex-col gap-3">
@@ -112,10 +127,11 @@ export function KelolaKeywordPanel() {
         Kategori video yang dipilih anggota saat mengunggah atau melaporkan
         videonya (mis. <b>BPJS</b>). <b>Video Sendiri</b> selalu ada dan tidak bisa
         dihapus — untuk video buatan anggota di luar tema mana pun.
-        Kategori tidak bisa dihapus: <b>Nonaktif</b> menyembunyikannya sementara
+        Kategori tidak pernah dihapus: <b>Nonaktif</b> mematikannya sementara
         (bisa dinyalakan lagi); acara yang sudah lewat tandai <b>Selesai</b> —
-        anggota tidak bisa memilihnya lagi, tapi seluruh datanya tetap tersimpan
-        dan tetap tampil di insight.
+        kategori <b>disembunyikan</b> dari daftar dan pilihan anggota, seluruh
+        datanya tetap tersimpan, dan Pimpinan Redaksi / Superadmin bisa
+        memunculkannya lagi.
       </p>
 
       {/* Tambah keyword */}
@@ -143,53 +159,27 @@ export function KelolaKeywordPanel() {
       </div>
 
       {/* Daftar keyword */}
-      {data.length === 0 ? (
+      {tampil.length === 0 ? (
         <p className="py-3 text-center text-[11.5px] text-teks-sekunder">
           Belum ada keyword. Tambahkan di atas.
         </p>
       ) : (
         <div className="flex flex-col gap-1.5">
-          {data.map((k) => (
+          {tampil.map((k) => (
             <div
               key={k.id}
               className={cn(
                 "glass-soft flex flex-col gap-2 rounded-xl px-3 py-2",
-                !k.aktif && !k.selesai && "opacity-55",
+                !k.aktif && "opacity-55",
               )}
             >
               <div className="flex items-center gap-2.5">
-                {k.selesai ? (
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-sukses" aria-hidden="true" />
-                ) : (
-                  <Tag className="h-4 w-4 shrink-0 text-pri" aria-hidden="true" />
-                )}
-                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-teks-utama">
-                  {k.keyword}
-                  {k.selesai && (
-                    <span className="ml-1.5 text-[10.5px] font-medium text-teks-sekunder">
-                      selesai {k.selesai_pada ? formatTanggalSelesai(k.selesai_pada) : ""}
-                    </span>
-                  )}
-                </span>
+                <Tag className="h-4 w-4 shrink-0 text-pri" aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-teks-utama">{k.keyword}</span>
                 {k.tetap ? (
                   <span className="rounded-lg bg-teks-sekunder/15 px-2.5 py-1 text-[10.5px] font-bold text-teks-sekunder">
                     tetap
                   </span>
-                ) : k.selesai ? (
-                  <button
-                    type="button"
-                    onClick={() => void selesaikan(k.id, false)}
-                    disabled={sibukSelesai === k.id}
-                    aria-label={`Buka lagi ${k.keyword}`}
-                    className="btn-tekan flex items-center gap-1 rounded-lg bg-teks-sekunder/15 px-2.5 py-1 text-[10.5px] font-bold text-teks-sekunder disabled:opacity-60"
-                  >
-                    {sibukSelesai === k.id ? (
-                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <RotateCcw className="h-3 w-3" aria-hidden="true" />
-                    )}
-                    Buka lagi
-                  </button>
                 ) : (
                   <>
                     <button
@@ -215,11 +205,12 @@ export function KelolaKeywordPanel() {
                   </>
                 )}
               </div>
-              {konfirmasiSelesai === k.id && !k.selesai && (
+              {konfirmasiSelesai === k.id && (
                 <div className="flex flex-wrap items-center gap-2 rounded-lg bg-pri/8 px-2.5 py-2">
                   <p className="min-w-0 flex-1 text-[11px] leading-snug text-teks-utama">
-                    Tandai <b>{k.keyword}</b> selesai? Anggota tidak bisa mengunggah untuk
-                    kategori ini lagi. Datanya <b>tetap tersimpan</b>, tidak dihapus.
+                    Tandai <b>{k.keyword}</b> selesai? Kategori <b>disembunyikan</b> — anggota
+                    tidak bisa mengunggah untuknya lagi. Datanya <b>tetap tersimpan</b>, tidak
+                    dihapus, dan bisa dimunculkan lagi oleh Pimpinan Redaksi / Superadmin.
                   </p>
                   <button
                     type="button"
@@ -246,6 +237,51 @@ export function KelolaKeywordPanel() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Kategori SELESAI (disembunyikan) — hanya Pimred / Superadmin. */}
+      {bolehMunculkan && tersembunyi.length > 0 && (
+        <div className="rounded-xl border border-dashed border-teks-sekunder/30 p-2">
+          <button
+            type="button"
+            onClick={() => setBukaTersembunyi((v) => !v)}
+            aria-expanded={bukaTersembunyi}
+            className="btn-tekan flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left text-[12px] font-bold text-teks-sekunder"
+          >
+            <EyeOff className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1">Disembunyikan ({tersembunyi.length})</span>
+            <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", bukaTersembunyi && "rotate-180")} aria-hidden="true" />
+          </button>
+          {bukaTersembunyi && (
+            <div className="mt-1.5 flex flex-col gap-1.5">
+              {tersembunyi.map((k) => (
+                <div key={k.id} className="glass-soft flex items-center gap-2.5 rounded-xl px-3 py-2">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-sukses" aria-hidden="true" />
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-teks-utama">
+                    {k.keyword}
+                    <span className="ml-1.5 text-[10.5px] font-medium text-teks-sekunder">
+                      selesai {k.selesai_pada ? formatTanggalSelesai(k.selesai_pada) : ""}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void selesaikan(k.id, false)}
+                    disabled={sibukSelesai === k.id}
+                    aria-label={`Munculkan lagi ${k.keyword}`}
+                    className="btn-tekan flex items-center gap-1 rounded-lg bg-pri/12 px-2.5 py-1 text-[10.5px] font-bold text-pri disabled:opacity-60"
+                  >
+                    {sibukSelesai === k.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                    )}
+                    Munculkan lagi
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

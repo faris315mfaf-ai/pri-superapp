@@ -271,188 +271,202 @@ export function kuotaMenipis(b: BatasUp): boolean {
 }
 
 // ------------------------------------------------------------
-// SIKLUS HARIAN — satu putaran penuh atas semua video, lalu ulang.
+// TINGKAT KESEGARAN (26 Sep 2026) — "hari ini dulu, lalu kemarin, lalu
+// yang lalu-lalu" (permintaan user).
 // ------------------------------------------------------------
 //
-// Tiap jalur berjalan dari id TERBARU ke terlama (jalur utama, kursor
-// menurun). Video yang muncul SETELAH siklus mulai ditangani jalur SEGAR
-// (kursor menaik) supaya unggahan hari ini tidak menunggu siklus besok.
-// Siklus baru dimulai bila siklus lama sudah habis DAN sudah lewat
-// JARAK_SIKLUS_MS sejak ia mulai. Bila suatu hari videonya terlalu banyak
-// untuk kuota, siklus hanya memanjang (semua video tetap kebagian, tidak
-// ada yang terlantar) — bukan memotong video terlama.
+// Tiap video di katalog (tvr_video_metrik) disegarkan menurut umurnya
+// (tanggal posting WIB): video hari ini paling sering, video lama paling
+// jarang. Antrean dihitung ulang tiap putaran dari database (kolom
+// waktu_posting & diperbarui_pada), jadi tidak ada kursor yang bisa
+// macet: video yang belum sempat dikerjakan tetap "jatuh tempo" dan
+// menjadi yang paling basi di putaran berikutnya.
 
-/** Siklus baru paling cepat 20 jam setelah siklus sebelumnya mulai (≈ tiap hari). */
-export const JARAK_SIKLUS_MS = 20 * 3600_000;
+/**
+ * diperbarui_pada untuk video yang BARU DIKENALI (dari daftar media /
+ * laporan) tapi angkanya belum ditarik. Kolomnya NOT NULL, jadi dipakai
+ * tanggal yang mustahil — layar menganggapnya "belum ada angka", dan
+ * antrean menganggapnya paling basi (dikerjakan duluan).
+ */
+export const BELUM_DITARIK = "1970-01-01T00:00:00.000Z";
 
-export type JalurSiklus = {
-  /** id tertinggi saat siklus mulai — batas atas jalur utama. */
-  batas_atas: number;
-  /** id terakhir yang dikerjakan jalur utama (menurun); null = belum mulai. */
-  kursor: number | null;
-  /** Jalur utama sudah sampai id terbawah. */
-  habis: boolean;
-  /** id tertinggi yang sudah dikerjakan jalur segar (di atas batas_atas). */
-  kursor_segar: number;
+/** true bila baris angka ini hanya penanda "belum ditarik". */
+export function belumDitarik(diperbaruiPada: string | null | undefined): boolean {
+  if (!diperbaruiPada) return true;
+  const t = Date.parse(diperbaruiPada);
+  return !Number.isFinite(t) || t < Date.parse("2000-01-01T00:00:00Z");
+}
+
+const JAM = 3600_000;
+const HARI = 24 * JAM;
+const WIB = 7 * JAM;
+
+/** 00:00 WIB hari itu (milidetik epoch). */
+export function awalHariWib(ms: number): number {
+  return Math.floor((ms + WIB) / HARI) * HARI - WIB;
+}
+
+/** "YYYY-MM-DD" menurut WIB. */
+export function tanggalWib(ms: number): string {
+  return new Date(ms + WIB).toISOString().slice(0, 10);
+}
+
+/** ISO tanpa milidetik — aman dipakai di filter or() PostgREST. */
+export function isoDetik(ms: number): string {
+  return new Date(Math.floor(ms / 1000) * 1000).toISOString().replace(".000Z", "Z");
+}
+
+export type NamaTingkat = "hari_ini" | "kemarin" | "pekan" | "lama";
+
+export type Tingkat = {
+  nama: NamaTingkat;
+  /** Batas bawah waktu_posting (ISO, inklusif); null = tanpa batas. */
+  dari: string | null;
+  /** Batas atas waktu_posting (ISO, eksklusif); null = tanpa batas. */
+  sampai: string | null;
+  /** Video tanpa waktu_posting ikut tingkat ini (hanya "lama"). */
+  tanpaWaktu: boolean;
+  /** Jatuh tempo bila diperbarui_pada lebih tua dari ini (ISO). */
+  basiSebelum: string;
+  /** Selang penyegaran tingkat ini (ms). */
+  selangMs: number;
 };
 
-export type HitungSiklus = {
-  /** Permintaan analitik yang dikirim ke upload-post. */
-  diminta: number;
-  /** Video (per platform) yang angkanya tersimpan. */
-  terisi: number;
-  /** Video yang dijawab galat oleh upload-post (token kedaluwarsa, dihapus, …). */
-  galat: number;
-  /** Laporan yang dilewati karena bukan video akun tertaut / sudah segar. */
-  dilewati: number;
+/** Selang penyegaran per tingkat. */
+export const SELANG_TINGKAT: Record<NamaTingkat, number> = {
+  hari_ini: 15 * 60_000,
+  kemarin: JAM,
+  pekan: 6 * JAM,
+  lama: HARI,
 };
 
-export type SiklusMetrik = {
-  v: 1;
-  nomor: number;
-  mulai: string;
-  selesai: string | null;
-  unggahan: JalurSiklus;
-  laporan: JalurSiklus;
-  /** Setelah upload-post menolak/kuota menipis: jangan bertanya sampai … */
-  jeda_sampai: string | null;
-  hitung: HitungSiklus;
-  terakhir: string | null;
-};
-
-function jalurBaru(maksId: number): JalurSiklus {
-  const atas = Math.max(0, Math.floor(maksId));
-  return { batas_atas: atas, kursor: null, habis: atas <= 0, kursor_segar: atas };
+/**
+ * Empat tingkat, urut prioritas: hari ini, kemarin, 2–6 hari lalu, lebih
+ * lama (termasuk yang tanggal postingnya tidak diketahui).
+ */
+export function tingkatKesegaran(kiniMs: number): Tingkat[] {
+  const awal = awalHariWib(kiniMs);
+  const buat = (nama: NamaTingkat, dari: number | null, sampai: number | null, tanpaWaktu = false): Tingkat => ({
+    nama,
+    dari: dari == null ? null : isoDetik(dari),
+    sampai: sampai == null ? null : isoDetik(sampai),
+    tanpaWaktu,
+    basiSebelum: isoDetik(kiniMs - SELANG_TINGKAT[nama]),
+    selangMs: SELANG_TINGKAT[nama],
+  });
+  return [
+    buat("hari_ini", awal, null),
+    buat("kemarin", awal - HARI, awal),
+    buat("pekan", awal - 6 * HARI, awal - HARI),
+    buat("lama", null, awal - 6 * HARI, true),
+  ];
 }
 
-export function siklusBaru(nomor: number, kiniMs: number, maksIdUnggahan: number, maksIdLaporan: number): SiklusMetrik {
-  return {
-    v: 1,
-    nomor,
-    mulai: new Date(kiniMs).toISOString(),
-    selesai: null,
-    unggahan: jalurBaru(maksIdUnggahan),
-    laporan: jalurBaru(maksIdLaporan),
-    jeda_sampai: null,
-    hitung: { diminta: 0, terisi: 0, galat: 0, dilewati: 0 },
-    terakhir: null,
-  };
+/** Tingkat sebuah video menurut waktu postingnya. */
+export function tingkatVideo(waktuPosting: string | null | undefined, kiniMs: number): NamaTingkat {
+  const t = waktuPosting ? Date.parse(waktuPosting) : NaN;
+  if (!Number.isFinite(t)) return "lama";
+  const awal = awalHariWib(kiniMs);
+  if (t >= awal) return "hari_ini";
+  if (t >= awal - HARI) return "kemarin";
+  if (t >= awal - 6 * HARI) return "pekan";
+  return "lama";
 }
 
-function angkaAtau(v: unknown, cadangan: number): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : cadangan;
+/**
+ * Perkiraan waktu posting video dari barisan laporan: laporan otomatis
+ * dicatat ±15 menit setelah terbit (dibuat_pada), laporan manual bisa
+ * berhari-hari kemudian — maka bila tanggalnya beda, pakai tengah hari
+ * tanggal_wib laporan.
+ */
+export function waktuDariLaporan(tanggalWibLaporan: string | null | undefined, dibuatPada: string | null | undefined): string | null {
+  const dibuat = dibuatPada ? Date.parse(dibuatPada) : NaN;
+  const tgl = /^\d{4}-\d{2}-\d{2}$/.test(tanggalWibLaporan ?? "") ? String(tanggalWibLaporan) : "";
+  if (Number.isFinite(dibuat) && (!tgl || tanggalWib(dibuat) === tgl)) return new Date(dibuat).toISOString();
+  if (tgl) return new Date(Date.parse(`${tgl}T12:00:00+07:00`)).toISOString();
+  return null;
 }
 
-function bacaJalur(v: unknown): JalurSiklus | null {
-  const o = objek(v);
-  if (!o) return null;
-  const atas = Number(o.batas_atas);
-  if (!Number.isFinite(atas) || atas < 0) return null;
-  const kursor = o.kursor == null ? null : Number(o.kursor);
-  if (kursor !== null && !Number.isFinite(kursor)) return null;
-  return {
-    batas_atas: Math.floor(atas),
-    kursor,
-    habis: o.habis === true,
-    kursor_segar: Math.max(Math.floor(atas), Math.floor(angkaAtau(o.kursor_segar, atas))),
-  };
+// ------------------------------------------------------------
+// Galat upload-post → tindakan
+// ------------------------------------------------------------
+
+export type JenisGalat = "akun" | "batas" | "video" | "waktu" | "lain";
+
+/**
+ * Golongkan pesan galat upload-post/platform:
+ *   akun  — token kedaluwarsa / izin dicabut → seluruh akun dijeda lama;
+ *   batas — batas laju platform → akun dijeda sebentar;
+ *   video — video dihapus / tidak ada → video itu saja yang dilewati;
+ *   waktu — upload-post tidak menjawab tepat waktu.
+ */
+export function golonganGalat(pesan: string | null | undefined): JenisGalat {
+  const p = String(pesan ?? "").toLowerCase();
+  if (!p) return "lain";
+  if (/abort|timeout|timed out|waktu habis/.test(p)) return "waktu";
+  if (/rate limit|too many|limit reached|request limit|quota|\(#4\)|\(#17\)|\(#32\)|\(#613\)|\b429\b|throttl/.test(p)) return "batas";
+  // Pesan RAGU dari upload-post ("…may have been deleted or the token
+  // expired", HTTP 400/401) = satu video dulu; akunnya baru dijeda bila
+  // banyak video akun itu gagal beruntun (dihitung penyegar).
+  if (/may have been deleted or the token/.test(p)) return "video";
+  if (/token|expired|kedaluwarsa|http 401|\b401\b|http 403|\b403\b|permission|not authori[sz]ed|unauthori[sz]ed|reconnect|missing or expired|access denied/.test(p)) {
+    return "akun";
+  }
+  if (/not found|deleted|does not exist|no longer|unavailable|http 400|\b400\b|\b404\b|invalid (media|post|video)|cannot be found/.test(p)) {
+    return "video";
+  }
+  return "lain";
 }
 
-/** Baca status tersimpan (teks JSON / objek). Bentuk rusak → null (mulai ulang). */
-export function bacaSiklus(v: unknown): SiklusMetrik | null {
-  let o: Record<string, unknown> | null = null;
-  if (typeof v === "string") {
-    try {
-      o = objek(JSON.parse(v));
-    } catch {
-      return null;
+// ------------------------------------------------------------
+// Urutan bergilir antar akun
+// ------------------------------------------------------------
+
+/**
+ * Susun ulang daftar supaya akun-akun bergiliran (A1, B1, C1, A2, B2, …)
+ * — beban ke tiap akun sosmed tersebar, bukan 300 video satu akun
+ * berturut-turut (platform membatasi laju per akun). Urutan dalam satu
+ * akun dipertahankan (yang paling basi duluan). `batasPerAkun` memotong
+ * jatah tiap akun.
+ */
+export function selangSeling<T>(daftar: T[], kunci: (t: T) => string, batasPerAkun = Number.POSITIVE_INFINITY): T[] {
+  const perAkun = new Map<string, T[]>();
+  for (const t of daftar) {
+    const k = kunci(t);
+    const l = perAkun.get(k);
+    if (l) l.push(t);
+    else perAkun.set(k, [t]);
+  }
+  const antre = [...perAkun.values()].map((l) => l.slice(0, Math.max(0, batasPerAkun)));
+  const hasil: T[] = [];
+  for (let i = 0; ; i++) {
+    let ada = false;
+    for (const l of antre) {
+      if (i < l.length) {
+        hasil.push(l[i]);
+        ada = true;
+      }
     }
-  } else {
-    o = objek(v);
+    if (!ada) break;
   }
-  if (!o || o.v !== 1) return null;
-  const unggahan = bacaJalur(o.unggahan);
-  const laporan = bacaJalur(o.laporan);
-  const mulai = typeof o.mulai === "string" && Number.isFinite(Date.parse(o.mulai)) ? o.mulai : null;
-  if (!unggahan || !laporan || !mulai) return null;
-  const h = objek(o.hitung) ?? {};
-  return {
-    v: 1,
-    nomor: Math.max(1, Math.floor(angkaAtau(o.nomor, 1))),
-    mulai,
-    selesai: typeof o.selesai === "string" ? o.selesai : null,
-    unggahan,
-    laporan,
-    jeda_sampai: typeof o.jeda_sampai === "string" ? o.jeda_sampai : null,
-    hitung: {
-      diminta: Math.max(0, angkaAtau(h.diminta, 0)),
-      terisi: Math.max(0, angkaAtau(h.terisi, 0)),
-      galat: Math.max(0, angkaAtau(h.galat, 0)),
-      dilewati: Math.max(0, angkaAtau(h.dilewati, 0)),
-    },
-    terakhir: typeof o.terakhir === "string" ? o.terakhir : null,
-  };
-}
-
-/**
- * Tentukan siklus yang berlaku sekarang: lanjutkan yang lama, atau mulai
- * yang baru bila yang lama sudah habis dan sudah ≥ JARAK_SIKLUS_MS.
- * Jeda karena kuota tetap dibawa ke siklus baru.
- */
-export function aturSiklus(
-  tersimpan: unknown,
-  kiniMs: number,
-  maksIdUnggahan: number,
-  maksIdLaporan: number,
-): { siklus: SiklusMetrik; baru: boolean } {
-  const lama = bacaSiklus(tersimpan);
-  if (!lama) return { siklus: siklusBaru(1, kiniMs, maksIdUnggahan, maksIdLaporan), baru: true };
-  const habis = lama.unggahan.habis && lama.laporan.habis;
-  if (habis && kiniMs - Date.parse(lama.mulai) >= JARAK_SIKLUS_MS) {
-    const s = siklusBaru(lama.nomor + 1, kiniMs, maksIdUnggahan, maksIdLaporan);
-    s.jeda_sampai = lama.jeda_sampai;
-    return { siklus: s, baru: true };
-  }
-  if (habis && !lama.selesai) lama.selesai = new Date(kiniMs).toISOString();
-  return { siklus: lama, baru: false };
-}
-
-/** id maksimum (inklusif) yang boleh diambil jalur utama berikutnya; < 1 = habis. */
-export function batasUtama(j: JalurSiklus): number {
-  return j.kursor == null ? j.batas_atas : j.kursor - 1;
-}
-
-/**
- * Majukan kursor jalur utama setelah satu jendela dikerjakan. `idTerkecil`
- * = id terkecil yang DIKERJAKAN di jendela itu (bukan sekadar dibaca).
- * `habisJendela` = kueri mengembalikan kurang dari yang diminta (dasar).
- */
-export function majukanUtama(j: JalurSiklus, idTerkecil: number | null, sampaiDasar: boolean): JalurSiklus {
-  const kursor = idTerkecil == null ? j.kursor : Math.min(idTerkecil, j.kursor ?? Number.POSITIVE_INFINITY);
-  const habis = sampaiDasar || (kursor != null && kursor <= 1);
-  return { ...j, kursor, habis };
-}
-
-/** Majukan kursor jalur segar (menaik). */
-export function majukanSegar(j: JalurSiklus, idTerbesar: number | null): JalurSiklus {
-  if (idTerbesar == null) return j;
-  return { ...j, kursor_segar: Math.max(j.kursor_segar, idTerbesar) };
+  return hasil;
 }
 
 // ------------------------------------------------------------
-// Pembagian kuota satu putaran
+// Daftar media → video
 // ------------------------------------------------------------
 
 /**
- * Bagi kuota permintaan satu putaran: jalur segar dulu (video baru harus
- * cepat punya angka), sisanya dibagi dua untuk kedua jalur utama; jatah
- * yang tak terpakai satu jalur dipakai jalur lain.
+ * true bila item daftar media adalah VIDEO. TikTok & YouTube selalu
+ * video; platform lain memberi media_type (diverifikasi 26 Sep 2026:
+ * VIDEO / TEXT / IMAGE / CAROUSEL_ALBUM) — teks & foto dilewati karena
+ * yang diminta angka tayangan per video.
  */
-export function bagiKuota(total: number): { segar: number; utamaLaporan: number } {
-  const t = Math.max(0, Math.floor(total));
-  const segar = Math.min(t, Math.max(1, Math.ceil(t * 0.3)));
-  return { segar, utamaLaporan: Math.ceil((t - segar) / 2) };
+export function adalahMediaVideo(platform: string, jenis: string | null | undefined): boolean {
+  const p = platformApp(platform);
+  if (p === "tiktok" || p === "youtube") return true;
+  const j = String(jenis ?? "").toUpperCase();
+  return j.includes("VIDEO") || j.includes("REEL");
 }
 
 // ------------------------------------------------------------

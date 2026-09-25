@@ -43,7 +43,8 @@ import {
   type MetrikPostTerurai,
 } from "@/lib/metrik-post-up";
 import { uploadPostSiap } from "@/lib/upload-post";
-import { segarkanSatuUnggahan, statusSiklusMetrik } from "@/lib/segar-metrik-video";
+import { segarkanSatuUnggahan, statusPenyegar } from "@/lib/segar-metrik-video";
+import { belumDitarik } from "@/lib/metrik-video-up";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 90;
@@ -221,6 +222,9 @@ export async function GET(request: Request) {
       }
       for (const m of (data ?? []) as unknown as Record<string, unknown>[]) {
         const kode = String(m.kode);
+        // Video yang baru dikenali katalog tapi angkanya belum ditarik
+        // (penanda BELUM_DITARIK) = "belum ada angka", bukan nol.
+        if (belumDitarik(m.diperbarui_pada ? String(m.diperbarui_pada) : null)) continue;
         metrik.set(kode, {
           kode,
           platform: String(m.platform ?? ""),
@@ -325,7 +329,7 @@ export async function GET(request: Request) {
     });
     const totalUp = jumlahkanMetrikPost(daftarPost.flatMap((p) => Object.values(p.per_platform)));
 
-    const siklus = await statusSiklusMetrik().catch(() => null);
+    const status = await statusPenyegar().catch(() => null);
     return {
       kategori,
       ringkasan,
@@ -338,13 +342,12 @@ export async function GET(request: Request) {
       /** Kolom favorit (sql/50) ada → angka "disimpan/favorit" bermakna. */
       ada_favorit: adaFavorit,
       /** Keadaan penyegar harian — ditampilkan sebagai "diperbarui …". */
-      pembaruan: siklus
+      pembaruan: status
         ? {
-            siklus: siklus.nomor,
-            mulai: siklus.mulai,
-            selesai: siklus.selesai,
-            terakhir: siklus.terakhir,
-            jeda_sampai: siklus.jeda_sampai,
+            terakhir: status.terakhir,
+            jeda_sampai: status.jeda_sampai,
+            menunggu: status.menunggu,
+            katalog: status.katalog,
           }
         : null,
     };

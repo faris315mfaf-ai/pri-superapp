@@ -1201,11 +1201,14 @@ export function kategoriBolehDipilih(k: KeywordWajib): boolean {
 export async function getKeywordWajib(): Promise<{
   data: KeywordWajib[];
   pimred: boolean;
+  /** Pimpinan Redaksi / Superadmin / master: boleh memunculkan lagi kategori selesai. */
+  bolehMunculkan: boolean;
 }> {
   const json = await fetchJson("/api/tv/keyword", { headers: headerToken() });
   return {
     data: (json.data ?? []) as KeywordWajib[],
     pimred: json.pimred === true,
+    bolehMunculkan: json.boleh_munculkan === true,
   };
 }
 
@@ -1262,6 +1265,71 @@ export type TotalMetrikPostUp = {
   platform_terukur: number;
 };
 
+export type TotalVideoHarian = {
+  video: number;
+  /** Video yang sudah punya angka (sisanya menunggu ditarik). */
+  berangka: number;
+  tayangan: number;
+  suka: number;
+  komentar: number;
+  bagikan: number;
+};
+
+/** Video per akun pada satu tanggal (26 Sep 2026) — TV Rakyat Nasional. */
+export type VideoHarian = {
+  tanggal: string;
+  hari_ini: string;
+  akun_dipilih: string;
+  platform_dipilih: string;
+  total: TotalVideoHarian;
+  total_tampil: TotalVideoHarian;
+  per_platform: Record<string, TotalVideoHarian>;
+  akun: (TotalVideoHarian & { kunci: string; user_id: string; nama: string; platform: string; username: string })[];
+  video: {
+    kode: string;
+    platform: string;
+    user_id: string;
+    nama: string;
+    akun: string;
+    judul: string;
+    url: string;
+    thumbnail_url: string;
+    waktu_posting: string | null;
+    /** null = angkanya belum ditarik. */
+    metrik: {
+      tayangan: number;
+      suka: number;
+      komentar: number;
+      bagikan: number;
+      favorit: number | null;
+      diperbarui_pada: string | null;
+    } | null;
+  }[];
+  ditampilkan: number;
+  pembaruan: PembaruanMetrikVideo | null;
+};
+
+export async function getVideoHarian(opsi: { tanggal?: string; akun?: string; platform?: string } = {}): Promise<VideoHarian> {
+  const q = new URLSearchParams();
+  if (opsi.tanggal) q.set("tanggal", opsi.tanggal);
+  if (opsi.akun) q.set("akun", opsi.akun);
+  if (opsi.platform) q.set("platform", opsi.platform);
+  const json = await fetchJson(`/api/tv-nasional/video-harian?${q.toString()}`, { headers: headerToken() });
+  return json as unknown as VideoHarian;
+}
+
+/** Keadaan penyegar angka per video (lib/segar-metrik-video). */
+export type PembaruanMetrikVideo = {
+  /** Akhir putaran terakhir. */
+  terakhir: string | null;
+  /** Penarikan dijeda sampai kuota upload-post pulih. */
+  jeda_sampai: string | null;
+  /** Video yang masih menunggu disegarkan, per tingkat umur. */
+  menunggu: { hari_ini: number; kemarin: number; pekan: number; lama: number } | null;
+  /** Isi katalog: seluruh video akun tersambung & yang sudah berangka. */
+  katalog: { video: number; berangka: number; akun: number; akun_lengkap: number } | null;
+};
+
 export type InsightKategori = {
   /** Postingan lewat SuperApp — angka dari upload-post per platform. */
   postingan: {
@@ -1280,14 +1348,8 @@ export type InsightKategori = {
   upload_post_siap: boolean;
   /** Kolom favorit (sql/50) ada → angka "favorit/disimpan" bermakna. */
   ada_favorit?: boolean;
-  /** Keadaan penyegar harian angka video (25 Sep 2026). */
-  pembaruan?: {
-    siklus: number;
-    mulai: string;
-    selesai: string | null;
-    terakhir: string | null;
-    jeda_sampai: string | null;
-  } | null;
+  /** Keadaan penyegar angka video (26 Sep 2026). */
+  pembaruan?: PembaruanMetrikVideo | null;
   kategori: string;
   ringkasan: {
     jumlah_video: number;

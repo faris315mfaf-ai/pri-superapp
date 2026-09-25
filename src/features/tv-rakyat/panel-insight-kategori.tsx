@@ -27,7 +27,8 @@ import { AlertTriangle, ExternalLink, Layers, RefreshCw, Upload } from "lucide-r
 import { GlassCard } from "@/components/glass-card";
 import { EmptyState, GlassSkeleton } from "@/components/pri-ui";
 import { PlatformIcon } from "@/components/platform-icon";
-import { formatAngkaRingkas, jamWIB, sejakRingkas, waktuJelasWIB } from "@/lib/format";
+import { formatAngkaRingkas, jamWIB, sejakRingkas } from "@/lib/format";
+import { kalimatKatalog, kalimatPembaruan } from "@/lib/kalimat-pembaruan";
 import { toast } from "@/hooks/use-app-store";
 import {
   getInsightKategori,
@@ -71,20 +72,6 @@ const LABEL_STATUS: Record<string, string> = {
 };
 
 const angka = (v: number | null | undefined) => (v == null ? "–" : formatAngkaRingkas(v));
-
-type Pembaruan = NonNullable<InsightKategori["pembaruan"]>;
-
-/** Satu kalimat keadaan penyegar harian untuk ditampilkan di atas angka. */
-function kalimatPembaruan(p: Pembaruan | null | undefined): string {
-  if (!p) return "Angka diperbarui otomatis tiap hari dari upload-post — penarikan pertama sedang disiapkan.";
-  if (p.jeda_sampai && Date.parse(p.jeda_sampai) > Date.now()) {
-    return `Penarikan harian sedang menunggu kuota upload-post pulih (${jamWIB(p.jeda_sampai)} WIB).`;
-  }
-  const terakhir = p.terakhir ? `terakhir berjalan ${waktuJelasWIB(p.terakhir)}` : "belum berjalan";
-  return p.selesai
-    ? `Angka diperbarui otomatis tiap hari · putaran hari ini selesai · ${terakhir}`
-    : `Angka diperbarui otomatis tiap hari · putaran hari ini sedang berjalan · ${terakhir}`;
-}
 
 export function PanelInsightKategori({
   onBukaHalaman,
@@ -293,6 +280,9 @@ export function PanelInsightKategori({
           >
             {kalimatPembaruan(data.pembaruan)}
           </p>
+          {kalimatKatalog(data.pembaruan) && (
+            <p className="mt-0.5 text-[10.5px] leading-relaxed text-teks-sekunder">{kalimatKatalog(data.pembaruan)}</p>
+          )}
           {!data.upload_post_siap && (
             <p className="mt-1 text-[10.5px] text-amber-600">
               Kunci upload-post belum terpasang di server ini — angka tidak bisa ditarik.

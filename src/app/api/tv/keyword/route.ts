@@ -8,10 +8,11 @@
 //          melihat SEMUA (termasuk nonaktif) + flag pimred:true.
 // POST   { keyword }            → tambah (Pimred)
 // PATCH  { id }                 → aktif/nonaktif (Pimred)
-// PATCH  { id, aksi:"selesai" } → tandai SELESAI (13 Sep 2026): acaranya
-//                                 sudah lewat, kreator tidak bisa memilihnya
-//                                 lagi; datanya TETAP tersimpan & tampil.
-// PATCH  { id, aksi:"buka" }    → buka lagi kategori yang selesai
+// PATCH  { id, aksi:"selesai" } → tandai SELESAI = DISEMBUNYIKAN (26 Sep
+//                                 2026): hilang dari daftar & pilihan
+//                                 anggota; datanya TETAP tersimpan. Pengelola.
+// PATCH  { id, aksi:"buka" }    → munculkan lagi — HANYA Pimpinan Redaksi /
+//                                 Superadmin / master (permintaan user).
 // DELETE                        → DITOLAK (13 Sep 2026): kategori tidak
 //                                 pernah dihapus — laporan & unggahan lama
 //                                 merujuk namanya. Sembunyikan sementara
@@ -19,9 +20,10 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
-import { adalahPimred } from "@/lib/jabatan";
+import { adalahPimred, adalahTvrNasional } from "@/lib/jabatan";
 import { bolehKelolaTvr } from "@/lib/tv-tim";
 import { KATEGORI_TETAP, kategoriTetap } from "@/lib/kategori-tetap";
+import { petaKategoriSelesai, ubahKategoriSelesai } from "@/lib/kategori-selesai";
 
 export const dynamic = "force-dynamic";
 
@@ -89,7 +91,10 @@ export async function GET(request: Request) {
     // "pimred" dipertahankan namanya untuk klien lama; artinya kini
     // "boleh mengelola", bukan hanya Pimpinan Redaksi.
     const pimred = adalahPimred(user) || (await bolehKelolaTvr(user));
-    const data = await daftarKeyword(pimred);
+    // TV Rakyat Nasional melihat semua (termasuk yang selesai) untuk insight;
+    // anggota biasa hanya yang boleh dipilih.
+    const lihatSemua = pimred || adalahTvrNasional(user);
+    const [data, selesaiPer] = await Promise.all([daftarKeyword(lihatSemua), petaKategoriSelesai()]);
     // Kategori TETAP di depan: ia ada di kode, bukan di database, jadi
     // tidak bisa terhapus dan tidak ikut hilang kalau tabelnya kosong.
     const tetap = KATEGORI_TETAP.map((nama) => ({
@@ -102,15 +107,20 @@ export async function GET(request: Request) {
     }));
     const dariDb = data
       .filter((k) => !kategoriTetap.adalah(String(k.keyword)))
-      .map((k) => ({
-        id: String(k.id),
-        keyword: String(k.keyword),
-        aktif: k.aktif === true,
-        selesai: k.selesai === true,
-        selesai_pada: k.selesai_pada ?? null,
-        tetap: false,
-      }));
-    return { data: [...tetap, ...dariDb], pimred };
+      .map((k) => {
+        const catatan = selesaiPer.get(String(k.id));
+        return {
+          id: String(k.id),
+          keyword: String(k.keyword),
+          aktif: k.aktif === true,
+          selesai: k.selesai === true || catatan !== undefined,
+          selesai_pada: k.selesai_pada ?? (catatan || null),
+          tetap: false,
+        };
+      })
+      // Yang selesai (disembunyikan) hanya terlihat oleh pengelola & TV Nasional.
+      .filter((k) => lihatSemua || !k.selesai);
+    return { data: [...tetap, ...dariDb], pimred, boleh_munculkan: adalahPimred(user) };
   });
 }
 
@@ -140,7 +150,7 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   return bungkus(async () => {
-    await pastikanPengelola(request);
+    const user = await pastikanPengelola(request);
     const body = (await request.json().catch(() => ({}))) as {
       id?: string | number;
       aksi?: "toggle" | "selesai" | "buka";
@@ -154,26 +164,17 @@ export async function PATCH(request: Request) {
     const aksi = body.aksi === "selesai" || body.aksi === "buka" ? body.aksi : "toggle";
 
     if (aksi !== "toggle") {
-      // SELESAI hanya menutup pintu masuk: tidak ada baris laporan,
-      // unggahan, atau angka yang disentuh. Menghapus datanya berarti
-      // kehilangan bukti kerja untuk acara yang justru sudah usai.
+      // SELESAI = DISEMBUNYIKAN: tidak ada baris laporan, unggahan, atau
+      // angka yang disentuh. Menghapus datanya berarti kehilangan bukti
+      // kerja untuk acara yang justru sudah usai.
       const selesai = aksi === "selesai";
-      const { data: row, error } = await db
-        .from("keyword_wajib")
-        .update({ selesai, selesai_pada: selesai ? new Date().toISOString() : null })
-        .eq("id", id)
-        .select("id")
-        .maybeSingle();
-      if (error) {
-        if (error.code === "42703") {
-          throw Object.assign(
-            new Error("Fitur selesai belum siap di database: jalankan pri-sql 51_kategori_selesai.sql dulu."),
-            { status: 503 },
-          );
-        }
-        throw new Error("Gagal mengubah keyword.");
+      if (!selesai && !adalahPimred(user)) {
+        throw Object.assign(
+          new Error("Hanya Pimpinan Redaksi / Superadmin yang bisa memunculkan lagi kategori yang disembunyikan."),
+          { status: 403 },
+        );
       }
-      if (!row) throw Object.assign(new Error("Keyword tidak ditemukan."), { status: 404 });
+      await ubahKategoriSelesai(id, selesai);
       return { sukses: true, selesai };
     }
 

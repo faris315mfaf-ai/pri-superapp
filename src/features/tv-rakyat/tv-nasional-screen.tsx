@@ -9,10 +9,12 @@
 // orang tidak pernah yakin mana yang "resmi", dan setiap perbaikan
 // harus dikerjakan dua kali.
 //
-// Tiga panel + satu halaman penuh:
+// Empat panel + satu halaman penuh:
 //   • KENAIKAN nasional — hari ini, kemarin, sepekan, sebulan.
+//   • VIDEO PER AKUN (26 Sep 2026) — seluruh video yang terbit pada
+//     satu tanggal di akun tersambung, disaring per akun/platform.
 //   • Insight per kategori (ringkas) → tombol "Halaman penuh" membuka
-//     layar kartu embed per sosial media, tarik data Chocodata, dan
+//     layar kartu embed per sosial media, tarik data upload-post, dan
 //     tambah link batch.
 //   • Dashboard nasional yang sudah ada — dipakai ulang apa adanya.
 // ============================================================
@@ -25,6 +27,7 @@ import { TvNasionalDashboard } from "@/features/dashboard/tv-nasional-dashboard"
 import { InsightKategoriScreen } from "./insight-kategori-screen";
 import { PanelInsightKategori } from "./panel-insight-kategori";
 import { PanelKenaikanNasional } from "./panel-kenaikan-nasional";
+import { PanelVideoHarian } from "./panel-video-harian";
 
 export function TvNasionalScreen({
   onBukaNotifikasi,
@@ -75,6 +78,10 @@ export function TvNasionalScreen({
 
       <FadeInUp delay={0.03} className="mt-5">
         <PanelKenaikanNasional />
+      </FadeInUp>
+
+      <FadeInUp delay={0.045} className="mt-4">
+        <PanelVideoHarian />
       </FadeInUp>
 
       <FadeInUp delay={0.06} className="mt-4">

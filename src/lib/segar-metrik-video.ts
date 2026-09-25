@@ -1,30 +1,40 @@
 // ============================================================
-// PENYEGAR ANGKA PER VIDEO — HARIAN (25 Sep 2026). KHUSUS SERVER.
+// PENYEGAR ANGKA PER VIDEO (25 Sep 2026, dirombak 26 Sep 2026).
+// KHUSUS SERVER.
 //
-// Dipanggil penjadwal VPS tiap 5 menit (/api/cron/metrik-video). Tiap
-// putaran mengerjakan sepotong antrean, lalu berhenti; putaran berikutnya
-// melanjutkan dari kursor tersimpan (pengaturan_sistem). Satu SIKLUS =
-// seluruh video sudah ditanyakan sekali → siklus berikutnya mulai ±20 jam
-// setelah siklus itu mulai. Hasilnya: angka tiap video diperbarui tiap hari.
+// Permintaan user (26 Sep): "tarik semua data video seluruh akun yang
+// terhubung (±650 akun) … sebanyak mungkin … se-realtime mungkin: tarik
+// dulu seluruh data hari ini, lalu update kemarin, lalu yang lalu-lalu".
 //
-// Dua jalur video:
-//   1. UNGGAHAN SuperApp (tvrku_post + request_id) → satu permintaan
-//      per unggahan, semua platformnya sekaligus.
-//   2. LAPORAN berkategori (laporan_video.keyword) yang BUKAN unggahan
-//      SuperApp → video di akun tertaut anggota, ditanyakan lewat ID
-//      aslinya. Video di akun yang tidak tersambung ke upload-post
-//      dilewati — upload-post memang tidak bisa membacanya.
-// Masing-masing punya jalur SEGAR (video yang muncul setelah siklus mulai)
-// supaya video hari ini tidak menunggu siklus besok.
+// Tiga bagian, dipanggil penjadwal VPS tiap 5 menit (/api/cron/metrik-
+// video, ±4 menit kerja per putaran):
 //
-// Rem kuota (upload-post: 100 permintaan / 5 menit, dipakai bersama
-// rekonsiliasi KPI & unggahan anggota):
-//   • maksimal MAKS_PERMINTAAN per putaran (bawaan 40);
-//   • berhenti bila header x-ratelimit-remaining menipis;
-//   • ditolak 429 → seluruh penyegar berhenti sampai kuota pulih.
+//  1. KATALOG — mengenali SEMUA video akun yang tersambung ke
+//     upload-post, disimpan di tvr_video_metrik (satu baris per video,
+//     kunci = kode platform+ID). Video baru dicatat dulu sebagai "belum
+//     ditarik" (diperbarui_pada = BELUM_DITARIK). Sumbernya:
+//       • laporan_video (laporan otomatis & manual, termasuk link pendek
+//         yang diurai) — murah, tanpa kuota upload-post;
+//       • daftar media tiap akun (/uploadposts/media) — halaman pertama
+//         tiap jam (video baru), lalu mundur halaman demi halaman sampai
+//         video terlama (isi katalog).
+//  2. UNGGAHAN SuperApp hari ini & kemarin — satu permintaan per unggahan
+//     (/post-analytics/{request_id}) memberi angka SEMUA platformnya.
+//  3. PER VIDEO — /post-analytics?platform_post_id= untuk tiap video di
+//     katalog, urut TINGKAT: hari ini (segar tiap 15 menit) → kemarin
+//     (1 jam) → 2–6 hari (6 jam) → lebih lama (24 jam). Antrean dihitung
+//     ulang dari database tiap putaran; video yang tidak sempat dikerjakan
+//     tetap jatuh tempo dan jadi yang paling basi berikutnya.
 //
-// Angka disimpan di tvr_video_metrik (kunci: kode video = platform + ID).
-// Blok platform yang galat TIDAK menimpa angka bagus sebelumnya.
+// Rem (kuota upload-post dipakai bersama unggahan & rekonsiliasi KPI):
+//   • maks METRIK_VIDEO_PER_MENIT permintaan/menit (bawaan 200; batas
+//     paket ±870/menit — diverifikasi dari header 26 Sep 2026);
+//   • maks 40 permintaan per akun sosmed per putaran, akun bergiliran;
+//   • header x-ratelimit-remaining menipis / 429 → berhenti & jeda;
+//   • akun yang tokennya rusak / kena batas platform dijeda (bukan
+//     ditanya terus-menerus); video yang dihapus dilewati.
+//
+// Angka yang galat TIDAK menimpa angka bagus sebelumnya.
 // ============================================================
 import { supabase } from "@/lib/supabase";
 import { kolomTabelAda } from "@/lib/kolom-struktur";
@@ -32,74 +42,136 @@ import { kodeMetrik } from "@/lib/insight-kategori";
 import { akunDariTautan, idVideo, kanonikTautan } from "@/lib/tautan-video";
 import { klienCache } from "@/lib/redis";
 import { semuaBaris } from "@/lib/semua-baris";
-import { KATEGORI_TETAP } from "@/lib/kategori-tetap";
 import { adalahTautanPendek, alamatDariPengalihan } from "@/lib/tautan-pendek";
 import { analitikPostAsliUp, analitikPostLiveUp, daftarMediaUp, uploadPostSiap } from "@/lib/upload-post";
 import {
-  aturSiklus,
-  bacaSiklus,
-  bagiKuota,
+  BELUM_DITARIK,
+  adalahMediaVideo,
+  awalHariWib,
   barisMetrikVideo,
-  batasUtama,
+  golonganGalat,
   idPlatformDariUrl,
   kuotaMenipis,
-  majukanSegar,
-  majukanUtama,
   perluDaftarMedia,
   platformApp,
   platformDidukung,
+  selangSeling,
+  tingkatKesegaran,
+  waktuDariLaporan,
   type BarisLama,
   type BatasUp,
   type BlokLive,
-  type JalurSiklus,
   type JawabanLive,
   type KolomTambahan,
-  type SiklusMetrik,
+  type NamaTingkat,
+  type Tingkat,
 } from "@/lib/metrik-video-up";
 import type { MetrikPost } from "@/lib/metrik-post-up";
 
 type Db = ReturnType<typeof supabase>;
 
-const KUNCI_SIKLUS = "metrik_video_siklus";
+// ------------------------------------------------------------
+// Konstanta
+// ------------------------------------------------------------
+
+const KUNCI_STATUS = "metrik_video_status";
 const KUNCI_LEASE = "metrik_video_lease";
 /** Umur lease: sedikit di atas lama satu putaran + panggilan yang masih jalan. */
-const UMUR_LEASE_MS = 290_000;
-/** Maks permintaan analitik per putaran (5 menit). */
-const MAKS_PERMINTAAN = Math.max(5, Math.min(90, Number(process.env.METRIK_VIDEO_PER_PUTARAN) || 40));
+const UMUR_LEASE_MS = 295_000;
 /** Anggaran waktu satu putaran (penjadwal memutus di 280 dtk). */
-const ANGGARAN_MS = 200_000;
+const ANGGARAN_MS = 225_000;
+/** Maks permintaan ke upload-post per menit (bisa diubah lewat env). */
+const MAKS_PER_MENIT = Math.max(20, Math.min(600, Number(process.env.METRIK_VIDEO_PER_MENIT) || 200));
 /** Permintaan yang berjalan bersamaan. */
-const PARALEL = 4;
+const PARALEL = 12;
+/** Maks permintaan per akun sosmed per putaran (batas laju platform per akun). */
+const MAKS_PER_AKUN_PUTARAN = 40;
 /** Unggahan semuda ini belum ditanya: platform masih memproses/menerbitkan. */
-const UMUR_MIN_UNGGAHAN_MS = 30 * 60_000;
-/** Baris yang dibaca per jendela kueri. */
-const JENDELA = 100;
+const UMUR_MIN_UNGGAHAN_MS = 20 * 60_000;
+/** Baris kandidat per kueri tingkat. */
+const JENDELA_TINGKAT = 1000;
+/** Jendela maksimal per tingkat per putaran (bila banyak yang tersaring). */
+const MAKS_JENDELA_TINGKAT = 4;
+/** Baris laporan_video yang dikenali per putaran. */
+const MAKS_LAPORAN_PUTARAN = 4000;
+/** Halaman daftar media pertama (cek video baru) tiap akun sekali per jam. */
+const CEK_BARU_MS = 60 * 60_000;
+/** Halaman daftar media maksimal per putaran: cek baru & isi katalog. */
+const MAKS_HALAMAN_BARU = 80;
+const MAKS_HALAMAN_ISI = 60;
+/** Isi katalog per akun maksimal sekian halaman (≈ 2.000–4.000 video). */
+const MAKS_HALAMAN_AKUN = 40;
+/** Katalog akun diulang dari awal seminggu sekali (video lama yang terlewat). */
+const ULANG_ISI_MS = 7 * 86_400_000;
 /** Ditolak 429 tanpa keterangan kapan pulih → tunggu selama ini. */
 const JEDA_TOLAK_MS = 5 * 60_000;
-/** Umur peta "alamat → ID media" per akun (Instagram/Threads/Facebook). */
-const UMUR_PETA_MEDIA_MS = 20 * 3600_000;
-/** Halaman daftar media maksimal per akun (100 video per halaman). */
-const MAKS_HALAMAN_MEDIA = 2;
+/** Umur peta "kode video → ID media" per akun (dirawat oleh katalog). */
+const UMUR_PETA_MEDIA_MS = 7 * 86_400_000;
+const JAM = 3600_000;
 
 // ------------------------------------------------------------
-// pengaturan_sistem: status siklus & lease
+// Mode uji kering (dry-run) — baca & tanya sungguhan, TIDAK menulis apa pun.
 // ------------------------------------------------------------
+
+let ujiKeringAktif = false;
+
+// ------------------------------------------------------------
+// pengaturan_sistem: status & lease
+// ------------------------------------------------------------
+
+export type StatusPenyegar = {
+  v: 2;
+  /** Akhir putaran terakhir (ISO). */
+  terakhir: string | null;
+  /** Setelah upload-post menolak/kuota menipis: jangan bertanya sampai … */
+  jeda_sampai: string | null;
+  /** id laporan_video terakhir yang sudah dikenali katalog. */
+  kursor_laporan: number;
+  /** Ringkasan putaran terakhir. */
+  putaran: { diminta: number; terisi: number; galat: number; dilewati: number; ditemukan: number; halaman: number; durasi_ms: number } | null;
+  /** Video yang masih jatuh tempo per tingkat (setelah putaran terakhir). */
+  menunggu: Record<NamaTingkat, number> | null;
+  /** Isi katalog: seluruh video & yang sudah punya angka. */
+  katalog: { video: number; berangka: number; akun: number; akun_lengkap: number } | null;
+};
+
+function statusKosong(): StatusPenyegar {
+  return { v: 2, terakhir: null, jeda_sampai: null, kursor_laporan: 0, putaran: null, menunggu: null, katalog: null };
+}
+
+function bacaStatusTeks(teks: string | null): StatusPenyegar {
+  if (!teks) return statusKosong();
+  try {
+    const o = JSON.parse(teks) as Partial<StatusPenyegar>;
+    if (!o || o.v !== 2) return statusKosong();
+    return {
+      ...statusKosong(),
+      ...o,
+      v: 2,
+      kursor_laporan: Math.max(0, Math.floor(Number(o.kursor_laporan) || 0)),
+    };
+  } catch {
+    return statusKosong();
+  }
+}
 
 async function bacaNilai(db: Db, kunci: string): Promise<string | null> {
   const { data } = await db.from("pengaturan_sistem").select("nilai").eq("kunci", kunci).maybeSingle();
   return data?.nilai == null ? null : String(data.nilai);
 }
 
-async function simpanSiklus(db: Db, s: SiklusMetrik): Promise<void> {
+async function simpanStatus(db: Db, s: StatusPenyegar): Promise<void> {
+  if (ujiKeringAktif) return;
   const { error } = await db
     .from("pengaturan_sistem")
-    .upsert({ kunci: KUNCI_SIKLUS, nilai: JSON.stringify(s) }, { onConflict: "kunci" });
-  if (error) console.error("[metrik-video] simpan siklus:", error.message);
+    .upsert({ kunci: KUNCI_STATUS, nilai: JSON.stringify(s) }, { onConflict: "kunci" });
+  if (error) console.error("[metrik-video] simpan status:", error.message);
 }
 
-/** Status siklus terakhir (untuk ditampilkan di panel). */
-export async function statusSiklusMetrik(): Promise<SiklusMetrik | null> {
-  return bacaSiklus(await bacaNilai(supabase(), KUNCI_SIKLUS));
+/** Keadaan penyegar untuk ditampilkan di panel. */
+export async function statusPenyegar(): Promise<StatusPenyegar | null> {
+  const teks = await bacaNilai(supabase(), KUNCI_STATUS);
+  return teks ? bacaStatusTeks(teks) : null;
 }
 
 /** Ambil lease secara atomik; null bila sedang dipegang putaran lain. */
@@ -132,57 +204,133 @@ async function lepasLease(db: Db, lease: string): Promise<void> {
 }
 
 // ------------------------------------------------------------
-// Pengendali kuota satu putaran
+// Simpanan kerja (Redis; memori bila Redis tidak ada)
+// ------------------------------------------------------------
+//
+// Hal-hal yang bukan data aplikasi tapi harus diingat antar-putaran:
+// jeda per akun, kemajuan katalog per akun, video yang baru saja gagal,
+// dan kapan unggahan terakhir disegarkan. Hilang (Redis dikosongkan) =
+// aman: paling-paling beberapa hal ditanya ulang.
+
+type StatusAkun = { jeda: number; alasan: string };
+type KatalogAkun = { baru?: number; cursor?: string | null; selesai?: number; halaman?: number; video?: number; gagal?: number };
+type Simpanan = {
+  akun: Record<string, StatusAkun>;
+  katalog: Record<string, KatalogAkun>;
+  /** kode video → jangan ditanya sebelum (ms). */
+  gagal: Record<string, number>;
+  /** id tvrku_post → terakhir disegarkan (ms). */
+  unggah: Record<string, number>;
+};
+
+const KUNCI_SIMPANAN = "mv:simpanan:v1";
+let simpananMemori: Simpanan | null = null;
+
+function simpananKosong(): Simpanan {
+  return { akun: {}, katalog: {}, gagal: {}, unggah: {} };
+}
+
+async function muatSimpanan(): Promise<Simpanan> {
+  if (simpananMemori) return simpananMemori;
+  const redis = klienCache();
+  if (redis) {
+    try {
+      const r = await redis.get<Simpanan>(KUNCI_SIMPANAN);
+      if (r && typeof r === "object" && r.akun && r.katalog && r.gagal && r.unggah) {
+        simpananMemori = r;
+        return r;
+      }
+    } catch {
+      // Redis bermasalah → mulai dari kosong (aman).
+    }
+  }
+  simpananMemori = simpananKosong();
+  return simpananMemori;
+}
+
+/** Buang catatan kedaluwarsa supaya simpanan tidak membengkak. */
+function rapikanSimpanan(s: Simpanan, kini: number) {
+  for (const [k, v] of Object.entries(s.akun)) if (v.jeda <= kini) delete s.akun[k];
+  for (const [k, v] of Object.entries(s.gagal)) if (v <= kini) delete s.gagal[k];
+  const batasUnggah = kini - 3 * 86_400_000;
+  for (const [k, v] of Object.entries(s.unggah)) if (v < batasUnggah) delete s.unggah[k];
+}
+
+async function simpanSimpanan(s: Simpanan): Promise<void> {
+  simpananMemori = s;
+  if (ujiKeringAktif) return;
+  const redis = klienCache();
+  if (!redis) return;
+  try {
+    await redis.set(KUNCI_SIMPANAN, s, { ex: 30 * 86_400 });
+  } catch {
+    // Gagal menyimpan bukan alasan menggagalkan putaran.
+  }
+}
+
+// ------------------------------------------------------------
+// Pengendali kuota & laju
 // ------------------------------------------------------------
 
 class Pengendali {
   private sisa: number;
-  private sisaJalur = Number.POSITIVE_INFINITY;
   readonly tenggat: number;
   berhenti = false;
   alasanBerhenti = "";
-  /** Diisi bila upload-post menolak/kuota menipis: jangan bertanya sampai … */
   jedaSampai: number | null = null;
   batasTerakhir: BatasUp | null = null;
   diminta = 0;
-  /** Dipanggil tiap permintaan diklaim (pencatat jatah tombol manual). */
   private readonly saatAmbil?: () => void;
-  /** Seberapa jauh satu panggilan boleh melewati tenggat putaran. */
   private readonly lebihMs: number;
+  private readonly jarakMs: number;
+  private slotBerikut = 0;
+  private readonly perAkun = new Map<string, number>();
 
-  constructor(maks: number, anggaranMs: number, opsi: { saatAmbil?: () => void; lebihMs?: number } = {}) {
+  constructor(
+    maks: number,
+    anggaranMs: number,
+    opsi: { saatAmbil?: () => void; lebihMs?: number; perMenit?: number } = {},
+  ) {
     this.sisa = maks;
     this.tenggat = Date.now() + anggaranMs;
     this.saatAmbil = opsi.saatAmbil;
-    this.lebihMs = opsi.lebihMs ?? 60_000;
-  }
-
-  mulaiJalur(jatah: number) {
-    this.sisaJalur = Math.max(0, jatah);
+    this.lebihMs = opsi.lebihMs ?? 30_000;
+    this.jarakMs = Math.floor(60_000 / Math.max(1, opsi.perMenit ?? MAKS_PER_MENIT));
   }
 
   get sisaPermintaan(): number {
-    return Math.max(0, Math.min(this.sisa, this.sisaJalur));
+    return Math.max(0, this.sisa);
   }
 
-  /** Sisa waktu (ms) — dipakai sebagai batas waktu tiap panggilan. */
   sisaWaktu(): number {
     return this.tenggat - Date.now();
   }
 
+  /** Masih boleh bekerja (kuota, waktu, tidak direm)? */
+  bolehLanjut(minWaktuMs = 8_000): boolean {
+    return !this.berhenti && this.sisa > 0 && this.sisaWaktu() >= minWaktuMs;
+  }
+
+  /** Jatah akun ini di putaran ini sudah habis? */
+  akunPenuh(akun: string | undefined): boolean {
+    return Boolean(akun) && (this.perAkun.get(akun!) ?? 0) >= MAKS_PER_AKUN_PUTARAN;
+  }
+
   /**
-   * Klaim satu permintaan. false = kuota/waktu habis atau sedang direm.
-   * `minWaktuMs`: permintaan hanya dimulai bila sisa waktu putaran masih
-   * cukup — memulai lalu memutusnya di tengah jalan membuang kuota.
+   * Klaim satu permintaan lalu tunggu gilirannya (laju maks per menit).
+   * false = kuota/waktu habis, sedang direm, atau jatah akun habis.
    */
-  ambil(minWaktuMs = 8_000): boolean {
-    if (this.berhenti || this.sisa <= 0 || this.sisaJalur <= 0) return false;
-    if (this.sisaWaktu() < minWaktuMs) return false;
+  async izin(minWaktuMs = 8_000, akun?: string): Promise<boolean> {
+    if (!this.bolehLanjut(minWaktuMs) || this.akunPenuh(akun)) return false;
     this.sisa -= 1;
-    this.sisaJalur -= 1;
     this.diminta += 1;
+    if (akun) this.perAkun.set(akun, (this.perAkun.get(akun) ?? 0) + 1);
     this.saatAmbil?.();
-    return true;
+    const kini = Date.now();
+    const slot = Math.max(kini, this.slotBerikut);
+    this.slotBerikut = slot + this.jarakMs;
+    if (slot > kini) await new Promise((r) => setTimeout(r, slot - kini));
+    return !this.berhenti;
   }
 
   /** Batas waktu satu panggilan: boleh melewati tenggat sedikit (lebihMs). */
@@ -193,19 +341,18 @@ class Pengendali {
   catatBatas(b: BatasUp | undefined | null) {
     if (!b) return;
     this.batasTerakhir = b;
-    if (kuotaMenipis(b)) {
-      this.rem("kuota upload-post menipis", b.reset_ms);
-    }
+    if (kuotaMenipis(b)) this.rem("kuota upload-post menipis", b.reset_ms);
   }
 
   rem(alasan: string, sampaiMs: number | null | undefined) {
     this.berhenti = true;
     if (!this.alasanBerhenti) this.alasanBerhenti = alasan;
-    const sampai = sampaiMs && sampaiMs > Date.now() ? Math.min(sampaiMs, Date.now() + 30 * 60_000) : Date.now() + JEDA_TOLAK_MS;
+    const sampai =
+      sampaiMs && sampaiMs > Date.now() ? Math.min(sampaiMs, Date.now() + 30 * 60_000) : Date.now() + JEDA_TOLAK_MS;
     this.jedaSampai = Math.max(this.jedaSampai ?? 0, sampai);
   }
 
-  /** Tangani galat panggilan upload-post. true = galat karena kuota (item ditunda). */
+  /** Galat panggilan upload-post: true bila karena kuota (item ditunda). */
   tanganiGalat(e: unknown): boolean {
     const g = e as { status?: number; batas?: BatasUp };
     if (g?.batas) this.batasTerakhir = g.batas;
@@ -217,9 +364,26 @@ class Pengendali {
   }
 }
 
+/** Kerjakan antrean dengan PARALEL pekerja sampai habis / direm. */
+async function jalankanAntre<T>(items: T[], kerja: (t: T) => Promise<void>, ctrl: Pengendali, minWaktuMs = 8_000): Promise<number> {
+  let i = 0;
+  let selesai = 0;
+  const pekerja = async () => {
+    while (i < items.length && ctrl.bolehLanjut(minWaktuMs)) {
+      const t = items[i++];
+      await kerja(t);
+      selesai += 1;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(PARALEL, items.length) }, pekerja));
+  return selesai;
+}
+
 // ------------------------------------------------------------
-// Konteks: kolom opsional, profil & akun tertaut
+// Konteks: kolom opsional, profil & akun tersambung
 // ------------------------------------------------------------
+
+type AkunTersambung = { uid: number; platform: string; username: string; profil: string; kunci: string };
 
 type Konteks = {
   kolom: KolomTambahan;
@@ -227,12 +391,12 @@ type Konteks = {
   profilPer: Map<number, string>;
   /** "user_id|platform" → username akun tertaut */
   akunUser: Map<string, string>;
-  /** "platform|username" → user_id pemilik (hanya akun yang tersambung) */
+  /** "platform|username" → user_id pemilik (akun tersambung) */
   pemilikAkun: Map<string, number>;
   /** "user_id|platform" yang tersambung ke upload-post */
   tersambung: Set<string>;
-  /** Kategori yang bisa tampil di halaman (huruf besar). */
-  kategori: Set<string>;
+  /** Seluruh akun tersambung yang punya profil upload-post. */
+  akun: AkunTersambung[];
 };
 
 async function muatKonteks(db: Db): Promise<Konteks> {
@@ -241,27 +405,24 @@ async function muatKonteks(db: Db): Promise<Konteks> {
     kolomTabelAda("tvr_video_metrik", "sumber"),
     kolomTabelAda("tvr_video_metrik", "mentah"),
   ]);
-  const [{ data: profil }, akun, { data: kw }] = await Promise.all([
+  type BarisAkun = { user_id: number | string; platform: string; username: string | null; terhubung: boolean | null };
+  const [{ data: profil }, akun] = await Promise.all([
     db
       .from("sosmed_profile")
       .select("id, user_id, profile_key")
       .eq("jenis", "pengguna")
       .eq("penyedia", "upload-post")
       .order("id", { ascending: true }),
-    semuaBaris<{ user_id: number | string; platform: string; username: string | null; terhubung: boolean | null }>(
+    semuaBaris<BarisAkun>(
       (dari, sampai) =>
         db
           .from("akun_tvr_user")
           .select("user_id, platform, username, terhubung")
           .eq("aktif", true)
           .order("id", { ascending: true })
-          .range(dari, sampai) as unknown as PromiseLike<{
-          data: { user_id: number | string; platform: string; username: string | null; terhubung: boolean | null }[] | null;
-          error: { message: string } | null;
-        }>,
+          .range(dari, sampai) as unknown as PromiseLike<{ data: BarisAkun[] | null; error: { message: string } | null }>,
       10_000,
     ),
-    db.from("keyword_wajib").select("keyword"),
   ]);
   const profilPer = new Map<number, string>();
   for (const p of profil ?? []) {
@@ -271,6 +432,7 @@ async function muatKonteks(db: Db): Promise<Konteks> {
   const akunUser = new Map<string, string>();
   const pemilikAkun = new Map<string, number>();
   const tersambung = new Set<string>();
+  const daftar = new Map<string, AkunTersambung>();
   for (const a of akun) {
     const uid = Number(a.user_id);
     const pf = platformApp(String(a.platform ?? ""));
@@ -282,14 +444,11 @@ async function muatKonteks(db: Db): Promise<Konteks> {
     if (a.terhubung === true) {
       tersambung.add(k);
       if (nama) pemilikAkun.set(`${pf}|${nama.toLowerCase()}`, uid);
+      const pk = profilPer.get(uid);
+      if (pk && platformDidukung(pf) && !daftar.has(k)) daftar.set(k, { uid, platform: pf, username: nama, profil: pk, kunci: k });
     }
   }
-  const kategori = new Set<string>(KATEGORI_TETAP.map((k) => k.toUpperCase()));
-  for (const k of kw ?? []) {
-    const n = String(k.keyword ?? "").trim().toUpperCase();
-    if (n) kategori.add(n);
-  }
-  return { kolom: { favorit: fav, sumber: sum, mentah: men }, profilPer, akunUser, pemilikAkun, tersambung, kategori };
+  return { kolom: { favorit: fav, sumber: sum, mentah: men }, profilPer, akunUser, pemilikAkun, tersambung, akun: [...daftar.values()] };
 }
 
 // ------------------------------------------------------------
@@ -314,8 +473,9 @@ function potong<T>(daftar: T[], ukuran: number): T[][] {
   return hasil;
 }
 
-/** Simpan draf (satu baris per kode; draf terakhir menang). Mengembalikan jumlah tersimpan. */
+/** Simpan angka (satu baris per kode; draf terakhir menang). Mengembalikan jumlah tersimpan. */
 async function tulisDraf(db: Db, draf: DraftBaris[], kolom: KolomTambahan): Promise<number> {
+  if (ujiKeringAktif) return 0;
   const perKode = new Map<string, DraftBaris>();
   for (const d of draf) perKode.set(d.kode, d);
   if (perKode.size === 0) return 0;
@@ -331,9 +491,7 @@ async function tulisDraf(db: Db, draf: DraftBaris[], kolom: KolomTambahan): Prom
       );
     const petaLama = new Map<string, BarisLama>();
     for (const l of lama ?? []) petaLama.set(String(l.kode), l as BarisLama);
-    const baris = bagian.map((d) =>
-      barisMetrikVideo({ ...d, kini, lama: petaLama.get(d.kode) ?? null, kolom }),
-    );
+    const baris = bagian.map((d) => barisMetrikVideo({ ...d, kini, lama: petaLama.get(d.kode) ?? null, kolom }));
     const { error } = await db.from("tvr_video_metrik").upsert(baris, { onConflict: "kode" });
     if (error) {
       console.error("[metrik-video] simpan angka:", error.message);
@@ -368,102 +526,104 @@ function drafDariBlok(
   };
 }
 
-// ------------------------------------------------------------
-// Jalur 1: unggahan SuperApp
-// ------------------------------------------------------------
-
-type BarisUnggahan = {
-  id: number | string;
-  user_id: number | string;
-  judul: string | null;
-  request_id: string | null;
-  jadwal: string | null;
-  dibuat_pada: string;
-};
-
-const POLA_REQUEST_UP = /^[0-9a-f]{32}$/i;
-
-type HasilItem = "selesai" | "tunda";
-
-export type HasilSatuUnggahan = {
-  post_id: number;
-  profil: string;
+/** Satu video yang dikenali katalog (belum tentu sudah punya angka). */
+type BarisKatalog = {
+  kode: string;
+  platform: string;
+  akun_username: string;
+  user_id: number;
+  url: string;
   judul: string;
-  per_platform: { platform: string; status: string; galat: string; tayangan: number | null; post_url: string }[];
-  tersimpan: number;
+  thumbnail_url: string;
+  waktu_posting: string | null;
 };
 
 /**
- * Tanya SATU unggahan ke upload-post, kumpulkan drafnya. "tunda" hanya
- * bila ditolak karena kuota (dicoba lagi putaran berikutnya); galat lain
- * (dihapus, token kedaluwarsa) = selesai untuk siklus ini.
+ * Masukkan video ke katalog. Yang BARU dicatat sebagai "belum ditarik"
+ * (angkanya menyusul); yang sudah ada hanya dilengkapi waktu posting &
+ * gambar pratinjaunya — angkanya tidak disentuh.
  */
-async function kerjakanUnggahan(
-  p: BarisUnggahan,
-  ctx: Konteks,
-  ctrl: Pengendali,
-  draf: DraftBaris[],
-  catat: { terisi: number; galat: number },
-): Promise<{ hasil: HasilItem; jawaban?: JawabanLive; galat?: string }> {
-  const rid = String(p.request_id ?? "").trim();
-  if (!POLA_REQUEST_UP.test(rid)) return { hasil: "selesai" };
-  if (p.jadwal && Date.parse(String(p.jadwal)) > Date.now()) return { hasil: "selesai" };
-  // Satu unggahan = semua platform sekaligus (biasanya 3–10 dtk, Facebook
-  // yang lambat bisa > 1 menit) → hanya dimulai bila waktunya masih lapang.
-  if (!ctrl.ambil(30_000)) return { hasil: "tunda" };
-  try {
-    const { jawaban, batas } = await analitikPostLiveUp(rid, ctrl.batasPanggilan(90_000));
-    ctrl.catatBatas(batas);
-    const uid = Number(p.user_id) || null;
-    for (const b of jawaban.blok) {
-      if (b.status !== "ok") {
-        if (b.status === "galat") catat.galat += 1;
-        continue;
-      }
-      const d = drafDariBlok(b, {
-        user_id: uid,
-        akun: uid ? (ctx.akunUser.get(`${uid}|${b.platform}`) ?? "") : "",
-        judul: jawaban.judul || String(p.judul ?? ""),
-        waktu: jawaban.waktu_unggah ?? (p.jadwal ? String(p.jadwal) : String(p.dibuat_pada)),
-      });
-      if (d) {
-        draf.push(d);
-        catat.terisi += 1;
-      }
+async function gabungKatalog(db: Db, rows: BarisKatalog[], kolom: KolomTambahan, isiCelah: boolean): Promise<number> {
+  const perKode = new Map<string, BarisKatalog>();
+  for (const r of rows) if (r.kode && r.url) perKode.set(r.kode, r);
+  if (perKode.size === 0) return 0;
+  let baruN = 0;
+  for (const bagian of potong([...perKode.values()], 200)) {
+    const { data: lama, error } = await db
+      .from("tvr_video_metrik")
+      .select("kode, platform, akun_username, url, waktu_posting, thumbnail_url, user_id")
+      .in(
+        "kode",
+        bagian.map((r) => r.kode),
+      );
+    if (error) {
+      console.error("[metrik-video] baca katalog:", error.message);
+      continue;
     }
-    return { hasil: "selesai", jawaban };
-  } catch (e) {
-    const pesan = e instanceof Error ? e.message : String(e);
-    if (ctrl.tanganiGalat(e)) return { hasil: "tunda", galat: pesan };
-    catat.galat += 1;
-    return { hasil: "selesai", galat: pesan };
+    const ada = new Map<string, Record<string, unknown>>();
+    for (const l of lama ?? []) ada.set(String(l.kode), l as Record<string, unknown>);
+    const baru = bagian.filter((r) => !ada.has(r.kode));
+    baruN += baru.length;
+    if (ujiKeringAktif) continue;
+    if (baru.length > 0) {
+      const isi = baru.map((r) => {
+        const b: Record<string, unknown> = {
+          kode: r.kode,
+          platform: r.platform,
+          akun_username: r.akun_username.slice(0, 120),
+          user_id: r.user_id,
+          nama_akun: "",
+          judul: r.judul.slice(0, 300),
+          url: r.url.slice(0, 500),
+          thumbnail_url: r.thumbnail_url.slice(0, 1000),
+          waktu_posting: r.waktu_posting,
+          tayangan: 0,
+          suka: 0,
+          komentar: 0,
+          bagikan: 0,
+          diperbarui_pada: BELUM_DITARIK,
+        };
+        if (kolom.sumber) b.sumber = "upload-post";
+        return b;
+      });
+      const { error: eBaru } = await db.from("tvr_video_metrik").upsert(isi, { onConflict: "kode", ignoreDuplicates: true });
+      if (eBaru) console.error("[metrik-video] katalog baru:", eBaru.message);
+    }
+    if (!isiCelah) continue;
+    // Lengkapi yang sudah ada: waktu posting dari daftar media lebih
+    // tepat daripada perkiraan dari laporan; gambar pratinjau bila kosong.
+    const celah: Record<string, unknown>[] = [];
+    for (const r of bagian) {
+      const l = ada.get(r.kode);
+      if (!l) continue;
+      const waktuLama = l.waktu_posting ? String(l.waktu_posting) : null;
+      const gantiWaktu = Boolean(r.waktu_posting) && (!waktuLama || Math.abs(Date.parse(waktuLama) - Date.parse(r.waktu_posting!)) > 60_000);
+      const gantiGambar = Boolean(r.thumbnail_url) && !String(l.thumbnail_url ?? "");
+      const gantiPemilik = l.user_id == null;
+      if (!gantiWaktu && !gantiGambar && !gantiPemilik) continue;
+      celah.push({
+        kode: r.kode,
+        platform: String(l.platform ?? r.platform),
+        akun_username: String(l.akun_username ?? "") || r.akun_username,
+        url: String(l.url ?? "") || r.url,
+        waktu_posting: gantiWaktu ? r.waktu_posting : waktuLama,
+        thumbnail_url: gantiGambar ? r.thumbnail_url.slice(0, 1000) : String(l.thumbnail_url ?? ""),
+        user_id: l.user_id == null ? r.user_id : Number(l.user_id),
+      });
+    }
+    if (celah.length > 0) {
+      const { error: eCelah } = await db.from("tvr_video_metrik").upsert(celah, { onConflict: "kode" });
+      if (eCelah) console.error("[metrik-video] lengkapi katalog:", eCelah.message);
+    }
   }
+  return baruN;
 }
 
 // ------------------------------------------------------------
-// Jalur 2: video laporan berkategori (bukan lewat SuperApp)
+// Peta "kode video → ID media" per akun (Instagram/Threads/Facebook)
 // ------------------------------------------------------------
 
-type BarisLaporan = {
-  id: number | string;
-  user_id: number | string;
-  platform: string;
-  url_video: string;
-  keyword: string | null;
-  tvrku_post_id: number | string | null;
-};
-
-/**
- * Mode UJI KERING (dry-run): baca database & tanya upload-post sungguhan,
- * tetapi TIDAK menulis apa pun (tanpa lease, status siklus, angka, cache
- * Redis). Dipakai memeriksa pencocokan data asli sebelum rilis.
- */
-let ujiKeringAktif = false;
-
-/** Peta "kode video → ID media" per akun (Instagram/Threads/Facebook). */
 const petaMedia = new Map<string, { sampai: number; peta: Record<string, string> }>();
-/** Satu penyusunan peta per akun pada satu waktu (bukan empat bersamaan). */
-const sedangSusun = new Map<string, Promise<Record<string, string> | "tunda">>();
 
 async function bacaPetaMedia(kunci: string): Promise<Record<string, string> | null> {
   const m = petaMedia.get(kunci);
@@ -473,102 +633,45 @@ async function bacaPetaMedia(kunci: string): Promise<Record<string, string> | nu
   try {
     const r = await redis.get<Record<string, string>>(`mv:media:${kunci}`);
     if (r && typeof r === "object" && !Array.isArray(r)) {
-      petaMedia.set(kunci, { sampai: Date.now() + UMUR_PETA_MEDIA_MS, peta: r });
+      petaMedia.set(kunci, { sampai: Date.now() + 6 * JAM, peta: r });
       return r;
     }
   } catch {
-    // Redis bermasalah → susun ulang dari upload-post.
+    // Redis bermasalah → anggap belum ada.
   }
   return null;
 }
 
-async function simpanPetaMedia(kunci: string, peta: Record<string, string>, umurMs: number, keRedis: boolean): Promise<void> {
-  if (petaMedia.size > 2000) petaMedia.clear();
-  petaMedia.set(kunci, { sampai: Date.now() + umurMs, peta });
-  const redis = keRedis && !ujiKeringAktif ? klienCache() : null;
+/** Gabungkan entri baru ke peta akun. */
+async function tambahPetaMedia(kunci: string, tambahan: Record<string, string>): Promise<void> {
+  if (Object.keys(tambahan).length === 0) return;
+  const lama = (await bacaPetaMedia(kunci)) ?? {};
+  const peta = { ...lama, ...tambahan };
+  if (petaMedia.size > 3000) petaMedia.clear();
+  petaMedia.set(kunci, { sampai: Date.now() + 6 * JAM, peta });
+  const redis = ujiKeringAktif ? null : klienCache();
   if (!redis) return;
   try {
-    await redis.set(`mv:media:${kunci}`, peta, { ex: Math.floor(umurMs / 1000) });
+    await redis.set(`mv:media:${kunci}`, peta, { ex: Math.floor(UMUR_PETA_MEDIA_MS / 1000) });
   } catch {
     // Gagal menyimpan cache bukan alasan menghentikan penyegaran.
   }
-}
-
-/**
- * Susun peta satu akun dari daftar medianya (maks 2 halaman = 200 video
- * terbaru). Peta hanya disimpan bila UTUH — kuota yang habis di tengah
- * jalan = "tunda" (dicoba lagi putaran berikutnya), bukan peta setengah
- * yang membuat video di halaman kedua dianggap tidak ada.
- */
-async function susunPetaMedia(profil: string, platform: string, kunci: string, ctrl: Pengendali): Promise<Record<string, string> | "tunda"> {
-  const peta: Record<string, string> = {};
-  let cursor: string | null = null;
-  for (let halaman = 0; halaman < MAKS_HALAMAN_MEDIA; halaman++) {
-    if (!ctrl.ambil(15_000)) return "tunda";
-    try {
-      const r = await daftarMediaUp(profil, platform, {
-        limit: 100,
-        cursor,
-        timeoutMs: ctrl.batasPanggilan(25_000),
-      });
-      ctrl.catatBatas(r.batas);
-      for (const m of r.media) {
-        const k = m.permalink ? kodeMetrik(platform, m.permalink) : null;
-        if (k && m.id) peta[k] = m.id;
-      }
-      if (!r.next_cursor || r.media.length === 0) break;
-      cursor = r.next_cursor;
-    } catch (e) {
-      if (ctrl.tanganiGalat(e)) return "tunda";
-      // Akun tidak bisa dibaca (token kedaluwarsa, akun dilepas, …): ingat
-      // SEJAM di memori saja, supaya tidak ditanya berulang tiap laporan
-      // tetapi segera dicoba lagi bila ternyata hanya gangguan sesaat.
-      await simpanPetaMedia(kunci, {}, 3600_000, false);
-      return {};
-    }
-  }
-  await simpanPetaMedia(kunci, peta, UMUR_PETA_MEDIA_MS, true);
-  return peta;
-}
-
-/**
- * ID media Instagram/Threads/Facebook untuk satu kode video, dicari lewat
- * daftar media akun pemiliknya. "tunda" = kuota habis/direm; null = tidak
- * ditemukan di 200 video terbaru akun itu.
- */
-async function idMediaUntuk(
-  profil: string,
-  platform: string,
-  kode: string,
-  ctrl: Pengendali,
-): Promise<string | null | "tunda"> {
-  const kunci = `${profil}|${platform}`;
-  const ada = await bacaPetaMedia(kunci);
-  if (ada) return ada[kode] ?? null;
-  let jalan = sedangSusun.get(kunci);
-  if (!jalan) {
-    jalan = susunPetaMedia(profil, platform, kunci, ctrl).finally(() => sedangSusun.delete(kunci));
-    sedangSusun.set(kunci, jalan);
-  }
-  const peta = await jalan;
-  if (peta === "tunda") return "tunda";
-  return peta[kode] ?? null;
 }
 
 // ------------------------------------------------------------
 // Link pendek (vt.tiktok, share Facebook/Threads, fb.watch) → alamat asli
 // ------------------------------------------------------------
 //
-// Diverifikasi dari server VPS (25 Sep 2026): dengan user-agent crawler
-// Facebook, ketiganya menjawab 302 ke alamat video yang lengkap (FB
-// /reel/<ID angka>, Threads /@akun/post/<kode>, TikTok /@akun/video/<ID>).
-// Peramban biasa ditolak Facebook (400). Hasil diingat 30 hari (gagal:
-// 6 jam) — link yang sama tidak diurai berulang-ulang.
+// Diverifikasi dari server VPS (25–26 Sep 2026): dengan user-agent
+// crawler Facebook, ketiganya menjawab 302 ke alamat video yang lengkap
+// (FB /reel/<ID> atau story.php?story_fbid=, Threads /@akun/post/<kode>,
+// TikTok /@akun/video/<ID>). Peramban biasa ditolak Facebook (400). Hasil
+// diingat 30 hari (gagal: 6 jam).
 
 const UA_CRAWLER = "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)";
 const UA_CADANGAN = "Twitterbot/1.0";
 const UMUR_PENDEK_MS = 30 * 86_400_000;
-const UMUR_PENDEK_GAGAL_MS = 6 * 3600_000;
+const UMUR_PENDEK_GAGAL_MS = 6 * JAM;
 const pendekDiingat = new Map<string, { sampai: number; url: string }>();
 
 async function bacaPendek(kunci: string): Promise<string | null | undefined> {
@@ -655,312 +758,568 @@ export async function alamatAsli(platform: string, url: string): Promise<string 
   return asli;
 }
 
-/** Urai semua link pendek di satu jendela laporan (4 bersamaan). */
-async function uraiPendekJendela(baris: BarisLaporan[], ctrl: Pengendali): Promise<Map<string, string | null>> {
-  const hasil = new Map<string, string | null>();
-  const perlu = baris.filter((l) => adalahTautanPendek(platformApp(String(l.platform ?? "")), String(l.url_video ?? "")));
-  for (let i = 0; i < perlu.length; i += PARALEL) {
-    if (ctrl.sisaWaktu() < 15_000) break;
-    const kelompok = perlu.slice(i, i + PARALEL);
-    const r = await Promise.all(
-      kelompok.map((l) => alamatAsli(platformApp(String(l.platform ?? "")), String(l.url_video ?? ""))),
-    );
-    kelompok.forEach((l, j) => hasil.set(String(l.id), r[j]));
-  }
-  return hasil;
+// ------------------------------------------------------------
+// Catatan hasil & galat
+// ------------------------------------------------------------
+
+type Catatan = { terisi: number; galat: number; dilewati: number; ditemukan: number; halaman: number };
+
+function catatanKosong(): Catatan {
+  return { terisi: 0, galat: 0, dilewati: 0, ditemukan: 0, halaman: 0 };
 }
 
-type ItemLaporan = {
-  laporan: BarisLaporan;
-  /** Kode video ASLI (setelah link pendek diurai). */
-  kode: string;
-  /** Kode link pendek yang dilaporkan — angkanya ikut disimpan di bawahnya. */
-  kodeAlias: string | null;
-  /** Alamat video asli. */
-  url: string;
-  platform: string;
-  pemilik: number;
-  profil: string;
-};
+/** Hasil per akun di putaran ini — akun yang terus gagal dijeda. */
+type HasilAkun = Map<string, { ok: number; gagal: number; pesan: string }>;
+
+function catatAkun(hasil: HasilAkun, akun: string, ok: boolean, pesan = "") {
+  const h = hasil.get(akun) ?? { ok: 0, gagal: 0, pesan: "" };
+  if (ok) h.ok += 1;
+  else {
+    h.gagal += 1;
+    if (pesan) h.pesan = pesan;
+  }
+  hasil.set(akun, h);
+}
 
 /**
- * Saring & lengkapi laporan: hanya video akun tersambung yang bisa
- * ditanyakan. `urlAsli`: hasil urai link pendek (undefined = belum
- * sempat diurai → item ditunda; null = tidak bisa diurai).
+ * Tindak lanjut galat satu video:
+ *   akun  → seluruh akun dijeda 6 jam (token/izin);
+ *   batas → akun dijeda 30 menit (batas laju platform);
+ *   lain  → video itu saja dilewati sampai selang tingkatnya lewat
+ *           (minimal 1 jam, maksimal 24 jam).
  */
-function siapkanLaporan(l: BarisLaporan, ctx: Konteks, urlAsli?: string | null): ItemLaporan | null | "tunda" {
-  if (l.tvrku_post_id != null && Number(l.tvrku_post_id) > 0) return null; // ditangani jalur unggahan
-  if (!ctx.kategori.has(String(l.keyword ?? "").trim().toUpperCase())) return null;
-  const platform = platformApp(String(l.platform ?? ""));
-  const dilaporkan = String(l.url_video ?? "");
-  if (!platformDidukung(platform) || !dilaporkan) return null;
-  let url = dilaporkan;
-  let kodeAlias: string | null = null;
-  if (adalahTautanPendek(platform, dilaporkan)) {
-    if (urlAsli === undefined) return "tunda";
-    if (!urlAsli) return null;
-    url = urlAsli;
-    kodeAlias = kodeMetrik(platform, dilaporkan);
+function catatGalat(s: Simpanan, hasil: HasilAkun, akun: string, kode: string | null, pesan: string, selangMs: number) {
+  const kini = Date.now();
+  catatAkun(hasil, akun, false, pesan);
+  const jenis = golonganGalat(pesan);
+  if (jenis === "akun") {
+    s.akun[akun] = { jeda: kini + 6 * JAM, alasan: pesan.slice(0, 160) };
+  } else if (jenis === "batas") {
+    s.akun[akun] = { jeda: kini + 30 * 60_000, alasan: pesan.slice(0, 160) };
   }
-  const kode = kodeMetrik(platform, url);
-  if (!kode) return null;
-  // Facebook: hanya ID video angka yang bisa dicocokkan dengan daftar media.
-  if (platform === "facebook" && !/^fb_\d{6,}$/.test(kode)) return null;
-  const pelapor = Number(l.user_id);
-  const nama = akunDariTautan(platform, url);
-  let pemilik = 0;
-  if (nama) {
-    // Alamat menyebut akunnya: pemiliknya harus anggota yang akunnya
-    // tersambung — bukan sekadar si pelapor (video bisa milik orang lain).
-    pemilik = ctx.pemilikAkun.get(`${platform}|${nama.toLowerCase()}`) ?? 0;
-  } else if (ctx.tersambung.has(`${pelapor}|${platform}`)) {
-    pemilik = pelapor;
-  }
-  const profil = pemilik ? ctx.profilPer.get(pemilik) : undefined;
-  if (!pemilik || !profil) return null;
-  return { laporan: l, kode, kodeAlias: kodeAlias && kodeAlias !== kode ? kodeAlias : null, url, platform, pemilik, profil };
+  if (kode) s.gagal[kode] = kini + Math.min(24 * JAM, Math.max(JAM, selangMs * 2));
 }
 
-async function kerjakanLaporan(
-  it: ItemLaporan,
+/** Akun yang ≥ 4 kali gagal tanpa satu pun berhasil di putaran ini → jeda 6 jam. */
+function jedaAkunGagalBeruntun(s: Simpanan, hasil: HasilAkun) {
+  const kini = Date.now();
+  for (const [akun, h] of hasil) {
+    if (h.ok === 0 && h.gagal >= 4 && !(s.akun[akun]?.jeda > kini)) {
+      s.akun[akun] = { jeda: kini + 6 * JAM, alasan: `gagal beruntun: ${h.pesan}`.slice(0, 160) };
+    }
+  }
+}
+
+function akunDijeda(s: Simpanan, akun: string): boolean {
+  return (s.akun[akun]?.jeda ?? 0) > Date.now();
+}
+
+// ------------------------------------------------------------
+// Bagian 2: unggahan SuperApp (request_id → semua platform sekaligus)
+// ------------------------------------------------------------
+
+type BarisUnggahan = {
+  id: number | string;
+  user_id: number | string;
+  judul: string | null;
+  request_id: string | null;
+  jadwal: string | null;
+  dibuat_pada: string;
+};
+
+const POLA_REQUEST_UP = /^[0-9a-f]{32}$/i;
+
+export type HasilSatuUnggahan = {
+  post_id: number;
+  profil: string;
+  judul: string;
+  per_platform: { platform: string; status: string; galat: string; tayangan: number | null; post_url: string }[];
+  tersimpan: number;
+};
+
+type Bantu = { simpanan: Simpanan; hasilAkun: HasilAkun; petaBaru: Map<string, Record<string, string>> };
+
+/**
+ * Tanya SATU unggahan ke upload-post. "tunda" hanya bila ditolak karena
+ * kuota; galat lain (dihapus, token kedaluwarsa) = selesai.
+ */
+async function kerjakanUnggahan(
+  p: BarisUnggahan,
   ctx: Konteks,
   ctrl: Pengendali,
   draf: DraftBaris[],
-  catat: { terisi: number; galat: number; dilewati: number },
-): Promise<HasilItem> {
-  const url = it.url;
-  let ppid: string | null = idPlatformDariUrl(it.platform, idVideo(it.platform, url));
-  if (!ppid && perluDaftarMedia(it.platform)) {
-    const r = await idMediaUntuk(it.profil, it.platform, it.kode, ctrl);
-    if (r === "tunda") return "tunda";
-    ppid = r;
-  }
-  // Facebook: daftar media upload-post sering kosong, padahal analitiknya
-  // menerima ID reel/video langsung (diverifikasi 26 Sep 2026). Video yang
-  // bukan milik Page tersambung membuat upload-post menggantung → batas
-  // waktu dipendekkan.
-  let batasMs = 30_000;
-  if (!ppid && it.platform === "facebook" && /^fb_\d{6,}$/.test(it.kode)) {
-    ppid = it.kode.slice(3);
-    batasMs = 20_000;
-  }
-  if (!ppid) {
-    catat.dilewati += 1;
-    return "selesai";
-  }
-  if (!ctrl.ambil(15_000)) return "tunda";
+  catat: Catatan,
+  bantu: Bantu | null,
+  selangMs: number,
+): Promise<{ hasil: "selesai" | "tunda"; jawaban?: JawabanLive; galat?: string }> {
+  const rid = String(p.request_id ?? "").trim();
+  if (!POLA_REQUEST_UP.test(rid)) return { hasil: "selesai" };
+  if (p.jadwal && Date.parse(String(p.jadwal)) > Date.now()) return { hasil: "selesai" };
+  // Satu unggahan = semua platform sekaligus (biasanya 3–10 dtk; Facebook
+  // yang lambat bisa lebih lama) → hanya dimulai bila waktunya lapang.
+  if (!(await ctrl.izin(40_000))) return { hasil: "tunda" };
+  const uid = Number(p.user_id) || null;
   try {
-    const { jawaban, batas } = await analitikPostAsliUp(ppid, it.platform, it.profil, ctrl.batasPanggilan(batasMs));
+    const { jawaban, batas } = await analitikPostLiveUp(rid, ctrl.batasPanggilan(45_000));
+    ctrl.catatBatas(batas);
+    for (const b of jawaban.blok) {
+      const akunKunci = `${uid}|${b.platform}`;
+      if (b.status === "tidak_terbit") continue;
+      if (b.status === "galat") {
+        catat.galat += 1;
+        if (bantu && uid) catatGalat(bantu.simpanan, bantu.hasilAkun, akunKunci, null, b.galat, selangMs);
+        continue;
+      }
+      const d = drafDariBlok(b, {
+        user_id: uid,
+        akun: uid ? (ctx.akunUser.get(akunKunci) ?? "") : "",
+        judul: jawaban.judul || String(p.judul ?? ""),
+        waktu: jawaban.waktu_unggah ?? (p.jadwal ? String(p.jadwal) : String(p.dibuat_pada)),
+      });
+      if (!d) continue;
+      draf.push(d);
+      catat.terisi += 1;
+      if (bantu && uid) {
+        catatAkun(bantu.hasilAkun, akunKunci, true);
+        // ID media Instagram/Threads/Facebook dari jawaban ini → peta
+        // akunnya, supaya penyegaran per video nanti tidak perlu mencari.
+        const profil = ctx.profilPer.get(uid);
+        if (profil && b.platform_post_id && perluDaftarMedia(b.platform)) {
+          const kunciPeta = `${profil}|${b.platform}`;
+          const peta = bantu.petaBaru.get(kunciPeta) ?? {};
+          peta[d.kode] = b.platform_post_id;
+          bantu.petaBaru.set(kunciPeta, peta);
+        }
+      }
+    }
+    if (bantu) bantu.simpanan.unggah[String(p.id)] = Date.now();
+    return { hasil: "selesai", jawaban };
+  } catch (e) {
+    const pesan = e instanceof Error ? e.message : String(e);
+    if (ctrl.tanganiGalat(e)) return { hasil: "tunda", galat: pesan };
+    catat.galat += 1;
+    // Tanpa jawaban sama sekali: jangan ditanya lagi sebelum selangnya lewat.
+    if (bantu) bantu.simpanan.unggah[String(p.id)] = Date.now();
+    return { hasil: "selesai", galat: pesan };
+  }
+}
+
+async function segarkanUnggahan(
+  db: Db,
+  ctx: Konteks,
+  ctrl: Pengendali,
+  draf: DraftBaris[],
+  catat: Catatan,
+  bantu: Bantu,
+  tingkat: "hari_ini" | "kemarin",
+  simpanBerkala: () => Promise<void>,
+) {
+  if (!ctrl.bolehLanjut(40_000)) return;
+  const kini = Date.now();
+  const awal = awalHariWib(kini);
+  const dari = tingkat === "hari_ini" ? awal : awal - 86_400_000;
+  const sampai = tingkat === "hari_ini" ? kini + 86_400_000 : awal;
+  const selang = tingkat === "hari_ini" ? 15 * 60_000 : JAM;
+  const { data, error } = await db
+    .from("tvrku_post")
+    .select("id, user_id, judul, request_id, jadwal, dibuat_pada")
+    .gte("dibuat_pada", new Date(dari).toISOString())
+    .lt("dibuat_pada", new Date(sampai).toISOString())
+    .not("request_id", "is", null)
+    .order("dibuat_pada", { ascending: false })
+    .limit(2000);
+  if (error) {
+    console.error("[metrik-video] baca unggahan:", error.message);
+    return;
+  }
+  const antre = ((data ?? []) as BarisUnggahan[]).filter((p) => {
+    if (!POLA_REQUEST_UP.test(String(p.request_id ?? ""))) return false;
+    if (p.jadwal && Date.parse(String(p.jadwal)) > kini) return false;
+    if (kini - Date.parse(String(p.dibuat_pada)) < UMUR_MIN_UNGGAHAN_MS) return false;
+    const terakhir = bantu.simpanan.unggah[String(p.id)] ?? 0;
+    return kini - terakhir >= selang;
+  });
+  // Yang paling lama tidak disegarkan duluan.
+  antre.sort((a, b) => (bantu.simpanan.unggah[String(a.id)] ?? 0) - (bantu.simpanan.unggah[String(b.id)] ?? 0));
+  await jalankanAntre(
+    antre,
+    async (p) => {
+      await kerjakanUnggahan(p, ctx, ctrl, draf, catat, bantu, selang);
+      await simpanBerkala();
+    },
+    ctrl,
+    40_000,
+  );
+}
+
+// ------------------------------------------------------------
+// Bagian 3: per video, urut tingkat (hari ini → kemarin → pekan → lama)
+// ------------------------------------------------------------
+
+type ItemVideo = {
+  kode: string;
+  /** Kode video ASLI (baris link pendek menyimpan alamat aslinya). */
+  kodeAsli: string;
+  platform: string;
+  uid: number;
+  profil: string;
+  akun: string;
+  url: string;
+};
+
+type BarisKandidat = { kode: string; platform: string; user_id: number | string | null; url: string; diperbarui_pada: string };
+
+async function kandidatTingkat(db: Db, t: Tingkat, setelah: BarisKandidat | null): Promise<BarisKandidat[]> {
+  let q = db
+    .from("tvr_video_metrik")
+    .select("kode, platform, user_id, url, diperbarui_pada")
+    .not("user_id", "is", null)
+    .lt("diperbarui_pada", t.basiSebelum);
+  if (t.dari) q = q.gte("waktu_posting", t.dari);
+  if (t.sampai) q = t.tanpaWaktu ? q.or(`waktu_posting.lt."${t.sampai}",waktu_posting.is.null`) : q.lt("waktu_posting", t.sampai);
+  if (setelah) {
+    // Lanjutan (keyset) setelah baris terakhir jendela sebelumnya.
+    q = q.or(`diperbarui_pada.gt."${setelah.diperbarui_pada}",and(diperbarui_pada.eq."${setelah.diperbarui_pada}",kode.gt."${setelah.kode}")`);
+  }
+  const { data, error } = await q
+    .order("diperbarui_pada", { ascending: true })
+    .order("kode", { ascending: true })
+    .limit(JENDELA_TINGKAT);
+  if (error) {
+    console.error("[metrik-video] kandidat", t.nama, error.message);
+    return [];
+  }
+  return (data ?? []) as BarisKandidat[];
+}
+
+async function kerjakanVideo(
+  it: ItemVideo,
+  ctx: Konteks,
+  ctrl: Pengendali,
+  draf: DraftBaris[],
+  catat: Catatan,
+  bantu: Bantu,
+  hasilPutaran: Map<string, DraftBaris>,
+  selangMs: number,
+): Promise<void> {
+  // Link pendek yang video aslinya sudah ditarik di putaran ini → salin.
+  const sudah = hasilPutaran.get(it.kodeAsli);
+  if (sudah) {
+    if (it.kode !== it.kodeAsli) draf.push({ ...sudah, kode: it.kode });
+    return;
+  }
+  let ppid: string | null = idPlatformDariUrl(it.platform, idVideo(it.platform, it.url));
+  if (!ppid && perluDaftarMedia(it.platform)) {
+    const peta = await bacaPetaMedia(`${it.profil}|${it.platform}`);
+    ppid = peta?.[it.kodeAsli] ?? null;
+  }
+  // Facebook: analitiknya menerima ID reel/video/postingan langsung
+  // (diverifikasi 26 Sep 2026) walau daftar medianya sering kosong.
+  if (!ppid && it.platform === "facebook" && /^fb_\d{6,}$/.test(it.kodeAsli)) ppid = it.kodeAsli.slice(3);
+  if (!ppid) {
+    // Instagram/Threads butuh ID media dari daftar media akunnya. Katalog
+    // akun yang belum lengkap → coba lagi nanti; yang sudah lengkap tapi
+    // tidak memuat video ini → video di luar jangkauan (dilewati sehari).
+    const k = bantu.simpanan.katalog[`${it.uid}|${it.platform}`];
+    bantu.simpanan.gagal[it.kode] = Date.now() + (k?.selesai ? 24 * JAM : 2 * JAM);
+    catat.dilewati += 1;
+    return;
+  }
+  if (!(await ctrl.izin(12_000, it.akun))) return;
+  try {
+    const { jawaban, batas } = await analitikPostAsliUp(
+      ppid,
+      it.platform,
+      it.profil,
+      ctrl.batasPanggilan(it.platform === "facebook" ? 20_000 : 30_000),
+    );
     ctrl.catatBatas(batas);
     const blok = jawaban.blok.find((b) => b.platform === it.platform) ?? jawaban.blok[0];
     const d = blok
       ? drafDariBlok(blok, {
-          kodeDikenal: it.kode,
-          urlCadangan: url,
-          user_id: it.pemilik,
-          akun: ctx.akunUser.get(`${it.pemilik}|${it.platform}`) ?? "",
+          kodeDikenal: it.kodeAsli,
+          urlCadangan: it.url,
+          user_id: it.uid,
+          akun: ctx.akunUser.get(it.akun) ?? "",
           judul: jawaban.judul,
-          waktu: jawaban.waktu_unggah,
+          waktu: null,
         })
       : null;
     if (d) {
       draf.push(d);
-      // Salinan di bawah kode link pendek yang dilaporkan, dengan alamat
-      // asli — kartu laporan itu langsung berangka.
-      if (it.kodeAlias) draf.push({ ...d, kode: it.kodeAlias });
+      if (it.kode !== it.kodeAsli) draf.push({ ...d, kode: it.kode });
+      hasilPutaran.set(it.kodeAsli, d);
       catat.terisi += 1;
+      catatAkun(bantu.hasilAkun, it.akun, true);
     } else {
       catat.galat += 1;
+      catatGalat(bantu.simpanan, bantu.hasilAkun, it.akun, it.kode, blok?.galat || "tanpa angka", selangMs);
     }
-    return "selesai";
   } catch (e) {
-    if (ctrl.tanganiGalat(e)) return "tunda";
+    if (ctrl.tanganiGalat(e)) return;
     catat.galat += 1;
-    return "selesai";
+    catatGalat(bantu.simpanan, bantu.hasilAkun, it.akun, it.kode, e instanceof Error ? e.message : String(e), selangMs);
   }
 }
 
-// ------------------------------------------------------------
-// Penggerak jalur
-// ------------------------------------------------------------
-
-/**
- * Kerjakan daftar item berurutan dalam kelompok PARALEL. Mengembalikan
- * hasil per item (sejajar). Item setelah berhenti = "tunda".
- */
-async function kerjakanKelompok<T>(
-  items: T[],
-  kerja: (t: T) => Promise<HasilItem>,
-  ctrl: Pengendali,
-): Promise<HasilItem[]> {
-  const hasil: HasilItem[] = new Array(items.length).fill("tunda");
-  for (let i = 0; i < items.length; i += PARALEL) {
-    if (ctrl.berhenti || ctrl.sisaWaktu() < 8_000) break;
-    const kelompok = items.slice(i, i + PARALEL);
-    const r = await Promise.all(kelompok.map((t) => kerja(t)));
-    r.forEach((h, j) => (hasil[i + j] = h));
-    // Kuota jalur habis → sisa item tidak akan mendapat jatah.
-    if (ctrl.sisaPermintaan <= 0 && r.some((h) => h === "tunda")) break;
-  }
-  return hasil;
-}
-
-/** id terakhir dari awalan item yang "selesai" berturut-turut; null bila tak ada. */
-function ujungSelesai<T extends { id: number | string }>(items: T[], hasil: HasilItem[]): number | null {
-  let ujung: number | null = null;
-  for (let i = 0; i < items.length; i++) {
-    if (hasil[i] !== "selesai") break;
-    ujung = Number(items[i].id);
-  }
-  return ujung;
-}
-
-type Catatan = { terisi: number; galat: number; dilewati: number };
-
-/** Satu jalur UNGGAHAN (segar: menaik di atas batas_atas; utama: menurun). */
-async function jalurUnggahan(
+async function segarkanTingkat(
   db: Db,
-  jalur: JalurSiklus,
-  segar: boolean,
   ctx: Konteks,
   ctrl: Pengendali,
   draf: DraftBaris[],
   catat: Catatan,
-): Promise<JalurSiklus> {
-  let j = jalur;
-  for (let putar = 0; putar < 20; putar++) {
-    if (ctrl.berhenti || ctrl.sisaPermintaan <= 0 || ctrl.sisaWaktu() < 8_000) break;
-    if (!segar && (j.habis || batasUtama(j) < 1)) {
-      j = { ...j, habis: true };
-      break;
+  bantu: Bantu,
+  hasilPutaran: Map<string, DraftBaris>,
+  t: Tingkat,
+  simpanBerkala: () => Promise<void>,
+) {
+  let setelah: BarisKandidat | null = null;
+  for (let jendela = 0; jendela < MAKS_JENDELA_TINGKAT; jendela++) {
+    if (!ctrl.bolehLanjut(12_000)) return;
+    const baris = await kandidatTingkat(db, t, setelah);
+    if (baris.length === 0) return;
+    setelah = baris[baris.length - 1];
+    const kini = Date.now();
+    const items: ItemVideo[] = [];
+    for (const b of baris) {
+      const uid = Number(b.user_id);
+      const platform = platformApp(String(b.platform ?? ""));
+      const profil = ctx.profilPer.get(uid);
+      const akun = `${uid}|${platform}`;
+      if (!profil || !platformDidukung(platform)) continue;
+      if (akunDijeda(bantu.simpanan, akun) || (bantu.simpanan.gagal[b.kode] ?? 0) > kini) continue;
+      if (ctrl.akunPenuh(akun)) continue;
+      const kodeAsli = kodeMetrik(platform, String(b.url ?? "")) ?? b.kode;
+      items.push({ kode: b.kode, kodeAsli, platform, uid, profil, akun, url: String(b.url ?? "") });
     }
-    let q = db
-      .from("tvrku_post")
-      .select("id, user_id, judul, request_id, jadwal, dibuat_pada")
-      .not("request_id", "is", null);
-    q = segar
-      ? q.gt("id", j.kursor_segar).order("id", { ascending: true })
-      : q.lte("id", batasUtama(j)).order("id", { ascending: false });
-    const { data, error } = await q.limit(JENDELA);
-    if (error) {
-      console.error("[metrik-video] baca unggahan:", error.message);
-      break;
-    }
-    let baris = (data ?? []) as BarisUnggahan[];
-    if (segar) {
-      // Unggahan yang terlalu muda menghentikan jalur segar (urut naik):
-      // yang di belakangnya pasti lebih muda lagi.
-      const batasMuda = Date.now() - UMUR_MIN_UNGGAHAN_MS;
-      const i = baris.findIndex((b) => Date.parse(String(b.dibuat_pada)) > batasMuda);
-      if (i >= 0) baris = baris.slice(0, i);
-    }
-    if (baris.length === 0) {
-      if (!segar) j = majukanUtama(j, null, true);
-      break;
-    }
-    const hasil = await kerjakanKelompok(
-      baris,
-      async (p) => (await kerjakanUnggahan(p, ctx, ctrl, draf, catat)).hasil,
+    const urut = selangSeling(items, (x) => x.akun, MAKS_PER_AKUN_PUTARAN);
+    await jalankanAntre(
+      urut,
+      async (it) => {
+        await kerjakanVideo(it, ctx, ctrl, draf, catat, bantu, hasilPutaran, t.selangMs);
+        await simpanBerkala();
+      },
       ctrl,
+      12_000,
     );
-    const ujung = ujungSelesai(baris, hasil);
-    const semuaSelesai = hasil.every((h) => h === "selesai");
-    if (segar) {
-      j = majukanSegar(j, ujung);
-    } else {
-      j = majukanUtama(j, ujung, semuaSelesai && (data ?? []).length < JENDELA);
-    }
-    if (!semuaSelesai) break;
+    if (baris.length < JENDELA_TINGKAT) return;
   }
-  return j;
 }
 
-/** Satu jalur LAPORAN berkategori. */
-async function jalurLaporan(
-  db: Db,
-  jalur: JalurSiklus,
-  segar: boolean,
-  siklusMulai: string,
-  ctx: Konteks,
-  ctrl: Pengendali,
-  draf: DraftBaris[],
-  catat: Catatan,
-  sudahKode: Set<string>,
-): Promise<JalurSiklus> {
-  let j = jalur;
-  for (let putar = 0; putar < 30; putar++) {
-    if (ctrl.berhenti || ctrl.sisaWaktu() < 8_000) break;
-    if (!segar && (j.habis || batasUtama(j) < 1)) {
-      j = { ...j, habis: true };
-      break;
-    }
-    let q = db
+// ------------------------------------------------------------
+// Bagian 1a: katalog dari laporan_video (murah, tanpa kuota upload-post)
+// ------------------------------------------------------------
+
+type BarisLaporan = {
+  id: number | string;
+  user_id: number | string;
+  platform: string;
+  url_video: string;
+  tanggal_wib: string | null;
+  dibuat_pada: string | null;
+  sumber: string | null;
+  tvrku_post_id: number | string | null;
+};
+
+/** Pemilik video sebuah laporan (user_id) — 0 bila tidak bisa ditanyakan ke upload-post. */
+function pemilikLaporan(l: BarisLaporan, platform: string, url: string, ctx: Konteks): number {
+  const pelapor = Number(l.user_id);
+  // Laporan otomatis & tautan unggahan berasal dari akun tertaut orang itu sendiri.
+  if (l.sumber === "otomatis" || (l.tvrku_post_id != null && Number(l.tvrku_post_id) > 0)) {
+    return ctx.profilPer.has(pelapor) ? pelapor : 0;
+  }
+  const nama = akunDariTautan(platform, url);
+  if (nama) return ctx.pemilikAkun.get(`${platform}|${nama.toLowerCase()}`) ?? 0;
+  return ctx.tersambung.has(`${pelapor}|${platform}`) && ctx.profilPer.has(pelapor) ? pelapor : 0;
+}
+
+async function kenaliDariLaporan(db: Db, ctx: Konteks, status: StatusPenyegar, catat: Catatan, tenggat: number) {
+  let kursor = status.kursor_laporan;
+  for (let halaman = 0; halaman * 1000 < MAKS_LAPORAN_PUTARAN; halaman++) {
+    if (Date.now() > tenggat) break;
+    const { data, error } = await db
       .from("laporan_video")
-      .select("id, user_id, platform, url_video, keyword, tvrku_post_id")
-      .not("keyword", "is", null);
-    q = segar
-      ? q.gt("id", j.kursor_segar).order("id", { ascending: true })
-      : q.lte("id", batasUtama(j)).order("id", { ascending: false });
-    const { data, error } = await q.limit(JENDELA);
+      .select("id, user_id, platform, url_video, tanggal_wib, dibuat_pada, sumber, tvrku_post_id")
+      .gt("id", kursor)
+      .order("id", { ascending: true })
+      .limit(1000);
     if (error) {
       console.error("[metrik-video] baca laporan:", error.message);
       break;
     }
     const baris = (data ?? []) as BarisLaporan[];
-    if (baris.length === 0) {
-      if (!segar) j = majukanUtama(j, null, true);
-      break;
+    if (baris.length === 0) break;
+    // Link pendek diurai dulu (4 bersamaan, diingat 30 hari).
+    const asli = new Map<string, string | null>();
+    const pendek = baris.filter((l) => adalahTautanPendek(platformApp(String(l.platform ?? "")), String(l.url_video ?? "")));
+    let terpotong = -1;
+    for (let i = 0; i < pendek.length; i += 4) {
+      if (Date.now() > tenggat) {
+        terpotong = Number(pendek[i].id);
+        break;
+      }
+      const kelompok = pendek.slice(i, i + 4);
+      const r = await Promise.all(kelompok.map((l) => alamatAsli(platformApp(String(l.platform ?? "")), String(l.url_video ?? ""))));
+      kelompok.forEach((l, j) => asli.set(String(l.id), r[j]));
     }
-    // Link pendek diurai dulu (tanpa kuota upload-post). Video yang sudah
-    // disegarkan siklus ini (oleh jalur unggahan atau laporan lain atas
-    // video yang sama) tidak ditanya lagi.
-    const asli = await uraiPendekJendela(baris, ctrl);
-    const siap = baris.map((l) => siapkanLaporan(l, ctx, asli.has(String(l.id)) ? asli.get(String(l.id)) : undefined));
-    const itemSiap = siap.filter((x): x is ItemLaporan => x !== null && x !== "tunda");
-    const kodeCek = [
-      ...new Set(itemSiap.flatMap((x) => (x.kodeAlias ? [x.kode, x.kodeAlias] : [x.kode]))),
-    ].filter((k) => !sudahKode.has(k));
-    if (kodeCek.length > 0) {
-      const { data: segarData } = await db
-        .from("tvr_video_metrik")
-        .select("kode, diperbarui_pada")
-        .in("kode", kodeCek)
-        .gte("diperbarui_pada", siklusMulai);
-      for (const m of segarData ?? []) sudahKode.add(String(m.kode));
+    const katalog: BarisKatalog[] = [];
+    let terakhir = kursor;
+    for (const l of baris) {
+      if (terpotong >= 0 && Number(l.id) >= terpotong) break;
+      terakhir = Number(l.id);
+      const platform = platformApp(String(l.platform ?? ""));
+      const dilaporkan = String(l.url_video ?? "");
+      if (!platformDidukung(platform) || !dilaporkan) continue;
+      const pendekIni = adalahTautanPendek(platform, dilaporkan);
+      const url = pendekIni ? asli.get(String(l.id)) : dilaporkan;
+      if (!url) continue;
+      const kode = kodeMetrik(platform, url);
+      if (!kode) continue;
+      const pemilik = pemilikLaporan(l, platform, url, ctx);
+      if (!pemilik) continue;
+      const akun = ctx.akunUser.get(`${pemilik}|${platform}`) ?? akunDariTautan(platform, url) ?? "";
+      const dasar: BarisKatalog = {
+        kode,
+        platform,
+        akun_username: akun,
+        user_id: pemilik,
+        url: kanonikTautan(platform, url, akun || null),
+        judul: "",
+        thumbnail_url: "",
+        waktu_posting: waktuDariLaporan(l.tanggal_wib, l.dibuat_pada),
+      };
+      katalog.push(dasar);
+      // Link pendek punya barisnya sendiri (kode link pendek, alamat asli)
+      // supaya kartu laporannya langsung ikut berangka.
+      const alias = pendekIni ? kodeMetrik(platform, dilaporkan) : null;
+      if (alias && alias !== kode) katalog.push({ ...dasar, kode: alias });
     }
-    // Tanpa kuota tersisa, jendela tetap disaring: laporan yang memang
-    // tidak butuh permintaan boleh dilewati kursornya.
-    const hasil = await kerjakanKelompok(
-      baris.map((l, i) => ({ l, it: siap[i] })),
-      async ({ it }) => {
-        if (it === "tunda") return "tunda";
-        if (!it) {
-          catat.dilewati += 1;
-          return "selesai";
+    catat.ditemukan += await gabungKatalog(db, katalog, ctx.kolom, false);
+    kursor = terakhir;
+    status.kursor_laporan = kursor;
+    if (terpotong >= 0 || baris.length < 1000) break;
+  }
+}
+
+// ------------------------------------------------------------
+// Bagian 1b: katalog dari daftar media tiap akun
+// ------------------------------------------------------------
+
+/** Satu halaman daftar media satu akun → katalog + peta ID media. */
+async function kenaliHalamanAkun(
+  db: Db,
+  a: AkunTersambung,
+  cursor: string | null,
+  ctx: Konteks,
+  ctrl: Pengendali,
+  bantu: Bantu,
+  catat: Catatan,
+): Promise<{ ok: boolean; dicoba: boolean; next: string | null; jumlah: number }> {
+  if (!(await ctrl.izin(15_000, a.kunci))) return { ok: false, dicoba: false, next: cursor, jumlah: 0 };
+  try {
+    const r = await daftarMediaUp(a.profil, a.platform, { limit: 100, cursor, timeoutMs: ctrl.batasPanggilan(25_000) });
+    ctrl.catatBatas(r.batas);
+    catat.halaman += 1;
+    // Sukses membaca daftar TIDAK dihitung "akun sehat": akun X yang
+    // daftarnya terbaca tapi analitiknya 401 tetap harus bisa dijeda.
+    const katalog: BarisKatalog[] = [];
+    const peta: Record<string, string> = {};
+    for (const m of r.media) {
+      if (!m.permalink || !adalahMediaVideo(a.platform, m.jenis)) continue;
+      const kode = kodeMetrik(a.platform, m.permalink);
+      if (!kode) continue;
+      if (m.id) peta[kode] = m.id;
+      katalog.push({
+        kode,
+        platform: a.platform,
+        akun_username: a.username,
+        user_id: a.uid,
+        url: kanonikTautan(a.platform, m.permalink, a.username || null),
+        judul: m.caption.slice(0, 300),
+        thumbnail_url: m.thumbnail,
+        waktu_posting: m.waktu,
+      });
+    }
+    if (perluDaftarMedia(a.platform)) await tambahPetaMedia(`${a.profil}|${a.platform}`, peta);
+    catat.ditemukan += await gabungKatalog(db, katalog, ctx.kolom, true);
+    return { ok: true, dicoba: true, next: r.media.length > 0 ? r.next_cursor : null, jumlah: katalog.length };
+  } catch (e) {
+    if (ctrl.tanganiGalat(e)) return { ok: false, dicoba: false, next: cursor, jumlah: 0 };
+    catat.galat += 1;
+    catatGalat(bantu.simpanan, bantu.hasilAkun, a.kunci, null, e instanceof Error ? e.message : String(e), JAM);
+    return { ok: false, dicoba: true, next: cursor, jumlah: 0 };
+  }
+}
+
+/** Halaman pertama tiap akun sekali per jam: video yang baru terbit. */
+async function kenaliVideoBaru(db: Db, ctx: Konteks, ctrl: Pengendali, bantu: Bantu, catat: Catatan) {
+  const kini = Date.now();
+  const s = bantu.simpanan;
+  const antre = ctx.akun
+    .filter((a) => !akunDijeda(s, a.kunci) && kini - (s.katalog[a.kunci]?.baru ?? 0) >= CEK_BARU_MS)
+    .sort((x, y) => (s.katalog[x.kunci]?.baru ?? 0) - (s.katalog[y.kunci]?.baru ?? 0))
+    .slice(0, MAKS_HALAMAN_BARU);
+  await jalankanAntre(
+    antre,
+    async (a) => {
+      const r = await kenaliHalamanAkun(db, a, null, ctx, ctrl, bantu, catat);
+      if (r.ok) s.katalog[a.kunci] = { ...(s.katalog[a.kunci] ?? {}), baru: Date.now() };
+    },
+    ctrl,
+    15_000,
+  );
+}
+
+/** Isi katalog: mundur halaman demi halaman sampai video terlama tiap akun. */
+async function isiKatalogAkun(db: Db, ctx: Konteks, ctrl: Pengendali, bantu: Bantu, catat: Catatan) {
+  const kini = Date.now();
+  const s = bantu.simpanan;
+  const perlu = ctx.akun.filter((a) => {
+    if (akunDijeda(s, a.kunci)) return false;
+    const k = s.katalog[a.kunci];
+    return !k?.selesai || kini - k.selesai >= ULANG_ISI_MS;
+  });
+  // Bergiliran satu halaman per akun, maks MAKS_HALAMAN_ISI per putaran.
+  let sisaHalaman = MAKS_HALAMAN_ISI;
+  let putar = perlu;
+  while (sisaHalaman > 0 && putar.length > 0 && ctrl.bolehLanjut(15_000)) {
+    const giliran = putar.slice(0, sisaHalaman);
+    sisaHalaman -= giliran.length;
+    const lanjut: AkunTersambung[] = [];
+    await jalankanAntre(
+      giliran,
+      async (a) => {
+        const k0 = s.katalog[a.kunci] ?? {};
+        // Katalog yang sudah lengkap tapi waktunya diulang: mulai dari awal.
+        const k: KatalogAkun = k0.selesai ? { baru: k0.baru, cursor: null, halaman: 0, video: 0 } : k0;
+        const r = await kenaliHalamanAkun(db, a, k.halaman ? (k.cursor ?? null) : null, ctx, ctrl, bantu, catat);
+        if (!r.ok) {
+          // Tidak sempat dicoba (kuota/jatah akun) → lanjut putaran depan
+          // dari halaman yang sama. Gagal sungguhan 3× → ulang dari awal
+          // (cursor upload-post bisa kedaluwarsa).
+          if (r.dicoba) {
+            const gagal = (k.gagal ?? 0) + 1;
+            s.katalog[a.kunci] = gagal >= 3 ? { ...k, cursor: null, halaman: 0, gagal: 0 } : { ...k, gagal };
+          }
+          return;
         }
-        if (sudahKode.has(it.kode) && (!it.kodeAlias || sudahKode.has(it.kodeAlias))) {
-          catat.dilewati += 1;
-          return "selesai";
-        }
-        const h = await kerjakanLaporan(it, ctx, ctrl, draf, catat);
-        if (h === "selesai") {
-          sudahKode.add(it.kode);
-          if (it.kodeAlias) sudahKode.add(it.kodeAlias);
-        }
-        return h;
+        const halaman = (k.halaman ?? 0) + 1;
+        const selesai = !r.next || halaman >= MAKS_HALAMAN_AKUN;
+        s.katalog[a.kunci] = {
+          ...k,
+          halaman: selesai ? 0 : halaman,
+          cursor: selesai ? null : r.next,
+          video: (k.video ?? 0) + r.jumlah,
+          selesai: selesai ? Date.now() : undefined,
+          gagal: 0,
+        };
+        if (!selesai) lanjut.push(a);
       },
       ctrl,
+      15_000,
     );
-    const ujung = ujungSelesai(baris, hasil);
-    const semuaSelesai = hasil.every((h) => h === "selesai");
-    if (segar) {
-      j = majukanSegar(j, ujung);
-    } else {
-      j = majukanUtama(j, ujung, semuaSelesai && baris.length < JENDELA);
-    }
-    if (!semuaSelesai) break;
+    putar = lanjut;
   }
-  return j;
 }
 
 // ------------------------------------------------------------
@@ -970,120 +1329,165 @@ async function jalurLaporan(
 export type RingkasanPutaran = {
   jalan: boolean;
   alasan?: string;
-  siklus?: number;
-  siklus_baru?: boolean;
-  siklus_selesai?: boolean;
   diminta: number;
   terisi: number;
   tersimpan: number;
   galat: number;
   dilewati: number;
+  ditemukan: number;
+  halaman: number;
   jeda_sampai?: string | null;
   sisa_kuota?: number | null;
+  menunggu?: Record<NamaTingkat, number> | null;
   durasi_ms: number;
-  /** Hanya mode uji kering: baris yang AKAN disimpan + status siklus. */
-  uji?: { baris: DraftBaris[]; siklus: SiklusMetrik };
+  /** Hanya mode uji kering: baris yang AKAN disimpan. */
+  uji?: { baris: DraftBaris[] };
 };
 
-async function idTerbesar(db: Db, tabel: "tvrku_post" | "laporan_video"): Promise<number> {
-  let q = db.from(tabel).select("id").order("id", { ascending: false }).limit(1);
-  if (tabel === "laporan_video") q = q.not("keyword", "is", null);
-  const { data, error } = await q;
-  if (error) return 0;
-  return Number(data?.[0]?.id ?? 0) || 0;
+async function hitungMenunggu(db: Db, kiniMs: number): Promise<Record<NamaTingkat, number>> {
+  const hasil = { hari_ini: 0, kemarin: 0, pekan: 0, lama: 0 } as Record<NamaTingkat, number>;
+  await Promise.all(
+    tingkatKesegaran(kiniMs).map(async (t) => {
+      let q = db
+        .from("tvr_video_metrik")
+        .select("kode", { count: "exact", head: true })
+        .not("user_id", "is", null)
+        .lt("diperbarui_pada", t.basiSebelum);
+      if (t.dari) q = q.gte("waktu_posting", t.dari);
+      if (t.sampai) q = t.tanpaWaktu ? q.or(`waktu_posting.lt."${t.sampai}",waktu_posting.is.null`) : q.lt("waktu_posting", t.sampai);
+      const { count } = await q;
+      hasil[t.nama] = count ?? 0;
+    }),
+  );
+  return hasil;
+}
+
+async function hitungKatalog(db: Db, ctx: Konteks, s: Simpanan): Promise<StatusPenyegar["katalog"]> {
+  const [{ count: video }, { count: belum }] = await Promise.all([
+    db.from("tvr_video_metrik").select("kode", { count: "exact", head: true }).not("user_id", "is", null),
+    db
+      .from("tvr_video_metrik")
+      .select("kode", { count: "exact", head: true })
+      .not("user_id", "is", null)
+      .lt("diperbarui_pada", "2000-01-01T00:00:00Z"),
+  ]);
+  const lengkap = ctx.akun.filter((a) => Boolean(s.katalog[a.kunci]?.selesai)).length;
+  return { video: video ?? 0, berangka: Math.max(0, (video ?? 0) - (belum ?? 0)), akun: ctx.akun.length, akun_lengkap: lengkap };
 }
 
 export async function putaranSegarMetrik(
-  opsi: { anggaranMs?: number; maksPermintaan?: number; ujiKering?: boolean; ujiSiklusBaru?: boolean } = {},
+  opsi: { anggaranMs?: number; maksPermintaan?: number; ujiKering?: boolean } = {},
 ): Promise<RingkasanPutaran> {
   const mulai = Date.now();
-  const kosong: RingkasanPutaran = { jalan: false, diminta: 0, terisi: 0, tersimpan: 0, galat: 0, dilewati: 0, durasi_ms: 0 };
+  const kosong: RingkasanPutaran = {
+    jalan: false,
+    diminta: 0,
+    terisi: 0,
+    tersimpan: 0,
+    galat: 0,
+    dilewati: 0,
+    ditemukan: 0,
+    halaman: 0,
+    durasi_ms: 0,
+  };
   if (!uploadPostSiap()) return { ...kosong, alasan: "upload-post belum tersambung" };
   const kering = opsi.ujiKering === true;
   ujiKeringAktif = kering;
   const db = supabase();
   const lease = kering ? "uji-kering" : await ambilLease(db);
-  if (!lease) return { ...kosong, alasan: "putaran lain masih berjalan", durasi_ms: Date.now() - mulai };
+  if (!lease) {
+    ujiKeringAktif = false;
+    return { ...kosong, alasan: "putaran lain masih berjalan", durasi_ms: Date.now() - mulai };
+  }
   const ujiBaris: DraftBaris[] = [];
   try {
-    const [maksUnggahan, maksLaporan, tersimpan] = await Promise.all([
-      idTerbesar(db, "tvrku_post"),
-      idTerbesar(db, "laporan_video"),
-      bacaNilai(db, KUNCI_SIKLUS),
-    ]);
-    // ujiSiklusBaru (hanya bersama ujiKering): abaikan status tersimpan.
-    const { siklus, baru } = aturSiklus(kering && opsi.ujiSiklusBaru ? null : tersimpan, Date.now(), maksUnggahan, maksLaporan);
-    if (siklus.jeda_sampai && Date.parse(siklus.jeda_sampai) > Date.now()) {
-      if (!kering) await simpanSiklus(db, siklus);
-      return {
-        ...kosong,
-        alasan: "menunggu kuota upload-post pulih",
-        siklus: siklus.nomor,
-        jeda_sampai: siklus.jeda_sampai,
-        durasi_ms: Date.now() - mulai,
-      };
+    const status = bacaStatusTeks(await bacaNilai(db, KUNCI_STATUS));
+    if (status.jeda_sampai && Date.parse(status.jeda_sampai) > Date.now()) {
+      return { ...kosong, alasan: "menunggu kuota upload-post pulih", jeda_sampai: status.jeda_sampai, durasi_ms: Date.now() - mulai };
     }
-    siklus.jeda_sampai = null;
-    const ctx = await muatKonteks(db);
-    const ctrl = new Pengendali(opsi.maksPermintaan ?? MAKS_PERMINTAAN, opsi.anggaranMs ?? ANGGARAN_MS);
-    const catat: Catatan = { terisi: 0, galat: 0, dilewati: 0 };
-    const sudahKode = new Set<string>();
+    status.jeda_sampai = null;
+    const anggaran = opsi.anggaranMs ?? ANGGARAN_MS;
+    const maks = opsi.maksPermintaan ?? Math.floor((MAKS_PER_MENIT * anggaran) / 60_000);
+    const [ctx, simpanan] = await Promise.all([muatKonteks(db), muatSimpanan()]);
+    rapikanSimpanan(simpanan, Date.now());
+    const ctrl = new Pengendali(maks, anggaran);
+    const catat = catatanKosong();
+    const bantu: Bantu = { simpanan, hasilAkun: new Map(), petaBaru: new Map() };
+    const hasilPutaran = new Map<string, DraftBaris>();
     let tersimpanN = 0;
     const draf: DraftBaris[] = [];
-    const simpanSementara = async () => {
-      const potongan = draf.splice(0, draf.length);
-      siklus.terakhir = new Date().toISOString();
-      if (kering) {
-        ujiBaris.push(...potongan);
-        return;
+    let sedangSimpan = false;
+    const simpanDraf = async (paksa: boolean) => {
+      if (sedangSimpan || (!paksa && draf.length < 150)) return;
+      sedangSimpan = true;
+      try {
+        const potongan = draf.splice(0, draf.length);
+        if (kering) ujiBaris.push(...potongan);
+        else tersimpanN += await tulisDraf(db, potongan, ctx.kolom);
+      } finally {
+        sedangSimpan = false;
       }
-      tersimpanN += await tulisDraf(db, potongan, ctx.kolom);
-      await simpanSiklus(db, siklus);
     };
+    const simpanBerkala = () => simpanDraf(false);
+    const tingkat = tingkatKesegaran(Date.now());
+    const [hariIni, kemarin, pekan, lama] = tingkat;
 
-    const kuota = bagiKuota(ctrl.sisaPermintaan);
-    // 1. Video BARU dulu (muncul setelah siklus mulai).
-    ctrl.mulaiJalur(kuota.segar);
-    siklus.unggahan = await jalurUnggahan(db, siklus.unggahan, true, ctx, ctrl, draf, catat);
-    siklus.laporan = await jalurLaporan(db, siklus.laporan, true, siklus.mulai, ctx, ctrl, draf, catat, sudahKode);
-    await simpanSementara();
-    // 2. Laporan berkategori (yang tampil di halaman TV Rakyat Nasional).
-    ctrl.mulaiJalur(Math.max(kuota.utamaLaporan, 0));
-    siklus.laporan = await jalurLaporan(db, siklus.laporan, false, siklus.mulai, ctx, ctrl, draf, catat, sudahKode);
-    await simpanSementara();
-    // 3. Seluruh unggahan SuperApp — memakai semua sisa kuota.
-    ctrl.mulaiJalur(Number.POSITIVE_INFINITY);
-    siklus.unggahan = await jalurUnggahan(db, siklus.unggahan, false, ctx, ctrl, draf, catat);
-    // Laporan utama boleh memakai kuota yang tersisa bila unggahan sudah habis.
-    if (!ctrl.berhenti && ctrl.sisaPermintaan > 0 && !siklus.laporan.habis) {
-      siklus.laporan = await jalurLaporan(db, siklus.laporan, false, siklus.mulai, ctx, ctrl, draf, catat, sudahKode);
-    }
+    // 1a. Video yang baru dilaporkan/tercatat (tanpa kuota upload-post).
+    await kenaliDariLaporan(db, ctx, status, catat, Date.now() + 40_000);
+    // 2 & 3. HARI INI: unggahan SuperApp, lalu seluruh video hari ini.
+    await segarkanUnggahan(db, ctx, ctrl, draf, catat, bantu, "hari_ini", simpanBerkala);
+    // Angka unggahan disimpan dulu: video yang baru disegarkan jalur
+    // unggahan tidak boleh ikut jatuh tempo lalu ditanya dua kali.
+    await simpanDraf(true);
+    await segarkanTingkat(db, ctx, ctrl, draf, catat, bantu, hasilPutaran, hariIni, simpanBerkala);
+    // 1b. Video baru di daftar media akun (halaman pertama, tiap jam).
+    await kenaliVideoBaru(db, ctx, ctrl, bantu, catat);
+    // KEMARIN.
+    await segarkanUnggahan(db, ctx, ctrl, draf, catat, bantu, "kemarin", simpanBerkala);
+    await simpanDraf(true);
+    await segarkanTingkat(db, ctx, ctrl, draf, catat, bantu, hasilPutaran, kemarin, simpanBerkala);
+    // 1c. Isi katalog: video lama tiap akun, halaman demi halaman.
+    await isiKatalogAkun(db, ctx, ctrl, bantu, catat);
+    await simpanDraf(true);
+    // YANG LALU-LALU.
+    await segarkanTingkat(db, ctx, ctrl, draf, catat, bantu, hasilPutaran, pekan, simpanBerkala);
+    await segarkanTingkat(db, ctx, ctrl, draf, catat, bantu, hasilPutaran, lama, simpanBerkala);
 
-    siklus.hitung = {
-      diminta: siklus.hitung.diminta + ctrl.diminta,
-      terisi: siklus.hitung.terisi + catat.terisi,
-      galat: siklus.hitung.galat + catat.galat,
-      dilewati: siklus.hitung.dilewati + catat.dilewati,
+    await simpanDraf(true);
+    for (const [kunci, peta] of bantu.petaBaru) await tambahPetaMedia(kunci, peta);
+    jedaAkunGagalBeruntun(simpanan, bantu.hasilAkun);
+    await simpanSimpanan(simpanan);
+
+    if (ctrl.jedaSampai) status.jeda_sampai = new Date(ctrl.jedaSampai).toISOString();
+    const [menunggu, katalog] = await Promise.all([hitungMenunggu(db, Date.now()), hitungKatalog(db, ctx, simpanan)]);
+    status.terakhir = new Date().toISOString();
+    status.menunggu = menunggu;
+    status.katalog = katalog;
+    status.putaran = {
+      diminta: ctrl.diminta,
+      terisi: catat.terisi,
+      galat: catat.galat,
+      dilewati: catat.dilewati,
+      ditemukan: catat.ditemukan,
+      halaman: catat.halaman,
+      durasi_ms: Date.now() - mulai,
     };
-    if (ctrl.jedaSampai) siklus.jeda_sampai = new Date(ctrl.jedaSampai).toISOString();
-    const habis = siklus.unggahan.habis && siklus.laporan.habis;
-    if (habis && !siklus.selesai) siklus.selesai = new Date().toISOString();
-    await simpanSementara();
+    await simpanStatus(db, status);
     return {
       jalan: true,
       alasan: ctrl.alasanBerhenti || undefined,
-      siklus: siklus.nomor,
-      siklus_baru: baru,
-      siklus_selesai: habis,
       diminta: ctrl.diminta,
       terisi: catat.terisi,
       tersimpan: tersimpanN,
       galat: catat.galat,
       dilewati: catat.dilewati,
-      jeda_sampai: siklus.jeda_sampai,
+      ditemukan: catat.ditemukan,
+      halaman: catat.halaman,
+      jeda_sampai: status.jeda_sampai,
       sisa_kuota: ctrl.batasTerakhir?.sisa ?? null,
+      menunggu,
       durasi_ms: Date.now() - mulai,
-      uji: kering ? { baris: ujiBaris, siklus } : undefined,
+      uji: kering ? { baris: ujiBaris } : undefined,
     };
   } catch (e) {
     console.error("[metrik-video] putaran:", e);
@@ -1099,14 +1503,13 @@ export async function putaranSegarMetrik(
 // ------------------------------------------------------------
 
 /** Angka yang lebih muda dari ini tidak ditarik ulang oleh tombol kategori. */
-const SEGAR_KATEGORI_MS = 6 * 3600_000;
+const SEGAR_KATEGORI_MS = 2 * JAM;
 /** Maks permintaan satu tekan tombol kategori. */
-const MAKS_PER_TEKAN = 15;
-
-/** Rem bersama tombol manual: maks 20 permintaan / 5 menit untuk semua orang. */
-const jejakManual: number[] = [];
-const MAKS_MANUAL = 20;
+const MAKS_PER_TEKAN = 40;
+/** Rem bersama tombol manual: maks 80 permintaan / 5 menit untuk semua orang. */
+const MAKS_MANUAL = 80;
 const JENDELA_MANUAL_MS = 5 * 60_000;
+const jejakManual: number[] = [];
 
 function jatahManual(n: number): number {
   const kini = Date.now();
@@ -1116,26 +1519,6 @@ function jatahManual(n: number): number {
 
 function pakaiJatahManual() {
   jejakManual.push(Date.now());
-}
-
-/**
- * Video yang BARU SAJA dicoba tombol kategori tapi gagal (dihapus, token
- * kedaluwarsa, …): jangan dicoba lagi selama 6 jam — tanpa ini tiap klik
- * menghabiskan jatah untuk video yang sama yang pasti gagal lagi.
- */
-const gagalManual = new Map<string, number>();
-
-function baruGagal(kunci: string): boolean {
-  const sampai = gagalManual.get(kunci);
-  if (sampai === undefined) return false;
-  if (sampai > Date.now()) return true;
-  gagalManual.delete(kunci);
-  return false;
-}
-
-function tandaiGagal(kunci: string) {
-  if (gagalManual.size > 5000) gagalManual.clear();
-  gagalManual.set(kunci, Date.now() + SEGAR_KATEGORI_MS);
 }
 
 /** Tarik angka satu unggahan SuperApp sekarang juga (1 permintaan). */
@@ -1156,15 +1539,16 @@ export async function segarkanSatuUnggahan(postId: number): Promise<HasilSatuUng
   }
   if (jatahManual(1) < 1) {
     throw Object.assign(
-      new Error("Terlalu banyak tarikan manual. Tunggu beberapa menit — angka juga diperbarui otomatis tiap hari."),
+      new Error("Terlalu banyak tarikan manual. Tunggu beberapa menit — angka juga diperbarui otomatis."),
       { status: 429 },
     );
   }
-  const ctx = await muatKonteks(db);
+  const [ctx, simpanan] = await Promise.all([muatKonteks(db), muatSimpanan()]);
   const ctrl = new Pengendali(1, 60_000, { saatAmbil: pakaiJatahManual, lebihMs: 15_000 });
   const draf: DraftBaris[] = [];
-  const catat = { terisi: 0, galat: 0 };
-  const r = await kerjakanUnggahan(p as BarisUnggahan, ctx, ctrl, draf, catat);
+  const catat = catatanKosong();
+  const bantu: Bantu = { simpanan, hasilAkun: new Map(), petaBaru: new Map() };
+  const r = await kerjakanUnggahan(p as BarisUnggahan, ctx, ctrl, draf, catat, bantu, 15 * 60_000);
   if (!r.jawaban) {
     if (ctrl.berhenti) {
       throw Object.assign(new Error("upload-post sedang membatasi permintaan. Coba lagi beberapa menit lagi."), {
@@ -1179,6 +1563,8 @@ export async function segarkanSatuUnggahan(postId: number): Promise<HasilSatuUng
   }
   const jawaban = r.jawaban;
   const tersimpan = await tulisDraf(db, draf, ctx.kolom);
+  for (const [kunci, peta] of bantu.petaBaru) await tambahPetaMedia(kunci, peta);
+  await simpanSimpanan(simpanan);
   return {
     post_id: postId,
     profil: jawaban.profil,
@@ -1205,7 +1591,7 @@ export type HasilSegarKategori = {
   sisa: number;
   /** true = direm kuota; tunggu beberapa menit sebelum menekan lagi. */
   direm: boolean;
-  /** Link pendek yang diurai di tekan ini (belum tentu sudah ditarik angkanya). */
+  /** Link pendek yang diurai di panggilan ini. */
   diurai: number;
   lama_ms: number;
 };
@@ -1219,15 +1605,13 @@ export async function segarkanKategori(kategori: string, polaIlike: string): Pro
   if (!uploadPostSiap()) throw Object.assign(new Error("Kunci upload-post belum terpasang."), { status: 503, pesanAman: true });
   const mulai = Date.now();
   const db = supabase();
-  const ctx = await muatKonteks(db);
-  // Kategori yang diminta selalu dianggap tampil (mis. baru dibuat).
-  ctx.kategori.add(kategori.trim().toUpperCase());
+  const [ctx, simpanan] = await Promise.all([muatKonteks(db), muatSimpanan()]);
 
   const laporan = await semuaBaris<BarisLaporan>(
     (dari, sampai) =>
       db
         .from("laporan_video")
-        .select("id, user_id, platform, url_video, keyword, tvrku_post_id")
+        .select("id, user_id, platform, url_video, tanggal_wib, dibuat_pada, sumber, tvrku_post_id")
         .ilike("keyword", polaIlike)
         .order("id", { ascending: false })
         .range(dari, sampai) as unknown as PromiseLike<{ data: BarisLaporan[] | null; error: { message: string } | null }>,
@@ -1239,113 +1623,116 @@ export async function segarkanKategori(kategori: string, polaIlike: string): Pro
   for (const l of laporan) if (l.tvrku_post_id && Number(l.tvrku_post_id) > 0) idPost.add(Number(l.tvrku_post_id));
   const { data: postKategori } = await db.from("tvrku_post").select("id").ilike("hasil->>kategori", polaIlike).limit(1000);
   for (const p of postKategori ?? []) idPost.add(Number(p.id));
-
   const unggahan: BarisUnggahan[] = [];
-  const kodePerPost = new Map<number, string[]>();
   for (const bagian of potong([...idPost], 200)) {
-    const [{ data }, { data: tautan }] = await Promise.all([
-      db.from("tvrku_post").select("id, user_id, judul, request_id, jadwal, dibuat_pada").in("id", bagian),
-      db.from("laporan_video").select("tvrku_post_id, platform, url_video").in("tvrku_post_id", bagian),
-    ]);
-    for (const p of (data ?? []) as BarisUnggahan[]) {
-      if (POLA_REQUEST_UP.test(String(p.request_id ?? ""))) unggahan.push(p);
-    }
-    for (const t of tautan ?? []) {
-      const k = kodeMetrik(String(t.platform ?? ""), String(t.url_video ?? ""));
-      if (!k) continue;
-      const pid = Number(t.tvrku_post_id);
-      kodePerPost.set(pid, [...(kodePerPost.get(pid) ?? []), k]);
-    }
-  }
-  // Link pendek diurai dulu (diingat 30 hari, jadi tekan berikutnya cepat).
-  const kendaliUrai = new Pengendali(0, 25_000);
-  const asli = await uraiPendekJendela(laporan, kendaliUrai);
-  const itemLaporan = new Map<string, ItemLaporan>();
-  // Link pendek yang belum sempat diurai di tekan ini → dihitung sisa.
-  const belumDiurai = new Set<string>();
-  for (const l of laporan) {
-    const it = siapkanLaporan(l, ctx, asli.has(String(l.id)) ? asli.get(String(l.id)) : undefined);
-    if (it === "tunda") {
-      belumDiurai.add(kodeMetrik(platformApp(String(l.platform ?? "")), String(l.url_video ?? "")) ?? String(l.id));
-      continue;
-    }
-    if (!it) continue;
-    // Kunci = kode yang dilaporkan: alias link pendek ikut terisi.
-    const kunciItem = it.kodeAlias ?? it.kode;
-    if (!itemLaporan.has(kunciItem)) itemLaporan.set(kunciItem, it);
+    const { data } = await db.from("tvrku_post").select("id, user_id, judul, request_id, jadwal, dibuat_pada").in("id", bagian);
+    for (const p of (data ?? []) as BarisUnggahan[]) if (POLA_REQUEST_UP.test(String(p.request_id ?? ""))) unggahan.push(p);
   }
 
-  // Yang angkanya masih segar (< 6 jam) atau baru saja gagal dilewati.
-  const semuaKode = [...new Set([...itemLaporan.keys(), ...[...kodePerPost.values()].flat()])];
+  // Laporan → katalog (link pendek diurai, pemilik dikenali).
+  const asli = new Map<string, string | null>();
+  const pendek = laporan.filter((l) => adalahTautanPendek(platformApp(String(l.platform ?? "")), String(l.url_video ?? "")));
+  let belumDiurai = 0;
+  for (let i = 0; i < pendek.length; i += 4) {
+    if (Date.now() - mulai > 20_000) {
+      belumDiurai = pendek.length - i;
+      break;
+    }
+    const kelompok = pendek.slice(i, i + 4);
+    const r = await Promise.all(kelompok.map((l) => alamatAsli(platformApp(String(l.platform ?? "")), String(l.url_video ?? ""))));
+    kelompok.forEach((l, j) => asli.set(String(l.id), r[j]));
+  }
+  const items = new Map<string, ItemVideo>();
+  const katalog: BarisKatalog[] = [];
+  for (const l of laporan) {
+    if (l.tvrku_post_id != null && Number(l.tvrku_post_id) > 0) continue; // lewat jalur unggahan
+    const platform = platformApp(String(l.platform ?? ""));
+    const dilaporkan = String(l.url_video ?? "");
+    if (!platformDidukung(platform) || !dilaporkan) continue;
+    const pendekIni = adalahTautanPendek(platform, dilaporkan);
+    const url = pendekIni ? asli.get(String(l.id)) : dilaporkan;
+    if (!url) continue;
+    const kodeAsli = kodeMetrik(platform, url);
+    if (!kodeAsli) continue;
+    const pemilik = pemilikLaporan(l, platform, url, ctx);
+    const profil = pemilik ? ctx.profilPer.get(pemilik) : undefined;
+    if (!pemilik || !profil) continue;
+    const kode = pendekIni ? (kodeMetrik(platform, dilaporkan) ?? kodeAsli) : kodeAsli;
+    const akunUsername = ctx.akunUser.get(`${pemilik}|${platform}`) ?? akunDariTautan(platform, url) ?? "";
+    const dasar: BarisKatalog = {
+      kode: kodeAsli,
+      platform,
+      akun_username: akunUsername,
+      user_id: pemilik,
+      url: kanonikTautan(platform, url, akunUsername || null),
+      judul: "",
+      thumbnail_url: "",
+      waktu_posting: waktuDariLaporan(l.tanggal_wib, l.dibuat_pada),
+    };
+    katalog.push(dasar);
+    if (kode !== kodeAsli) katalog.push({ ...dasar, kode });
+    if (!items.has(kode)) items.set(kode, { kode, kodeAsli, platform, uid: pemilik, profil, akun: `${pemilik}|${platform}`, url: dasar.url });
+  }
+  await gabungKatalog(db, katalog, ctx.kolom, false);
+
+  // Yang angkanya masih segar (< 2 jam), baru gagal, atau akunnya dijeda dilewati.
   const segarPada = new Map<string, number>();
-  for (const bagian of potong(semuaKode, 200)) {
+  for (const bagian of potong([...items.keys()], 200)) {
     const { data } = await db.from("tvr_video_metrik").select("kode, diperbarui_pada").in("kode", bagian);
     for (const m of data ?? []) segarPada.set(String(m.kode), Date.parse(String(m.diperbarui_pada ?? "")) || 0);
   }
-  const masihSegar = (kode: string) => Date.now() - (segarPada.get(kode) ?? 0) < SEGAR_KATEGORI_MS;
-  const antreUnggahan = unggahan.filter((p) => {
-    if (baruGagal(`u:${p.id}`)) return false;
-    if (p.jadwal && Date.parse(String(p.jadwal)) > Date.now()) return false;
-    const kode = kodePerPost.get(Number(p.id)) ?? [];
-    return kode.length === 0 || !kode.every(masihSegar);
-  });
-  const antreLaporan = [...itemLaporan.values()].filter(
-    (it) => !baruGagal(`l:${it.kodeAlias ?? it.kode}`) && !masihSegar(it.kodeAlias ?? it.kode),
+  const kini = Date.now();
+  const antreVideo = [...items.values()].filter(
+    (it) =>
+      kini - (segarPada.get(it.kode) ?? 0) >= SEGAR_KATEGORI_MS &&
+      (simpanan.gagal[it.kode] ?? 0) <= kini &&
+      !akunDijeda(simpanan, it.akun),
   );
-  const total = unggahan.length + itemLaporan.size + belumDiurai.size;
-  const diurai = asli.size;
-  const perlu = antreUnggahan.length + antreLaporan.length + belumDiurai.size;
-
+  const antreUnggahan = unggahan.filter(
+    (p) => !(p.jadwal && Date.parse(String(p.jadwal)) > kini) && kini - (simpanan.unggah[String(p.id)] ?? 0) >= SEGAR_KATEGORI_MS,
+  );
+  const total = unggahan.length + items.size + belumDiurai;
+  const perlu = antreUnggahan.length + antreVideo.length + belumDiurai;
   const jatah = jatahManual(MAKS_PER_TEKAN);
   if (perlu > 0 && jatah < 1) {
-    return { kategori, total, dikerjakan: 0, terisi: 0, galat: 0, sisa: perlu, direm: true, diurai, lama_ms: Date.now() - mulai };
+    return { kategori, total, dikerjakan: 0, terisi: 0, galat: 0, sisa: perlu, direm: true, diurai: asli.size, lama_ms: Date.now() - mulai };
   }
-  const ctrl = new Pengendali(jatah, 55_000, { saatAmbil: pakaiJatahManual, lebihMs: 15_000 });
+  const ctrl = new Pengendali(jatah, 50_000, { saatAmbil: pakaiJatahManual, lebihMs: 15_000 });
   const draf: DraftBaris[] = [];
+  const catat = catatanKosong();
+  const bantu: Bantu = { simpanan, hasilAkun: new Map(), petaBaru: new Map() };
+  const hasilPutaran = new Map<string, DraftBaris>();
   let dikerjakan = 0;
-  let terisi = 0;
-  let galat = 0;
-  const hasilU = await kerjakanKelompok(
+  dikerjakan += await jalankanAntre(
     antreUnggahan,
     async (p) => {
-      const catat = { terisi: 0, galat: 0 };
-      const r = await kerjakanUnggahan(p, ctx, ctrl, draf, catat);
-      if (r.hasil === "selesai") {
-        dikerjakan += 1;
-        if (catat.terisi === 0) tandaiGagal(`u:${p.id}`);
-      }
-      terisi += catat.terisi;
-      galat += catat.galat;
-      return r.hasil;
+      await kerjakanUnggahan(p, ctx, ctrl, draf, catat, bantu, JAM);
     },
     ctrl,
+    40_000,
   );
-  const hasilL = await kerjakanKelompok(
-    antreLaporan,
+  dikerjakan += await jalankanAntre(
+    selangSeling(antreVideo, (x) => x.akun),
     async (it) => {
-      const catat = { terisi: 0, galat: 0, dilewati: 0 };
-      const h = await kerjakanLaporan(it, ctx, ctrl, draf, catat);
-      if (h === "selesai") {
-        dikerjakan += 1;
-        if (catat.terisi === 0) tandaiGagal(`l:${it.kodeAlias ?? it.kode}`);
-      }
-      terisi += catat.terisi;
-      galat += catat.galat;
-      return h;
+      await kerjakanVideo(it, ctx, ctrl, draf, catat, bantu, hasilPutaran, JAM);
     },
     ctrl,
+    12_000,
   );
   await tulisDraf(db, draf, ctx.kolom);
-  const sisa = [...hasilU, ...hasilL].filter((h) => h === "tunda").length + belumDiurai.size;
+  for (const [kunci, peta] of bantu.petaBaru) await tambahPetaMedia(kunci, peta);
+  jedaAkunGagalBeruntun(simpanan, bantu.hasilAkun);
+  await simpanSimpanan(simpanan);
+  const sisa = Math.max(0, perlu - dikerjakan);
   return {
     kategori,
     total,
     dikerjakan,
-    terisi,
-    galat,
+    terisi: catat.terisi,
+    galat: catat.galat,
     sisa,
     direm: ctrl.berhenti || (sisa > 0 && jatahManual(1) < 1),
-    diurai,
+    diurai: asli.size,
     lama_ms: Date.now() - mulai,
   };
 }

@@ -5,10 +5,11 @@
 // Tiga keadaan kategori di keyword_wajib:
 //   • aktif           → boleh dipilih.
 //   • nonaktif        → disembunyikan (salah ketik, ganda); tidak boleh.
-//   • SELESAI         → acaranya sudah lewat. Kreator TIDAK perlu dan
-//                       TIDAK BOLEH mengunggah lagi. Datanya — laporan,
-//                       unggahan, angka — tetap disimpan dan tetap tampil
-//                       di insight; hanya pintu masuknya yang ditutup.
+//   • SELESAI         → acaranya sudah lewat: DISEMBUNYIKAN (26 Sep 2026).
+//                       Kreator TIDAK boleh mengunggah lagi. Datanya —
+//                       laporan, unggahan, angka — tetap disimpan dan
+//                       tampil di insight; Pimred/Superadmin bisa
+//                       memunculkannya lagi (lib/kategori-selesai).
 // Kategori tetap ("Video Sendiri") selalu boleh: ia hidup di kode.
 //
 // Keputusannya dibuat oleh fungsi MURNI (putuskanKategori) supaya bisa
@@ -20,6 +21,7 @@
 import { supabase } from "@/lib/supabase";
 import { kategoriTetap } from "@/lib/kategori-tetap";
 import { polaPersis } from "@/lib/insight-kategori";
+import { petaKategoriSelesai } from "@/lib/kategori-selesai";
 
 export type BarisKategori = {
   keyword: string;
@@ -50,27 +52,16 @@ export async function pastikanKategoriBolehDipakai(nama: string): Promise<void> 
   if (n && !kategoriTetap.adalah(n)) {
     const { data, error } = await supabase()
       .from("keyword_wajib")
-      .select("keyword, aktif, selesai")
+      .select("id, keyword, aktif")
       .ilike("keyword", polaPersis(n))
       .limit(1)
       .maybeSingle();
-    // Kolom `selesai` belum ada (sql/51 belum dijalankan)? Jangan
-    // mengunci semua unggahan gara-gara migrasi tertinggal: anggap
-    // belum ada yang selesai, tapi tetap periksa ada/aktifnya.
-    if (error && error.code === "42703") {
-      const lama = await supabase()
-        .from("keyword_wajib")
-        .select("keyword, aktif")
-        .ilike("keyword", polaPersis(n))
-        .limit(1)
-        .maybeSingle();
-      baris = lama.data ? { keyword: String(lama.data.keyword), aktif: lama.data.aktif === true, selesai: false } : undefined;
-    } else if (error) {
-      throw new Error("Gagal memeriksa kategori.");
-    } else {
-      baris = data
-        ? { keyword: String(data.keyword), aktif: data.aktif === true, selesai: data.selesai === true }
-        : undefined;
+    if (error) throw new Error("Gagal memeriksa kategori.");
+    if (data) {
+      // Status selesai (disembunyikan) dari kolomnya ATAU catatan
+      // pengaturan_sistem bila kolomnya belum dipasang (26 Sep 2026).
+      const selesai = (await petaKategoriSelesai()).has(String(data.id));
+      baris = { keyword: String(data.keyword), aktif: data.aktif === true, selesai };
     }
   }
   const pesan = putuskanKategori(n, baris);

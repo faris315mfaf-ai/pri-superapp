@@ -1,24 +1,26 @@
 // Uji penyegar angka per video dari upload-post (lib/metrik-video-up, 25 Sep 2026).
 // Jalankan: npx tsx tests/uji-metrik-video-up.mts
 import {
+  BELUM_DITARIK,
+  adalahMediaVideo,
   angkaSimpan,
-  aturSiklus,
+  awalHariWib,
   bacaBatasUp,
-  bacaSiklus,
-  bagiKuota,
   barisMetrikVideo,
-  batasUtama,
+  belumDitarik,
+  golonganGalat,
   idPlatformDariUrl,
-  JARAK_SIKLUS_MS,
   kuotaMenipis,
-  majukanSegar,
-  majukanUtama,
   perluDaftarMedia,
   platformApp,
   platformDidukung,
   platformUp,
-  siklusBaru,
+  selangSeling,
+  tanggalWib,
+  tingkatKesegaran,
+  tingkatVideo,
   uraiJawabanLive,
+  waktuDariLaporan,
   waktuUp,
 } from "@/lib/metrik-video-up";
 import { kodeMetrik, susunInsightKategori } from "@/lib/insight-kategori";
@@ -168,50 +170,56 @@ cek("batas kecil: cadangan minimal 20", kuotaMenipis({ batas: 40, sisa: 20, rese
 cek("sisa tak diketahui → jalan terus", !kuotaMenipis({ batas: null, sisa: null, reset_ms: null }));
 
 // ---------------------------------------------------------------
-console.log("siklus harian");
-const t0 = Date.parse("2026-09-25T00:00:00Z");
-const a = aturSiklus(null, t0, 4802, 30409);
-cek("tanpa status → siklus 1 baru", a.baru && a.siklus.nomor === 1 && a.siklus.unggahan.batas_atas === 4802 && a.siklus.laporan.batas_atas === 30409);
-cek("jalur baru belum mulai", a.siklus.unggahan.kursor === null && !a.siklus.unggahan.habis && a.siklus.unggahan.kursor_segar === 4802);
-cek("batas utama awal = batas_atas", batasUtama(a.siklus.unggahan) === 4802);
-let ju = majukanUtama(a.siklus.unggahan, 4703, false);
-cek("kursor maju ke id terkecil yang dikerjakan", ju.kursor === 4703 && batasUtama(ju) === 4702 && !ju.habis);
-ju = majukanUtama(ju, null, false);
-cek("tanpa kemajuan kursor tetap", ju.kursor === 4703);
-ju = majukanUtama(ju, 4800, false);
-cek("kursor tidak pernah mundur", ju.kursor === 4703);
-ju = majukanUtama(ju, 12, true);
-cek("sampai dasar → habis", ju.habis);
-cek("kursor ≤ 1 → habis", majukanUtama(a.siklus.laporan, 1, false).habis);
-cek("jalur segar maju naik", majukanSegar(a.siklus.unggahan, 4810).kursor_segar === 4810 && majukanSegar(majukanSegar(a.siklus.unggahan, 4810), 4805).kursor_segar === 4810);
-cek("jalur segar tanpa kemajuan tetap", majukanSegar(a.siklus.unggahan, null).kursor_segar === 4802);
-cek("tabel kosong → jalur langsung habis", siklusBaru(1, t0, 0, 0).unggahan.habis && siklusBaru(1, t0, 0, 0).laporan.habis);
+console.log("tingkat kesegaran (hari ini → kemarin → pekan → lama)");
+// 26 Sep 2026 10:00 WIB = 03:00 UTC
+const kiniT = Date.parse("2026-09-26T03:00:00Z");
+cek("awal hari WIB", new Date(awalHariWib(kiniT)).toISOString() === "2026-09-25T17:00:00.000Z");
+cek("awal hari WIB tepat tengah malam", awalHariWib(Date.parse("2026-09-25T17:00:00Z")) === Date.parse("2026-09-25T17:00:00Z"));
+cek("23:59 WIB masih hari itu", awalHariWib(Date.parse("2026-09-26T16:59:59Z")) === Date.parse("2026-09-25T17:00:00Z"));
+cek("tanggal WIB", tanggalWib(Date.parse("2026-09-25T17:30:00Z")) === "2026-09-26");
+const t = tingkatKesegaran(kiniT);
+cek("empat tingkat berurutan", t.map((x) => x.nama).join(",") === "hari_ini,kemarin,pekan,lama");
+cek("hari ini: dari 00:00 WIB, tanpa batas atas", t[0].dari === "2026-09-25T17:00:00Z" && t[0].sampai === null && !t[0].tanpaWaktu);
+cek("kemarin: 24 jam sebelumnya", t[1].dari === "2026-09-24T17:00:00Z" && t[1].sampai === "2026-09-25T17:00:00Z");
+cek("pekan: 2–6 hari", t[2].dari === "2026-09-19T17:00:00Z" && t[2].sampai === "2026-09-24T17:00:00Z");
+cek("lama: sebelum 6 hari + tanpa waktu", t[3].dari === null && t[3].sampai === "2026-09-19T17:00:00Z" && t[3].tanpaWaktu);
+cek("selang: 15 mnt / 1 jam / 6 jam / 24 jam", t.map((x) => x.selangMs / 60_000).join(",") === "15,60,360,1440");
+cek("batas basi hari ini = 15 menit lalu", t[0].basiSebelum === "2026-09-26T02:45:00Z");
+cek("ISO tanpa milidetik (aman untuk or())", !t.some((x) => /\.\d{3}/.test(`${x.dari}${x.sampai}${x.basiSebelum}`)));
+cek("tingkat video: hari ini", tingkatVideo("2026-09-26T01:00:00Z", kiniT) === "hari_ini");
+cek("tingkat video: kemarin", tingkatVideo("2026-09-25T10:00:00Z", kiniT) === "kemarin");
+cek("tingkat video: pekan", tingkatVideo("2026-09-21T10:00:00Z", kiniT) === "pekan");
+cek("tingkat video: lama / tanpa waktu", tingkatVideo("2026-09-01T10:00:00Z", kiniT) === "lama" && tingkatVideo(null, kiniT) === "lama");
+cek("penanda belum ditarik", belumDitarik(BELUM_DITARIK) && belumDitarik("1970-01-01T00:00:00+00:00") && belumDitarik(null) && !belumDitarik("2026-09-26T01:00:00Z"));
 
-const tersimpan = JSON.stringify({ ...a.siklus, unggahan: ju, terakhir: new Date(t0 + 3600_000).toISOString() });
-const b = aturSiklus(tersimpan, t0 + 2 * 3600_000, 4900, 30500);
-cek("siklus berjalan dilanjutkan (bukan diulang)", !b.baru && b.siklus.nomor === 1 && b.siklus.unggahan.habis && b.siklus.unggahan.batas_atas === 4802);
-const habisSemua = JSON.stringify({ ...a.siklus, unggahan: { ...ju, habis: true }, laporan: { ...a.siklus.laporan, habis: true } });
-const c = aturSiklus(habisSemua, t0 + 5 * 3600_000, 4900, 30500);
-cek("siklus habis < 20 jam → tunggu, ditandai selesai", !c.baru && c.siklus.selesai !== null && c.siklus.nomor === 1);
-const jedaLama = new Date(t0 + JARAK_SIKLUS_MS + 60_000).toISOString();
-const d = aturSiklus(JSON.stringify({ ...JSON.parse(habisSemua), jeda_sampai: jedaLama }), t0 + JARAK_SIKLUS_MS, 4900, 30500);
-cek("siklus habis ≥ 20 jam → siklus baru", d.baru && d.siklus.nomor === 2 && d.siklus.unggahan.batas_atas === 4900 && d.siklus.laporan.batas_atas === 30500);
-cek("siklus baru membawa jeda kuota", d.siklus.jeda_sampai === jedaLama);
-cek("siklus baru: hitungan nol lagi", d.siklus.hitung.diminta === 0 && d.siklus.selesai === null);
-const belumHabis = aturSiklus(tersimpan, t0 + 3 * JARAK_SIKLUS_MS, 5000, 31000);
-cek("siklus belum habis tidak pernah dipotong walau > 20 jam", !belumHabis.baru && belumHabis.siklus.nomor === 1);
-cek("status rusak → mulai ulang", aturSiklus("{bukan json", t0, 10, 10).baru && aturSiklus({ v: 2 }, t0, 10, 10).baru && aturSiklus({ v: 1, mulai: "x" }, t0, 10, 10).baru);
-cek("bacaSiklus bolak-balik JSON", JSON.stringify(bacaSiklus(JSON.stringify(a.siklus))) === JSON.stringify(a.siklus));
-cek("bacaSiklus menolak kursor bukan angka", bacaSiklus({ ...a.siklus, unggahan: { ...a.siklus.unggahan, kursor: "abc" } }) === null);
+console.log("perkiraan waktu posting dari laporan");
+cek("laporan otomatis: waktu dicatat", waktuDariLaporan("2026-09-25", "2026-09-25T05:00:00Z") === "2026-09-25T05:00:00.000Z");
+cek("laporan manual telat: tengah hari tanggal laporan", waktuDariLaporan("2026-09-23", "2026-09-25T05:00:00Z") === "2026-09-23T05:00:00.000Z");
+cek("tanpa tanggal: waktu dicatat", waktuDariLaporan(null, "2026-09-25T05:00:00Z") === "2026-09-25T05:00:00.000Z");
+cek("tanpa apa pun → null", waktuDariLaporan(null, null) === null && waktuDariLaporan("kemarin", "x") === null);
 
-// ---------------------------------------------------------------
-console.log("pembagian kuota");
-cek("40 → segar 12, laporan 14", (() => {
-  const k = bagiKuota(40);
-  return k.segar === 12 && k.utamaLaporan === 14;
-})(), bagiKuota(40));
-cek("kuota 1 tetap bisa jalan", bagiKuota(1).segar === 1 && bagiKuota(1).utamaLaporan === 0);
-cek("kuota 0 / negatif aman", bagiKuota(0).segar === 0 && bagiKuota(-5).segar === 0);
+console.log("golongan galat upload-post");
+cek("token kedaluwarsa = akun", golonganGalat("Instagram access token missing or expired.") === "akun");
+cek("pesan ragu (dihapus ATAU token) = video", golonganGalat("X API error (HTTP 401). The tweet may have been deleted or the token expired.") === "video");
+cek("IG 400 ragu = video", golonganGalat("Instagram API error (HTTP 400). The post may have been deleted or the token expired.") === "video");
+cek("batas laju = batas", golonganGalat("(#4) Application request limit reached") === "batas" && golonganGalat("Rate limit exceeded") === "batas");
+cek("video tidak ada = video", golonganGalat("TikTok video not found (ID: 7123456789).") === "video");
+cek("waktu habis = waktu", golonganGalat("The operation was aborted due to timeout") === "waktu");
+cek("izin dicabut = akun", golonganGalat("Permissions error") === "akun" && golonganGalat("HTTP 403 Forbidden") === "akun");
+cek("kosong/aneh = lain", golonganGalat("") === "lain" && golonganGalat("sesuatu terjadi") === "lain");
+
+console.log("giliran antar akun");
+const antre = ["A1", "A2", "A3", "B1", "C1", "C2"].map((x) => ({ akun: x[0], id: x }));
+cek("akun bergiliran", selangSeling(antre, (x) => x.akun).map((x) => x.id).join(",") === "A1,B1,C1,A2,C2,A3");
+cek("jatah per akun dipotong", selangSeling(antre, (x) => x.akun, 1).map((x) => x.id).join(",") === "A1,B1,C1");
+cek("urutan dalam akun tetap", selangSeling(antre, (x) => x.akun, 2).filter((x) => x.akun === "A").map((x) => x.id).join(",") === "A1,A2");
+cek("daftar kosong aman", selangSeling([] as { akun: string }[], (x) => x.akun).length === 0);
+
+console.log("daftar media → hanya video");
+cek("TikTok & YouTube selalu video", adalahMediaVideo("tiktok", "") && adalahMediaVideo("youtube", null));
+cek("X teks dilewati, video diterima", !adalahMediaVideo("twitter", "TEXT") && adalahMediaVideo("x", "VIDEO"));
+cek("IG foto & album dilewati", !adalahMediaVideo("instagram", "IMAGE") && !adalahMediaVideo("instagram", "CAROUSEL_ALBUM") && adalahMediaVideo("instagram", "VIDEO") && adalahMediaVideo("instagram", "REELS"));
+cek("tanpa jenis di platform lain dilewati", !adalahMediaVideo("threads", "") && !adalahMediaVideo("facebook", null));
 
 // ---------------------------------------------------------------
 console.log("ID platform & kode video");
