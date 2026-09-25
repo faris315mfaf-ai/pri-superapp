@@ -18,6 +18,11 @@ cat > /etc/crontabs/root <<'JADWAL'
 # tanpa memberi tahu aplikasi, jadi hasilnya ditanyakan berkala supaya
 # catatan videonya ikut selesai (status, kanal Konten, wajib komentar).
 */5  * * * * /panggil.sh jadwal-tayang
+# Angka per video dari upload-post (25 Sep 2026): tiap 5 menit sepotong
+# antrean (maks ±40 permintaan), sehingga dalam sehari seluruh video
+# unggahan & video berkategori sudah disegarkan sekali. Menit 2,7,12,…
+# supaya tidak berbarengan dengan tugas lain di menit kelipatan 5.
+2,7,12,17,22,27,32,37,42,47,52,57 * * * * /panggil.sh metrik-video
 # Rekaman angka nasional TV Rakyat (12 Sep 2026). Sekali sehari sudah
 # cukup: yang dibutuhkan panel kenaikan adalah SATU titik pembanding
 # per hari. Pukul 23.50 WIB = 16.50 UTC — hampir tutup hari, jadi

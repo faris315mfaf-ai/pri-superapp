@@ -8,9 +8,11 @@
 // komentar, dibagikan, favorit, durasi. Di atasnya: total kategori dan
 // rata-rata tayangan per video.
 //
-// Dua tombol kerja:
-//   • TARIK DATA (Chocodata) — menarik angka semua video kategori ini,
-//     potongan demi potongan sampai habis, kemajuannya tampak.
+// Angka per video diperbarui OTOMATIS TIAP HARI dari upload-post
+// (lib/segar-metrik-video.ts, 25 Sep 2026). Dua tombol kerja:
+//   • TARIK SEKARANG — menarik angka video kategori ini dari upload-post
+//     saat itu juga, potongan demi potongan (jatahnya dibatasi supaya
+//     kuota upload-post tetap cukup untuk unggahan anggota).
 //   • TAMBAH LINK — tempel banyak link (satu per baris) ke kategori ini;
 //     yang ditolak dilaporkan per baris beserta alasannya.
 //
@@ -34,12 +36,12 @@ import { EmptyState, GlassSkeleton, ThemeToggle } from "@/components/pri-ui";
 import { PlatformIcon } from "@/components/platform-icon";
 import { toast } from "@/hooks/use-app-store";
 import { idVideo } from "@/lib/tautan-video";
-import { formatAngkaRingkas, jamWIB } from "@/lib/format";
+import { formatAngkaRingkas, sejakRingkas, waktuJelasWIB } from "@/lib/format";
 import {
   getInsightKategori,
   getKeywordWajib,
+  segarkanKategoriUp,
   tambahLinkKategori,
-  tarikDataKategori,
   type InsightKategori,
 } from "@/services";
 import { cn } from "@/lib/utils";
@@ -84,7 +86,7 @@ function durasi(detik: number | null): string {
 
 type Video = InsightKategori["video"][number];
 
-function KartuVideo({ v }: { v: Video }) {
+function KartuVideo({ v, adaFavorit }: { v: Video; adaFavorit: boolean }) {
   const [muatEmbed, setMuatEmbed] = useState(false);
   const embed = alamatEmbed(v.platform, v.url);
   return (
@@ -123,7 +125,12 @@ function KartuVideo({ v }: { v: Video }) {
           {v.judul || v.url.replace(/^https?:\/\/(www\.)?/, "")}
         </p>
         <p className="mt-0.5 truncate text-[10.5px] text-teks-sekunder">
-          {[v.akun, v.asal === "kategori" ? "ditambahkan ke kategori" : v.pelapor && `lapor: ${v.pelapor}`]
+          {[
+            v.akun,
+            v.asal === "kategori"
+              ? "ditambahkan ke kategori"
+              : v.pelapor && (v.asal === "unggahan" ? `unggah: ${v.pelapor}` : `lapor: ${v.pelapor}`),
+          ]
             .filter(Boolean)
             .join(" · ")}
         </p>
@@ -133,17 +140,21 @@ function KartuVideo({ v }: { v: Video }) {
             <span><b className="text-teks-utama">{angka(v.metrik.suka)}</b> suka</span>
             <span><b className="text-teks-utama">{angka(v.metrik.komentar)}</b> komentar</span>
             <span><b className="text-teks-utama">{angka(v.metrik.bagikan)}</b> dibagikan</span>
-            <span><b className="text-teks-utama">{angka(v.metrik.favorit)}</b> favorit</span>
-            <span>{v.metrik.durasi_detik != null ? `${durasi(v.metrik.durasi_detik)} durasi` : ""}</span>
+            {adaFavorit && (
+              <span><b className="text-teks-utama">{angka(v.metrik.favorit)}</b> favorit</span>
+            )}
+            {v.metrik.durasi_detik != null && <span>{durasi(v.metrik.durasi_detik)} durasi</span>}
           </div>
         ) : (
-          <p className="mt-1.5 text-[10.5px] text-amber-600">belum ada angka — tekan Tarik Data</p>
+          <p className="mt-1.5 text-[10.5px] text-amber-600">belum ada angka</p>
         )}
         <div className="mt-1.5 flex items-center justify-between text-[10px] text-teks-sekunder/80">
           <span>
             {v.metrik?.diperbarui_pada
-              ? `angka ${v.metrik.sumber} · ${jamWIB(v.metrik.diperbarui_pada)}`
-              : `dilaporkan ${v.tanggal_wib}`}
+              ? `angka diperbarui ${sejakRingkas(v.metrik.diperbarui_pada)}`
+              : v.tanggal_wib
+                ? `${v.asal === "unggahan" ? "diunggah" : "dilaporkan"} ${v.tanggal_wib}`
+                : ""}
           </span>
           <a href={v.url} target="_blank" rel="noopener noreferrer" aria-label="Buka video" className="text-teks-utama">
             <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
@@ -170,7 +181,7 @@ export function InsightKategoriScreen({
   const [galat, setGalat] = useState("");
   const [muat, setMuat] = useState(0);
 
-  // Tarik data (Chocodata) — berulang sampai sisa nol.
+  // Tarik sekarang (upload-post) — berulang sampai sisa nol atau direm.
   const [menarik, setMenarik] = useState<{ terisi: number; gagal: number; sisa: number | null } | null>(null);
   // Tambah link batch.
   const [formLink, setFormLink] = useState(false);
@@ -222,25 +233,39 @@ export function InsightKategoriScreen({
     let terisi = 0;
     let gagalN = 0;
     try {
-      // Potongan demi potongan: tiap panggilan mengerjakan sebanyak yang
-      // muat dalam batas waktu server, lalu memberi tahu sisanya.
-      for (let putaran = 0; putaran < 40; putaran++) {
-        const h = await tarikDataKategori(pilih);
+      // Potongan demi potongan: tiap panggilan mengerjakan sebatas jatah
+      // tarik manual, lalu memberi tahu sisanya. Direm = jatah bersama
+      // habis; sisanya tetap ditarik otomatis oleh penyegar harian.
+      let direm = false;
+      let sisa = 0;
+      for (let putaran = 0; putaran < 20; putaran++) {
+        const h = await segarkanKategoriUp(pilih);
         terisi += h.terisi;
-        gagalN += h.gagal.length;
+        gagalN += h.galat;
+        sisa = h.sisa;
         setMenarik({ terisi, gagal: gagalN, sisa: h.sisa });
-        if (h.sisa <= 0 || h.dikerjakan === 0) {
-          if (h.tidak_didukung > 0) {
-            toast("info", `${h.tidak_didukung} video di platform yang belum didukung Chocodata`, "Threads/Bilibili dihitung sebagai laporan saja.");
-          }
-          if (gagalN > 0) toast("peringatan", `${gagalN} video gagal ditarik`, h.gagal[0]?.alasan ?? "");
+        if (h.direm) {
+          direm = true;
           break;
         }
+        if (h.sisa <= 0 || h.dikerjakan === 0) break;
       }
-      toast("sukses", "Tarik data selesai", `${terisi} video terisi angkanya.`);
+      if (direm && sisa > 0) {
+        toast(
+          "info",
+          `${terisi} video diperbarui · ${sisa} menyusul`,
+          "Jatah tarik manual sedang habis (dibatasi supaya kuota upload-post aman). Sisanya ikut penarikan otomatis harian.",
+        );
+      } else {
+        toast(
+          "sukses",
+          "Tarik selesai",
+          `${terisi} video diperbarui angkanya${gagalN > 0 ? ` · ${gagalN} tidak terbaca upload-post` : ""}.`,
+        );
+      }
       setMuat((n) => n + 1);
     } catch (e) {
-      toast("error", "Tarik data terhenti", e instanceof Error ? e.message : "");
+      toast("error", "Tarik terhenti", e instanceof Error ? e.message : "");
     } finally {
       setMenarik(null);
     }
@@ -357,7 +382,7 @@ export function InsightKategoriScreen({
           {menarik ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <DownloadCloud className="h-4 w-4" aria-hidden="true" />}
           {menarik
             ? `Menarik… ${menarik.terisi} terisi${menarik.sisa != null ? `, sisa ${menarik.sisa}` : ""}`
-            : "Tarik Data (Chocodata)"}
+            : "Tarik Sekarang"}
         </button>
         <button
           type="button"
@@ -450,7 +475,10 @@ export function InsightKategoriScreen({
                   ["bagikan", "Dibagikan"],
                   ["favorit", "Favorit"],
                 ] as const
-              ).map(([k, label]) => (
+              )
+                // Favorit hanya bermakna bila kolomnya ada (sql/50).
+                .filter(([k]) => k !== "favorit" || data.ada_favorit === true)
+                .map(([k, label]) => (
                 <div key={k} className="glass-soft rounded-xl p-2.5 text-center">
                   <p className="angka-tab font-heading text-[16px] leading-none font-extrabold text-teks-utama">
                     {ringkasTampil.terukur > 0 ? formatAngkaRingkas(ringkasTampil.total[k]) : "–"}
@@ -467,8 +495,10 @@ export function InsightKategoriScreen({
             </div>
             <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder">
               <b className="text-teks-utama">{ringkasTampil.video}</b> video ·{" "}
-              <b className="text-teks-utama">{ringkasTampil.terukur}</b> punya angka. Angka dari sapuan TikHub
-              (TikTok/Instagram) dan tarikan Chocodata; yang belum punya angka ditandai di kartunya.
+              <b className="text-teks-utama">{ringkasTampil.terukur}</b> punya angka. Angka per video dari
+              upload-post (akun anggota yang tersambung), diperbarui otomatis tiap hari
+              {data.pembaruan?.terakhir ? ` — terakhir ${waktuJelasWIB(data.pembaruan.terakhir)}` : ""}. Video di akun
+              yang tidak tersambung tampil tanpa angka.
             </p>
           </GlassCard>
 
@@ -477,7 +507,7 @@ export function InsightKategoriScreen({
           ) : (
             <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
               {videoTampil.map((v) => (
-                <KartuVideo key={v.kunci} v={v} />
+                <KartuVideo key={v.kunci} v={v} adaFavorit={data.ada_favorit === true} />
               ))}
             </ul>
           )}

@@ -1,23 +1,25 @@
 "use client";
 
 // ============================================================
-// PanelInsightKategori (12 Sep 2026) — modul TV Rakyat Nasional.
+// PanelInsightKategori (12 Sep 2026, dirombak 25 Sep 2026) — modul TV
+// Rakyat Nasional.
 //
-// Pilih satu kategori (mis. BPJS) → dua bagian yang sengaja DIPISAH
-// karena sumber dan artinya berbeda:
+// Pilih satu kategori (mis. BPJS) → dua bagian:
 //
-//  1. POSTINGAN LEWAT SUPERAPP — video yang diunggah lewat aplikasi dan
-//     diberi kategori saat unggah. Angkanya LANGSUNG dari upload-post
-//     (post-analytics), per postingan per platform: suka, komentar,
-//     dibagikan, tayangan, impresi, jangkauan. Inilah yang dipakai untuk
-//     pengiklan: "20 video bulan ini dapat berapa" dijawab dari sini,
-//     lengkap dengan jam penarikan angkanya.
-//  2. LAPORAN ANGGOTA — semua video yang dilaporkan dengan kategori itu;
-//     angkanya dari sapuan TikHub (TikTok & Instagram saja).
+//  1. UNGGAHAN LEWAT SUPERAPP — video yang diunggah lewat aplikasi dengan
+//     kategori itu; angkanya per platform (tayangan, suka, komentar,
+//     dibagikan). Tombol ↻ menarik satu unggahan dari upload-post saat
+//     itu juga.
+//  2. SEMUA VIDEO KATEGORI — unggahan, laporan anggota, dan link yang
+//     ditambahkan ke kategori, satu baris per video (tanpa dobel).
+//
+// Angka per video DIPERBARUI OTOMATIS TIAP HARI dari upload-post
+// (lib/segar-metrik-video.ts) — panel ini hanya membaca, jadi membukanya
+// berkali-kali tidak menghabiskan kuota. Video di akun yang tidak
+// tersambung ke upload-post memang tidak punya angka.
 //
 // Angka yang tidak diberikan sumbernya ditulis "–", bukan 0: nol berarti
-// benar-benar nol, "–" berarti tidak diketahui. Keduanya tidak boleh
-// tampak sama.
+// benar-benar nol, "–" berarti tidak diketahui.
 // ============================================================
 
 import { useEffect, useState } from "react";
@@ -25,8 +27,8 @@ import { AlertTriangle, ExternalLink, Layers, RefreshCw, Upload } from "lucide-r
 import { GlassCard } from "@/components/glass-card";
 import { EmptyState, GlassSkeleton } from "@/components/pri-ui";
 import { PlatformIcon } from "@/components/platform-icon";
-import { formatAngkaRingkas, jamWIB } from "@/lib/format";
-import { toast, useAppStore } from "@/hooks/use-app-store";
+import { formatAngkaRingkas, jamWIB, sejakRingkas, waktuJelasWIB } from "@/lib/format";
+import { toast } from "@/hooks/use-app-store";
 import {
   getInsightKategori,
   getKeywordWajib,
@@ -36,18 +38,18 @@ import {
 } from "@/services";
 import { cn } from "@/lib/utils";
 
-const TILE_LAPORAN: { kunci: keyof InsightKategori["ringkasan"]["total"]; label: string }[] = [
+const TILE_KATEGORI: { kunci: "tayangan" | "suka" | "komentar" | "bagikan"; label: string }[] = [
   { kunci: "tayangan", label: "Tayangan" },
   { kunci: "suka", label: "Suka" },
   { kunci: "komentar", label: "Komentar" },
   { kunci: "bagikan", label: "Dibagikan" },
 ];
 
-const TILE_UP: { kunci: "suka" | "komentar" | "bagikan" | "tayangan" | "impresi" | "jangkauan"; label: string }[] = [
+const TILE_UP: { kunci: "tayangan" | "suka" | "komentar" | "bagikan" | "impresi" | "jangkauan"; label: string }[] = [
+  { kunci: "tayangan", label: "Tayangan" },
   { kunci: "suka", label: "Suka" },
   { kunci: "komentar", label: "Komentar" },
   { kunci: "bagikan", label: "Dibagikan" },
-  { kunci: "tayangan", label: "Tayangan" },
   { kunci: "impresi", label: "Impresi" },
   { kunci: "jangkauan", label: "Jangkauan" },
 ];
@@ -62,7 +64,27 @@ const LABEL_PLATFORM: Record<string, string> = {
   bilibili: "Bilibili",
 };
 
+const LABEL_STATUS: Record<string, string> = {
+  ok: "angka diperbarui",
+  galat: "upload-post tidak bisa membaca angkanya",
+  tidak_terbit: "tidak terbit di platform ini",
+};
+
 const angka = (v: number | null | undefined) => (v == null ? "–" : formatAngkaRingkas(v));
+
+type Pembaruan = NonNullable<InsightKategori["pembaruan"]>;
+
+/** Satu kalimat keadaan penyegar harian untuk ditampilkan di atas angka. */
+function kalimatPembaruan(p: Pembaruan | null | undefined): string {
+  if (!p) return "Angka diperbarui otomatis tiap hari dari upload-post — penarikan pertama sedang disiapkan.";
+  if (p.jeda_sampai && Date.parse(p.jeda_sampai) > Date.now()) {
+    return `Penarikan harian sedang menunggu kuota upload-post pulih (${jamWIB(p.jeda_sampai)} WIB).`;
+  }
+  const terakhir = p.terakhir ? `terakhir berjalan ${waktuJelasWIB(p.terakhir)}` : "belum berjalan";
+  return p.selesai
+    ? `Angka diperbarui otomatis tiap hari · putaran hari ini selesai · ${terakhir}`
+    : `Angka diperbarui otomatis tiap hari · putaran hari ini sedang berjalan · ${terakhir}`;
+}
 
 export function PanelInsightKategori({
   onBukaHalaman,
@@ -78,26 +100,28 @@ export function PanelInsightKategori({
   const [data, setData] = useState<InsightKategori | null>(null);
   const [galat, setGalat] = useState("");
   const [muat, setMuat] = useState(0);
-  // "Tarik sekarang" per unggahan (13 Sep 2026): menarik profil pemiliknya
-  // dari upload-post saat itu juga. Untuk master, jawaban mentahnya ikut
-  // ditampilkan di bawah — pengganti alamat API yang tidak bisa dibuka
-  // dari bilah alamat (butuh token login).
-  const peran = useAppStore((s) => s.user?.role);
+  // "Tarik sekarang" per unggahan: satu permintaan live ke upload-post.
+  // Hasil per platform (termasuk alasan bila gagal) ditampilkan di bawah
+  // daftar supaya "–" selalu punya penjelasan.
   const [tarikId, setTarikId] = useState<string | null>(null);
-  const [mentahTerakhir, setMentahTerakhir] = useState<HasilTarikMetrik | null>(null);
+  const [tarikTerakhir, setTarikTerakhir] = useState<HasilTarikMetrik | null>(null);
 
   async function tarikSekarang(id: string) {
     if (tarikId) return;
     setTarikId(id);
     try {
       const h = await tarikMetrikPostSekarang(id);
-      setMentahTerakhir(h);
+      setTarikTerakhir(h);
+      const ok = h.per_platform.filter((p) => p.status === "ok").length;
+      const gagal = h.per_platform.filter((p) => p.status === "galat");
       toast(
-        h.unggahan_terisi > 0 ? "sukses" : "info",
-        `upload-post: ${h.postingan_di_upload_post} postingan di profil ${h.profil}`,
-        h.unggahan_terisi > 0
-          ? `${h.unggahan_terisi} unggahan terisi angkanya.`
-          : "Tidak ada yang cocok dengan unggahan aplikasi — lihat rincian di bawah daftar.",
+        ok > 0 ? "sukses" : "info",
+        ok > 0 ? `Angka ${ok} platform diperbarui` : "upload-post belum memberi angka",
+        gagal.length > 0
+          ? `${gagal.map((g) => LABEL_PLATFORM[g.platform] ?? g.platform).join(", ")}: ${gagal[0].galat}`
+          : ok > 0
+            ? "Langsung dari upload-post."
+            : "Lihat rincian di bawah daftar.",
       );
       setMuat((n) => n + 1);
     } catch (e) {
@@ -147,6 +171,15 @@ export function PanelInsightKategori({
   }, [pilih, muat]);
 
   const r = data?.ringkasan;
+  // Impresi & jangkauan hanya ada bila database menyimpan angka mentah
+  // (sql/50); tanpa itu tile-nya disembunyikan, bukan ditulis 0.
+  const tileUp = data
+    ? TILE_UP.filter(
+        (t) =>
+          (t.kunci !== "impresi" && t.kunci !== "jangkauan") ||
+          data.postingan.some((p) => Object.values(p.per_platform).some((m) => m[t.kunci] != null)),
+      )
+    : TILE_UP.slice(0, 4);
 
   return (
     <GlassCard className="p-4">
@@ -161,7 +194,7 @@ export function PanelInsightKategori({
         <div className="min-w-0 flex-1">
           <p className="font-heading text-[15px] font-bold text-teks-utama">Insight per Kategori</p>
           <p className="mt-0.5 text-[11px] text-teks-sekunder">
-            Angka per postingan dari upload-post, plus laporan anggota
+            Tayangan, suka, komentar & dibagikan tiap video — diperbarui otomatis tiap hari
           </p>
         </div>
         {onBukaHalaman && (
@@ -222,44 +255,74 @@ export function PanelInsightKategori({
           onAksi={() => setMuat((n) => n + 1)}
         />
       ) : !data || !r ? (
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          {TILE_UP.map((t) => (
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {TILE_KATEGORI.map((t) => (
             <GlassSkeleton key={t.kunci} className="h-[62px] rounded-xl" />
           ))}
         </div>
       ) : (
         <>
-          {/* ===== 1. Postingan lewat SuperApp (upload-post) ===== */}
-          <h3 className="mt-4 flex items-center gap-1.5 font-heading text-[13px] font-bold text-teks-utama">
-            <Upload className="h-3.5 w-3.5 text-sky-500" aria-hidden="true" />
-            Postingan lewat SuperApp
-            <span className="text-[11px] font-semibold text-teks-sekunder">
-              · {data.postingan.length} unggahan · {data.postingan_terukur} punya angka
-            </span>
-          </h3>
-          {!data.upload_post_siap && (
-            <p className="mt-1 text-[10.5px] text-amber-600">
-              Kunci upload-post belum terpasang di server ini — angka tidak bisa ditarik.
-            </p>
-          )}
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {TILE_UP.map((t) => (
+          {/* ===== Ringkasan seluruh video kategori ===== */}
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {TILE_KATEGORI.map((t) => (
               <div key={t.kunci} className="glass-soft rounded-xl p-2.5 text-center">
                 <p className="angka-tab font-heading text-[16px] leading-none font-extrabold text-teks-utama">
-                  {data.postingan_terukur > 0 ? angka(data.total_up[t.kunci]) : "–"}
+                  {r.jumlah_terukur > 0 ? formatAngkaRingkas(r.total[t.kunci]) : "–"}
                 </p>
                 <p className="mt-1 text-[10px] font-semibold text-teks-sekunder">{t.label}</p>
               </div>
             ))}
           </div>
           <p className="mt-1.5 text-[10.5px] leading-relaxed text-teks-sekunder">
-            Total dari {data.total_up.platform_terukur} platform yang memberi angka. Angka disegarkan
-            bertahap dari upload-post; unggahan yang belum ditarik menyusul di pembukaan berikutnya.
+            <b className="text-teks-utama">{r.jumlah_video}</b> video kategori ini ·{" "}
+            <b className="text-teks-utama">{r.jumlah_terukur}</b> punya angka
+            {r.rata_tayangan != null && (
+              <>
+                {" "}· rata-rata <b className="text-teks-utama">{formatAngkaRingkas(r.rata_tayangan)}</b> tayangan/video
+              </>
+            )}
+            .
           </p>
+          <p
+            className={cn(
+              "mt-1 text-[10.5px] leading-relaxed",
+              data.pembaruan?.jeda_sampai && Date.parse(data.pembaruan.jeda_sampai) > Date.now()
+                ? "text-amber-600"
+                : "text-teks-sekunder",
+            )}
+          >
+            {kalimatPembaruan(data.pembaruan)}
+          </p>
+          {!data.upload_post_siap && (
+            <p className="mt-1 text-[10.5px] text-amber-600">
+              Kunci upload-post belum terpasang di server ini — angka tidak bisa ditarik.
+            </p>
+          )}
+
+          {/* ===== 1. Unggahan lewat SuperApp ===== */}
+          <h3 className="mt-4 flex items-center gap-1.5 font-heading text-[13px] font-bold text-teks-utama">
+            <Upload className="h-3.5 w-3.5 text-sky-500" aria-hidden="true" />
+            Unggahan lewat SuperApp
+            <span className="text-[11px] font-semibold text-teks-sekunder">
+              · {data.postingan.length} unggahan · {data.postingan_terukur} punya angka
+            </span>
+          </h3>
+          {data.postingan.length > 0 && (
+            <div className={cn("mt-2 grid gap-2", tileUp.length > 4 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4")}>
+              {tileUp.map((t) => (
+                <div key={t.kunci} className="glass-soft rounded-xl p-2.5 text-center">
+                  <p className="angka-tab font-heading text-[16px] leading-none font-extrabold text-teks-utama">
+                    {data.postingan_terukur > 0 ? angka(data.total_up[t.kunci]) : "–"}
+                  </p>
+                  <p className="mt-1 text-[10px] font-semibold text-teks-sekunder">{t.label}</p>
+                </div>
+              ))}
+            </div>
+          )}
 
           {data.postingan.length === 0 ? (
             <p className="mt-2 text-[11.5px] text-teks-sekunder">
-              Belum ada unggahan lewat SuperApp dengan kategori ini.
+              Belum ada unggahan lewat SuperApp dengan kategori ini. Kategori unggahan dicatat sejak 25 Sep 2026.
             </p>
           ) : (
             <ul className="mt-2 flex flex-col gap-1.5">
@@ -271,10 +334,10 @@ export function PanelInsightKategori({
                       <p className="mt-0.5 truncate text-[10.5px] text-teks-sekunder">
                         {[p.pengunggah, jamWIB(p.dibuat_pada)].filter(Boolean).join(" · ")}
                         {p.metrik_pada
-                          ? ` · angka ${jamWIB(p.metrik_pada)}`
+                          ? ` · angka ${sejakRingkas(p.metrik_pada)}`
                           : p.terlacak
-                            ? " · angka belum ditarik"
-                            : " · tidak terlacak (tanpa request_id)"}
+                            ? " · menunggu penarikan harian"
+                            : " · tidak tercatat di upload-post"}
                       </p>
                     </div>
                     <span className="angka-tab shrink-0 text-[11px] font-bold text-teks-utama">
@@ -283,7 +346,7 @@ export function PanelInsightKategori({
                     <button
                       type="button"
                       onClick={() => void tarikSekarang(p.id)}
-                      disabled={tarikId !== null || !data.upload_post_siap}
+                      disabled={tarikId !== null || !data.upload_post_siap || !p.terlacak}
                       aria-label="Tarik angka dari upload-post sekarang"
                       title="Tarik angka dari upload-post sekarang"
                       className="glass btn-tekan flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-teks-utama disabled:opacity-50"
@@ -301,19 +364,16 @@ export function PanelInsightKategori({
                           <PlatformIcon platform={pf} size={12} />
                           <span className="w-16 shrink-0 font-semibold text-teks-utama">{LABEL_PLATFORM[pf] ?? pf}</span>
                           <span className="angka-tab min-w-0 flex-1">
-                            {angka(m.suka)} suka · {angka(m.komentar)} komentar · {angka(m.bagikan)} dibagikan ·{" "}
-                            {angka(m.tayangan)} tayang · {angka(m.impresi)} impresi · {angka(m.jangkauan)} jangkauan
+                            {angka(m.tayangan)} tayang · {angka(m.suka)} suka · {angka(m.komentar)} komentar ·{" "}
+                            {angka(m.bagikan)} dibagikan
+                            {m.impresi != null && ` · ${angka(m.impresi)} impresi`}
+                            {m.jangkauan != null && ` · ${angka(m.jangkauan)} jangkauan`}
                             {m.simpan != null && ` · ${angka(m.simpan)} disimpan`}
                             {/* Angka lain dari upload-post yang tidak masuk kolom baku:
                                 tetap ditampilkan apa adanya, bukan hilang diam-diam. */}
                             {m.lain && Object.keys(m.lain).length > 0 && (
                               <span className="block text-[10px] text-teks-sekunder/80">
                                 lainnya: {Object.entries(m.lain).map(([k, v]) => `${k} ${formatAngkaRingkas(v)}`).join(" · ")}
-                              </span>
-                            )}
-                            {m.captured_at && (
-                              <span className="block text-[10px] text-teks-sekunder/80">
-                                ditarik upload-post {jamWIB(m.captured_at)}
                               </span>
                             )}
                           </span>
@@ -337,49 +397,48 @@ export function PanelInsightKategori({
             </ul>
           )}
 
-          {/* Hasil "Tarik sekarang" terakhir — supaya yang tidak cocok bisa
-              dilihat sebabnya, bukan sekadar "–". Master juga melihat
-              jawaban upload-post apa adanya. */}
-          {mentahTerakhir && (
-            <details className="glass-soft mt-2 rounded-xl p-2.5 text-[10.5px] text-teks-sekunder">
+          {/* Hasil "Tarik sekarang" terakhir — per platform beserta alasannya,
+              supaya "–" selalu bisa dijelaskan (token kedaluwarsa, video
+              dihapus, tidak terbit, …). */}
+          {tarikTerakhir && (
+            <details className="glass-soft mt-2 rounded-xl p-2.5 text-[10.5px] text-teks-sekunder" open>
               <summary className="cursor-pointer font-bold text-teks-utama">
-                Rincian tarikan terakhir — profil {mentahTerakhir.profil}
+                Tarikan terakhir — {tarikTerakhir.judul || `unggahan #${tarikTerakhir.post_id}`}
+                {tarikTerakhir.profil ? ` · profil ${tarikTerakhir.profil}` : ""}
               </summary>
-              <p className="mt-1.5">
-                upload-post mengembalikan <b>{mentahTerakhir.postingan_di_upload_post}</b> postingan
-                untuk profil ini; <b>{mentahTerakhir.unggahan_terisi}</b> unggahan aplikasi terisi.
-                {mentahTerakhir.postingan_di_upload_post === 0 &&
-                  " Nol postingan berarti upload-post belum punya rekaman angka untuk profil ini — angka baru tersedia sehari setelah unggahan tayang."}
-                {mentahTerakhir.postingan_di_upload_post > 0 && mentahTerakhir.unggahan_terisi === 0 &&
-                  " Ada postingan, tapi tidak satu pun cocok dengan alamat yang tercatat di laporan — kirimkan rincian ini ke developer."}
-              </p>
-              {peran === "master" && mentahTerakhir.mentah_halaman_pertama !== undefined && (
-                <pre className="scrollbar-tipis mt-2 max-h-72 overflow-auto rounded-lg bg-black/5 p-2 text-[10px] leading-snug whitespace-pre-wrap break-all dark:bg-white/10">
-                  {JSON.stringify(mentahTerakhir.mentah_halaman_pertama, null, 1).slice(0, 12000)}
-                </pre>
-              )}
+              <ul className="mt-1.5 flex flex-col gap-1">
+                {tarikTerakhir.per_platform.map((b) => (
+                  <li key={b.platform} className="flex items-start gap-1.5">
+                    <PlatformIcon platform={b.platform} size={12} />
+                    <span className="w-16 shrink-0 font-semibold text-teks-utama">
+                      {LABEL_PLATFORM[b.platform] ?? b.platform}
+                    </span>
+                    <span className={cn("min-w-0 flex-1", b.status !== "ok" && "text-amber-600")}>
+                      {b.status === "ok"
+                        ? `${LABEL_STATUS.ok}${b.tayangan != null ? ` · ${formatAngkaRingkas(b.tayangan)} tayang` : ""}`
+                        : `${LABEL_STATUS[b.status] ?? b.status}${
+                            b.galat && b.galat !== LABEL_STATUS[b.status] ? ` — ${b.galat}` : ""
+                          }`}
+                    </span>
+                  </li>
+                ))}
+                {tarikTerakhir.per_platform.length === 0 && (
+                  <li>upload-post tidak mengembalikan platform apa pun untuk unggahan ini.</li>
+                )}
+              </ul>
             </details>
           )}
 
-          {/* ===== 2. Laporan anggota (TikHub) ===== */}
+          {/* ===== 2. Semua video kategori (unggahan + laporan + link) ===== */}
           <h3 className="mt-5 font-heading text-[13px] font-bold text-teks-utama">
-            Laporan anggota
+            Semua video kategori
             <span className="ml-1 text-[11px] font-semibold text-teks-sekunder">
               · {r.jumlah_video} video · {r.jumlah_terukur} punya angka
             </span>
           </h3>
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {TILE_LAPORAN.map((t) => (
-              <div key={t.kunci} className="glass-soft rounded-xl p-2.5 text-center">
-                <p className="angka-tab font-heading text-[16px] leading-none font-extrabold text-teks-utama">
-                  {r.jumlah_terukur > 0 ? formatAngkaRingkas(r.total[t.kunci]) : "–"}
-                </p>
-                <p className="mt-1 text-[10px] font-semibold text-teks-sekunder">{t.label}</p>
-              </div>
-            ))}
-          </div>
-          <p className="mt-1.5 text-[10.5px] leading-relaxed text-teks-sekunder">
-            Angka per video dari sapuan TikHub — hanya TikTok & Instagram; video lain dihitung sebagai laporan saja.
+          <p className="mt-1 text-[10.5px] leading-relaxed text-teks-sekunder">
+            Unggahan SuperApp, laporan anggota, dan link kategori — satu baris per video. Angka dibaca upload-post
+            dari akun anggota yang tersambung; video di akun lain tampil tanpa angka.
           </p>
 
           {Object.keys(r.per_platform).length > 0 && (
@@ -423,7 +482,13 @@ export function PanelInsightKategori({
                       {v.judul || v.url.replace(/^https?:\/\/(www\.)?/, "")}
                     </p>
                     <p className="mt-0.5 truncate text-[10.5px] text-teks-sekunder">
-                      {[LABEL_PLATFORM[v.platform] ?? v.platform, v.akun, v.pelapor && `lapor: ${v.pelapor}`]
+                      {[
+                        LABEL_PLATFORM[v.platform] ?? v.platform,
+                        v.akun,
+                        v.asal === "kategori"
+                          ? "ditambahkan ke kategori"
+                          : v.pelapor && (v.asal === "unggahan" ? `unggah: ${v.pelapor}` : `lapor: ${v.pelapor}`),
+                      ]
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
@@ -431,6 +496,9 @@ export function PanelInsightKategori({
                       <p className="angka-tab mt-0.5 text-[10.5px] text-teks-sekunder">
                         {formatAngkaRingkas(v.metrik.tayangan)} tayangan · {formatAngkaRingkas(v.metrik.suka)} suka ·{" "}
                         {formatAngkaRingkas(v.metrik.komentar)} komentar · {formatAngkaRingkas(v.metrik.bagikan)} dibagikan
+                        {v.metrik.diperbarui_pada && (
+                          <span className="text-teks-sekunder/80"> · {sejakRingkas(v.metrik.diperbarui_pada)}</span>
+                        )}
                       </p>
                     ) : (
                       <p className="mt-0.5 text-[10.5px] text-amber-600">belum ada angka</p>

@@ -34,6 +34,7 @@
 
 import { denganCache, hapusCacheBersama } from "@/lib/cache-bersama";
 import { KonfigurasiError } from "@/lib/supabase";
+import { bacaBatasUp, uraiJawabanLive, type BatasUp, type JawabanLive } from "@/lib/metrik-video-up";
 
 const DASAR = "https://api.upload-post.com/api";
 
@@ -72,10 +73,11 @@ function kunci(): string {
   return k;
 }
 
-async function panggil<T>(
+/** Seperti panggil(), tetapi ikut mengembalikan sisa kuota dari header. */
+async function panggilDenganBatas<T>(
   jalur: string,
   init: RequestInit & { timeoutMs?: number } = {},
-): Promise<T> {
+): Promise<{ json: T; batas: BatasUp }> {
   const { timeoutMs = 30000, ...sisa } = init;
   const res = await fetch(`${DASAR}${jalur}`, {
     ...sisa,
@@ -86,6 +88,7 @@ async function panggil<T>(
     signal: AbortSignal.timeout(timeoutMs),
     cache: "no-store",
   });
+  const batas = bacaBatasUp((nama) => res.headers.get(nama));
   const teks = await res.text();
   let json: unknown = null;
   try {
@@ -102,15 +105,22 @@ async function panggil<T>(
         new Error(
           "Penyedia unggahan sedang membatasi permintaan. Tunggu sekitar satu menit, lalu coba sekali — jangan menekan berulang.",
         ),
-        { status: 429, pesanAman: true },
+        { status: 429, pesanAman: true, batas },
       );
     }
     const pesan =
       (json as { message?: string })?.message ??
       `upload-post menolak permintaan (${res.status})`;
-    throw Object.assign(new Error(pesan), { status: res.status });
+    throw Object.assign(new Error(pesan), { status: res.status, batas });
   }
-  return json as T;
+  return { json: json as T, batas };
+}
+
+async function panggil<T>(
+  jalur: string,
+  init: RequestInit & { timeoutMs?: number } = {},
+): Promise<T> {
+  return (await panggilDenganBatas<T>(jalur, init)).json;
 }
 
 // ------------------------------------------------------------
@@ -538,9 +548,13 @@ function urlDari(o: Record<string, unknown> | undefined): string {
  * bertanya "20 video bulan lalu dapat berapa", rentangnya harus dikirim
  * eksplisit. Halaman diikuti sampai habis (maks `maksHalaman`).
  *
- * CATATAN PENTING: endpoint /post-analytics/{request_id} yang dipakai
- * analitikPostUp() di bawah TIDAK ADA di spesifikasi — ia kebetulan
- * memberi post_url, tapi bukan angka. Angka hanya ada di sini.
+ * RALAT (25 Sep 2026, diverifikasi langsung + dokumen get-analytics):
+ * /cached ini hanya MEMUTAR ULANG bacaan live terakhir — tidak ada
+ * penyegaran di latar, jadi angkanya berhenti di saat unggahan pertama
+ * kali dibaca (±5 menit setelah unggah). Angka yang segar datang dari
+ * /post-analytics/{request_id} (post_metrics) — lihat analitikPostLiveUp()
+ * dan penyegar harian lib/segar-metrik-video.ts. Fungsi ini tidak lagi
+ * dipakai untuk menyegarkan angka.
  */
 export type PostCachedUp = {
   post_id: string;
@@ -618,4 +632,81 @@ export async function analitikPostUp(requestId: string, timeoutMs = 25000): Prom
     }
   }
   return hasil;
+}
+
+// ------------------------------------------------------------
+// Angka per video LIVE — penyegaran harian (25 Sep 2026)
+// ------------------------------------------------------------
+//
+// Dua pintu live (kontrak diverifikasi langsung 25 Sep 2026, dokumen:
+// docs.upload-post.com/api/get-analytics). Keduanya dibatasi upload-post
+// 100 permintaan / 5 menit dan dipakai bersama rekonsiliasi KPI — jangan
+// dipanggil dalam putaran tanpa rem (lihat lib/segar-metrik-video.ts).
+
+/** Satu unggahan SuperApp, SEMUA platformnya dalam satu permintaan. */
+export async function analitikPostLiveUp(
+  requestId: string,
+  timeoutMs = 60_000,
+): Promise<{ jawaban: JawabanLive; batas: BatasUp }> {
+  const { json, batas } = await panggilDenganBatas<unknown>(
+    `/uploadposts/post-analytics/${encodeURIComponent(requestId)}`,
+    { method: "GET", timeoutMs: Math.max(5_000, timeoutMs) },
+  );
+  return { jawaban: uraiJawabanLive(json), batas };
+}
+
+/**
+ * Satu video di akun tertaut yang TIDAK diunggah lewat API (mis. video
+ * yang dilaporkan anggota). `platformPostId` = ID asli di platform itu
+ * (TikTok/YouTube/X = ID di alamatnya; Instagram/Threads/Facebook = ID
+ * media dari daftarMediaUp).
+ */
+export async function analitikPostAsliUp(
+  platformPostId: string,
+  platformApp: string,
+  profil: string,
+  timeoutMs = 30_000,
+): Promise<{ jawaban: JawabanLive; batas: BatasUp }> {
+  const q = new URLSearchParams({
+    platform_post_id: platformPostId,
+    platform: KE_UP[platformApp] ?? platformApp,
+    user: profil,
+  });
+  const { json, batas } = await panggilDenganBatas<unknown>(`/uploadposts/post-analytics?${q.toString()}`, {
+    method: "GET",
+    timeoutMs: Math.max(5_000, timeoutMs),
+  });
+  return { jawaban: uraiJawabanLive(json), batas };
+}
+
+/**
+ * Daftar media satu akun tertaut, satu halaman (maks 100). Dipakai
+ * mencari ID media Instagram/Threads/Facebook dari alamat video.
+ */
+export async function daftarMediaUp(
+  profil: string,
+  platformApp: string,
+  opsi: { limit?: number; cursor?: string | null; timeoutMs?: number } = {},
+): Promise<{ media: PostinganUp[]; next_cursor: string | null; batas: BatasUp }> {
+  const q = new URLSearchParams({
+    platform: KE_UP[platformApp] ?? platformApp,
+    user: profil,
+    limit: String(Math.min(Math.max(opsi.limit ?? 100, 1), 100)),
+  });
+  if (opsi.cursor) q.set("cursor", opsi.cursor);
+  const { json, batas } = await panggilDenganBatas<{
+    media?: Record<string, unknown>[];
+    pagination?: { next_cursor?: string | null };
+    next_cursor?: string | null;
+  }>(`/uploadposts/media?${q.toString()}`, { method: "GET", timeoutMs: Math.max(5_000, opsi.timeoutMs ?? 20_000) });
+  const media = (json?.media ?? []).map((m) => ({
+    id: String(m.id ?? ""),
+    permalink: String(m.permalink ?? m.media_url ?? ""),
+    caption: String(m.caption ?? "").slice(0, 300),
+    jenis: String(m.media_type ?? ""),
+    waktu: keIso(m.timestamp),
+    thumbnail: String(m.thumbnail_url ?? ""),
+  }));
+  const lanjut = json?.pagination?.next_cursor ?? json?.next_cursor ?? null;
+  return { media, next_cursor: lanjut ? String(lanjut) : null, batas };
 }

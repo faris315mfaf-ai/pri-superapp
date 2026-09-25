@@ -71,8 +71,20 @@ export function idVideo(platform: string, url: string): string | null {
 }
 
 /** Nama akun dari tautan (bila ada) — TikTok/Threads/X. */
+export function akunDariTautan(platform: string, s: string): string | null {
+  return akunDari(platform.toLowerCase(), (s ?? "").trim());
+}
+
+/** Segmen jalur Instagram yang BUKAN nama akun. */
+const JALUR_IG_BUKAN_AKUN = new Set(["reel", "reels", "p", "tv", "stories", "explore", "accounts", "share"]);
+
 function akunDari(platform: string, s: string): string | null {
   switch (platform) {
+    case "instagram": {
+      // instagram.com/<akun>/reel/<kode> — bentuk yang disalin dari profil.
+      const u = /instagram\.com\/([A-Za-z0-9_.]{1,30})\/(?:reel|reels|p|tv)\//i.exec(s)?.[1] ?? null;
+      return u && !JALUR_IG_BUKAN_AKUN.has(u.toLowerCase()) ? u : null;
+    }
     case "tiktok":
       return /tiktok\.com\/@([\w.-]+)\/video\//i.exec(s)?.[1] ?? null;
     case "threads":

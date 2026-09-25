@@ -1278,6 +1278,16 @@ export type InsightKategori = {
   postingan_terukur: number;
   total_up: TotalMetrikPostUp;
   upload_post_siap: boolean;
+  /** Kolom favorit (sql/50) ada → angka "favorit/disimpan" bermakna. */
+  ada_favorit?: boolean;
+  /** Keadaan penyegar harian angka video (25 Sep 2026). */
+  pembaruan?: {
+    siklus: number;
+    mulai: string;
+    selesai: string | null;
+    terakhir: string | null;
+    jeda_sampai: string | null;
+  } | null;
   kategori: string;
   ringkasan: {
     jumlah_video: number;
@@ -1294,9 +1304,10 @@ export type InsightKategori = {
     judul: string;
     thumbnail_url: string;
     akun: string;
+    /** Pelapor (laporan) atau pengunggah (unggahan). */
     pelapor: string;
-    /** "laporan" (anggota) atau "kategori" (ditambahkan langsung). */
-    asal: "laporan" | "kategori";
+    /** "laporan" (anggota), "kategori" (ditambahkan langsung), "unggahan" (lewat SuperApp). */
+    asal: "laporan" | "kategori" | "unggahan";
     tanggal_wib: string;
     waktu_posting: string | null;
     metrik: {
@@ -1365,25 +1376,54 @@ export async function tarikDataKategori(kategori: string, paksa = false): Promis
   return json as unknown as HasilTarikKategori;
 }
 
+/** Hasil "Tarik sekarang" satu unggahan — langsung dari upload-post (live). */
 export type HasilTarikMetrik = {
   post_id: number;
   profil: string;
-  /** Berapa postingan profil ini yang dikembalikan upload-post. */
-  postingan_di_upload_post: number;
-  /** Berapa unggahan aplikasi milik profil ini yang berhasil terisi angkanya. */
-  unggahan_terisi: number;
-  unggahan_ini: { metrik: Record<string, MetrikPostUp> | null; metrik_pada: string | null } | null;
-  /** Hanya untuk master: jawaban upload-post apa adanya (halaman pertama). */
-  mentah_halaman_pertama?: unknown;
+  judul: string;
+  /** Per platform: "ok" = angka tersimpan; "galat"/"tidak_terbit" beserta alasannya. */
+  per_platform: {
+    platform: string;
+    status: "ok" | "galat" | "tidak_terbit";
+    galat: string;
+    tayangan: number | null;
+    post_url: string;
+  }[];
+  /** Jumlah video (per platform) yang angkanya tersimpan. */
+  tersimpan: number;
 };
 
-/** Tarik angka upload-post SEKARANG untuk profil pemilik satu unggahan. */
+/** Tarik angka satu unggahan SEKARANG dari upload-post. */
 export async function tarikMetrikPostSekarang(idUnggahan: string): Promise<HasilTarikMetrik> {
   const json = await fetchJson(
     `/api/tv-nasional/kategori?mentah=${encodeURIComponent(idUnggahan)}`,
     { headers: headerToken() },
   );
   return json as unknown as HasilTarikMetrik;
+}
+
+export type HasilSegarKategori = {
+  kategori: string;
+  /** Video kategori yang bisa ditanyakan ke upload-post. */
+  total: number;
+  dikerjakan: number;
+  terisi: number;
+  galat: number;
+  /** Masih perlu ditarik setelah panggilan ini; panggil lagi sampai 0. */
+  sisa: number;
+  /** true = jatah tarik manual/kuota upload-post sedang direm. */
+  direm: boolean;
+  lama_ms: number;
+};
+
+/** Satu potongan tarik angka SATU KATEGORI dari upload-post (25 Sep 2026). */
+export async function segarkanKategoriUp(kategori: string): Promise<HasilSegarKategori> {
+  const json = await fetchJson("/api/tv-nasional/kategori-segar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ kategori }),
+  });
+  return json as unknown as HasilSegarKategori;
 }
 
 export async function getInsightKategori(kategori: string): Promise<InsightKategori> {

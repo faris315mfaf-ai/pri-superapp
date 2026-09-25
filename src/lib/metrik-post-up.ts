@@ -33,7 +33,8 @@ export type KunciMetrikPost = (typeof KUNCI_METRIK_POST)[number];
 /** Nama-nama yang lazim dipakai upload-post & sosmed asalnya, per angka. */
 const NAMA: Record<KunciMetrikPost, string[]> = {
   suka: ["like_count", "likes", "likes_count", "digg_count", "favorite_count", "reactions", "reaction_count", "total_likes"],
-  komentar: ["comment_count", "comments", "comments_count", "reply_count", "total_comments"],
+  // "replies" = istilah upload-post untuk komentar Threads & X (diverifikasi 25 Sep 2026).
+  komentar: ["comment_count", "comments", "comments_count", "reply_count", "replies", "total_comments"],
   bagikan: ["share_count", "shares", "shares_count", "reposts", "repost_count", "retweets", "retweet_count", "total_shares"],
   tayangan: ["view_count", "views", "views_count", "play_count", "video_views", "plays", "total_views", "video_view_count"],
   impresi: ["impressions", "impression_count", "impressions_count", "total_impressions"],

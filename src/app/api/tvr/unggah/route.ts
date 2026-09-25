@@ -513,9 +513,14 @@ export async function POST(request: Request) {
       });
       // Platform yang langsung dinyatakan gagal oleh penyedia (balasan sinkron).
       const gagalAwal = hasil.gagalAwal;
+      // Kategori ikut disimpan di `hasil` (25 Sep 2026): kolom tvrku_post.
+      // keyword belum tentu ada di database (sql/46 belum dijalankan di
+      // cloud), dan tanpa ini kategori setiap unggahan hilang diam-diam —
+      // insight per kategori & laporan otomatis tidak tahu videonya milik
+      // kategori apa. Rekonsiliasi KPI mempertahankan kunci ini.
       const hasilSimpan = gagalAwal.length
-        ? { ...hasil.mentah, kpi_gagal: gagalAwal.map((g) => g.platform), kpi_gagal_alasan: Object.fromEntries(gagalAwal.map((g) => [g.platform, g.pesan])) }
-        : hasil.mentah;
+        ? { ...hasil.mentah, kategori, kpi_gagal: gagalAwal.map((g) => g.platform), kpi_gagal_alasan: Object.fromEntries(gagalAwal.map((g) => [g.platform, g.pesan])) }
+        : { ...hasil.mentah, kategori };
 
       // Berkas dihapus 2 jam setelah TAYANG: post langsung = sekarang+2j;
       // terjadwal = jadwal+2j (upload-post butuh URL-nya masih hidup

@@ -204,6 +204,18 @@ export function waktuJelasWIB(iso: string | null | undefined): string {
   return `${hari}, ${d.getUTCDate()} ${bulan} ${dua(d.getUTCHours())}:${dua(d.getUTCMinutes())} WIB (${lalu})`;
 }
 
+/** Selisih waktu ringkas untuk label kecil: "baru saja", "12 mnt lalu", "5 jam lalu", "2 hari lalu". */
+export function sejakRingkas(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const mnt = Math.max(0, Math.round((Date.now() - t) / 60_000));
+  if (mnt < 1) return "baru saja";
+  if (mnt < 60) return `${mnt} mnt lalu`;
+  if (mnt < 48 * 60) return `${Math.floor(mnt / 60)} jam lalu`;
+  return `${Math.floor(mnt / 1440)} hari lalu`;
+}
+
 /** "YYYY-MM-DD" hari ini menurut WIB (jam perangkat + 7). */
 export function tanggalWibHariIni(): string {
   return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);

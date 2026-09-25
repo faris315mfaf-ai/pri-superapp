@@ -153,7 +153,35 @@ type KonteksCatat = {
    * tanpa mengaitkan ke tvrku_post, lalu status menunggu tak hilang.
    */
   barisPerKunci: Map<string, BarisLaporanKunci>;
+  /**
+   * Kategori tiap unggahan (tvrku_post.hasil.kategori, 25 Sep 2026) →
+   * ikut dicatat sebagai `keyword` laporan otomatisnya, supaya video itu
+   * masuk pengelompokan kategori di TV Rakyat Nasional.
+   */
+  kategoriPost: Map<number, string>;
 };
+
+/** Kategori yang tersimpan di hasil unggahan; "" bila tidak ada. */
+export function kategoriDariHasil(hasil: Record<string, unknown> | null | undefined): string {
+  const k = hasil?.kategori;
+  return typeof k === "string" ? k.trim().slice(0, 120) : "";
+}
+
+/** Isi keyword laporan yang masih kosong dengan kategori unggahannya. */
+async function isiKategoriKosong(db: ReturnType<typeof supabase>, idLaporan: number, kategori: string): Promise<void> {
+  if (!kategori || idLaporan <= 0) return;
+  // Hanya yang keyword-nya kosong: kategori pilihan anggota (laporan
+  // manual) tidak pernah ditimpa. Galat (mis. kolom belum ada) diabaikan.
+  await db
+    .from("laporan_video")
+    .update({ keyword: kategori })
+    .eq("id", idLaporan)
+    .is("keyword", null)
+    .then(
+      () => undefined,
+      () => undefined,
+    );
+}
 
 /** Tautkan baris orphan ke unggahan. Mengembalikan "baru" bila berhasil. */
 async function tautkanOrphanKePost(
@@ -180,6 +208,7 @@ async function tautkanOrphanKePost(
   if (error || !(data ?? []).length) return "dobel";
   baris.postId = postId;
   ctx.adaTerkait.add(`${postId}|${platform}`);
+  await isiKategoriKosong(db, baris.id, ctx.kategoriPost.get(postId) ?? "");
   return "baru";
 }
 
@@ -214,7 +243,9 @@ async function catatLaporan(
     user_id: userId,
     platform,
     url_video: url,
-    keyword: null,
+    // Kategori unggahannya (bila ada) — unggahan native tanpa unggahan
+    // aplikasi (postId 0) memang tidak punya kategori.
+    keyword: (postId > 0 ? ctx.kategoriPost.get(postId) : "") || null,
     tanggal_wib: tanggalWibDari(waktu),
     sumber: "otomatis",
   };
@@ -413,7 +444,12 @@ export async function rekonsiliasiKpiRinci(
       const pf = String(a.platform ?? "").toLowerCase();
       if (!usernamePer[pf] && a.username) usernamePer[pf] = String(a.username);
     }
-    const ctx: KonteksCatat = { usernamePer, kunciSudah, adaTerkait, barisPerKunci };
+    const kategoriPost = new Map<number, string>();
+    for (const p of posts) {
+      const k = kategoriDariHasil(p.hasil);
+      if (k) kategoriPost.set(p.id, k);
+    }
+    const ctx: KonteksCatat = { usernamePer, kunciSudah, adaTerkait, barisPerKunci, kategoriPost };
     // URL yang SUDAH terkait unggahan dilewati; orphan boleh dipasangkan lagi.
     const sudahTerkaitPost = (pf: string) => (url: string) => {
       const baris = barisPerKunci.get(kunciVideo(pf, url));

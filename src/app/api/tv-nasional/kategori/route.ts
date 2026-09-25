@@ -1,39 +1,34 @@
 // GET /api/tv-nasional/kategori?kategori=BPJS
 //
-// Insight PER KATEGORI untuk modul TV Rakyat Nasional. Dua sumber angka,
-// dilaporkan TERPISAH karena artinya berbeda:
+// Insight PER KATEGORI untuk modul TV Rakyat Nasional (dirombak 25 Sep
+// 2026). Seluruh video kategori itu — unggahan lewat SuperApp, laporan
+// anggota, dan link yang ditambahkan langsung ke kategori — beserta
+// angkanya per video: tayangan, suka, komentar, dibagikan.
 //
-//  1. LAPORAN (laporan_video × tvr_video_metrik) — semua video yang
-//     dilaporkan anggota dengan kategori itu; angkanya dari sapuan TikHub
-//     (TikTok & Instagram saja).
-//  2. POSTINGAN LEWAT SUPERAPP (tvrku_post) — video yang diunggah lewat
-//     aplikasi; angkanya LANGSUNG dari upload-post, per platform.
+// ANGKA: dari tabel tvr_video_metrik, yang DISEGARKAN TIAP HARI oleh
+// penjadwal (/api/cron/metrik-video → lib/segar-metrik-video.ts) langsung
+// dari upload-post (post-analytics live). Rute ini TIDAK memanggil
+// upload-post sama sekali: membuka panel berkali-kali tidak menghabiskan
+// kuota, dan panel tetap cepat.
 //
-// CARA ANGKA UPLOAD-POST DITARIK (diperbaiki 13 Sep 2026, setelah
-// membaca openapi.json resmi mereka): per PROFIL, bukan per unggahan.
-//   GET /uploadposts/post-analytics/cached?user=<profil>&since=&until=
-// mengembalikan SEMUA postingan profil itu beserta `metrics`. Lalu tiap
-// postingan dicocokkan ke unggahan aplikasi lewat ID video di post_url
-// (laporan_video menyimpan URL per platform untuk tiap unggahan).
-// Endpoint /post-analytics/{request_id} yang dipakai sebelumnya TIDAK
-// ADA di spesifikasi — ia hanya kebetulan memberi post_url, bukan angka.
+// KATEGORI sebuah video dikenali dari:
+//   • laporan_video.keyword (laporan manual, dan sejak 25 Sep 2026 juga
+//     laporan otomatis dari unggahan berkategori);
+//   • tvrku_post.hasil.kategori (unggahan sejak 25 Sep 2026) atau kolom
+//     tvrku_post.keyword bila migrasinya sudah dijalankan;
+//   • tvr_kategori_link (sql/50) bila tabelnya ada.
+// Kolom/tabel yang belum ada di database dilewati, tidak membuat galat.
 //
-// Angka disimpan di baris unggahannya (sql/49: metrik, metrik_mentah,
-// metrik_pada) dan disegarkan BERTAHAP di latar: profil yang paling basi
-// dulu, maksimal beberapa profil per permintaan — panel tetap cepat dan
-// kuota upload-post tidak habis oleh satu orang yang membuka panel
-// berkali-kali.
-//
-// ?mentah=<id tvrku_post> (master saja): jawaban upload-post apa adanya
-// untuk profil pemilik unggahan itu, plus hasil pencocokannya.
+// ?mentah=<id tvrku_post>: tarik angka SATU unggahan sekarang juga
+// (tombol di panel) — satu permintaan ke upload-post, dibatasi bersama.
 //
 // Akses: jabatan TV Rakyat Nasional, Pimpinan Redaksi, master.
-import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { adalahPimred, adalahTvrNasional } from "@/lib/jabatan";
 import { semuaBaris } from "@/lib/semua-baris";
+import { kolomTabelAda } from "@/lib/kolom-struktur";
 import {
   kodeMetrik,
   polaPersis,
@@ -42,22 +37,16 @@ import {
   type MetrikVideoKategori,
 } from "@/lib/insight-kategori";
 import {
+  angkaLain,
   jumlahkanMetrikPost,
-  metrikBasi,
-  petakanPostCached,
+  uraiMetrikPost,
   type MetrikPostTerurai,
-  type TautanUnggahan,
 } from "@/lib/metrik-post-up";
-import { analitikPostCachedUp, uploadPostSiap } from "@/lib/upload-post";
-import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
+import { uploadPostSiap } from "@/lib/upload-post";
+import { segarkanSatuUnggahan, statusSiklusMetrik } from "@/lib/segar-metrik-video";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
-
-/** Maks profil yang ditarik dari upload-post per permintaan panel. */
-const MAKS_PROFIL_SEGAR = 3;
-/** Rentang tarik maksimal ke belakang (upload-post bawaannya cuma 30 hari). */
-const MAKS_HARI_TARIK = 120;
+export const maxDuration = 90;
 
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
@@ -70,10 +59,6 @@ function potong<T>(daftar: T[], ukuran: number): T[][] {
   return hasil;
 }
 
-function tanggalIso(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
-}
-
 type BarisPost = {
   id: number | string;
   user_id: number | string;
@@ -81,89 +66,14 @@ type BarisPost = {
   platforms: string[] | null;
   request_id: string | null;
   dibuat_pada: string;
-  metrik: Record<string, MetrikPostTerurai> | null;
-  metrik_pada: string | null;
 };
 
-/**
- * Tarik angka SATU PROFIL dari upload-post, cocokkan ke seluruh unggahan
- * pemiliknya (bukan hanya yang berkategori — sekali tarik, semua dapat),
- * simpan ke tvrku_post. Mengembalikan jumlah unggahan yang terisi.
- */
-async function segarkanProfil(userId: number, profil: string, sejakMs: number): Promise<{
-  terisi: number;
-  posts: number;
-  mentah: unknown;
-}> {
-  const db = supabase();
-  const since = tanggalIso(Math.max(sejakMs, Date.now() - MAKS_HARI_TARIK * 86_400_000));
-  const { posts, mentah_halaman_pertama } = await analitikPostCachedUp(profil, {
-    since,
-    until: tanggalIso(Date.now()),
-    timeoutMs: 20_000,
-  });
+type BarisLaporan = LaporanKategori & { tvrku_post_id?: unknown };
 
-  // Seluruh unggahan pemilik ini + URL per platform (laporan_video).
-  const { data: milik } = await db
-    .from("tvrku_post")
-    .select("id")
-    .eq("user_id", userId)
-    .not("request_id", "is", null)
-    .limit(1000);
-  const idMilik = (milik ?? []).map((p) => String(p.id));
-  const tautan: TautanUnggahan[] = [];
-  for (const bagian of potong(idMilik, 300)) {
-    const { data } = await db
-      .from("laporan_video")
-      .select("tvrku_post_id, platform, url_video")
-      .in("tvrku_post_id", bagian.map(Number));
-    for (const t of data ?? []) {
-      if (t.tvrku_post_id && t.url_video) {
-        tautan.push({
-          tvrku_post_id: String(t.tvrku_post_id),
-          platform: String(t.platform ?? ""),
-          url_video: String(t.url_video),
-        });
-      }
-    }
-  }
+/** Angka satu platform satu unggahan untuk layar (tanpa `mentah` yang besar). */
+type MetrikTampil = Omit<MetrikPostTerurai, "mentah">;
 
-  const peta = petakanPostCached(posts, tautan);
-  const kini = new Date().toISOString();
-  let terisi = 0;
-  for (const [postId, perPlatform] of peta) {
-    const mentah: Record<string, unknown> = {};
-    for (const [pf, m] of Object.entries(perPlatform)) mentah[pf] = m.mentah;
-    const { error } = await db
-      .from("tvrku_post")
-      .update({ metrik: perPlatform, metrik_mentah: mentah, metrik_pada: kini })
-      .eq("id", Number(postId));
-    if (!error) terisi += 1;
-  }
-  // Unggahan pemilik ini yang TIDAK ketemu di upload-post tetap ditandai
-  // sudah dicoba (metrik_pada), supaya tidak ditarik ulang terus-menerus.
-  const tidakKetemu = idMilik.filter((id) => !peta.has(id));
-  for (const bagian of potong(tidakKetemu, 300)) {
-    await db
-      .from("tvrku_post")
-      .update({ metrik_pada: kini })
-      .in("id", bagian.map(Number))
-      .is("metrik", null);
-  }
-  return { terisi, posts: posts.length, mentah: mentah_halaman_pertama };
-}
-
-/** Profil upload-post milik seorang anggota (username), atau "". */
-async function profilMilik(userId: number): Promise<string> {
-  const { data } = await supabase()
-    .from("sosmed_profile")
-    .select("profile_key")
-    .eq("jenis", "pengguna")
-    .in("penyedia", PENYEDIA_ANGGOTA)
-    .eq("user_id", userId)
-    .maybeSingle();
-  return String(data?.profile_key ?? "");
-}
+const KOLOM_POST = "id, user_id, judul, platforms, request_id, dibuat_pada";
 
 export async function GET(request: Request) {
   return bungkus(async () => {
@@ -179,61 +89,102 @@ export async function GET(request: Request) {
     const db = supabase();
 
     // ---- "Tarik sekarang" untuk satu unggahan (tombol di panel) ----
-    // Siapa pun yang boleh membuka panel boleh menarik ulang; jawaban
-    // MENTAH upload-post hanya disertakan untuk master (bahan diagnosa).
     const idMentah = Number(url.searchParams.get("mentah") ?? 0);
     if (idMentah > 0) {
-      if (!uploadPostSiap()) throw Object.assign(new Error("Kunci upload-post belum terpasang."), { status: 503 });
-      const { data: p } = await db
-        .from("tvrku_post")
-        .select("id, user_id, request_id, dibuat_pada")
-        .eq("id", idMentah)
-        .maybeSingle();
-      if (!p) throw Object.assign(new Error("Unggahan tidak ditemukan."), { status: 404 });
-      const profil = await profilMilik(Number(p.user_id));
-      if (!profil) throw Object.assign(new Error("Pemilik unggahan belum punya profil upload-post."), { status: 404 });
-      const hasil = await segarkanProfil(Number(p.user_id), profil, Date.parse(String(p.dibuat_pada)) - 86_400_000);
-      const { data: sesudah } = await db.from("tvrku_post").select("metrik, metrik_pada").eq("id", idMentah).maybeSingle();
-      return {
-        post_id: idMentah,
-        profil,
-        postingan_di_upload_post: hasil.posts,
-        unggahan_terisi: hasil.terisi,
-        unggahan_ini: sesudah,
-        // Jawaban apa adanya dari upload-post: hanya master, dan hanya
-        // untuk membaca kolom-kolom yang mungkin belum dikenali pengurai.
-        mentah_halaman_pertama: user.role === "master" ? hasil.mentah : undefined,
-      };
+      return segarkanSatuUnggahan(Math.floor(idMentah));
     }
 
     const kategori = (url.searchParams.get("kategori") ?? "").trim().slice(0, 120);
     if (!kategori) throw Object.assign(new Error("Sebutkan kategorinya."), { status: 400 });
     const pola = polaPersis(kategori);
 
+    const [adaKeywordPost, adaFavorit, adaDurasi, adaSumber, adaMentah] = await Promise.all([
+      kolomTabelAda("tvrku_post", "keyword"),
+      kolomTabelAda("tvr_video_metrik", "favorit"),
+      kolomTabelAda("tvr_video_metrik", "durasi_detik"),
+      kolomTabelAda("tvr_video_metrik", "sumber"),
+      kolomTabelAda("tvr_video_metrik", "mentah"),
+    ]);
+
     // ==================================================================
-    // 1. LAPORAN × TikHub
+    // 1. Sumber video kategori
     // ==================================================================
-    const laporan = await semuaBaris<LaporanKategori & { tvrku_post_id?: unknown }>(
-      (dari, sampai) =>
-        db
-          .from("laporan_video")
-          .select("id, user_id, platform, url_video, tanggal_wib, tvrku_post_id")
-          .ilike("keyword", pola)
-          .order("tanggal_wib", { ascending: false })
-          .range(dari, sampai) as unknown as PromiseLike<{
-            data: (LaporanKategori & { tvrku_post_id?: unknown })[] | null;
+    const [laporan, { data: linkKategori }, { data: postHasil }, { data: postKeyword }] = await Promise.all([
+      semuaBaris<BarisLaporan>(
+        (dari, sampai) =>
+          db
+            .from("laporan_video")
+            .select("id, user_id, platform, url_video, tanggal_wib, tvrku_post_id")
+            .ilike("keyword", pola)
+            .order("tanggal_wib", { ascending: false })
+            .range(dari, sampai) as unknown as PromiseLike<{
+            data: BarisLaporan[] | null;
             error: { message: string } | null;
           }>,
-      20_000,
-    );
-    // Link yang ditambahkan LANGSUNG ke kategori (batch, sql/50) ikut
-    // dihitung sebagai video kategori — tanpa pelapor.
-    const { data: linkKategori } = await db
-      .from("tvr_kategori_link")
-      .select("id, platform, url, dibuat_pada")
-      .ilike("kategori", pola)
-      .order("dibuat_pada", { ascending: false })
-      .limit(1000);
+        20_000,
+      ),
+      // Tabel sql/50 — belum tentu ada; galatnya = tidak ada link tambahan.
+      db
+        .from("tvr_kategori_link")
+        .select("id, platform, url, dibuat_pada")
+        .ilike("kategori", pola)
+        .order("dibuat_pada", { ascending: false })
+        .limit(1000),
+      db
+        .from("tvrku_post")
+        .select(KOLOM_POST)
+        .ilike("hasil->>kategori", pola)
+        .order("dibuat_pada", { ascending: false })
+        .limit(1000),
+      adaKeywordPost
+        ? db
+            .from("tvrku_post")
+            .select(KOLOM_POST)
+            .ilike("keyword", pola)
+            .order("dibuat_pada", { ascending: false })
+            .limit(1000)
+        : Promise.resolve({ data: [] as BarisPost[] }),
+    ]);
+
+    // Unggahan kategori ini: kategorinya tersimpan, ATAU laporannya
+    // (tautan unggahan itu) berkategori ini.
+    const postSemua = new Map<string, BarisPost>();
+    for (const p of [...((postHasil ?? []) as BarisPost[]), ...((postKeyword ?? []) as BarisPost[])]) {
+      postSemua.set(String(p.id), p);
+    }
+    const idDariLaporan = [
+      ...new Set(laporan.map((l) => Number(l.tvrku_post_id ?? 0)).filter((n) => n > 0 && !postSemua.has(String(n)))),
+    ];
+    for (const bagian of potong(idDariLaporan, 300)) {
+      const { data } = await db.from("tvrku_post").select(KOLOM_POST).in("id", bagian);
+      for (const p of (data ?? []) as BarisPost[]) postSemua.set(String(p.id), p);
+    }
+    const postingan = [...postSemua.values()].sort((a, b) => String(b.dibuat_pada).localeCompare(String(a.dibuat_pada)));
+
+    // Tautan per platform tiap unggahan (dicatat rekonsiliasi KPI).
+    const tautanPost: { post_id: string; platform: string; url: string; tanggal_wib: string }[] = [];
+    for (const bagian of potong(
+      postingan.map((p) => Number(p.id)),
+      300,
+    )) {
+      const { data } = await db
+        .from("laporan_video")
+        .select("tvrku_post_id, platform, url_video, tanggal_wib")
+        .in("tvrku_post_id", bagian);
+      for (const t of data ?? []) {
+        if (!t.tvrku_post_id || !t.url_video) continue;
+        tautanPost.push({
+          post_id: String(t.tvrku_post_id),
+          platform: String(t.platform ?? "").toLowerCase(),
+          url: String(t.url_video),
+          tanggal_wib: String(t.tanggal_wib ?? ""),
+        });
+      }
+    }
+
+    // ==================================================================
+    // 2. Angka per video (tvr_video_metrik)
+    // ==================================================================
     const tautanKategori: LaporanKategori[] = (linkKategori ?? []).map((l) => ({
       id: `k${l.id}`,
       user_id: "",
@@ -242,26 +193,37 @@ export async function GET(request: Request) {
       tanggal_wib: String(l.dibuat_pada ?? "").slice(0, 10),
       asal: "kategori" as const,
     }));
-
     const kodeSemua = [
       ...new Set(
-        [...laporan, ...tautanKategori]
-          .map((l) => kodeMetrik(String(l.platform), String(l.url_video)))
-          .filter((k): k is string => Boolean(k)),
+        [
+          ...laporan.map((l) => kodeMetrik(String(l.platform), String(l.url_video))),
+          ...tautanKategori.map((l) => kodeMetrik(l.platform, l.url_video)),
+          ...tautanPost.map((t) => kodeMetrik(t.platform, t.url)),
+        ].filter((k): k is string => Boolean(k)),
       ),
     ];
+    const kolomMetrik = [
+      "kode, platform, judul, url, thumbnail_url, nama_akun, akun_username, waktu_posting, tayangan, suka, komentar, bagikan, diperbarui_pada",
+      adaFavorit ? "favorit" : "",
+      adaDurasi ? "durasi_detik" : "",
+      adaSumber ? "sumber" : "",
+      adaMentah ? "mentah" : "",
+    ]
+      .filter(Boolean)
+      .join(", ");
     const metrik = new Map<string, MetrikVideoKategori>();
+    const mentahPer = new Map<string, Record<string, unknown>>();
     for (const bagian of potong(kodeSemua, 200)) {
-      const { data } = await db
-        .from("tvr_video_metrik")
-        .select(
-          "kode, platform, judul, url, thumbnail_url, nama_akun, akun_username, waktu_posting, tayangan, suka, komentar, bagikan, favorit, durasi_detik, sumber, diperbarui_pada",
-        )
-        .in("kode", bagian);
-      for (const m of data ?? []) {
-        metrik.set(String(m.kode), {
-          kode: String(m.kode),
-          platform: String(m.platform),
+      const { data, error } = await db.from("tvr_video_metrik").select(kolomMetrik).in("kode", bagian);
+      if (error) {
+        console.error("[kategori] baca angka:", error.message);
+        continue;
+      }
+      for (const m of (data ?? []) as unknown as Record<string, unknown>[]) {
+        const kode = String(m.kode);
+        metrik.set(kode, {
+          kode,
+          platform: String(m.platform ?? ""),
           judul: String(m.judul ?? ""),
           url: String(m.url ?? ""),
           thumbnail_url: String(m.thumbnail_url ?? ""),
@@ -274,75 +236,20 @@ export async function GET(request: Request) {
           bagikan: Number(m.bagikan ?? 0),
           favorit: Number(m.favorit ?? 0),
           durasi_detik: m.durasi_detik == null ? null : Number(m.durasi_detik),
-          sumber: String(m.sumber ?? "tikhub"),
+          sumber: String(m.sumber ?? ""),
           diperbarui_pada: m.diperbarui_pada ? String(m.diperbarui_pada) : null,
         });
-      }
-    }
-
-    // ==================================================================
-    // 2. POSTINGAN LEWAT SUPERAPP × upload-post
-    //    Unggahan berkategori = keyword di tvrku_post ATAU laporan yang
-    //    tertaut ke unggahan itu berkategori (unggahan lama belum punya
-    //    kolom kategori, tapi laporannya mungkin sudah).
-    // ==================================================================
-    const idDariLaporan = [
-      ...new Set(laporan.map((l) => Number(l.tvrku_post_id ?? 0)).filter((n) => n > 0)),
-    ];
-    const kolomPost = "id, user_id, judul, platforms, request_id, dibuat_pada, metrik, metrik_pada";
-    const { data: postKeyword } = await db
-      .from("tvrku_post")
-      .select(kolomPost)
-      .ilike("keyword", pola)
-      .order("dibuat_pada", { ascending: false })
-      .limit(500);
-    const postSemua = new Map<string, BarisPost>();
-    for (const p of (postKeyword ?? []) as BarisPost[]) postSemua.set(String(p.id), p);
-    for (const bagian of potong(idDariLaporan, 300)) {
-      const { data } = await db.from("tvrku_post").select(kolomPost).in("id", bagian);
-      for (const p of (data ?? []) as BarisPost[]) postSemua.set(String(p.id), p);
-    }
-    const postingan = [...postSemua.values()].sort((a, b) =>
-      String(b.dibuat_pada).localeCompare(String(a.dibuat_pada)),
-    );
-
-    // Penyegaran bertahap di latar, PER PROFIL: profil yang unggahannya
-    // paling basi ditarik dulu.
-    if (uploadPostSiap()) {
-      const perPemilik = new Map<number, { basiTertua: string; sejakMs: number }>();
-      for (const p of postingan) {
-        if (!p.request_id || !metrikBasi(p.metrik_pada)) continue;
-        const uid = Number(p.user_id);
-        const ada = perPemilik.get(uid);
-        const dibuat = Date.parse(String(p.dibuat_pada)) || Date.now();
-        perPemilik.set(uid, {
-          basiTertua: ada ? (ada.basiTertua < (p.metrik_pada ?? "") ? ada.basiTertua : (p.metrik_pada ?? "")) : (p.metrik_pada ?? ""),
-          sejakMs: Math.min(ada?.sejakMs ?? Number.POSITIVE_INFINITY, dibuat - 86_400_000),
-        });
-      }
-      const antrean = [...perPemilik.entries()]
-        .sort((a, b) => a[1].basiTertua.localeCompare(b[1].basiTertua))
-        .slice(0, MAKS_PROFIL_SEGAR);
-      if (antrean.length > 0) {
-        after(async () => {
-          for (const [uid, info] of antrean) {
-            try {
-              const profil = await profilMilik(uid);
-              if (profil) await segarkanProfil(uid, profil, info.sejakMs);
-            } catch (e) {
-              console.error("[kategori] segarkan profil", uid, e instanceof Error ? e.message : e);
-            }
-          }
-        });
+        if (m.mentah && typeof m.mentah === "object" && !Array.isArray(m.mentah)) {
+          mentahPer.set(kode, m.mentah as Record<string, unknown>);
+        }
       }
     }
 
     // ---- Nama orang (pelapor & pengunggah) ---------------------------
     const idOrang = [
-      ...new Set([
-        ...laporan.map((l) => Number(l.user_id)),
-        ...postingan.map((p) => Number(p.user_id)),
-      ].filter((n) => n > 0)),
+      ...new Set(
+        [...laporan.map((l) => Number(l.user_id)), ...postingan.map((p) => Number(p.user_id))].filter((n) => n > 0),
+      ),
     ];
     const nama = new Map<string, string>();
     for (const bagian of potong(idOrang, 300)) {
@@ -350,32 +257,75 @@ export async function GET(request: Request) {
       for (const u of data ?? []) nama.set(String(u.id), String(u.nama ?? ""));
     }
 
-    const laporanBersih: LaporanKategori[] = laporan.map((l) => ({
-      id: String(l.id),
-      user_id: String(l.user_id),
-      platform: String(l.platform ?? ""),
-      url_video: String(l.url_video ?? ""),
-      tanggal_wib: String(l.tanggal_wib ?? ""),
-    }));
-    const { video, ringkasan } = susunInsightKategori([...laporanBersih, ...tautanKategori], metrik, nama);
+    // ==================================================================
+    // 3. Susun: daftar video unik + ringkasan, dan daftar unggahan
+    // ==================================================================
+    const pemilikPost = new Map(postingan.map((p) => [String(p.id), String(p.user_id)]));
+    // Urutan sumber = prioritas atribusi: video yang ternyata unggahan
+    // SuperApp ditandai "unggahan" walau ada juga yang melaporkannya.
+    const sumber: LaporanKategori[] = [
+      ...tautanPost.map((t, i) => ({
+        id: `u${t.post_id}-${i}`,
+        user_id: pemilikPost.get(t.post_id) ?? "",
+        platform: t.platform,
+        url_video: t.url,
+        tanggal_wib: t.tanggal_wib,
+        asal: "unggahan" as const,
+      })),
+      ...laporan.map((l) => ({
+        id: String(l.id),
+        user_id: String(l.user_id),
+        platform: String(l.platform ?? ""),
+        url_video: String(l.url_video ?? ""),
+        tanggal_wib: String(l.tanggal_wib ?? ""),
+        asal: "laporan" as const,
+      })),
+      ...tautanKategori,
+    ];
+    const { video, ringkasan } = susunInsightKategori(sumber, metrik, nama);
 
     const daftarPost = postingan.map((p) => {
-      const perPlatform = (p.metrik ?? {}) as Record<string, MetrikPostTerurai>;
-      const total = jumlahkanMetrikPost(Object.values(perPlatform));
+      const perPlatform: Record<string, MetrikTampil> = {};
+      let metrikPada: string | null = null;
+      for (const t of tautanPost) {
+        if (t.post_id !== String(p.id)) continue;
+        const kode = kodeMetrik(t.platform, t.url);
+        const m = kode ? metrik.get(kode) : undefined;
+        if (!m) continue;
+        // Angka baku dari kolom; impresi/jangkauan/angka lain hanya bila
+        // kolom `mentah` (sql/50) ada — tanpa itu memang tidak diketahui.
+        const mentah = kode ? mentahPer.get(kode) : undefined;
+        const tambahan = mentah ? uraiMetrikPost(mentah) : null;
+        perPlatform[t.platform] = {
+          suka: m.suka,
+          komentar: m.komentar,
+          bagikan: m.bagikan,
+          tayangan: m.tayangan,
+          impresi: tambahan?.impresi ?? null,
+          jangkauan: tambahan?.jangkauan ?? null,
+          simpan: adaFavorit ? m.favorit : null,
+          post_url: m.url || t.url,
+          post_id: kode ?? "",
+          captured_at: m.diperbarui_pada,
+          lain: mentah ? angkaLain(mentah) : {},
+        };
+        if (m.diperbarui_pada && (!metrikPada || m.diperbarui_pada > metrikPada)) metrikPada = m.diperbarui_pada;
+      }
       return {
         id: String(p.id),
         judul: String(p.judul ?? ""),
         pengunggah: nama.get(String(p.user_id)) ?? "",
         platforms: (p.platforms ?? []) as string[],
         dibuat_pada: String(p.dibuat_pada),
-        metrik_pada: p.metrik_pada,
-        terlacak: Boolean(p.request_id),
+        metrik_pada: metrikPada,
+        terlacak: /^[0-9a-f]{32}$/i.test(String(p.request_id ?? "")),
         per_platform: perPlatform,
-        total,
+        total: jumlahkanMetrikPost(Object.values(perPlatform)),
       };
     });
     const totalUp = jumlahkanMetrikPost(daftarPost.flatMap((p) => Object.values(p.per_platform)));
 
+    const siklus = await statusSiklusMetrik().catch(() => null);
     return {
       kategori,
       ringkasan,
@@ -385,6 +335,18 @@ export async function GET(request: Request) {
       postingan_terukur: daftarPost.filter((p) => p.total.platform_terukur > 0).length,
       total_up: totalUp,
       upload_post_siap: uploadPostSiap(),
+      /** Kolom favorit (sql/50) ada → angka "disimpan/favorit" bermakna. */
+      ada_favorit: adaFavorit,
+      /** Keadaan penyegar harian — ditampilkan sebagai "diperbarui …". */
+      pembaruan: siklus
+        ? {
+            siklus: siklus.nomor,
+            mulai: siklus.mulai,
+            selesai: siklus.selesai,
+            terakhir: siklus.terakhir,
+            jeda_sampai: siklus.jeda_sampai,
+          }
+        : null,
     };
   });
 }

@@ -38,14 +38,19 @@ export type MetrikVideoKategori = {
   diperbarui_pada: string | null;
 };
 
+export type AsalVideoKategori = "laporan" | "kategori" | "unggahan";
+
 export type LaporanKategori = {
   id: string;
   user_id: string;
   platform: string;
   url_video: string;
   tanggal_wib: string;
-  /** "laporan" (anggota) atau "kategori" (ditambahkan langsung ke kategori). */
-  asal?: "laporan" | "kategori";
+  /**
+   * "laporan" (anggota), "kategori" (ditambahkan langsung ke kategori),
+   * atau "unggahan" (diunggah lewat SuperApp dengan kategori ini).
+   */
+  asal?: AsalVideoKategori;
 };
 
 /** Awalan kode per platform. tt_/ig_ mengikuti penyapu TikHub (lib/tikhub.ts). */
@@ -99,8 +104,9 @@ export type VideoKategori = {
   judul: string;
   thumbnail_url: string;
   akun: string;
+  /** Pelapor (asal laporan) atau pengunggah (asal unggahan). */
   pelapor: string;
-  asal: "laporan" | "kategori";
+  asal: AsalVideoKategori;
   tanggal_wib: string;
   waktu_posting: string | null;
   /** null = belum ada angka untuk video ini. */
@@ -128,7 +134,9 @@ export type RingkasanKategori = {
 /**
  * Menyatukan tautan + metrik menjadi daftar video (satu baris per video,
  * bukan per laporan — dua anggota yang melaporkan video yang sama tidak
- * menggandakan angkanya) dan ringkasan totalnya.
+ * menggandakan angkanya) dan ringkasan totalnya. Bila satu video datang
+ * dari beberapa sumber, yang PERTAMA di daftar yang dipakai (asal &
+ * pelapornya) — jadi urutkan sumber dari yang paling bermakna.
  */
 export function susunInsightKategori(
   laporan: LaporanKategori[],
