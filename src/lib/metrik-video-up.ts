@@ -36,6 +36,36 @@ export function platformUp(namaApp: string): string {
   return n === "twitter" ? "x" : n;
 }
 
+/**
+ * Potong teks dengan AMAN untuk database: per karakter utuh (emoji tidak
+ * terbelah), tanpa karakter NUL dan tanpa separuh-emoji (surrogate
+ * tunggal). Insiden 26 Sep 2026: caption yang dipotong .slice() di tengah
+ * emoji membuat Postgres menolak SELURUH kiriman ("invalid input syntax
+ * for type json") — 200 video sekaligus gagal masuk katalog.
+ */
+export function potongAman(teks: unknown, maks: number): string {
+  const s = teks == null ? "" : String(teks);
+  let hasil = "";
+  let n = 0;
+  for (let i = 0; i < s.length && n < maks; i++) {
+    const c = s.charCodeAt(i);
+    if (c === 0) continue;
+    if (c >= 0xd800 && c <= 0xdbff) {
+      const d = s.charCodeAt(i + 1);
+      if (d >= 0xdc00 && d <= 0xdfff) {
+        hasil += s[i] + s[i + 1];
+        i++;
+        n++;
+      }
+      continue;
+    }
+    if (c >= 0xdc00 && c <= 0xdfff) continue;
+    hasil += s[i];
+    n++;
+  }
+  return hasil;
+}
+
 function objek(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 }
@@ -106,7 +136,7 @@ export function uraiJawabanLive(jawaban: unknown): JawabanLive {
   const post = objek(d.post) ?? {};
   const hasil: JawabanLive = {
     profil: String(post.profile_username ?? ""),
-    judul: String(post.post_title ?? post.post_caption ?? "").trim().slice(0, 300),
+    judul: potongAman(String(post.post_title ?? post.post_caption ?? "").trim(), 300),
     waktu_unggah: waktuUp(post.upload_timestamp),
     asal: String(post.source ?? ""),
     request_id: String(post.request_id ?? ""),
@@ -127,13 +157,13 @@ export function uraiJawabanLive(jawaban: unknown): JawabanLive {
         status: "tidak_terbit",
         // Kosong bila upload-post tidak menyebut alasannya — layar sudah
         // menulis "tidak terbit di platform ini" sendiri.
-        galat: String(b.error ?? b.message ?? "").slice(0, 300),
+        galat: potongAman(b.error ?? b.message ?? "", 300),
       });
       continue;
     }
     const galat = typeof b.post_metrics_error === "string" ? b.post_metrics_error.trim() : "";
     if (galat) {
-      hasil.blok.push({ ...dasar, status: "galat", galat: galat.slice(0, 300) });
+      hasil.blok.push({ ...dasar, status: "galat", galat: potongAman(galat, 300) });
       continue;
     }
     const pm = objek(b.post_metrics);
@@ -217,12 +247,12 @@ export function barisMetrikVideo(o: {
   const baris: Record<string, unknown> = {
     kode: o.kode,
     platform: platformApp(o.platform),
-    akun_username: teks(o.akun_username.replace(/^@/, ""), lama.akun_username).slice(0, 120),
+    akun_username: potongAman(teks(o.akun_username.replace(/^@/, ""), lama.akun_username), 120),
     user_id: o.user_id ?? (lama.user_id == null ? null : Number(lama.user_id)),
-    nama_akun: String(lama.nama_akun ?? "").slice(0, 200),
-    judul: teks(o.judul, lama.judul).slice(0, 300),
+    nama_akun: potongAman(lama.nama_akun ?? "", 200),
+    judul: potongAman(teks(o.judul, lama.judul), 300),
     // URL lama dipertahankan: bentuknya sudah dipakai laporan/embed.
-    url: teks(String(lama.url ?? ""), o.url).slice(0, 500),
+    url: potongAman(teks(String(lama.url ?? ""), o.url), 500),
     waktu_posting: lama.waktu_posting ? String(lama.waktu_posting) : o.waktu_posting,
     tayangan: a.tayangan,
     suka: a.suka,

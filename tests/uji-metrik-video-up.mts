@@ -15,6 +15,7 @@ import {
   platformApp,
   platformDidukung,
   platformUp,
+  potongAman,
   selangSeling,
   tanggalWib,
   tingkatKesegaran,
@@ -295,6 +296,15 @@ const s2 = susunInsightKategori(
 );
 cek("link bagikan + link lengkap video sama = 1 video", s2.ringkasan.jumlah_video === 1 && s2.ringkasan.total.tayangan === 90, s2.ringkasan);
 cek("kartu link bagikan berangka & beralamat asli", s2.video[0]?.metrik?.tayangan === 90 && s2.video[0]?.url === "https://www.facebook.com/reel/946158698557752");
+
+console.log("potongAman — teks aman untuk database (insiden 26 Sep 2026)");
+const emoji = "Aksi 😀 damai";
+cek("emoji tidak terbelah (dipotong per karakter)", potongAman(emoji, 6) === "Aksi 😀" && potongAman(emoji, 5) === "Aksi ");
+cek("separuh emoji (surrogate tunggal) dibuang", potongAman("a\ud83d", 10) === "a" && potongAman("\ude00b", 10) === "b");
+cek("hasil potongan lama (.slice) dipulihkan", JSON.stringify(potongAman(emoji.slice(0, 6), 300)) === JSON.stringify("Aksi "));
+cek("karakter NUL dibuang", potongAman("a\u0000b", 10) === "ab");
+cek("null/undefined → kosong", potongAman(null, 5) === "" && potongAman(undefined, 5) === "");
+cek("panjang dihitung per karakter", Array.from(potongAman("😀".repeat(400), 300)).length === 300);
 
 console.log(`\n${lulus} lulus, ${gagal} gagal`);
 if (gagal > 0) process.exit(1);

@@ -47,6 +47,7 @@ import { analitikPostAsliUp, analitikPostLiveUp, daftarMediaUp, uploadPostSiap }
 import {
   BELUM_DITARIK,
   adalahMediaVideo,
+  potongAman,
   awalHariWib,
   barisMetrikVideo,
   golonganGalat,
@@ -570,12 +571,12 @@ async function gabungKatalog(db: Db, rows: BarisKatalog[], kolom: KolomTambahan,
         const b: Record<string, unknown> = {
           kode: r.kode,
           platform: r.platform,
-          akun_username: r.akun_username.slice(0, 120),
+          akun_username: potongAman(r.akun_username, 120),
           user_id: r.user_id,
           nama_akun: "",
-          judul: r.judul.slice(0, 300),
-          url: r.url.slice(0, 500),
-          thumbnail_url: r.thumbnail_url.slice(0, 1000),
+          judul: potongAman(r.judul, 300),
+          url: potongAman(r.url, 500),
+          thumbnail_url: potongAman(r.thumbnail_url, 1000),
           waktu_posting: r.waktu_posting,
           tayangan: 0,
           suka: 0,
@@ -587,7 +588,16 @@ async function gabungKatalog(db: Db, rows: BarisKatalog[], kolom: KolomTambahan,
         return b;
       });
       const { error: eBaru } = await db.from("tvr_video_metrik").upsert(isi, { onConflict: "kode", ignoreDuplicates: true });
-      if (eBaru) console.error("[metrik-video] katalog baru:", eBaru.message);
+      if (eBaru) {
+        // Satu baris rusak menggagalkan seluruh kiriman → ulang per baris,
+        // supaya hanya baris itu yang terlewat, bukan 200 video sekaligus.
+        let gagal = 0;
+        for (const satu of isi) {
+          const { error: e1 } = await db.from("tvr_video_metrik").upsert(satu, { onConflict: "kode", ignoreDuplicates: true });
+          if (e1) gagal += 1;
+        }
+        if (gagal > 0) console.error(`[metrik-video] katalog baru: ${gagal} baris gagal —`, eBaru.message);
+      }
     }
     if (!isiCelah) continue;
     // Lengkapi yang sudah ada: waktu posting dari daftar media lebih
@@ -607,13 +617,20 @@ async function gabungKatalog(db: Db, rows: BarisKatalog[], kolom: KolomTambahan,
         akun_username: String(l.akun_username ?? "") || r.akun_username,
         url: String(l.url ?? "") || r.url,
         waktu_posting: gantiWaktu ? r.waktu_posting : waktuLama,
-        thumbnail_url: gantiGambar ? r.thumbnail_url.slice(0, 1000) : String(l.thumbnail_url ?? ""),
+        thumbnail_url: gantiGambar ? potongAman(r.thumbnail_url, 1000) : String(l.thumbnail_url ?? ""),
         user_id: l.user_id == null ? r.user_id : Number(l.user_id),
       });
     }
     if (celah.length > 0) {
       const { error: eCelah } = await db.from("tvr_video_metrik").upsert(celah, { onConflict: "kode" });
-      if (eCelah) console.error("[metrik-video] lengkapi katalog:", eCelah.message);
+      if (eCelah) {
+        let gagal = 0;
+        for (const satu of celah) {
+          const { error: e1 } = await db.from("tvr_video_metrik").upsert(satu, { onConflict: "kode" });
+          if (e1) gagal += 1;
+        }
+        if (gagal > 0) console.error(`[metrik-video] lengkapi katalog: ${gagal} baris gagal —`, eCelah.message);
+      }
     }
   }
   return baruN;
@@ -672,6 +689,8 @@ const UA_CRAWLER = "facebookexternalhit/1.1 (+http://www.facebook.com/externalhi
 const UA_CADANGAN = "Twitterbot/1.0";
 const UMUR_PENDEK_MS = 30 * 86_400_000;
 const UMUR_PENDEK_GAGAL_MS = 6 * JAM;
+/** Link pendek yang diurai bersamaan (bukan permintaan upload-post). */
+const URAI_PARALEL = 10;
 const pendekDiingat = new Map<string, { sampai: number; url: string }>();
 
 async function bacaPendek(kunci: string): Promise<string | null | undefined> {
@@ -711,7 +730,7 @@ async function ikutiPengalihan(platform: string, url: string, ua: string): Promi
     const r = await fetch(kini, {
       redirect: "manual",
       headers: { "User-Agent": ua, Accept: "text/html" },
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(6_000),
       cache: "no-store",
     });
     const lokasi = r.headers.get("location");
@@ -1149,16 +1168,16 @@ async function kenaliDariLaporan(db: Db, ctx: Konteks, status: StatusPenyegar, c
     }
     const baris = (data ?? []) as BarisLaporan[];
     if (baris.length === 0) break;
-    // Link pendek diurai dulu (4 bersamaan, diingat 30 hari).
+    // Link pendek diurai dulu (10 bersamaan, diingat 30 hari).
     const asli = new Map<string, string | null>();
     const pendek = baris.filter((l) => adalahTautanPendek(platformApp(String(l.platform ?? "")), String(l.url_video ?? "")));
     let terpotong = -1;
-    for (let i = 0; i < pendek.length; i += 4) {
+    for (let i = 0; i < pendek.length; i += URAI_PARALEL) {
       if (Date.now() > tenggat) {
         terpotong = Number(pendek[i].id);
         break;
       }
-      const kelompok = pendek.slice(i, i + 4);
+      const kelompok = pendek.slice(i, i + URAI_PARALEL);
       const r = await Promise.all(kelompok.map((l) => alamatAsli(platformApp(String(l.platform ?? "")), String(l.url_video ?? ""))));
       kelompok.forEach((l, j) => asli.set(String(l.id), r[j]));
     }
@@ -1235,7 +1254,7 @@ async function kenaliHalamanAkun(
         akun_username: a.username,
         user_id: a.uid,
         url: kanonikTautan(a.platform, m.permalink, a.username || null),
-        judul: m.caption.slice(0, 300),
+        judul: potongAman(m.caption, 300),
         thumbnail_url: m.thumbnail,
         waktu_posting: m.waktu,
       });
@@ -1433,7 +1452,7 @@ export async function putaranSegarMetrik(
     const [hariIni, kemarin, pekan, lama] = tingkat;
 
     // 1a. Video yang baru dilaporkan/tercatat (tanpa kuota upload-post).
-    await kenaliDariLaporan(db, ctx, status, catat, Date.now() + 40_000);
+    await kenaliDariLaporan(db, ctx, status, catat, Date.now() + 60_000);
     // 2 & 3. HARI INI: unggahan SuperApp, lalu seluruh video hari ini.
     await segarkanUnggahan(db, ctx, ctrl, draf, catat, bantu, "hari_ini", simpanBerkala);
     // Angka unggahan disimpan dulu: video yang baru disegarkan jalur
@@ -1633,12 +1652,12 @@ export async function segarkanKategori(kategori: string, polaIlike: string): Pro
   const asli = new Map<string, string | null>();
   const pendek = laporan.filter((l) => adalahTautanPendek(platformApp(String(l.platform ?? "")), String(l.url_video ?? "")));
   let belumDiurai = 0;
-  for (let i = 0; i < pendek.length; i += 4) {
+  for (let i = 0; i < pendek.length; i += URAI_PARALEL) {
     if (Date.now() - mulai > 20_000) {
       belumDiurai = pendek.length - i;
       break;
     }
-    const kelompok = pendek.slice(i, i + 4);
+    const kelompok = pendek.slice(i, i + URAI_PARALEL);
     const r = await Promise.all(kelompok.map((l) => alamatAsli(platformApp(String(l.platform ?? "")), String(l.url_video ?? ""))));
     kelompok.forEach((l, j) => asli.set(String(l.id), r[j]));
   }

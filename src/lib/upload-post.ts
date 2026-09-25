@@ -34,7 +34,7 @@
 
 import { denganCache, hapusCacheBersama } from "@/lib/cache-bersama";
 import { KonfigurasiError } from "@/lib/supabase";
-import { bacaBatasUp, uraiJawabanLive, type BatasUp, type JawabanLive } from "@/lib/metrik-video-up";
+import { bacaBatasUp, potongAman, uraiJawabanLive, type BatasUp, type JawabanLive } from "@/lib/metrik-video-up";
 
 const DASAR = "https://api.upload-post.com/api";
 
@@ -417,7 +417,7 @@ export async function postinganTerbaruUp(
   return (d.media ?? []).map((m) => ({
     id: String(m.id ?? ""),
     permalink: String(m.permalink ?? m.media_url ?? ""),
-    caption: String(m.caption ?? "").slice(0, 300),
+    caption: potongAman(m.caption ?? "", 300),
     jenis: String(m.media_type ?? ""),
     waktu: keIso(m.timestamp),
     thumbnail: String(
@@ -702,7 +702,7 @@ export async function daftarMediaUp(
   const media = (json?.media ?? []).map((m) => ({
     id: String(m.id ?? ""),
     permalink: String(m.permalink ?? m.media_url ?? ""),
-    caption: String(m.caption ?? "").slice(0, 300),
+    caption: potongAman(m.caption ?? "", 300),
     jenis: String(m.media_type ?? ""),
     waktu: keIso(m.timestamp),
     thumbnail: String(m.thumbnail_url ?? ""),
