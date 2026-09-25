@@ -66,15 +66,16 @@ export function UnggahSosmedSaya() {
   const [tertaut, setTertaut] = useState<string[] | null>(null);
   const [riwayat, setRiwayat] = useState<TvrkuPost[] | null>(null);
   // TOMBOL BAGIKAN (3 Sep 2026): setelah unggah, URL postingan per platform
-  // terbit beberapa saat kemudian → riwayat dipantau tiap 15 dtk (maks 4 mnt)
-  // sampai tautannya ada, lalu tombol Bagikan muncul di riwayat.
+  // terbit beberapa saat kemudian → riwayat dipantau tiap 15 dtk.
+  // Upload-post sering mengantri lama (antrean worker), jadi jendela pantau
+  // 30 menit — dulu 4 menit, terlalu pendek saat status masih "queued".
   const [pantauSejak, setPantauSejak] = useState<number | null>(null);
   const tautanTerakhir = useRef(0);
   useEffect(() => {
     if (pantauSejak === null) return;
     let hidup = true;
     const t = setInterval(() => {
-      if (Date.now() - pantauSejak > 4 * 60_000) {
+      if (Date.now() - pantauSejak > 30 * 60_000) {
         setPantauSejak(null);
         return;
       }
@@ -906,9 +907,14 @@ export function UnggahSosmedSaya() {
                       <Share2 className="h-3.5 w-3.5" /> Bagikan
                     </button>
                   </div>
-                ) : pantauSejak !== null && r.id === riwayat[0]?.id ? (
+                ) : Date.now() - Date.parse(r.dibuat_pada) < 2 * 3600_000 ? (
                   <p className="mt-1.5 flex items-center gap-1 text-[10.5px] text-teks-sekunder">
-                    <Loader2 className="h-3 w-3 animate-spin" /> menunggu tautan postingan terbit…
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    {String((r.hasil as { message?: string } | null)?.message ?? "")
+                      .toLowerCase()
+                      .match(/background|queued|handed off/)
+                      ? "Video masih antre di layanan posting… tombol Bagikan muncul setelah tautan terbit"
+                      : "Menunggu tautan postingan terbit… tombol Bagikan menyusul"}
                   </p>
                 ) : null}
               </div>

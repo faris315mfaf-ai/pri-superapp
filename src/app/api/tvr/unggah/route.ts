@@ -158,7 +158,9 @@ export async function GET(request: Request) {
     // riwayat terasa kosong/telat, padahal tautan yang sudah ada tetap
     // terbaca dari laporan_video di bawah. Yang belum siap menyusul lewat
     // after() + cron 15 menit + pantauan klien.
-    after(() => rekonsiliasiKpiOtomatis(Number(user.id)));
+    // `paksa`: buka riwayat setelah antrean upload-post selesai harus
+    // langsung menarik tautan, bukan ditahan jeda 60 dtk interaktif.
+    after(() => rekonsiliasiKpiOtomatis(Number(user.id), { paksa: true, anggaranMs: 20_000 }));
     after(bersihkanVideoKedaluwarsa);
     // PALUGODAM: pesanan yang rendernya sudah selesai ikut diposting.
     if (adalahPalugodam(user))
