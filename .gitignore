@@ -78,3 +78,7 @@ apk/*.idsig
 
 # Sisa alat: "nul" lahir dari perintah Windows yang salah menulis "> nul".
 nul
+
+# Token fetch di VPS (jangan disalin ke repo)
+rahasia/
+

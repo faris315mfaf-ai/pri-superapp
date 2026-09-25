@@ -1,8 +1,9 @@
 # Deploy otomatis ke VPS setelah kode masuk ke main.
 #
-# Alur: GitHub Actions SSH ke server → ambil kode main dengan token
-# job ini (repo privat) → `pri-perbarui --tanpa-tarik` membangun &
-# mengganti container (dengan rollback otomatis bila tidak sehat).
+# Alur: GitHub Actions SSH ke server. Kunci VPS_SSH_KEY diauthorized_keys
+# dipaksa menjalankan `pri-deploy-actions` (fetch via deploy key baca +
+# `pri-perbarui --tanpa-tarik`). Skrip di bawah adalah cadangan bila
+# forced-command belum dipasang (vps/17 + vps/31 + vps/32).
 #
 # RAHASIA (Settings → Secrets and variables → Actions):
 #   VPS_HOST     alamat server, mis. 187.77.113.63
@@ -54,7 +55,7 @@ jobs:
       - name: Jalankan pri-perbarui di VPS
         uses: appleboy/ssh-action@v1.2.2
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}

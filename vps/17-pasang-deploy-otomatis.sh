@@ -3,11 +3,14 @@
 # MEMASANG DEPLOY OTOMATIS DARI GITHUB (18 Sep 2026)
 #
 # Sekali jalan di VPS. Hasilnya: setiap push ke branch main di GitHub
-# membuat GitHub Actions masuk lewat SSH dan menjalankan `pri-perbarui`.
+# membuat GitHub Actions masuk lewat SSH dan menjalankan
+# `pri-deploy-actions` (fetch main + pri-perbarui --tanpa-tarik).
 #
-# Kunci yang dibuat HANYA boleh menjalankan pri-perbarui — tidak bisa
+# Kunci yang dibuat HANYA boleh menjalankan wrapper itu — tidak bisa
 # dipakai untuk membuka shell, menyalin berkas, atau perintah lain.
 # Jadi bocornya kunci di GitHub tidak langsung berarti penguasaan server.
+# Deploy key baca (vps/31-pasang-kunci-git-baca.sh) tetap perlu agar
+# wrapper bisa `git fetch` ke repo privat.
 #
 # CARA PAKAI (root, di VPS):
 #   bash /opt/pri-superapp/sumber/vps/17-pasang-deploy-otomatis.sh
@@ -32,6 +35,8 @@ if ! id "$DEPLOY_USER" >/dev/null 2>&1; then
 fi
 HOME_USER="$(getent passwd "$DEPLOY_USER" | cut -d: -f6)"
 AUTH="$HOME_USER/.ssh/authorized_keys"
+WRAPPER_SRC=/opt/pri-superapp/skrip/32-deploy-dari-actions.sh
+WRAPPER=/usr/local/bin/pri-deploy-actions
 PERINTAH=/usr/local/bin/pri-perbarui
 CADANGAN=/opt/pri-superapp/skrip/12-perbarui.sh
 
@@ -49,6 +54,18 @@ touch "$AUTH"
 chmod 600 "$AUTH"
 chown -R "$DEPLOY_USER:$DEPLOY_USER" "$HOME_USER/.ssh"
 
+# Pastikan wrapper deploy Actions terpasang (fetch + --tanpa-tarik).
+if [ -f /opt/pri-superapp/sumber/vps/32-deploy-dari-actions.sh ]; then
+  cp -a /opt/pri-superapp/sumber/vps/32-deploy-dari-actions.sh "$WRAPPER_SRC"
+fi
+if [ -f "$WRAPPER_SRC" ]; then
+  chmod +x "$WRAPPER_SRC"
+  ln -sfn "$WRAPPER_SRC" "$WRAPPER"
+  echo "  wrapper: $WRAPPER → $WRAPPER_SRC"
+else
+  echo "PERINGATAN: $WRAPPER_SRC belum ada — pasang skrip 32 dulu." >&2
+fi
+
 echo "== 2/4 Menyiapkan kunci SSH =="
 mkdir -p "$DIR"
 chmod 700 "$DIR"
@@ -61,14 +78,17 @@ else
 fi
 [ -f "$PUB" ] || { echo "Berkas publik hilang: $PUB" >&2; exit 1; }
 
-echo "== 3/4 Memasang kunci di authorized_keys (hanya pri-perbarui) =="
-# Kalau pintasan belum ada, kunci menunjuk ke skrip aslinya. Isi
-# command= dipasang di sisi SSH, jadi klien GitHub tidak bisa mengganti
-# perintah yang dijalankan.
-if [ -x "$PERINTAH" ]; then
-  JALAN="sudo -n $PERINTAH"
+echo "== 3/4 Memasang kunci di authorized_keys (hanya pri-deploy-actions) =="
+# Isi command= dipasang di sisi SSH, jadi klien GitHub tidak bisa
+# mengganti perintah yang dijalankan. Wrapper-lah yang fetch + bangun.
+if [ -x "$WRAPPER" ]; then
+  JALAN="$WRAPPER"
+elif [ -x "$WRAPPER_SRC" ]; then
+  JALAN="bash $WRAPPER_SRC"
 else
-  JALAN="sudo -n bash $CADANGAN"
+  # Cadangan lama: masih pull di dalam pri-perbarui (butuh deploy key).
+  JALAN="sudo -n $PERINTAH"
+  echo "  PERINGATAN: wrapper 32 belum ada — memakai pri-perbarui penuh."
 fi
 PUBLIK="$(tr -d '\n' < "$PUB")"
 BARIS="command=\"$JALAN\",no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty $PUBLIK"
@@ -83,7 +103,7 @@ printf '%s\n' "$BARIS" >> "$TMP"
 mv "$TMP" "$AUTH"
 chmod 600 "$AUTH"
 chown "$DEPLOY_USER:$DEPLOY_USER" "$AUTH"
-echo "  kunci dipasang di $AUTH; SSH dengan kunci ini HANYA menjalankan pri-perbarui"
+echo "  kunci dipasang di $AUTH; SSH dengan kunci ini HANYA menjalankan pri-deploy-actions"
 
 echo "== 4/4 Nilai untuk GitHub =="
 HOST="$(hostname -I 2>/dev/null | awk '{print $1}')"

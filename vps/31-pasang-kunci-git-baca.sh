@@ -25,6 +25,11 @@ PUB="$PRIV.pub"
 SUMBER=/opt/pri-superapp/sumber
 REPO_SSH=git@github.com:faris315mfaf-ai/pri-superapp.git
 
+DEPLOY_USER="${SUDO_USER:-${DEPLOY_USER:-adminportalpri}}"
+if ! id "$DEPLOY_USER" >/dev/null 2>&1; then
+  DEPLOY_USER=root
+fi
+
 mkdir -p "$DIR"
 chmod 700 "$DIR"
 if [ ! -f "$PRIV" ]; then
@@ -32,18 +37,25 @@ if [ ! -f "$PRIV" ]; then
 fi
 chmod 600 "$PRIV"
 chmod 644 "$PUB"
+# adminportalpri (Actions / pri-deploy-actions) harus bisa baca kunci ini
+chown -R "$DEPLOY_USER:$DEPLOY_USER" "$DIR"
+chmod 700 "$DIR"
+chmod 600 "$PRIV"
 
-mkdir -p /root/.ssh
-chmod 700 /root/.ssh
+HOME_USER="$(getent passwd "$DEPLOY_USER" | cut -d: -f6)"
+mkdir -p "$HOME_USER/.ssh" /root/.ssh
+chmod 700 "$HOME_USER/.ssh" /root/.ssh
+ssh-keyscan -t ed25519,rsa github.com >> "$HOME_USER/.ssh/known_hosts" 2>/dev/null || true
 ssh-keyscan -t ed25519,rsa github.com >> /root/.ssh/known_hosts 2>/dev/null || true
-cat > /root/.ssh/config <<EOF
-Host github.com
-  HostName github.com
-  User git
-  IdentityFile $PRIV
-  IdentitiesOnly yes
-EOF
-chmod 600 /root/.ssh/config
+# Jangan paksa IdentityFile di config root/user jika path salah — GIT_SSH_COMMAND
+# di 32-deploy-dari-actions.sh yang menunjuk kunci. Kosongkan IdentityFile rusak.
+for CFG in /root/.ssh/config "$HOME_USER/.ssh/config"; do
+  if [ -f "$CFG" ] && grep -q '/kunci/github-baca' "$CFG" 2>/dev/null; then
+    printf '%s\n' "Host github.com" "  HostName github.com" "  User git" > "$CFG"
+    chmod 600 "$CFG"
+  fi
+done
+chown -R "$DEPLOY_USER:$DEPLOY_USER" "$HOME_USER/.ssh"
 
 if [ -d "$SUMBER/.git" ]; then
   git -C "$SUMBER" remote set-url origin "$REPO_SSH"
@@ -54,4 +66,5 @@ echo "=== Kunci publik (salin ke GitHub → Deploy keys, read-only) ==="
 cat "$PUB"
 echo
 echo "Setelah kunci dipasang di GitHub, uji:"
-echo "  git -C $SUMBER fetch origin main && sudo pri-perbarui"
+echo "  sudo -u $DEPLOY_USER GIT_SSH_COMMAND=\"ssh -i $PRIV -o IdentitiesOnly=yes\" git -C $SUMBER fetch origin main"
+echo "  sudo pri-perbarui --tanpa-tarik"
