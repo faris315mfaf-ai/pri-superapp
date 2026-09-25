@@ -735,13 +735,22 @@ async function kerjakanLaporan(
     if (r === "tunda") return "tunda";
     ppid = r;
   }
+  // Facebook: daftar media upload-post sering kosong, padahal analitiknya
+  // menerima ID reel/video langsung (diverifikasi 26 Sep 2026). Video yang
+  // bukan milik Page tersambung membuat upload-post menggantung → batas
+  // waktu dipendekkan.
+  let batasMs = 30_000;
+  if (!ppid && it.platform === "facebook" && /^fb_\d{6,}$/.test(it.kode)) {
+    ppid = it.kode.slice(3);
+    batasMs = 20_000;
+  }
   if (!ppid) {
     catat.dilewati += 1;
     return "selesai";
   }
   if (!ctrl.ambil(15_000)) return "tunda";
   try {
-    const { jawaban, batas } = await analitikPostAsliUp(ppid, it.platform, it.profil, ctrl.batasPanggilan(30_000));
+    const { jawaban, batas } = await analitikPostAsliUp(ppid, it.platform, it.profil, ctrl.batasPanggilan(batasMs));
     ctrl.catatBatas(batas);
     const blok = jawaban.blok.find((b) => b.platform === it.platform) ?? jawaban.blok[0];
     const d = blok
