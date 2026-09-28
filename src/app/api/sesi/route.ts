@@ -17,6 +17,7 @@ import { siaranUltahHarian } from "@/lib/ultah";
 import { siaranVerifikasiBerkala } from "@/lib/verifikasi-ingatkan";
 import { sinkronKontenTvTerjadwal } from "@/lib/sinkron-konten-tv";
 import { after } from "next/server";
+import { jalankanLatar } from "@/lib/penjaga-supabase";
 
 export const dynamic = "force-dynamic";
 // Respons /api/sesi tetap kembali seketika; nilai ini hanya memberi
@@ -68,14 +69,15 @@ export async function GET(request: Request) {
 
     // Ucapan ulang tahun global — sekali sehari, menumpang pembukaan
     // aplikasi siapa pun (tanpa cron).
-    after(siaranUltahHarian);
+    after(() => jalankanLatar("ultah", siaranUltahHarian));
     // Ajakan verifikasi berkala (fitur 1.22.x/1) — sekali per jendela
     // (bawaan 60 menit) ke anggota yang WA/Google/Wajah-nya belum lengkap.
-    after(siaranVerifikasiBerkala);
+    after(() => jalankanLatar("ajakan-verifikasi", siaranVerifikasiBerkala));
     // Sinkron konten TV Rakyat dari Ayrshare — sekali per jendela (bawaan
     // 30 menit): isi kanal konten + daftar postingan wajib-komen + cek
     // komentar. Tanpa cron; menumpang pembukaan aplikasi.
-    after(sinkronKontenTvTerjadwal);
+    // Lajur latar (28 Sep 2026): mengalah pada permintaan pengguna.
+    after(() => jalankanLatar("sinkron-konten-sesi", sinkronKontenTvTerjadwal));
 
     return { user };
   });

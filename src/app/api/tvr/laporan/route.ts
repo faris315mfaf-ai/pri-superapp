@@ -21,6 +21,7 @@ import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { luluskanLaporanTertahan } from "@/lib/laporan-tertahan";
 import { namaKolomHilang } from "@/lib/kolom-struktur";
 import { solusiGagal } from "@/lib/batas-caption";
+import { jalankanLatar } from "@/lib/penjaga-supabase";
 import {
   bannedAktifPerUser,
   hitungKpi,
@@ -313,7 +314,7 @@ export async function GET(request: Request) {
         }
       }
     }
-    after(() => rekonsiliasiKpiOtomatis(Number(user.id)));
+    after(() => jalankanLatar("rekonsiliasi-kpi-layar", () => rekonsiliasiKpiOtomatis(Number(user.id))));
 
     return {
       tanggal,

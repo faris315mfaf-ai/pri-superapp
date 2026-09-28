@@ -22,6 +22,7 @@ import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { bolehDashboard } from "@/lib/dashboard-akses";
 import { semuaBaris } from "@/lib/semua-baris";
+import { jalankanLatar } from "@/lib/penjaga-supabase";
 import { ambilInsight, ayrshareSiap, type InsightProfil } from "@/lib/ayrshare";
 import {
   INDIKATOR_TVR,
@@ -65,16 +66,26 @@ function metrikDariOfficial(i: InsightProfil | null): Metrik | null {
 
 type IsiCacheOfficial = { insight: InsightProfil | null; diambil: string };
 
-/** Cache Official milik /api/tv/insight (dibaca-saja, bentuk longgar). */
-async function bacaCacheOfficial(platform: string): Promise<InsightProfil | null> {
+/**
+ * Kedua cache Official SEMUA platform dalam SATU kueri (28 Sep 2026).
+ * Dulu dibaca per platform, berurutan: hingga 12 kueri tiap dashboard
+ * dibuka (pola N+1). Kunci yang tidak ada = cache kosong.
+ */
+async function bacaSemuaCache(platforms: readonly string[]): Promise<Map<string, string>> {
+  const kunci = platforms.flatMap((p) => [`ayrshare_insight_${p}`, `tvnas_official_${p}`]);
   try {
-    const { data } = await supabase()
-      .from("pengaturan_sistem")
-      .select("nilai")
-      .eq("kunci", `ayrshare_insight_${platform}`)
-      .maybeSingle();
-    if (!data?.nilai) return null;
-    const isi = JSON.parse(String(data.nilai)) as { insight?: InsightProfil | null };
+    const { data } = await supabase().from("pengaturan_sistem").select("kunci, nilai").in("kunci", kunci);
+    return new Map((data ?? []).map((b) => [String(b.kunci), String(b.nilai ?? "")]));
+  } catch {
+    return new Map();
+  }
+}
+
+/** Cache Official milik /api/tv/insight (dibaca-saja, bentuk longgar). */
+function uraiCacheOfficial(nilai: string | undefined): InsightProfil | null {
+  if (!nilai) return null;
+  try {
+    const isi = JSON.parse(nilai) as { insight?: InsightProfil | null };
     return isi.insight ?? null;
   } catch {
     return null;
@@ -82,15 +93,10 @@ async function bacaCacheOfficial(platform: string): Promise<InsightProfil | null
 }
 
 /** Cache milik dashboard ini sendiri (untuk platform yang ditarik langsung). */
-async function bacaCacheSendiri(platform: string): Promise<InsightProfil | null> {
+function uraiCacheSendiri(nilai: string | undefined): InsightProfil | null {
+  if (!nilai) return null;
   try {
-    const { data } = await supabase()
-      .from("pengaturan_sistem")
-      .select("nilai")
-      .eq("kunci", `tvnas_official_${platform}`)
-      .maybeSingle();
-    if (!data?.nilai) return null;
-    const isi = JSON.parse(String(data.nilai)) as IsiCacheOfficial;
+    const isi = JSON.parse(nilai) as IsiCacheOfficial;
     // TTL 30 menit — Ayrshare toh menyegarkan menurut jadwalnya sendiri.
     if (Date.now() - new Date(isi.diambil).getTime() > 30 * 60_000) return null;
     return isi.insight;
@@ -128,8 +134,10 @@ export async function GET(request: Request) {
     // ---------- OFFICIAL (Ayrshare) ----------
     const official: Record<string, Metrik | null> = {};
     let tarikLangsung = 0;
+    const cache = await bacaSemuaCache(PLATFORMS);
     for (const p of PLATFORMS) {
-      let insight = (await bacaCacheOfficial(p)) ?? (await bacaCacheSendiri(p));
+      let insight =
+        uraiCacheOfficial(cache.get(`ayrshare_insight_${p}`)) ?? uraiCacheSendiri(cache.get(`tvnas_official_${p}`));
       if (!insight && ayrshareSiap() && tarikLangsung < MAKS_OFFICIAL_LANGSUNG) {
         tarikLangsung++;
         try {
@@ -209,7 +217,7 @@ export async function GET(request: Request) {
     }
 
     // Penyegaran latar untuk profil basi — dashboard berikutnya lebih segar.
-    after(segarkanProfilTvrBasi);
+    after(() => jalankanLatar("sapu-profil-tvr", segarkanProfilTvrBasi));
 
     return {
       indikator: INDIKATOR,

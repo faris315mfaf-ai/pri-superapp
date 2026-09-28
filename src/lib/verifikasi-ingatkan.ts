@@ -20,6 +20,14 @@ const KUNCI_KLAIM = "verif_reminder_bucket";
 const KUNCI_INTERVAL = "verif_reminder_interval_menit";
 const INTERVAL_BAWAAN = 60;
 const INTERVAL_MIN = 15;
+/**
+ * Ingatan per proses (28 Sep 2026): fungsi ini menumpang SETIAP pembukaan
+ * aplikasi (/api/sesi). Dulu tiap pembukaan = 3 kueri (baca interval,
+ * upsert, update klaim) walau jendelanya sudah beres. Kini interval
+ * disimpan 10 menit, dan jendela yang sudah dicoba tidak dicoba lagi.
+ */
+let intervalCache: { nilai: number; pada: number } | null = null;
+let bucketSelesaiInstance = "";
 
 async function bacaIntervalMenit(db: ReturnType<typeof supabase>): Promise<number> {
   const { data } = await db
@@ -40,19 +48,25 @@ async function bacaIntervalMenit(db: ReturnType<typeof supabase>): Promise<numbe
 export async function siaranVerifikasiBerkala(): Promise<void> {
   try {
     const db = supabase();
-    const intervalMenit = await bacaIntervalMenit(db);
+    if (!intervalCache || Date.now() - intervalCache.pada > 10 * 60_000) {
+      intervalCache = { nilai: await bacaIntervalMenit(db), pada: Date.now() };
+    }
+    const intervalMenit = intervalCache.nilai;
     const bucket = String(Math.floor(Date.now() / (intervalMenit * 60_000)));
+    if (bucket === bucketSelesaiInstance) return;
 
     // Pastikan baris klaim ada (tanpa menimpa nilainya), lalu klaim atomik.
     await db
       .from("pengaturan_sistem")
       .upsert({ kunci: KUNCI_KLAIM, nilai: "" }, { onConflict: "kunci", ignoreDuplicates: true });
-    const { data: klaim } = await db
+    const { data: klaim, error: galatKlaim } = await db
       .from("pengaturan_sistem")
       .update({ nilai: bucket })
       .eq("kunci", KUNCI_KLAIM)
       .neq("nilai", bucket)
       .select("kunci");
+    // Klaim gagal (database sibuk) = belum beres; dicoba lagi nanti.
+    if (!galatKlaim) bucketSelesaiInstance = bucket;
     if (!klaim || klaim.length === 0) return; // sudah dikirim untuk jendela ini
 
     // Anggota aktif (bukan master) + status verifikasi Google.

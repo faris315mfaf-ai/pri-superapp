@@ -89,7 +89,12 @@ export function useDetakGlobal(aktif: boolean) {
         // Detak PERTAMA hanya merekam keadaan awal — data baru saja
         // dimuat, jadi tidak perlu langsung ditarik ulang.
         if (tandaRef.current !== null && tanda !== tandaRef.current) {
-          useAppStore.getState().segarkanData();
+          // Tunda acak 0-4 dtk (28 Sep 2026): tanpa ini ratusan perangkat
+          // yang melihat tanda baru pada detik yang sama menarik ulang
+          // semua layarnya serentak — lonjakan yang menjenuhkan database.
+          setTimeout(() => {
+            if (hidup) useAppStore.getState().segarkanData();
+          }, Math.random() * 4_000);
         }
         tandaRef.current = tanda;
       } catch {

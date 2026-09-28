@@ -21,6 +21,7 @@
 import { after } from "next/server";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { supabase } from "@/lib/supabase";
+import { sinkronkanAkunTertaut } from "@/lib/sinkron-akun-tertaut";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { adalahAdminStudio, DIVISI_PALUGODAM } from "@/lib/struktur";
@@ -178,36 +179,16 @@ function usulanProfil(username: string, nama: string, id: number): string {
   return POLA_USERNAME_UP.test(inti) ? inti : `anggota-pri-${id}`;
 }
 
-/** Sinkron akun tertaut profil → akun_tvr_user (pola sama dengan dashboard tv-anggota). */
+/** Sinkron akun tertaut profil → akun_tvr_user (lib/sinkron-akun-tertaut). */
 async function sinkronAkunTertautStudio(
   db: ReturnType<typeof supabase>,
   userId: number,
   akun: Record<string, string>,
 ): Promise<number> {
-  let tersinkron = 0;
-  for (const [platform, mentah] of Object.entries(akun)) {
-    if (!PLATFORM6_SET.has(platform)) continue;
-    const username = String(mentah).toLowerCase().replace(/^@+/, "");
-    if (!username) continue;
-    const { data: ada } = await db
-      .from("akun_tvr_user")
-      .select("id, user_id")
-      .eq("platform", platform)
-      .ilike("username", username)
-      .maybeSingle();
-    if (!ada) {
-      const { error } = await db
-        .from("akun_tvr_user")
-        .insert({ user_id: userId, platform, username, terhubung: true });
-      if (!error) tersinkron += 1;
-    } else if (Number(ada.user_id) === userId) {
-      await db
-        .from("akun_tvr_user")
-        .update({ terhubung: true })
-        .eq("id", ada.id);
-    }
-  }
-  return tersinkron;
+  const daftar = Object.entries(akun)
+    .filter(([platform]) => PLATFORM6_SET.has(platform))
+    .map(([platform, username]) => ({ platform, username: String(username) }));
+  return (await sinkronkanAkunTertaut(db, userId, daftar)).tersinkron;
 }
 
 /**

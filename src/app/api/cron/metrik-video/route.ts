@@ -9,6 +9,7 @@
 // Keamanan: sama seperti cron lain — bila CRON_SECRET terpasang, wajib
 // `Authorization: Bearer`; bila tidak, hanya user-agent penjadwal.
 import { putaranSegarMetrik } from "@/lib/segar-metrik-video";
+import { jalankanLatar, tundaKarenaMacet } from "@/lib/penjaga-supabase";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -23,7 +24,11 @@ async function jalankan(request: Request) {
   const ua = (request.headers.get("user-agent") ?? "").toLowerCase();
   const sah = rahasia ? tokenDari(request) === rahasia : ua.includes("cron");
   if (!sah) return Response.json({ error: "Tidak berwenang." }, { status: 403 });
-  const hasil = await putaranSegarMetrik();
+  // Lajur latar (28 Sep 2026): jatah kueri kecil, mengalah pada pengguna,
+  // dan tidak mulai sama sekali saat database macet.
+  const tunda = tundaKarenaMacet("metrik-video");
+  if (tunda) return Response.json(tunda, { headers: { "Cache-Control": "no-store" } });
+  const hasil = await jalankanLatar("metrik-video", () => putaranSegarMetrik());
   return Response.json(hasil, { headers: { "Cache-Control": "no-store" } });
 }
 

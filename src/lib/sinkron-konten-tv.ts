@@ -17,6 +17,7 @@
 // ============================================================
 import { supabase } from "@/lib/supabase";
 import { modulAktifServer } from "@/lib/sakelar";
+import { latarHarusBerhenti } from "@/lib/penjaga-supabase";
 import { ambilAkunTertaut, ayrshareSiap } from "@/lib/ayrshare";
 import {
   idPostinganKanonik,
@@ -298,6 +299,9 @@ export async function sinkronKontenTvPaksa(
     while (Date.now() - mulai < anggaranTotalMs) {
       const sisaWaktu = anggaranTotalMs - (Date.now() - mulai);
       if (sisaWaktu < 15_000) break;
+      // Database macet (28 Sep 2026): sisa putaran menunggu giliran cron
+      // berikutnya — kapasitas yang tersisa untuk pengguna.
+      if (putaran > 0 && latarHarusBerhenti()) break;
       putaran += 1;
       try {
         terakhir = await jalankanAnalisisAyrshare({

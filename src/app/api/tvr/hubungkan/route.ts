@@ -8,6 +8,7 @@
 //        akun_tvr_user (terhubung=true). Akun yang sudah diklaim
 //        anggota lain dilaporkan, bukan direbut.
 import { supabase } from "@/lib/supabase";
+import { sinkronkanAkunTertaut } from "@/lib/sinkron-akun-tertaut";
 import { userEfektifTvr } from "@/lib/sebagai";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
@@ -120,31 +121,8 @@ export async function GET(request: Request) {
 
     // Sinkron ke akun_tvr_user: tambah yang belum ada (terhubung=true);
     // yang sudah kupunya ditandai terhubung; milik orang lain = konflik.
-    let tersinkron = 0;
-    const konflik: string[] = [];
-    for (const a of tertaut) {
-      const username = a.username.toLowerCase().replace(/^@+/, "");
-      if (!username) continue;
-      const { data: ada } = await db
-        .from("akun_tvr_user")
-        .select("id, user_id")
-        .eq("platform", a.platform)
-        .ilike("username", username)
-        .maybeSingle();
-      if (!ada) {
-        const { error } = await db.from("akun_tvr_user").insert({
-          user_id: Number(user.id),
-          platform: a.platform,
-          username,
-          terhubung: true,
-        });
-        if (!error) tersinkron += 1;
-      } else if (Number(ada.user_id) === Number(user.id)) {
-        await db.from("akun_tvr_user").update({ terhubung: true }).eq("id", ada.id);
-      } else {
-        konflik.push(`@${username} (${a.platform}) sudah terdaftar milik anggota lain`);
-      }
-    }
+    // Kueri tetap berapa pun jumlah akunnya (lib/sinkron-akun-tertaut).
+    const { tersinkron, konflik } = await sinkronkanAkunTertaut(db, Number(user.id), tertaut);
 
     return {
       terhubung: tertaut.map((a) => ({

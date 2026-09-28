@@ -17,6 +17,7 @@
 // tayangannya aman — sosmed menyimpan salinannya sendiri.
 import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { bolehSekarang } from "@/lib/jeda-instans";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { BATAS_BERKAS_CLOUDINARY_MB, BATAS_KOMPRES_MB, konfigUploadCloudinary, hapusVideoCloudinary, siapHapusCloudinary } from "@/lib/cloudinary";
@@ -42,6 +43,8 @@ async function pastikanMasuk(request: Request) {
 /** Hapus media yang jatuh tempo (>2 hari) dari Cloudinary. */
 async function bersihkanMediaKedaluwarsa() {
   if (!siapHapusCloudinary()) return;
+  // Menumpang GET: cukup sekali per 10 menit per proses (28 Sep 2026).
+  if (!bolehSekarang("tv-manual:bersihkan-media", 10 * 60_000)) return;
   try {
     const db = supabase();
     const { data } = await db

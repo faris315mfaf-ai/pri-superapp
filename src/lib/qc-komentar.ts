@@ -11,6 +11,7 @@
 // daftar komentar mentah per-postingan yang menyusut (memang tujuannya).
 // ============================================================
 import { supabase } from "@/lib/supabase";
+import { bolehSekarang } from "@/lib/jeda-instans";
 
 const KUNCI_RETENSI = "qc_komentar_retensi_jam";
 const RETENSI_JAM_BAWAAN = 48; // 2 hari
@@ -32,6 +33,9 @@ async function bacaRetensiJam(db: ReturnType<typeof supabase>): Promise<number> 
  * pemanggilnya.
  */
 export async function bersihkanKomentarKedaluwarsa(): Promise<void> {
+  // Dipanggil tiap GET analisis: DELETE berulang tiap pembukaan layar itu
+  // mubazir. Cukup sekali per 10 menit per proses (28 Sep 2026).
+  if (!bolehSekarang("qc:bersihkan-komentar", 10 * 60_000)) return;
   try {
     const db = supabase();
     const retensiJam = await bacaRetensiJam(db);

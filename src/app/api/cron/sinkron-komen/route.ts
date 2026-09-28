@@ -14,6 +14,7 @@
 // pada satu waktu, jadi tak bisa dipakai membanjiri Ayrshare.
 import { after } from "next/server";
 import { sinkronKontenTvPaksa } from "@/lib/sinkron-konten-tv";
+import { jalankanLatar, tundaKarenaMacet } from "@/lib/penjaga-supabase";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -38,7 +39,11 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const rantai = Math.max(0, Number(url.searchParams.get("rantai") ?? 0) || 0);
-  const hasil = await sinkronKontenTvPaksa(rantai > 0 ? `rantai-${rantai}` : "vercel-cron", ANGGARAN_MS);
+  const tunda = tundaKarenaMacet("sinkron-komen");
+  if (tunda) return Response.json({ ...tunda, rantai }, { headers: { "Cache-Control": "no-store" } });
+  const hasil = await jalankanLatar("sinkron-komen", () =>
+    sinkronKontenTvPaksa(rantai > 0 ? `rantai-${rantai}` : "vercel-cron", ANGGARAN_MS),
+  );
 
   // Masih ada sisa → sambung ke panggilan berikutnya (fire-and-forget:
   // permintaan dibatalkan setelah 3 dtk, fungsi tujuan tetap berjalan).

@@ -10,7 +10,11 @@ cat > /etc/crontabs/root <<'JADWAL'
 # menit  jam  tanggal  bulan  hari
 */5  * * * * /panggil.sh sinkron-komen
 */10 * * * * /panggil.sh pantau-server
-*/15 * * * * /panggil.sh rekonsiliasi-kpi
+# Rekonsiliasi KPI digeser ke menit 9,24,39,54 (28 Sep 2026): dulu menit
+# 0,15,30,45 — bersamaan dengan sinkron-komen, sinkron-absensi,
+# jadwal-tayang, dan pemantau, sehingga lima tugas menyerbu database pada
+# detik yang sama.
+9,24,39,54 * * * * /panggil.sh rekonsiliasi-kpi
 # Absensi dari SADAR (14 Sep 2026): SuperApp hanya menampilkan; datanya
 # ditarik dari sadar-pri.id tiap 5 menit (hari ini + kemarin + susulan).
 */5  * * * * /panggil.sh sinkron-absensi

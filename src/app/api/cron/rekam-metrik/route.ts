@@ -13,6 +13,7 @@
 import { rekamMetrikHarian } from "@/lib/tvr-nasional";
 import { beriKoinJuaraKomenHarian } from "@/lib/juara-komen";
 import { modulAktifServer } from "@/lib/sakelar";
+import { jalankanLatar } from "@/lib/penjaga-supabase";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -28,7 +29,9 @@ async function jalankan(request: Request) {
   const sah = rahasia ? tokenDari(request) === rahasia : ua.includes("cron");
   if (!sah) return Response.json({ error: "Tidak berwenang." }, { status: 403 });
   try {
-    const hasil = await rekamMetrikHarian();
+    // Sekali sehari: tetap jalan walau database lambat (rekaman harian
+    // tidak boleh bolong), di lajur latar.
+    const hasil = await jalankanLatar("rekam-metrik", () => rekamMetrikHarian());
     // Reward top komen harian (12 Sep 2026): juara 1 periode yang baru
     // selesai diberi koin. Gagal di sini tidak membatalkan rekaman —
     // keduanya urusan terpisah yang kebetulan berjalan di jam yang sama.

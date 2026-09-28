@@ -10,6 +10,7 @@
 import { sinkronAbsensiHariIni, sinkronAbsensiRentang, sinkronAbsensiTanggal } from "@/lib/absensi-sadar";
 import { sadarSiap } from "@/lib/sadar";
 import { tanggalWibHariIni } from "@/lib/format";
+import { jalankanLatar, tundaKarenaMacet } from "@/lib/penjaga-supabase";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -32,8 +33,12 @@ export async function GET(request: Request) {
   const kemarin = new Date(Date.parse(`${hariIni}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
   const awal = new Date(Date.parse(`${hariIni}T00:00:00Z`) - 31 * 86_400_000).toISOString().slice(0, 10);
 
-  const ini = await sinkronAbsensiHariIni();
-  const kmr = await sinkronAbsensiTanggal(kemarin);
-  const lampau = await sinkronAbsensiRentang(awal, kemarin, 5);
-  return Response.json({ jalan: true, hari_ini: ini, kemarin: kmr, lampau });
+  const tunda = tundaKarenaMacet("sinkron-absensi");
+  if (tunda) return Response.json(tunda);
+  return jalankanLatar("sinkron-absensi", async () => {
+    const ini = await sinkronAbsensiHariIni();
+    const kmr = await sinkronAbsensiTanggal(kemarin);
+    const lampau = await sinkronAbsensiRentang(awal, kemarin, 5);
+    return Response.json({ jalan: true, hari_ini: ini, kemarin: kmr, lampau });
+  });
 }

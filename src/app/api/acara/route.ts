@@ -11,6 +11,7 @@ import { adalahHR } from "@/lib/hr";
 import { userDariToken } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
 import { after } from "next/server";
+import { bolehSekarang } from "@/lib/jeda-instans";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,8 @@ function tanggalCantik(iso: string): string {
  * retensi absensi & chat.
  */
 async function kirimPengingatTertunda() {
+  // Menumpang GET acara: cukup sekali per 10 menit per proses (28 Sep 2026).
+  if (!bolehSekarang("acara:pengingat", 10 * 60_000)) return;
   try {
     const db = supabase();
     const hariIni = tanggalWib(0);

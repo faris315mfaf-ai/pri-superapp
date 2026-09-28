@@ -5,6 +5,7 @@
 // Keamanan: bila env CRON_SECRET terpasang, wajib `Authorization: Bearer`;
 // bila tidak, hanya user-agent vercel-cron yang diterima.
 import { pantauServer } from "@/lib/pantau-server";
+import { jalankanLatar } from "@/lib/penjaga-supabase";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -20,7 +21,9 @@ export async function GET(request: Request) {
   const sah = rahasia ? tokenDari(request) === rahasia : ua.includes("vercel-cron");
   if (!sah) return Response.json({ error: "Tidak berwenang." }, { status: 403 });
   try {
-    const hasil = await pantauServer();
+    // Pemantau tetap jalan walau database macet — justru saat itulah ia
+    // dibutuhkan — tapi di lajur latar supaya mengalah pada pengguna.
+    const hasil = await jalankanLatar("pantau-server", () => pantauServer());
     return Response.json(hasil, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     console.error("[cron/pantau-server]", e);

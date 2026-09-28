@@ -19,7 +19,7 @@ import { SectionTitle } from "@/components/pri-ui";
 import { SwitchKaca } from "./switch-kaca";
 import { toast } from "@/hooks/use-app-store";
 import { aksiMasterHasil } from "@/services";
-import { DAFTAR_FITUR_BERAT } from "@/lib/sakelar";
+import { DAFTAR_FITUR_BERAT } from "@/lib/fitur-berat";
 import { cn } from "@/lib/utils";
 
 type HasilPantau = {

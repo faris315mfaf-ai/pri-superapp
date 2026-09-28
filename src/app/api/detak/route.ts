@@ -14,8 +14,8 @@
 // perangkat, dan tarikan berat HANYA saat memang ada perubahan.
 //
 // Biaya server: tanda dihitung SEKALI untuk semua orang (cache bersama
-// Redis 5 detik), yaitu 5 kueri "id terbesar" per 5 detik untuk seluruh
-// aplikasi — berapa pun jumlah penggunanya.
+// Redis 5 detik), yaitu 4 kueri "id terbesar" per 5 detik (+ laporan_video
+// per 2 menit) untuk seluruh aplikasi — berapa pun jumlah penggunanya.
 // ============================================================
 import { bungkus } from "@/lib/api-helper";
 import { denganCache } from "@/lib/cache-bersama";
@@ -25,6 +25,7 @@ import { supabase } from "@/lib/supabase";
 import { catatHadir, daftarHadir } from "@/lib/kehadiran";
 import { bacaSakelar } from "@/lib/sakelar";
 import { jedaDetak, ratakan } from "@/lib/rem-detak";
+import { kondisiDb } from "@/lib/penjaga-supabase";
 export const dynamic = "force-dynamic";
 
 /** Tabel yang perubahannya harus terasa di layar dalam hitungan detik. */
@@ -32,12 +33,39 @@ const TABEL_PANTAU = [
   "notifikasi",
   "pengumuman",
   "postingan",
-  "laporan_video",
   "feed_konten",
 ] as const;
 
 /** Umur tanda di cache bersama; lebih pendek dari jeda detak klien. */
 const TTL_DETIK = 5;
+
+/**
+ * laporan_video DIPISAH (28 Sep 2026). Tabel ini bertambah terus sepanjang
+ * jam kerja — tiap video anggota yang tercatat KPI, kebanyakan oleh tugas
+ * latar. Diukur: tanda berubah di 10 dari 18 jendela 10 detik, hampir
+ * semuanya karena laporan_video. Tiap perubahan membuat SEMUA perangkat
+ * yang online memuat ulang SEMUA layarnya serentak — beban terbesar yang
+ * membuat Supabase jenuh. Angka KPI tidak perlu sesegar notifikasi:
+ * bagian laporan dari tanda kini paling sering berubah tiap 2 menit.
+ */
+const TTL_LAPORAN_DETIK = 120;
+
+async function idTerbesar(db: ReturnType<typeof supabase>, tabel: string): Promise<string> {
+  // "id terbesar" pada kunci primer: satu baris, memakai indeks.
+  const { data, error } = await db
+    .from(tabel)
+    .select("id")
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    // Satu tabel bermasalah tidak boleh mematikan detak; tandai "x"
+    // supaya nilainya stabil (tidak memicu penyegaran palsu).
+    console.error(`[detak] ${tabel}:`, error.message);
+    return `${tabel[0]}x`;
+  }
+  return `${tabel[0]}${data?.id ?? 0}`;
+}
 
 // Rem otomatis: jedanya dihitung lib/rem-detak (murni, teruji terpisah).
 /** Rata-rata bergerak lama kueri tanda (ms) di instansi ini. */
@@ -46,26 +74,12 @@ let msTanda = 0;
 async function hitungTanda(): Promise<string> {
   const mulai = Date.now();
   const db = supabase();
-  const bagian = await Promise.all(
-    TABEL_PANTAU.map(async (tabel) => {
-      // "id terbesar" pada kunci primer: satu baris, memakai indeks.
-      const { data, error } = await db
-        .from(tabel)
-        .select("id")
-        .order("id", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) {
-        // Satu tabel bermasalah tidak boleh mematikan detak; tandai "x"
-        // supaya nilainya stabil (tidak memicu penyegaran palsu).
-        console.error(`[detak] ${tabel}:`, error.message);
-        return `${tabel[0]}x`;
-      }
-      return `${tabel[0]}${data?.id ?? 0}`;
-    }),
-  );
+  const [bagian, laporan] = await Promise.all([
+    Promise.all(TABEL_PANTAU.map((tabel) => idTerbesar(db, tabel))),
+    denganCache("detak:laporan", TTL_LAPORAN_DETIK, () => idTerbesar(db, "laporan_video")),
+  ]);
   msTanda = ratakan(msTanda, Date.now() - mulai);
-  return bagian.join(".");
+  return [...bagian, laporan].join(".");
 }
 
 export async function GET(request: Request) {
@@ -86,7 +100,10 @@ export async function GET(request: Request) {
       hadir,
       online: hadir.length,
       // Klien memakai angka ini sebagai jeda detak berikutnya (detik).
-      jeda: jedaDetak(sakelar?.hemat === true, msTanda),
+      // Lama kueri tanda ATAU median seluruh kueri proses ini (penjaga
+      // Supabase) — yang lebih lambat menang, supaya rem ikut terasa
+      // walau tanda sendiri kebetulan tersaji dari cache.
+      jeda: jedaDetak(sakelar?.hemat === true, Math.max(msTanda, kondisiDb().p50 ?? 0)),
     };
   });
 }

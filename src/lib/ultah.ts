@@ -45,6 +45,13 @@ export async function daftarUltahHariIni(): Promise<OrangUltah[]> {
 }
 
 const KUNCI_TERKIRIM = "ultah_terkirim";
+/**
+ * Hari yang klaimnya sudah dicoba proses ini (28 Sep 2026). Fungsi ini
+ * menumpang SETIAP pembukaan aplikasi (/api/sesi); tanpa ingatan ini
+ * tiap pembukaan = satu UPDATE ke pengaturan_sistem, padahal sesudah
+ * klaim pertama hari itu jawabannya pasti "sudah".
+ */
+let hariSelesaiInstance = "";
 
 /**
  * Kirim ucapan global maksimal SEKALI per hari. Kunci klaim di
@@ -55,14 +62,18 @@ const KUNCI_TERKIRIM = "ultah_terkirim";
 export async function siaranUltahHarian(): Promise<void> {
   try {
     const hariIni = tanggalWib();
+    if (hariIni === hariSelesaiInstance) return;
     const db = supabase();
 
-    const { data: klaim } = await db
+    const { data: klaim, error: galatKlaim } = await db
       .from("pengaturan_sistem")
       .update({ nilai: hariIni })
       .eq("kunci", KUNCI_TERKIRIM)
       .neq("nilai", hariIni)
       .select("kunci");
+    // Klaim yang GAGAL (database sibuk) tidak dianggap beres: dicoba lagi
+    // pada pembukaan berikutnya.
+    if (!galatKlaim) hariSelesaiInstance = hariIni;
     if (!klaim || klaim.length === 0) return; // sudah dikirim hari ini
 
     const orang = await daftarUltahHariIni();

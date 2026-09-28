@@ -9,6 +9,7 @@
 // Keamanan sama dengan tugas berkala lain: Authorization: Bearer CRON_SECRET.
 import { rekonsiliasiJadwalTayang } from "@/lib/jadwal-tayang";
 import { ayrshareSiap } from "@/lib/ayrshare";
+import { jalankanLatar, tundaKarenaMacet } from "@/lib/penjaga-supabase";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -26,6 +27,8 @@ export async function GET(request: Request) {
   if (!ayrshareSiap()) {
     return Response.json({ jalan: false, pesan: "Ayrshare belum diatur." });
   }
-  const hasil = await rekonsiliasiJadwalTayang();
+  const tunda = tundaKarenaMacet("jadwal-tayang");
+  if (tunda) return Response.json(tunda);
+  const hasil = await jalankanLatar("jadwal-tayang", () => rekonsiliasiJadwalTayang());
   return Response.json({ jalan: true, ...hasil });
 }

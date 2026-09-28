@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabase";
 import { BATAS_UMUR_JAM, belumPasti, rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { uploadPostSiap } from "@/lib/upload-post";
 import { luluskanLaporanTertahan } from "@/lib/laporan-tertahan";
+import { jalankanLatar, latarHarusBerhenti, tundaKarenaMacet } from "@/lib/penjaga-supabase";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -27,6 +28,13 @@ export async function GET(request: Request) {
   const ua = (request.headers.get("user-agent") ?? "").toLowerCase();
   const sah = rahasia ? tokenDari(request) === rahasia : ua.includes("vercel-cron");
   if (!sah) return Response.json({ error: "Tidak berwenang." }, { status: 403 });
+  // Lajur latar + tunda saat database macet (28 Sep 2026).
+  const tunda = tundaKarenaMacet("rekonsiliasi-kpi");
+  if (tunda) return Response.json(tunda);
+  return jalankanLatar("rekonsiliasi-kpi", () => kerjakan());
+}
+
+async function kerjakan(): Promise<Response> {
   // ACC HR ditiadakan (23 Sep 2026): sisa antrean laporan manual lama
   // diluluskan sedikit demi sedikit (50 per putaran, berurutan) — sengaja
   // dicicil supaya tidak membebani database sekaligus. Jalan walau
@@ -80,6 +88,8 @@ export async function GET(request: Request) {
   let baru = 0;
   for (const uid of antre) {
     if (Date.now() - mulai > ANGGARAN_TOTAL_MS) break;
+    // Database macet di tengah jalan: sisanya menunggu giliran berikutnya.
+    if (latarHarusBerhenti()) break;
     // `paksa`: jeda 60 dtk hanya untuk spam layar interaktif, bukan cron.
     baru += await rekonsiliasiKpiOtomatis(uid, { anggaranMs: ANGGARAN_PER_ORANG_MS, paksa: true });
     diproses += 1;

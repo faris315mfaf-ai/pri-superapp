@@ -8,6 +8,7 @@
 // Gabungan "Official + anggota" dirakit klien: sisi Official dari
 // endpoint insight Ayrshare yang sudah ada, sisi anggota dari sini.
 import { supabase } from "@/lib/supabase";
+import { sinkronkanAkunTertaut } from "@/lib/sinkron-akun-tertaut";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { bolehDashboard } from "@/lib/dashboard-akses";
@@ -178,36 +179,16 @@ export async function GET(request: Request) {
 const PLATFORM6 = new Set(["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"]);
 const POLA_USERNAME = /^[a-z0-9][a-z0-9-]{2,39}$/;
 
-/** Sinkron akun tertaut profil → akun_tvr_user (pola sama dengan tvr/hubungkan). */
+/** Sinkron akun tertaut profil → akun_tvr_user (lib/sinkron-akun-tertaut). */
 async function sinkronAkunTertaut(
   db: ReturnType<typeof supabase>,
   userId: number,
   akun: Record<string, string>,
 ): Promise<{ tersinkron: number; konflik: string[] }> {
-  let tersinkron = 0;
-  const konflik: string[] = [];
-  for (const [platform, mentah] of Object.entries(akun)) {
-    if (!PLATFORM6.has(platform)) continue;
-    const username = String(mentah).toLowerCase().replace(/^@+/, "");
-    if (!username) continue;
-    const { data: ada } = await db
-      .from("akun_tvr_user")
-      .select("id, user_id")
-      .eq("platform", platform)
-      .ilike("username", username)
-      .maybeSingle();
-    if (!ada) {
-      const { error } = await db
-        .from("akun_tvr_user")
-        .insert({ user_id: userId, platform, username, terhubung: true });
-      if (!error) tersinkron += 1;
-    } else if (Number(ada.user_id) === userId) {
-      await db.from("akun_tvr_user").update({ terhubung: true }).eq("id", ada.id);
-    } else {
-      konflik.push(`@${username} (${platform}) sudah terdaftar milik anggota lain`);
-    }
-  }
-  return { tersinkron, konflik };
+  const daftar = Object.entries(akun)
+    .filter(([platform]) => PLATFORM6.has(platform))
+    .map(([platform, username]) => ({ platform, username: String(username) }));
+  return sinkronkanAkunTertaut(db, userId, daftar);
 }
 
 export async function POST(request: Request) {

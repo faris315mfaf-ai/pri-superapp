@@ -41,6 +41,7 @@ import { kolomTabelAda } from "@/lib/kolom-struktur";
 import { kodeMetrik } from "@/lib/insight-kategori";
 import { akunDariTautan, idVideo, kanonikTautan } from "@/lib/tautan-video";
 import { klienCache } from "@/lib/redis";
+import { latarHarusBerhenti } from "@/lib/penjaga-supabase";
 import { semuaBaris } from "@/lib/semua-baris";
 import { adalahTautanPendek, alamatDariPengalihan } from "@/lib/tautan-pendek";
 import { analitikPostAsliUp, analitikPostLiveUp, daftarMediaUp, uploadPostSiap } from "@/lib/upload-post";
@@ -323,6 +324,13 @@ class Pengendali {
    */
   async izin(minWaktuMs = 8_000, akun?: string): Promise<boolean> {
     if (!this.bolehLanjut(minWaktuMs) || this.akunPenuh(akun)) return false;
+    // Database macet saat tugas LATAR berjalan (28 Sep 2026): berhenti
+    // untuk putaran ini saja — tanpa jeda panjang (bukan salah upload-post).
+    if (latarHarusBerhenti()) {
+      this.berhenti = true;
+      if (!this.alasanBerhenti) this.alasanBerhenti = "database sedang lambat";
+      return false;
+    }
     this.sisa -= 1;
     this.diminta += 1;
     if (akun) this.perAkun.set(akun, (this.perAkun.get(akun) ?? 0) + 1);

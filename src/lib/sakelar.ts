@@ -16,30 +16,10 @@
 import { supabase } from "@/lib/supabase";
 import { DAFTAR_MODUL, nilaiModul, type KunciModul } from "@/lib/sakelar-modul";
 
-export const DAFTAR_FITUR_BERAT = [
-  {
-    kunci: "ludo",
-    label: "Ludo Robot",
-    keterangan: "Permainan multipemain — tiap pemain menanyakan keadaan ruang ke server 1,5 detik sekali.",
-  },
-  {
-    kunci: "pet_beranda",
-    label: "Robot & hewan melayang di beranda",
-    keterangan: "Dua komponen animasi + pemuatan data pet setiap kali beranda dibuka.",
-  },
-  {
-    kunci: "juara_efek",
-    label: "Running text & kembang api juara",
-    keterangan: "Kanvas kembang api dan kueri juara komentar di beranda semua pengguna.",
-  },
-  {
-    kunci: "asisten",
-    label: "Asisten AI",
-    keterangan: "Panggilan model AI — paling mahal dan lambat saat server sibuk.",
-  },
-] as const;
-
-export type KunciFiturBerat = (typeof DAFTAR_FITUR_BERAT)[number]["kunci"];
+// Daftar fitur berat tinggal di modul murni lib/fitur-berat (28 Sep 2026)
+// supaya layar klien bisa memakainya tanpa ikut membundel modul server ini.
+import { DAFTAR_FITUR_BERAT, type KunciFiturBerat } from "@/lib/fitur-berat";
+export { DAFTAR_FITUR_BERAT, type KunciFiturBerat };
 
 export type PetaSakelar = {
   /** Keadaan EFEKTIF tiap fitur (sudah memperhitungkan mode hemat). */

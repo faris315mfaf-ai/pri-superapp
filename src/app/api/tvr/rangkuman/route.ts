@@ -16,6 +16,7 @@ import { bungkus } from "@/lib/api-helper";
 import { targetKendali, userEfektifTvr } from "@/lib/sebagai";
 import { pastikanMasuk } from "@/lib/sesi";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
+import { jalankanLatar } from "@/lib/penjaga-supabase";
 import { luluskanLaporanTertahan } from "@/lib/laporan-tertahan";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +56,9 @@ export async function GET(request: Request) {
     // rangkuman hari ini tampil kosong padahal barisnya sudah ada.
     // Rekonsiliasi tetap jalan setelah respons; klien menyegarkan.
     if (tanggal === tanggalWib()) {
-      after(() => rekonsiliasiKpiOtomatis(uid, { anggaranMs: ANGGARAN_REKONSILIASI_MS }));
+      after(() =>
+        jalankanLatar("rekonsiliasi-kpi-layar", () => rekonsiliasiKpiOtomatis(uid, { anggaranMs: ANGGARAN_REKONSILIASI_MS })),
+      );
     }
 
     // ACC HR ditiadakan (23 Sep 2026): antrean lama orang ini diluluskan

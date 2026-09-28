@@ -19,6 +19,7 @@
 // foto, murah, dan rekap bulanan membutuhkannya.
 import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { bolehSekarang } from "@/lib/jeda-instans";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { bolehDashboard } from "@/lib/dashboard-akses";
@@ -56,6 +57,8 @@ async function pastikanMasuk(request: Request) {
  * baris — kalau penghapusan foto gagal, barisnya tetap jadi penunjuk.
  */
 async function bersihkanUsang() {
+  // Menumpang GET absensi: cukup sekali per 10 menit per proses (28 Sep 2026).
+  if (!bolehSekarang("absensi:bersihkan-usang", 10 * 60_000)) return;
   try {
     const db = supabase();
     const batasFoto = new Date(Date.now() - RETENSI_FOTO_HARI * 86_400_000).toISOString();

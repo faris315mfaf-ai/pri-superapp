@@ -7,6 +7,7 @@
 // karena kuncinya akan ikut terkirim ke browser pengguna.
 // ============================================================
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { fetchTerjaga } from "@/lib/penjaga-supabase";
 
 /** Kesalahan konfigurasi .env — pesan sengaja berbahasa Indonesia */
 export class KonfigurasiError extends Error {}
@@ -32,6 +33,9 @@ export function supabase(): SupabaseClient {
 
   klien = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
+    // Batas waktu, batas antrean, jatah tugas latar & statistik per
+    // menit (28 Sep 2026) — lihat lib/penjaga-supabase.
+    global: { fetch: fetchTerjaga },
   });
   return klien;
 }
