@@ -162,8 +162,6 @@ export async function GET(request: Request) {
     // `paksa`: buka riwayat setelah antrean upload-post selesai harus
     // langsung menarik tautan, bukan ditahan jeda 60 dtk interaktif.
     after(() => rekonsiliasiKpiOtomatis(Number(user.id), { paksa: true, anggaranMs: 20_000 }));
-    // Unggahan baru tampil seketika di laporan pribadi (cache berkunci sinyal).
-    after(() => naikkanSinyal([Number(user.id)]));
     after(bersihkanVideoKedaluwarsa);
     // PALUGODAM: pesanan yang rendernya sudah selesai ikut diposting.
     if (adalahPalugodam(user))
@@ -611,6 +609,11 @@ export async function POST(request: Request) {
         });
       }
       after(bersihkanVideoKedaluwarsa);
+      // Unggahan BARU → laporan pribadi (cache berkunci sinyal) langsung
+      // menampilkannya. JANGAN dipasang di GET riwayat: GET yang menaikkan
+      // sinyal memicu penyegaran yang memanggil GET lagi — lingkaran tanpa
+      // henti (bug rilis dd3f64b, diperbaiki 29 Sep 2026).
+      after(() => naikkanSinyal([Number(user.id)]));
       return {
         sukses: hasil.sukses,
         id: baris ? String(baris.id) : null,
