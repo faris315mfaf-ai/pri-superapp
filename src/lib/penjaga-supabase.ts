@@ -265,8 +265,26 @@ export function sasaranRest(url: string): string | null {
 
 type Hitungan = { n: number; ms: number; gagal: number };
 
+/**
+ * "Bentuk" kueri tanpa nilainya: kolom select + nama filter & operatornya.
+ * Contoh: app_user?select=id,nama&id=eq → menunjuk titik pemanggil di kode
+ * (tabel yang sama dibaca dari puluhan tempat dengan bentuk berbeda).
+ */
+export function bentukKueri(url: string, metode: string, sasaran: string): string {
+  const q = url.indexOf("?");
+  if (q < 0) return `${metode} ${sasaran}`;
+  const bagian: string[] = [];
+  for (const [k, v] of new URLSearchParams(url.slice(q + 1))) {
+    if (k === "select") bagian.unshift(`select=${v.slice(0, 80)}`);
+    else if (k === "limit" || k === "offset" || k === "order" || k === "on_conflict" || k === "columns") bagian.push(k);
+    else bagian.push(`${k}=${v.split(".")[0].slice(0, 12)}`);
+  }
+  return `${metode} ${sasaran}?${bagian.join("&")}`;
+}
+
 export class Pencatat {
   private per = new Map<string, Hitungan>();
+  private bentuk = new Map<string, number>();
   private lama: number[] = [];
   private ditolak = 0;
   private habis = 0;
@@ -286,6 +304,12 @@ export class Pencatat {
     if (gagal) h.gagal += 1;
     this.per.set(kunci, h);
     if (this.lama.length < 5_000) this.lama.push(ms);
+  }
+
+  catatBentuk(b: string) {
+    // Batas memori: bentuk kueri terbatas jumlahnya, tapi tetap dijaga.
+    if (this.bentuk.size >= 500 && !this.bentuk.has(b)) return;
+    this.bentuk.set(b, (this.bentuk.get(b) ?? 0) + 1);
   }
 
   catatTolak(waktuHabis: boolean) {
@@ -322,9 +346,12 @@ export class Pencatat {
               tingkat: kondisi.tingkat,
               jatah_latar: kondisi.jatahLatar,
               atas,
+              // 10 bentuk kueri terbanyak: petunjuk titik pemanggil di kode.
+              bentuk_atas: [...this.bentuk.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10),
             };
           })();
     this.per = new Map();
+    this.bentuk = new Map();
     this.lama = [];
     this.ditolak = 0;
     this.habis = 0;
@@ -380,6 +407,7 @@ export function buatFetchTerjaga(penjaga: Penjaga, pencatat: Pencatat, saatDipak
     const { lajur, sumber } = lajurSaatIni();
     const metode = (init?.method ?? (masukan instanceof Request ? masukan.method : "GET")).toUpperCase();
     const kunci = `${lajur === "latar" ? `latar:${sumber || "?"}` : "pengguna"} ${metode} ${sasaran}`;
+    pencatat.catatBentuk(bentukKueri(url, metode, sasaran));
     const tenggat = Date.now() + penjaga.batasMs(lajur);
 
     let lepas: () => void;

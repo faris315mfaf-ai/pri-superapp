@@ -12,6 +12,7 @@ import {
   buatFetchTerjaga,
   jalankanLatar,
   lajurSaatIni,
+  bentukKueri,
   sasaranRest,
   type OpsiPenjaga,
 } from "@/lib/penjaga-supabase";
@@ -43,6 +44,13 @@ cek("tabel", sasaranRest("https://x.supabase.co/rest/v1/app_user?select=id") ===
 cek("rpc", sasaranRest("https://x.supabase.co/rest/v1/rpc/fungsi_saya") === "rpc/fungsi_saya");
 cek("storage bukan REST", sasaranRest("https://x.supabase.co/storage/v1/object/a/b.mp4") === null);
 cek("akar", sasaranRest("https://x.supabase.co/rest/v1/") === "(akar)");
+cek(
+  "bentuk kueri tanpa nilai",
+  bentukKueri("https://x/rest/v1/app_user?select=id%2Cnama&id=in.%281%2C2%29&aktif=eq.true&limit=5", "GET", "app_user") ===
+    "GET app_user?select=id,nama&id=in&aktif=eq&limit",
+  bentukKueri("https://x/rest/v1/app_user?select=id%2Cnama&id=in.%281%2C2%29&aktif=eq.true&limit=5", "GET", "app_user"),
+);
+cek("bentuk tanpa query", bentukKueri("https://x/rest/v1/tabel", "POST", "tabel") === "POST tabel");
 
 console.log("antrean & jatah");
 {
@@ -253,6 +261,8 @@ console.log("integrasi: klien supabase-js + server tiruan");
   const r = pencatat.tutup(penjaga.kondisi()) as { atas: [string][]; waktu_habis: number };
   cek("ringkasan memisahkan lajur (latar:uji GET sedang)", r.atas.some((a) => a[0] === "latar:uji GET sedang") && r.atas.some((a) => a[0] === "pengguna GET sedang"), r.atas);
   cek("waktu habis tercatat di ringkasan", r.waktu_habis >= 1, r);
+  const rb = r as unknown as { bentuk_atas: [string, number][] };
+  cek("bentuk kueri teratas ikut dilaporkan", rb.bentuk_atas.some(([b]) => b.startsWith("GET sedang?select=id&")), rb.bentuk_atas);
   server.close();
 }
 
