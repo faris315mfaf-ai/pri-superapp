@@ -362,12 +362,19 @@ export type Tingkat = {
   selangMs: number;
 };
 
-/** Selang penyegaran per tingkat. */
+/**
+ * Selang penyegaran per tingkat. Diatur ulang 29 Sep 2026 (disetujui
+ * user) setelah diukur: robot sanggup ±115 ribu tarikan/hari (±170 ribu
+ * setelah 300/menit), sedangkan jadwal lama (15 mnt / 1 jam / 6 jam /
+ * 24 jam) butuh ±330 ribu — video lama & yang belum pernah berangka tak
+ * pernah kebagian. Jadwal ini butuh ±140 ribu/hari (±2.500 video terbit
+ * per hari, ±12 ribu umur 2–6 hari, ±95 ribu lebih lama).
+ */
 export const SELANG_TINGKAT: Record<NamaTingkat, number> = {
-  hari_ini: 15 * 60_000,
-  kemarin: JAM,
-  pekan: 6 * JAM,
-  lama: HARI,
+  hari_ini: 20 * 60_000,
+  kemarin: 2 * JAM,
+  pekan: 12 * JAM,
+  lama: 7 * HARI,
 };
 
 /**

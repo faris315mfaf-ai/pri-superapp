@@ -181,7 +181,7 @@ export function PanelInsightKategori({
         <div className="min-w-0 flex-1">
           <p className="font-heading text-[15px] font-bold text-teks-utama">Insight per Kategori</p>
           <p className="mt-0.5 text-[11px] text-teks-sekunder">
-            Tayangan, suka, komentar & dibagikan tiap video — diperbarui otomatis tiap hari
+            Tayangan, suka, komentar & dibagikan tiap video — diperbarui otomatis
           </p>
         </div>
         {onBukaHalaman && (

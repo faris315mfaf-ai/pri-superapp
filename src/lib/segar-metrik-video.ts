@@ -21,14 +21,15 @@
 //  2. UNGGAHAN SuperApp hari ini & kemarin — satu permintaan per unggahan
 //     (/post-analytics/{request_id}) memberi angka SEMUA platformnya.
 //  3. PER VIDEO — /post-analytics?platform_post_id= untuk tiap video di
-//     katalog, urut TINGKAT: hari ini (segar tiap 15 menit) → kemarin
-//     (1 jam) → 2–6 hari (6 jam) → lebih lama (24 jam). Antrean dihitung
+//     katalog, urut TINGKAT: hari ini (segar tiap 20 menit) → kemarin
+//     (2 jam) → 2–6 hari (12 jam) → lebih lama (7 hari). Antrean dihitung
 //     ulang dari database tiap putaran; video yang tidak sempat dikerjakan
 //     tetap jatuh tempo dan jadi yang paling basi berikutnya.
 //
 // Rem (kuota upload-post dipakai bersama unggahan & rekonsiliasi KPI):
-//   • maks METRIK_VIDEO_PER_MENIT permintaan/menit (bawaan 200; batas
-//     paket ±870/menit — diverifikasi dari header 26 Sep 2026);
+//   • maks METRIK_VIDEO_PER_MENIT permintaan/menit (bawaan 300 sejak
+//     29 Sep 2026, dulu 200; paket Business ±2.500+10/profil per 10 menit
+//     ≈ ±400/menit berkelanjutan — sisanya untuk unggahan & fitur lain);
 //   • maks 40 permintaan per akun sosmed per putaran, akun bergiliran;
 //   • header x-ratelimit-remaining menipis / 429 → berhenti & jeda;
 //   • akun yang tokennya rusak / kena batas platform dijeda (bukan
@@ -59,6 +60,7 @@ import {
   platformApp,
   platformDidukung,
   selangSeling,
+  SELANG_TINGKAT,
   tingkatKesegaran,
   waktuDariLaporan,
   type BarisLama,
@@ -85,9 +87,13 @@ const UMUR_LEASE_MS = 295_000;
 /** Anggaran waktu satu putaran (penjadwal memutus di 280 dtk). */
 const ANGGARAN_MS = 225_000;
 /** Maks permintaan ke upload-post per menit (bisa diubah lewat env). */
-const MAKS_PER_MENIT = Math.max(20, Math.min(600, Number(process.env.METRIK_VIDEO_PER_MENIT) || 200));
-/** Permintaan yang berjalan bersamaan. */
-const PARALEL = 12;
+const MAKS_PER_MENIT = Math.max(20, Math.min(600, Number(process.env.METRIK_VIDEO_PER_MENIT) || 300));
+/**
+ * Permintaan yang berjalan bersamaan. Satu panggilan analitik 3–10 dtk,
+ * jadi 12 pekerja mentok di ±170/menit (terukur 29 Sep: 617 permintaan
+ * per putaran 217 dtk) — 300/menit butuh ±24 pekerja.
+ */
+const PARALEL = 24;
 /** Maks permintaan per akun sosmed per putaran (batas laju platform per akun). */
 const MAKS_PER_AKUN_PUTARAN = 40;
 /** Unggahan semuda ini belum ditanya: platform masih memproses/menerbitkan. */
@@ -957,7 +963,7 @@ async function segarkanUnggahan(
   const awal = awalHariWib(kini);
   const dari = tingkat === "hari_ini" ? awal : awal - 86_400_000;
   const sampai = tingkat === "hari_ini" ? kini + 86_400_000 : awal;
-  const selang = tingkat === "hari_ini" ? 15 * 60_000 : JAM;
+  const selang = SELANG_TINGKAT[tingkat];
   const { data, error } = await db
     .from("tvrku_post")
     .select("id, user_id, judul, request_id, jadwal, dibuat_pada")

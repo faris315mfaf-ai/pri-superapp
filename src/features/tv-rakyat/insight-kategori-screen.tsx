@@ -497,7 +497,7 @@ export function InsightKategoriScreen({
             <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder">
               <b className="text-teks-utama">{ringkasTampil.video}</b> video ·{" "}
               <b className="text-teks-utama">{ringkasTampil.terukur}</b> punya angka. Angka per video dari
-              upload-post (akun anggota yang tersambung), diperbarui otomatis tiap hari
+              upload-post (akun anggota yang tersambung), diperbarui otomatis (video baru lebih sering, video lama seminggu sekali)
               {data.pembaruan?.terakhir ? ` — terakhir ${waktuJelasWIB(data.pembaruan.terakhir)}` : ""}. Video di akun
               yang tidak tersambung tampil tanpa angka.
             </p>

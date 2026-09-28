@@ -14,7 +14,7 @@ export function kalimatPembaruan(p: PembaruanMetrikVideo | null | undefined): st
     return `Penarikan sedang menunggu kuota upload-post pulih (${jamWIB(p.jeda_sampai)} WIB).`;
   }
   const bagian = [
-    "Video hari ini disegarkan ±tiap 15 menit, kemarin tiap jam, yang lama tiap hari",
+    "Video hari ini disegarkan ±tiap 20 menit, kemarin tiap 2 jam, 2–6 hari tiap 12 jam, yang lama seminggu sekali",
     `terakhir ${waktuJelasWIB(p.terakhir)}`,
   ];
   if (p.menunggu && p.menunggu.hari_ini > 0) bagian.push(`${formatAngkaRingkas(p.menunggu.hari_ini)} video hari ini menunggu giliran`);

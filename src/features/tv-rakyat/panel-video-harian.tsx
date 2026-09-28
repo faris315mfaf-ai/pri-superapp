@@ -9,7 +9,7 @@
 // berikut angkanya; saring per akun sosmed dan per platform.
 //
 // Angkanya dari katalog yang disegarkan penyegar (lib/segar-metrik-
-// video): video hari ini ±tiap 15 menit. Panel memuat ulang sendiri tiap
+// video): video hari ini ±tiap 20 menit. Panel memuat ulang sendiri tiap
 // menit selama terlihat, supaya angka yang baru masuk langsung tampak.
 // Video yang sudah dikenali tapi angkanya belum ditarik ditulis "belum
 // ada angka" — bukan 0.

@@ -24,8 +24,9 @@ cat > /etc/crontabs/root <<'JADWAL'
 */5  * * * * /panggil.sh jadwal-tayang
 # Angka per video dari upload-post (25 Sep 2026, dirombak 26 Sep): tiap
 # 5 menit ±4 menit kerja (maks ±200 permintaan/menit). Seluruh video akun
-# tersambung dikatalogkan; video hari ini disegarkan ±tiap 15 menit,
-# kemarin tiap jam, yang lama tiap hari. Menit 2,7,12,… supaya tidak
+# tersambung dikatalogkan; video hari ini disegarkan ±tiap 20 menit,
+# kemarin tiap 2 jam, 2–6 hari tiap 12 jam, yang lama seminggu sekali
+# (29 Sep 2026: jadwal lama butuh 3x kemampuan robot). Menit 2,7,12,… supaya tidak
 # berbarengan dengan tugas lain di menit kelipatan 5.
 2,7,12,17,22,27,32,37,42,47,52,57 * * * * /panggil.sh metrik-video
 # Rekaman angka nasional TV Rakyat (12 Sep 2026). Sekali sehari sudah

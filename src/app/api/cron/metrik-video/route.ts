@@ -1,9 +1,9 @@
 // /api/cron/metrik-video — penyegar angka per video dari upload-post.
 //
 // Dipanggil penjadwal VPS tiap 5 menit (vps/aplikasi/jadwal). Tiap
-// panggilan bekerja ±4 menit (maks ±200 permintaan/menit ke upload-post):
+// panggilan bekerja ±4 menit (maks ±300 permintaan/menit ke upload-post):
 // mengenali video baru di seluruh akun tersambung, lalu menyegarkan angka
-// — video hari ini dulu (±tiap 15 menit), lalu kemarin, lalu yang lama.
+// — video hari ini dulu (±tiap 20 menit), lalu kemarin, lalu yang lama.
 // Rincian cara kerjanya di lib/segar-metrik-video.ts.
 //
 // Keamanan: sama seperti cron lain — bila CRON_SECRET terpasang, wajib

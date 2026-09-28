@@ -186,8 +186,9 @@ cek("hari ini: dari 00:00 WIB, tanpa batas atas", t[0].dari === "2026-09-25T17:0
 cek("kemarin: 24 jam sebelumnya", t[1].dari === "2026-09-24T17:00:00Z" && t[1].sampai === "2026-09-25T17:00:00Z");
 cek("pekan: 2–6 hari", t[2].dari === "2026-09-19T17:00:00Z" && t[2].sampai === "2026-09-24T17:00:00Z");
 cek("lama: sebelum 6 hari + tanpa waktu", t[3].dari === null && t[3].sampai === "2026-09-19T17:00:00Z" && t[3].tanpaWaktu);
-cek("selang: 15 mnt / 1 jam / 6 jam / 24 jam", t.map((x) => x.selangMs / 60_000).join(",") === "15,60,360,1440");
-cek("batas basi hari ini = 15 menit lalu", t[0].basiSebelum === "2026-09-26T02:45:00Z");
+cek("selang: 20 mnt / 2 jam / 12 jam / 7 hari", t.map((x) => x.selangMs / 60_000).join(",") === "20,120,720,10080");
+cek("batas basi hari ini = 20 menit lalu", t[0].basiSebelum === "2026-09-26T02:40:00Z");
+cek("batas basi lama = 7 hari lalu", t[3].basiSebelum === "2026-09-19T03:00:00Z", t[3].basiSebelum);
 cek("ISO tanpa milidetik (aman untuk or())", !t.some((x) => /\.\d{3}/.test(`${x.dari}${x.sampai}${x.basiSebelum}`)));
 cek("tingkat video: hari ini", tingkatVideo("2026-09-26T01:00:00Z", kiniT) === "hari_ini");
 cek("tingkat video: kemarin", tingkatVideo("2026-09-25T10:00:00Z", kiniT) === "kemarin");
