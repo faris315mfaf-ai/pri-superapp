@@ -53,6 +53,7 @@ import {
   barisMetrikVideo,
   golonganGalat,
   idPlatformDariUrl,
+  jelajahiAntrean,
   kuotaMenipis,
   perluDaftarMedia,
   platformApp,
@@ -66,6 +67,7 @@ import {
   type JawabanLive,
   type KolomTambahan,
   type NamaTingkat,
+  type PosisiAntrean,
   type Tingkat,
 } from "@/lib/metrik-video-up";
 import type { MetrikPost } from "@/lib/metrik-post-up";
@@ -223,6 +225,15 @@ type Simpanan = {
   gagal: Record<string, number>;
   /** id tvrku_post → terakhir disegarkan (ms). */
   unggah: Record<string, number>;
+  /**
+   * Posisi terakhir antrean tiap tingkat (29 Sep 2026). Tanpa ini tiap
+   * putaran mulai dari depan antrean — dan video yang selalu dilewati
+   * (akun dijeda, ID media belum ada) memenuhi 4.000 calon pertama,
+   * sehingga video di belakangnya TIDAK PERNAH terjangkau. Terbukti:
+   * antrean "lama" urut kode (fb_ < ig_ < th_ < tt_ < yt_) hanya sampai
+   * Threads; 27 ribu TikTok & 10 ribu YouTube tak pernah ditarik.
+   */
+  kursor?: Record<string, { d: string; k: string }>;
 };
 
 const KUNCI_SIMPANAN = "mv:simpanan:v1";
@@ -996,7 +1007,7 @@ type ItemVideo = {
 
 type BarisKandidat = { kode: string; platform: string; user_id: number | string | null; url: string; diperbarui_pada: string };
 
-async function kandidatTingkat(db: Db, t: Tingkat, setelah: BarisKandidat | null): Promise<BarisKandidat[]> {
+async function kandidatTingkat(db: Db, t: Tingkat, setelah: PosisiAntrean | null): Promise<BarisKandidat[]> {
   let q = db
     .from("tvr_video_metrik")
     .select("kode, platform, user_id, url, diperbarui_pada")
@@ -1006,7 +1017,7 @@ async function kandidatTingkat(db: Db, t: Tingkat, setelah: BarisKandidat | null
   if (t.sampai) q = t.tanpaWaktu ? q.or(`waktu_posting.lt."${t.sampai}",waktu_posting.is.null`) : q.lt("waktu_posting", t.sampai);
   if (setelah) {
     // Lanjutan (keyset) setelah baris terakhir jendela sebelumnya.
-    q = q.or(`diperbarui_pada.gt."${setelah.diperbarui_pada}",and(diperbarui_pada.eq."${setelah.diperbarui_pada}",kode.gt."${setelah.kode}")`);
+    q = q.or(`diperbarui_pada.gt."${setelah.d}",and(diperbarui_pada.eq."${setelah.d}",kode.gt."${setelah.k}")`);
   }
   const { data, error } = await q
     .order("diperbarui_pada", { ascending: true })
@@ -1100,37 +1111,58 @@ async function segarkanTingkat(
   t: Tingkat,
   simpanBerkala: () => Promise<void>,
 ) {
-  let setelah: BarisKandidat | null = null;
-  for (let jendela = 0; jendela < MAKS_JENDELA_TINGKAT; jendela++) {
-    if (!ctrl.bolehLanjut(12_000)) return;
-    const baris = await kandidatTingkat(db, t, setelah);
-    if (baris.length === 0) return;
-    setelah = baris[baris.length - 1];
-    const kini = Date.now();
-    const items: ItemVideo[] = [];
-    for (const b of baris) {
-      const uid = Number(b.user_id);
-      const platform = platformApp(String(b.platform ?? ""));
-      const profil = ctx.profilPer.get(uid);
-      const akun = `${uid}|${platform}`;
-      if (!profil || !platformDidukung(platform)) continue;
-      if (akunDijeda(bantu.simpanan, akun) || (bantu.simpanan.gagal[b.kode] ?? 0) > kini) continue;
-      if (ctrl.akunPenuh(akun)) continue;
-      const kodeAsli = kodeMetrik(platform, String(b.url ?? "")) ?? b.kode;
-      items.push({ kode: b.kode, kodeAsli, platform, uid, profil, akun, url: String(b.url ?? "") });
-    }
-    const urut = selangSeling(items, (x) => x.akun, MAKS_PER_AKUN_PUTARAN);
-    await jalankanAntre(
-      urut,
-      async (it) => {
-        await kerjakanVideo(it, ctx, ctrl, draf, catat, bantu, hasilPutaran, t.selangMs);
-        await simpanBerkala();
-      },
-      ctrl,
-      12_000,
-    );
-    if (baris.length < JENDELA_TINGKAT) return;
+  // Lanjut dari posisi putaran sebelumnya (lihat jelajahiAntrean).
+  const kursor = (bantu.simpanan.kursor ??= {});
+  const posisi = await jelajahiAntrean<BarisKandidat>({
+    kursor: kursor[t.nama] ?? null,
+    ukuran: JENDELA_TINGKAT,
+    maksJendela: MAKS_JENDELA_TINGKAT,
+    boleh: () => ctrl.bolehLanjut(12_000),
+    ambil: (setelah) => kandidatTingkat(db, t, setelah),
+    kerjakan: (baris) => kerjakanJendela(baris, ctx, ctrl, draf, catat, bantu, hasilPutaran, t, simpanBerkala),
+  });
+  if (posisi) kursor[t.nama] = posisi;
+  else delete kursor[t.nama];
+}
+
+/** Satu jendela kandidat → true bila semuanya sempat dikerjakan. */
+async function kerjakanJendela(
+  baris: BarisKandidat[],
+  ctx: Konteks,
+  ctrl: Pengendali,
+  draf: DraftBaris[],
+  catat: Catatan,
+  bantu: Bantu,
+  hasilPutaran: Map<string, DraftBaris>,
+  t: Tingkat,
+  simpanBerkala: () => Promise<void>,
+): Promise<boolean> {
+  const kini = Date.now();
+  const items: ItemVideo[] = [];
+  for (const b of baris) {
+    const uid = Number(b.user_id);
+    const platform = platformApp(String(b.platform ?? ""));
+    const profil = ctx.profilPer.get(uid);
+    const akun = `${uid}|${platform}`;
+    if (!profil || !platformDidukung(platform)) continue;
+    if (akunDijeda(bantu.simpanan, akun) || (bantu.simpanan.gagal[b.kode] ?? 0) > kini) continue;
+    if (ctrl.akunPenuh(akun)) continue;
+    const kodeAsli = kodeMetrik(platform, String(b.url ?? "")) ?? b.kode;
+    items.push({ kode: b.kode, kodeAsli, platform, uid, profil, akun, url: String(b.url ?? "") });
   }
+  const urut = selangSeling(items, (x) => x.akun, MAKS_PER_AKUN_PUTARAN);
+  const dikerjakan = await jalankanAntre(
+    urut,
+    async (it) => {
+      await kerjakanVideo(it, ctx, ctrl, draf, catat, bantu, hasilPutaran, t.selangMs);
+      await simpanBerkala();
+    },
+    ctrl,
+    12_000,
+  );
+  // Waktu putaran habis di tengah jalan (izin laju ditolak pun terhitung
+  // "dikerjakan") → anggap belum tuntas supaya jendela ini diulang.
+  return dikerjakan >= urut.length && ctrl.bolehLanjut(12_000);
 }
 
 // ------------------------------------------------------------

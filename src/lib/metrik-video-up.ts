@@ -482,6 +482,79 @@ export function selangSeling<T>(daftar: T[], kunci: (t: T) => string, batasPerAk
   return hasil;
 }
 
+/** Posisi keyset di antrean tingkat: (diperbarui_pada, kode) baris terakhir. */
+export type PosisiAntrean = { d: string; k: string };
+
+/**
+ * Menjelajah antrean satu tingkat per jendela, MELANJUTKAN dari posisi
+ * putaran sebelumnya (29 Sep 2026). Tanpa posisi ini tiap putaran mulai
+ * dari depan, dan video yang selalu dilewati (akun dijeda, ID media belum
+ * ada) memenuhi jendela-jendela pertama — video di belakangnya tidak
+ * pernah terjangkau (terbukti: 27 ribu TikTok & 10 ribu YouTube).
+ *
+ * - Sampai ujung antrean → lanjut dari depan (sekali per putaran).
+ * - Jendela tidak tuntas (waktu putaran habis) → posisi dikembalikan ke
+ *   awal jendela itu; yang sudah disegarkan keluar sendiri dari antrean
+ *   (waktunya baru), jadi tetap maju tanpa melompati sisanya.
+ *
+ * Mengembalikan posisi untuk putaran berikutnya (null = dari depan).
+ */
+export async function jelajahiAntrean<B extends { kode: string; diperbarui_pada: string }>(o: {
+  kursor: PosisiAntrean | null;
+  ukuran: number;
+  maksJendela: number;
+  boleh: () => boolean;
+  ambil: (setelah: PosisiAntrean | null) => Promise<B[]>;
+  /** true = seluruh jendela sudah dikerjakan. */
+  kerjakan: (baris: B[]) => Promise<boolean>;
+}): Promise<PosisiAntrean | null> {
+  const mulai = o.kursor;
+  let setelah = o.kursor;
+  let simpan = o.kursor;
+  let sudahPutar = !setelah;
+  /** Sudah berputar dari posisi tersimpan ke depan antrean. */
+  let dariDepanLagi = false;
+  for (let j = 0; j < o.maksJendela; j++) {
+    if (!o.boleh()) return simpan;
+    const awal = setelah;
+    let baris = await o.ambil(setelah);
+    let ujung = baris.length < o.ukuran;
+    if (dariDepanLagi && mulai && baris.length > 0 && !posisiSebelum(baris[baris.length - 1], mulai)) {
+      // Satu lingkaran penuh: sisanya sudah dilihat di awal putaran ini.
+      baris = baris.filter((b) => !posisiSetelah(b, mulai));
+      ujung = true;
+    }
+    if (baris.length > 0) {
+      if (!(await o.kerjakan(baris))) return awal;
+      const akhir = baris[baris.length - 1];
+      setelah = { d: akhir.diperbarui_pada, k: akhir.kode };
+    }
+    simpan = ujung ? null : setelah;
+    if (ujung) {
+      if (sudahPutar) return null;
+      sudahPutar = true;
+      dariDepanLagi = true;
+      setelah = null;
+    }
+  }
+  return simpan;
+}
+
+function bandingPosisi(b: { kode: string; diperbarui_pada: string }, p: PosisiAntrean): number {
+  const tb = Date.parse(b.diperbarui_pada);
+  const tp = Date.parse(p.d);
+  if (Number.isFinite(tb) && Number.isFinite(tp) && tb !== tp) return tb < tp ? -1 : 1;
+  return b.kode < p.k ? -1 : b.kode > p.k ? 1 : 0;
+}
+/** Baris ada SEBELUM posisi (urutan antrean). */
+function posisiSebelum(b: { kode: string; diperbarui_pada: string }, p: PosisiAntrean): boolean {
+  return bandingPosisi(b, p) < 0;
+}
+/** Baris ada SESUDAH posisi (urutan antrean). */
+function posisiSetelah(b: { kode: string; diperbarui_pada: string }, p: PosisiAntrean): boolean {
+  return bandingPosisi(b, p) > 0;
+}
+
 // ------------------------------------------------------------
 // Daftar media → video
 // ------------------------------------------------------------

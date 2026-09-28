@@ -10,6 +10,7 @@ import {
   belumDitarik,
   golonganGalat,
   idPlatformDariUrl,
+  jelajahiAntrean,
   kuotaMenipis,
   perluDaftarMedia,
   platformApp,
@@ -23,6 +24,7 @@ import {
   uraiJawabanLive,
   waktuDariLaporan,
   waktuUp,
+  type PosisiAntrean,
 } from "@/lib/metrik-video-up";
 import { kodeMetrik, susunInsightKategori } from "@/lib/insight-kategori";
 import { uraiMetrikPost } from "@/lib/metrik-post-up";
@@ -305,6 +307,122 @@ cek("hasil potongan lama (.slice) dipulihkan", JSON.stringify(potongAman(emoji.s
 cek("karakter NUL dibuang", potongAman("a\u0000b", 10) === "ab");
 cek("null/undefined → kosong", potongAman(null, 5) === "" && potongAman(undefined, 5) === "");
 cek("panjang dihitung per karakter", Array.from(potongAman("😀".repeat(400), 300)).length === 300);
+
+// ---------------------------------------------------------------
+console.log("jelajahiAntrean — antrean tingkat melanjutkan posisi (29 Sep 2026)");
+{
+  type Baris = { kode: string; diperbarui_pada: string };
+  const NOL = "1970-01-01T00:00:00+00:00";
+  const lebihBesar = (b: Baris, p: PosisiAntrean) => b.diperbarui_pada > p.d || (b.diperbarui_pada === p.d && b.kode > p.k);
+  /** Antrean tiruan: urut (diperbarui_pada, kode); yang disegarkan keluar. */
+  const buatAntrean = (macet: number, bisa: number) => {
+    const baris: Baris[] = [];
+    for (let i = 0; i < macet; i++) baris.push({ kode: `fb_${String(i).padStart(6, "0")}`, diperbarui_pada: NOL });
+    for (let i = 0; i < bisa; i++) baris.push({ kode: `tt_${String(i).padStart(6, "0")}`, diperbarui_pada: NOL });
+    return baris;
+  };
+  const ambilDari = (antre: Baris[]) => async (setelah: PosisiAntrean | null) =>
+    antre.filter((b) => !setelah || lebihBesar(b, setelah)).slice(0, 1000);
+  /** Satu putaran: `jatah` video TikTok bisa dikerjakan; fb_ selalu dilewati. */
+  const putaran = async (antre: Baris[], kursor: PosisiAntrean | null, jatah: number, pakaiKursor = true) => {
+    let sisa = jatah;
+    const disegarkan = new Set<string>();
+    const pos = await jelajahiAntrean<Baris>({
+      kursor: pakaiKursor ? kursor : null,
+      ukuran: 1000,
+      maksJendela: 4,
+      boleh: () => sisa > 0,
+      ambil: ambilDari(antre),
+      kerjakan: async (baris) => {
+        for (const b of baris) {
+          if (!b.kode.startsWith("tt_")) continue;
+          if (sisa <= 0) return false;
+          sisa -= 1;
+          disegarkan.add(b.kode);
+        }
+        return true;
+      },
+    });
+    // Yang disegarkan mendapat waktu baru → keluar dari antrean tingkat.
+    for (let i = antre.length - 1; i >= 0; i--) if (disegarkan.has(antre[i].kode)) antre.splice(i, 1);
+    return { pos, n: disegarkan.size };
+  };
+
+  // Kasus produksi: 5.000 video macet di depan, TikTok di belakang.
+  const lamaAntre = buatAntrean(5000, 3000);
+  let totalLama = 0;
+  for (let r = 0; r < 20; r++) totalLama += (await putaran(lamaAntre, null, 600, false)).n;
+  cek("perilaku LAMA (selalu dari depan): TikTok tak pernah terjangkau", totalLama === 0, totalLama);
+
+  const antre = buatAntrean(5000, 3000);
+  let kursor: PosisiAntrean | null = null;
+  let total = 0;
+  let putaranKe = 0;
+  while (antre.some((b) => b.kode.startsWith("tt_")) && putaranKe < 50) {
+    const h = await putaran(antre, kursor, 600);
+    kursor = h.pos;
+    total += h.n;
+    putaranKe += 1;
+  }
+  cek("perilaku BARU: seluruh 3.000 TikTok tertarik", total === 3000, { total, putaranKe });
+  cek("…dalam jumlah putaran wajar (≤ 10)", putaranKe <= 10, putaranKe);
+
+  // Jendela tidak tuntas → posisi kembali ke awal jendela itu.
+  {
+    const a = buatAntrean(0, 2500);
+    const h1 = await putaran(a, null, 1500);
+    cek("jatah habis di jendela ke-2 → posisi = akhir jendela ke-1", h1.pos?.k === "tt_000999" && h1.n === 1500, h1);
+    const h2 = await putaran(a, h1.pos, 5000);
+    cek("putaran berikut mengulang jendela itu tanpa melompati sisanya", h2.n === 1000 && !a.length, { n: h2.n, sisa: a.length });
+    cek("antrean habis → posisi null (mulai dari depan)", h2.pos === null, h2.pos);
+  }
+  // Sampai ujung → putar ke depan SEKALI dalam putaran yang sama.
+  {
+    const a = buatAntrean(0, 1500);
+    const dipanggil: (string | null)[] = [];
+    const pos = await jelajahiAntrean<Baris>({
+      kursor: { d: NOL, k: "tt_000999" },
+      ukuran: 1000,
+      maksJendela: 4,
+      boleh: () => true,
+      ambil: async (s) => {
+        dipanggil.push(s?.k ?? null);
+        return ambilDari(a)(s);
+      },
+      kerjakan: async () => true,
+    });
+    cek("mulai dari posisi tersimpan, lalu putar ke depan sekali", dipanggil[0] === "tt_000999" && dipanggil[1] === null && dipanggil.length === 2, dipanggil);
+    cek("…berhenti tepat setelah satu lingkaran penuh (posisi null)", pos === null, pos);
+  }
+  {
+    // Lingkaran penuh di tengah jendela: baris sesudah posisi awal tidak diulang.
+    const a = buatAntrean(0, 1500);
+    const dilihat: string[] = [];
+    await jelajahiAntrean<Baris>({
+      kursor: { d: NOL, k: "tt_000499" },
+      ukuran: 1000,
+      maksJendela: 4,
+      boleh: () => true,
+      ambil: ambilDari(a),
+      kerjakan: async (b) => (dilihat.push(...b.map((x) => x.kode)), true),
+    });
+    cek("setiap video tepat sekali per putaran walau berputar", dilihat.length === 1500 && new Set(dilihat).size === 1500, { n: dilihat.length, unik: new Set(dilihat).size });
+  }
+  {
+    const a = buatAntrean(0, 6000);
+    const pos = await jelajahiAntrean<Baris>({ kursor: null, ukuran: 1000, maksJendela: 4, boleh: () => true, ambil: ambilDari(a), kerjakan: async () => true });
+    cek("antrean panjang → berhenti di batas 4 jendela, posisi tersimpan", pos?.k === "tt_003999", pos);
+  }
+  {
+    let n = 0;
+    const pos = await jelajahiAntrean<Baris>({ kursor: null, ukuran: 1000, maksJendela: 4, boleh: () => true, ambil: async () => (n++, []), kerjakan: async () => true });
+    cek("antrean kosong → null, satu kali baca", pos === null && n === 1, { pos, n });
+  }
+  {
+    const pos = await jelajahiAntrean<Baris>({ kursor: { d: NOL, k: "x" }, ukuran: 1000, maksJendela: 4, boleh: () => false, ambil: async () => [], kerjakan: async () => true });
+    cek("tanpa waktu sama sekali → posisi lama tetap", pos?.k === "x", pos);
+  }
+}
 
 console.log(`\n${lulus} lulus, ${gagal} gagal`);
 if (gagal > 0) process.exit(1);
