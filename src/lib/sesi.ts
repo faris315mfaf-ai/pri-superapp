@@ -9,6 +9,8 @@
 // terhadap kata sandi.
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { supabase } from "@/lib/supabase";
+import { AWALAN_TOKEN_UJI } from "@/lib/uji-beban-skenario";
+import { periksaTokenUji } from "@/lib/uji-beban-token";
 import type { Role, User } from "@/types";
 import { after } from "next/server";
 import {
@@ -97,6 +99,11 @@ export type UserPublik = User & {
   profil_lengkap: boolean;
   username: string | null;
   nomor_wa: string | null;
+  /**
+   * Pengguna VIRTUAL uji beban (29 Sep 2026, lib/uji-beban). Rute yang punya
+   * tugas susulan ke layanan luar / penanda online melewatinya bila true.
+   */
+  ujiBeban?: boolean;
 };
 
 export function keUserPublik(b: BarisUser): UserPublik {
@@ -148,6 +155,45 @@ export async function kolomUser(): Promise<string> {
  *  langsung — pakai `kolomUser()` supaya database lama tidak gagal. */
 const KOLOM_USER = `${KOLOM_USER_DASAR}, jabatan_tvr`;
 
+// ------------------------------------------------------------
+// PENGGUNA VIRTUAL UJI BEBAN (29 Sep 2026) — lihat lib/uji-beban.
+// ------------------------------------------------------------
+const gudangUji = globalThis as unknown as { __priProfilUji?: Map<string, UserPublik> };
+const profilUji: Map<string, UserPublik> = (gudangUji.__priProfilUji ??= new Map<string, UserPublik>());
+
+/** Buang profil virtual satu putaran (dipanggil mesin uji saat selesai). */
+export function lupakanProfilUji(idPutaran: string): void {
+  for (const k of profilUji.keys()) if (k.startsWith(`${idPutaran}:`)) profilUji.delete(k);
+}
+
+/**
+ * Profil akun yang ditirukan token uji. "Login" pertama tiap orang virtual
+ * = satu bacaan app_user (seperti sesi yang belum ada di cache); sesudahnya
+ * dari memori. TIDAK menyentuh sesi_perangkat maupun cache sesi sungguhan.
+ */
+async function userUjiBeban(token: string): Promise<UserPublik | null> {
+  const sah = periksaTokenUji(token);
+  if (!sah) return null;
+  const kunci = `${sah.idPutaran}:${sah.userId}`;
+  const ada = profilUji.get(kunci);
+  if (ada) return ada;
+  const { data } = await supabase()
+    .from("app_user")
+    .select(await kolomUser())
+    .eq("id", sah.userId)
+    .maybeSingle();
+  const u = data as BarisUser | null;
+  if (!u || !u.aktif || u.status !== "aktif") return null;
+  // Peran efektif sama persis dengan jalur sesi sungguhan.
+  if (u.role !== "master" && u.role !== "superadmin" && (u.jabatan ?? "").trim() === "Ketua Umum") {
+    u.role = "super_admin";
+  }
+  const publik: UserPublik = { ...keUserPublik(u), ujiBeban: true };
+  if (profilUji.size > 5_000) profilUji.clear();
+  profilUji.set(kunci, publik);
+  return publik;
+}
+
 /**
  * Tukar token perangkat dengan data akun.
  *
@@ -158,6 +204,9 @@ const KOLOM_USER = `${KOLOM_USER_DASAR}, jabatan_tvr`;
 export async function userDariToken(token: string): Promise<UserPublik | null> {
   const bersih = (token ?? "").trim();
   if (!bersih) return null;
+  // Token uji beban: diperiksa DI SINI, sebelum cache sesi, supaya token
+  // yang putarannya sudah selesai tidak bisa lolos lewat cache.
+  if (bersih.startsWith(AWALAN_TOKEN_UJI)) return userUjiBeban(bersih);
 
   const hash = hashToken(bersih);
 
@@ -253,6 +302,7 @@ export async function userDariToken(token: string): Promise<UserPublik | null> {
 export async function userDariTokenLonggar(token: string): Promise<UserPublik | null> {
   const bersih = (token ?? "").trim();
   if (!bersih) return null;
+  if (bersih.startsWith(AWALAN_TOKEN_UJI)) return userUjiBeban(bersih);
 
   const hash = hashToken(bersih);
   // Cache 30 dtk (1 Sep 2026 — pemangkasan beban Supabase): /api/sesi

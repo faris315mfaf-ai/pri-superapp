@@ -88,7 +88,9 @@ export async function GET(request: Request) {
     const user = await pastikanMasuk(request);
     // KEHADIRAN (10 Sep 2026): detak inilah bukti "aplikasinya sedang
     // dibuka", jadi ditumpangi sekalian — tanpa permintaan tambahan.
-    await catatHadir(user.id);
+    // Pengguna virtual uji beban tidak dicatat online — ia meminjam id orang
+    // sungguhan, dan titik hijau palsu menyesatkan lawan bicaranya di Chat.
+    if (!user.ujiBeban) await catatHadir(user.id);
     const [tanda, hadir, sakelar, tandaSaya] = await Promise.all([
       denganCache("detak:global", TTL_DETIK, hitungTanda),
       daftarHadir(),

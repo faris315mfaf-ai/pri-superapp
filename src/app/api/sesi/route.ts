@@ -67,6 +67,10 @@ export async function GET(request: Request) {
     // Mode perbaikan: semua orang selain master tertahan di sini.
     await pastikanBukanPerbaikan(user.role);
 
+    // Pengguna virtual uji beban (lib/uji-beban) berhenti di sini: tugas
+    // susulan di bawah (kabar & sinkron Ayrshare) bukan bagian yang diuji.
+    if (user.ujiBeban) return { user };
+
     // Ucapan ulang tahun global — sekali sehari, menumpang pembukaan
     // aplikasi siapa pun (tanpa cron).
     after(() => jalankanLatar("ultah", siaranUltahHarian));

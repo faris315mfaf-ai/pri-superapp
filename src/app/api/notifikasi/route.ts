@@ -21,7 +21,8 @@ export async function GET(request: Request) {
     const saya = await pastikanMasuk(request);
     // Mode Simpel tidak menjalankan detak; memuat notifikasi tetap bukti
     // aplikasinya sedang dibuka, jadi kehadirannya dicatat di sini juga.
-    after(() => catatHadir(saya.id));
+    // Pengguna virtual uji beban tidak dicatat online (lihat /api/detak).
+    if (!saya.ujiBeban) after(() => catatHadir(saya.id));
     const pengguna = token ? await userDariToken(token) : null;
 
     let kueri = supabase()

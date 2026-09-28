@@ -101,7 +101,7 @@ async function hitungLeaderboardKomen(periode: string, platformKomen: string) {
 
 export async function GET(request: Request) {
   return bungkus(async () => {
-    await pastikanMasuk(request);
+    const pemanggil = await pastikanMasuk(request);
     // Kategori KEPATUHAN KOMEN — jalur ringan terpisah dari data TVR.
     if (new URL(request.url).searchParams.get("komen") === "1") {
       const pf = (new URL(request.url).searchParams.get("platform") ?? "").toLowerCase();
@@ -120,7 +120,8 @@ export async function GET(request: Request) {
         : "tayangan";
       const hariRaw = Number(qp.get("hari") ?? 30);
       const hari = [0, 7, 30].includes(hariRaw) ? hariRaw : 30;
-      after(() => jalankanLatar("sapu-video-terbaik", segarkanVideoMetrik));
+      // Penyapu memanggil TikHub/upload-post — tidak untuk pengguna virtual uji beban.
+      if (!pemanggil.ujiBeban) after(() => jalankanLatar("sapu-video-terbaik", segarkanVideoMetrik));
       return leaderboardVideo(platform, metrik, hari);
     }
     if (!hasilCache || Date.now() - hasilCache.pada > TTL_CACHE_MS) {
@@ -138,7 +139,7 @@ export async function GET(request: Request) {
     // (insiden 1 Sep 2026). Sapuan cukup dari pembukaan leaderboard/
     // dashboard, dan tetap dijaga klaim atomik 10-menit di dalamnya.
     if (searchParams.get("ringkas") === "1") return { top3 };
-    after(() => jalankanLatar("sapu-profil-tvr", segarkanProfilTvrBasi));
+    if (!pemanggil.ujiBeban) after(() => jalankanLatar("sapu-profil-tvr", segarkanProfilTvrBasi));
 
     return {
       platforms: PLATFORM_TVR,

@@ -6328,6 +6328,42 @@ export async function getServerMaster(): Promise<ServerMaster> {
   return json as ServerMaster;
 }
 
+// ---- Panel Master: UJI BEBAN (29 Sep 2026) — lib/uji-beban ----
+export type StatusUjiBeban = import("@/lib/uji-beban").StatusUji;
+export type DataUjiBeban = {
+  berjalan: StatusUjiBeban | null;
+  terakhir: StatusUjiBeban | null;
+  akun_aktif: number;
+  tingkat_db: string;
+  siap: boolean;
+};
+
+export async function getUjiBeban(): Promise<DataUjiBeban> {
+  return (await fetchJson("/api/master/uji-beban")) as DataUjiBeban;
+}
+
+export async function mulaiUjiBeban(opsi: {
+  jumlah: number;
+  skenario: "normal" | "berat";
+  durasi: number;
+  konfirmasi: string;
+}): Promise<{ mulai: boolean; status: StatusUjiBeban | null }> {
+  return (await fetchJson("/api/master/uji-beban", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ aksi: "mulai", ...opsi }),
+  })) as { mulai: boolean; status: StatusUjiBeban | null };
+}
+
+export async function hentikanUjiBeban(): Promise<boolean> {
+  const json = await fetchJson("/api/master/uji-beban", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ aksi: "berhenti" }),
+  });
+  return json?.dihentikan === true;
+}
+
 // ---- Panel Master: BEBAS KEWAJIBAN (3 Sep 2026) ----
 export type PenggunaKewajiban = {
   id: string;

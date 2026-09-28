@@ -258,7 +258,8 @@ export async function GET(request: Request) {
       // ACC HR DITIADAKAN (23 Sep 2026): sisa antrean lama milik orang ini
       // diluluskan dulu supaya ikut terbaca di bawah dan tak ada lagi status
       // "menunggu HR" di layar. Kosong = satu kueri ringan saja.
-      await luluskanLaporanTertahan(uid, 50);
+      // Uji beban harus murni membaca: antrean lama tidak diproses pengguna virtual.
+      if (!user.ujiBeban) await luluskanLaporanTertahan(uid, 50);
       const pilihLaporan = "id, platform, url_video, keyword, tanggal_wib, dibuat_pada, sumber";
       const [{ data: lvMentah, error: lvError }, jenisBebas, targetKu, bannedKu] = await Promise.all([
         db
@@ -343,7 +344,10 @@ export async function GET(request: Request) {
       sinyalKu === ""
         ? await hitungLaporanSendiri()
         : await denganCache(`kpi-laporan:${Number(user.id)}:${tanggal}:${sinyalKu}`, 60, hitungLaporanSendiri);
-    after(() => jalankanLatar("rekonsiliasi-kpi-layar", () => rekonsiliasiKpiOtomatis(Number(user.id))));
+    // Rekonsiliasi memanggil upload-post — tidak untuk pengguna virtual uji beban.
+    if (!user.ujiBeban) {
+      after(() => jalankanLatar("rekonsiliasi-kpi-layar", () => rekonsiliasiKpiOtomatis(Number(user.id))));
+    }
     return hasilSendiri;
   });
 }

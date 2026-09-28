@@ -55,7 +55,8 @@ export async function GET(request: Request) {
     // rekonsiliasi sampai 30 dtk — proxy/Caddy sering memutus, jadi
     // rangkuman hari ini tampil kosong padahal barisnya sudah ada.
     // Rekonsiliasi tetap jalan setelah respons; klien menyegarkan.
-    if (tanggal === tanggalWib()) {
+    // (Rekonsiliasi memanggil upload-post — tidak untuk pengguna virtual uji beban.)
+    if (tanggal === tanggalWib() && !user.ujiBeban) {
       after(() =>
         jalankanLatar("rekonsiliasi-kpi-layar", () => rekonsiliasiKpiOtomatis(uid, { anggaranMs: ANGGARAN_REKONSILIASI_MS })),
       );
@@ -63,7 +64,8 @@ export async function GET(request: Request) {
 
     // ACC HR ditiadakan (23 Sep 2026): antrean lama orang ini diluluskan
     // dulu supaya link manualnya ikut masuk rangkuman.
-    await luluskanLaporanTertahan(uid, 50);
+    // Uji beban harus murni membaca: antrean lama tidak diproses pengguna virtual.
+    if (!user.ujiBeban) await luluskanLaporanTertahan(uid, 50);
     const { data: tercatat } = await db
       .from("laporan_video")
       .select("platform, url_video, dibuat_pada")

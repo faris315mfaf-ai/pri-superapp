@@ -161,11 +161,15 @@ export async function GET(request: Request) {
     // after() + cron 15 menit + pantauan klien.
     // `paksa`: buka riwayat setelah antrean upload-post selesai harus
     // langsung menarik tautan, bukan ditahan jeda 60 dtk interaktif.
-    after(() => rekonsiliasiKpiOtomatis(Number(user.id), { paksa: true, anggaranMs: 20_000 }));
-    after(bersihkanVideoKedaluwarsa);
-    // PALUGODAM: pesanan yang rendernya sudah selesai ikut diposting.
-    if (adalahPalugodam(user))
-      after(() => prosesPesananPalugodam(Number(user.id)));
+    // Tugas susulan memanggil upload-post / menghapus berkas — tidak untuk
+    // pengguna virtual uji beban (lib/uji-beban).
+    if (!user.ujiBeban) {
+      after(() => rekonsiliasiKpiOtomatis(Number(user.id), { paksa: true, anggaranMs: 20_000 }));
+      after(bersihkanVideoKedaluwarsa);
+      // PALUGODAM: pesanan yang rendernya sudah selesai ikut diposting.
+      if (adalahPalugodam(user))
+        after(() => prosesPesananPalugodam(Number(user.id)));
+    }
     // TAUTAN HASIL (3 Sep 2026): URL postingan per platform yang sudah terbit
     // (dicatat rekonsiliasi KPI otomatis di laporan_video) → tombol Bagikan.
     const ids = (data ?? []).map((b) => Number(b.id));

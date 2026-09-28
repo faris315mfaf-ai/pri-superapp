@@ -22,6 +22,7 @@ import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { SeksiKuota } from "./seksi-kuota";
 import { SeksiPenyediaTvr } from "./seksi-penyedia-tvr";
 import { SeksiServer } from "./seksi-server";
+import { SeksiUjiBeban } from "./seksi-uji-beban";
 import { SeksiBebasKewajiban } from "./seksi-bebas-kewajiban";
 import { SeksiSakelarBerat } from "./seksi-sakelar-berat";
 import { SeksiSakelarModul } from "./seksi-sakelar-modul";
@@ -590,6 +591,8 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
             <SeksiPenyediaTvr />
             <SeksiEksporData />
             <SeksiServer />
+            {/* Uji beban ratusan orang sekaligus (29 Sep 2026) */}
+            <SeksiUjiBeban />
             {/* Fitur berat & mode hemat + format laporan upload (4 Sep 2026) */}
             {/* Toko Pet (v5, 5 Sep 2026): master sebagai pedagang */}
             <SeksiTokoPet

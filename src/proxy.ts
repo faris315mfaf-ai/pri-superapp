@@ -32,6 +32,7 @@
 //   seluruh tampilan tanpa menambah perlindungan XSS yang berarti.
 // ============================================================
 import { NextRequest, NextResponse } from "next/server";
+import { adalahTokenUji, ruteUjiBoleh } from "@/lib/uji-beban-skenario";
 
 // Origin Supabase untuk connect-src: unggah video TVR Saya naik LANGSUNG
 // peramban→storage lewat URL tertandatangan (unggah-sosmed-saya.tsx).
@@ -56,6 +57,16 @@ const ASAL_R2 = process.env.R2_ACCOUNT_ID
   : "";
 
 export function proxy(request: NextRequest) {
+  // Token UJI BEBAN (29 Sep 2026, lib/uji-beban): pengguna virtual hanya
+  // boleh MEMBACA rute uji. Apa pun selain GET/HEAD ke daftar itu ditolak
+  // di pintu depan — sebelum menyentuh rute mana pun.
+  if (
+    adalahTokenUji(request.headers.get("authorization")) &&
+    !ruteUjiBoleh(request.method, request.nextUrl.pathname)
+  ) {
+    return NextResponse.json({ error: "Token uji beban hanya boleh membaca rute uji." }, { status: 403 });
+  }
+
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   // Di development React memakai eval untuk membangun stack trace;
   // produksi tidak membutuhkannya.

@@ -217,7 +217,8 @@ export async function GET(request: Request) {
     }
 
     // Penyegaran latar untuk profil basi — dashboard berikutnya lebih segar.
-    after(() => jalankanLatar("sapu-profil-tvr", segarkanProfilTvrBasi));
+    // Penyapu memanggil upload-post — tidak untuk pengguna virtual uji beban.
+    if (!user.ujiBeban) after(() => jalankanLatar("sapu-profil-tvr", segarkanProfilTvrBasi));
 
     return {
       indikator: INDIKATOR,
