@@ -10,9 +10,11 @@ import {
   aksesDashboardRole,
   KATALOG_DASHBOARD,
   KUNCI_DASHBOARD_SAH,
+  kunciCacheAksesDashboard,
 } from "@/lib/dashboard-akses";
 import { PERAN_DIATUR } from "@/lib/fitur";
 import { adalahHR } from "@/lib/hr";
+import { hapusCacheBersama } from "@/lib/cache-bersama";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +117,7 @@ export async function POST(request: Request) {
       console.error("[dashboard-akses] simpan:", error.message);
       throw new Error("Gagal menyimpan pengaturan.");
     }
+    await hapusCacheBersama(kunciCacheAksesDashboard(role));
 
     return { sukses: true };
   });

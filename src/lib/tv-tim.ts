@@ -18,6 +18,7 @@ import { bolehProsesVideo } from "@/types";
 import type { UserPublik } from "@/lib/sesi";
 
 import { modulDibuka } from "@/lib/peran";
+import { denganCache } from "@/lib/cache-bersama";
 /**
  * SEMENTARA (permintaan 2 Sep 2026): SELURUH anggota Divisi TV Rakyat
  * berwenang penuh — upload ke sosmed + menyetujui video — tanpa perlu
@@ -62,11 +63,22 @@ export async function wewenangTv(user: {
     return { anggota: true, acc: true, upload: true, proses: true };
   }
 
-  const { data } = await supabase()
-    .from("tv_tim")
-    .select("boleh_acc, boleh_upload")
-    .eq("user_id", Number(user.id))
-    .maybeSingle();
+  // Keanggotaan tim TV disimpan 60 dtk (28 Sep 2026) — dibuang /api/tv/tim
+  // saat anggota ditambah/dilepas (kunciCacheTvTim).
+  let data: { boleh_acc: unknown; boleh_upload: unknown } | null = null;
+  try {
+    data = await denganCache(kunciCacheTvTim(user.id), 60, async () => {
+      const { data: baris, error } = await supabase()
+        .from("tv_tim")
+        .select("boleh_acc, boleh_upload")
+        .eq("user_id", Number(user.id))
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return baris ?? null;
+    });
+  } catch {
+    data = null;
+  }
 
   if (!data) {
     return { anggota: false, acc: false, upload: false, proses: false };
@@ -81,6 +93,11 @@ export async function wewenangTv(user: {
   // Official berwenang penuh. Kolom boleh_acc/boleh_upload dibiarkan ada
   // di database supaya baris lama tidak perlu diutak-atik.
   return { anggota: true, proses: true, acc: true, upload: true };
+}
+
+/** Kunci cache keanggotaan tim TV seseorang. */
+export function kunciCacheTvTim(userId: string | number): string {
+  return `tv-tim:${Number(userId)}`;
 }
 
 /** true bila user berhak menyetujui video (dipakai /api/tv/persetujuan). */

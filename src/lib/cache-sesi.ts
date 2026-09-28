@@ -35,7 +35,10 @@ import type { UserPublik } from "@/lib/sesi";
 /** Umur entri cache. Dinaikkan 60→300 dtk (1 Sep 2026, pemangkasan
  *  beban Supabase): pencabutan akses TETAP seketika lewat
  *  hapusCacheUser — TTL hanyalah jaring pengaman terakhir. */
-const TTL_DETIK = 300;
+// 300 → 900 dtk (28 Sep 2026): pencabutan akses TIDAK bergantung TTL (hapusCacheUser
+// membuang entri seketika), jadi TTL lebih panjang aman dan memangkas
+// lookup sesi_perangkat + app_user sepertiganya.
+const TTL_DETIK = 900;
 
 /** Batas entri di memori proses; yang terlama dibuang lebih dulu. */
 const MAKS_ENTRI = 5000;

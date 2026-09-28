@@ -45,6 +45,8 @@ export function useDetakGlobal(aktif: boolean) {
   // Tanda terakhir & jumlah kegagalan disimpan di ref: berubahnya tidak
   // perlu me-render ulang apa pun.
   const tandaRef = useRef<string | null>(null);
+  // Sinyal pribadi (28 Sep 2026): hanya berubah untuk peristiwa milik SAYA.
+  const tandaSayaRef = useRef<string | null>(null);
   const gagalRef = useRef(0);
   // Aplikasi baru dibuka = penggunanya jelas sedang ada di depan layar.
   const sentuhRef = useRef(Date.now());
@@ -81,22 +83,31 @@ export function useDetakGlobal(aktif: boolean) {
       }
       sedang = true;
       try {
-        const { tanda, hadir, jeda } = await getDetak();
+        const { tanda, tanda_saya: tandaSaya, hadir, jeda } = await getDetak();
         gagalRef.current = 0;
         jedaRef.current = jeda * 1000;
         // Siapa yang sedang membuka aplikasi (titik hijau & hitungan di Chat).
         useAppStore.getState().setHadir(hadir);
         // Detak PERTAMA hanya merekam keadaan awal — data baru saja
         // dimuat, jadi tidak perlu langsung ditarik ulang.
-        if (tandaRef.current !== null && tanda !== tandaRef.current) {
+        const berubahGlobal = tandaRef.current !== null && tanda !== tandaRef.current;
+        // "" = server sedang tidak bisa membaca sinyal: abaikan, jangan
+        // dianggap perubahan (dan jangan timpa nilai terakhir yang sah).
+        const berubahSaya = tandaSaya !== "" && tandaSayaRef.current !== null && tandaSaya !== tandaSayaRef.current;
+        if (berubahGlobal) {
           // Tunda acak 0-4 dtk (28 Sep 2026): tanpa ini ratusan perangkat
           // yang melihat tanda baru pada detik yang sama menarik ulang
           // semua layarnya serentak — lonjakan yang menjenuhkan database.
           setTimeout(() => {
             if (hidup) useAppStore.getState().segarkanData();
           }, Math.random() * 4_000);
+        } else if (berubahSaya) {
+          // Peristiwa milik saya sendiri: hanya HP ini yang menyegarkan diri,
+          // tidak perlu disebar acak.
+          useAppStore.getState().segarkanData();
         }
         tandaRef.current = tanda;
+        if (tandaSaya !== "") tandaSayaRef.current = tandaSaya;
       } catch {
         gagalRef.current += 1;
       } finally {

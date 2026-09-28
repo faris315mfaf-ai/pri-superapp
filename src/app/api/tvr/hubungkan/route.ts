@@ -13,6 +13,7 @@ import { userEfektifTvr } from "@/lib/sebagai";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { penyediaUntukAnggota } from "@/lib/sosmed-penyedia";
+import { denganCache, hapusCacheBersama } from "@/lib/cache-bersama";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,8 @@ async function profilKu(userId: number, penyediaId: string) {
 export async function POST(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
+    // Sesudah menautkan, pembacaan berikutnya harus bertanya ke penyedia lagi.
+    await hapusCacheBersama(kunciCacheTertaut(Number(user.id)));
     const penyedia = await penyediaUntukAnggota(Number(user.id));
     const db = supabase();
 
@@ -84,53 +87,81 @@ export async function POST(request: Request) {
   });
 }
 
+/**
+ * Kunci cache akun tertaut seseorang (28 Sep 2026, rencana "200 orang tanpa
+ * lag" #7). Dulu SETIAP penyegaran layar TVR Saya bertanya ke penyedia
+ * sosmed (upload-post/Postiz) lalu menulis sinkron ke database — padahal
+ * akun tertaut baru berubah saat orang itu menautkan akun. Kini disimpan
+ * 10 menit; tombol "Segarkan" (?segar=1) dan tombol "Hubungkan" (POST)
+ * selalu memaksa data baru.
+ */
+function kunciCacheTertaut(userId: number): string {
+  return `tvr-hubungkan:${userId}`;
+}
+
 export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
-    const penyedia = await penyediaUntukAnggota(Number(user.id));
-    const db = supabase();
-
-    const profil = await profilKu(Number(user.id), penyedia.id);
-    if (!profil) return { terhubung: [], tersinkron: 0, konflik: [] };
-
-    let tertaut: { platform: string; username: string }[];
-    try {
-      tertaut = (await penyedia.akunTertaut(profil.profile_key as string)).filter((a) =>
-        PLATFORM_TVR.has(a.platform),
-      );
-    } catch (e) {
-      // Kuota upload-post habis sesaat: jangan gagalkan layar unggah.
-      // Akun yang sudah tersimpan di database tetap ditampilkan.
-      if ((e as { status?: number }).status !== 429) throw e;
-      const { data: simpanan } = await db
-        .from("akun_tvr_user")
-        .select("platform, username")
-        .eq("user_id", Number(user.id))
-        .eq("terhubung", true);
-      return {
-        terhubung: (simpanan ?? [])
-          .filter((a) => PLATFORM_TVR.has(String(a.platform)))
-          .map((a) => ({
-            platform: String(a.platform),
-            username: String(a.username ?? "").toLowerCase().replace(/^@+/, ""),
-          })),
-        tersinkron: 0,
-        konflik: [],
-      };
-    }
-
-    // Sinkron ke akun_tvr_user: tambah yang belum ada (terhubung=true);
-    // yang sudah kupunya ditandai terhubung; milik orang lain = konflik.
-    // Kueri tetap berapa pun jumlah akunnya (lib/sinkron-akun-tertaut).
-    const { tersinkron, konflik } = await sinkronkanAkunTertaut(db, Number(user.id), tertaut);
-
-    return {
-      terhubung: tertaut.map((a) => ({
-        platform: a.platform,
-        username: a.username.toLowerCase().replace(/^@+/, ""),
-      })),
-      tersinkron,
-      konflik,
-    };
+    const kunci = kunciCacheTertaut(Number(user.id));
+    if (new URL(request.url).searchParams.get("segar") === "1") await hapusCacheBersama(kunci);
+    let dihitung = false;
+    const hasil = await denganCache(kunci, 600, async () => {
+      dihitung = true;
+      return bacaDanSinkronTertaut(user);
+    });
+    // Dari simpanan: tidak ada yang "baru ditambahkan" pada panggilan ini.
+    return dihitung ? hasil : { ...hasil, tersinkron: 0 };
   });
+}
+
+async function bacaDanSinkronTertaut(user: { id: string | number }): Promise<{
+  terhubung: { platform: string; username: string }[];
+  tersinkron: number;
+  konflik: string[];
+}> {
+  const penyedia = await penyediaUntukAnggota(Number(user.id));
+  const db = supabase();
+
+  const profil = await profilKu(Number(user.id), penyedia.id);
+  if (!profil) return { terhubung: [], tersinkron: 0, konflik: [] };
+
+  let tertaut: { platform: string; username: string }[];
+  try {
+    tertaut = (await penyedia.akunTertaut(profil.profile_key as string)).filter((a) =>
+      PLATFORM_TVR.has(a.platform),
+    );
+  } catch (e) {
+    // Kuota upload-post habis sesaat: jangan gagalkan layar unggah.
+    // Akun yang sudah tersimpan di database tetap ditampilkan.
+    if ((e as { status?: number }).status !== 429) throw e;
+    const { data: simpanan } = await db
+      .from("akun_tvr_user")
+      .select("platform, username")
+      .eq("user_id", Number(user.id))
+      .eq("terhubung", true);
+    return {
+      terhubung: (simpanan ?? [])
+        .filter((a) => PLATFORM_TVR.has(String(a.platform)))
+        .map((a) => ({
+          platform: String(a.platform),
+          username: String(a.username ?? "").toLowerCase().replace(/^@+/, ""),
+        })),
+      tersinkron: 0,
+      konflik: [],
+    };
+  }
+
+  // Sinkron ke akun_tvr_user: tambah yang belum ada (terhubung=true);
+  // yang sudah kupunya ditandai terhubung; milik orang lain = konflik.
+  // Kueri tetap berapa pun jumlah akunnya (lib/sinkron-akun-tertaut).
+  const { tersinkron, konflik } = await sinkronkanAkunTertaut(db, Number(user.id), tertaut);
+
+  return {
+    terhubung: tertaut.map((a) => ({
+      platform: a.platform,
+      username: a.username.toLowerCase().replace(/^@+/, ""),
+    })),
+    tersinkron,
+    konflik,
+  };
 }

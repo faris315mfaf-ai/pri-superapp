@@ -17,6 +17,7 @@ import { DIVISI } from "@/lib/struktur";
 import { bacaBasis } from "@/lib/asisten-basis";
 
 import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
+import { denganCache } from "@/lib/cache-bersama";
 // Bawaan DIVERIFIKASI terhadap kunci user 28 Agu 2026: generasi 2.5
 // sudah ditutup untuk pengguna baru; 3.6-flash teruji menjawab, dan
 // 3.1-flash-live-preview adalah model bidi (suara) generasi terbaru.
@@ -32,12 +33,20 @@ export async function bolehChatbotRole(role: string): Promise<boolean> {
   // Master & super admin (= jabatan Ketua Umum, model peran baru) selalu
   // boleh — "buka seluruh mode untuk ketua umum" (permintaan 31 Agu 2026).
   if (role === "master" || role === "super_admin") return true;
-  const { data } = await supabase()
-    .from("chatbot_access")
-    .select("aktif")
-    .eq("role", role)
-    .maybeSingle();
-  return data?.aktif === true;
+  // Cache 60 dtk (28 Sep 2026) — dibuang /api/asisten/akses saat diubah.
+  try {
+    return await denganCache(`akses-asisten:${role}`, 60, async () => {
+      const { data, error } = await supabase()
+        .from("chatbot_access")
+        .select("aktif")
+        .eq("role", role)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return data?.aktif === true;
+    });
+  } catch {
+    return false;
+  }
 }
 
 /** Identitas pemanggil — menentukan sapaan & alat yang terbuka. */

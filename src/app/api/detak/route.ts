@@ -14,8 +14,9 @@
 // perangkat, dan tarikan berat HANYA saat memang ada perubahan.
 //
 // Biaya server: tanda dihitung SEKALI untuk semua orang (cache bersama
-// Redis 5 detik), yaitu 4 kueri "id terbesar" per 5 detik (+ laporan_video
-// per 2 menit) untuk seluruh aplikasi — berapa pun jumlah penggunanya.
+// Redis 5 detik), yaitu 4 kueri "id terbesar" per 5 detik untuk seluruh
+// aplikasi — berapa pun jumlah penggunanya — plus satu GET Redis per
+// panggilan untuk sinyal pribadi.
 // ============================================================
 import { bungkus } from "@/lib/api-helper";
 import { denganCache } from "@/lib/cache-bersama";
@@ -26,6 +27,7 @@ import { catatHadir, daftarHadir } from "@/lib/kehadiran";
 import { bacaSakelar } from "@/lib/sakelar";
 import { jedaDetak, ratakan } from "@/lib/rem-detak";
 import { kondisiDb } from "@/lib/penjaga-supabase";
+import { bacaSinyal } from "@/lib/sinyal-pribadi";
 export const dynamic = "force-dynamic";
 
 /** Tabel yang perubahannya harus terasa di layar dalam hitungan detik. */
@@ -39,25 +41,25 @@ const TABEL_PANTAU = [
 /** Umur tanda di cache bersama; lebih pendek dari jeda detak klien. */
 const TTL_DETIK = 5;
 
-/**
- * laporan_video DIPISAH (28 Sep 2026). Tabel ini bertambah terus sepanjang
- * jam kerja — tiap video anggota yang tercatat KPI, kebanyakan oleh tugas
- * latar. Diukur: tanda berubah di 10 dari 18 jendela 10 detik, hampir
- * semuanya karena laporan_video. Tiap perubahan membuat SEMUA perangkat
- * yang online memuat ulang SEMUA layarnya serentak — beban terbesar yang
- * membuat Supabase jenuh. Angka KPI tidak perlu sesegar notifikasi:
- * bagian laporan dari tanda kini paling sering berubah tiap 2 menit.
+/*
+ * TANDA GLOBAL vs SINYAL PRIBADI (28 Sep 2026, rencana "200 orang tanpa
+ * lag" #3). Diukur: tanda global berubah di 10 dari 18 jendela 10 detik,
+ * hampir semuanya karena laporan_video (KPI satu orang) dan notifikasi
+ * untuk satu orang. Tiap perubahan membuat SEMUA HP yang online memuat
+ * ulang layarnya serentak — beban terbesar yang menjenuhkan Supabase.
+ *
+ * Kini tanda global hanya berisi hal milik semua orang: notifikasi UMUM /
+ * per peran (untuk_user kosong), pengumuman, postingan, feed konten.
+ * Peristiwa milik satu orang (notifikasi & chat untuknya, laporan KPI-nya)
+ * menaikkan sinyal pribadinya di Redis (lib/sinyal-pribadi) dan dikirim
+ * sebagai `tanda_saya` — hanya HP orang itu yang menyegarkan diri.
  */
-const TTL_LAPORAN_DETIK = 120;
-
 async function idTerbesar(db: ReturnType<typeof supabase>, tabel: string): Promise<string> {
   // "id terbesar" pada kunci primer: satu baris, memakai indeks.
-  const { data, error } = await db
-    .from(tabel)
-    .select("id")
-    .order("id", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  let q = db.from(tabel).select("id");
+  // Notifikasi beralamat orang tertentu masuk sinyal pribadi, bukan tanda global.
+  if (tabel === "notifikasi") q = q.is("untuk_user", null);
+  const { data, error } = await q.order("id", { ascending: false }).limit(1).maybeSingle();
   if (error) {
     // Satu tabel bermasalah tidak boleh mematikan detak; tandai "x"
     // supaya nilainya stabil (tidak memicu penyegaran palsu).
@@ -74,12 +76,9 @@ let msTanda = 0;
 async function hitungTanda(): Promise<string> {
   const mulai = Date.now();
   const db = supabase();
-  const [bagian, laporan] = await Promise.all([
-    Promise.all(TABEL_PANTAU.map((tabel) => idTerbesar(db, tabel))),
-    denganCache("detak:laporan", TTL_LAPORAN_DETIK, () => idTerbesar(db, "laporan_video")),
-  ]);
+  const bagian = await Promise.all(TABEL_PANTAU.map((tabel) => idTerbesar(db, tabel)));
   msTanda = ratakan(msTanda, Date.now() - mulai);
-  return [...bagian, laporan].join(".");
+  return bagian.join(".");
 }
 
 export async function GET(request: Request) {
@@ -90,13 +89,16 @@ export async function GET(request: Request) {
     // KEHADIRAN (10 Sep 2026): detak inilah bukti "aplikasinya sedang
     // dibuka", jadi ditumpangi sekalian — tanpa permintaan tambahan.
     await catatHadir(user.id);
-    const [tanda, hadir, sakelar] = await Promise.all([
+    const [tanda, hadir, sakelar, tandaSaya] = await Promise.all([
       denganCache("detak:global", TTL_DETIK, hitungTanda),
       daftarHadir(),
       bacaSakelar().catch(() => null),
+      bacaSinyal(user.id),
     ]);
     return {
       tanda,
+      // Sinyal pribadi (Redis, bukan Supabase). "" = sedang tidak terbaca.
+      tanda_saya: tandaSaya,
       hadir,
       online: hadir.length,
       // Klien memakai angka ini sebagai jeda detak berikutnya (detik).

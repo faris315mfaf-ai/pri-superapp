@@ -61,6 +61,7 @@ import { ModalHadiahHarian } from "@/features/pet/modal-hadiah-harian";
 import { bolehPet } from "@/lib/pet-akses";
 import { MODUL_AKUN, modulDibuka } from "@/lib/peran";
 import { useDetakGlobal } from "@/hooks/use-detak-global";
+import { KonteksTabAktif } from "@/hooks/use-tab-aktif";
 import { HewanMelayang } from "@/features/pet/hewan-melayang";
 import { LudoScreen } from "@/features/ludo/ludo-screen";
 import { AcaraScreen } from "@/features/acara/acara-screen";
@@ -584,7 +585,10 @@ export default function Page() {
       }
     }
     void muatIzin();
-    const detak = setInterval(() => void muatIzin(), 5 * 60_000);
+    // Hanya saat aplikasi terlihat (28 Sep 2026) — dulu tetap jalan di latar.
+    const detak = setInterval(() => {
+      if (document.visibilityState === "visible") void muatIzin();
+    }, 5 * 60_000);
     return () => {
       hidup = false;
       clearInterval(detak);
@@ -618,7 +622,9 @@ export default function Page() {
       setSembunyiTab(sembunyi);
     }
     void muatAkses();
-    const detak = setInterval(() => void muatAkses(), 5 * 60_000);
+    const detak = setInterval(() => {
+      if (document.visibilityState === "visible") void muatAkses();
+    }, 5 * 60_000);
     return () => {
       hidup = false;
       clearInterval(detak);
@@ -686,7 +692,10 @@ export default function Page() {
     // cepat lewat DETAK 10 detik (useDetakGlobal → "pri:segarkan" →
     // muat()), jadi jaring pengaman berkala ini boleh separuh lebih
     // jarang — beban server turun, notifikasi justru lebih segar.
-    const berkala = setInterval(() => void muat(), 60_000);
+    // 28 Sep 2026: 60 → 300 detik. Notifikasi baru kini membangunkan HP
+    // penerimanya lewat sinyal pribadi di detak, dan notifikasi umum lewat
+    // tanda global — penarikan berkala tinggal jaring pengaman.
+    const berkala = setInterval(() => void muat(), 300_000);
     // Begitu admin kembali ke tab ini, segarkan langsung supaya tidak
     // perlu menunggu giliran berikutnya.
     const saatTerlihat = () => {
@@ -728,15 +737,17 @@ export default function Page() {
   );
 
   // Catat tab aktif sebagai "pernah dibuka" supaya state-nya tetap hidup
-  // setelah pindah, tanpa memasang tab yang belum disentuh.
-  useEffect(() => {
+  // setelah pindah, tanpa memasang tab yang belum disentuh. Disesuaikan
+  // saat render (pola resmi React), bukan lewat effect: tab baru langsung
+  // terpasang pada render yang sama, tanpa satu render kosong.
+  if (!tabPernahDibuka.has(tabEfektif)) {
     setTabPernahDibuka((sebelum) => {
       if (sebelum.has(tabEfektif)) return sebelum;
       const lanjut = new Set(sebelum);
       lanjut.add(tabEfektif);
       return lanjut;
     });
-  }, [tabEfektif]);
+  }
 
   // ------------------------------------------------------------
   // Aksi navigasi
@@ -1325,7 +1336,11 @@ export default function Page() {
                 )}
               >
                 {tabPernahDibuka.has(kunci) ? (
-                  <PagarGalat nama={kunci}>{isi}</PagarGalat>
+                  // Tab tersembunyi (atau tertutup sub-layar) tidak menarik
+                  // data sampai terlihat lagi — lihat hooks/use-tab-aktif.
+                  <KonteksTabAktif.Provider value={kunci === tabEfektif && !subLayar}>
+                    <PagarGalat nama={kunci}>{isi}</PagarGalat>
+                  </KonteksTabAktif.Provider>
                 ) : null}
               </div>
             ))}

@@ -21,6 +21,7 @@ import type {
   VideoAntrian,
 } from "@/types";
 import { PERIODE_AKTIF } from "@/types";
+import { buatPenggabungGet } from "@/lib/gabung-get";
 
 // ------------------------------------------------------------
 // Tipe tambahan lapisan services
@@ -80,7 +81,28 @@ export type DashboardData = {
  * Fetch JSON dari API route (path relatif) dengan penanganan error
  * berbahasa Indonesia. Mengembalikan objek respons apa adanya.
  */
+/** GET kembar yang sedang berjalan menumpang yang pertama (lib/gabung-get). */
+const gabungGet = buatPenggabungGet();
+
 async function fetchJson(path: string, init?: RequestInit): Promise<any> {
+  const metode = (init?.method ?? "GET").toUpperCase();
+  // Permintaan pengubah data: GET sesudahnya harus berangkat baru.
+  if (metode !== "GET") gabungGet.lupakan();
+  // Hanya GET tanpa isi & tanpa sinyal batal milik pemanggil yang boleh
+  // digabung (membatalkan satu penumpang tidak boleh membatalkan semuanya).
+  if (metode === "GET" && !init?.body && !init?.signal) {
+    const kunci = JSON.stringify([
+      path,
+      headerToken(),
+      init?.headers ?? null,
+      init?.cache ?? "no-store",
+    ]);
+    return gabungGet.jalankan(kunci, () => fetchJsonLangsung(path, init));
+  }
+  return fetchJsonLangsung(path, init);
+}
+
+async function fetchJsonLangsung(path: string, init?: RequestInit): Promise<any> {
   // Token perangkat DISERTAKAN OTOMATIS untuk setiap panggilan API.
   // Sebelumnya tiap pemanggil harus ingat menambahkan headerToken()
   // sendiri, dan yang lupa membuat endpoint-nya terpaksa dibiarkan
@@ -5456,13 +5478,16 @@ export async function hubungkanSosmedTvr(platform?: string): Promise<string> {
   return json.url as string;
 }
 
-/** TVR Saya: baca akun tertaut + sinkron ke daftar akunku. */
-export async function sinkronSosmedTvr(): Promise<{
+/**
+ * TVR Saya: baca akun tertaut + sinkron ke daftar akunku. Server menyimpan
+ * hasilnya 10 menit; `segar` (tombol Segarkan) memaksa bertanya ke penyedia.
+ */
+export async function sinkronSosmedTvr(opsi: { segar?: boolean } = {}): Promise<{
   terhubung: { platform: string; username: string }[];
   tersinkron: number;
   konflik: string[];
 }> {
-  const json = await fetchJson("/api/tvr/hubungkan", {
+  const json = await fetchJson(opsi.segar ? "/api/tvr/hubungkan?segar=1" : "/api/tvr/hubungkan", {
     headers: headerToken(),
   });
   return {
@@ -6711,6 +6736,11 @@ export async function ubahSayapAktif(id: number, aktif: boolean): Promise<void> 
 export type HasilDetak = {
   /** Tanda perubahan global; berubah = ada data baru. */
   tanda: string;
+  /**
+   * Sinyal pribadi (28 Sep 2026): berubah = ada yang baru UNTUK SAYA
+   * (notifikasi/chat/laporan KPI). "" = server sedang tidak bisa membacanya.
+   */
+  tanda_saya: string;
   /** Id pengguna yang sedang membuka aplikasi (±60 detik terakhir). */
   hadir: string[];
   /**
@@ -6752,6 +6782,7 @@ export async function getDetak(): Promise<HasilDetak> {
   const jeda = Number(json?.jeda);
   return {
     tanda: String(json?.tanda ?? ""),
+    tanda_saya: String(json?.tanda_saya ?? ""),
     hadir: Array.isArray(json?.hadir) ? (json.hadir as unknown[]).map(String) : [],
     // Batas aman: server tidak boleh menyuruh lebih cepat dari 5 detik
     // atau lebih lambat dari 5 menit, walau jawabannya aneh.

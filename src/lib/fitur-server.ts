@@ -7,6 +7,7 @@
 import { supabase } from "@/lib/supabase";
 import { bolehFitur, type KunciFitur, type PetaIzin } from "@/lib/fitur";
 import { adalahHR } from "@/lib/hr";
+import { denganCache } from "@/lib/cache-bersama";
 
 /**
  * Fitur milik HR Center (24 Sep 2026, "seluruh pengguna Divisi HR mendapat
@@ -15,18 +16,34 @@ import { adalahHR } from "@/lib/hr";
  */
 const FITUR_HR_CENTER = new Set<KunciFitur>(["database.detail", "qc.analisis", "absensi.approval"]);
 
-/** Izin efektif satu peran: hanya memuat fitur yang DIMATIKAN. */
+/** Kunci cache izin satu peran — dibuang /api/fitur setiap kali diubah. */
+export function kunciCacheIzinFitur(peran: string): string {
+  return `izin-fitur:${peran}`;
+}
+
+/**
+ * Izin efektif satu peran: hanya memuat fitur yang DIMATIKAN.
+ *
+ * Disimpan 60 dtk (28 Sep 2026, rencana "200 orang tanpa lag" #5): dulu
+ * dibaca ulang dari database di SETIAP panggilan API yang memeriksa izin,
+ * padahal tabelnya cuma belasan baris dan jarang berubah. Perubahan dari
+ * Panel Master membuang cache-nya seketika (kunciCacheIzinFitur).
+ */
 export async function izinPeran(peran: string): Promise<PetaIzin> {
   try {
-    const { data } = await supabase()
-      .from("fitur_izin")
-      .select("fitur, aktif")
-      .eq("peran", peran);
-    const peta: PetaIzin = {};
-    for (const b of data ?? []) {
-      if (b.aktif === false) peta[b.fitur as KunciFitur] = false;
-    }
-    return peta;
+    return await denganCache(kunciCacheIzinFitur(peran), 60, async () => {
+      const { data, error } = await supabase()
+        .from("fitur_izin")
+        .select("fitur, aktif")
+        .eq("peran", peran);
+      // Gagal = jangan disimpan (denganCache tidak menyimpan yang melempar).
+      if (error) throw new Error(error.message);
+      const peta: PetaIzin = {};
+      for (const b of data ?? []) {
+        if (b.aktif === false) peta[b.fitur as KunciFitur] = false;
+      }
+      return peta;
+    });
   } catch {
     // Gagal membaca matriks tidak boleh mengunci aplikasi — anggap
     // semua fitur nyala (perilaku bawaan).

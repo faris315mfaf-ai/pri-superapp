@@ -726,7 +726,8 @@ export function TvrKuScreen({
     if (sedangHubung) return;
     setSedangHubung(true);
     try {
-      const hasil = await sinkronSosmedTvr();
+      // Tombol Segarkan: selalu tanya penyedia (lewati simpanan 10 menit).
+      const hasil = await sinkronSosmedTvr({ segar: true });
       if (hasil.terhubung.length === 0) {
         toast("info", "Belum ada akun tertaut", "Tekan Hubungkan lalu login sosmedmu dulu.");
       } else {

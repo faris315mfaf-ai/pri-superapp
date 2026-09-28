@@ -18,6 +18,7 @@ import {
 
 import { modulDibuka } from "@/lib/peran";
 import { adalahPengurusSayap } from "@/lib/struktur";
+import { denganCache } from "@/lib/cache-bersama";
 export { KATALOG_DASHBOARD, KUNCI_DASHBOARD_SAH };
 export type { KunciDashboard };
 
@@ -64,14 +65,35 @@ export async function aksesDashboardRole(
   if (aksesPenuh(p)) {
     return KATALOG_DASHBOARD.map((d) => d.kunci);
   }
-  const { data } = await supabase()
-    .from("dashboard_access")
-    .select("dashboard_key")
-    .eq("role", p.role)
-    .eq("aktif", true);
-  return (data ?? [])
-    .map((b) => String(b.dashboard_key))
-    .filter((k) => KUNCI_DASHBOARD_SAH.has(k));
+  return kunciDashboardAktifPeran(p.role);
+}
+
+/** Kunci cache dashboard aktif satu peran — dibuang /api/dashboard/akses saat diubah. */
+export function kunciCacheAksesDashboard(role: string): string {
+  return `akses-dashboard:${role}`;
+}
+
+/**
+ * Dashboard yang menyala untuk satu peran, disimpan 60 dtk (28 Sep 2026,
+ * rencana "200 orang tanpa lag" #5). Dulu dibaca ulang dari database di
+ * setiap pemeriksaan akses dashboard.
+ */
+async function kunciDashboardAktifPeran(role: string): Promise<string[]> {
+  try {
+    return await denganCache(kunciCacheAksesDashboard(role), 60, async () => {
+      const { data, error } = await supabase()
+        .from("dashboard_access")
+        .select("dashboard_key")
+        .eq("role", role)
+        .eq("aktif", true);
+      if (error) throw new Error(error.message);
+      return (data ?? [])
+        .map((b) => String(b.dashboard_key))
+        .filter((k) => KUNCI_DASHBOARD_SAH.has(k));
+    });
+  } catch {
+    return [];
+  }
 }
 
 /** Apakah pemakai ini boleh membuka satu sub-dashboard? */
@@ -81,11 +103,5 @@ export async function bolehDashboard(
 ): Promise<boolean> {
   const p = urai(pemakai);
   if (aksesPenuh(p)) return true;
-  const { data } = await supabase()
-    .from("dashboard_access")
-    .select("aktif")
-    .eq("role", p.role)
-    .eq("dashboard_key", kunci)
-    .maybeSingle();
-  return data?.aktif === true;
+  return (await kunciDashboardAktifPeran(p.role)).includes(kunci);
 }

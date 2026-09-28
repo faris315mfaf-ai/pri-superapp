@@ -12,6 +12,8 @@ import { userDariToken } from "@/lib/sesi";
 import { KATALOG_FITUR, PERAN_DIATUR } from "@/lib/fitur";
 import { izinGabungan } from "@/lib/fitur-server";
 import { DIVISI } from "@/lib/struktur";
+import { hapusCacheBersama } from "@/lib/cache-bersama";
+import { kunciCacheIzinFitur } from "@/lib/fitur-server";
 
 export const dynamic = "force-dynamic";
 
@@ -116,6 +118,8 @@ export async function POST(request: Request) {
       }
     }
 
+    // Izin peran ini dibaca dari cache 60 dtk — buang supaya berlaku seketika.
+    await hapusCacheBersama(kunciCacheIzinFitur(peran));
     return { sukses: true };
   });
 }

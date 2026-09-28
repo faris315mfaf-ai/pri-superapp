@@ -10,6 +10,11 @@
 //   kunci `tvr_collapse_${id}` → "1" (terlipat) / "0" (terbuka).
 // - Dipakai modul TV Rakyat (bawaan TERLIPAT) dan HR Center
 //   (bawaan bisa diatur lewat prop bawaanTerbuka).
+// - Isi baru DIPASANG saat seksi pertama kali dibuka (28 Sep 2026,
+//   rencana "200 orang tanpa lag" #4), lalu tetap terpasang supaya
+//   state-nya terjaga. Dulu isi seksi terlipat pun tetap dipasang dan
+//   menarik datanya — mis. seksi Konten di Beranda yang memuat seluruh
+//   layar Konten walau tidak pernah dibuka.
 // ============================================================
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -55,6 +60,10 @@ export function SeksiLipat({
     typeof window === "undefined" ? bawaanTerbuka : bacaSimpanan(id, bawaanTerbuka),
   );
   const seksiRef = useRef<HTMLElement>(null);
+  // Sudah pernah terbuka? Disesuaikan saat render (pola resmi React) supaya
+  // isi terpasang pada render yang sama ketika seksi dibuka.
+  const [pernahTerbuka, setPernahTerbuka] = useState(terbuka);
+  if (terbuka && !pernahTerbuka) setPernahTerbuka(true);
 
   // Buka paksa ketika bukaSinyal berubah (abaikan render pertama).
   const sinyalTerakhir = useRef(bukaSinyal);
@@ -121,7 +130,7 @@ export function SeksiLipat({
         }}
       >
         <div className="overflow-hidden">
-          <div className="px-4 pb-4">{children}</div>
+          <div className="px-4 pb-4">{pernahTerbuka ? children : null}</div>
         </div>
       </div>
     </section>

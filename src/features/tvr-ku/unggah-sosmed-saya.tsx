@@ -41,6 +41,7 @@ import {
 import { PlatformIcon, labelPlatform } from "@/components/platform-icon";
 import { KOMPRES_MB, unggahVideoTvrku } from "@/lib/unggah-video-klien";
 import { cn } from "@/lib/utils";
+import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 
 const LABEL: Record<string, string> = {
   instagram: "Instagram",
@@ -70,6 +71,7 @@ export function UnggahSosmedSaya() {
   // Upload-post sering mengantri lama (antrean worker), jadi jendela pantau
   // 30 menit — dulu 4 menit, terlalu pendek saat status masih "queued".
   const [pantauSejak, setPantauSejak] = useState<number | null>(null);
+  const tabAktifRef = useRefTabAktif();
   const tautanTerakhir = useRef(0);
   useEffect(() => {
     if (pantauSejak === null) return;
@@ -79,6 +81,8 @@ export function UnggahSosmedSaya() {
         setPantauSejak(null);
         return;
       }
+      // Pantau hanya saat layar ini terlihat (28 Sep 2026).
+      if (document.visibilityState !== "visible" || !tabAktifRef.current) return;
       getRiwayatTvrkuPost()
         .then((posts) => {
           if (!hidup) return;

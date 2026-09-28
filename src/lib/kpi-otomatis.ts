@@ -38,6 +38,7 @@ import { LABEL_SOSMED, solusiGagal } from "@/lib/batas-caption";
 import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 import { namaKolomHilang } from "@/lib/kolom-struktur";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
+import { naikkanSinyal } from "@/lib/sinyal-pribadi";
 
 /** Toleransi mundur saat mencocokkan waktu terbit (jam beda server). */
 export const TOLERANSI_MENIT = 10;
@@ -309,7 +310,10 @@ export type RingkasanRekonsiliasi = {
   catatan: string[];
 };
 
-const JEDA_REKON_MS = 60_000;
+// 60 → 180 dtk (28 Sep 2026): pemicu dari LAYAR (Beranda/TVR Saya) cukup
+// tiap 3 menit per orang — cron menyapu semua orang tiap 15 menit, dan
+// unggahan lewat aplikasi memakai `paksa`. Tiap putaran = ±5 kueri + upload-post.
+const JEDA_REKON_MS = 180_000;
 const jedaRekon = new Map<number, number>();
 
 /**
@@ -324,6 +328,9 @@ export async function rekonsiliasiKpiOtomatis(
   opsi: { anggaranMs?: number; paksa?: boolean } = {},
 ): Promise<number> {
   const r = await rekonsiliasiKpiRinci(userId, opsi);
+  // Laporan KPI baru tercatat → hanya HP orang ini yang menyegarkan angka
+  // KPI-nya (sinyal pribadi, 28 Sep 2026), bukan seluruh HP yang online.
+  if (r.baru > 0) await naikkanSinyal([userId]);
   return r.baru;
 }
 

@@ -63,6 +63,7 @@ import { SeksiLipat } from "@/components/seksi-lipat";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { useModulAktif } from "@/hooks/use-modul";
 import { cn } from "@/lib/utils";
+import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 
 // ------------------------------------------------------------
 // Konstanta & helper
@@ -207,6 +208,7 @@ function QcScreenPenuh({
 
   // Filter platform
   const [platform, setPlatform] = useState("semua");
+  const tabAktifRef = useRefTabAktif();
 
   /** Ganti tanggal terpilih + kosongkan data lama (skeleton muncul). */
   function gantiTanggal(t: string) {
@@ -255,7 +257,7 @@ function QcScreenPenuh({
 
     if (!hariIni) return () => { hidup = false; };
     const detak = setInterval(() => {
-      if (document.visibilityState === "hidden") return;
+      if (document.visibilityState === "hidden" || !tabAktifRef.current) return;
       void baca();
     }, 60_000); // 30→60 dtk (1 Sep 2026 — pemangkasan beban Supabase)
     return () => {

@@ -11,12 +11,14 @@ import { useEffect, useState } from "react";
 import { Trophy } from "lucide-react";
 import { getJuaraKomen, type HasilJuaraKomen } from "@/services";
 import { tanggalIndonesia } from "@/lib/format";
+import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 
 const MEDALI = ["🥇", "🥈", "🥉"];
 const SEGAR_MS = 5 * 60_000;
 
 export function RunningTextJuara() {
   const [data, setData] = useState<HasilJuaraKomen | null>(null);
+  const tabAktifRef = useRefTabAktif();
 
   useEffect(() => {
     let hidup = true;
@@ -27,7 +29,11 @@ export function RunningTextJuara() {
           // gagal memuat = tidak tampil; bukan alasan mengganggu beranda
         });
     void muat();
-    const t = setInterval(() => void muat(), SEGAR_MS);
+    // Hanya saat terlihat & tabnya aktif (28 Sep 2026).
+    const t = setInterval(() => {
+      if (document.visibilityState !== "visible" || !tabAktifRef.current) return;
+      void muat();
+    }, SEGAR_MS);
     return () => {
       hidup = false;
       clearInterval(t);

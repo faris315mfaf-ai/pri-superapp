@@ -89,6 +89,7 @@ import { cn } from "@/lib/utils";
 import { RobotSvg } from "./robot-svg";
 import { HewanSvg, type GerakHewan } from "./hewan-svg";
 import { PasarLobi } from "./pasar-lobi";
+import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 
 /** Tab utama layar pet (v5: + Pasar). */
 export type TabPet = "rawat" | "toko" | "lemari" | "pasar";
@@ -312,6 +313,7 @@ export function PetScreen({
   const [pilihMakanan, setPilihMakanan] = useState(false);
   // Animasi makan: emoji terbang ke mulut + mulut mengunyah ±1,4 dtk.
   const [emojiMakan, setEmojiMakan] = useState<string | null>(null);
+  const tabAktifRef = useRefTabAktif();
   const timerMakan = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function terima(d: PetState, pesan?: string) {
@@ -335,7 +337,11 @@ export function PetScreen({
             ),
         );
     void muat();
-    const t = setInterval(() => void muat(), SEGAR_MS);
+    // Hanya saat terlihat & tab Pet aktif (28 Sep 2026).
+    const t = setInterval(() => {
+      if (document.visibilityState !== "visible" || !tabAktifRef.current) return;
+      void muat();
+    }, SEGAR_MS);
     return () => {
       hidup = false;
       clearInterval(t);

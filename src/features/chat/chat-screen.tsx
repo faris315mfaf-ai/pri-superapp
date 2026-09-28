@@ -81,6 +81,7 @@ import { jamWIB, tanggalIndonesia } from "@/lib/format";
 import type { User } from "@/types";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { cn } from "@/lib/utils";
+import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 
 const EMOJI = [
   "😀", "😂", "🥰", "😎", "🤝", "🙏", "👍", "👏",
@@ -125,6 +126,7 @@ function PanelPercakapan({
   const [gambarPenuh, setGambarPenuh] = useState<string | null>(null);
   const [profilBuka, setProfilBuka] = useState(false);
   const [koinBuka, setKoinBuka] = useState(false);
+  const tabAktifRef = useRefTabAktif();
   const inputGambarRef = useRef<HTMLInputElement | null>(null);
   const timerTekanRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ujungRef = useRef<HTMLDivElement | null>(null);
@@ -182,7 +184,9 @@ function PanelPercakapan({
     void tarik(true);
     void tandaiChatDibaca(kontak.id);
     const detak = setInterval(() => {
-      if (document.visibilityState === "hidden") return;
+      // Percakapan yang sedang dibuka tetap 6 dtk — tapi berhenti bila
+      // pengguna pindah ke tab lain (di PC panel ini bisa tertinggal terbuka).
+      if (document.visibilityState === "hidden" || !tabAktifRef.current) return;
       void tarik(false);
     }, 6000); // 4→6 dtk (1 Sep 2026): tetap terasa langsung, beban -33%
     return () => {
@@ -942,6 +946,7 @@ export function ChatScreen({
   const [grup, setGrup] = useState<InfoGrupDivisi | null>(null);
   const [grupBuka, setGrupBuka] = useState(false);
   const [modalPantau, setModalPantau] = useState(false);
+  const tabAktifRef = useRefTabAktif();
 
   // Daftar chat dimuat + disegarkan tiap 10 dtk (badge unread hidup).
   useEffect(() => {
@@ -961,10 +966,14 @@ export function ChatScreen({
       }
     }
     void muat();
+    // 28 Sep 2026: pesan baru untuk SAYA kini membangunkan layar lewat sinyal
+    // pribadi di detak (versiSegar berubah → daftar dimuat ulang), jadi
+    // penarikan berkala cukup jaring pengaman tiap 60 dtk — dan hanya saat
+    // tab Chat sedang dibuka (dulu tetap 4x/menit walau tabnya ditinggal).
     const detak = setInterval(() => {
-      if (document.visibilityState === "hidden") return;
+      if (document.visibilityState === "hidden" || !tabAktifRef.current) return;
       void muat();
-    }, 15000); // 10→15 dtk (1 Sep 2026 — pemangkasan beban Supabase)
+    }, 60_000);
     return () => {
       hidup = false;
       clearInterval(detak);

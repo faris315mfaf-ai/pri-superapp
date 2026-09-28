@@ -31,6 +31,7 @@ import {
 import { jamWIB } from "@/lib/format";
 import type { User } from "@/types";
 import { cn } from "@/lib/utils";
+import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 
 const EMOJI = [
   "😀", "😂", "🥰", "😎", "🤝", "🙏", "👍", "👏",
@@ -69,6 +70,7 @@ export function PanelGrup({
   const [infoBuka, setInfoBuka] = useState(false);
   const [namaTampil, setNamaTampil] = useState(namaGrup);
   const [fotoTampil, setFotoTampil] = useState(fotoGrup);
+  const tabAktifRef = useRefTabAktif();
   const ujungRef = useRef<HTMLDivElement | null>(null);
   const idTerakhirRef = useRef<string>("0");
 
@@ -101,7 +103,7 @@ export function PanelGrup({
     void tarik(true);
     void tandaiGrupDibaca();
     const detak = setInterval(() => {
-      if (document.visibilityState === "hidden") return;
+      if (document.visibilityState === "hidden" || !tabAktifRef.current) return;
       void tarik(false);
     }, 4000);
     return () => {

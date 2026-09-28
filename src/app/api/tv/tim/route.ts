@@ -16,6 +16,8 @@ import { kirimKabar } from "@/lib/notifikasi";
 import { maksUploadMb, retensiJamTv, videoBaruTampil } from "@/lib/pengaturan-tv";
 
 import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
+import { hapusCacheBersama } from "@/lib/cache-bersama";
+import { kunciCacheTvTim } from "@/lib/tv-tim";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
@@ -167,6 +169,7 @@ export async function POST(request: Request) {
 
     if (body.aksi === "hapus") {
       const { error } = await db.from("tv_tim").delete().eq("user_id", id);
+      await hapusCacheBersama(kunciCacheTvTim(id));
       if (error) throw new Error("Gagal mengeluarkan anggota.");
       return { sukses: true };
     }
@@ -181,6 +184,7 @@ export async function POST(request: Request) {
       throw Object.assign(new Error("Anggota tidak ditemukan/nonaktif."), { status: 404 });
     }
 
+    await hapusCacheBersama(kunciCacheTvTim(id));
     const { error } = await db.from("tv_tim").upsert(
       { user_id: id, ditunjuk_oleh_id: Number(user.id) },
       { onConflict: "user_id" },

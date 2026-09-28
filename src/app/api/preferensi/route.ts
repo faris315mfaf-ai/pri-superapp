@@ -7,6 +7,7 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
+import { denganCache, hapusCacheBersama } from "@/lib/cache-bersama";
 
 export const dynamic = "force-dynamic";
 
@@ -25,14 +26,18 @@ export async function GET(request: Request) {
     const user = await userDariToken(tokenDari(request));
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
 
-    const { data } = await supabase()
-      .from("preferensi_pengguna")
-      .select("kunci, nilai")
-      .eq("user_id", Number(user.id))
-      .limit(100);
-
-    const peta: Record<string, unknown> = {};
-    for (const b of data ?? []) peta[String(b.kunci)] = b.nilai;
+    // Cache 60 dtk per orang (28 Sep 2026) — dibuang POST di bawah.
+    const peta = await denganCache(`preferensi:${Number(user.id)}`, 60, async () => {
+      const { data, error } = await supabase()
+        .from("preferensi_pengguna")
+        .select("kunci, nilai")
+        .eq("user_id", Number(user.id))
+        .limit(100);
+      if (error) throw new Error(error.message);
+      const hasil: Record<string, unknown> = {};
+      for (const b of data ?? []) hasil[String(b.kunci)] = b.nilai;
+      return hasil;
+    });
     return { preferensi: peta };
   });
 }
@@ -75,6 +80,7 @@ export async function POST(request: Request) {
       console.error("[preferensi] simpan:", error.message);
       throw new Error("Gagal menyimpan preferensi.");
     }
+    await hapusCacheBersama(`preferensi:${Number(user.id)}`);
     return { sukses: true };
   });
 }

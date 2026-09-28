@@ -32,6 +32,7 @@ import { toast } from "@/hooks/use-app-store";
 import { getInsightSosmed, type BalasanInsight } from "@/services";
 import { formatAngkaRingkas, jamWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 
 /** Selang periksa ulang di layar; server tetap menahan panggilan ke
  *  Ayrshare sampai jadwal segarnya lewat, jadi ini tidak boros kuota. */
@@ -60,6 +61,7 @@ export function InsightPanel({ onBukaRinci }: { onBukaRinci?: () => void }) {
   const [data, setData] = useState<BalasanInsight | null>(null);
   const [gagal, setGagal] = useState("");
   const [menyegarkan, setMenyegarkan] = useState(false);
+  const tabAktifRef = useRefTabAktif();
 
   // Muat + periksa berkala. setState hanya setelah await (aturan lint
   // react-hooks proyek ini); `hidup` mencegah setState pasca-unmount.
@@ -82,7 +84,11 @@ export function InsightPanel({ onBukaRinci }: { onBukaRinci?: () => void }) {
     }
 
     void baca();
-    const detak = setInterval(() => void baca(), SELANG_MS);
+    // Hanya saat terlihat & tabnya aktif (28 Sep 2026).
+    const detak = setInterval(() => {
+      if (document.visibilityState !== "visible" || !tabAktifRef.current) return;
+      void baca();
+    }, SELANG_MS);
     return () => {
       hidup = false;
       clearInterval(detak);

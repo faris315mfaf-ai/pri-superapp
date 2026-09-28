@@ -63,6 +63,8 @@ export type KlienCache = {
   smembers<T = string[]>(key: string): Promise<T>;
   expire(key: string, seconds: number): Promise<number>;
   del(...keys: string[]): Promise<number>;
+  /** Tambah 1 (sinyal pribadi detak, 28 Sep 2026). */
+  incr(key: string): Promise<number>;
 };
 
 class AdapterRedisTcp implements KlienCache {
@@ -109,6 +111,9 @@ class AdapterRedisTcp implements KlienCache {
   del(...keys: string[]): Promise<number> {
     if (keys.length === 0) return Promise.resolve(0);
     return this.r.del(...keys);
+  }
+  incr(key: string): Promise<number> {
+    return this.r.incr(key);
   }
 }
 

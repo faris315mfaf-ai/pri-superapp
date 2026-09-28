@@ -24,6 +24,7 @@ import { formatAngkaRingkas, jamWIB, sejakRingkas, tanggalWibHariIni } from "@/l
 import { kalimatKatalog, kalimatPembaruan } from "@/lib/kalimat-pembaruan";
 import { getVideoHarian, type VideoHarian } from "@/services";
 import { cn } from "@/lib/utils";
+import { useIntervalAktif } from "@/hooks/use-tab-aktif";
 
 const LABEL_PLATFORM: Record<string, string> = {
   tiktok: "TikTok",
@@ -98,13 +99,9 @@ export function PanelVideoHarian() {
     };
   }, [tanggal, akun, platform, muat]);
 
-  // Se-realtime mungkin: muat ulang tiap menit selama panel terlihat.
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      if (document.visibilityState === "visible") setMuat((n) => n + 1);
-    }, 60_000);
-    return () => window.clearInterval(id);
-  }, []);
+  // Se-realtime mungkin: muat ulang tiap menit selama panel terlihat DAN
+  // tabnya aktif; menit yang terlewat disusul sekali saat tab dibuka lagi.
+  useIntervalAktif(() => setMuat((n) => n + 1), 60_000);
 
   const akunTerpilih = useMemo(() => data?.akun.find((a) => a.kunci === akun) ?? null, [data, akun]);
   const pilihanAkun = useMemo(() => {

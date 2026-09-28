@@ -220,7 +220,8 @@ export function BerandaSimpelGlass({
 
   // Penyegaran diam-diam tiap 30 dtk + saat aplikasi dibuka kembali.
   const [tik, setTik] = useState(0);
-  useSegarOtomatis(() => setTik((t) => t + 1));
+  // 60 → 300 dtk (28 Sep 2026): lihat beranda-screen — sinyal pribadi.
+  useSegarOtomatis(() => setTik((t) => t + 1), 300);
 
   useEffect(() => {
     let hidup = true;

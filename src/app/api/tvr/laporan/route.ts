@@ -29,6 +29,8 @@ import {
   PLATFORM_KPI,
   targetPerPlatformDari,
 } from "@/lib/kpi-video";
+import { bacaSinyal, naikkanSinyal } from "@/lib/sinyal-pribadi";
+import { denganCache } from "@/lib/cache-bersama";
 
 export const dynamic = "force-dynamic";
 
@@ -200,137 +202,149 @@ export async function GET(request: Request) {
     }
 
     // --- Laporan milik sendiri ---
-    // UNGGAHAN HARI INI YANG BELUM TERCATAT (10 Sep 2026): setiap video yang
-    // diunggah lewat aplikasi WAJIB tampil di daftar — walau sosmednya belum
-    // memberi tautan pasti. Statusnya per platform: menunggu / gagal /
-    // terjadwal. Rekonsiliasi tautan jalan SETELAH respons (after), bukan
-    // ditunggu di GET — dulu anggaran 8 dtk membuat KPI/rangkuman kosong.
-    const uid = Number(user.id);
-    const awalHari = new Date(`${tanggal}T00:00:00+07:00`).toISOString();
-    const akhirHari = new Date(`${tanggal}T23:59:59.999+07:00`).toISOString();
-    const filterHari =
-      `and(jadwal.is.null,dibuat_pada.gte.${awalHari},dibuat_pada.lte.${akhirHari}),and(jadwal.gte.${awalHari},jadwal.lte.${akhirHari})`;
-    let { data: postHariIni, error: errPost } = await db
-      .from("tvrku_post")
-      .select("id, judul, platforms, kpi_tercatat, jadwal, dibuat_pada, hasil")
-      .eq("user_id", uid)
-      .or(filterHari)
-      .order("id", { ascending: false })
-      .limit(40);
-    if (errPost && namaKolomHilang(errPost.message) === "kpi_tercatat") {
-      const ulang = await db
+    // CACHE 60 DTK (28 Sep 2026, rencana "200 orang tanpa lag" #6): jalur ini
+    // ±7 kueri tiap panggilan dan dipanggil Beranda + TVR Saya. Kuncinya
+    // memuat SINYAL PRIBADI orang ini — setiap laporan/unggahan baru
+    // miliknya menaikkan sinyal itu, jadi kunci berganti dan datanya
+    // langsung segar tanpa menunggu 60 dtk. Sinyal tak terbaca → tanpa cache.
+    const hitungLaporanSendiri = async () => {
+      // UNGGAHAN HARI INI YANG BELUM TERCATAT (10 Sep 2026): setiap video yang
+      // diunggah lewat aplikasi WAJIB tampil di daftar — walau sosmednya belum
+      // memberi tautan pasti. Statusnya per platform: menunggu / gagal /
+      // terjadwal. Rekonsiliasi tautan jalan SETELAH respons (after), bukan
+      // ditunggu di GET — dulu anggaran 8 dtk membuat KPI/rangkuman kosong.
+      const uid = Number(user.id);
+      const awalHari = new Date(`${tanggal}T00:00:00+07:00`).toISOString();
+      const akhirHari = new Date(`${tanggal}T23:59:59.999+07:00`).toISOString();
+      const filterHari =
+        `and(jadwal.is.null,dibuat_pada.gte.${awalHari},dibuat_pada.lte.${akhirHari}),and(jadwal.gte.${awalHari},jadwal.lte.${akhirHari})`;
+      let { data: postHariIni, error: errPost } = await db
         .from("tvrku_post")
-        .select("id, judul, platforms, jadwal, dibuat_pada, hasil")
+        .select("id, judul, platforms, kpi_tercatat, jadwal, dibuat_pada, hasil")
         .eq("user_id", uid)
         .or(filterHari)
         .order("id", { ascending: false })
         .limit(40);
-      postHariIni = (ulang.data ?? []).map((p) => ({ ...p, kpi_tercatat: null }));
-      errPost = ulang.error;
-    }
-    if (errPost) {
-      console.error("[tvr/laporan] baca unggahan:", errPost.message);
-      postHariIni = [];
-    }
-    const daftarStr = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
-    const posts = (postHariIni ?? []).map((p) => {
-      const hasil = (p.hasil && typeof p.hasil === "object" && !Array.isArray(p.hasil) ? p.hasil : {}) as Record<string, unknown>;
-      const alasanPer = (hasil.kpi_gagal_alasan && typeof hasil.kpi_gagal_alasan === "object" ? hasil.kpi_gagal_alasan : {}) as Record<string, string>;
-      return {
-        id: Number(p.id),
-        judul: String(p.judul ?? ""),
-        platforms: daftarStr(p.platforms),
-        tercatat: new Set(daftarStr(p.kpi_tercatat)),
-        gagal: new Set(daftarStr(hasil.kpi_gagal)),
-        alasanPer,
-        jadwal: p.jadwal ? String(p.jadwal) : null,
-        dibuat_pada: String(p.dibuat_pada),
-      };
-    });
-    // ACC HR DITIADAKAN (23 Sep 2026): sisa antrean lama milik orang ini
-    // diluluskan dulu supaya ikut terbaca di bawah dan tak ada lagi status
-    // "menunggu HR" di layar. Kosong = satu kueri ringan saja.
-    await luluskanLaporanTertahan(uid, 50);
-    const pilihLaporan = "id, platform, url_video, keyword, tanggal_wib, dibuat_pada, sumber";
-    const [{ data: lvMentah, error: lvError }, jenisBebas, targetKu, bannedKu] = await Promise.all([
-      db
-        .from("laporan_video")
-        .select(pilihLaporan)
-        .eq("user_id", Number(user.id))
-        .eq("tanggal_wib", tanggal)
-        .order("id"),
-      kpiDibebaskan(Number(user.id), tanggal),
-      targetKpiUser(Number(user.id)),
-      bannedAktifPerUser([Number(user.id)]),
-    ]);
-    let data = lvMentah as { id: unknown; platform: string; url_video: string; keyword?: string | null; tanggal_wib: string; dibuat_pada: string; sumber?: string | null }[] | null;
-    let error = lvError;
-    if (error && namaKolomHilang(error.message) === "keyword") {
-      const ulang = await db
-        .from("laporan_video")
-        .select("id, platform, url_video, tanggal_wib, dibuat_pada, sumber")
-        .eq("user_id", Number(user.id))
-        .eq("tanggal_wib", tanggal)
-        .order("id");
-      data = ulang.data as typeof data;
-      error = ulang.error;
-    }
-    if (error) {
-      console.error("[tvr/laporan] baca:", error.message);
-      throw new Error("Gagal memuat laporan video.");
-    }
-    const daftar = (data ?? []).map((d) => ({ ...d, id: String(d.id) }));
+      if (errPost && namaKolomHilang(errPost.message) === "kpi_tercatat") {
+        const ulang = await db
+          .from("tvrku_post")
+          .select("id, judul, platforms, jadwal, dibuat_pada, hasil")
+          .eq("user_id", uid)
+          .or(filterHari)
+          .order("id", { ascending: false })
+          .limit(40);
+        postHariIni = (ulang.data ?? []).map((p) => ({ ...p, kpi_tercatat: null }));
+        errPost = ulang.error;
+      }
+      if (errPost) {
+        console.error("[tvr/laporan] baca unggahan:", errPost.message);
+        postHariIni = [];
+      }
+      const daftarStr = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
+      const posts = (postHariIni ?? []).map((p) => {
+        const hasil = (p.hasil && typeof p.hasil === "object" && !Array.isArray(p.hasil) ? p.hasil : {}) as Record<string, unknown>;
+        const alasanPer = (hasil.kpi_gagal_alasan && typeof hasil.kpi_gagal_alasan === "object" ? hasil.kpi_gagal_alasan : {}) as Record<string, string>;
+        return {
+          id: Number(p.id),
+          judul: String(p.judul ?? ""),
+          platforms: daftarStr(p.platforms),
+          tercatat: new Set(daftarStr(p.kpi_tercatat)),
+          gagal: new Set(daftarStr(hasil.kpi_gagal)),
+          alasanPer,
+          jadwal: p.jadwal ? String(p.jadwal) : null,
+          dibuat_pada: String(p.dibuat_pada),
+        };
+      });
+      // ACC HR DITIADAKAN (23 Sep 2026): sisa antrean lama milik orang ini
+      // diluluskan dulu supaya ikut terbaca di bawah dan tak ada lagi status
+      // "menunggu HR" di layar. Kosong = satu kueri ringan saja.
+      await luluskanLaporanTertahan(uid, 50);
+      const pilihLaporan = "id, platform, url_video, keyword, tanggal_wib, dibuat_pada, sumber";
+      const [{ data: lvMentah, error: lvError }, jenisBebas, targetKu, bannedKu] = await Promise.all([
+        db
+          .from("laporan_video")
+          .select(pilihLaporan)
+          .eq("user_id", Number(user.id))
+          .eq("tanggal_wib", tanggal)
+          .order("id"),
+        kpiDibebaskan(Number(user.id), tanggal),
+        targetKpiUser(Number(user.id)),
+        bannedAktifPerUser([Number(user.id)]),
+      ]);
+      let data = lvMentah as { id: unknown; platform: string; url_video: string; keyword?: string | null; tanggal_wib: string; dibuat_pada: string; sumber?: string | null }[] | null;
+      let error = lvError;
+      if (error && namaKolomHilang(error.message) === "keyword") {
+        const ulang = await db
+          .from("laporan_video")
+          .select("id, platform, url_video, tanggal_wib, dibuat_pada, sumber")
+          .eq("user_id", Number(user.id))
+          .eq("tanggal_wib", tanggal)
+          .order("id");
+        data = ulang.data as typeof data;
+        error = ulang.error;
+      }
+      if (error) {
+        console.error("[tvr/laporan] baca:", error.message);
+        throw new Error("Gagal memuat laporan video.");
+      }
+      const daftar = (data ?? []).map((d) => ({ ...d, id: String(d.id) }));
 
-    // Aturan ketat 5x6: hitung per platform, platform banned dikecualikan.
-    const perPlatform = new Map<string, number>();
-    for (const d of daftar) {
-      perPlatform.set(d.platform, (perPlatform.get(d.platform) ?? 0) + 1);
-    }
-    const kpi = hitungKpi(perPlatform, bannedKu.get(Number(user.id)) ?? new Set(), targetKu);
+      // Aturan ketat 5x6: hitung per platform, platform banned dikecualikan.
+      const perPlatform = new Map<string, number>();
+      for (const d of daftar) {
+        perPlatform.set(d.platform, (perPlatform.get(d.platform) ?? 0) + 1);
+      }
+      const kpi = hitungKpi(perPlatform, bannedKu.get(Number(user.id)) ?? new Set(), targetKu);
 
-    // KPI OTOMATIS: unggahan lewat aplikasi yang URL postingannya sudah
-    // terbit dicatat sendiri (hasilnya tampak pada pembukaan berikutnya).
-    // Tautan yang sudah tercatat untuk unggahan hari ini (tanggal laporan
-    // bisa berbeda dari tanggal unggah, jadi dicari per id unggahan).
-    const idPost = posts.map((p) => p.id);
-    const { data: tautanPost } = idPost.length
-      ? await db.from("laporan_video").select("tvrku_post_id, platform").eq("user_id", uid).in("tvrku_post_id", idPost)
-      : { data: [] as { tvrku_post_id: unknown; platform: unknown }[] };
-    const sudahTercatat = new Set((tautanPost ?? []).map((t) => `${Number(t.tvrku_post_id)}|${String(t.platform)}`));
-    const unggahan: {
-      id: string; judul: string; platform: string; status: "menunggu" | "gagal" | "terjadwal";
-      alasan: string | null; solusi: string | null; dibuat_pada: string; jadwal: string | null;
-    }[] = [];
-    for (const p of posts) {
-      const terjadwal = Boolean(p.jadwal && Date.parse(p.jadwal) > Date.now());
-      for (const pf of p.platforms) {
-        if (p.tercatat.has(pf) || sudahTercatat.has(`${p.id}|${pf}`)) continue;
-        if (p.gagal.has(pf)) {
-          const pesan = String(p.alasanPer[pf] ?? "");
-          const { ringkas, solusi } = solusiGagal(pf, pesan);
-          unggahan.push({ id: String(p.id), judul: p.judul, platform: pf, status: "gagal", alasan: ringkas || pesan || "gagal terbit", solusi, dibuat_pada: p.dibuat_pada, jadwal: p.jadwal });
-        } else {
-          unggahan.push({ id: String(p.id), judul: p.judul, platform: pf, status: terjadwal ? "terjadwal" : "menunggu", alasan: null, solusi: null, dibuat_pada: p.dibuat_pada, jadwal: p.jadwal });
+      // KPI OTOMATIS: unggahan lewat aplikasi yang URL postingannya sudah
+      // terbit dicatat sendiri (hasilnya tampak pada pembukaan berikutnya).
+      // Tautan yang sudah tercatat untuk unggahan hari ini (tanggal laporan
+      // bisa berbeda dari tanggal unggah, jadi dicari per id unggahan).
+      const idPost = posts.map((p) => p.id);
+      const { data: tautanPost } = idPost.length
+        ? await db.from("laporan_video").select("tvrku_post_id, platform").eq("user_id", uid).in("tvrku_post_id", idPost)
+        : { data: [] as { tvrku_post_id: unknown; platform: unknown }[] };
+      const sudahTercatat = new Set((tautanPost ?? []).map((t) => `${Number(t.tvrku_post_id)}|${String(t.platform)}`));
+      const unggahan: {
+        id: string; judul: string; platform: string; status: "menunggu" | "gagal" | "terjadwal";
+        alasan: string | null; solusi: string | null; dibuat_pada: string; jadwal: string | null;
+      }[] = [];
+      for (const p of posts) {
+        const terjadwal = Boolean(p.jadwal && Date.parse(p.jadwal) > Date.now());
+        for (const pf of p.platforms) {
+          if (p.tercatat.has(pf) || sudahTercatat.has(`${p.id}|${pf}`)) continue;
+          if (p.gagal.has(pf)) {
+            const pesan = String(p.alasanPer[pf] ?? "");
+            const { ringkas, solusi } = solusiGagal(pf, pesan);
+            unggahan.push({ id: String(p.id), judul: p.judul, platform: pf, status: "gagal", alasan: ringkas || pesan || "gagal terbit", solusi, dibuat_pada: p.dibuat_pada, jadwal: p.jadwal });
+          } else {
+            unggahan.push({ id: String(p.id), judul: p.judul, platform: pf, status: terjadwal ? "terjadwal" : "menunggu", alasan: null, solusi: null, dibuat_pada: p.dibuat_pada, jadwal: p.jadwal });
+          }
         }
       }
-    }
-    after(() => jalankanLatar("rekonsiliasi-kpi-layar", () => rekonsiliasiKpiOtomatis(Number(user.id))));
-
-    return {
-      tanggal,
-      hari_ini: tanggalWibSekarang(),
-      data: daftar,
-      // Tetap dikirim (kosong) supaya klien lama tidak rusak.
-      menunggu: [],
-      unggahan,
-      // kpi_target kini TOTAL (per-platform x platform aktif) supaya
-      // tampilan "x/target" langsung benar tanpa mengubah pemanggil lama.
-      kpi_target: kpi.target_total,
-      kpi_tercapai: kpi.tercapai,
-      kpi_persen: kpi.persen,
-      per_platform: kpi.per_platform,
-      dibebaskan: jenisBebas,
+      return {
+        tanggal,
+        hari_ini: tanggalWibSekarang(),
+        data: daftar,
+        // Tetap dikirim (kosong) supaya klien lama tidak rusak.
+        menunggu: [],
+        unggahan,
+        // kpi_target kini TOTAL (per-platform x platform aktif) supaya
+        // tampilan "x/target" langsung benar tanpa mengubah pemanggil lama.
+        kpi_target: kpi.target_total,
+        kpi_tercapai: kpi.tercapai,
+        kpi_persen: kpi.persen,
+        per_platform: kpi.per_platform,
+        dibebaskan: jenisBebas,
+      };
     };
+    const sinyalKu = await bacaSinyal(Number(user.id));
+    const hasilSendiri =
+      sinyalKu === ""
+        ? await hitungLaporanSendiri()
+        : await denganCache(`kpi-laporan:${Number(user.id)}:${tanggal}:${sinyalKu}`, 60, hitungLaporanSendiri);
+    after(() => jalankanLatar("rekonsiliasi-kpi-layar", () => rekonsiliasiKpiOtomatis(Number(user.id))));
+    return hasilSendiri;
   });
 }
 
@@ -392,6 +406,9 @@ function validasiLink(platformMentah: string, urlMentah: string): {
 export async function POST(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
+    // Laporan orang ini berubah → cache laporan pribadinya (kunci memuat
+    // sinyal pribadi) berganti & HP-nya menyegarkan diri. Sesudah respons.
+    after(() => naikkanSinyal([Number(user.id)]));
     const body = (await request.json().catch(() => ({}))) as {
       platform?: string;
       url?: string;
@@ -505,6 +522,9 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
+    // Laporan orang ini berubah → cache laporan pribadinya (kunci memuat
+    // sinyal pribadi) berganti & HP-nya menyegarkan diri. Sesudah respons.
+    after(() => naikkanSinyal([Number(user.id)]));
     const body = (await request.json().catch(() => ({}))) as { id?: string; pending?: boolean };
     const id = Number(body.id);
     if (!id) throw Object.assign(new Error("Laporan tidak disebutkan."), { status: 400 });
@@ -553,6 +573,9 @@ export async function DELETE(request: Request) {
 export async function PATCH(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
+    // Laporan orang ini berubah → cache laporan pribadinya (kunci memuat
+    // sinyal pribadi) berganti & HP-nya menyegarkan diri. Sesudah respons.
+    after(() => naikkanSinyal([Number(user.id)]));
     const body = (await request.json().catch(() => ({}))) as {
       id?: string;
       platform?: string;
@@ -589,6 +612,8 @@ export async function PATCH(request: Request) {
         console.error("[tvr/laporan] setel kpi:", error.message);
         throw new Error("Gagal menyimpan KPI.");
       }
+      // Target orang itu berubah → angka KPI-nya perlu disegarkan.
+      after(() => naikkanSinyal([targetId]));
       return { sukses: true, kpi_target: kpi ?? KPI_PER_PLATFORM };
     }
 

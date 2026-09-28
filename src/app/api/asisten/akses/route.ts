@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { PERAN_DIATUR } from "@/lib/fitur";
+import { hapusCacheBersama } from "@/lib/cache-bersama";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
       console.error("[asisten-akses] simpan:", error.message);
       throw new Error("Gagal menyimpan pengaturan.");
     }
+    await hapusCacheBersama(`akses-asisten:${role}`);
     return { sukses: true };
   });
 }

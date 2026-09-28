@@ -11,6 +11,7 @@
 // ============================================================
 import webpush from "web-push";
 import { supabase } from "@/lib/supabase";
+import { naikkanSinyal } from "@/lib/sinyal-pribadi";
 
 type Kabar = {
   judul: string;
@@ -151,6 +152,13 @@ export async function kirimKabar(kabar: Kabar): Promise<void> {
           untuk_role: kabar.untukRole && kabar.untukRole.length > 0 ? kabar.untukRole : null,
         });
       }
+    }
+
+    // --- 1b. Sinyal pribadi (28 Sep 2026): hanya HP penerimanya yang
+    // menyegarkan diri pada detak berikutnya — termasuk pesan chat
+    // (hanyaPush) yang tidak masuk daftar notifikasi.
+    if (kabar.untukUserIds && kabar.untukUserIds.length > 0) {
+      await naikkanSinyal(kabar.untukUserIds);
     }
 
     // --- 2. Push ke perangkat yang berhak ---

@@ -44,6 +44,7 @@ import {
   type TvDashboardData,
 } from "@/services";
 import { cn } from "@/lib/utils";
+import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 
 function labelTanggal(t: string): string {
   return `${t.slice(8, 10)}/${t.slice(5, 7)}`;
@@ -71,6 +72,7 @@ export function TvAnalitikDashboard() {
   const [aktivitas, setAktivitas] = useState<TvDashboardData["aktivitas"] | null>(null);
   // Penanda denyut terakhir supaya pengguna tahu umpannya hidup.
   const [terakhirSegar, setTerakhirSegar] = useState<number | null>(null);
+  const tabAktifRef = useRefTabAktif();
   const gagalPolling = useRef(0);
 
   useEffect(() => {
@@ -102,6 +104,8 @@ export function TvAnalitikDashboard() {
     let hidup = true;
     const detak = setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      // Tab lain sedang dibuka → jangan menarik (28 Sep 2026).
+      if (!tabAktifRef.current) return;
       void (async () => {
         try {
           const baru = await getDashboardTvAktivitas();

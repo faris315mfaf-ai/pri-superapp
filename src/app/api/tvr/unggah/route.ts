@@ -45,6 +45,7 @@ import {
 } from "@/lib/r2";
 import { PENYEDIA_ANGGOTA, unggahVideoAnggota, type IdPenyedia } from "@/lib/sosmed-penyedia";
 import { kolomTabelAda, sisipkanLonggar } from "@/lib/kolom-struktur";
+import { naikkanSinyal } from "@/lib/sinyal-pribadi";
 
 export const dynamic = "force-dynamic";
 // upload-post mengunduh video dari URL kita lalu memposting ke banyak
@@ -161,6 +162,8 @@ export async function GET(request: Request) {
     // `paksa`: buka riwayat setelah antrean upload-post selesai harus
     // langsung menarik tautan, bukan ditahan jeda 60 dtk interaktif.
     after(() => rekonsiliasiKpiOtomatis(Number(user.id), { paksa: true, anggaranMs: 20_000 }));
+    // Unggahan baru tampil seketika di laporan pribadi (cache berkunci sinyal).
+    after(() => naikkanSinyal([Number(user.id)]));
     after(bersihkanVideoKedaluwarsa);
     // PALUGODAM: pesanan yang rendernya sudah selesai ikut diposting.
     if (adalahPalugodam(user))

@@ -19,7 +19,9 @@ import { klienCache } from "@/lib/redis";
 
 const memori = new Map<string, { isi: unknown; sampai: number }>();
 const dalamProses = new Map<string, Promise<unknown>>();
-const MAKS_ENTRI = 500;
+// 500 → 5000 (28 Sep 2026): kini ada kunci PER ORANG (preferensi, tim TV,
+// angka KPI) — 200+ orang x beberapa kunci akan terus saling menggusur.
+const MAKS_ENTRI = 5000;
 const MAKS_MEMORI_DARI_REDIS_DETIK = 30;
 
 export async function denganCache<T>(kunci: string, ttlDetik: number, hitung: () => Promise<T>): Promise<T> {
