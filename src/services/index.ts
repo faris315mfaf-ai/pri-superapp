@@ -2957,6 +2957,32 @@ export async function kirimPesanChat(
   };
 }
 
+/**
+ * Master mengirim koin ke lawan bicara (28 Sep 2026). `kunci` dibuat SEKALI
+ * per dialog: kirim ulang dengan kunci yang sama tidak membayar dua kali
+ * (server menjawab `duplikat: true`).
+ */
+export async function kirimKoinChat(
+  kontakId: string,
+  jumlah: number,
+  catatan: string,
+  kunci: string,
+): Promise<{ id: string; dibuat_pada: string; isi: string; duplikat: boolean; saldo_penerima: number | null }> {
+  const json = await fetchJson("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "kirim_koin", kontak_id: kontakId, jumlah, catatan, kunci }),
+  });
+  const saldo = Number(json.saldo_penerima);
+  return {
+    id: (json.id as string) ?? "",
+    dibuat_pada: (json.dibuat_pada as string) ?? new Date().toISOString(),
+    isi: (json.isi as string) ?? "",
+    duplikat: json.duplikat === true,
+    saldo_penerima: Number.isFinite(saldo) ? saldo : null,
+  };
+}
+
 /** Tarik satu pesan — hilang dari tampilan kedua pihak (spek 1.14). */
 export async function hapusPesanChat(pesanId: string): Promise<void> {
   await fetchJson("/api/chat", {

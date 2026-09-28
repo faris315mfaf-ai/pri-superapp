@@ -11,6 +11,7 @@
 // master mengubahnya lewat Pengaturan Fitur tanpa deploy ulang.
 // ============================================================
 import { supabase } from "@/lib/supabase";
+import { AKTIVITAS_KIRIMAN_MASTER } from "@/lib/koin-chat";
 
 /** Aktivitas berhadiah koin + kunci pengaturannya. */
 export const AKTIVITAS_KOIN = [
@@ -76,6 +77,34 @@ export async function beriKoin(
   } catch (e) {
     console.error("[koin] beri:", e);
   }
+}
+
+/**
+ * Kiriman koin dari MASTER lewat chat (28 Sep 2026). Beda dengan beriKoin:
+ * - jumlahnya ditentukan master, bukan pengaturan bonus;
+ * - MELEMPAR bila gagal — pengirim harus tahu koinnya belum masuk;
+ * - `baru` = false bila referensi yang sama sudah tercatat (ketukan
+ *   ganda / kirim ulang setelah sinyal putus) → tidak dibayar dua kali.
+ * Saldo master TIDAK dipotong: ini hadiah dari sistem, tercatat di buku
+ * besar dengan aktivitas "kiriman_master" supaya tetap bisa diaudit.
+ */
+export async function catatKirimanMaster(
+  penerimaId: number,
+  jumlah: number,
+  referensi: string,
+): Promise<{ baru: boolean }> {
+  const { data, error } = await supabase()
+    .from("koin_transaksi")
+    .upsert(
+      { user_id: penerimaId, jumlah, aktivitas: AKTIVITAS_KIRIMAN_MASTER, referensi },
+      { onConflict: "user_id,aktivitas,referensi", ignoreDuplicates: true },
+    )
+    .select("id");
+  if (error) {
+    console.error("[koin] kiriman master:", error.message);
+    throw new Error("Gagal mencatat koin. Coba lagi.");
+  }
+  return { baru: (data ?? []).length > 0 };
 }
 
 /** Saldo koin seseorang (0 bila belum pernah dapat). */

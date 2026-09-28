@@ -21,6 +21,7 @@ import {
   ArrowLeft,
   Check,
   CheckCheck,
+  Coins,
   Eye,
   ImagePlus,
   Loader2,
@@ -50,6 +51,8 @@ import { toast, useAppStore } from "@/hooks/use-app-store";
 import { kompresGambar } from "@/lib/gambar-kompres";
 import { IkonStreak } from "@/components/ikon-streak";
 import { PanelGrup } from "./panel-grup";
+import { DialogKirimKoin, KartuKoin } from "./kirim-koin";
+import { uraiPesanKoin } from "@/lib/koin-chat";
 import { ProfilPublikModal } from "@/features/profil/profil-publik";
 import { getGrupDivisiku, type InfoGrupDivisi } from "@/services";
 import {
@@ -93,11 +96,14 @@ const EMOJI = [
 function PanelPercakapan({
   kontak,
   idKu,
+  bolehKirimKoin,
   onKembali,
   onSegarkanDaftar,
 }: {
   kontak: ChatKontak;
   idKu: string;
+  /** Master (28 Sep 2026): tombol kirim koin di kotak tulis. */
+  bolehKirimKoin: boolean;
   onKembali: () => void;
   onSegarkanDaftar: () => void;
 }) {
@@ -118,6 +124,7 @@ function PanelPercakapan({
   // Gambar yang sedang dibuka ukuran penuh
   const [gambarPenuh, setGambarPenuh] = useState<string | null>(null);
   const [profilBuka, setProfilBuka] = useState(false);
+  const [koinBuka, setKoinBuka] = useState(false);
   const inputGambarRef = useRef<HTMLInputElement | null>(null);
   const timerTekanRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ujungRef = useRef<HTMLDivElement | null>(null);
@@ -318,6 +325,32 @@ function PanelPercakapan({
         <div className="mx-auto flex max-w-[560px] flex-col gap-1.5">
           {pesan.map((p) => {
             const milikku = p.pengirim_id === idKu;
+            // Kiriman koin dari master tampil sebagai kartu, bukan teks.
+            const koin = uraiPesanKoin(p.isi);
+            if (koin) {
+              return (
+                <div
+                  key={p.id}
+                  className={cn("flex", milikku ? "justify-end" : "justify-start")}
+                  onPointerDown={() => mulaiTekan(p)}
+                  onPointerUp={batalTekan}
+                  onPointerLeave={batalTekan}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setPesanDipilih(p);
+                  }}
+                >
+                  <KartuKoin
+                    jumlah={koin.jumlah}
+                    catatan={koin.catatan}
+                    milikku={milikku}
+                    namaLawan={kontak.lawan_nama}
+                    jam={jamWIB(p.dibuat_pada)}
+                    dibaca={p.dibaca}
+                  />
+                </div>
+              );
+            }
             return (
               <div key={p.id} className={cn("flex", milikku ? "justify-end" : "justify-start")}>
                 <div
@@ -475,6 +508,18 @@ function PanelPercakapan({
                   e.target.value = ""; // supaya file sama bisa dipilih lagi
                 }}
               />
+              {bolehKirimKoin && (
+                <button
+                  type="button"
+                  onClick={() => setKoinBuka(true)}
+                  aria-label="Kirim koin"
+                  title="Kirim koin"
+                  className="btn-tekan flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-sm"
+                  style={{ background: "linear-gradient(135deg, #F59E0B, #D97706)" }}
+                >
+                  <Coins className="h-5 w-5" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => inputGambarRef.current?.click()}
@@ -568,6 +613,26 @@ function PanelPercakapan({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Kirim koin (khusus master, 28 Sep 2026) */}
+      {koinBuka && (
+        <DialogKirimKoin
+          kontakId={kontak.id}
+          namaPenerima={kontak.lawan_nama}
+          onTutup={() => setKoinBuka(false)}
+          onTerkirim={(h) => {
+            // Sama seperti pesan biasa: pakai id ASLI server supaya polling
+            // tidak menarik kartu yang sama lagi.
+            if (Number(h.id) > Number(idTerakhirRef.current)) idTerakhirRef.current = h.id;
+            setPesan((lama) =>
+              lama.some((m) => m.id === h.id)
+                ? lama
+                : [...lama, { id: h.id, pengirim_id: idKu, isi: h.isi, dibaca: false, dibuat_pada: h.dibuat_pada }],
+            );
+            onSegarkanDaftar();
+          }}
+        />
       )}
 
       {/* Profil publik lawan bicara (spek 4.3) */}
@@ -1203,6 +1268,7 @@ export function ChatScreen({
             <PanelPercakapan
               kontak={kontakAktif}
               idKu={user.id}
+              bolehKirimKoin={user.role === "master"}
               onKembali={() => {
                 setKontakAktif(null);
                 setMuatUlang((n) => n + 1);

@@ -7,6 +7,8 @@
 // POST {aksi:"mulai", target_id}         → ajukan percakapan baru
 // POST {aksi:"terima"|"tolak", kontak_id} → jawab ajakan
 // POST {aksi:"kirim", kontak_id, isi}     → kirim pesan
+// POST {aksi:"kirim_koin", kontak_id, jumlah, catatan, kunci}
+//                                         → master mengirim koin (28 Sep 2026)
 // PATCH {kontak_id}  → tandai semua pesan lawan sebagai dibaca
 //
 // Mode chat (spek 1.14): bawaan 'terbuka' — semua orang bebas chat
@@ -24,7 +26,16 @@ import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { kirimKabar } from "@/lib/notifikasi";
 import { bacaStreakChat, catatPesanStreak } from "@/lib/streak";
-import { beriKoin } from "@/lib/koin";
+import { beriKoin, catatKirimanMaster, saldoKoin } from "@/lib/koin";
+import {
+  buangPenandaKoin,
+  cuplikanPesanChat,
+  isiPesanKoin,
+  kunciKirimanSah,
+  periksaJumlahKoin,
+  rapikanCatatanKoin,
+  teksAngkaKoin,
+} from "@/lib/koin-chat";
 import { after } from "next/server";
 
 import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
@@ -187,7 +198,8 @@ function pasangan(a: number, b: number): { kecil: number; besar: number } {
  * berbahaya, tapi karena kebijakan chat ini memang teks murni.
  */
 function bersihkanIsi(mentah: string): string {
-  const isi = String(mentah ?? "").trim();
+  // Penanda pesan koin hanya boleh dibuat server (lib/koin-chat).
+  const isi = buangPenandaKoin(String(mentah ?? "")).trim();
   if (!isi) throw Object.assign(new Error("Pesan kosong."), { status: 400 });
   if (isi.length > BATAS_PESAN) {
     throw Object.assign(
@@ -386,7 +398,7 @@ export async function GET(request: Request) {
         if (!cuplikanPer.has(kid)) {
           cuplikanPer.set(kid, {
             // Pesan gambar tanpa teks tampil sebagai label di daftar.
-            isi: (p.isi as string) || (p.gambar_url ? "📷 Gambar" : ""),
+            isi: cuplikanPesanChat(p.isi as string) || (p.gambar_url ? "📷 Gambar" : ""),
             dibuat_pada: p.dibuat_pada as string,
             pengirim_id: Number(p.pengirim_id),
           });
@@ -435,6 +447,9 @@ export async function POST(request: Request) {
       gambar?: string;
       nyala?: boolean;
       mode?: string;
+      jumlah?: number | string;
+      catatan?: string;
+      kunci?: string;
     };
     const db = supabase();
     const pengawas = PENGAWAS.has(user.role);
@@ -614,7 +629,9 @@ export async function POST(request: Request) {
       const kontakId = Number(body.kontak_id);
       const adaGambar = Boolean((body.gambar ?? "").trim());
       // Pesan gambar boleh tanpa teks; pesan teks tetap wajib berisi.
-      const isi = adaGambar ? (body.isi ?? "").trim().slice(0, BATAS_PESAN) : bersihkanIsi(body.isi ?? "");
+      const isi = adaGambar
+        ? buangPenandaKoin(body.isi ?? "").trim().slice(0, BATAS_PESAN)
+        : bersihkanIsi(body.isi ?? "");
       const { data: kontak } = await db
         .from("chat_kontak")
         .select("id, user_kecil, user_besar, status")
@@ -682,6 +699,86 @@ export async function POST(request: Request) {
         id: String(pesan.id),
         dibuat_pada: pesan.dibuat_pada,
         gambar_url: gambarUrl ?? "",
+      };
+    }
+
+    // --- Kirim koin (khusus MASTER, 28 Sep 2026) ---
+    // Koin masuk ke buku besar lebih dulu; baru sesudah itu kartu koinnya
+    // muncul di chat. Kunci dari klien membuat ketukan ganda / kirim ulang
+    // tidak membayar dua kali. Saldo master tidak dipotong.
+    if (body.aksi === "kirim_koin") {
+      if (user.role !== "master") {
+        throw Object.assign(new Error("Hanya master yang boleh mengirim koin."), { status: 403 });
+      }
+      const cek = periksaJumlahKoin(body.jumlah);
+      if ("galat" in cek) throw Object.assign(new Error(cek.galat), { status: 400 });
+      const kunci = kunciKirimanSah(body.kunci);
+      if (!kunci) {
+        throw Object.assign(new Error("Permintaan tidak lengkap. Tutup lalu buka lagi dialog kirim koin."), {
+          status: 400,
+        });
+      }
+      const catatan = rapikanCatatanKoin(body.catatan ?? "");
+      const kontakId = Number(body.kontak_id);
+      const { data: kontak } = await db
+        .from("chat_kontak")
+        .select("id, user_kecil, user_besar, status")
+        .eq("id", kontakId)
+        .maybeSingle();
+      const pesertanya =
+        kontak && (Number(kontak.user_kecil) === idKu || Number(kontak.user_besar) === idKu);
+      if (!kontak || !pesertanya) {
+        throw Object.assign(new Error("Percakapan tidak ditemukan."), { status: 404 });
+      }
+      const penerimaId =
+        Number(kontak.user_kecil) === idKu ? Number(kontak.user_besar) : Number(kontak.user_kecil);
+      const { data: penerima } = await db
+        .from("app_user")
+        .select("id, aktif, status")
+        .eq("id", penerimaId)
+        .maybeSingle();
+      if (!penerima || !penerima.aktif || penerima.status !== "aktif") {
+        throw Object.assign(new Error("Penerima tidak aktif — koin tidak dikirim."), { status: 404 });
+      }
+
+      const { baru } = await catatKirimanMaster(penerimaId, cek.jumlah, `chat-${kontakId}-${kunci}`);
+      if (!baru) {
+        // Kiriman dengan kunci ini sudah tercatat (ketukan ganda / ulang
+        // kirim setelah sinyal putus): jangan bayar & jangan pasang kartu lagi.
+        return { sukses: true, duplikat: true, saldo_penerima: await saldoKoin(penerimaId) };
+      }
+      // Pengawas boleh mengirim walau ajakan chat belum diterima.
+      if (kontak.status !== "diterima") {
+        await db.from("chat_kontak").update({ status: "diterima" }).eq("id", kontakId);
+      }
+      const isi = isiPesanKoin(cek.jumlah, catatan);
+      const { data: pesan, error } = await db
+        .from("chat_pesan")
+        .insert({ kontak_id: kontakId, pengirim_id: idKu, isi })
+        .select("id, dibuat_pada")
+        .single();
+      if (error) {
+        // Koin SUDAH masuk; hanya kartunya yang gagal tampil. Jangan
+        // dilaporkan gagal — nanti master mengirim ulang dan penerima
+        // mendapat dua kali.
+        console.error("[chat] kartu koin:", error.message);
+      }
+      after(() =>
+        kirimKabar({
+          judul: `🪙 Kamu menerima ${teksAngkaKoin(cek.jumlah)} koin`,
+          isi: `Dari ${user.nama}${catatan ? `: "${catatan}"` : ""}. Koinnya sudah masuk ke saldomu.`,
+          kategori: "sukses",
+          jenis_peristiwa: "koin",
+          target: "chat",
+          untukUserIds: [penerimaId],
+        }),
+      );
+      return {
+        sukses: true,
+        id: pesan ? String(pesan.id) : "",
+        dibuat_pada: pesan?.dibuat_pada ?? new Date().toISOString(),
+        isi,
+        saldo_penerima: await saldoKoin(penerimaId),
       };
     }
 
