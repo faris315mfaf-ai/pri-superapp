@@ -1,6 +1,7 @@
 // Uji penjaga Supabase, pembatas per proses, dan rencana sinkron akun tertaut (28 Sep 2026).
 // Jalankan: npx tsx tests/uji-penjaga-supabase.mts
 // Bagian integrasi memakai server PostgREST TIRUAN di 127.0.0.1 — tidak menyentuh Supabase asli.
+import "./_als-next.mts";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { createClient } from "@supabase/supabase-js";
@@ -14,8 +15,11 @@ import {
   lajurSaatIni,
   bentukKueri,
   sasaranRest,
+  adalahPenulisan,
+  melayaniPenggunaUji,
   type OpsiPenjaga,
 } from "@/lib/penjaga-supabase";
+import { workUnitAsyncStorage } from "next/dist/server/app-render/work-unit-async-storage.external";
 import { bolehSekarang, kosongkanJedaInstans } from "@/lib/jeda-instans";
 import { akunUnik, rencanaSinkronAkun } from "@/lib/sinkron-akun-tertaut";
 
@@ -285,6 +289,58 @@ console.log("integrasi: klien supabase-js + server tiruan");
   cek("waktu habis tercatat di ringkasan", r.waktu_habis >= 1, r);
   const rb = r as unknown as { bentuk_atas: [string, number][] };
   cek("bentuk kueri teratas ikut dilaporkan", rb.bentuk_atas.some(([b]) => b.startsWith("GET sedang?select=id&")), rb.bentuk_atas);
+  server.close();
+}
+
+console.log("rem penulisan uji beban");
+{
+  const masuk: string[] = [];
+  const server = http.createServer((req, res) => {
+    masuk.push(`${req.method} ${new URL(req.url ?? "/", "http://x").pathname}`);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify([{ id: 1 }]));
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const asal = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const f = buatFetchTerjaga(new Penjaga(), new Pencatat());
+  const db = createClient(asal, "kunci-uji", { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: f } });
+  // Tiruan penyimpan permintaan Next: sama bentuknya dengan RequestStore.
+  const dalamPermintaan = <T,>(auth: string, kerja: () => Promise<T>) =>
+    workUnitAsyncStorage.run({ type: "request", headers: new Headers({ authorization: auth }) } as never, kerja);
+
+  cek("adalahPenulisan: GET/HEAD bukan", !adalahPenulisan(`${asal}/rest/v1/x`, "GET") && !adalahPenulisan(`${asal}/rest/v1/x`, "HEAD"));
+  cek("adalahPenulisan: POST/PATCH/DELETE REST ya, RPC tidak", adalahPenulisan(`${asal}/rest/v1/x`, "POST") && adalahPenulisan(`${asal}/rest/v1/x`, "PATCH") && adalahPenulisan(`${asal}/rest/v1/x`, "DELETE") && !adalahPenulisan(`${asal}/rest/v1/rpc/zona_cakupan`, "POST"));
+  cek("adalahPenulisan: storage hapus/unggah ya, tanda-tangan & daftar tidak", adalahPenulisan(`${asal}/storage/v1/object/chat`, "DELETE") && adalahPenulisan(`${asal}/storage/v1/object/b/a.mp4`, "POST") && !adalahPenulisan(`${asal}/storage/v1/object/sign/b/a.mp4`, "POST") && !adalahPenulisan(`${asal}/storage/v1/object/list/b`, "POST"));
+  cek("di luar permintaan Next → bukan pengguna uji", !melayaniPenggunaUji());
+
+  await dalamPermintaan("Bearer ujibeban.abc123.7.9.sig", async () => {
+    cek("header ujibeban terbaca dari penyimpan permintaan", melayaniPenggunaUji());
+    masuk.length = 0;
+    const baca = await db.from("absensi").select("id");
+    cek("pengguna uji: BACA tetap sampai ke database", !baca.error && baca.data?.length === 1 && masuk.includes("GET /rest/v1/absensi"));
+    const hapus = await db.from("absensi").delete().lt("tanggal", "2026-01-01");
+    const ubah = await db.from("app_user").update({ nama: "x" }).eq("id", 7).select("id").maybeSingle();
+    const sisip = await db.from("koin_riwayat").insert({ user_id: 7, jumlah: 5 });
+    const berkas = await db.storage.from("chat").remove(["a.png"]);
+    cek("pengguna uji: DELETE/PATCH/POST/hapus berkas TIDAK sampai ke database", !masuk.some((m) => !m.startsWith("GET ") && !m.startsWith("POST /rest/v1/rpc/")), masuk);
+    cek("…dan kode pemanggil menerima 'berhasil tanpa baris' (tanpa galat)", !hapus.error && !ubah.error && ubah.data === null && !sisip.error && !berkas.error, { hapus: hapus.error, ubah, sisip: sisip.error, berkas: berkas.error });
+    const rpc = await db.rpc("zona_cakupan");
+    cek("pengguna uji: RPC bacaan tetap jalan", !rpc.error && masuk.includes("POST /rest/v1/rpc/zona_cakupan"));
+    // Tugas after() Next berjalan dengan salinan konteks yang sama.
+    await new Promise<void>((r) => setTimeout(r, 5));
+    masuk.length = 0;
+    await db.from("chat_pesan").delete().lt("dibuat_pada", "2026-01-01");
+    cek("penulisan dari tugas susulan dalam konteks yang sama juga diblokir", masuk.length === 0, masuk);
+  });
+
+  await dalamPermintaan("Bearer token-asli-pengguna", async () => {
+    masuk.length = 0;
+    const hapus = await db.from("absensi").delete().lt("tanggal", "2026-01-01");
+    cek("pengguna ASLI: penulisan tetap berjalan normal", !hapus.error && masuk.includes("DELETE /rest/v1/absensi"), masuk);
+  });
+  masuk.length = 0;
+  await db.from("absensi").delete().lt("tanggal", "2026-01-01");
+  cek("tugas berkala (di luar permintaan): penulisan tetap berjalan", masuk.includes("DELETE /rest/v1/absensi"), masuk);
   server.close();
 }
 

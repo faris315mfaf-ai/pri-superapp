@@ -154,7 +154,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const db = supabase();
     const pengawas = PENGAWAS.has(user.role);
-    after(bersihkanPesanGrupLama);
+    if (!user.ujiBeban) after(bersihkanPesanGrupLama);
 
     // --- Pengawas membaca grup divisi mana pun (termasuk pesan ditarik) ---
     const pantau = url.searchParams.get("pantau");

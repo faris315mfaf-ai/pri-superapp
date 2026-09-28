@@ -34,6 +34,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
 // "external"): darinya kita tahu RUTE API yang sedang dilayani, tanpa
 // menyentuh 250-an berkas rute.
 import { workAsyncStorage } from "next/dist/server/app-render/work-async-storage.external";
+// Penyimpan permintaan (header asli) — ikut tersalin ke dalam after().
+import { workUnitAsyncStorage } from "next/dist/server/app-render/work-unit-async-storage.external";
+import { adalahTokenUji } from "./uji-beban-skenario";
 
 export type Lajur = "pengguna" | "latar";
 export type Tingkat = "normal" | "lambat" | "macet";
@@ -61,6 +64,53 @@ export function ruteSaatIni(): string {
   } catch {
     return "";
   }
+}
+
+// ------------------------------------------------------------
+// Rem penulisan uji beban (29 Sep 2026)
+// ------------------------------------------------------------
+// Pengguna virtual uji beban hanya boleh MEMBACA. Penjagaan per rute
+// (user.ujiBeban) tetap ada, tapi uji ujung-ke-ujung membuktikan satu-dua
+// penulisan bisa terlewat (sapu retensi absensi & chat). Rem di lapisan
+// koneksi ini menutup SEMUA jalur — termasuk tugas after(), yang ikut
+// membawa konteks permintaan — tanpa bergantung pada ketelitian audit.
+
+/** true bila kode ini sedang melayani permintaan bertoken uji beban. */
+export function melayaniPenggunaUji(): boolean {
+  try {
+    const s = workUnitAsyncStorage.getStore() as { type?: string; headers?: Headers } | undefined;
+    if (s?.type !== "request") return false;
+    return adalahTokenUji(s.headers?.get("authorization") ?? null);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Permintaan Supabase yang MENGUBAH data. RPC dilewatkan (yang dipakai
+ * aplikasi semuanya bacaan: zona_cakupan, ukuran_database,
+ * kuota_penyimpanan); begitu pula tanda-tangan & daftar berkas storage.
+ */
+export function adalahPenulisan(url: string, metode: string): boolean {
+  if (metode === "GET" || metode === "HEAD" || metode === "OPTIONS") return false;
+  if (url.includes("/rest/v1/")) return !url.includes("/rest/v1/rpc/");
+  if (url.includes("/storage/v1/")) return !url.includes("/object/sign/") && !url.includes("/object/list/");
+  return false;
+}
+
+const tulisUjiTercatat = new Set<string>();
+
+/** Jawaban "berhasil tanpa baris" pengganti penulisan yang diblokir. */
+function jawabanTulisDiblokir(url: string, metode: string, masukan: RequestInfo | URL, init?: RequestInit): Response {
+  const sasaran = sasaranRest(url) ?? "storage";
+  const kunci = `${metode} ${sasaran}`;
+  if (!tulisUjiTercatat.has(kunci) && tulisUjiTercatat.size < 200) {
+    tulisUjiTercatat.add(kunci);
+    console.warn(`[uji-beban] penulisan diblokir: ${kunci} (rute ${ruteSaatIni() || "?"})`);
+  }
+  const header = new Headers(init?.headers ?? (masukan instanceof Request ? masukan.headers : undefined));
+  const isi = (header.get("accept") ?? "").includes("vnd.pgrst.object") ? "null" : "[]";
+  return new Response(isi, { status: 200, headers: { "content-type": "application/json", "content-range": "*/0" } });
 }
 
 /** Nama sumber beban untuk ringkasan: rute API, atau "latar:<tugas>". */
@@ -468,12 +518,13 @@ export function ringkasanSupabase(): Record<string, unknown> | null {
 export function buatFetchTerjaga(penjaga: Penjaga, pencatat: Pencatat, saatDipakai?: () => void) {
   return async function fetchDijaga(masukan: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const url = typeof masukan === "string" ? masukan : masukan instanceof URL ? masukan.href : masukan.url;
+    const metode = (init?.method ?? (masukan instanceof Request ? masukan.method : "GET")).toUpperCase();
+    if (adalahPenulisan(url, metode) && melayaniPenggunaUji()) return jawabanTulisDiblokir(url, metode, masukan, init);
     const sasaran = sasaranRest(url);
     if (!sasaran) return fetch(masukan, init);
     saatDipakai?.();
 
     const { lajur, sumber } = lajurSaatIni();
-    const metode = (init?.method ?? (masukan instanceof Request ? masukan.method : "GET")).toUpperCase();
     const kunci = `${lajur === "latar" ? `latar:${sumber || "?"}` : "pengguna"} ${metode} ${sasaran}`;
     pencatat.catatBentuk(bentukKueri(url, metode, sasaran));
     pencatat.catatRute(sumberBeban());

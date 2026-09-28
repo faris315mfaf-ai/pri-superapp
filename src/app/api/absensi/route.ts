@@ -139,7 +139,7 @@ async function rapikan(baris: BarisAbsensi[]) {
 export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
-    after(bersihkanUsang);
+    if (!user.ujiBeban) after(bersihkanUsang);
 
     const url = new URL(request.url);
     const mauSemua = url.searchParams.get("semua") === "1";

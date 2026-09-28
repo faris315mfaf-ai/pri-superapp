@@ -230,7 +230,7 @@ export async function GET(request: Request) {
     const db = supabase();
 
     const pengawas = PENGAWAS.has(user.role);
-    after(bersihkanPesanLama);
+    if (!user.ujiBeban) after(bersihkanPesanLama);
 
     // --- Pemantauan seluruh percakapan (khusus pengawas) ---
     if (url.searchParams.get("pantau") === "1") {
