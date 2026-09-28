@@ -100,28 +100,92 @@ export async function petaKodeKeUser(baris: Pick<BarisSadar, "kode" | "email">[]
   return hasil;
 }
 
-/** Cocokkan email SADAR → id akun SuperApp (huruf kecil). */
-export async function petaEmailKeUser(email: string[]): Promise<Map<string, number>> {
-  const peta = new Map<string, number>();
-  const unik = Array.from(new Set(email.filter(Boolean)));
-  if (unik.length === 0) return peta;
-  const db = supabase();
-  // .in() dengan ratusan email aman (PostgREST memakai POST bila panjang).
-  for (let i = 0; i < unik.length; i += 200) {
-    const potong = unik.slice(i, i + 200);
-    const { data } = await db.from("app_user").select("id, email").in("email", potong);
-    for (const u of data ?? []) peta.set(String(u.email).toLowerCase(), Number(u.id));
+type AkunEmail = { id: number; email: string; aktif: boolean | null };
+
+/**
+ * MURNI (diuji): peta email (huruf kecil) → id akun. Tanpa peduli huruf
+ * besar/kecil; bila satu email dipakai beberapa akun, akun AKTIF dengan
+ * id terkecil yang menang (dulu: urutan jawaban database, acak).
+ */
+export function petaEmailDariAkun(akun: AkunEmail[], email: string[]): Map<string, number> {
+  const perEmail = new Map<string, AkunEmail>();
+  for (const a of akun) {
+    const k = String(a.email ?? "").trim().toLowerCase();
+    if (!k) continue;
+    const lama = perEmail.get(k);
+    const lebihBaik =
+      !lama ||
+      (a.aktif === true && lama.aktif !== true) ||
+      ((a.aktif === true) === (lama.aktif === true) && a.id < lama.id);
+    if (lebihBaik) perEmail.set(k, a);
   }
-  // Email di app_user bisa saja tersimpan dengan huruf besar: cocokkan
-  // lagi tanpa peduli huruf untuk yang belum ketemu.
-  const belum = unik.filter((e) => !peta.has(e));
-  if (belum.length > 0 && belum.length <= 50) {
-    for (const e of belum) {
-      const { data } = await db.from("app_user").select("id, email").ilike("email", e).limit(1).maybeSingle();
-      if (data) peta.set(e, Number(data.id));
-    }
+  const peta = new Map<string, number>();
+  for (const e of email) {
+    if (!e) continue;
+    const a = perEmail.get(e.trim().toLowerCase());
+    if (a) peta.set(e, a.id);
   }
   return peta;
+}
+
+/**
+ * Semua pasangan id-email akun, disimpan 60 detik per proses (28 Sep 2026).
+ *
+ * Dulu petaEmailKeUser mencocokkan email lewat .in() lalu, untuk setiap
+ * email yang belum ketemu, SATU kueri ilike lagi — pola N+1. Karena ±47
+ * pegawai SADAR memang belum punya akun, tiap pembukaan layar absensi /
+ * ringkasan dashboard = ±50 kueri. Terukur di produksi: 291 dari ±600
+ * permintaan REST per menit (bentuk "app_user?select=id,email&email=ilike").
+ * Kini: satu daftar untuk semua orang, dicocokkan tanpa peduli huruf di
+ * memori. Akun baru paling lambat 60 detik ikut terbaca.
+ */
+let cacheAkunEmail: { isi: AkunEmail[]; pada: number } | null = null;
+let muatAkunEmail: Promise<AkunEmail[]> | null = null;
+
+async function semuaAkunEmail(): Promise<AkunEmail[]> {
+  if (cacheAkunEmail && Date.now() - cacheAkunEmail.pada < 60_000) return cacheAkunEmail.isi;
+  if (muatAkunEmail) return muatAkunEmail;
+  muatAkunEmail = (async () => {
+    const db = supabase();
+    const isi: AkunEmail[] = [];
+    for (let dari = 0; dari < 50_000; dari += 1000) {
+      const { data, error } = await db
+        .from("app_user")
+        .select("id, email, aktif")
+        .order("id", { ascending: true })
+        .range(dari, dari + 999);
+      // Gagal = JANGAN disimpan: daftar kosong/terpotong membuat absensi
+      // semua orang tampak tidak cocok selama 60 detik.
+      if (error) throw new Error(error.message);
+      for (const u of data ?? []) isi.push({ id: Number(u.id), email: String(u.email ?? ""), aktif: u.aktif as boolean | null });
+      if ((data ?? []).length < 1000) break;
+    }
+    cacheAkunEmail = { isi, pada: Date.now() };
+    return isi;
+  })().finally(() => {
+    muatAkunEmail = null;
+  });
+  return muatAkunEmail;
+}
+
+/** Cocokkan email SADAR → id akun SuperApp (tanpa peduli huruf besar/kecil). */
+export async function petaEmailKeUser(email: string[]): Promise<Map<string, number>> {
+  const unik = Array.from(new Set(email.filter(Boolean)));
+  if (unik.length === 0) return new Map();
+  try {
+    return petaEmailDariAkun(await semuaAkunEmail(), unik);
+  } catch (e) {
+    // Daftar gagal dimuat (database sibuk): jalur lama yang hemat — cocok
+    // persis saja, tanpa kueri per email.
+    console.error("[absensi-sadar] daftar email:", e instanceof Error ? e.message : e);
+    const peta = new Map<string, number>();
+    const db = supabase();
+    for (let i = 0; i < unik.length; i += 200) {
+      const { data } = await db.from("app_user").select("id, email").in("email", unik.slice(i, i + 200));
+      for (const u of data ?? []) peta.set(String(u.email).toLowerCase(), Number(u.id));
+    }
+    return peta;
+  }
 }
 
 /** Tarik & cerminkan satu tanggal. Tidak pernah melempar. */

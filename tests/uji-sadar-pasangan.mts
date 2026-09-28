@@ -2,6 +2,7 @@
 // Jalankan: npx tsx tests/uji-sadar-pasangan.mts
 import { kataNama, namaNormal, skorNama, susunSaran } from "@/lib/sadar-pasangan";
 import { gabungPemetaan, type Pemetaan } from "@/lib/sadar-pemetaan";
+import { petaEmailDariAkun } from "@/lib/absensi-sadar";
 
 let lulus = 0;
 let gagal = 0;
@@ -73,6 +74,24 @@ cek("satu kode ke dua akun dalam satu kiriman: yang terakhir menang", g3.isiBaru
 const g4 = gabungPemetaan([], [B(1, "A"), B(1, "B")], 9, "x");
 cek("satu akun ke dua kode dalam satu kiriman: yang terakhir menang", g4.isiBaru.length === 1 && g4.isiBaru[0].kode_pegawai === "B");
 cek("pencatat & waktu diisi", g1.isiBaru[0].dibuat_oleh_id === 9 && g1.isiBaru[0].dibuat_pada === "2026-09-28T00:00:00Z");
+
+console.log("peta email SADAR → akun (tanpa kueri per email)");
+{
+  const daftar = [
+    { id: 5, email: "Budi@Gmail.com", aktif: true },
+    { id: 2, email: "ganda@gmail.com", aktif: false },
+    { id: 9, email: "GANDA@gmail.com", aktif: true },
+    { id: 3, email: "dua@gmail.com", aktif: true },
+    { id: 1, email: "dua@gmail.com", aktif: true },
+    { id: 7, email: "", aktif: true },
+  ];
+  const p = petaEmailDariAkun(daftar, ["budi@gmail.com", "ganda@gmail.com", "dua@gmail.com", "tidakada@gmail.com", ""]);
+  cek("beda huruf besar/kecil tetap cocok", p.get("budi@gmail.com") === 5);
+  cek("email ganda: akun AKTIF menang", p.get("ganda@gmail.com") === 9);
+  cek("sama-sama aktif: id terkecil menang", p.get("dua@gmail.com") === 1);
+  cek("tak ada akun → tidak dipetakan", !p.has("tidakada@gmail.com") && !p.has(""));
+  cek("kunci = email SADAR apa adanya", petaEmailDariAkun(daftar, ["BUDI@gmail.com"]).get("BUDI@gmail.com") === 5);
+}
 
 console.log(`\n${lulus} lulus, ${gagal} gagal`);
 if (gagal > 0) process.exit(1);
