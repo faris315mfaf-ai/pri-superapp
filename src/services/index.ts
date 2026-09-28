@@ -6865,3 +6865,24 @@ export async function setPenyediaTvr(
   });
   return (json ?? {}) as { penyedia: string; berubah: boolean; catatan?: string };
 }
+
+// ============================================================
+// Analisis Video (29 Sep 2026) — /api/tv-nasional/analisis
+// ============================================================
+export type RentangAnalisis = import("@/lib/analisis-video").Rentang;
+export type DataAnalisisVideo =
+  | { menyusun: true; ringkas?: undefined }
+  | (import("@/lib/analisis-video-data").TampilanLengkap & {
+      menyusun: boolean;
+      dimuat_pada: string;
+      katalog: { video: number };
+      nama: Record<string, string>;
+    });
+
+export async function getAnalisisVideo(opsi: { rentang: RentangAnalisis; platform?: string; akun?: string }): Promise<DataAnalisisVideo> {
+  const q = new URLSearchParams({ rentang: opsi.rentang });
+  if (opsi.platform) q.set("platform", opsi.platform);
+  if (opsi.akun) q.set("akun", opsi.akun);
+  const json = await fetchJson(`/api/tv-nasional/analisis?${q.toString()}`, { headers: headerToken() });
+  return json as unknown as DataAnalisisVideo;
+}

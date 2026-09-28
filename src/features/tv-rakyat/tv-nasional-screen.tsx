@@ -17,9 +17,12 @@
 //     layar kartu embed per sosial media, tarik data upload-post, dan
 //     tambah link batch.
 //   • Dashboard nasional yang sudah ada — dipakai ulang apa adanya.
+//   • ANALISIS VIDEO (29 Sep 2026) — kartu ringkas → halaman penuh berisi
+//     tren, platform, akun terbaik, jam posting terbaik, video teratas.
 // ============================================================
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { Radio } from "lucide-react";
 import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
 import { TombolLonceng } from "@/components/tombol-lonceng";
@@ -28,6 +31,13 @@ import { InsightKategoriScreen } from "./insight-kategori-screen";
 import { PanelInsightKategori } from "./panel-insight-kategori";
 import { PanelKenaikanNasional } from "./panel-kenaikan-nasional";
 import { PanelVideoHarian } from "./panel-video-harian";
+import { PanelAnalisisRingkas } from "./panel-analisis-ringkas";
+
+// Halaman analisis membawa recharts — dimuat hanya saat dibuka.
+const AnalisisVideoScreen = dynamic(() => import("./analisis-video-screen").then((m) => m.AnalisisVideoScreen), {
+  ssr: false,
+  loading: () => <div className="kolom-aplikasi px-4 pt-5 text-[12px] text-teks-sekunder">Memuat analisis…</div>,
+});
 
 export function TvNasionalScreen({
   onBukaNotifikasi,
@@ -37,6 +47,11 @@ export function TvNasionalScreen({
   // Halaman penuh insight kategori — menutupi layar ini, bukan layar
   // terpisah di navigasi: kembalinya ke tempat yang sama persis.
   const [halamanKategori, setHalamanKategori] = useState<string | null>(null);
+  const [halamanAnalisis, setHalamanAnalisis] = useState(false);
+
+  if (halamanAnalisis) {
+    return <AnalisisVideoScreen onKembali={() => setHalamanAnalisis(false)} />;
+  }
 
   if (halamanKategori !== null) {
     return (
@@ -78,6 +93,10 @@ export function TvNasionalScreen({
 
       <FadeInUp delay={0.03} className="mt-5">
         <PanelKenaikanNasional />
+      </FadeInUp>
+
+      <FadeInUp delay={0.04} className="mt-4">
+        <PanelAnalisisRingkas onBuka={() => setHalamanAnalisis(true)} />
       </FadeInUp>
 
       <FadeInUp delay={0.045} className="mt-4">
