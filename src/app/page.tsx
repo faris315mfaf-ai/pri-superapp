@@ -21,54 +21,11 @@ import { PushBannerStack } from "@/components/push-banner";
 import { BottomNav, type KunciTab } from "@/components/bottom-nav";
 import { PagarGalat } from "@/components/pagar-galat";
 import { SideNav } from "@/components/side-nav";
-import { AuthScreen } from "@/features/auth/auth-screen";
 import { SplashScreen } from "@/features/auth/splash-screen";
-import { DashboardScreen } from "@/features/dashboard/dashboard-screen";
-import { ModulDashboardScreen } from "@/features/dashboard/modul-dashboard-screen";
-import { KelolaAksesDashboardScreen } from "@/features/dashboard/kelola-akses-screen";
-import { AturMenuScreen } from "@/features/profil/atur-menu-screen";
-import { AsistenScreen } from "@/features/asisten/asisten-screen";
-import { QcScreen } from "@/features/qc-konten/qc-screen";
-import { AccountDetailScreen } from "@/features/qc-konten/account-detail-screen";
-import { PostDetailScreen } from "@/features/qc-konten/post-detail-screen";
-import { TvScreen } from "@/features/tv-rakyat/tv-screen";
-import { TvNasionalScreen } from "@/features/tv-rakyat/tv-nasional-screen";
-import { PengumumanScreen } from "@/features/pengguna/pengumuman-screen";
-import { PersetujuanKpiScreen } from "@/features/pengguna/persetujuan-kpi-screen";
-import { KontenScreen } from "@/features/konten/konten-screen";
-import { TvrKuScreen } from "@/features/tvr-ku/tvrku-screen";
-import { ChatScreen } from "@/features/chat/chat-screen";
-import { NotifikasiScreen } from "@/features/notifikasi/notifikasi-screen";
-import { ProfilScreen } from "@/features/profil/profil-screen";
-import { AbsensiScreen } from "@/features/absensi/absensi-screen";
-import { LaporanKerjaScreen } from "@/features/laporan-kerja/laporan-kerja-screen";
-import { KelolaLaporanKpiScreen } from "@/features/laporan-kerja/kelola-laporan-kpi-screen";
-import { BannerKendali } from "@/components/banner-kendali";
-import { PanelMasterScreen } from "@/features/profil/panel-master";
-import { PengaturanFiturScreen } from "@/features/profil/pengaturan-fitur";
-import { BerandaScreen } from "@/features/beranda/beranda-screen";
-import { BerandaSimpelGlass } from "@/features/beranda/beranda-simpel-glass";
-import { LeaderboardKomenScreen, PengumumanDaftarScreen } from "@/features/beranda/layar-anggota";
-import { DatabaseScreen } from "@/features/database/database-screen";
-import { LayarPerbaikan } from "@/features/perbaikan/layar-perbaikan";
-import { PilihUcapanUltah } from "@/features/notifikasi/pilih-ucapan-ultah";
-import { ModalChangelog } from "@/features/profil/modal-changelog";
-import { TurPemandu } from "@/features/tur/tur-pemandu";
-import { ModalKembangApi } from "@/features/beranda/modal-kembang-api";
-import { PetScreen } from "@/features/pet/pet-screen";
-import { PetMelayang } from "@/features/pet/pet-melayang";
-import { ModalHadiahHarian } from "@/features/pet/modal-hadiah-harian";
 import { bolehPet } from "@/lib/pet-akses";
 import { MODUL_AKUN, modulDibuka } from "@/lib/peran";
 import { useDetakGlobal } from "@/hooks/use-detak-global";
 import { KonteksTabAktif } from "@/hooks/use-tab-aktif";
-import { HewanMelayang } from "@/features/pet/hewan-melayang";
-import { LudoScreen } from "@/features/ludo/ludo-screen";
-import { AcaraScreen } from "@/features/acara/acara-screen";
-import { TabelAnggotaScreen } from "@/features/pengguna/tabel-anggota-screen";
-import { AbsensiHariIniScreen } from "@/features/pengguna/absensi-hari-ini-screen";
-import { RobotMelayang } from "@/features/asisten/robot-asisten";
-import { LayarSuara } from "@/features/asisten/layar-suara";
 import dynamic from "next/dynamic";
 import { ScreenHeader } from "@/components/pri-ui";
 
@@ -103,7 +60,69 @@ const TvAnalitikDashboardLayar = dynamic(
     ),
   { ssr: false },
 );
-import { SetelKpiScreen } from "@/features/pengguna/setel-kpi-screen";
+// ------------------------------------------------------------
+// PEMECAHAN HALAMAN (28 Sep 2026, rencana "200 orang tanpa lag" #8).
+// Dulu ±45 layar diimpor statis ke cangkang ini, sehingga pembukaan
+// pertama mengunduh ±2,8 MB JavaScript (Ludo, Pet, Studio, Panel
+// Master, pustaka grafik …) walau anggota tidak pernah membukanya.
+// Kini tiap layar diunduh saat PERTAMA KALI ditampilkan; yang tetap
+// ada di awal hanya cangkang: splash, navigasi, latar, toast.
+// ------------------------------------------------------------
+const AuthScreen = dynamic(() => import("@/features/auth/auth-screen").then((m) => m.AuthScreen), { ssr: false, loading: MuatLayar });
+const DashboardScreen = dynamic(() => import("@/features/dashboard/dashboard-screen").then((m) => m.DashboardScreen), { ssr: false, loading: MuatLayar });
+const ModulDashboardScreen = dynamic(() => import("@/features/dashboard/modul-dashboard-screen").then((m) => m.ModulDashboardScreen), { ssr: false, loading: MuatLayar });
+const KelolaAksesDashboardScreen = dynamic(() => import("@/features/dashboard/kelola-akses-screen").then((m) => m.KelolaAksesDashboardScreen), { ssr: false, loading: MuatLayar });
+const AturMenuScreen = dynamic(() => import("@/features/profil/atur-menu-screen").then((m) => m.AturMenuScreen), { ssr: false, loading: MuatLayar });
+const AsistenScreen = dynamic(() => import("@/features/asisten/asisten-screen").then((m) => m.AsistenScreen), { ssr: false, loading: MuatLayar });
+const QcScreen = dynamic(() => import("@/features/qc-konten/qc-screen").then((m) => m.QcScreen), { ssr: false, loading: MuatLayar });
+const AccountDetailScreen = dynamic(() => import("@/features/qc-konten/account-detail-screen").then((m) => m.AccountDetailScreen), { ssr: false, loading: MuatLayar });
+const PostDetailScreen = dynamic(() => import("@/features/qc-konten/post-detail-screen").then((m) => m.PostDetailScreen), { ssr: false, loading: MuatLayar });
+const TvScreen = dynamic(() => import("@/features/tv-rakyat/tv-screen").then((m) => m.TvScreen), { ssr: false, loading: MuatLayar });
+const TvNasionalScreen = dynamic(() => import("@/features/tv-rakyat/tv-nasional-screen").then((m) => m.TvNasionalScreen), { ssr: false, loading: MuatLayar });
+const PengumumanScreen = dynamic(() => import("@/features/pengguna/pengumuman-screen").then((m) => m.PengumumanScreen), { ssr: false, loading: MuatLayar });
+const PersetujuanKpiScreen = dynamic(() => import("@/features/pengguna/persetujuan-kpi-screen").then((m) => m.PersetujuanKpiScreen), { ssr: false, loading: MuatLayar });
+const KontenScreen = dynamic(() => import("@/features/konten/konten-screen").then((m) => m.KontenScreen), { ssr: false, loading: MuatLayar });
+const TvrKuScreen = dynamic(() => import("@/features/tvr-ku/tvrku-screen").then((m) => m.TvrKuScreen), { ssr: false, loading: MuatLayar });
+const ChatScreen = dynamic(() => import("@/features/chat/chat-screen").then((m) => m.ChatScreen), { ssr: false, loading: MuatLayar });
+const NotifikasiScreen = dynamic(() => import("@/features/notifikasi/notifikasi-screen").then((m) => m.NotifikasiScreen), { ssr: false, loading: MuatLayar });
+const ProfilScreen = dynamic(() => import("@/features/profil/profil-screen").then((m) => m.ProfilScreen), { ssr: false, loading: MuatLayar });
+const AbsensiScreen = dynamic(() => import("@/features/absensi/absensi-screen").then((m) => m.AbsensiScreen), { ssr: false, loading: MuatLayar });
+const LaporanKerjaScreen = dynamic(() => import("@/features/laporan-kerja/laporan-kerja-screen").then((m) => m.LaporanKerjaScreen), { ssr: false, loading: MuatLayar });
+const KelolaLaporanKpiScreen = dynamic(() => import("@/features/laporan-kerja/kelola-laporan-kpi-screen").then((m) => m.KelolaLaporanKpiScreen), { ssr: false, loading: MuatLayar });
+const PanelMasterScreen = dynamic(() => import("@/features/profil/panel-master").then((m) => m.PanelMasterScreen), { ssr: false, loading: MuatLayar });
+const PengaturanFiturScreen = dynamic(() => import("@/features/profil/pengaturan-fitur").then((m) => m.PengaturanFiturScreen), { ssr: false, loading: MuatLayar });
+const BerandaScreen = dynamic(() => import("@/features/beranda/beranda-screen").then((m) => m.BerandaScreen), { ssr: false, loading: MuatLayar });
+const BerandaSimpelGlass = dynamic(() => import("@/features/beranda/beranda-simpel-glass").then((m) => m.BerandaSimpelGlass), { ssr: false, loading: MuatLayar });
+const LeaderboardKomenScreen = dynamic(() => import("@/features/beranda/layar-anggota").then((m) => m.LeaderboardKomenScreen), { ssr: false, loading: MuatLayar });
+const PengumumanDaftarScreen = dynamic(() => import("@/features/beranda/layar-anggota").then((m) => m.PengumumanDaftarScreen), { ssr: false, loading: MuatLayar });
+const DatabaseScreen = dynamic(() => import("@/features/database/database-screen").then((m) => m.DatabaseScreen), { ssr: false, loading: MuatLayar });
+const LayarPerbaikan = dynamic(() => import("@/features/perbaikan/layar-perbaikan").then((m) => m.LayarPerbaikan), { ssr: false, loading: MuatLayar });
+const PetScreen = dynamic(() => import("@/features/pet/pet-screen").then((m) => m.PetScreen), { ssr: false, loading: MuatLayar });
+const LudoScreen = dynamic(() => import("@/features/ludo/ludo-screen").then((m) => m.LudoScreen), { ssr: false, loading: MuatLayar });
+const AcaraScreen = dynamic(() => import("@/features/acara/acara-screen").then((m) => m.AcaraScreen), { ssr: false, loading: MuatLayar });
+const TabelAnggotaScreen = dynamic(() => import("@/features/pengguna/tabel-anggota-screen").then((m) => m.TabelAnggotaScreen), { ssr: false, loading: MuatLayar });
+const AbsensiHariIniScreen = dynamic(() => import("@/features/pengguna/absensi-hari-ini-screen").then((m) => m.AbsensiHariIniScreen), { ssr: false, loading: MuatLayar });
+const SetelKpiScreen = dynamic(() => import("@/features/pengguna/setel-kpi-screen").then((m) => m.SetelKpiScreen), { ssr: false, loading: MuatLayar });
+// Elemen mengambang & modal: tidak perlu penanda muat.
+const BannerKendali = dynamic(() => import("@/components/banner-kendali").then((m) => m.BannerKendali), { ssr: false, loading: () => null });
+const PilihUcapanUltah = dynamic(() => import("@/features/notifikasi/pilih-ucapan-ultah").then((m) => m.PilihUcapanUltah), { ssr: false, loading: () => null });
+const ModalChangelog = dynamic(() => import("@/features/profil/modal-changelog").then((m) => m.ModalChangelog), { ssr: false, loading: () => null });
+const TurPemandu = dynamic(() => import("@/features/tur/tur-pemandu").then((m) => m.TurPemandu), { ssr: false, loading: () => null });
+const ModalKembangApi = dynamic(() => import("@/features/beranda/modal-kembang-api").then((m) => m.ModalKembangApi), { ssr: false, loading: () => null });
+const PetMelayang = dynamic(() => import("@/features/pet/pet-melayang").then((m) => m.PetMelayang), { ssr: false, loading: () => null });
+const ModalHadiahHarian = dynamic(() => import("@/features/pet/modal-hadiah-harian").then((m) => m.ModalHadiahHarian), { ssr: false, loading: () => null });
+const HewanMelayang = dynamic(() => import("@/features/pet/hewan-melayang").then((m) => m.HewanMelayang), { ssr: false, loading: () => null });
+const RobotMelayang = dynamic(() => import("@/features/asisten/robot-asisten").then((m) => m.RobotMelayang), { ssr: false, loading: () => null });
+const LayarSuara = dynamic(() => import("@/features/asisten/layar-suara").then((m) => m.LayarSuara), { ssr: false, loading: () => null });
+
+/** Penanda muat ringan selagi kode sebuah layar diunduh (sekali per layar). */
+function MuatLayar() {
+  return (
+    <div className="flex min-h-[40dvh] items-center justify-center" role="status" aria-label="Memuat layar">
+      <span className="h-7 w-7 animate-spin rounded-full border-2 border-pri/25 border-t-pri" aria-hidden="true" />
+    </div>
+  );
+}
 import { modulUntukDivisi } from "@/lib/modul-divisi";
 import { adalahHR, diDivisiHR } from "@/lib/hr";
 import { KUNCI_CHANGELOG_DILIHAT } from "@/lib/changelog";
