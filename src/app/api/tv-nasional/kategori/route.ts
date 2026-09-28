@@ -348,6 +348,7 @@ export async function GET(request: Request) {
             jeda_sampai: status.jeda_sampai,
             menunggu: status.menunggu,
             katalog: status.katalog,
+            siklus: status.siklus ?? null,
           }
         : null,
     };

@@ -181,7 +181,13 @@ export async function GET(request: Request) {
       }),
       ditampilkan: Math.min(MAKS_VIDEO_TAMPIL, tampil.length),
       pembaruan: status
-        ? { terakhir: status.terakhir, jeda_sampai: status.jeda_sampai, menunggu: status.menunggu, katalog: status.katalog }
+        ? {
+            terakhir: status.terakhir,
+            jeda_sampai: status.jeda_sampai,
+            menunggu: status.menunggu,
+            katalog: status.katalog,
+            siklus: status.siklus ?? null,
+          }
         : null,
     };
   });

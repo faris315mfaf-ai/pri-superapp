@@ -1350,6 +1350,8 @@ export type PembaruanMetrikVideo = {
   menunggu: { hari_ini: number; kemarin: number; pekan: number; lama: number } | null;
   /** Isi katalog: seluruh video akun tersambung & yang sudah berangka. */
   katalog: { video: number; berangka: number; akun: number; akun_lengkap: number } | null;
+  /** Putaran kata kunci → lainnya, terlama → terbaru (29 Sep 2026). */
+  siklus?: import("@/lib/segar-metrik-video").InfoSiklus | null;
 };
 
 export type InsightKategori = {

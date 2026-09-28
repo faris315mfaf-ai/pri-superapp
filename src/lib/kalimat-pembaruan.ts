@@ -14,9 +14,19 @@ export function kalimatPembaruan(p: PembaruanMetrikVideo | null | undefined): st
     return `Penarikan sedang menunggu kuota upload-post pulih (${jamWIB(p.jeda_sampai)} WIB).`;
   }
   const bagian = [
-    "Video hari ini disegarkan ±tiap 20 menit, kemarin tiap 2 jam, 2–6 hari tiap 12 jam, yang lama seminggu sekali",
-    `terakhir ${waktuJelasWIB(p.terakhir)}`,
+    "Video hari ini disegarkan ±tiap 20 menit; video lain bergiliran dari yang terlama ke terbaru, video kata kunci didahulukan",
   ];
+  const s = p.siklus;
+  if (s && s.total > 0) {
+    const kataKunci =
+      s.prioritas === 0
+        ? ""
+        : s.posisi >= s.prioritas
+          ? " (video kata kunci sudah semua)"
+          : ` (video kata kunci ${Math.floor((s.posisi / s.prioritas) * 100)}%)`;
+    bagian.push(`putaran ke-${s.ke}: ${String(s.persen).replace(".", ",")}%${kataKunci}`);
+  }
+  bagian.push(`terakhir ${waktuJelasWIB(p.terakhir)}`);
   if (p.menunggu && p.menunggu.hari_ini > 0) bagian.push(`${formatAngkaRingkas(p.menunggu.hari_ini)} video hari ini menunggu giliran`);
   return bagian.join(" · ");
 }

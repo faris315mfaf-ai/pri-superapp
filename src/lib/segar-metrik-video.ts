@@ -18,20 +18,23 @@
 //       • daftar media tiap akun (/uploadposts/media) — halaman pertama
 //         tiap jam (video baru), lalu mundur halaman demi halaman sampai
 //         video terlama (isi katalog).
-//  2. UNGGAHAN SuperApp hari ini & kemarin — satu permintaan per unggahan
-//     (/post-analytics/{request_id}) memberi angka SEMUA platformnya.
-//  3. PER VIDEO — /post-analytics?platform_post_id= untuk tiap video di
-//     katalog, urut TINGKAT: hari ini (segar tiap 20 menit) → kemarin
-//     (2 jam) → 2–6 hari (12 jam) → lebih lama (7 hari). Antrean dihitung
-//     ulang dari database tiap putaran; video yang tidak sempat dikerjakan
-//     tetap jatuh tempo dan jadi yang paling basi berikutnya.
+//  2. JALUR CEPAT (±15% tenaga, 29 Sep 2026) — unggahan SuperApp hari ini
+//     & kemarin (/post-analytics/{request_id}: semua platform sekaligus)
+//     dan seluruh video yang terbit HARI INI (±tiap 20 menit).
+//  3. PUTARAN (sisa tenaga, 29 Sep 2026 — alur permintaan user): video
+//     yang caption/hashtag/kategorinya memuat KATA KUNCI dulu, lalu video
+//     lain; masing-masing dari tanggal unggah TERLAMA ke terbaru; habis →
+//     ulang dari awal. Lihat lib/siklus-metrik & lib/kata-kunci-video.
 //
 // Rem (kuota upload-post dipakai bersama unggahan & rekonsiliasi KPI):
 //   • maks METRIK_VIDEO_PER_MENIT permintaan/menit (bawaan 300 sejak
 //     29 Sep 2026, dulu 200; paket Business ±2.500+10/profil per 10 menit
 //     ≈ ±400/menit berkelanjutan — sisanya untuk unggahan & fitur lain);
 //   • maks 40 permintaan per akun sosmed per putaran, akun bergiliran;
-//   • header x-ratelimit-remaining menipis / 429 → berhenti & jeda;
+//   • header x-ratelimit-remaining menipis / 429 → TUNGGU jendela kuota
+//     per menit berganti lalu lanjut (dulu berhenti sampai putaran
+//     berikutnya = 5 menit terbuang untuk kuota yang pulih ±20 detik);
+//     berhenti & jeda hanya bila pulihnya lama / tak diketahui;
 //   • akun yang tokennya rusak / kena batas platform dijeda (bukan
 //     ditanya terus-menerus); video yang dihapus dilewati.
 //
@@ -46,6 +49,8 @@ import { latarHarusBerhenti } from "@/lib/penjaga-supabase";
 import { semuaBaris } from "@/lib/semua-baris";
 import { adalahTautanPendek, alamatDariPengalihan } from "@/lib/tautan-pendek";
 import { analitikPostAsliUp, analitikPostLiveUp, daftarMediaUp, uploadPostSiap } from "@/lib/upload-post";
+import { kataKunciCocok, siapkanKataKunci, sidikKataKunci, type KataKunci } from "@/lib/kata-kunci-video";
+import { gabungTertunda, jalankanSiklus, persenSiklus, susunUrutan, type CalonRencana } from "@/lib/siklus-metrik";
 import {
   BELUM_DITARIK,
   adalahMediaVideo,
@@ -94,6 +99,8 @@ const MAKS_PER_MENIT = Math.max(20, Math.min(600, Number(process.env.METRIK_VIDE
  * per putaran 217 dtk) — 300/menit butuh ±24 pekerja.
  */
 const PARALEL = 24;
+/** Bagian jatah satu putaran robot untuk jalur cepat (video hari ini). */
+const BAGIAN_JALUR_CEPAT = 0.15;
 /** Maks permintaan per akun sosmed per putaran (batas laju platform per akun). */
 const MAKS_PER_AKUN_PUTARAN = 40;
 /** Unggahan semuda ini belum ditanya: platform masih memproses/menerbitkan. */
@@ -138,11 +145,41 @@ export type StatusPenyegar = {
   /** id laporan_video terakhir yang sudah dikenali katalog. */
   kursor_laporan: number;
   /** Ringkasan putaran terakhir. */
-  putaran: { diminta: number; terisi: number; galat: number; dilewati: number; ditemukan: number; halaman: number; durasi_ms: number } | null;
-  /** Video yang masih jatuh tempo per tingkat (setelah putaran terakhir). */
+  putaran: {
+    diminta: number;
+    terisi: number;
+    galat: number;
+    dilewati: number;
+    ditemukan: number;
+    halaman: number;
+    durasi_ms: number;
+    /** Kenapa berhenti lebih awal (kuota, database lambat, …). */
+    alasan?: string;
+    /** Sisa kuota upload-post menit itu (header) saat terakhir dilihat. */
+    sisa_kuota?: number | null;
+    /** Berapa kali menunggu jendela kuota per menit berganti. */
+    ditahan?: number;
+  } | null;
+  /** Video hari ini yang masih jatuh tempo (tingkat lain kini lewat putaran). */
   menunggu: Record<NamaTingkat, number> | null;
+  /** Kemajuan putaran kata kunci → lainnya (29 Sep 2026). */
+  siklus?: InfoSiklus | null;
   /** Isi katalog: seluruh video & yang sudah punya angka. */
   katalog: { video: number; berangka: number; akun: number; akun_lengkap: number } | null;
+};
+
+export type InfoSiklus = {
+  ke: number;
+  mulai: string;
+  total: number;
+  /** Jumlah video kata kunci (di depan urutan). */
+  prioritas: number;
+  posisi: number;
+  persen: number;
+  tertunda: number;
+  /** Akhir & lama putaran sebelumnya. */
+  selesai_lalu: string | null;
+  durasi_lalu_jam: number | null;
 };
 
 function statusKosong(): StatusPenyegar {
@@ -291,7 +328,7 @@ async function simpanSimpanan(s: Simpanan): Promise<void> {
 // Pengendali kuota & laju
 // ------------------------------------------------------------
 
-class Pengendali {
+export class Pengendali {
   private sisa: number;
   readonly tenggat: number;
   berhenti = false;
@@ -299,6 +336,13 @@ class Pengendali {
   jedaSampai: number | null = null;
   batasTerakhir: BatasUp | null = null;
   diminta = 0;
+  /** Berapa kali menunggu jendela kuota per menit berganti. */
+  kaliDitahan = 0;
+  /** Jatah sementara (jalur cepat); null = tanpa batas tambahan. */
+  private batasJatah: number | null = null;
+  private pakaiJatah = 0;
+  /** Kuota per menit menipis → jangan meminta sebelum (ms). */
+  private tahanSampai = 0;
   private readonly saatAmbil?: () => void;
   private readonly lebihMs: number;
   private readonly jarakMs: number;
@@ -325,9 +369,23 @@ class Pengendali {
     return this.tenggat - Date.now();
   }
 
-  /** Masih boleh bekerja (kuota, waktu, tidak direm)? */
+  /** Masih boleh bekerja (kuota, waktu, jatah, tidak direm)? */
   bolehLanjut(minWaktuMs = 8_000): boolean {
+    if (this.batasJatah !== null && this.pakaiJatah >= this.batasJatah) return false;
     return !this.berhenti && this.sisa > 0 && this.sisaWaktu() >= minWaktuMs;
+  }
+
+  /** Jalankan `kerja` dengan paling banyak `n` permintaan (jalur cepat). */
+  async denganJatah<T>(n: number, kerja: () => Promise<T>): Promise<T> {
+    const lama = { batas: this.batasJatah, pakai: this.pakaiJatah };
+    this.batasJatah = Math.max(0, Math.floor(n));
+    this.pakaiJatah = 0;
+    try {
+      return await kerja();
+    } finally {
+      this.batasJatah = lama.batas;
+      this.pakaiJatah = lama.pakai;
+    }
   }
 
   /** Jatah akun ini di putaran ini sudah habis? */
@@ -348,8 +406,16 @@ class Pengendali {
       if (!this.alasanBerhenti) this.alasanBerhenti = "database sedang lambat";
       return false;
     }
+    // Kuota per menit ditahan: tunggu jendelanya berganti (bila waktu cukup).
+    const tahan = this.tahanSampai - Date.now();
+    if (tahan > 0) {
+      if (this.sisaWaktu() - tahan < minWaktuMs) return false;
+      await new Promise((r) => setTimeout(r, tahan));
+      if (!this.bolehLanjut(minWaktuMs) || this.akunPenuh(akun)) return false;
+    }
     this.sisa -= 1;
     this.diminta += 1;
+    if (this.batasJatah !== null) this.pakaiJatah += 1;
     if (akun) this.perAkun.set(akun, (this.perAkun.get(akun) ?? 0) + 1);
     this.saatAmbil?.();
     const kini = Date.now();
@@ -367,7 +433,23 @@ class Pengendali {
   catatBatas(b: BatasUp | undefined | null) {
     if (!b) return;
     this.batasTerakhir = b;
-    if (kuotaMenipis(b)) this.rem("kuota upload-post menipis", b.reset_ms);
+    if (kuotaMenipis(b)) this.tahanAtauRem("kuota upload-post menipis", b.reset_ms);
+  }
+
+  /**
+   * Kuota menipis / 429: bila jendelanya pulih ≤ 65 dtk lagi dan waktu
+   * putaran masih cukup → tunggu lalu lanjut; selain itu berhenti & jeda.
+   */
+  tahanAtauRem(alasan: string, resetMs: number | null | undefined) {
+    const kini = Date.now();
+    if (resetMs && resetMs > kini && resetMs - kini <= 65_000 && this.sisaWaktu() - (resetMs - kini) >= 20_000) {
+      if (resetMs + 500 > this.tahanSampai) {
+        this.tahanSampai = resetMs + 500;
+        this.kaliDitahan += 1;
+      }
+      return;
+    }
+    this.rem(alasan, resetMs);
   }
 
   rem(alasan: string, sampaiMs: number | null | undefined) {
@@ -383,7 +465,7 @@ class Pengendali {
     const g = e as { status?: number; batas?: BatasUp };
     if (g?.batas) this.batasTerakhir = g.batas;
     if (g?.status === 429) {
-      this.rem("upload-post menolak (429)", g.batas?.reset_ms ?? null);
+      this.tahanAtauRem("upload-post menolak (429)", g.batas?.reset_ms ?? null);
       return true;
     }
     return false;
@@ -1173,6 +1255,316 @@ async function kerjakanJendela(
 }
 
 // ------------------------------------------------------------
+// Bagian 4: PUTARAN kata kunci → lainnya, terlama → terbaru (29 Sep 2026)
+// ------------------------------------------------------------
+// Rencana (urutan kode) disusun sekali per putaran dari katalog; posisi &
+// daftar tertunda disimpan di Redis (memori bila Redis tidak ada). Hilang
+// = aman: putaran baru dimulai, video yang baru disegarkan tidak ditanya
+// ulang karena penyaring "sudah disegarkan sejak putaran dimulai".
+
+type RencanaSiklus = { id: string; ke: number; mulai: string; dibangun: string; sidik: string; prioritas: number; kode: string[] };
+type PosisiSiklus = { id: string; i: number; tertunda: string[]; selesai_lalu: string | null; durasi_lalu_ms: number | null };
+type BarisSiklus = { kode: string; platform: string; user_id: number | string | null; url: string; diperbarui_pada: string; waktu_posting: string | null };
+
+const KUNCI_RENCANA = "mv:siklus:rencana:v1";
+const KUNCI_POSISI = "mv:siklus:posisi:v1";
+/** Kode per potongan putaran (2 kueri `in` berisi 150 kode). */
+const POTONGAN_SIKLUS = 300;
+/** Video galat di putaran: jangan ditanya lagi sebelum … (catatGalat menggandakan). */
+const SELANG_GAGAL_SIKLUS = 6 * JAM;
+/** Maks tertunda yang dikerjakan di awal satu putaran robot. */
+const MAKS_TERTUNDA_SEKALI = 1200;
+let rencanaMemori: RencanaSiklus | null = null;
+let posisiMemori: PosisiSiklus | null = null;
+
+async function bacaRedis<T>(kunci: string): Promise<T | null> {
+  const redis = klienCache();
+  if (!redis) return null;
+  try {
+    return (await redis.get<T>(kunci)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function tulisRedis(kunci: string, nilai: unknown): Promise<void> {
+  if (ujiKeringAktif) return;
+  const redis = klienCache();
+  if (!redis) return;
+  try {
+    await redis.set(kunci, nilai, { ex: 14 * 86_400 });
+  } catch {
+    // Gagal menyimpan: putaran berikutnya menyusun ulang (aman).
+  }
+}
+
+async function muatRencana(): Promise<RencanaSiklus | null> {
+  if (rencanaMemori) return rencanaMemori;
+  const r = await bacaRedis<RencanaSiklus>(KUNCI_RENCANA);
+  if (r && Array.isArray(r.kode) && typeof r.id === "string") rencanaMemori = r;
+  return rencanaMemori;
+}
+
+async function muatPosisi(): Promise<PosisiSiklus | null> {
+  if (posisiMemori) return posisiMemori;
+  const r = await bacaRedis<PosisiSiklus>(KUNCI_POSISI);
+  if (r && typeof r.id === "string" && Array.isArray(r.tertunda)) posisiMemori = r;
+  return posisiMemori;
+}
+
+async function simpanRencana(r: RencanaSiklus): Promise<void> {
+  if (ujiKeringAktif) return;
+  rencanaMemori = r;
+  await tulisRedis(KUNCI_RENCANA, r);
+}
+
+async function simpanPosisi(p: PosisiSiklus): Promise<void> {
+  if (ujiKeringAktif) return;
+  posisiMemori = p;
+  await tulisRedis(KUNCI_POSISI, p);
+}
+
+async function bacaKataKunci(db: Db): Promise<KataKunci[]> {
+  const { data, error } = await db.from("keyword_wajib").select("keyword").eq("aktif", true).limit(500);
+  if (error) {
+    console.error("[metrik-video] kata kunci:", error.message);
+    return [];
+  }
+  return siapkanKataKunci((data ?? []).map((k) => String(k.keyword ?? "")));
+}
+
+/**
+ * Kode video yang KATEGORINYA memuat kata kunci: kategori laporan
+ * (laporan_video.keyword — termasuk laporan otomatis unggahan), kategori
+ * unggahan SuperApp (tvrku_post.hasil.kategori → tautan per platformnya),
+ * dan link yang ditambahkan ke kategori (tvr_kategori_link, sql/50 —
+ * belum tentu ada).
+ */
+export async function kodeBerkategori(db: Db, kunci: KataKunci[]): Promise<Set<string>> {
+  const hasil = new Set<string>();
+  if (kunci.length === 0) return hasil;
+  const tambah = (platform: unknown, url: unknown) => {
+    const k = kodeMetrik(String(platform ?? ""), String(url ?? ""));
+    if (k) hasil.add(k);
+  };
+  let setelah = 0;
+  for (let n = 0; n < 500; n++) {
+    const { data, error } = await db
+      .from("laporan_video")
+      .select("id, platform, url_video, keyword")
+      .not("keyword", "is", null)
+      .neq("keyword", "")
+      .gt("id", setelah)
+      .order("id", { ascending: true })
+      .limit(1000);
+    if (error) {
+      console.error("[metrik-video] kategori laporan:", error.message);
+      break;
+    }
+    const b = data ?? [];
+    for (const l of b) if (kataKunciCocok(String(l.keyword ?? ""), kunci)) tambah(l.platform, l.url_video);
+    if (b.length < 1000) break;
+    setelah = Number(b[b.length - 1].id);
+  }
+  const idPost: number[] = [];
+  let setelahPost = 0;
+  for (let n = 0; n < 200; n++) {
+    const { data, error } = await db
+      .from("tvrku_post")
+      .select("id, kategori:hasil->>kategori")
+      .not("hasil->>kategori", "is", null)
+      .gt("id", setelahPost)
+      .order("id", { ascending: true })
+      .limit(1000);
+    if (error) {
+      console.error("[metrik-video] kategori unggahan:", error.message);
+      break;
+    }
+    const b = (data ?? []) as unknown as { id: number; kategori: string | null }[];
+    for (const p of b) if (kataKunciCocok(String(p.kategori ?? ""), kunci)) idPost.push(Number(p.id));
+    if (b.length < 1000) break;
+    setelahPost = Number(b[b.length - 1].id);
+  }
+  for (const bagian of potong(idPost, 300)) {
+    const { data } = await db.from("laporan_video").select("platform, url_video").in("tvrku_post_id", bagian);
+    for (const l of data ?? []) tambah(l.platform, l.url_video);
+  }
+  const { data: link, error: galatLink } = await db.from("tvr_kategori_link").select("platform, url, kategori").limit(20_000);
+  if (!galatLink) for (const l of link ?? []) if (kataKunciCocok(String(l.kategori ?? ""), kunci)) tambah(l.platform, l.url);
+  return hasil;
+}
+
+/** Susun urutan putaran dari seluruh katalog akun tersambung. */
+export async function bangunRencana(db: Db, ke: number, mulai: string, kunci: KataKunci[]): Promise<RencanaSiklus> {
+  const calon: CalonRencana[] = [];
+  let setelah = "";
+  for (let n = 0; n < 600; n++) {
+    let q = db.from("tvr_video_metrik").select("kode, judul, waktu_posting").not("user_id", "is", null);
+    if (setelah) q = q.gt("kode", setelah);
+    const { data, error } = await q.order("kode", { ascending: true }).limit(1000);
+    if (error) throw new Error(`Gagal membaca katalog untuk putaran: ${error.message}`);
+    const b = (data ?? []) as { kode: string; judul: string | null; waktu_posting: string | null }[];
+    for (const r of b) {
+      const w = r.waktu_posting ? Date.parse(r.waktu_posting) : NaN;
+      calon.push({ kode: r.kode, waktuMs: Number.isFinite(w) ? w : null, prioritas: Boolean(kataKunciCocok(r.judul, kunci)) });
+    }
+    if (b.length < 1000) break;
+    setelah = b[b.length - 1].kode;
+  }
+  const kategori = await kodeBerkategori(db, kunci);
+  for (const c of calon) if (!c.prioritas && kategori.has(c.kode)) c.prioritas = true;
+  const { kode, prioritas } = susunUrutan(calon);
+  return {
+    id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    ke,
+    mulai,
+    dibangun: new Date().toISOString(),
+    sidik: sidikKataKunci(kunci),
+    prioritas,
+    kode,
+  };
+}
+
+async function ambilBarisSiklus(db: Db, kode: string[]): Promise<BarisSiklus[]> {
+  const hasil: BarisSiklus[] = [];
+  for (const bagian of potong(kode, 150)) {
+    const { data, error } = await db
+      .from("tvr_video_metrik")
+      .select("kode, platform, user_id, url, diperbarui_pada, waktu_posting")
+      .in("kode", bagian);
+    if (error) throw new Error(`Gagal membaca potongan putaran: ${error.message}`);
+    hasil.push(...((data ?? []) as BarisSiklus[]));
+  }
+  return hasil;
+}
+
+function infoSiklus(r: RencanaSiklus, p: PosisiSiklus): InfoSiklus {
+  return {
+    ke: r.ke,
+    mulai: r.mulai,
+    total: r.kode.length,
+    prioritas: r.prioritas,
+    posisi: Math.min(p.i, r.kode.length),
+    persen: persenSiklus(p.i, r.kode.length),
+    tertunda: p.tertunda.length,
+    selesai_lalu: p.selesai_lalu,
+    durasi_lalu_jam: p.durasi_lalu_ms == null ? null : Math.round((p.durasi_lalu_ms / JAM) * 10) / 10,
+  };
+}
+
+/** Keadaan putaran untuk status (tanpa mengubah apa pun). */
+async function keadaanSiklus(): Promise<InfoSiklus | null> {
+  const [r, p] = await Promise.all([muatRencana(), muatPosisi()]);
+  return r && p && p.id === r.id ? infoSiklus(r, p) : null;
+}
+
+async function segarkanSiklus(
+  db: Db,
+  ctx: Konteks,
+  ctrl: Pengendali,
+  draf: DraftBaris[],
+  catat: Catatan,
+  bantu: Bantu,
+  hasilPutaran: Map<string, DraftBaris>,
+  simpanBerkala: () => Promise<void>,
+): Promise<void> {
+  // Menyusun rencana membaca ±110 ribu baris (±20 dtk) → butuh waktu lapang.
+  if (!ctrl.bolehLanjut(60_000)) return;
+  const kunci = await bacaKataKunci(db);
+  let rencana = await muatRencana();
+  let posisi = await muatPosisi();
+  const kini = Date.now();
+  if (!rencana || !posisi || posisi.id !== rencana.id || posisi.i >= rencana.kode.length) {
+    // Putaran baru: pertama kali, simpanan hilang, atau putaran lalu tuntas.
+    const tuntas = Boolean(rencana && posisi && posisi.id === rencana.id && posisi.i >= rencana.kode.length);
+    const baru = await bangunRencana(db, (rencana?.ke ?? 0) + 1, new Date(kini).toISOString(), kunci);
+    posisi = {
+      id: baru.id,
+      i: 0,
+      tertunda: posisi?.tertunda ?? [],
+      selesai_lalu: tuntas ? new Date(kini).toISOString() : (posisi?.selesai_lalu ?? null),
+      durasi_lalu_ms: tuntas && rencana ? kini - Date.parse(rencana.mulai) : (posisi?.durasi_lalu_ms ?? null),
+    };
+    rencana = baru;
+    await simpanRencana(rencana);
+    await simpanPosisi(posisi);
+  } else if (rencana.sidik !== sidikKataKunci(kunci)) {
+    // Kata kunci berubah: urutan disusun ulang, putarannya (nomor & waktu
+    // mulai) tetap — yang sudah disegarkan terlewati sendiri.
+    const baru = await bangunRencana(db, rencana.ke, rencana.mulai, kunci);
+    posisi = { ...posisi, id: baru.id, i: 0 };
+    rencana = baru;
+    await simpanRencana(rencana);
+    await simpanPosisi(posisi);
+  }
+  const mulaiMs = Date.parse(rencana.mulai);
+
+  const kerjakan = async (baris: BarisSiklus[]): Promise<string[]> => {
+    const kiniK = Date.now();
+    const awalHariIni = awalHariWib(kiniK);
+    const items: ItemVideo[] = [];
+    const belum: string[] = [];
+    for (const b of baris) {
+      if (b.user_id == null) continue;
+      // Sudah disegarkan di putaran ini (atau oleh jalur cepat / tombol).
+      if (Date.parse(b.diperbarui_pada) >= mulaiMs) continue;
+      // Video hari ini: urusan jalur cepat.
+      if (b.waktu_posting && Date.parse(b.waktu_posting) >= awalHariIni) continue;
+      const uid = Number(b.user_id);
+      const platform = platformApp(String(b.platform ?? ""));
+      const profil = ctx.profilPer.get(uid);
+      const akun = `${uid}|${platform}`;
+      if (!profil || !platformDidukung(platform)) continue;
+      if (akunDijeda(bantu.simpanan, akun) || (bantu.simpanan.gagal[b.kode] ?? 0) > kiniK) continue;
+      if (ctrl.akunPenuh(akun)) {
+        belum.push(b.kode);
+        continue;
+      }
+      const kodeAsli = kodeMetrik(platform, String(b.url ?? "")) ?? b.kode;
+      items.push({ kode: b.kode, kodeAsli, platform, uid, profil, akun, url: String(b.url ?? "") });
+    }
+    const urut = selangSeling(items, (x) => x.akun, MAKS_PER_AKUN_PUTARAN);
+    const dipilih = new Set(urut.map((x) => x.kode));
+    for (const it of items) if (!dipilih.has(it.kode)) belum.push(it.kode);
+    await jalankanAntre(
+      urut,
+      async (it) => {
+        await kerjakanVideo(it, ctx, ctrl, draf, catat, bantu, hasilPutaran, SELANG_GAGAL_SIKLUS);
+        await simpanBerkala();
+      },
+      ctrl,
+      12_000,
+    );
+    // Tidak sempat / ditahan kuota (tanpa hasil & tanpa tanda gagal) → tertunda.
+    const kiniS = Date.now();
+    for (const it of urut) {
+      if (!hasilPutaran.has(it.kodeAsli) && !((bantu.simpanan.gagal[it.kode] ?? 0) > kiniS)) belum.push(it.kode);
+    }
+    return belum;
+  };
+
+  // Tertunda dari putaran robot sebelumnya lebih dulu.
+  if (posisi.tertunda.length > 0 && ctrl.bolehLanjut(12_000)) {
+    const giliran = posisi.tertunda.slice(0, MAKS_TERTUNDA_SEKALI);
+    const peta = new Map((await ambilBarisSiklus(db, giliran)).map((r) => [r.kode, r]));
+    const sisa = await kerjakan(giliran.map((k) => peta.get(k)).filter((r): r is BarisSiklus => Boolean(r)));
+    posisi.tertunda = gabungTertunda(sisa, posisi.tertunda.slice(giliran.length));
+  }
+
+  const hasil = await jalankanSiklus<BarisSiklus>({
+    kode: rencana.kode,
+    i: posisi.i,
+    potongan: POTONGAN_SIKLUS,
+    boleh: () => ctrl.bolehLanjut(12_000),
+    ambil: (k) => ambilBarisSiklus(db, k),
+    kerjakan,
+  });
+  posisi.i = hasil.i;
+  posisi.tertunda = gabungTertunda(posisi.tertunda, hasil.tunda);
+  await simpanPosisi(posisi);
+}
+
+// ------------------------------------------------------------
 // Bagian 1a: katalog dari laporan_video (murah, tanpa kuota upload-post)
 // ------------------------------------------------------------
 
@@ -1412,8 +1804,9 @@ export type RingkasanPutaran = {
 
 async function hitungMenunggu(db: Db, kiniMs: number): Promise<Record<NamaTingkat, number>> {
   const hasil = { hari_ini: 0, kemarin: 0, pekan: 0, lama: 0 } as Record<NamaTingkat, number>;
+  // Hanya hari ini (jalur cepat); video lain bergiliran di putaran.
   await Promise.all(
-    tingkatKesegaran(kiniMs).map(async (t) => {
+    tingkatKesegaran(kiniMs).slice(0, 1).map(async (t) => {
       let q = db
         .from("tvr_video_metrik")
         .select("kode", { count: "exact", head: true })
@@ -1495,29 +1888,28 @@ export async function putaranSegarMetrik(
       }
     };
     const simpanBerkala = () => simpanDraf(false);
-    const tingkat = tingkatKesegaran(Date.now());
-    const [hariIni, kemarin, pekan, lama] = tingkat;
+    const [hariIni] = tingkatKesegaran(Date.now());
 
     // 1a. Video yang baru dilaporkan/tercatat (tanpa kuota upload-post).
     await kenaliDariLaporan(db, ctx, status, catat, Date.now() + 60_000);
-    // 2 & 3. HARI INI: unggahan SuperApp, lalu seluruh video hari ini.
-    await segarkanUnggahan(db, ctx, ctrl, draf, catat, bantu, "hari_ini", simpanBerkala);
-    // Angka unggahan disimpan dulu: video yang baru disegarkan jalur
-    // unggahan tidak boleh ikut jatuh tempo lalu ditanya dua kali.
+    // 2. JALUR CEPAT (±15% jatah, disetujui user 29 Sep 2026): unggahan
+    // SuperApp hari ini, seluruh video HARI INI, lalu unggahan kemarin.
+    await ctrl.denganJatah(Math.max(20, Math.ceil(maks * BAGIAN_JALUR_CEPAT)), async () => {
+      await segarkanUnggahan(db, ctx, ctrl, draf, catat, bantu, "hari_ini", simpanBerkala);
+      // Angka unggahan disimpan dulu: video yang baru disegarkan jalur
+      // unggahan tidak boleh ikut jatuh tempo lalu ditanya dua kali.
+      await simpanDraf(true);
+      await segarkanTingkat(db, ctx, ctrl, draf, catat, bantu, hasilPutaran, hariIni, simpanBerkala);
+      await segarkanUnggahan(db, ctx, ctrl, draf, catat, bantu, "kemarin", simpanBerkala);
+    });
     await simpanDraf(true);
-    await segarkanTingkat(db, ctx, ctrl, draf, catat, bantu, hasilPutaran, hariIni, simpanBerkala);
     // 1b. Video baru di daftar media akun (halaman pertama, tiap jam).
     await kenaliVideoBaru(db, ctx, ctrl, bantu, catat);
-    // KEMARIN.
-    await segarkanUnggahan(db, ctx, ctrl, draf, catat, bantu, "kemarin", simpanBerkala);
-    await simpanDraf(true);
-    await segarkanTingkat(db, ctx, ctrl, draf, catat, bantu, hasilPutaran, kemarin, simpanBerkala);
     // 1c. Isi katalog: video lama tiap akun, halaman demi halaman.
     await isiKatalogAkun(db, ctx, ctrl, bantu, catat);
     await simpanDraf(true);
-    // YANG LALU-LALU.
-    await segarkanTingkat(db, ctx, ctrl, draf, catat, bantu, hasilPutaran, pekan, simpanBerkala);
-    await segarkanTingkat(db, ctx, ctrl, draf, catat, bantu, hasilPutaran, lama, simpanBerkala);
+    // 3. PUTARAN: kata kunci dulu, lalu lainnya — terlama → terbaru.
+    await segarkanSiklus(db, ctx, ctrl, draf, catat, bantu, hasilPutaran, simpanBerkala);
 
     await simpanDraf(true);
     for (const [kunci, peta] of bantu.petaBaru) await tambahPetaMedia(kunci, peta);
@@ -1525,10 +1917,15 @@ export async function putaranSegarMetrik(
     await simpanSimpanan(simpanan);
 
     if (ctrl.jedaSampai) status.jeda_sampai = new Date(ctrl.jedaSampai).toISOString();
-    const [menunggu, katalog] = await Promise.all([hitungMenunggu(db, Date.now()), hitungKatalog(db, ctx, simpanan)]);
+    const [menunggu, katalog, siklus] = await Promise.all([
+      hitungMenunggu(db, Date.now()),
+      hitungKatalog(db, ctx, simpanan),
+      keadaanSiklus(),
+    ]);
     status.terakhir = new Date().toISOString();
     status.menunggu = menunggu;
     status.katalog = katalog;
+    status.siklus = siklus;
     status.putaran = {
       diminta: ctrl.diminta,
       terisi: catat.terisi,
@@ -1537,6 +1934,9 @@ export async function putaranSegarMetrik(
       ditemukan: catat.ditemukan,
       halaman: catat.halaman,
       durasi_ms: Date.now() - mulai,
+      alasan: ctrl.alasanBerhenti || undefined,
+      sisa_kuota: ctrl.batasTerakhir?.sisa ?? null,
+      ditahan: ctrl.kaliDitahan,
     };
     await simpanStatus(db, status);
     return {
