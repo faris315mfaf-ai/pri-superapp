@@ -5,6 +5,7 @@
 // ============================================================
 import { NextResponse } from "next/server";
 import { KonfigurasiError } from "@/lib/supabase";
+import { catatPanggilanApi } from "@/lib/penjaga-supabase";
 
 /**
  * Bungkus isi handler API. Semua error diterjemahkan jadi respons
@@ -15,6 +16,9 @@ export async function bungkus<T>(
   isi: () => Promise<T>,
 ): Promise<NextResponse> {
   const tanpaCache = { headers: { "Cache-Control": "no-store" } };
+  // Penghitung per rute (28 Sep 2026): berapa panggilan API masuk per rute,
+  // dipasangkan dengan jumlah kueri Supabase-nya di log [supabase/menit].
+  catatPanggilanApi();
   try {
     return NextResponse.json(await isi(), tanpaCache);
   } catch (e) {

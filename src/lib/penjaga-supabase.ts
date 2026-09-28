@@ -30,6 +30,10 @@
 // puluhan MB) dan lainnya dilewatkan apa adanya.
 // ============================================================
 import { AsyncLocalStorage } from "node:async_hooks";
+// Penyimpan konteks permintaan milik Next (satu instans bersama, sengaja
+// "external"): darinya kita tahu RUTE API yang sedang dilayani, tanpa
+// menyentuh 250-an berkas rute.
+import { workAsyncStorage } from "next/dist/server/app-render/work-async-storage.external";
 
 export type Lajur = "pengguna" | "latar";
 export type Tingkat = "normal" | "lambat" | "macet";
@@ -48,6 +52,22 @@ export function jalankanLatar<T>(sumber: string, kerja: () => Promise<T>): Promi
 
 export function lajurSaatIni(): KonteksLajur {
   return konteksLajur.getStore() ?? { lajur: "pengguna", sumber: "" };
+}
+
+/** Rute API yang sedang dilayani (mis. "/api/tvr/laporan"); "" di luar permintaan. */
+export function ruteSaatIni(): string {
+  try {
+    return workAsyncStorage.getStore()?.route ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** Nama sumber beban untuk ringkasan: rute API, atau "latar:<tugas>". */
+function sumberBeban(): string {
+  const { lajur, sumber } = lajurSaatIni();
+  if (lajur === "latar") return `latar:${sumber || "?"}`;
+  return ruteSaatIni() || "(tanpa-rute)";
 }
 
 /**
@@ -285,6 +305,9 @@ export function bentukKueri(url: string, metode: string, sasaran: string): strin
 export class Pencatat {
   private per = new Map<string, Hitungan>();
   private bentuk = new Map<string, number>();
+  /** Per sumber (rute API / tugas latar): panggilan API & kueri Supabase. */
+  private rute = new Map<string, { api: number; db: number }>();
+  private apiN = 0;
   private lama: number[] = [];
   private ditolak = 0;
   private habis = 0;
@@ -312,6 +335,23 @@ export class Pencatat {
     this.bentuk.set(b, (this.bentuk.get(b) ?? 0) + 1);
   }
 
+  /** Satu kueri Supabase dari sumber ini (rute API / tugas latar). */
+  catatRute(sumber: string) {
+    if (this.rute.size >= 500 && !this.rute.has(sumber)) return;
+    const r = this.rute.get(sumber) ?? { api: 0, db: 0 };
+    r.db += 1;
+    this.rute.set(sumber, r);
+  }
+
+  /** Satu panggilan API masuk (dicatat oleh bungkus di lib/api-helper). */
+  catatApi(sumber: string) {
+    this.apiN += 1;
+    if (this.rute.size >= 500 && !this.rute.has(sumber)) return;
+    const r = this.rute.get(sumber) ?? { api: 0, db: 0 };
+    r.api += 1;
+    this.rute.set(sumber, r);
+  }
+
   catatTolak(waktuHabis: boolean) {
     if (waktuHabis) this.habis += 1;
     else this.ditolak += 1;
@@ -322,11 +362,11 @@ export class Pencatat {
   }
 
   /** Tutup jendela: kembalikan ringkasan lalu mulai jendela baru. null = tidak ada lalu lintas. */
-  tutup(kondisi: KondisiDb): Record<string, unknown> | null {
+  tutup(kondisi: KondisiDb, online: number | null = null): Record<string, unknown> | null {
     const detik = Math.max(1, (this.kini() - this.mulai) / 1000);
     const n = [...this.per.values()].reduce((s, h) => s + h.n, 0);
     const hasil =
-      n === 0 && this.ditolak === 0 && this.habis === 0
+      n === 0 && this.ditolak === 0 && this.habis === 0 && this.apiN === 0
         ? null
         : (() => {
             const urut = [...this.lama].sort((a, b) => a - b);
@@ -348,10 +388,22 @@ export class Pencatat {
               atas,
               // 10 bentuk kueri terbanyak: petunjuk titik pemanggil di kode.
               bentuk_atas: [...this.bentuk.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10),
+              // Panggilan API yang masuk & orang yang sedang membuka aplikasi:
+              // beban per orang = pembanding yang adil antar-jam.
+              api_n: this.apiN,
+              online,
+              db_per_orang_menit: online && online > 0 ? Math.round((n / online / (detik / 60)) * 10) / 10 : null,
+              // 15 sumber teratas menurut kueri Supabase: [sumber, panggilan API, kueri].
+              rute_atas: [...this.rute.entries()]
+                .sort((a, b) => b[1].db - a[1].db || b[1].api - a[1].api)
+                .slice(0, 15)
+                .map(([k, r]) => [k, r.api, r.db]),
             };
           })();
     this.per = new Map();
     this.bentuk = new Map();
+    this.rute = new Map();
+    this.apiN = 0;
     this.lama = [];
     this.ditolak = 0;
     this.habis = 0;
@@ -374,12 +426,28 @@ function nyalakanPencatat() {
   if (pencatatJalan) return;
   pencatatJalan = true;
   const t = setInterval(() => {
-    const r = pencatat.tutup(penjaga.kondisi());
-    if (!r) return;
-    ringkasanTerakhir = { ...r, pada: new Date().toISOString() };
-    console.log(`[supabase/menit] ${JSON.stringify(r)}`);
+    void (async () => {
+      // Jumlah orang online (Redis, bukan Supabase). Gagal dibaca → null.
+      let online: number | null = null;
+      try {
+        const { daftarHadir } = await import("@/lib/kehadiran");
+        online = (await daftarHadir()).length;
+      } catch {
+        online = null;
+      }
+      const r = pencatat.tutup(penjaga.kondisi(), online);
+      if (!r) return;
+      ringkasanTerakhir = { ...r, pada: new Date().toISOString() };
+      console.log(`[supabase/menit] ${JSON.stringify(r)}`);
+    })();
   }, 60_000);
   t.unref?.();
+}
+
+/** Catat satu panggilan API (dipanggil bungkus di lib/api-helper). */
+export function catatPanggilanApi(): void {
+  nyalakanPencatat();
+  pencatat.catatApi(sumberBeban());
 }
 
 /** Kondisi database menurut lalu lintas proses ini (tanpa kueri tambahan). */
@@ -408,6 +476,7 @@ export function buatFetchTerjaga(penjaga: Penjaga, pencatat: Pencatat, saatDipak
     const metode = (init?.method ?? (masukan instanceof Request ? masukan.method : "GET")).toUpperCase();
     const kunci = `${lajur === "latar" ? `latar:${sumber || "?"}` : "pengguna"} ${metode} ${sasaran}`;
     pencatat.catatBentuk(bentukKueri(url, metode, sasaran));
+    pencatat.catatRute(sumberBeban());
     const tenggat = Date.now() + penjaga.batasMs(lajur);
 
     let lepas: () => void;

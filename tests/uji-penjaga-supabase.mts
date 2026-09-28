@@ -156,6 +156,28 @@ console.log("pencatat per menit");
   cek("waktu habis & antre maks tercatat", r.waktu_habis === 1 && r.antre_maks === 7, r);
   t = 120_000;
   cek("jendela direset setelah ditutup", c.tutup(k) === null);
+
+  // Per rute: panggilan API + kueri Supabase, dinormalkan per orang online.
+  for (let i = 0; i < 5; i++) c.catatApi("/api/tvr/laporan");
+  for (let i = 0; i < 60; i++) {
+    c.catatRute("/api/tvr/laporan");
+    c.catat("pengguna GET laporan_video", 100, false);
+  }
+  c.catatApi("/api/ping");
+  for (let i = 0; i < 20; i++) {
+    c.catatRute("latar:metrik-video");
+    c.catat("latar:metrik-video GET tvr_video_metrik", 100, false);
+  }
+  t = 180_000;
+  const rr = c.tutup(k, 10) as { api_n: number; online: number; db_per_orang_menit: number; rute_atas: [string, number, number][] };
+  cek("panggilan API dihitung", rr.api_n === 6, rr);
+  cek("rute teratas menurut kueri, lengkap dengan jumlah API", rr.rute_atas[0][0] === "/api/tvr/laporan" && rr.rute_atas[0][1] === 5 && rr.rute_atas[0][2] === 60, rr.rute_atas);
+  cek("rute tanpa kueri tetap tercatat", rr.rute_atas.some(([r, api, db]) => r === "/api/ping" && api === 1 && db === 0), rr.rute_atas);
+  cek("beban per orang = 80 kueri / 10 online / 1 menit = 8", rr.online === 10 && rr.db_per_orang_menit === 8, rr);
+  t = 240_000;
+  c.catatApi("/api/ping");
+  const hanyaApi = c.tutup(k, null) as { n: number; api_n: number; db_per_orang_menit: null } | null;
+  cek("menit tanpa kueri tapi ada API tetap dilaporkan; online tak diketahui → null", hanyaApi !== null && hanyaApi.n === 0 && hanyaApi.api_n === 1 && hanyaApi.db_per_orang_menit === null, hanyaApi);
 }
 
 console.log("pembatas per proses");
