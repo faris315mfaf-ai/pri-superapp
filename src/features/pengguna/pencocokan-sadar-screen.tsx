@@ -5,12 +5,17 @@
 //
 // Mencocokkan akun SuperApp dengan pegawai SADAR TANPA mengubah email di
 // kedua aplikasi. Bawaannya cocok lewat email; yang emailnya berbeda
-// dipasangkan HR di sini (pemetaan manual — menang atas email). Setelah
-// dipasang, absensi 60 hari orang itu langsung tercermin.
+// dipasangkan HR di sini (pemetaan manual — menang atas email).
+//
+// 28 Sep 2026: saran pasangan kini dari SERVER (nama lengkap, gelar &
+// singkatan dinormalkan, email/username) dengan tingkat keyakinan —
+// dulu layar memilih pegawai pertama yang KATA DEPAN-nya sama, sehingga
+// "Muhammad …" hampir selalu tersaran ke orang yang salah. Saran "kuat"
+// bisa dipasangkan sekaligus; "mirip" diperiksa satu per satu.
 // ============================================================
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Link2, Loader2, Search, Unlink } from "lucide-react";
+import { ArrowLeft, CheckCheck, Link2, Loader2, Search, Sparkles, Unlink } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { AvatarInisial, GlassSkeleton, StatusBadge } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
@@ -19,6 +24,7 @@ import {
   getPencocokanSadar,
   lepasPemetaanSadar,
   pasangkanSadar,
+  pasangkanSadarBanyak,
   type AnggotaPencocokan,
   type DataPencocokanSadar,
 } from "@/services";
@@ -33,6 +39,8 @@ export function PencocokanSadarScreen({ onKembali }: { onKembali: () => void }) 
   const [pilihan, setPilihan] = useState<Record<string, string>>({});
   const [sibuk, setSibuk] = useState<string | null>(null);
   const [muatUlang, setMuatUlang] = useState(0);
+  const [yakinBanyak, setYakinBanyak] = useState(false);
+  const [sibukBanyak, setSibukBanyak] = useState(false);
 
   useEffect(() => {
     let hidup = true;
@@ -64,13 +72,31 @@ export function PencocokanSadarScreen({ onKembali }: { onKembali: () => void }) 
     );
   }, [data, cari, saring]);
 
-  // Saran otomatis: pegawai SADAR yang namanya paling mirip (kata pertama
-  // sama) — HR tinggal memeriksa, bukan mencari dari nol.
+  // Saran dari server (nama lengkap / email / username, satu-lawan-satu).
+  const saranPer = useMemo(() => new Map((data?.saran ?? []).map((x) => [x.user_id, x])), [data]);
+  const saranKuat = useMemo(() => (data?.saran ?? []).filter((x) => x.keyakinan === "kuat"), [data]);
+  const namaPegawai = useMemo(() => new Map((data?.sadar_belum ?? []).map((p) => [p.kode, p])), [data]);
   function saran(a: AnggotaPencocokan): string {
-    const kata = a.nama.trim().toLowerCase().split(/\s+/)[0] ?? "";
-    if (!kata || !data) return "";
-    const cocok = data.sadar_belum.find((p) => p.nama.toLowerCase().split(/\s+/)[0] === kata);
-    return cocok?.kode ?? "";
+    return saranPer.get(a.id)?.kode ?? "";
+  }
+
+  async function pasangSemuaKuat() {
+    if (sibukBanyak || saranKuat.length === 0) return;
+    setSibukBanyak(true);
+    try {
+      const h = await pasangkanSadarBanyak(saranKuat.map((x) => ({ user_id: x.user_id, kode_pegawai: x.kode })));
+      toast(
+        h.ditolak.length > 0 ? "info" : "sukses",
+        `${h.dipasangkan} anggota dipasangkan`,
+        h.ditolak.length > 0 ? `${h.ditolak.length} ditolak: ${h.ditolak[0].alasan}` : "Absensinya langsung terbaca dari SADAR.",
+      );
+      setYakinBanyak(false);
+      setMuatUlang((n) => n + 1);
+    } catch (e) {
+      toast("error", "Gagal memasangkan", e instanceof Error ? e.message : "");
+    } finally {
+      setSibukBanyak(false);
+    }
   }
 
   async function pasang(a: AnggotaPencocokan) {
@@ -82,7 +108,7 @@ export function PencocokanSadarScreen({ onKembali }: { onKembali: () => void }) 
     setSibuk(a.id);
     try {
       const h = await pasangkanSadar(a.id, kode);
-      toast("sukses", "Dipasangkan", `${a.nama} ↔ ${h.nama_sadar} (${kode}). Absensi 60 hari langsung tercermin.`);
+      toast("sukses", "Dipasangkan", `${a.nama} ↔ ${h.nama_sadar} (${kode}). Absensinya langsung terbaca dari SADAR.`);
       setMuatUlang((n) => n + 1);
     } catch (e) {
       toast("error", "Gagal memasangkan", e instanceof Error ? e.message : "");
@@ -128,9 +154,55 @@ export function PencocokanSadarScreen({ onKembali }: { onKembali: () => void }) 
       </header>
 
       <p className="mt-3 text-[11px] leading-snug text-teks-sekunder">
-        Bawaannya akun dicocokkan lewat <b>email yang sama</b> di SuperApp dan SADAR. Yang emailnya
-        berbeda, pasangkan di sini — tidak perlu mengubah email di mana pun.
+        Bawaannya akun dicocokkan lewat <b>email yang sama</b> di SuperApp dan SADAR. Akun yang
+        mendaftar tanpa email atau emailnya berbeda, pasangkan di sini — tidak perlu mengubah email di
+        mana pun. Sistem menyarankan pasangan dari <b>nama lengkap</b> (gelar & singkatan seperti
+        &quot;M.&quot; = &quot;Muhammad&quot; disamakan); periksa sebelum menekan Pasangkan.
       </p>
+
+      {/* Pasangkan semua saran KUAT sekaligus (dua ketukan). */}
+      {saranKuat.length > 0 && (
+        <GlassCard className="mt-3 p-3">
+          <div className="flex items-start gap-2.5">
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-pri" aria-hidden="true" />
+            <p className="min-w-0 flex-1 text-[11.5px] leading-snug text-teks-utama">
+              <b>{saranKuat.length} saran kuat</b> — nama lengkap sama persis (atau email/username sama) dan
+              tidak ada calon lain yang setara.
+            </p>
+          </div>
+          {yakinBanyak ? (
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => void pasangSemuaKuat()}
+                disabled={sibukBanyak}
+                className="btn-tekan flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl text-[12px] font-bold text-white disabled:opacity-60"
+                style={{ background: "linear-gradient(135deg, #10B981, #059669)" }}
+              >
+                {sibukBanyak ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}
+                Ya, pasangkan {saranKuat.length} anggota
+              </button>
+              <button
+                type="button"
+                onClick={() => setYakinBanyak(false)}
+                className="glass btn-tekan h-9 rounded-xl px-3 text-[12px] font-bold text-teks-utama"
+              >
+                Batal
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setYakinBanyak(true)}
+              className="btn-tekan mt-2 flex h-9 w-full items-center justify-center gap-1.5 rounded-xl text-[12px] font-bold text-white"
+              style={{ background: "linear-gradient(135deg, #10B981, #059669)" }}
+            >
+              <CheckCheck className="h-4 w-4" />
+              Pasangkan semua saran kuat ({saranKuat.length})
+            </button>
+          )}
+        </GlassCard>
+      )}
 
       {/* Ringkasan */}
       {r && (
@@ -184,6 +256,7 @@ export function PencocokanSadarScreen({ onKembali }: { onKembali: () => void }) 
         <div className="mt-3 flex flex-col gap-1.5">
           {tersaring.map((a) => {
             const kodeSaran = saran(a);
+            const infoSaran = saranPer.get(a.id);
             const nilai = pilihan[a.id] ?? kodeSaran;
             return (
               <GlassCard key={a.id} className="p-2.5">
@@ -191,7 +264,9 @@ export function PencocokanSadarScreen({ onKembali }: { onKembali: () => void }) 
                   {a.avatar_url ? <FotoBulat src={a.avatar_url} ukuran={34} /> : <AvatarInisial nama={a.nama} ukuran={34} />}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[12.5px] font-bold text-teks-utama">{a.nama}</p>
-                    <p className="truncate text-[10.5px] text-teks-sekunder">{a.email || "tanpa email"}</p>
+                    <p className="truncate text-[10.5px] text-teks-sekunder">
+                      {a.email || (a.username ? `@${a.username} · daftar tanpa email` : "tanpa email")}
+                    </p>
                     {a.cara !== "belum" && (
                       <p className="truncate text-[10.5px] text-teks-sekunder">
                         SADAR: <b className="font-semibold text-teks-utama">{a.nama_sadar || a.kode_sadar}</b> · {a.kode_sadar}
@@ -205,6 +280,17 @@ export function PencocokanSadarScreen({ onKembali }: { onKembali: () => void }) 
                   />
                 </div>
 
+                {a.cara === "belum" && infoSaran && (
+                  <p
+                    className={cn(
+                      "mt-1.5 truncate text-[10.5px] font-semibold",
+                      infoSaran.keyakinan === "kuat" ? "text-sukses" : "text-amber-600",
+                    )}
+                  >
+                    Saran {infoSaran.keyakinan === "kuat" ? "kuat" : "— periksa dulu"}:{" "}
+                    {namaPegawai.get(infoSaran.kode)?.nama ?? infoSaran.kode} ({infoSaran.alasan})
+                  </p>
+                )}
                 {a.cara === "belum" && (
                   <div className="mt-2 flex gap-2">
                     <select
@@ -214,7 +300,10 @@ export function PencocokanSadarScreen({ onKembali }: { onKembali: () => void }) 
                       className="glass-input h-9 min-w-0 flex-1 rounded-xl px-2.5 text-[12px] text-teks-utama outline-none"
                     >
                       <option value="">— pilih pegawai SADAR —</option>
-                      {data.sadar_belum.map((p) => (
+                      {/* Calon yang disarankan paling atas. */}
+                      {[...data.sadar_belum]
+                        .sort((x, y) => Number(y.kode === kodeSaran) - Number(x.kode === kodeSaran))
+                        .map((p) => (
                         <option key={p.kode} value={p.kode}>
                           {p.nama} · {p.kode}{p.email ? ` · ${p.email}` : ""}
                         </option>

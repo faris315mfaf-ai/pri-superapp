@@ -17,6 +17,7 @@ import { ambilAbsensiSadar, sadarSiap, waktuWibKeIso, type BarisSadar } from "@/
 import { beriKoin } from "@/lib/koin";
 import { catatTugasStreak } from "@/lib/streak";
 import { tanggalWibHariIni } from "@/lib/format";
+import { semuaPemetaan } from "@/lib/sadar-pemetaan";
 
 const JEDA_HARI_INI_DETIK = 60;
 const SEGAR_LAMPAU_JAM = 6;
@@ -73,26 +74,20 @@ export type HasilSinkron = {
 };
 
 /**
- * Kode pegawai SADAR → id akun SuperApp. Pemetaan MANUAL (sadar_pemetaan,
- * dipasang HR dari Database Anggota) menang; sisanya lewat email.
+ * Kode pegawai SADAR → id akun SuperApp. Pemetaan MANUAL (dipasang HR
+ * dari Database Anggota — tabel sadar_pemetaan atau, bila belum ada,
+ * pengaturan_sistem; lib/sadar-pemetaan) menang; sisanya lewat email.
  */
 export async function petaKodeKeUser(baris: Pick<BarisSadar, "kode" | "email">[]): Promise<Map<string, number>> {
   const hasil = new Map<string, number>();
-  const kode = Array.from(new Set(baris.map((b) => b.kode).filter(Boolean)));
-  if (kode.length === 0) return hasil;
-  const db = supabase();
+  const kode = new Set(baris.map((b) => b.kode).filter(Boolean));
+  if (kode.size === 0) return hasil;
+  // Akun yang sudah dipasang manual (ke kode mana pun) tidak boleh diambil
+  // lagi lewat email — satu akun satu pegawai.
   const dipetakan = new Set<number>();
-  for (let i = 0; i < kode.length; i += 200) {
-    const { data, error } = await db
-      .from("sadar_pemetaan")
-      .select("user_id, kode_pegawai")
-      .in("kode_pegawai", kode.slice(i, i + 200));
-    // Tabel belum ada (sql/54 belum dijalankan) → cukup lewat email.
-    if (error) break;
-    for (const m of data ?? []) {
-      hasil.set(String(m.kode_pegawai), Number(m.user_id));
-      dipetakan.add(Number(m.user_id));
-    }
+  for (const m of await semuaPemetaan()) {
+    dipetakan.add(m.user_id);
+    if (kode.has(m.kode_pegawai)) hasil.set(m.kode_pegawai, m.user_id);
   }
   const sisa = baris.filter((b) => !hasil.has(b.kode));
   const lewatEmail = await petaEmailKeUser(sisa.map((b) => b.email));
@@ -295,6 +290,9 @@ export async function sinkronAbsensiRentang(dari: string, sampai: string, maks =
  * dibuang, mentahnya tetap (bukan milik siapa-siapa lagi).
  */
 export async function cerminkanUlangKode(kode: string, userId: number | null): Promise<void> {
+  // Tanpa tabel cermin (sql/53) tidak ada yang perlu ditulis ulang: layar
+  // membaca SADAR langsung dan memakai pemetaan terbaru saat itu juga.
+  if (!(await tabelSadarAda())) return;
   const db = supabase();
   const awal = new Date(Date.now() - 60 * 86_400_000).toISOString().slice(0, 10);
   const { data: mentah } = await db
@@ -339,6 +337,54 @@ export async function cerminkanUlangKode(kode: string, userId: number | null): P
   }
   // Tarikan hari ini berikutnya harus menghitung ulang, bukan memakai cache.
   await hapusCacheBersama(`sadar:sinkron:${tanggalWibHariIni()}`);
+}
+
+export type PegawaiSadar = { kode: string; nama: string; email: string; terakhir: string };
+
+/** Berapa hari ke belakang daftar pegawai SADAR disusun (jalur langsung). */
+const HARI_DAFTAR_PEGAWAI = 14;
+
+/**
+ * Pegawai SADAR yang muncul belakangan ini (unik per kode, data terbaru).
+ * Dengan tabel cermin: 31 hari dari absensi_sadar. Tanpa tabel (cloud
+ * saat ini): gabungan 14 hari langsung dari API SADAR — dulu HANYA hari
+ * ini, sehingga pegawai yang libur/tidak absen hari itu tidak bisa
+ * dipasangkan sama sekali (28 Sep 2026).
+ */
+export async function daftarPegawaiSadar(): Promise<Map<string, PegawaiSadar>> {
+  const peta = new Map<string, PegawaiSadar>();
+  if (!(await tabelSadarAda())) {
+    const hariIni = tanggalWibHariIni();
+    const tanggal = Array.from({ length: HARI_DAFTAR_PEGAWAI }, (_, i) =>
+      new Date(Date.parse(`${hariIni}T00:00:00Z`) - i * 86_400_000).toISOString().slice(0, 10),
+    );
+    // Terbaru dulu: nama/email terakhir yang dipakai menang. 4 bersamaan,
+    // hari lampau di-cache 6 jam, jadi hanya pembukaan pertama yang lambat.
+    for (let i = 0; i < tanggal.length; i += 4) {
+      const hasil = await Promise.all(tanggal.slice(i, i + 4).map((t) => sadarLangsung(t)));
+      for (const { baris } of hasil) {
+        for (const b of baris) {
+          if (!b.kode || peta.has(b.kode)) continue;
+          peta.set(b.kode, { kode: b.kode, nama: b.nama, email: String(b.email ?? "").toLowerCase(), terakhir: b.tanggal });
+        }
+      }
+    }
+    return peta;
+  }
+  const awal = new Date(Date.now() - 31 * 86_400_000).toISOString().slice(0, 10);
+  const { data } = await supabase()
+    .from("absensi_sadar")
+    .select("kode_pegawai, nama, email, tanggal")
+    .gte("tanggal", awal)
+    .order("tanggal", { ascending: false })
+    .limit(10000);
+  for (const r of data ?? []) {
+    const kode = String(r.kode_pegawai);
+    if (!peta.has(kode)) {
+      peta.set(kode, { kode, nama: String(r.nama ?? ""), email: String(r.email ?? "").toLowerCase(), terakhir: String(r.tanggal) });
+    }
+  }
+  return peta;
 }
 
 /** Berapa orang SADAR pada tanggal itu yang belum punya akun SuperApp. */

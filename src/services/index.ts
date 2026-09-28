@@ -1982,9 +1982,19 @@ export type AnggotaPencocokan = {
   nama_sadar: string;
   email_sadar: string;
 };
+/** Saran pasangan dari server (nama lengkap / email / username) — HR yang memutuskan. */
+export type SaranPasanganSadar = {
+  user_id: string;
+  kode: string;
+  skor: number;
+  /** "kuat" = boleh dipasang sekaligus; "mirip" = periksa dulu. */
+  keyakinan: "kuat" | "mirip";
+  alasan: string;
+};
 export type DataPencocokanSadar = {
   anggota: AnggotaPencocokan[];
   sadar_belum: { kode: string; nama: string; email: string; terakhir: string }[];
+  saran?: SaranPasanganSadar[];
   ringkasan: {
     anggota: number;
     cocok_email: number;
@@ -1992,6 +2002,8 @@ export type DataPencocokanSadar = {
     belum: number;
     sadar_belum: number;
     pegawai_sadar: number;
+    saran_kuat?: number;
+    saran_mirip?: number;
   };
 };
 export async function getPencocokanSadar(): Promise<DataPencocokanSadar> {
@@ -2003,6 +2015,20 @@ export async function pasangkanSadar(user_id: string, kode_pegawai: string): Pro
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ user_id, kode_pegawai }),
   })) as { nama_sadar: string };
+}
+/** Pasangkan banyak sekaligus (mis. semua saran kuat). */
+export async function pasangkanSadarBanyak(
+  pasangan: { user_id: string; kode_pegawai: string }[],
+): Promise<{ dipasangkan: number; ditolak: { user_id: string; kode_pegawai: string; alasan: string }[] }> {
+  const json = await fetchJson("/api/absensi/sadar/pencocokan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ pasangan }),
+  });
+  return {
+    dipasangkan: Number(json.dipasangkan ?? 0),
+    ditolak: (json.ditolak ?? []) as { user_id: string; kode_pegawai: string; alasan: string }[],
+  };
 }
 export async function lepasPemetaanSadar(user_id: string): Promise<void> {
   await fetchJson("/api/absensi/sadar/pencocokan", {
