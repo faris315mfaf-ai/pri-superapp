@@ -493,9 +493,12 @@ export type PosisiAntrean = { d: string; k: string };
  * pernah terjangkau (terbukti: 27 ribu TikTok & 10 ribu YouTube).
  *
  * - Sampai ujung antrean → lanjut dari depan (sekali per putaran).
- * - Jendela tidak tuntas (waktu putaran habis) → posisi dikembalikan ke
- *   awal jendela itu; yang sudah disegarkan keluar sendiri dari antrean
- *   (waktunya baru), jadi tetap maju tanpa melompati sisanya.
+ * - Jendela tidak tuntas (waktu putaran habis) → putaran berikutnya
+ *   lanjut SESUDAH jendela itu; sisanya terjangkau lagi setelah antrean
+ *   berputar. JANGAN diulang dari awal jendela: satu putaran hanya sempat
+ *   ±500 video sedangkan satu jendela 1.000, jadi "ulangi jendela" sama
+ *   saja dengan selalu mulai dari depan (terbukti di produksi 29 Sep:
+ *   posisi tak pernah tersimpan, TikTok tetap tak tersentuh).
  *
  * Mengembalikan posisi untuk putaran berikutnya (null = dari depan).
  */
@@ -516,7 +519,6 @@ export async function jelajahiAntrean<B extends { kode: string; diperbarui_pada:
   let dariDepanLagi = false;
   for (let j = 0; j < o.maksJendela; j++) {
     if (!o.boleh()) return simpan;
-    const awal = setelah;
     let baris = await o.ambil(setelah);
     let ujung = baris.length < o.ukuran;
     if (dariDepanLagi && mulai && baris.length > 0 && !posisiSebelum(baris[baris.length - 1], mulai)) {
@@ -525,9 +527,10 @@ export async function jelajahiAntrean<B extends { kode: string; diperbarui_pada:
       ujung = true;
     }
     if (baris.length > 0) {
-      if (!(await o.kerjakan(baris))) return awal;
+      const tuntas = await o.kerjakan(baris);
       const akhir = baris[baris.length - 1];
       setelah = { d: akhir.diperbarui_pada, k: akhir.kode };
+      if (!tuntas) return ujung ? null : setelah;
     }
     simpan = ujung ? null : setelah;
     if (ujung) {

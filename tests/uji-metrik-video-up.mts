@@ -367,14 +367,45 @@ console.log("jelajahiAntrean — antrean tingkat melanjutkan posisi (29 Sep 2026
   cek("perilaku BARU: seluruh 3.000 TikTok tertarik", total === 3000, { total, putaranKe });
   cek("…dalam jumlah putaran wajar (≤ 10)", putaranKe <= 10, putaranKe);
 
-  // Jendela tidak tuntas → posisi kembali ke awal jendela itu.
+  // Jendela tidak tuntas → lanjut SESUDAH jendela itu; sisanya setelah berputar.
   {
     const a = buatAntrean(0, 2500);
     const h1 = await putaran(a, null, 1500);
-    cek("jatah habis di jendela ke-2 → posisi = akhir jendela ke-1", h1.pos?.k === "tt_000999" && h1.n === 1500, h1);
+    cek("jatah habis di jendela ke-2 → posisi = akhir jendela ke-2", h1.pos?.k === "tt_001999" && h1.n === 1500, h1);
     const h2 = await putaran(a, h1.pos, 5000);
-    cek("putaran berikut mengulang jendela itu tanpa melompati sisanya", h2.n === 1000 && !a.length, { n: h2.n, sisa: a.length });
+    cek("putaran berikut: ujung antrean, lalu berputar & menyelesaikan sisanya", h2.n === 1000 && !a.length, { n: h2.n, sisa: a.length });
     cek("antrean habis → posisi null (mulai dari depan)", h2.pos === null, h2.pos);
+  }
+  // Kasus produksi 29 Sep: jatah (±500) < jendela (1.000), dan depan antrean
+  // terus berisi video yang BISA dikerjakan (bukan macet) — tetap harus maju.
+  {
+    const a: Baris[] = [];
+    for (let i = 0; i < 8000; i++) a.push({ kode: `fb_${String(i).padStart(6, "0")}`, diperbarui_pada: NOL });
+    for (let i = 0; i < 3000; i++) a.push({ kode: `tt_${String(i).padStart(6, "0")}`, diperbarui_pada: NOL });
+    let kursorP: PosisiAntrean | null = null;
+    let putaranTt = -1;
+    for (let r = 0; r < 40 && putaranTt < 0; r++) {
+      let sisa = 500;
+      const kena = new Set<string>();
+      kursorP = await jelajahiAntrean<Baris>({
+        kursor: kursorP,
+        ukuran: 1000,
+        maksJendela: 4,
+        boleh: () => sisa > 0,
+        ambil: ambilDari(a),
+        kerjakan: async (baris) => {
+          for (const b of baris) {
+            if (sisa <= 0) return false;
+            sisa -= 1;
+            kena.add(b.kode);
+          }
+          return true;
+        },
+      });
+      for (let i = a.length - 1; i >= 0; i--) if (kena.has(a[i].kode)) a.splice(i, 1);
+      if ([...kena].some((k) => k.startsWith("tt_"))) putaranTt = r;
+    }
+    cek("jatah < jendela: TikTok di belakang 8.000 video tetap tersentuh ≤ 10 putaran", putaranTt >= 0 && putaranTt <= 10, putaranTt);
   }
   // Sampai ujung → putar ke depan SEKALI dalam putaran yang sama.
   {

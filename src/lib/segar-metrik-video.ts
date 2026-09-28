@@ -1161,7 +1161,8 @@ async function kerjakanJendela(
     12_000,
   );
   // Waktu putaran habis di tengah jalan (izin laju ditolak pun terhitung
-  // "dikerjakan") → anggap belum tuntas supaya jendela ini diulang.
+  // "dikerjakan") → belum tuntas: jelajahiAntrean berhenti di sini dan
+  // putaran berikutnya lanjut sesudah jendela ini.
   return dikerjakan >= urut.length && ctrl.bolehLanjut(12_000);
 }
 
