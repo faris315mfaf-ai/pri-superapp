@@ -37,6 +37,7 @@ import { workAsyncStorage } from "next/dist/server/app-render/work-async-storage
 // Penyimpan permintaan (header asli) — ikut tersalin ke dalam after().
 import { workUnitAsyncStorage } from "next/dist/server/app-render/work-unit-async-storage.external";
 import { adalahTokenUji } from "./uji-beban-skenario";
+import { JEDA_ULANG_MS, bolehUlangJaringan, jenisGalatJaringan } from "./jaringan-keluar";
 
 export type Lajur = "pengguna" | "latar";
 export type Tingkat = "normal" | "lambat" | "macet";
@@ -362,6 +363,8 @@ export class Pencatat {
   private ditolak = 0;
   private habis = 0;
   private antreMaks = 0;
+  /** Percobaan ulang karena sambungan gagal (29 Sep 2026, lib/jaringan-keluar). */
+  private ulang = 0;
   private mulai: number;
   private readonly kini: () => number;
 
@@ -411,12 +414,16 @@ export class Pencatat {
     if (n > this.antreMaks) this.antreMaks = n;
   }
 
+  catatUlang() {
+    this.ulang += 1;
+  }
+
   /** Tutup jendela: kembalikan ringkasan lalu mulai jendela baru. null = tidak ada lalu lintas. */
   tutup(kondisi: KondisiDb, online: number | null = null): Record<string, unknown> | null {
     const detik = Math.max(1, (this.kini() - this.mulai) / 1000);
     const n = [...this.per.values()].reduce((s, h) => s + h.n, 0);
     const hasil =
-      n === 0 && this.ditolak === 0 && this.habis === 0 && this.apiN === 0
+      n === 0 && this.ditolak === 0 && this.habis === 0 && this.apiN === 0 && this.ulang === 0
         ? null
         : (() => {
             const urut = [...this.lama].sort((a, b) => a - b);
@@ -433,6 +440,8 @@ export class Pencatat {
               antre_maks: this.antreMaks,
               waktu_habis: this.habis,
               ditolak: this.ditolak,
+              // Sambungan yang gagal lalu dicoba lagi (jaringan VPS bermasalah).
+              ulang_jaringan: this.ulang,
               tingkat: kondisi.tingkat,
               jatah_latar: kondisi.jatahLatar,
               atas,
@@ -458,6 +467,7 @@ export class Pencatat {
     this.ditolak = 0;
     this.habis = 0;
     this.antreMaks = 0;
+    this.ulang = 0;
     this.mulai = this.kini();
     return hasil;
   }
@@ -515,7 +525,12 @@ export function ringkasanSupabase(): Record<string, unknown> | null {
  * memakai satu pasang milik proses (fetchTerjaga di bawah); uji membuat
  * pasangan sendiri dengan batas waktu pendek.
  */
-export function buatFetchTerjaga(penjaga: Penjaga, pencatat: Pencatat, saatDipakai?: () => void) {
+export function buatFetchTerjaga(
+  penjaga: Penjaga,
+  pencatat: Pencatat,
+  saatDipakai?: () => void,
+  fetchDasar: typeof fetch = (m, i) => fetch(m, i),
+) {
   return async function fetchDijaga(masukan: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const url = typeof masukan === "string" ? masukan : masukan instanceof URL ? masukan.href : masukan.url;
     const metode = (init?.method ?? (masukan instanceof Request ? masukan.method : "GET")).toUpperCase();
@@ -551,8 +566,32 @@ export function buatFetchTerjaga(penjaga: Penjaga, pencatat: Pencatat, saatDipak
     const sinyal = sinyalLuar ? AbortSignal.any([sinyalLuar, pengendali.signal]) : pengendali.signal;
 
     const mulai = Date.now();
+    // Isi permintaan yang bisa dikirim ulang (supabase-js: teks JSON / kosong).
+    const bisaDiulang = !(masukan instanceof Request) && (init?.body == null || typeof init.body === "string");
     try {
-      const res = await fetch(masukan, { ...init, signal: sinyal });
+      let res: Response;
+      for (let coba = 0; ; coba++) {
+        try {
+          res = await fetchDasar(masukan, { ...init, signal: sinyal });
+          break;
+        } catch (e) {
+          // Sambungan gagal (jaringan VPS, lib/jaringan-keluar) → coba lagi
+          // selama waktunya masih ada; batal/tenggat tidak pernah diulang.
+          const jeda = JEDA_ULANG_MS[coba];
+          if (
+            waktuHabis ||
+            sinyal.aborted ||
+            !bisaDiulang ||
+            jeda === undefined ||
+            !bolehUlangJaringan(metode, jenisGalatJaringan(e)) ||
+            Date.now() + jeda > tenggat - 1_000
+          ) {
+            throw e;
+          }
+          pencatat.catatUlang();
+          await new Promise((r) => setTimeout(r, jeda));
+        }
+      }
       const ms = Date.now() - mulai;
       penjaga.catatJawaban(ms);
       pencatat.catat(kunci, ms, res.status >= 500);

@@ -22,6 +22,7 @@ import {
 import { workUnitAsyncStorage } from "next/dist/server/app-render/work-unit-async-storage.external";
 import { bolehSekarang, kosongkanJedaInstans } from "@/lib/jeda-instans";
 import { akunUnik, rencanaSinkronAkun } from "@/lib/sinkron-akun-tertaut";
+import { bolehUlangJaringan, jenisGalatJaringan, kodeGalat } from "@/lib/jaringan-keluar";
 
 let lulus = 0;
 let gagal = 0;
@@ -343,6 +344,52 @@ console.log("rem penulisan uji beban");
   cek("tugas berkala (di luar permintaan): penulisan tetap berjalan", masuk.includes("DELETE /rest/v1/absensi"), masuk);
   server.close();
 }
+
+console.log("jaringan keluar — sambungan gagal dicoba lagi (insiden IPv4 VPS 29 Sep)");
+{
+  const galat = (kode: string) => Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error(kode), { code: kode }) });
+  cek("kode galat dibaca dari cause bertingkat", kodeGalat(Object.assign(new TypeError("x"), { cause: { cause: { code: "ECONNRESET" } } })) === "ECONNRESET");
+  cek("gagal tersambung (timeout/refused/unreach) = 'sambung'", ["UND_ERR_CONNECT_TIMEOUT", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH"].every((k) => jenisGalatJaringan(galat(k)) === "sambung"));
+  cek("putus di tengah = 'putus'; galat lain = null", jenisGalatJaringan(galat("ECONNRESET")) === "putus" && jenisGalatJaringan(new Error("lain")) === null);
+  cek("gagal tersambung boleh diulang untuk POST/PATCH (belum terkirim)", bolehUlangJaringan("POST", "sambung") && bolehUlangJaringan("PATCH", "sambung"));
+  cek("putus di tengah: GET boleh, POST TIDAK (bisa dobel tulis)", bolehUlangJaringan("GET", "putus") && !bolehUlangJaringan("POST", "putus"));
+
+  const jalankan = async (urutan: (string | "ok")[], metode = "GET", body?: string, signal?: AbortSignal) => {
+    let panggil = 0;
+    const tiruan: typeof fetch = async () => {
+      const x = urutan[Math.min(panggil, urutan.length - 1)];
+      panggil++;
+      if (x === "ok") return new Response("[]", { status: 200, headers: { "content-type": "application/json" } });
+      throw galat(x);
+    };
+    const pc = new Pencatat();
+    const f = buatFetchTerjaga(new Penjaga(), pc, undefined, tiruan);
+    try {
+      const r = await f("http://127.0.0.1:1/rest/v1/uji?select=id", { method: metode, body, signal });
+      return { ok: r.ok, panggil, ringkas: pc.tutup({ tingkat: "normal", p50: 0, antre: 0, jatahLatar: 8 } as never) as Record<string, number> | null };
+    } catch (e) {
+      return { ok: false, panggil, galat: kodeGalat(e), ringkas: pc.tutup({ tingkat: "normal", p50: 0, antre: 0, jatahLatar: 8 } as never) as Record<string, number> | null };
+    }
+  };
+  const a = await jalankan(["UND_ERR_CONNECT_TIMEOUT", "ok"]);
+  cek("GET: gagal tersambung sekali → dicoba lagi → berhasil", a.ok && a.panggil === 2, a);
+  cek("…dan tercatat di log per menit (ulang_jaringan)", a.ringkas?.ulang_jaringan === 1, a.ringkas);
+  const b = await jalankan(["ECONNREFUSED", "ok"], "POST", '{"a":1}');
+  cek("POST: gagal tersambung → aman diulang → berhasil", b.ok && b.panggil === 2, b);
+  const c = await jalankan(["ECONNRESET", "ok"], "POST", '{"a":1}');
+  cek("POST: putus di tengah → TIDAK diulang (cegah tulis dobel)", !c.ok && c.panggil === 1 && c.galat === "ECONNRESET", c);
+  const d = await jalankan(["ECONNRESET", "ok"], "GET");
+  cek("GET: putus di tengah → diulang", d.ok && d.panggil === 2, d);
+  const e = await jalankan(["UND_ERR_CONNECT_TIMEOUT"]);
+  cek("gagal terus → berhenti setelah 3 percobaan, galat asli diteruskan", !e.ok && e.panggil === 3 && e.galat === "UND_ERR_CONNECT_TIMEOUT", e);
+  const g = await jalankan(["EBUKANJARINGAN", "ok"]);
+  cek("galat bukan jaringan → tidak diulang", !g.ok && g.panggil === 1, g);
+  const ac = new AbortController();
+  ac.abort();
+  const h = await jalankan(["UND_ERR_CONNECT_TIMEOUT", "ok"], "GET", undefined, ac.signal);
+  cek("dibatalkan pemanggil → tidak diulang", !h.ok && h.panggil === 1, h);
+}
+
 
 console.log(`\n${lulus} lulus, ${gagal} gagal`);
 if (gagal > 0) process.exit(1);
