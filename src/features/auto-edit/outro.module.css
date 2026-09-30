@@ -1,0 +1,316 @@
+/* ============================================================
+   Outro (dibawa dari GODAM "Auto Outro").
+
+   Nilai dasarnya sama dengan Edit Video supaya kedua alat terasa satu
+   keluarga: jarak, ukuran huruf, sudut, warna, dan tiga peran tombol.
+   Warnanya ditulis langsung, bukan token tema SuperApp: tiap panel adalah
+   kartu gelap dengan latarnya sendiri, jadi tetap terbaca di tema terang
+   maupun gelap.
+   ============================================================ */
+.page {
+  --sela-1: 4px;
+  --sela-2: 8px;
+  --sela-3: 12px;
+  --sela-4: 16px;
+  --sela-5: 24px;
+
+  --teks-judul: 18px;
+  --teks-subjudul: 14px;
+  --teks-isi: 13px;
+  --teks-kecil: 11px;
+
+  --bulat-kecil: 8px;
+  --bulat: 12px;
+  --bulat-penuh: 999px;
+
+  --hijau: #7fe0a0;
+  --hijau-tua: #3fce6f;
+  --merah: #ff7d7d;
+  --kuning: #f0b429;
+  --garis: #2a3a2e;
+  --redup: #9aa89f;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--sela-4);
+  color: #eef2ee;
+  /* Memberi tahu peramban bahwa alat ini gelap, supaya kontrol bawaannya
+     (batang gulir, kotak centang) ikut gelap dan tidak tampil sebagai kotak
+     putih menyilaukan. */
+  color-scheme: dark;
+  accent-color: #3fce6f;
+}
+
+/* ---- Tiga peran tombol ----
+   Sifat dasarnya ditulis ulang di tiap peran, sama seperti di halaman Edit
+   Video, karena composes bertingkat hanya terbawa satu tingkat. */
+.btnUtama,
+.btnSekunder,
+.btnBahaya {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sela-1);
+  min-height: 34px;
+  padding: var(--sela-2) var(--sela-3);
+  border-radius: var(--bulat-kecil);
+  font-family: inherit;
+  font-size: var(--teks-isi);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s, opacity 0.15s;
+}
+
+.btnUtama {
+  border: none;
+  background: var(--hijau);
+  color: #051008;
+}
+
+.btnSekunder,
+.btnBahaya {
+  border: 1px solid var(--garis);
+  background: transparent;
+  color: var(--redup);
+}
+
+.btnSekunder:hover:not(:disabled) {
+  color: #eef2ee;
+  border-color: var(--hijau-tua);
+}
+
+.btnBahaya:hover:not(:disabled) {
+  color: var(--merah);
+  border-color: #63302f;
+}
+
+.btnUtama:disabled,
+.btnSekunder:disabled,
+.btnBahaya:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---- Kerangka ---- */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sela-4);
+  border: 1px solid #232a24;
+  border-radius: var(--bulat);
+  background: #131713;
+  padding: var(--sela-4);
+}
+
+@media (min-width: 768px) {
+  .panel {
+    padding: var(--sela-5);
+  }
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sela-3);
+  flex-wrap: wrap;
+}
+
+.panelHead h2 {
+  margin: 0;
+  font-size: var(--teks-judul);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--teks-isi);
+  font-weight: 600;
+  color: #8fa095;
+  line-height: 1.6;
+}
+
+
+/* ---- Formulir ---- */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sela-4);
+}
+
+.blok {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sela-3);
+  border: 1px solid #232a24;
+  border-radius: var(--bulat);
+  padding: var(--sela-4);
+}
+
+.blokHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sela-3);
+  flex-wrap: wrap;
+}
+
+.blokHead h3 {
+  margin: 0;
+  font-size: var(--teks-subjudul);
+  font-weight: 700;
+}
+
+.jumlahHuruf {
+  font-size: var(--teks-kecil);
+  font-weight: 700;
+  color: #7c8a81;
+  font-variant-numeric: tabular-nums;
+}
+
+.row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sela-3);
+  flex-wrap: wrap;
+}
+
+.row > label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sela-1);
+  flex: 1;
+  min-width: 160px;
+}
+
+.row > label > span {
+  font-size: var(--teks-kecil);
+  font-weight: 600;
+  color: var(--redup);
+  opacity: 0.75;
+}
+
+/* Kotak caption ikut bergaya gelap; tanpa ini ia tampil putih bawaan peramban. */
+.naskah {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--garis);
+  border-radius: var(--bulat-kecil);
+  background: #0f1210;
+  color: #eef2ee;
+  font-family: inherit;
+  font-size: var(--teks-isi);
+  font-weight: 600;
+  line-height: 1.6;
+  padding: var(--sela-3);
+}
+
+.naskah:focus {
+  outline: none;
+  border-color: var(--hijau-tua);
+}
+
+/* ---- Baris tombol ---- */
+.aksi {
+  display: flex;
+  align-items: center;
+  gap: var(--sela-2);
+  flex-wrap: nowrap;
+}
+
+/* ---- Pesan ---- */
+.galat {
+  margin: 0;
+  font-size: var(--teks-isi);
+  font-weight: 700;
+  color: var(--merah);
+  line-height: 1.6;
+}
+
+.rincianKotak {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sela-2);
+  margin-top: var(--sela-2);
+  padding: var(--sela-3);
+  border: 1px solid #232a24;
+  border-radius: var(--bulat-kecil);
+  background: #0f1310;
+}
+
+.rincianBaris {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sela-2);
+  flex-wrap: wrap;
+}
+
+.rincianNilai {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--teks-isi);
+  font-weight: 600;
+  color: var(--hijau);
+  /* Nilainya tidak punya spasi, jadi harus boleh putus di mana saja. */
+  word-break: break-all;
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: var(--bulat-penuh);
+  font-size: var(--teks-kecil);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #23301f;
+  color: var(--hijau);
+}
+
+.sasaranOk {
+  border-color: #2c4a34;
+  color: var(--hijau);
+}
+
+.sasaranGagal {
+  border-color: #63302f;
+  color: var(--merah);
+}
+
+.progresBatang {
+  flex: 1 1 60px;
+  min-width: 50px;
+  height: 6px;
+  border-radius: var(--bulat-penuh);
+  background: #232a24;
+  overflow: hidden;
+}
+
+.progresIsi {
+  display: block;
+  height: 100%;
+  border-radius: var(--bulat-penuh);
+  background: var(--hijau);
+  transition: width 0.9s linear;
+}
+
+/* ---- Kartu hasil ---- */
+.kartuHasil {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--sela-3);
+}
+
+.namaChannel {
+  overflow-wrap: anywhere;
+}
+
+.video {
+  width: 100%;
+  border-radius: 10px;
+  background: #000;
+}

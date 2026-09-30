@@ -8,6 +8,8 @@
 #   aplikasi  — Next.js (hasil build standalone)
 #   redis     — cache bersama: sesi, tanda detak, siapa yang online
 #   jadwal    — penjalan tugas berkala, pengganti Vercel Cron
+#   autoedit-* — mesin Auto Edit video (modul khusus master, 30 Sep 2026):
+#               API + worker render ffmpeg + Redis antreannya sendiri
 #
 # Gerbang masuk tetap Caddy milik server (di luar tumpukan ini), yang
 # membagi berdasarkan nama domain. Karena itu TIDAK ADA satu pun port di
@@ -45,6 +47,10 @@ services:
     # internet, cuma mampir ke Caddy di mesin yang sama.
     extra_hosts:
       - "${DOMAIN_DB}:host-gateway"
+    # Socket API Auto Edit: satu-satunya jalan ke layanan itu (tanpa port,
+    # tanpa jaringan bersama). Disiapkan 12-perbarui.sh (siapkan-disk.sh).
+    volumes:
+      - /srv/godam/sock:/run/autoedit
     ports:
       - "127.0.0.1:${PORT_APLIKASI:-3001}:3000"
     depends_on:
@@ -119,9 +125,111 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
+  # --- Auto Edit ---------------------------------------------------
+  # Terpisah total dari aplikasi: jaringannya sendiri (subnet tetap supaya
+  # firewall keluar di vps/autoedit/firewall-keluar.sh bisa menutup akses
+  # ke alamat privat — pengunduh video menerima link dari luar), Redis
+  # sendiri, disk media sendiri (/srv/godam/media, image 60 GB: penuh pun
+  # disk database tidak tersentuh), dan batas CPU/RAM supaya render tidak
+  # merebut jatah database. Rahasianya hanya kunci DeepSeek & sesi Instagram
+  # (autoedit.env, disaring 12-perbarui.sh dari env.txt) — bukan seluruh env.
+  autoedit-redis:
+    image: redis:7-alpine
+    container_name: pri-autoedit-redis
+    restart: unless-stopped
+    # Antrean render: AOF menyala dan TIDAK ada pembuangan kunci.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "96mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - autoedit-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [autoedit]
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 128M }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  autoedit-api:
+    build:
+      context: ../sumber/autoedit
+    image: pri-autoedit:terbaru
+    container_name: pri-autoedit-api
+    restart: unless-stopped
+    init: true
+    env_file:
+      - path: ./autoedit.env
+        required: false
+    environment:
+      ROLE: api
+      REDIS_URL: redis://autoedit-redis:6379/0
+      MEDIA_DIR: /data/media
+      TZ: Asia/Jakarta
+    volumes:
+      - /srv/godam/media:/data/media
+      - /srv/godam/sock:/run/autoedit
+    depends_on:
+      autoedit-redis:
+        condition: service_healthy
+    networks: [autoedit]
+    healthcheck:
+      test: ["CMD", "python", "sehat.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    # Outro dirender di proses API (utas + ffmpeg), jadi jatahnya lebih
+    # dari sekadar API.
+    deploy:
+      resources:
+        limits: { cpus: "1.5", memory: 1536M, pids: 256 }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # SATU video sekaligus, 2 utas encoder. Naikkan CELERY_CONCURRENCY hanya
+  # bersama batas CPU di bawah.
+  autoedit-worker:
+    image: pri-autoedit:terbaru
+    container_name: pri-autoedit-worker
+    restart: unless-stopped
+    init: true
+    env_file:
+      - path: ./autoedit.env
+        required: false
+    environment:
+      ROLE: worker
+      REDIS_URL: redis://autoedit-redis:6379/0
+      MEDIA_DIR: /data/media
+      CELERY_CONCURRENCY: "1"
+      VIDEO_THREADS: "2"
+      TZ: Asia/Jakarta
+    volumes:
+      - /srv/godam/media:/data/media
+    depends_on:
+      autoedit-redis:
+        condition: service_healthy
+    networks: [autoedit]
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 3G, pids: 512 }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
 volumes:
   redis-data:
+  autoedit-redis-data:
 
 networks:
   pri:
     name: pri
+  autoedit:
+    name: pri-autoedit
+    ipam:
+      config:
+        - subnet: 10.251.0.0/24

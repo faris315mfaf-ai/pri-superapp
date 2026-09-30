@@ -109,8 +109,12 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     // Semua halaman KECUALI aset statis & prefetch — pola resmi Next.
+    // /api/autoedit ikut dikecualikan (30 Sep 2026): proxy menyalin isi
+    // permintaan ke memori dan MEMOTONGNYA di 10 MB, padahal rute itu
+    // meneruskan unggahan video ratusan MB. Rute itu menjaga dirinya sendiri
+    // (sesi + peran master) dan tidak menyajikan halaman, jadi tidak butuh CSP.
     {
-      source: "/((?!_next/static|_next/image|favicon.ico|sw.js|ikon/|logo|robots.txt|cek.html|manifest).*)",
+      source: "/((?!_next/static|_next/image|favicon.ico|sw.js|ikon/|logo|robots.txt|cek.html|manifest|api/autoedit).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },

@@ -139,6 +139,50 @@ if [ "$SKRIP_SAJA" = "1" ]; then
   exit 0
 fi
 
+# --- Auto Edit (modul khusus master, 30 Sep 2026) ------------------
+# Disk media, folder socket, firewall keluar, dan kuncinya disiapkan
+# SEBELUM aplikasi dinyalakan ulang: container aplikasi memasang folder
+# socket-nya. Semua langkah Auto Edit boleh gagal tanpa menghentikan
+# pembaruan aplikasi — yang terganggu hanya modul itu sendiri.
+AUTOEDIT_SIAP=1
+siapkan_autoedit() {
+  bash "$SKRIP/autoedit/siapkan-disk.sh" 60 >/dev/null || return 1
+  install -m 755 "$SKRIP/autoedit/firewall-keluar.sh" /usr/local/sbin/pri-autoedit-firewall || return 1
+  cat > /etc/systemd/system/pri-autoedit-firewall.service <<'UNIT' || return 1
+[Unit]
+Description=Firewall keluar container Auto Edit PRI
+After=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/pri-autoedit-firewall
+
+[Install]
+WantedBy=multi-user.target docker.service
+UNIT
+  systemctl daemon-reload || return 1
+  systemctl enable --quiet pri-autoedit-firewall.service || return 1
+  systemctl restart pri-autoedit-firewall.service || return 1
+  # Container Auto Edit hanya menerima kunci DeepSeek (hook berita) dan sesi
+  # Instagram untuk pengunduh (opsional) — bukan seluruh env.txt.
+  ( umask 077; grep -E '^(DEEPSEEK_(API_KEY|BASE_URL|MODEL)|VIDEO_IG_SESSIONID)=' "$APP/env.txt" > "$APP/autoedit.env" || true )
+  {
+    echo 'SHELL=/bin/bash'
+    echo 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+    echo "50 2 * * * root bash $SKRIP/autoedit/cadangan-template.sh >> /var/log/pri-autoedit-cadangan.log 2>&1"
+  } > /etc/cron.d/pri-autoedit || return 1
+  chmod 644 /etc/cron.d/pri-autoedit
+}
+echo "== Auto Edit: disk, socket, firewall =="
+if siapkan_autoedit; then
+  echo "  siap ($(df -h --output=avail /srv/godam/media | tail -1 | tr -d ' ') bebas di disk media)"
+else
+  AUTOEDIT_SIAP=0
+  echo "  PERINGATAN: persiapan Auto Edit gagal — aplikasi tetap diperbarui, modul Auto Edit menunggu." >&2
+fi
+
 echo "== 3/6 Menyimpan versi sekarang sebagai cadangan =="
 # Kalau yang baru bermasalah, inilah yang dihidupkan kembali.
 if docker image inspect pri-aplikasi:terbaru >/dev/null 2>&1; then
@@ -184,6 +228,28 @@ if [ "$SIAP" -ne 1 ]; then
     echo "Tidak ada cadangan untuk dikembalikan." >&2
   fi
   exit 1
+fi
+
+if [ "$AUTOEDIT_SIAP" = "1" ]; then
+  echo "== Auto Edit: membangun & menyalakan =="
+  # Image yang sama untuk API dan worker; compose hanya membuat ulang
+  # container yang image/susunannya berubah. Render yang sedang berjalan
+  # ikut terputus saat worker diganti — job itu ditandai gagal, bisa diulang.
+  if docker compose build autoedit-api && docker compose up -d autoedit-redis autoedit-api autoedit-worker; then
+    SEHAT=""
+    for i in $(seq 1 30); do
+      SEHAT="$(docker inspect -f '{{.State.Health.Status}}' pri-autoedit-api 2>/dev/null || true)"
+      [ "$SEHAT" = "healthy" ] && break
+      sleep 3
+    done
+    if [ "$SEHAT" = "healthy" ]; then
+      echo "  Auto Edit jalan."
+    else
+      echo "  PERINGATAN: API Auto Edit belum sehat ($SEHAT). Log: docker logs --tail 50 pri-autoedit-api" >&2
+    fi
+  else
+    echo "  PERINGATAN: Auto Edit gagal dibangun/dinyalakan — aplikasi tetap jalan." >&2
+  fi
 fi
 
 echo "== 6/6 Memeriksa hasil =="

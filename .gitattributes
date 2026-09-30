@@ -12,3 +12,6 @@ vps/**/*.sh      text eol=lf
 vps/**/Dockerfile text eol=lf
 vps/**/*.yml    text eol=lf
 .dockerignore   text eol=lf
+# Backend Auto Edit dibangun di Linux (Docker): semua berkas teksnya LF,
+# berkas biner (font, gambar) dikenali otomatis.
+autoedit/**     text=auto eol=lf

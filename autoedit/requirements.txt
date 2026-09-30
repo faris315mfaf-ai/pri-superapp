@@ -1,0 +1,20 @@
+# Versi DIPATOK dengan sengaja: batas bawahnya versi yang terbukti jalan,
+# batas atasnya versi mayor berikutnya (yang boleh memutus kompatibilitas).
+# Menaikkan versi: ubah angkanya di sini, jalankan uji, baru push.
+
+fastapi>=0.141.1,<1.0
+uvicorn[standard]>=0.52.4,<1.0
+celery>=5.6.3,<6.0
+redis>=8.1.0,<9.0
+httpx>=0.28.1,<1.0
+python-multipart>=0.0.32,<1.0
+pillow>=12.0.0,<13.0
+# Auto Outro merender latar prosedural (gradien, partikel) dengan numpy.
+numpy>=1.26,<3
+
+# yt-dlp SENGAJA tidak dipatok ke atas. Instagram, TikTok, dan YouTube
+# mengubah halamannya kapan saja, dan yt-dlp menambalnya lewat rilis baru
+# yang sering - memakukannya justru membuat pembacaan link mati sendiri
+# beberapa minggu kemudian.
+yt-dlp>=2026.8.19
+

@@ -1,0 +1,1057 @@
+/* ============================================================
+   Edit Video (dibawa dari GODAM).
+
+   Warnanya ditulis langsung, bukan token tema SuperApp: tiap panel adalah
+   kartu gelap dengan latarnya sendiri, jadi tetap terbaca di tema terang
+   maupun gelap tanpa perlu dua set warna.
+
+   Nilai dasar tampilan.
+
+   Sebelumnya halaman ini memakai sebelas ukuran huruf, lima nilai jarak, dan
+   lima radius yang berbeda-beda — kombinasi yang membuatnya terasa berantakan
+   walau tiap bagiannya sendiri terlihat wajar. Semuanya kini diambil dari
+   daftar di bawah, jadi yang dipakai selalu itu-itu saja.
+   ============================================================ */
+.page {
+  /* Jarak: satu deret naik, dipakai untuk gap, padding, dan margin. */
+  --sela-1: 4px;
+  --sela-2: 8px;
+  --sela-3: 12px;
+  --sela-4: 16px;
+  --sela-5: 24px;
+
+  /* Ukuran huruf: empat tingkat saja, dari judul sampai keterangan. */
+  --teks-judul: 18px;
+  --teks-subjudul: 14px;
+  --teks-isi: 13px;
+  --teks-kecil: 11px;
+
+  /* Sudut membulat */
+  --bulat-kecil: 8px;
+  --bulat: 12px;
+  --bulat-penuh: 999px;
+
+  /* Warna */
+  --hijau: #7fe0a0;
+  --hijau-tua: #3fce6f;
+  --merah: #ff7d7d;
+  --kuning: #f0b429;
+  --garis: #2a3a2e;
+  --redup: #9aa89f;
+
+  color: #eef2ee;
+  /* Kontrol bawaan peramban (pemilih berkas, kotak centang, daftar pilihan)
+     ikut gelap, tidak tampil sebagai kotak putih menyilaukan. */
+  color-scheme: dark;
+  accent-color: #3fce6f;
+  /* Tata letak dua kolom mengikuti lebar kolom aplikasi, bukan lebar
+     jendela: di PC kolomnya menyempit oleh navigasi samping. */
+  container-type: inline-size;
+}
+
+/* ---- Tiga peran tombol ----
+   Sebelumnya ada tujuh gaya tombol dengan tinggi dan radius berbeda. Sekarang
+   hanya tiga peran, dan nama kelas lama menumpang lewat "composes".
+
+   Sifat dasarnya sengaja ditulis ulang di tiap peran, tidak diwarisi dari satu
+   kelas bersama: composes bertingkat (kelas lama -> peran -> dasar) hanya
+   terbawa satu tingkat, sehingga sifat dasarnya tidak pernah sampai ke
+   tombolnya dan tombol kehilangan ruang dalam serta perataan teksnya. */
+.btnUtama {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sela-1);
+  min-height: 34px;
+  padding: var(--sela-2) var(--sela-3);
+  border-radius: var(--bulat-kecil);
+  font-family: inherit;
+  font-size: var(--teks-isi);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s, opacity .15s;
+  border: none;
+  background: var(--hijau);
+  color: #051008;
+}
+
+.btnSekunder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sela-1);
+  min-height: 34px;
+  padding: var(--sela-2) var(--sela-3);
+  border-radius: var(--bulat-kecil);
+  font-family: inherit;
+  font-size: var(--teks-isi);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s, opacity .15s;
+  border: 1px solid var(--garis);
+  background: transparent;
+  color: var(--redup);
+}
+
+.btnBahaya {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sela-1);
+  min-height: 34px;
+  padding: var(--sela-2) var(--sela-3);
+  border-radius: var(--bulat-kecil);
+  font-family: inherit;
+  font-size: var(--teks-isi);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s, opacity .15s;
+  border: 1px solid var(--garis);
+  background: transparent;
+  color: var(--redup);
+}
+
+.btnUtama:disabled,
+.btnSekunder:disabled,
+.btnBahaya:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.btnSekunder:hover:not(:disabled) {
+  color: #eef2ee;
+  border-color: var(--hijau-tua);
+}
+
+.btnBahaya:hover:not(:disabled) {
+  color: var(--merah);
+  border-color: #63302f;
+}
+
+.headStatus {
+  margin-left: auto;
+  font-size: var(--teks-isi);
+  text-transform: uppercase;
+  color: #8fa095;
+  font-weight: 700;
+}
+
+.main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sela-4);
+  align-items: start;
+}
+
+@container (min-width: 900px) {
+  .main {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: var(--sela-5);
+  }
+}
+
+.panel {
+  border: 1px solid #2a3a2e;
+  border-radius: var(--bulat);
+  background: #161a17;
+  padding: var(--sela-4);
+}
+
+@container (min-width: 600px) {
+  .panel {
+    padding: var(--sela-5);
+  }
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sela-3);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sela-4);
+}
+
+.row {
+  display: flex;
+  gap: var(--sela-3);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.row > label {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+/* Selektor dilingkupi .panel: CSS Modules menolak selektor elemen telanjang. */
+.panel label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sela-2);
+}
+
+.panel label > span {
+  font-size: var(--teks-isi);
+  font-weight: 700;
+  color: #9aa89f;
+}
+
+.panel input,
+.panel select {
+  width: 100%;
+  border: 1px solid #2a3a2e;
+  border-radius: var(--bulat-kecil);
+  background: #0f1210;
+  color: #eef2ee;
+  font-family: inherit;
+  font-size: var(--teks-isi);
+  font-weight: 600;
+  padding: var(--sela-3);
+}
+
+.panel input:focus,
+.panel select:focus {
+  outline: none;
+  border-color: #3fce6f;
+}
+
+/* Tombol "Pilih berkas" bawaan dilucuti gaya dasar Tailwind sampai tinggal
+   tulisan polos; dikembalikan jadi tombol supaya jelas bisa ditekan. */
+.panel input::file-selector-button {
+  margin-right: var(--sela-3);
+  padding: 6px var(--sela-3);
+  border: 1px solid var(--garis);
+  border-radius: var(--bulat-kecil);
+  background: #1c2b21;
+  color: #eef2ee;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.select {
+  width: auto;
+  min-width: 160px;
+}
+
+.blok {
+  border: 1px solid #232a24;
+  border-radius: var(--bulat);
+  padding: var(--sela-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sela-3);
+}
+
+.blokHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sela-3);
+  /* Menumpuk hanya saat benar-benar tidak muat, bukan sedikit-sedikit. */
+  flex-wrap: wrap;
+}
+
+.ghostBtn {
+  composes: btnSekunder;
+}
+
+.hapusBtn {
+  composes: btnBahaya;
+}
+
+.uploadBtn {
+  composes: btnSekunder;
+}
+
+
+
+
+.uploadBtn input[type="file"] {
+  display: none;
+}
+
+.aksi {
+  display: flex;
+  align-items: center;
+  gap: var(--sela-2);
+  /* Tidak membungkus: tombol di satu baris berdampingan, bukan bertumpuk. */
+  flex-wrap: nowrap;
+}
+
+.simpanBtn {
+  composes: btnUtama;
+}
+
+.mulaiBtn {
+  composes: btnUtama;
+  width: 100%;
+  min-height: 42px;
+  font-size: var(--teks-subjudul);
+}
+
+.unduhBtn {
+  composes: btnUtama;
+  text-decoration: none;
+}
+
+
+.pesan {
+  font-size: var(--teks-isi);
+  font-weight: 600;
+  color: #7fe0a0;
+}
+
+
+/* ---------- JOB ---------- */
+
+.jobBox {
+  border: 1px solid #232a24;
+  border-radius: var(--bulat);
+  padding: var(--sela-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sela-3);
+}
+
+.jobHead {
+  display: flex;
+  align-items: center;
+  gap: var(--sela-3);
+  font-size: var(--teks-isi);
+  font-weight: 600;
+  color: #b8c6bd;
+}
+
+.badge {
+  font-size: var(--teks-kecil);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 800;
+  padding: var(--sela-1) var(--sela-3);
+  border-radius: var(--bulat-penuh);
+  background: #2a2f2b;
+  color: #8fa095;
+}
+
+.queued,
+.downloading,
+.rendering {
+  background: #24402e;
+  color: #7fe0a0;
+}
+
+.done {
+  background: #7fe0a0;
+  color: #051008;
+}
+
+.error {
+  background: #4a2626;
+  color: #ff9a9a;
+}
+
+.barWrap {
+  height: 7px;
+  border-radius: var(--bulat-penuh);
+  background: #0f1210;
+  border: 1px solid #2a3a2e;
+  overflow: hidden;
+}
+
+.bar {
+  height: 100%;
+  background: linear-gradient(90deg, #3fce6f, #7fe0a0);
+  transition: width 0.4s ease;
+}
+
+.hasil {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sela-3);
+}
+
+.video {
+  width: 100%;
+  max-height: 460px;
+  border-radius: var(--bulat);
+  background: #000;
+}
+
+/* ---- Hook otomatis ---- */
+.hookBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sela-2);
+  padding: var(--sela-3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--bulat);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.naskah {
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+}
+
+
+/* ---- Pratinjau isi link ---- */
+.pratinjauBox {
+  padding: var(--sela-3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--bulat);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.pratinjauIsi {
+  display: flex;
+  gap: var(--sela-3);
+  align-items: flex-start;
+}
+
+.pratinjauGambar {
+  width: 140px;
+  max-width: 40%;
+  border-radius: var(--bulat-kecil);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.pratinjauTeks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sela-1);
+  min-width: 0;
+}
+
+.pratinjauTeks strong {
+  line-height: 1.3;
+}
+
+.pratinjauTeks span {
+  font-size: var(--teks-kecil);
+  opacity: 0.75;
+}
+
+@media (max-width: 520px) {
+  .pratinjauIsi { flex-direction: column; }
+  .pratinjauGambar { width: 100%; max-width: 100%; }
+}
+
+/* ---- Caption & hook ---- */
+.caption {
+  margin: var(--sela-3) 0 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: var(--teks-kecil);
+  line-height: 1.5;
+  opacity: 0.8;
+  white-space: pre-wrap;
+  max-height: 7.5em;
+  overflow-y: auto;
+}
+
+.hookJudul {
+  font-size: var(--teks-kecil);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+}
+
+.hookParagraf {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+  text-align: justify;
+}
+
+.hookKicker {
+  color: #d32d27;
+}
+
+/* ---- Pilihan AI / manual ---- */
+.hookHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sela-3);
+  flex-wrap: wrap;
+}
+
+.pilihMode {
+  display: inline-flex;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--bulat-penuh);
+  overflow: hidden;
+}
+
+.modeBtn,
+.modeAktif {
+  padding: var(--sela-1) var(--sela-4);
+  border: 0;
+  font: inherit;
+  font-size: var(--teks-kecil);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  background: transparent;
+  color: inherit;
+}
+
+.modeAktif {
+  background: #d32d27;
+  color: #fff;
+}
+
+.kredit {
+  margin: var(--sela-1) 0 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: var(--teks-kecil);
+  opacity: 0.8;
+}
+
+/* ---- Tombol kosongkan slot layer ---- */
+.kosongkanBtn {
+  composes: btnBahaya;
+  flex: 0 0 auto;
+  width: 34px;
+  padding: 0;
+  align-self: flex-end;
+  font-size: var(--teks-subjudul);
+}
+
+
+/* ---- Pratinjau & kotak teks ---- */
+.pratinjauKotak {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  border-radius: var(--bulat);
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+  background: #181818;
+}
+
+.pratinjauKotak img {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+
+.kotakTeksLayer {
+  position: absolute;
+  border: 2px solid #4ade80;
+  background: rgba(74, 222, 128, 0.18);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+/* ---- Kotak badge & daftar template ---- */
+.kotakBadgeLayer {
+  position: absolute;
+  border: 2px solid #fb923c;
+  background: rgba(251, 146, 60, 0.18);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.kotakBawaan {
+  border-style: dashed;
+  background: rgba(251, 146, 60, 0.08);
+}
+
+.daftarCek {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sela-2) var(--sela-4);
+}
+
+.cekItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sela-2);
+  padding: var(--sela-2) var(--sela-3);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--bulat-kecil);
+  cursor: pointer;
+}
+
+.cekItem input {
+  width: auto;
+  margin: 0;
+}
+
+.jobDaftar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sela-3);
+}
+
+/* ---- Warna pratinjau teks berita ----
+   Latarnya ikut dibalik supaya warna yang dipilih terlihat apa adanya dan
+   tetap terbaca: tulisan hitam di atas latar terang, putih di atas gelap —
+   sama seperti nanti di dalam kotak template. */
+.isiHitam {
+  color: #111;
+  background: #f4f4f4;
+  padding: var(--sela-3) var(--sela-3);
+  border-radius: var(--bulat-kecil);
+}
+
+.isiPutih {
+  color: #fff;
+  background: #1c1c1c;
+  padding: var(--sela-3) var(--sela-3);
+  border-radius: var(--bulat-kecil);
+}
+
+/* ---- Tanda tanya penjelasan ---- */
+.bantuanBungkus {
+  display: inline;
+}
+
+.bantuanTombol {
+  margin-left: 6px;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--teks-kecil);
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+  vertical-align: middle;
+}
+
+.bantuanTombol:hover {
+  opacity: 1;
+  border-color: #4ade80;
+  color: #4ade80;
+}
+
+.bantuanIsi {
+  display: block;
+  margin-top: 6px;
+  padding: var(--sela-2) var(--sela-3);
+  border-left: 2px solid rgba(74, 222, 128, 0.6);
+  border-radius: 0 var(--bulat-kecil) var(--bulat-kecil) 0;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: var(--teks-kecil);
+  font-weight: 400;
+  line-height: 1.5;
+  opacity: 0.9;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* ---- Alasan tombol belum bisa ditekan ---- */
+.alasan {
+  margin: -4px 0 0;
+  font-size: var(--teks-kecil);
+  text-align: center;
+  opacity: 0.75;
+}
+
+
+/* ---- Tingkat tulisan ----
+   Tiga tingkat yang jelas: judul panel, judul bagian, lalu isi. Keterangan
+   kecil dibuat lebih redup agar tidak bersaing dengan isian. */
+.panelHead h2 {
+  margin: 0;
+  font-size: var(--teks-judul);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.blokHead h3 {
+  margin: 0;
+  font-size: var(--teks-subjudul);
+  font-weight: 700;
+}
+
+.form > label > span,
+.row > label > span {
+  font-size: var(--teks-kecil);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+}
+
+.hint {
+  font-size: var(--teks-kecil);
+  line-height: 1.55;
+  opacity: 0.65;
+}
+
+/* ---- Rangka pemuatan ----
+   Saat menunggu jawaban server, area kosong membuat halaman terlihat
+   berkedip. Balok redup berdenyut ini menahan ruangnya lebih dulu. */
+.rangka {
+  border-radius: var(--bulat-kecil);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 25%,
+    rgba(255, 255, 255, 0.11) 37%,
+    rgba(255, 255, 255, 0.05) 63%
+  );
+  background-size: 400% 100%;
+  animation: denyut 1.4s ease-in-out infinite;
+}
+
+.rangkaBaris {
+  composes: rangka;
+  height: 14px;
+  margin-bottom: var(--sela-2);
+}
+
+.rangkaKotak {
+  composes: rangka;
+  height: 76px;
+}
+
+@keyframes denyut {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rangka { animation: none; }
+}
+
+/* Keterangan saat template yang dibuka tidak bisa diubah (template bawaan). */
+.kunciInfo {
+  margin: 0;
+  padding: var(--sela-3) var(--sela-4);
+  border: 1px solid #4a4526;
+  border-radius: var(--bulat-kecil);
+  background: #1f1d12;
+  color: #e6d38a;
+  font-size: var(--teks-isi);
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+/* Tombol unggah yang dikunci: tampak redup dan tidak bisa diklik. */
+.nonaktif {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Pesan saat gambar pratinjau tidak bisa dibuat (mis. berkas layernya hilang). */
+.pratinjauGagal {
+  margin: 0;
+  padding: var(--sela-4);
+  text-align: center;
+  font-size: var(--teks-isi);
+  font-weight: 600;
+  color: #ff9a9a;
+  line-height: 1.6;
+}
+
+/* ---- Kemajuan unggahan ----
+   Muncul di bawah baris berkas selama unggahan berjalan, lalu hilang sendiri.
+   Dua keadaan: bar yang terisi sesuai byte terkirim, lalu bar bergerak saat
+   berkasnya sudah sampai dan server masih memeriksanya. */
+.unggahProgres {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.unggahBarWrap {
+  height: 6px;
+  border-radius: var(--bulat-penuh);
+  background: #0f1210;
+  border: 1px solid #2a3a2e;
+  overflow: hidden;
+}
+
+.unggahBar {
+  height: 100%;
+  border-radius: var(--bulat-penuh);
+  background: linear-gradient(90deg, #3fce6f, #7fe0a0);
+  transition: width 0.2s ease-out;
+}
+
+/* Berkas sudah terkirim seluruhnya; server masih memeriksa dan merapikannya.
+   Lamanya tidak bisa diketahui, jadi barnya bergerak, bukan terisi. */
+.unggahBarProses {
+  height: 100%;
+  width: 35%;
+  border-radius: var(--bulat-penuh);
+  background: linear-gradient(90deg, #3fce6f, #7fe0a0);
+  animation: geser 1.1s ease-in-out infinite;
+}
+
+.unggahLabel {
+  font-size: var(--teks-kecil);
+  font-weight: 600;
+  color: #8fa095;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes geser {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .unggahBarProses {
+    width: 100%;
+    animation: none;
+    opacity: 0.6;
+  }
+  .unggahBar {
+    transition: none;
+  }
+}
+
+/* ---- Menghentikan pembuatan video ---- */
+.stopBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  min-height: 34px;
+  padding: var(--sela-2) var(--sela-4);
+  border: 1px solid #63302f;
+  border-radius: var(--bulat-kecil);
+  background: transparent;
+  color: var(--merah);
+  font-family: inherit;
+  font-size: var(--teks-isi);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.stopBtn:hover:not(:disabled) {
+  background: #d32d27;
+  border-color: #d32d27;
+  color: #fff;
+}
+
+.stopBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---- Kepala daftar hasil ---- */
+.jobHeadBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sela-3);
+  flex-wrap: wrap;
+}
+
+.jobJumlah {
+  font-size: var(--teks-kecil);
+  font-weight: 700;
+  color: #8fa095;
+}
+
+.hapusSemuaBtn,
+.hapusHasilBtn {
+  border: 1px solid var(--garis);
+  border-radius: var(--bulat-penuh);
+  background: transparent;
+  color: #8fa095;
+  font-family: inherit;
+  font-size: var(--teks-kecil);
+  font-weight: 700;
+  padding: 5px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  align-self: flex-start;
+}
+
+.hapusSemuaBtn:hover,
+.hapusHasilBtn:hover {
+  color: var(--merah);
+  border-color: #63302f;
+}
+
+.hasilAksi {
+  display: flex;
+  align-items: center;
+  gap: var(--sela-2);
+  flex-wrap: wrap;
+}
+
+/* Tahap unduh sumber tidak punya angka, jadi barnya bergerak. */
+.barGerak {
+  height: 100%;
+  width: 35%;
+  border-radius: var(--bulat-penuh);
+  background: linear-gradient(90deg, #3fce6f, #7fe0a0);
+  animation: geser 1.1s ease-in-out infinite;
+}
+
+/* Status dihentikan: bukan kesalahan, jadi warnanya netral. */
+.dibatalkan {
+  background: #2f2a1c;
+  color: #e6d38a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barGerak {
+    width: 100%;
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* ---- Pilihan perataan tulisan (empat ikon garis) ---- */
+.pilihRata {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.rataBtn,
+.rataAktif {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #2a3a2e;
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.rataAktif {
+  background: #1c2b21;
+  border-color: #3fce6f;
+}
+
+.rataBtn:disabled,
+.rataAktif:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Empat garis kecil yang meniru bentuk paragrafnya. */
+.rataIkon {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 18px;
+}
+
+.rataIkon span {
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  background: #b8c6bd;
+}
+
+.rataAktif .rataIkon span {
+  background: #7fe0a0;
+}
+
+/* ---- Sisa jatah penyimpanan ---- */
+.kuotaBaris {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 2px;
+}
+
+.kuotaBarWrap {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: #1a221c;
+  overflow: hidden;
+}
+
+.kuotaBar { height: 100%; background: #3fce6f; }
+.kuotaBarHampir { height: 100%; background: #e0b43f; }
+.kuotaBarPenuh { height: 100%; background: #e0574f; }
+
+.kuotaLabel {
+  color: #9aa89f;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* ---- Peringatan mesin perender mati ---- */
+.peringatanWorker {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid #e0b43f;
+  border-radius: 0 8px 8px 0;
+  background: #1f1a12;
+  color: #e6d3a3;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ---- Baris bawah kartu job: keterangan + tombol hentikan ---- */
+.barisBawah {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.stopSatuBtn,
+.ulangiBtn {
+  padding: 5px 11px;
+  border: 1px solid #2a3a2e;
+  border-radius: 8px;
+  background: transparent;
+  color: #b8c6bd;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ulangiBtn {
+  border-color: #3fce6f;
+  color: #7fe0a0;
+}
+
+.stopSatuBtn:hover { border-color: #e0574f; color: #ff9b95; }
+.stopSatuBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* Penolakan, bukan peringatan: videonya memang tidak akan diproses. */
+.tolak {
+  color: #ff9b95;
+  font-weight: 700;
+}

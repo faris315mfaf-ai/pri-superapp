@@ -82,3 +82,7 @@ nul
 # Token fetch di VPS (jangan disalin ke repo)
 rahasia/
 
+
+# Backend Auto Edit (Python): sisa uji & cache interpreter.
+__pycache__/
+.pytest_cache/
