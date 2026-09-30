@@ -40,7 +40,6 @@ import {
   GraduationCap,
   Bot,
   Dice5,
-  Clapperboard,
 } from "lucide-react";
 import { mulaiTur } from "@/lib/tur";
 import { LogoPri } from "@/components/logo-pri";
@@ -120,8 +119,6 @@ type ProfilScreenProps = {
   onBukaKelolaLaporanKpi?: () => void;
   onBukaNotifikasi?: () => void;
   onBukaPanelMaster?: () => void;
-  /** Auto Edit video (modul khusus master, 30 Sep 2026) */
-  onBukaAutoEdit?: () => void;
   /** Pet Robot (3 Sep 2026, terbuka untuk semua) */
   onBukaPet?: () => void;
   /** Ludo Robot multipemain (3 Sep 2026, terbuka untuk semua) */
@@ -364,7 +361,6 @@ export function ProfilScreen({
   onBukaKelolaLaporanKpi,
   onBukaNotifikasi,
   onBukaPanelMaster,
-  onBukaAutoEdit,
   onBukaPet,
   onBukaLudo,
   onBukaPengaturanFitur,
@@ -845,33 +841,6 @@ export function ProfilScreen({
               </span>
               <span className="block text-[11px] text-teks-sekunder">
                 Peran istimewa, akun wajib QC, log galat
-              </span>
-            </span>
-          </button>
-        </FadeInUp>
-      )}
-
-      {/* Auto Edit — modul khusus master (superadmin ikut: peran efektifnya master) */}
-      {user.role === "master" && onBukaAutoEdit && (
-        <FadeInUp delay={0.04}>
-          <button
-            type="button"
-            onClick={onBukaAutoEdit}
-            className="btn-tekan mt-3 flex w-full items-center gap-3 rounded-2xl border border-sky-500/40 bg-sky-500/10 px-4 py-3 text-left"
-          >
-            <span
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
-              style={{ background: "linear-gradient(135deg, #0EA5E9, #2563EB)" }}
-              aria-hidden="true"
-            >
-              <Clapperboard className="h-4.5 w-4.5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold text-teks-utama">
-                Auto Edit Video
-              </span>
-              <span className="block text-[11px] text-teks-sekunder">
-                Template berlapis, render massal, outro
               </span>
             </span>
           </button>

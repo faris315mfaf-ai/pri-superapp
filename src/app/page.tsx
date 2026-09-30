@@ -89,7 +89,6 @@ const ProfilScreen = dynamic(() => import("@/features/profil/profil-screen").the
 const AbsensiScreen = dynamic(() => import("@/features/absensi/absensi-screen").then((m) => m.AbsensiScreen), { ssr: false, loading: MuatLayar });
 const LaporanKerjaScreen = dynamic(() => import("@/features/laporan-kerja/laporan-kerja-screen").then((m) => m.LaporanKerjaScreen), { ssr: false, loading: MuatLayar });
 const KelolaLaporanKpiScreen = dynamic(() => import("@/features/laporan-kerja/kelola-laporan-kpi-screen").then((m) => m.KelolaLaporanKpiScreen), { ssr: false, loading: MuatLayar });
-const AutoEditScreen = dynamic(() => import("@/features/auto-edit/auto-edit-screen").then((m) => m.AutoEditScreen), { ssr: false, loading: MuatLayar });
 const PanelMasterScreen = dynamic(() => import("@/features/profil/panel-master").then((m) => m.PanelMasterScreen), { ssr: false, loading: MuatLayar });
 const PengaturanFiturScreen = dynamic(() => import("@/features/profil/pengaturan-fitur").then((m) => m.PengaturanFiturScreen), { ssr: false, loading: MuatLayar });
 const BerandaScreen = dynamic(() => import("@/features/beranda/beranda-screen").then((m) => m.BerandaScreen), { ssr: false, loading: MuatLayar });
@@ -189,8 +188,6 @@ type SubLayar =
   | { nama: "notifikasi" }
   // Panel Master — kewenangan tertinggi, hanya peran master
   | { nama: "panel-master" }
-  // Auto Edit video — modul khusus master (30 Sep 2026)
-  | { nama: "auto-edit" }
   // Pet Robot (percobaan master, 3 Sep 2026)
   | { nama: "pet"; tab?: "rawat" | "toko" | "lemari" | "pasar" }
   // Ludo Robot multipemain (percobaan, 3 Sep 2026)
@@ -224,6 +221,11 @@ const TAB_AWAL: Record<Role, KunciTab> = {
 // (refresh selamat), tapi buka aplikasi besok = mulai bersih.
 // ------------------------------------------------------------
 const KUNCI_NAV = "pri_nav_v1";
+// Sub-layar yang sudah tidak ada. Posisi tersimpan yang menunjuknya dibuang:
+// cabang terakhir rantai render sub-layar adalah Detail Postingan, jadi nama
+// yang tak dikenal akan membuka layar itu tanpa data.
+// "auto-edit": Auto Edit master pindah ke TV Rakyat Saya (1 Okt 2026).
+const SUBLAYAR_DIHAPUS = new Set(["auto-edit"]);
 
 function bacaNavTersimpan(
   userId: string | number | null | undefined,
@@ -243,7 +245,8 @@ function bacaNavTersimpan(
     const subLayar =
       j.subLayar &&
       typeof j.subLayar === "object" &&
-      typeof j.subLayar.nama === "string"
+      typeof j.subLayar.nama === "string" &&
+      !SUBLAYAR_DIHAPUS.has(j.subLayar.nama)
         ? (j.subLayar as SubLayar)
         : null;
     return { tab: j.tab as KunciTab, subLayar };
@@ -1239,7 +1242,6 @@ export default function Page() {
           }
           onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           onBukaPanelMaster={() => setSubLayar({ nama: "panel-master" })}
-          onBukaAutoEdit={() => setSubLayar({ nama: "auto-edit" })}
           onBukaPet={bolehPet(user) ? () => setSubLayar({ nama: "pet" }) : undefined}
           onBukaLudo={sakelar.fitur.ludo === false ? undefined : () => setSubLayar({ nama: "ludo" })}
           onBukaPengaturanFitur={() =>
@@ -1427,10 +1429,6 @@ export default function Page() {
                     // Superadmin (peran efektif master) tidak membuka Panel Master.
                     user?.role === "master" && !user.superadmin ? (
                       <PanelMasterScreen onKembali={() => setSubLayar(null)} />
-                    ) : null
-                  ) : subLayar.nama === "auto-edit" ? (
-                    user?.role === "master" ? (
-                      <AutoEditScreen onKembali={() => setSubLayar(null)} />
                     ) : null
                   ) : subLayar.nama === "ludo" ? (
                     <LudoScreen onKembali={() => setSubLayar(null)} />

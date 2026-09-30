@@ -81,6 +81,7 @@ import { PanelTugasSaya } from "./tugas-saya";
 import { KirimVideoManual } from "./kirim-video-manual";
 import { UnggahSosmedSaya } from "./unggah-sosmed-saya";
 import { EditOtomatisTvr } from "./edit-otomatis-tvr";
+import { AutoEditPanel } from "@/features/auto-edit/auto-edit-panel";
 import { bolehEditOtomatisTvr } from "@/lib/peran";
 import { VideoSiapUnggah } from "./video-siap-unggah";
 import { RekapAnggotaPalugodam } from "./rekap-anggota-palugodam";
@@ -601,6 +602,10 @@ export function TvrKuScreen({
   const bolehAccKomen = adalahPalugodam(userAsli);
   // Edit Otomatis (30 Sep 2026): master, atau akun yang modulnya dibuka master.
   const bolehEditOtomatis = bolehEditOtomatisTvr(userAsli);
+  // Auto Edit penuh GODAM (1 Okt 2026, dulu dari Profil): khusus master
+  // (superadmin ikut — peran efektifnya master); gerbang /api/autoedit
+  // menegakkan aturan yang sama di server.
+  const bolehAutoEditMaster = userAsli.role === "master";
   const komenAktif = useModulAktif("kepatuhan_komen");
   const [akun, setAkun] = useState<AkunTvr[] | null>(null);
   const [laporan, setLaporan] = useState<LaporanVideo[]>([]);
@@ -1036,6 +1041,25 @@ export function TvrKuScreen({
         </SeksiLipat>
       </FadeInUp>
         ) },
+        ...(bolehAutoEditMaster
+          ? [
+              {
+                id: "auto-edit-master",
+                segmen: "Unggah & Jadwal",
+                judul: "Auto Edit (Master)",
+                ikon: Clapperboard,
+                keterangan: "Edit video GODAM: banyak template, render sekaligus, outro — langsung upload ke sosmed",
+                render: () => (
+                  <FadeInUp delay={0.06}>
+                    <SectionTitle judul="Auto Edit (Master)" />
+                    <div className="mt-2.5">
+                      <AutoEditPanel />
+                    </div>
+                  </FadeInUp>
+                ),
+              },
+            ]
+          : []),
         ...(bolehEditOtomatis
           ? [
               {

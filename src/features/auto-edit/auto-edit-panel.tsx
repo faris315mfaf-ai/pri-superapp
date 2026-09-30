@@ -1,7 +1,9 @@
 "use client";
 
 // ============================================================
-// AutoEditScreen — alat Edit Video dan Outro dari GODAM, khusus master.
+// AutoEditPanel — alat Edit Video dan Outro dari GODAM, khusus master.
+// Tinggal di TV Rakyat Saya (1 Okt 2026, sebelumnya layar sendiri dari
+// Profil); video jadi bisa langsung diunggah lewat upload-post.
 //
 // Kedua alat bicara dengan layanan Auto Edit (Python) lewat penerus
 // /api/autoedit milik SuperApp. Sebelum alatnya dipasang, layanan ditanya
@@ -11,7 +13,7 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { AlertTriangle, ArrowLeft, Clapperboard, Film, RefreshCw, Scissors } from "lucide-react";
+import { AlertTriangle, Film, RefreshCw, Scissors } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
 import { cn } from "@/lib/utils";
@@ -42,7 +44,7 @@ function tabTersimpan(): Tab {
   return tab === "outro" ? "outro" : "edit";
 }
 
-export function AutoEditScreen({ onKembali }: { onKembali: () => void }) {
+export function AutoEditPanel() {
   // Tab yang pernah dibuka tetap terpasang (disembunyikan saja), supaya
   // unggahan dan pemantauan render yang sedang berjalan tidak hilang hanya
   // karena pindah tab sebentar.
@@ -90,26 +92,8 @@ export function AutoEditScreen({ onKembali }: { onKembali: () => void }) {
   }
 
   return (
-    <div className="kolom-aplikasi px-4 pt-5 pb-16">
-      <header className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onKembali}
-          aria-label="Kembali"
-          className="glass btn-tekan flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-teks-utama"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-        <div className="min-w-0 flex-1">
-          <h1 className="font-heading truncate text-xl font-extrabold tracking-tight text-teks-utama">
-            Auto Edit
-          </h1>
-          <p className="text-xs text-teks-sekunder">Edit video & outro otomatis</p>
-        </div>
-        <Clapperboard className="h-5 w-5 shrink-0 text-pri" aria-hidden="true" />
-      </header>
-
-      <div role="tablist" aria-label="Alat Auto Edit" className="mt-4 flex gap-2">
+    <div>
+      <div role="tablist" aria-label="Alat Auto Edit" className="flex gap-2">
         {DAFTAR_TAB.map(({ id, label, ikon: Ikon }) => (
           <button
             key={id}

@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import styles from "./edit-video.module.css";
 import { apiFetch, apiUnggah, bacaJson, bacaSimpanan, pesanGalat, simpanSimpanan } from "./api";
 import { useDialog } from "./dialog";
+import { PopupUnggahSosmed } from "./popup-unggah-sosmed";
 
 // Template pertama. Id "utama" dipertahankan dari versi GODAM sebelumnya
 // supaya berkas yang sudah diunggah tidak perlu diunggah ulang. Set
@@ -362,15 +363,19 @@ function VideoHasil({
   src,
   unduh,
   nama,
+  onUnggah,
   children,
 }: {
   src: string;
   unduh: string;
   nama: string;
+  /** Dipanggil dengan berkas videonya saat "Upload ke Sosmed" ditekan. */
+  onUnggah?: (berkas: File) => void;
   children: React.ReactNode;
 }) {
   const perluToken = src.startsWith("/api/");
   const [blob, setBlob] = useState("");
+  const [isiBlob, setIsiBlob] = useState<Blob | null>(null);
   const [galat, setGalat] = useState("");
   useEffect(() => {
     if (!perluToken) return;
@@ -388,6 +393,7 @@ function VideoHasil({
         if (batal) return;
         alamat = URL.createObjectURL(isi);
         setBlob(alamat);
+        setIsiBlob(isi);
       } catch (err) {
         if (!batal) setGalat(err instanceof Error ? err.message : "Video hasil tidak bisa diambil.");
       }
@@ -408,6 +414,15 @@ function VideoHasil({
         <p className={styles.hint}>Mengambil video ...</p>
       )}
       <div className={styles.hasilAksi}>
+        {onUnggah && isiBlob && (
+          <button
+            type="button"
+            className={styles.unduhBtn}
+            onClick={() => onUnggah(new File([isiBlob], nama, { type: "video/mp4" }))}
+          >
+            Upload ke Sosmed
+          </button>
+        )}
         {putar && (
           <a className={styles.unduhBtn} href={perluToken ? blob : unduh} download={nama}>
             Unduh MP4
@@ -1253,6 +1268,13 @@ export function EditVideo() {
       setMenghentikanSatu("");
     }
   }
+
+  /**
+   * Upload ke Sosmed (1 Okt 2026): form unggah TVR Saya yang biasa, dengan
+   * video hasil ini sudah terpasang. Sesudah terkirim ke upload-post, hasil
+   * render di server dihapus — salinannya sudah di penyimpanan upload-post.
+   */
+  const [unggahSosmed, setUnggahSosmed] = useState<{ jobId: string; berkas: File } | null>(null);
 
   /** Buang satu hasil dari server, sekaligus dari daftar. */
   async function hapusHasil(jobId: string) {
@@ -2183,6 +2205,7 @@ export function EditVideo() {
                           src={berkas}
                           unduh={alamatUnduh(j, berkas)}
                           nama={namaUnduhan(namaSetDari(j.template_id), j.job_id)}
+                          onUnggah={(file) => setUnggahSosmed({ jobId: j.job_id, berkas: file })}
                         >
                           <button
                             type="button"
@@ -2215,6 +2238,18 @@ export function EditVideo() {
           </div>
         </section>
       </div>
+      {unggahSosmed && (
+        <PopupUnggahSosmed
+          key={unggahSosmed.jobId}
+          berkas={unggahSosmed.berkas}
+          onTutup={() => setUnggahSosmed(null)}
+          onTerkirim={() => {
+            const jobId = unggahSosmed.jobId;
+            setUnggahSosmed(null);
+            void hapusHasil(jobId);
+          }}
+        />
+      )}
     </div>
   );
 }
