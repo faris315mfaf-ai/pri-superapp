@@ -10,7 +10,7 @@ import { rmSync } from "node:fs";
 const SOCKET =
   process.platform === "win32" ? `\\\\.\\pipe\\pri-autoedit-uji-${process.pid}` : join(tmpdir(), `autoedit-uji-${process.pid}.sock`);
 process.env.AUTOEDIT_SOCKET = SOCKET;
-const { bolehAutoEdit, teruskanAutoEdit } = await import("@/lib/autoedit");
+const { keluargaAutoEdit, teruskanAutoEdit } = await import("@/lib/autoedit");
 
 let lulus = 0;
 let gagal = 0;
@@ -24,14 +24,23 @@ const cek = (n: string, ok: boolean, i?: unknown) => {
   }
 };
 
+const daftar = (u: Parameters<typeof keluargaAutoEdit>[0]) => [...keluargaAutoEdit(u)].sort().join(",");
 console.log("\n[A] Siapa yang boleh");
-cek("master boleh", bolehAutoEdit({ id: "12", role: "master" }));
-cek("superadmin (peran efektif master) boleh", bolehAutoEdit({ id: "251", role: "master", superadmin: true } as never));
-cek("anggota tidak", !bolehAutoEdit({ id: "13", role: "anggota" }));
-cek("super_admin (Ketua Umum) tidak", !bolehAutoEdit({ id: "14", role: "super_admin" }));
-cek("pengguna uji beban tidak", !bolehAutoEdit({ id: "15", role: "master", ujiBeban: true }));
-cek("id bukan angka tidak", !bolehAutoEdit({ id: "uji-1", role: "master" }));
-cek("tanpa pengguna tidak", !bolehAutoEdit(null));
+cek("master: modul penuh + TVR", daftar({ id: "12", role: "master" }) === "outro,tvr,video");
+cek(
+  "superadmin (peran efektif master) sama dengan master",
+  daftar({ id: "251", role: "master", superadmin: true } as never) === "outro,tvr,video",
+);
+cek("anggota biasa: tidak ada", daftar({ id: "13", role: "anggota" }) === "");
+cek("anggota dibuka master: TVR saja", daftar({ id: "13", role: "anggota", modul_izin: { autoedit: true } }) === "tvr");
+cek(
+  "anggota ditutup / modul lain dibuka: tidak ada",
+  daftar({ id: "13", role: "anggota", modul_izin: { autoedit: false, tvrku: true } }) === "",
+);
+cek("super_admin (Ketua Umum) tanpa dibuka: tidak ada", daftar({ id: "14", role: "super_admin" }) === "");
+cek("pengguna uji beban tidak", daftar({ id: "15", role: "master", ujiBeban: true }) === "");
+cek("id bukan angka tidak", daftar({ id: "uji-1", role: "master" }) === "");
+cek("tanpa pengguna tidak", daftar(null) === "");
 
 // ---- Layanan tiruan ----
 type Catatan = { method?: string; url?: string; header: Record<string, unknown>; byte: number };
@@ -63,7 +72,9 @@ const layanan = createServer((req, res) => {
 });
 await new Promise<void>((r) => layanan.listen(SOCKET, r));
 
-const minta = (jalur: string[], init: RequestInit & { cari?: string } = {}) =>
+const SEMUA: ReadonlySet<string> = new Set(["video", "outro", "tvr"]);
+const HANYA_TVR: ReadonlySet<string> = new Set(["tvr"]);
+const minta = (jalur: string[], init: RequestInit & { cari?: string } = {}, keluarga = SEMUA) =>
   teruskanAutoEdit(
     new Request(`http://localhost/api/autoedit/${jalur.join("/")}${init.cari ?? ""}`, {
       ...init,
@@ -71,6 +82,7 @@ const minta = (jalur: string[], init: RequestInit & { cari?: string } = {}) =>
     } as RequestInit),
     jalur,
     "12",
+    keluarga,
   );
 
 console.log("\n[B] Penerusan");
@@ -108,7 +120,17 @@ for (const jalur of [["admin", "users"], ["auth", "login"], ["video", "..", ".."
   r = await minta(jalur);
   cek(`${JSON.stringify(jalur)} -> 404`, r.status === 404, r.status);
 }
+for (const jalur of [["video", "templates"], ["outro", "jobs"]]) {
+  r = await minta(jalur, {}, HANYA_TVR);
+  cek(`akun TVR ke ${jalur.join("/")} -> 404`, r.status === 404, r.status);
+}
 cek("tidak satu pun sampai ke layanan", catatan.length === sebelum, catatan.slice(sebelum));
+r = await minta(["tvr", "ringkas"], {}, HANYA_TVR);
+cek(
+  "akun TVR ke tvr/ringkas diteruskan ke /api/tvr/ringkas",
+  r.status === 200 && catatan.at(-1)!.url === "/api/tvr/ringkas",
+  catatan.at(-1)!.url,
+);
 r = await minta(["video", "templates", "a b%2F..%2F"]);
 cek("segmen di-encode, tidak bisa keluar dari /api/video", catatan.at(-1)!.url === "/api/video/templates/a%20b%252F..%252F", catatan.at(-1)!.url);
 

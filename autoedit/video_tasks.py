@@ -45,6 +45,16 @@ KUNCI_URUT = "videojob:urut"
 # sempat terpakai tidak tertinggal selamanya.
 KUNCI_BATAL = "videojob:batal:"
 BATAL_UMUR_DETIK = 3 * 3600
+# Job yang belum selesai (menunggu atau sedang dikerjakan), diurut waktu
+# masuk. Dari sinilah nomor antrean dihitung tanpa membaca semua job.
+KUNCI_AKTIF = "videojob:aktif"
+# Rata-rata lama satu job dikerjakan (unduh + render), untuk perkiraan waktu
+# tunggu. Dimulai dari tebakan, lalu mengikuti kenyataan tiap job selesai.
+KUNCI_RATA = "videojob:rata_detik"
+RATA_AWAL_DETIK = float(os.getenv("VIDEO_PERKIRAAN_AWAL_DETIK", "90"))
+# Berapa job dikerjakan bersamaan oleh worker (sama dengan CELERY_CONCURRENCY
+# di container worker); dipakai membagi perkiraan tunggu.
+WORKER_PARALEL = max(1, int(os.getenv("VIDEO_WORKER_PARALEL", "1")))
 _redis_klien: redis.Redis | None = None
 
 
@@ -104,6 +114,12 @@ def tulis_status(job_id: str, **ubahan: Any) -> dict[str, Any]:
     pipa = r.pipeline()
     pipa.set(kunci, json.dumps(data, ensure_ascii=False), ex=umur)
     pipa.zadd(KUNCI_URUT, {job_id: data.get("created") or time.time()})
+    # Daftar antrean mengikuti status: masuk selama belum selesai, keluar
+    # begitu selesai/gagal/dibatalkan - apa pun jalur yang mengubahnya.
+    if data.get("status") in STATUS_AKTIF_JOB:
+        pipa.zadd(KUNCI_AKTIF, {job_id: data.get("created") or time.time()})
+    else:
+        pipa.zrem(KUNCI_AKTIF, job_id)
     pipa.execute()
     return data
 
@@ -262,6 +278,91 @@ def buang_job(job_id: str) -> None:
     r.delete(KUNCI_JOB + job_id)
     r.delete(KUNCI_BATAL + job_id)
     r.zrem(KUNCI_URUT, job_id)
+    r.zrem(KUNCI_AKTIF, job_id)
+
+
+def rata_durasi() -> float:
+    """Rata-rata lama satu job dikerjakan, dalam detik."""
+    try:
+        nilai = float(_r().get(KUNCI_RATA) or 0)
+    except (TypeError, ValueError):
+        nilai = 0.0
+    return nilai if nilai > 0 else RATA_AWAL_DETIK
+
+
+def _catat_durasi(detik: float) -> None:
+    """Perbarui rata-rata bergerak: 30% bobot untuk job terbaru."""
+    if detik <= 0:
+        return
+    baru = rata_durasi() * 0.7 + min(max(detik, 5.0), 3600.0) * 0.3
+    try:
+        _r().set(KUNCI_RATA, f"{baru:.1f}")
+    except Exception:  # noqa: BLE001 - perkiraan bukan hal kritis
+        logger.warning("Rata-rata durasi job gagal disimpan")
+
+
+def _sisa_detik(status: dict[str, Any], rata: float, sekarang: float) -> float:
+    """Perkiraan sisa waktu satu job yang sedang dikerjakan."""
+    try:
+        berjalan = sekarang - float(status.get("mulai_proses") or sekarang)
+    except (TypeError, ValueError):
+        berjalan = 0.0
+    sisa = rata - berjalan
+    # Saat render sudah punya persen, persen itu lebih jujur dari rata-rata:
+    # lama render sejauh ini dibanding bagian yang sudah selesai.
+    try:
+        progres = float(status.get("progress") or 0)
+        lama_render = sekarang - float(status.get("mulai_render") or 0)
+    except (TypeError, ValueError):
+        progres, lama_render = 0.0, 0.0
+    if status.get("status") == "rendering" and 0 < progres < 100 and 0 < lama_render < sekarang:
+        sisa = lama_render * (100 - progres) / progres
+    return max(5.0, sisa)
+
+
+def posisi_antrean(job_id: str) -> dict[str, Any] | None:
+    """Nomor antrean dan perkiraan waktu tunggu satu job; None bila sudah tidak aktif.
+
+    ``posisi`` 1 = sedang/berikutnya dikerjakan. Hitungannya mencakup SEMUA
+    job di server (worker-nya satu untuk semua orang), bukan hanya milik akun
+    ini. Entri yang ternyata sudah selesai atau hangus dibuang di sini juga.
+    """
+    job_id = _aman_id(job_id)
+    r = _r()
+    ids = r.zrange(KUNCI_AKTIF, 0, -1)
+    if job_id not in ids:
+        return None
+    isi = r.mget([KUNCI_JOB + i for i in ids])
+    hidup: list[dict[str, Any]] = []
+    basi: list[str] = []
+    for i, mentah in zip(ids, isi):
+        try:
+            st = json.loads(mentah) if mentah else None
+        except json.JSONDecodeError:
+            st = None
+        if not st or st.get("status") not in STATUS_AKTIF_JOB:
+            basi.append(i)
+            continue
+        hidup.append(st)
+    if basi:
+        r.zrem(KUNCI_AKTIF, *basi)
+
+    rata = rata_durasi()
+    sekarang = time.time()
+    tunggu = 0.0
+    di_depan = 0
+    for st in hidup:
+        if st.get("job_id") == job_id:
+            if st.get("status") in STATUS_BERJALAN_JOB:
+                sendiri = _sisa_detik(st, rata, sekarang)
+                return {"posisi": 1, "di_depan": 0, "sedang_dikerjakan": True,
+                        "perkiraan_detik": round(sendiri)}
+            total = tunggu / WORKER_PARALEL + rata
+            return {"posisi": di_depan + 1, "di_depan": di_depan, "sedang_dikerjakan": False,
+                    "perkiraan_detik": round(total)}
+        di_depan += 1
+        tunggu += _sisa_detik(st, rata, sekarang) if st.get("status") in STATUS_BERJALAN_JOB else rata
+    return None
 
 
 def minta_batal(job_id: str) -> None:
@@ -373,6 +474,8 @@ def _bersihkan_setelah_gagal(job_id: str, folder: Path) -> None:
     try:
         for sisa in folder.glob("source.*"):
             sisa.unlink(missing_ok=True)
+        # Hasil setengah jadi dari render yang dihentikan/gagal tidak berguna.
+        (folder / "output.mp4").unlink(missing_ok=True)
         shutil.rmtree(folder / "kerja", ignore_errors=True)
     except OSError as galat:
         logger.warning("Sisa job %s gagal dibersihkan: %s", job_id, galat)
@@ -416,11 +519,12 @@ def render_video(
         # template sekaligus tidak bisa menyimpan pilihan warna ke satu template.
         if teks_warna in ("black", "white"):
             template = {**template, "teks_warna": teks_warna}
-        tulis_status(job_id, status="downloading", progress=0, task_id=self.request.id)
+        tulis_status(job_id, status="downloading", progress=0, task_id=self.request.id,
+                     mulai_proses=time.time())
         catat(f"Template: {template.get('name') or template_id}")
         sumber = download_source(url, folder, log=catat)
 
-        tulis_status(job_id, status="rendering", progress=0)
+        tulis_status(job_id, status="rendering", progress=0, mulai_render=time.time())
         hasil = render(
             template,
             sumber,
@@ -433,6 +537,12 @@ def render_video(
         # Sumber tidak dipakai lagi; hapus supaya disk hemat.
         sumber.unlink(missing_ok=True)
 
+        try:
+            mulai = float(baca_status(job_id).get("mulai_proses") or 0)
+            if mulai > 0:
+                _catat_durasi(time.time() - mulai)
+        except (VideoError, TypeError, ValueError):
+            pass
         tulis_status(
             job_id,
             status="done",

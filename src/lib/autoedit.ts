@@ -1,5 +1,5 @@
 /**
- * Gerbang modul Auto Edit (khusus master, 30 Sep 2026).
+ * Gerbang modul Auto Edit (master) & Edit Otomatis TVR Saya (30 Sep 2026).
  *
  * Mesin edit videonya layanan Python terpisah (folder autoedit/, container
  * pri-autoedit-api) yang TIDAK punya port jaringan: ia hanya mendengar di
@@ -14,9 +14,8 @@
 import { request as mintaHttp } from "node:http";
 import { Readable } from "node:stream";
 import type { ReadableStream as AliranNode } from "node:stream/web";
+import { bolehEditOtomatisTvr } from "@/lib/peran";
 
-// Hanya dua keluarga rute layanan yang boleh dijangkau dari luar.
-const KELUARGA_SAH = new Set(["video", "outro"]);
 const HEADER_MASUK = ["content-type", "content-length", "range", "accept"];
 const HEADER_KELUAR = [
   "content-type",
@@ -42,19 +41,32 @@ export function galatAutoEdit(status: number, detail: string): Response {
 }
 
 /**
- * Khusus master — superadmin ikut karena peran efektifnya master. Pengguna
- * virtual uji beban tidak pernah boleh, dan id harus angka karena menjadi
- * nama pemilik berkas di layanan ("pri-<id>").
+ * Keluarga rute layanan yang boleh dijangkau akun ini; kosong = tidak boleh.
+ *   master (superadmin ikut: peran efektifnya master) → modul Auto Edit
+ *     penuh ("video", "outro") + Edit Otomatis TVR Saya ("tvr").
+ *   akun yang modul Edit Otomatis-nya dibuka master → "tvr" saja.
+ * Pengguna virtual uji beban tidak pernah boleh, dan id harus angka karena
+ * menjadi nama pemilik berkas di layanan ("pri-<id>").
  */
-export function bolehAutoEdit(
-  user: { id?: string | null; role?: string | null; ujiBeban?: boolean } | null | undefined,
-): boolean {
-  return user?.role === "master" && user.ujiBeban !== true && /^\d{1,12}$/.test(user.id ?? "");
+export function keluargaAutoEdit(
+  user:
+    | { id?: string | null; role?: string | null; ujiBeban?: boolean; modul_izin?: unknown }
+    | null
+    | undefined,
+): ReadonlySet<string> {
+  if (!user || user.ujiBeban === true || !/^\d{1,12}$/.test(user.id ?? "")) return new Set();
+  if (user.role === "master") return new Set(["video", "outro", "tvr"]);
+  return bolehEditOtomatisTvr(user) ? new Set(["tvr"]) : new Set();
 }
 
 /** Teruskan permintaan ke layanan Auto Edit sebagai akun `idAkun`. */
-export function teruskanAutoEdit(request: Request, jalur: string[], idAkun: string): Promise<Response> {
-  if (!jalur.length || !KELUARGA_SAH.has(jalur[0]) || jalur.some((b) => b === "." || b === "..")) {
+export function teruskanAutoEdit(
+  request: Request,
+  jalur: string[],
+  idAkun: string,
+  keluarga: ReadonlySet<string>,
+): Promise<Response> {
+  if (!jalur.length || !keluarga.has(jalur[0]) || jalur.some((b) => b === "." || b === "..")) {
     return Promise.resolve(galatAutoEdit(404, "Tidak ditemukan"));
   }
   const tujuan = `/api/${jalur.map(encodeURIComponent).join("/")}${new URL(request.url).search}`;

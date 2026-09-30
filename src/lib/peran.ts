@@ -61,6 +61,14 @@ export const MODUL_AKUN = [
   { kunci: "chat", label: "Chat", keterangan: "Percakapan antar anggota" },
   { kunci: "asisten", label: "Asisten AI", keterangan: "Chatbot & perintah suara" },
   { kunci: "acara", label: "Acara", keterangan: "Tanggal penting partai" },
+  // Bukan tab (30 Sep 2026): seksi di dalam TVR Saya. Tertutup untuk semua
+  // kecuali dibuka master per akun — masih uji coba, dan render memakan CPU.
+  {
+    kunci: "autoedit",
+    label: "Edit Otomatis (TVR Saya)",
+    keterangan: "Template pribadi + edit video otomatis dengan antrean (uji coba)",
+    bukanTab: true,
+  },
 ] as const;
 
 export type KunciModul = (typeof MODUL_AKUN)[number]["kunci"];
@@ -77,6 +85,16 @@ export function modulDibuka(
   if (!izin || typeof izin !== "object" || Array.isArray(izin)) return undefined;
   const v = (izin as Record<string, unknown>)[kunci];
   return typeof v === "boolean" ? v : undefined;
+}
+
+/**
+ * Edit Otomatis di TVR Saya (30 Sep 2026): master selalu boleh; yang lain
+ * hanya bila master MEMBUKA modulnya untuk akun itu ("ikut peran" = tidak).
+ */
+export function bolehEditOtomatisTvr(
+  u: { role?: string | null; modul_izin?: unknown } | null | undefined,
+): boolean {
+  return u?.role === "master" || modulDibuka(u, "autoedit") === true;
 }
 
 /** Saring masukan mentah jadi peta modul yang sah; null bila kosong. */

@@ -63,7 +63,18 @@ function jamWib(iso: string): string {
   return `${dua(d.getUTCDate())}/${dua(d.getUTCMonth() + 1)} ${dua(d.getUTCHours())}:${dua(d.getUTCMinutes())} WIB`;
 }
 
-export function UnggahSosmedSaya() {
+export function UnggahSosmedSaya({
+  berkasAwal = null,
+  hanyaForm = false,
+  onTerkirim,
+}: {
+  /** Video hasil Edit Otomatis (30 Sep 2026): langsung terpasang di form. */
+  berkasAwal?: File | null;
+  /** Tertanam di Edit Otomatis: hanya form kirim, tanpa riwayat/antrean jadwal. */
+  hanyaForm?: boolean;
+  /** Dipanggil setelah video berkas terkirim ke upload-post. */
+  onTerkirim?: () => void;
+} = {}) {
   const [tertaut, setTertaut] = useState<string[] | null>(null);
   const [riwayat, setRiwayat] = useState<TvrkuPost[] | null>(null);
   // TOMBOL BAGIKAN (3 Sep 2026): setelah unggah, URL postingan per platform
@@ -125,9 +136,16 @@ export function UnggahSosmedSaya() {
     }
   }
 
-  const [berkas, setBerkas] = useState<File | null>(null);
+  // Berkas awal (dari Edit Otomatis) melewati pemeriksaan ukuran yang sama
+  // dengan berkas pilihan sendiri.
+  const awalMuat = berkasAwal !== null && berkasAwal.size <= MAKS_MB * 1024 * 1024;
+  const [berkas, setBerkas] = useState<File | null>(() => (awalMuat ? berkasAwal : null));
   // Berkas yang ditolak karena > MAKS_MB — dipakai kartu arahan kompres.
-  const [terlaluBesar, setTerlaluBesar] = useState<{ nama: string; mb: number } | null>(null);
+  const [terlaluBesar, setTerlaluBesar] = useState<{ nama: string; mb: number } | null>(() =>
+    berkasAwal !== null && !awalMuat
+      ? { nama: berkasAwal.name, mb: Math.round(berkasAwal.size / 1_048_576) }
+      : null,
+  );
 
   function pilihBerkas(f: File | null) {
     if (f && f.size > MAKS_MB * 1024 * 1024) {
@@ -368,6 +386,7 @@ export function UnggahSosmedSaya() {
       setJadwal("");
       if (inputRef.current) inputRef.current.value = "";
       await setelahPost(hasil);
+      onTerkirim?.();
     } catch (e) {
       toast("error", "Gagal", e instanceof Error ? e.message : "Coba lagi sebentar.");
     } finally {
@@ -392,7 +411,7 @@ export function UnggahSosmedSaya() {
     <div className="flex flex-col gap-3">
       {kartuBelumTaut}
       {/* PALUGODAM: satu pintu untuk edit + upload otomatis */}
-      {bolehLink && (
+      {bolehLink && !hanyaForm && (
         <button
           type="button"
           onClick={() => setBukaEditOtomatis(true)}
@@ -433,7 +452,7 @@ export function UnggahSosmedSaya() {
       {tertaut.length > 0 && (
       <GlassCard className="p-4">
         {/* PALUGODAM: pilih cara kirim — unggah berkas atau tempel tautan */}
-        {bolehLink && (
+        {bolehLink && !hanyaForm && (
           <div className="mb-3 grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -464,7 +483,7 @@ export function UnggahSosmedSaya() {
           </div>
         )}
 
-        {modeLink ? (
+        {modeLink && !hanyaForm ? (
           <>
             <input
               value={tautan}
@@ -490,6 +509,14 @@ export function UnggahSosmedSaya() {
           className="hidden"
           onChange={(e) => pilihBerkas(e.target.files?.[0] ?? null)}
         />
+        {hanyaForm ? (
+          // Tertanam di Edit Otomatis: videonya hasil edit itu, tidak diganti
+          // di sini (sesudah terkirim, hasil edit di server ikut dihapus).
+          <div className="glass flex w-full items-center justify-center gap-2 rounded-xl py-4 text-[13px] font-bold text-teks-utama">
+            <Check className="h-5 w-5 text-emerald-500" />
+            {berkas ? `Video hasil edit (${Math.max(1, Math.round(berkas.size / 1_048_576))} MB)` : "Video hasil edit"}
+          </div>
+        ) : (
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
@@ -499,6 +526,7 @@ export function UnggahSosmedSaya() {
           <UploadCloud className="h-5 w-5 text-pri" />
           {berkas ? `${berkas.name} (${Math.round(berkas.size / 1_048_576)} MB)` : "Pilih Video"}
         </button>
+        )}
         <p className="mt-1.5 text-[10.5px] text-teks-sekunder">
           Maksimal {MAKS_MB} MB per video (MP4/MOV/WebM). Di atas {KOMPRES_MB} MB dikompres
           otomatis sampai {KOMPRES_MB} MB — resolusi &amp; kualitas tampak dijaga.
@@ -796,7 +824,7 @@ export function UnggahSosmedSaya() {
       )}
 
       {/* Antrean terjadwal (2 Sep 2026) — belum tayang, bisa dibatalkan */}
-      {jadwalAntre !== null && jadwalAntre.length > 0 && (
+      {!hanyaForm && jadwalAntre !== null && jadwalAntre.length > 0 && (
         <GlassCard className="p-4">
           <p className="flex items-center gap-1.5 text-[12.5px] font-bold text-teks-utama">
             <CalendarClock className="h-3.5 w-3.5 text-pri" />
@@ -839,14 +867,14 @@ export function UnggahSosmedSaya() {
 
       {/* Riwayat — selalu ditampilkan, termasuk kosong, supaya unggahan
           tidak "lenyap" hanya karena sinkron akun tertaut gagal. */}
-      {riwayat !== null && riwayat.length === 0 && (
+      {!hanyaForm && riwayat !== null && riwayat.length === 0 && (
         <p className="px-1 text-[12px] leading-relaxed text-teks-sekunder">
           Belum ada riwayat post di akun yang sedang dibuka. Unggahan tercatat
           pada akun yang memposting — bila Anda admin, buka akun anggota lewat
           Kendali Akun.
         </p>
       )}
-      {riwayat !== null && riwayat.length > 0 && (
+      {!hanyaForm && riwayat !== null && riwayat.length > 0 && (
         <SeksiLipat id="tvrku-riwayat-post" judul="Riwayat Post Saya" ikon={History} bawaanTerbuka>
           <div className="mt-2 flex flex-col gap-2">
             {riwayat.slice(0, 8).map((r) => (

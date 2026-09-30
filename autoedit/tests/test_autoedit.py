@@ -356,3 +356,282 @@ def test_outro_dpp_jadi_lalu_tersapu():
     # Sapuan dengan umur 0: folder outro terbuang, entrinya ikut dilupakan.
     ve.bersihkan_volume(0)
     assert KLIEN.get(f"/api/outro/jobs/{job}", headers=h(dev)).status_code == 404
+
+
+# ------------------------------------------------------------------
+#  7. Edit Otomatis TVR Saya: template pribadi, draf, antrean
+# ------------------------------------------------------------------
+
+import hashlib  # noqa: E402
+
+import tvr_api  # noqa: E402
+
+
+def _png_kotak(latar=(20, 20, 60, 255)) -> bytes:
+    """Panel bawah 720x300: latar gelap dengan bidang putih polos untuk tulisan."""
+    from PIL import Image, ImageDraw
+
+    im = Image.new("RGBA", (720, 300), latar)
+    ImageDraw.Draw(im).rectangle((20, 40, 700, 280), fill=(255, 255, 255, 255))
+    buf = io.BytesIO()
+    im.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _berkas_video(nama: str, *argumen: str) -> bytes:
+    tujuan = MEDIA / nama
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *argumen, str(tujuan)], check=True)
+    return tujuan.read_bytes()
+
+
+def _hijau() -> bytes:
+    return _berkas_video(
+        "boom-hijau.mp4", "-f", "lavfi",
+        "-i", "color=c=0x00C040:s=280x158:d=2,drawbox=x=90:y=40:w=100:h=80:color=red:t=fill",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+    )
+
+
+def _gif() -> bytes:
+    return _berkas_video(
+        "boom.gif", "-f", "lavfi", "-i", "testsrc=s=120x80:d=1:r=10",
+        "-vf", "split[a][b];[a]palettegen=reserve_transparent=1[p];[b][p]paletteuse",
+    )
+
+
+def _webm_alpha() -> bytes:
+    return _berkas_video(
+        "boom-alpha.webm", "-f", "lavfi",
+        "-i", "color=c=black@0.0:s=200x100:d=1,format=yuva420p,drawbox=x=50:y=25:w=100:h=50:color=red@1:t=fill",
+        "-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p", "-auto-alt-ref", "0",
+    )
+
+
+def _penutup() -> bytes:
+    return _berkas_video(
+        "penutup.mp4", "-f", "lavfi", "-i", "color=c=navy:s=720x1280:d=2:r=30",
+        "-f", "lavfi", "-i", "sine=frequency=880:duration=2",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+    )
+
+
+def _draf(id_akun: str, slot: str, nama: str, isi: bytes):
+    return KLIEN.post(
+        f"/api/tvr/template/draf/{slot}",
+        headers=h(id_akun),
+        files={"file": (nama, isi, "application/octet-stream")},
+    )
+
+
+def _aset_tvr(id_akun: str) -> list[str]:
+    folder = ve.template_path(f"tvr-{id_akun}") / "assets"
+    return sorted(p.name for p in folder.iterdir() if p.is_file()) if folder.is_dir() else []
+
+
+KOTAK_UJI = {"x": 30, "y": 1000, "w": 660, "h": 230}
+
+
+def _tetapkan(id_akun: str, **tambahan: Any):
+    return KLIEN.put("/api/tvr/template", headers=h(id_akun), json={"text_box": KOTAK_UJI, **tambahan})
+
+
+def _template_siap(id_akun: str) -> None:
+    assert _draf(id_akun, "kotak", "kotak.png", _png_kotak()).status_code == 200
+    assert _draf(id_akun, "bingkai", "bingkai.png", png(720, 120, (200, 0, 0, 255))).status_code == 200
+    r = _tetapkan(id_akun)
+    assert r.status_code == 200, r.text
+
+
+def test_tvr_wajib_identitas():
+    assert KLIEN.get("/api/tvr/ringkas").status_code == 401
+    assert KLIEN.get("/api/tvr/ringkas", headers=h("abc")).status_code == 401
+
+
+def test_tvr_template_draf_validasi_dan_tetapkan():
+    a = "8001"
+    awal = KLIEN.get("/api/tvr/ringkas", headers=h(a)).json()
+    assert awal["template"]["ada"] is False and awal["job"] is None
+    # Kotak monas wajib PNG: ekstensi lain ditolak, begitu juga JPG yang diganti namanya.
+    r = _draf(a, "kotak", "kotak.jpg", b"\xff\xd8\xff\xe0isi-jpeg")
+    assert r.status_code == 415 and "wajib PNG" in r.json()["detail"]
+    r = _draf(a, "kotak", "kotak.png", b"\xff\xd8\xff\xe0bukan-png")
+    assert r.status_code == 415 and "bukan PNG asli" in r.json()["detail"]
+    assert _draf(a, "bingkai", "b.gif", _gif()).status_code == 415
+    assert _draf(a, "tidakada", "x.png", _png_kotak()).status_code == 404
+    # PNG asli masuk DRAF; template dibuat tapi belum ditetapkan.
+    r = _draf(a, "kotak", "kotak.png", _png_kotak())
+    assert r.status_code == 200, r.text
+    t = r.json()["template"]
+    assert t["ada"] and not t["siap"]
+    assert t["slot"]["kotak"] == {"ada": False, "draf": True, "jenis": "gambar"}
+    # Belum lengkap: bingkai wajib, dan tidak ada yang dipindahkan.
+    r = _tetapkan(a)
+    assert r.status_code == 400 and "Bingkai teratas" in r.json()["detail"]
+    assert _aset_tvr(a) == []
+    assert _draf(a, "bingkai", "bingkai.png", png(720, 120, (200, 0, 0, 255))).status_code == 200
+    r = KLIEN.put("/api/tvr/template", headers=h(a), json={})
+    assert r.status_code == 400 and "posisi tulisan" in r.json()["detail"]
+    r = KLIEN.put("/api/tvr/template", headers=h(a), json={"text_box": {"x": 600, "y": 0, "w": 300, "h": 100}})
+    assert r.status_code == 422
+    # Pratinjau & deteksi memakai draf.
+    r = KLIEN.get("/api/tvr/template/pratinjau.png?kotak=30,1000,660,230&warna=black&teks=HALO", headers=h(a))
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png" and r.content[:4] == b"\x89PNG"
+    tvr_api._deteksi_terakhir.clear()
+    r = KLIEN.post("/api/tvr/template/deteksi", headers=h(a))
+    assert r.status_code == 200, r.text
+    kotak = r.json()["text_box"]
+    assert kotak["y"] > 900 and kotak["w"] > 500
+    assert KLIEN.post("/api/tvr/template/deteksi", headers=h(a)).status_code == 429
+    r = KLIEN.put("/api/tvr/template", headers=h(a), json={"text_box": kotak, "teks_warna": "black"})
+    assert r.status_code == 200, r.text
+    t = r.json()["template"]
+    assert t["siap"] and t["slot"]["kotak"]["ada"] and not t["slot"]["kotak"]["draf"]
+    assert t["text_box"] == kotak and t["teks_warna"] == "black"
+    assert _aset_tvr(a) == ["bingkai.png", "kotak.png"]
+    assert not (ve.template_path(f"tvr-{a}") / "assets" / ".draf").exists()
+
+
+def test_tvr_edit_template_menggantikan_bukan_menumpuk():
+    a = "8002"
+    _template_siap(a)
+    folder = ve.template_path(f"tvr-{a}") / "assets"
+    sidik = hashlib.md5((folder / "bingkai.png").read_bytes()).hexdigest()
+    # BATAL: draf dibuang, template lama utuh.
+    assert _draf(a, "bingkai", "baru.png", png(720, 200, (0, 200, 0, 255))).status_code == 200
+    r = KLIEN.delete("/api/tvr/template/draf", headers=h(a))
+    assert r.status_code == 200 and not r.json()["template"]["slot"]["bingkai"]["draf"]
+    assert hashlib.md5((folder / "bingkai.png").read_bytes()).hexdigest() == sidik
+    # GIF lalu diganti MP4 hijau: hanya satu berkas boom yang tersisa.
+    assert _draf(a, "boom", "boom.gif", _gif()).status_code == 200
+    assert _tetapkan(a).status_code == 200
+    assert "boom.gif" in _aset_tvr(a)
+    r = _draf(a, "boom", "boom.mp4", _hijau())
+    assert r.status_code == 200
+    assert r.json()["template"]["slot"]["boom"]["alpha"] is False
+    assert _tetapkan(a, kunci_hijau=True).status_code == 200
+    assert _aset_tvr(a) == ["bingkai.png", "boom.mp4", "kotak.png"]
+    boom = ve.load_template(f"tvr-{a}")["overlays"][1]
+    assert boom["file"] == "assets/boom.mp4" and boom["loop"] and boom["kunci_hijau"]
+    # WEBM transparan diubah jadi MOV beralpha supaya transparansinya terbaca.
+    r = _draf(a, "boom", "boom.webm", _webm_alpha())
+    assert r.status_code == 200, r.text
+    assert r.json()["template"]["slot"]["boom"]["alpha"] is True
+    assert _tetapkan(a).status_code == 200
+    assert _aset_tvr(a) == ["bingkai.png", "boom.mov", "kotak.png"]
+    # Kosongkan boom: berkasnya ikut dibuang. Kotak wajib tidak bisa dikosongkan.
+    assert _tetapkan(a, kosongkan=["boom"]).status_code == 200
+    assert _aset_tvr(a) == ["bingkai.png", "kotak.png"]
+    assert _tetapkan(a, kosongkan=["kotak"]).status_code == 422
+
+
+def test_tvr_penutup_dibatasi_durasinya(monkeypatch):
+    a = "8003"
+    monkeypatch.setattr(tvr_api, "MAKS_ANIMASI_DETIK", 1.0)
+    r = _draf(a, "penutup", "penutup.mp4", _penutup())
+    assert r.status_code == 413 and "maksimal" in r.json()["detail"]
+    assert not list((ve.template_path(f"tvr-{a}") / "assets" / ".draf").glob("*"))
+
+
+def test_tvr_antrean_satu_video_per_akun_dan_render():
+    a, b = "8101", "8102"
+    # Antrean bersih: job uji lain yang tak pernah dirender ditutup dulu.
+    for sisa in vt._r().zrange(vt.KUNCI_AKTIF, 0, -1):
+        vt.tulis_status(sisa, status="error", log="dibereskan uji")
+    # Belum punya template yang ditetapkan: ditolak.
+    r = KLIEN.post("/api/tvr/jobs", headers=h(a), json={"url": "https://www.instagram.com/reel/X/", "hook": "UJI"})
+    assert r.status_code == 409
+    _template_siap(a)
+    _template_siap(b)
+    assert _draf(a, "boom", "boom.mp4", _hijau()).status_code == 200
+    assert _draf(a, "penutup", "penutup.mp4", _penutup()).status_code == 200
+    assert _tetapkan(a, kunci_hijau=True).status_code == 200
+    r = KLIEN.post("/api/tvr/jobs", headers=h(a), json={"url": "https://www.instagram.com/reel/X/", "hook": "   "})
+    assert r.status_code == 422
+
+    # Unggah sumber; unggahan orang lain tidak bisa dipakai.
+    r = KLIEN.post("/api/tvr/sumber", headers=h(a), files={"file": ("s.mp4", video_sumber(3), "video/mp4")})
+    assert r.status_code == 200, r.text
+    sumber_a = r.json()["url"]
+    r = KLIEN.post("/api/tvr/jobs", headers=h(b), json={"url": sumber_a, "hook": "UJI"})
+    assert r.status_code == 404
+
+    TUGAS.clear()
+    r = KLIEN.post("/api/tvr/jobs", headers=h(a), json={
+        "url": sumber_a, "hook": "VIRAL! UJI EDIT OTOMATIS TVR SAYA", "sumber": "SUMBER: @uji"})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["job"]["status"] == "queued" and d["antrean"]["posisi"] == 1
+    # Satu akun satu video: kiriman kedua ditolak selama belum dituntaskan.
+    r = KLIEN.post("/api/tvr/jobs", headers=h(a), json={"url": sumber_a, "hook": "LAGI"})
+    assert r.status_code == 409 and "masih diproses" in r.json()["detail"]
+    # Akun lain mengantre di belakangnya, dengan perkiraan waktu tunggu.
+    r = KLIEN.post("/api/tvr/jobs", headers=h(b), json={"url": "https://www.instagram.com/reel/B/", "hook": "UJI B"})
+    assert r.status_code == 200, r.text
+    antre_b = r.json()["antrean"]
+    assert antre_b["posisi"] == 2 and antre_b["di_depan"] == 1
+    assert antre_b["perkiraan_detik"] >= 2 * vt.rata_durasi() - 1
+
+    # Worker mengerjakan video A (render ffmpeg sungguhan).
+    args, kwargs = TUGAS[0]
+    hasil = vt.render_video(*args, **kwargs)
+    assert hasil["status"] == "done", hasil
+    st = KLIEN.get("/api/tvr/jobs/saya", headers=h(a)).json()
+    assert st["job"]["status"] == "done" and st["antrean"] is None
+    assert KLIEN.get("/api/tvr/jobs/saya", headers=h(b)).json()["antrean"]["posisi"] == 1
+    unduh = KLIEN.get("/api/tvr/jobs/saya/berkas", headers=h(a))
+    assert unduh.status_code == 200 and unduh.headers["content-type"] == "video/mp4"
+    berkas = MEDIA / "hasil-tvr.mp4"
+    berkas.write_bytes(unduh.content)
+    info = ve.probe(berkas)
+    assert (info["width"], info["height"]) == (720, 1280) and info["has_audio"]
+    # 3 detik video sumber + 2 detik video penutup.
+    assert 4.5 < info["duration"] < 5.6
+    assert KLIEN.get("/api/tvr/jobs/saya/berkas", headers=h(b)).status_code == 409
+    r = KLIEN.post("/api/tvr/jobs", headers=h(a), json={"url": sumber_a, "hook": "LAGI"})
+    assert r.status_code == 409 and "sudah jadi" in r.json()["detail"]
+
+    # EDIT ULANG: hasil dihapus, sumber unggahan disimpan untuk dipakai lagi.
+    folder_job = vt.job_path(d["job"]["job_id"])
+    assert folder_job.is_dir()
+    assert KLIEN.delete("/api/tvr/jobs/saya", headers=h(a)).json()["ok"]
+    assert not folder_job.exists()
+    assert KLIEN.get("/api/tvr/jobs/saya", headers=h(a)).json()["job"] is None
+    assert ve.folder_unggahan(sumber_a).is_dir()
+    r = KLIEN.post("/api/tvr/jobs", headers=h(a), json={"url": sumber_a, "hook": "ULANG"})
+    assert r.status_code == 200
+    job_ulang = r.json()["job"]["job_id"]
+    # Batal selagi mengantre + buang sumbernya (seperti sesudah diunggah ke sosmed).
+    assert KLIEN.delete("/api/tvr/jobs/saya?hapus_sumber=1", headers=h(a)).json()["ok"]
+    assert vt.posisi_antrean(job_ulang) is None
+    assert not ve.folder_unggahan(sumber_a).exists()
+    # Tugas yang terlanjur di broker dilewati worker karena job-nya sudah tiada.
+    args, kwargs = TUGAS[-1]
+    assert vt.render_video(*args, **kwargs)["status"] == "hilang"
+
+
+def test_tvr_render_dengan_gif_berulang():
+    a = "8103"
+    _template_siap(a)
+    assert _draf(a, "boom", "boom.gif", _gif()).status_code == 200
+    assert _tetapkan(a).status_code == 200
+    r = KLIEN.post("/api/tvr/sumber", headers=h(a), files={"file": ("s.mp4", video_sumber(3), "video/mp4")})
+    TUGAS.clear()
+    r = KLIEN.post("/api/tvr/jobs", headers=h(a), json={"url": r.json()["url"], "hook": "UJI GIF"})
+    assert r.status_code == 200, r.text
+    args, kwargs = TUGAS[0]
+    assert vt.render_video(*args, **kwargs)["status"] == "done"
+    assert KLIEN.get("/api/tvr/jobs/saya", headers=h(a)).json()["job"]["status"] == "done"
+
+
+def test_tvr_unggahan_baru_membuang_unggahan_lama():
+    a = "8104"
+    r1 = KLIEN.post("/api/tvr/sumber", headers=h(a), files={"file": ("1.mp4", video_sumber(2), "video/mp4")}).json()
+    r2 = KLIEN.post("/api/tvr/sumber", headers=h(a), files={"file": ("2.mp4", video_sumber(2), "video/mp4")}).json()
+    assert not ve.folder_unggahan(r1["url"]).exists()
+    assert ve.folder_unggahan(r2["url"]).is_dir()
+
+
+def test_tvr_identitas_tidak_membuat_template_awal():
+    a = "8105"
+    KLIEN.get("/api/tvr/ringkas", headers=h(a))
+    assert ve.list_templates(owner=f"pri-{a}") == []

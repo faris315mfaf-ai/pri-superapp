@@ -54,3 +54,15 @@ def pengguna_wajib(x_autoedit_pengguna: str = Header(default="")) -> dict[str, A
     pemilik = f"pri-{id_akun}"
     _siapkan_template_awal(pemilik)
     return {"user_id": id_akun, "username": pemilik}
+
+
+def pengguna_tvr(x_autoedit_pengguna: str = Header(default="")) -> dict[str, Any]:
+    """Identitas untuk Edit Otomatis TVR Saya.
+
+    Sama dengan pengguna_wajib, tanpa membuatkan template awal: akun TVR punya
+    tepat satu template sendiri (tvr_api), tidak perlu salinan template bawaan.
+    """
+    id_akun = x_autoedit_pengguna.strip()
+    if not POLA_ID.match(id_akun):
+        raise HTTPException(status_code=401, detail="Permintaan tidak lewat SuperApp.")
+    return {"user_id": id_akun, "username": f"pri-{id_akun}"}

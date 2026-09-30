@@ -1,8 +1,9 @@
 /**
- * /api/autoedit/* — gerbang modul Auto Edit (khusus master, 30 Sep 2026).
- * Penjaga peran dan penerusan ke layanan ada di lib/autoedit.
+ * /api/autoedit/* — gerbang modul Auto Edit (master) dan Edit Otomatis TVR
+ * Saya (akun yang dibuka master), 30 Sep 2026. Penjaga peran dan penerusan
+ * ke layanan ada di lib/autoedit.
  */
-import { bolehAutoEdit, galatAutoEdit, teruskanAutoEdit } from "@/lib/autoedit";
+import { galatAutoEdit, keluargaAutoEdit, teruskanAutoEdit } from "@/lib/autoedit";
 import { pastikanMasuk } from "@/lib/sesi";
 
 export const runtime = "nodejs";
@@ -18,10 +19,11 @@ async function tangani(
   } catch {
     return galatAutoEdit(401, "Sesi tidak berlaku. Silakan masuk lagi.");
   }
-  // Bukan master: 404, bukan 403 — modul ini tidak perlu diumumkan.
-  if (!bolehAutoEdit(user)) return galatAutoEdit(404, "Tidak ditemukan");
+  // Tanpa izin: 404, bukan 403 — modul ini tidak perlu diumumkan.
+  const keluarga = keluargaAutoEdit(user);
+  if (keluarga.size === 0) return galatAutoEdit(404, "Tidak ditemukan");
   const { jalur } = await params;
-  return teruskanAutoEdit(request, jalur ?? [], user.id);
+  return teruskanAutoEdit(request, jalur ?? [], user.id, keluarga);
 }
 
 export const GET = tangani;

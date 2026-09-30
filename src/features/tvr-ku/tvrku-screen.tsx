@@ -80,6 +80,8 @@ import { TombolLonceng } from "@/components/tombol-lonceng";
 import { PanelTugasSaya } from "./tugas-saya";
 import { KirimVideoManual } from "./kirim-video-manual";
 import { UnggahSosmedSaya } from "./unggah-sosmed-saya";
+import { EditOtomatisTvr } from "./edit-otomatis-tvr";
+import { bolehEditOtomatisTvr } from "@/lib/peran";
 import { VideoSiapUnggah } from "./video-siap-unggah";
 import { RekapAnggotaPalugodam } from "./rekap-anggota-palugodam";
 import { SiaranSerentak } from "./siaran-serentak";
@@ -597,6 +599,8 @@ export function TvrKuScreen({
   const bolehStudio = adalahAdminStudio(userAsli);
   // ACC ajuan komentar (3 Sep 2026): seluruh anggota Divisi PALUGODAM + pengurus.
   const bolehAccKomen = adalahPalugodam(userAsli);
+  // Edit Otomatis (30 Sep 2026): master, atau akun yang modulnya dibuka master.
+  const bolehEditOtomatis = bolehEditOtomatisTvr(userAsli);
   const komenAktif = useModulAktif("kepatuhan_komen");
   const [akun, setAkun] = useState<AkunTvr[] | null>(null);
   const [laporan, setLaporan] = useState<LaporanVideo[]>([]);
@@ -1032,6 +1036,25 @@ export function TvrKuScreen({
         </SeksiLipat>
       </FadeInUp>
         ) },
+        ...(bolehEditOtomatis
+          ? [
+              {
+                id: "edit-otomatis",
+                segmen: "Unggah & Jadwal",
+                judul: "Edit Otomatis",
+                ikon: Clapperboard,
+                keterangan: "Template pribadi + edit video otomatis dengan antrean",
+                render: () => (
+                  <FadeInUp delay={0.08}>
+                    <SectionTitle judul="Edit Otomatis" />
+                    <div className="mt-2.5">
+                      <EditOtomatisTvr />
+                    </div>
+                  </FadeInUp>
+                ),
+              },
+            ]
+          : []),
         { id: "unggah-sosmed", segmen: "Unggah & Jadwal", judul: "Unggah ke Sosmed Saya", ikon: Clapperboard, render: () => (
       <FadeInUp delay={0.1}>
         <SectionTitle judul="Unggah ke Sosmed Saya" />

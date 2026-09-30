@@ -542,6 +542,9 @@ export default function Page() {
     // tidak pernah dibuang). Setelah itu urutan tab dibakukan.
     if (user.modul_izin) {
       for (const m of MODUL_AKUN) {
+        // Modul yang bukan tab (mis. Edit Otomatis di TVR Saya) diatur di
+        // layarnya sendiri, tidak pernah menambah/membuang tab.
+        if ("bukanTab" in m) continue;
         const v = modulDibuka(user, m.kunci);
         if (v === true && !dasar.includes(m.kunci)) dasar.push(m.kunci);
         // (Konten & Profil tidak ada di katalog modul, jadi tak pernah terbuang.)

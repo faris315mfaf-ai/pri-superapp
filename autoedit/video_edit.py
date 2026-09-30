@@ -2191,6 +2191,11 @@ def _bangun_perintah(
         if potong and not POLA_CROP.match(potong):
             raise VideoError(f"Nilai crop layer tidak sah: {potong[:40]!r} (bentuknya lebar:tinggi:x:y)")
         rantai: list[str] = []
+        # Animasi berlatar hijau (green screen): hijaunya dibuang jadi
+        # transparan sebelum dipotong/diskala. Kemiripan 0.25 menangkap hijau
+        # studio yang tidak murni 00FF00; tepinya dihaluskan 0.05.
+        if item.get("kunci_hijau"):
+            rantai.append("chromakey=0x00FF00:0.25:0.05")
         if potong:
             rantai.append(f"crop={potong}")
         if w or h:
