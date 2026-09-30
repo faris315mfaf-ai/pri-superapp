@@ -48,6 +48,12 @@ const ASAL_SUPABASE = (() => {
 // Supabase Realtime (lobi robot, 5 Sep 2026) memakai WebSocket ke host yang
 // sama — CSP membedakan skema, jadi wss:// harus disebut tersendiri.
 const ASAL_SUPABASE_WSS = ASAL_SUPABASE ? ASAL_SUPABASE.replace(/^https:/, "wss:") : "";
+// Database dipasang sendiri (alih 30 Sep 2026) SELALU diizinkan, di samping
+// SUPABASE_URL: tab yang dibuka SEBELUM alih memegang CSP lamanya sampai
+// dimuat ulang — tanpa baris ini unggahan langsung & Realtime tab itu diblokir
+// begitu database pindah.
+const ASAL_DB_TETAP = ["https://db.pri-superapp.com", "wss://db.pri-superapp.com"];
+const ASAL_DB = [...new Set([ASAL_SUPABASE, ASAL_SUPABASE_WSS, ...ASAL_DB_TETAP].filter(Boolean))].join(" ");
 
 // Origin Cloudflare R2 (1 Sep 2026): video TVR Saya diunggah LANGSUNG
 // peramban→R2 lewat URL bertanda tangan. Tanpa origin ini CSP memblokir
@@ -79,7 +85,7 @@ export function proxy(request: NextRequest) {
     img-src 'self' https: data: blob:;
     media-src 'self' https: blob:;
     font-src 'self' data:;
-    connect-src 'self' https://api.cloudinary.com https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com${ASAL_SUPABASE ? ` ${ASAL_SUPABASE} ${ASAL_SUPABASE_WSS}` : ""}${ASAL_R2 ? ` ${ASAL_R2}` : ""}${dev ? " ws:" : ""};
+    connect-src 'self' https://api.cloudinary.com https://generativelanguage.googleapis.com wss://generativelanguage.googleapis.com ${ASAL_DB}${ASAL_R2 ? ` ${ASAL_R2}` : ""}${dev ? " ws:" : ""};
     worker-src 'self' blob:;
     object-src 'none';
     base-uri 'self';

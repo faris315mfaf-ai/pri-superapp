@@ -100,6 +100,10 @@ console.log("pagar proxy");
   cek("token uji + GET rute uji → diteruskan", r3.status === 200 && r3.headers.get("x-middleware-next") === "1", r3.status);
   const r4 = proxy(req("POST", "/api/tvr/laporan", "token-biasa"));
   cek("token biasa tidak terpengaruh", r4.status === 200 && r4.headers.get("x-middleware-next") === "1");
+  // Alih database 30 Sep 2026: alamat database baru selalu ada di connect-src.
+  const hubung = /connect-src ([^;]*)/.exec(r4.headers.get("content-security-policy") ?? "")?.[1] ?? "";
+  cek("CSP connect-src memuat https://db.pri-superapp.com", hubung.split(" ").includes("https://db.pri-superapp.com"), hubung);
+  cek("CSP connect-src memuat wss://db.pri-superapp.com", hubung.split(" ").includes("wss://db.pri-superapp.com"), hubung);
 }
 
 console.log("mesin uji melawan server tiruan");
