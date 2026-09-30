@@ -188,5 +188,20 @@ const dep = (tingkat: () => string = () => "normal") => ({
 }
 server.close();
 
+// Database dipasang sendiri (30 Sep 2026): CPU database dibaca dari /proc/stat mesin.
+{
+  const { cuplikanCpuMesin, databaseDiSupabaseCloud } = await import("@/lib/metrik-server");
+  cek("alamat *.supabase.co → Cloud", databaseDiSupabaseCloud("https://pichnkyjepsirpclofhs.supabase.co") === true);
+  cek("alamat dipasang sendiri → bukan Cloud", databaseDiSupabaseCloud("https://db.pri-superapp.com") === false);
+  cek("alamat menyamar → bukan Cloud", databaseDiSupabaseCloud("https://supabase.co.jahat.com") === false);
+  cek("alamat kosong/rusak → bukan Cloud", databaseDiSupabaseCloud("") === false && databaseDiSupabaseCloud("bukan url") === false);
+  const a = cuplikanCpuMesin("cpu  100 0 50 800 50 0 0 0 0 0\ncpu0 1 2 3 4\n");
+  cek("cuplikan /proc/stat: idle = idle + iowait", a?.idle === 850 && a?.total === 1000, a);
+  const b = cuplikanCpuMesin("cpu  400 0 150 1300 150 0 0 0 0 0\n");
+  const persen = a && b ? Math.round((1 - (b.idle - a.idle) / (b.total - a.total)) * 100) : null;
+  cek("dua cuplikan → CPU 40%", persen === 40, persen);
+  cek("teks rusak → null", cuplikanCpuMesin("bukan stat") === null && cuplikanCpuMesin("") === null);
+}
+
 console.log(`\n${lulus} lulus, ${gagal} gagal`);
 process.exit(gagal > 0 ? 1 : 0);

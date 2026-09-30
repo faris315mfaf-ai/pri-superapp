@@ -11,7 +11,7 @@ import { supabase } from "@/lib/supabase";
 import { lupakanProfilUji, userDariToken } from "@/lib/sesi";
 import { adalahMasterAsli, PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
 import { kondisiDb } from "@/lib/penjaga-supabase";
-import { ambilMetrik } from "@/lib/metrik-server";
+import { ambilMetrik, cuplikanCpuMesin, databaseDiSupabaseCloud } from "@/lib/metrik-server";
 import { tanggalWibHariIni } from "@/lib/format";
 import { rahasiaUji } from "@/lib/uji-beban-token";
 import { hentikanUjiBeban, jalankanUji, statusUjiBeban, type StatusUji } from "@/lib/uji-beban";
@@ -35,8 +35,14 @@ async function pastikanMasterAsli(request: Request) {
   return user;
 }
 
-/** Jumlah detik idle & total CPU instansi Supabase dari metrik resminya. */
+/**
+ * Jumlah idle & total CPU mesin database. Supabase Cloud: dari metrik resminya.
+ * Supabase yang dipasang sendiri di VPS yang sama: dari /proc/stat mesin ini —
+ * alamat metrik Cloud tidak ada di sana, dan tanpa angka ini rem CPU uji beban
+ * tidak pernah bisa menghentikan uji.
+ */
 async function cuplikanCpuSupabase(): Promise<{ idle: number; total: number } | null> {
+  if (!databaseDiSupabaseCloud()) return cuplikanCpuMesin();
   const teks = await ambilMetrik();
   let idle = 0;
   let total = 0;

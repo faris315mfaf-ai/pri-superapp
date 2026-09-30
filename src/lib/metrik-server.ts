@@ -57,6 +57,36 @@ export async function ambilMetrik(): Promise<string> {
   return res.text();
 }
 
+/** true bila database dilayani Supabase Cloud (alamat *.supabase.co), bukan dipasang sendiri. */
+export function databaseDiSupabaseCloud(url = process.env.SUPABASE_URL ?? ""): boolean {
+  try {
+    return new URL(url).hostname.endsWith(".supabase.co");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Cuplikan counter CPU mesin dari /proc/stat (idle + iowait vs total).
+ * Dipakai saat database dipasang sendiri di mesin yang sama dengan aplikasi:
+ * CPU mesin = CPU yang juga dipakai database. Satuannya jiffy, bukan detik —
+ * tidak masalah karena yang dipakai hanya perbandingan dua cuplikan.
+ */
+export function cuplikanCpuMesin(stat?: string): { idle: number; total: number } | null {
+  let teks = stat;
+  if (teks == null) {
+    try {
+      teks = readFileSync("/proc/stat", "utf8");
+    } catch {
+      return null;
+    }
+  }
+  const kolom = (/^cpu\s+(.*)$/m.exec(teks)?.[1] ?? "").trim().split(/\s+/).map(Number);
+  const total = kolom.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+  if (!(total > 0)) return null;
+  return { idle: (kolom[3] ?? 0) + (kolom[4] ?? 0), total };
+}
+
 /** Nilai metrik pertama yang cocok (nama + potongan label opsional). */
 function nilai(teks: string, nama: string, label = ""): number | null {
   const re = new RegExp(`^${nama}\\{[^}]*${label}[^}]*\\}\\s+([-+0-9.eE]+)`, "m");
