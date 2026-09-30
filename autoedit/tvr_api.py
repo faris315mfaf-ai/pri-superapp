@@ -75,14 +75,20 @@ KUNCI_JOB_AKUN = "tvrjob:"
 KUNCI_UNGGAHAN = "tvrunggah:"
 JEDA_DETEKSI_DETIK = float(os.getenv("VIDEO_JEDA_DETEKSI", "3"))
 
-# Tulisan berita & kredit sumber: angka acuan sama dengan susunan TV Rakyat di
-# modul Auto Edit master (kanvas 720x1280). Kotak monas dan tulisan beritanya
-# tampil pada detik 0-3.
+# Susunan tulisan PERSIS template GODAM (susunanBawaan di modul Auto Edit
+# master, kanvas 720x1280): tulisan berita, badge kategori, kredit sumber.
+# Kotak monas, tulisan berita, dan badge tampil pada detik 0-3.
 TEKS_HOOK: dict[str, Any] = {
     "name": "hook", "style": "berita", "align": "justify", "size": 38, "min_size": 22,
     "max_lines": 4, "x": 38, "y": 783, "width": 660, "line_height": 1.15,
     "color": "black", "kicker_color": "#d32d27", "start": 0, "end": 3,
 }
+TEKS_KATEGORI: dict[str, Any] = {
+    "name": "kategori", "style": "kategori", "source": "kategori", "color": "white",
+    "start": 0, "end": 3,
+}
+PILIHAN_RATA = ("justify", "left", "center", "right")
+MAKS_KATEGORI = 30
 TEKS_SUMBER: dict[str, Any] = {
     "name": "sumber", "size": 10, "x": None, "y": 1253, "align": "right",
     "color": "white", "stroke": 1, "stroke_color": "black",
@@ -165,16 +171,30 @@ def _info_slot(pengguna: dict[str, Any], template: dict[str, Any] | None) -> dic
     return hasil
 
 
+def _rata(template: dict[str, Any] | None) -> str:
+    """Perataan tulisan berita: disimpan di layer "berita", seperti GODAM."""
+    for layer in (template or {}).get("texts") or []:
+        if layer.get("style") == "berita" and layer.get("align") in PILIHAN_RATA:
+            return str(layer["align"])
+    return "justify"
+
+
 def _keadaan(pengguna: dict[str, Any]) -> dict[str, Any]:
     """Keadaan template akun ini untuk halaman."""
     template = _baca_template(pengguna)
+    isi = template or {}
     return {
         "ada": template is not None,
         "siap": bool(template and template.get("siap")),
         "slot": _info_slot(pengguna, template),
-        "text_box": (template or {}).get("text_box"),
-        "teks_warna": (template or {}).get("teks_warna") or "black",
-        "diperbarui": (template or {}).get("diperbarui"),
+        "text_box": isi.get("text_box"),
+        "badge_box": isi.get("badge_box"),
+        # Tebakan letak badge bila belum digambar (sama dengan GODAM).
+        "badge_box_default": ve.kotak_kategori_bawaan(isi.get("text_box")),
+        "kategori": str(isi.get("kategori") or ""),
+        "rata": _rata(template),
+        "teks_warna": isi.get("teks_warna") or "white",
+        "diperbarui": isi.get("diperbarui"),
     }
 
 
@@ -193,9 +213,10 @@ def _susunan(pengguna: dict[str, Any], berkas: dict[str, Path | None], kunci_hij
         # Selebar layar, menempel ke dasar; tingginya mengikuti rasio berkas.
         {"label": "kotak monas", "file": rujukan("kotak"), "x": 0, "y": "main_h-h",
          "w": LEBAR, "h": None, "start": 0, "end": 3},
-        # Animasi diputar berulang; latar hijau dibuang bila dicentang.
+        # Ukuran & letak persis GODAM (280x158 di 45,55). Animasi diputar
+        # berulang; latar hijau dibuang bila dicentang.
         {"label": "boom like share", "file": rujukan("boom"), "x": 45, "y": 55,
-         "w": 280, "h": None, "loop": boom_bergerak,
+         "w": 280, "h": 158, "loop": boom_bergerak,
          "kunci_hijau": bool(kunci_hijau and _jenis(boom) == "video")},
         {"label": "bingkai teratas", "file": rujukan("bingkai"), "x": 0, "y": "main_h-h",
          "w": LEBAR, "h": None},
@@ -208,6 +229,9 @@ def _template_dari(
     text_box: dict[str, int] | None,
     teks_warna: str,
     kunci_hijau: bool,
+    badge_box: dict[str, int] | None = None,
+    kategori: str = "",
+    rata: str = "justify",
 ) -> dict[str, Any]:
     penutup = berkas.get("penutup")
     return {
@@ -222,11 +246,15 @@ def _template_dari(
         ),
         "max_duration": MAKS_DURASI_DETIK,
         "overlays": _susunan(pengguna, berkas, kunci_hijau),
-        "texts": [TEKS_HOOK, TEKS_SUMBER],
+        "texts": [
+            {**TEKS_HOOK, "align": rata if rata in PILIHAN_RATA else "justify"},
+            TEKS_KATEGORI,
+            TEKS_SUMBER,
+        ],
         "text_box": text_box,
-        "badge_box": None,
-        "kategori": "",
-        "teks_warna": teks_warna if teks_warna in ("white", "black") else "black",
+        "badge_box": badge_box,
+        "kategori": kategori,
+        "teks_warna": teks_warna if teks_warna in ("white", "black") else "white",
         "kunci_hijau": bool(kunci_hijau),
     }
 
@@ -237,16 +265,22 @@ def _pastikan_template(pengguna: dict[str, Any]) -> dict[str, Any]:
     if ada is not None:
         return ada
     tid = _id_template(pengguna)
-    isi = _template_dari(pengguna, {}, None, "black", False)
+    isi = _template_dari(pengguna, {}, None, "white", False)
     isi["siap"] = False
     isi["name"] = ve.nama_set_unik("TVR Saya", tid, _akun(pengguna))
     return ve.save_template(isi, tid, owner=_akun(pengguna))
 
 
 def _template_gabungan(
-    pengguna: dict[str, Any], text_box: dict[str, int] | None, teks_warna: str | None
+    pengguna: dict[str, Any],
+    text_box: dict[str, int] | None,
+    teks_warna: str | None,
+    badge_box: dict[str, int] | None = None,
+    kategori: str | None = None,
+    rata: str | None = None,
 ) -> dict[str, Any]:
-    """Template seperti yang AKAN tersimpan: draf menimpa berkas yang ada."""
+    """Template seperti yang AKAN tersimpan: draf menimpa berkas yang ada,
+    pilihan yang belum disimpan (dari pratinjau) menimpa yang tersimpan."""
     template = _baca_template(pengguna) or {}
     berkas = {
         slot: _berkas_slot(_folder_draf(pengguna), slot) or _berkas_slot(_folder_aset(pengguna), slot)
@@ -256,8 +290,11 @@ def _template_gabungan(
         pengguna,
         berkas,
         text_box if text_box is not None else template.get("text_box"),
-        teks_warna or str(template.get("teks_warna") or "black"),
+        teks_warna or str(template.get("teks_warna") or "white"),
         bool(template.get("kunci_hijau")),
+        badge_box if badge_box is not None else template.get("badge_box"),
+        kategori if kategori is not None else str(template.get("kategori") or ""),
+        rata or _rata(template),
     )
     isi["id"] = _id_template(pengguna)
     return isi
@@ -359,10 +396,18 @@ class KotakTeks(BaseModel):
     h: int = Field(ge=20, le=TINGGI)
 
 
+def _bersih_kategori(nilai: str) -> str:
+    """Kategori ditulis kapital, spasi dirapikan (sama dengan GODAM)."""
+    return " ".join(str(nilai or "").split()).upper()[:MAKS_KATEGORI]
+
+
 class SimpanBody(BaseModel):
     text_box: KotakTeks | None = None
-    # Hitam: kotak monas lazimnya berbidang putih (lihat TEKS_HOOK).
-    teks_warna: Literal["white", "black"] = "black"
+    # Kosong = tebakan otomatis di atas kotak tulisan.
+    badge_box: KotakTeks | None = None
+    kategori: str = Field(default="", max_length=MAKS_KATEGORI)
+    rata: Literal["justify", "left", "center", "right"] = "justify"
+    teks_warna: Literal["white", "black"] = "white"
     kunci_hijau: bool = False
     kosongkan: list[Literal["boom", "penutup"]] = Field(default_factory=list, max_length=2)
 
@@ -389,6 +434,7 @@ def ringkas(pengguna: dict[str, Any] = Depends(pengguna_tvr)) -> dict[str, Any]:
             "maks_durasi_detik": MAKS_DURASI_DETIK,
             "maks_hook": MAKS_HOOK,
             "maks_sumber_teks": MAKS_SUMBER,
+            "maks_kategori": MAKS_KATEGORI,
             "jenis_slot": {k: sorted(v) for k, v in JENIS_SLOT.items()},
             "jenis_sumber": sorted(va.JENIS_VIDEO),
             "umur_simpan_jam": vt.JOB_RETENTION_HOURS,
@@ -464,6 +510,9 @@ def _kotak_dari_teks(nilai: str) -> dict[str, int] | None:
 @router.get("/template/pratinjau.png")
 def pratinjau(
     kotak: str = "",
+    badge: str = "",
+    kategori: str | None = None,
+    rata: str = "",
     warna: str = "",
     teks: str = "",
     pengguna: dict[str, Any] = Depends(pengguna_tvr),
@@ -471,8 +520,14 @@ def pratinjau(
     """Gambar template (draf + yang berlaku) beserta contoh tulisannya."""
     import io
 
-    template = _template_gabungan(pengguna, _kotak_dari_teks(kotak) if kotak else None,
-                                  warna if warna in ("white", "black") else None)
+    template = _template_gabungan(
+        pengguna,
+        _kotak_dari_teks(kotak) if kotak else None,
+        warna if warna in ("white", "black") else None,
+        _kotak_dari_teks(badge) if badge else None,
+        _bersih_kategori(kategori) if kategori is not None else None,
+        rata if rata in PILIHAN_RATA else None,
+    )
     contoh = {
         "hook": (teks.strip() or "VIRAL! CONTOH TULISAN BERITA UNTUK MELIHAT LETAK DAN UKURANNYA")[:MAKS_HOOK],
         "sumber": "SUMBER: CONTOH",
@@ -556,7 +611,10 @@ def simpan_template(body: SimpanBody, pengguna: dict[str, Any] = Depends(penggun
                 final[slot] = _berkas_slot(aset, slot)
         shutil.rmtree(draf, ignore_errors=True)
 
-        isi = _template_dari(pengguna, final, kotak, body.teks_warna, body.kunci_hijau)
+        isi = _template_dari(
+            pengguna, final, kotak, body.teks_warna, body.kunci_hijau,
+            _kotak_sah(body.badge_box), _bersih_kategori(body.kategori), body.rata,
+        )
         isi["siap"] = True
         isi["diperbarui"] = time.time()
         isi["name"] = (_baca_template(pengguna) or {}).get("name") or "TVR Saya"

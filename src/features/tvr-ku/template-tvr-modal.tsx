@@ -18,11 +18,14 @@ import { cn } from "@/lib/utils";
 import { apiFetch, apiUnggah, bacaJson, pesanGalat } from "@/features/auto-edit/api";
 import {
   INFO_SLOT,
+  PILIHAN_RATA,
   URUTAN_SLOT,
   akhiranBerkas,
+  tebakanBadge,
   type BatasTvr,
   type KeadaanTemplateTvr,
   type KotakTeks,
+  type RataTeks,
   type SlotTvr,
 } from "./edit-otomatis-tipe";
 
@@ -43,6 +46,11 @@ export function TemplateTvrModal({
   const [tpl, setTpl] = useState<KeadaanTemplateTvr>(awal);
   const [kotak, setKotak] = useState<KotakTeks | null>(awal.text_box);
   const [warna, setWarna] = useState<"white" | "black">(awal.teks_warna);
+  // Badge kategori & perataan: sama dengan editor template GODAM.
+  const [badge, setBadge] = useState<KotakTeks | null>(awal.badge_box);
+  const [kategori, setKategori] = useState(awal.kategori);
+  const [rata, setRata] = useState<RataTeks>(awal.rata);
+  const [modeGambar, setModeGambar] = useState<"teks" | "kategori">("teks");
   const [kunciHijau, setKunciHijau] = useState(Boolean(awal.slot.boom.kunci_hijau));
   const [kosongkan, setKosongkan] = useState<Set<SlotTvr>>(() => new Set());
   const [unggah, setUnggah] = useState<{ slot: SlotTvr; persen: number } | null>(null);
@@ -61,7 +69,9 @@ export function TemplateTvrModal({
   const sibuk = unggah !== null || menyimpan || menutup;
   const adaDraf = URUTAN_SLOT.some((s) => tpl.slot[s].draf);
   const kotakKunci = kotak ? `${kotak.x},${kotak.y},${kotak.w},${kotak.h}` : "";
-  const kunciGambar = `${versi}|${kotakKunci}|${warna}`;
+  const badgeKunci = badge ? `${badge.x},${badge.y},${badge.w},${badge.h}` : "";
+  const kategoriBersih = kategori.trim().replace(/\s+/g, " ").toUpperCase();
+  const kunciGambar = `${versi}|${kotakKunci}|${badgeKunci}|${kategoriBersih}|${rata}|${warna}`;
   const adaGambarLayer = tpl.slot.kotak.ada || tpl.slot.kotak.draf || tpl.slot.bingkai.ada || tpl.slot.bingkai.draf;
 
   // Pratinjau: diambil ulang (dengan jeda) setiap bahan/kotak/warna berubah.
@@ -72,8 +82,9 @@ export function TemplateTvrModal({
     let alamat = "";
     const t = window.setTimeout(async () => {
       try {
-        const q = new URLSearchParams({ warna });
+        const q = new URLSearchParams({ warna, rata, kategori: kategoriBersih });
         if (kotakKunci) q.set("kotak", kotakKunci);
+        if (badgeKunci) q.set("badge", badgeKunci);
         const res = await apiFetch(`/api/tvr/template/pratinjau.png?${q.toString()}`, { cache: "no-store" });
         if (!res.ok) throw new Error(pesanGalat(res.status, await bacaJson(res), "Pratinjau gagal dimuat."));
         const blob = await res.blob();
@@ -92,7 +103,7 @@ export function TemplateTvrModal({
       hidup = false;
       window.clearTimeout(t);
     };
-  }, [kunciGambar, kotakKunci, warna, adaGambarLayer]);
+  }, [kunciGambar, kotakKunci, badgeKunci, kategoriBersih, rata, warna, adaGambarLayer]);
 
   // Blob pratinjau terakhir dilepas saat editor ditutup.
   const gambarRef = useRef(gambar);
@@ -184,7 +195,8 @@ export function TemplateTvrModal({
     setSeret(null);
     // Seretan kecil dianggap sentuhan tak sengaja.
     if (!k || k.w < 20 || k.h < 20) return;
-    setKotak(k);
+    if (modeGambar === "kategori") setBadge(k);
+    else setKotak(k);
   }
 
   async function deteksi() {
@@ -221,6 +233,9 @@ export function TemplateTvrModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text_box: kotak,
+          badge_box: badge,
+          kategori: kategoriBersih,
+          rata,
           teks_warna: warna,
           kunci_hijau: boomVideoTanpaAlpha && kunciHijau,
           kosongkan: [...kosongkan].filter((s) => s === "boom" || s === "penutup"),
@@ -254,15 +269,15 @@ export function TemplateTvrModal({
     return { teks: "Belum ada", kelas: "text-teks-sekunder" };
   }
 
-  const tampilKotak = seret ?? kotak;
-  const gayaKotak = tampilKotak
-    ? {
-        left: `${(tampilKotak.x / LEBAR) * 100}%`,
-        top: `${(tampilKotak.y / TINGGI) * 100}%`,
-        width: `${(tampilKotak.w / LEBAR) * 100}%`,
-        height: `${(tampilKotak.h / TINGGI) * 100}%`,
-      }
-    : undefined;
+  const gaya = (k: KotakTeks) => ({
+    left: `${(k.x / LEBAR) * 100}%`,
+    top: `${(k.y / TINGGI) * 100}%`,
+    width: `${(k.w / LEBAR) * 100}%`,
+    height: `${(k.h / TINGGI) * 100}%`,
+  });
+  const tampilKotak = modeGambar === "teks" && seret ? seret : kotak;
+  const badgeTebakan = !badge && !(modeGambar === "kategori" && seret);
+  const tampilBadge = modeGambar === "kategori" && seret ? seret : (badge ?? tebakanBadge(kotak));
 
   if (typeof document === "undefined") return null;
   return createPortal(
@@ -364,8 +379,26 @@ export function TemplateTvrModal({
             Posisi tulisan <span className="text-gagal">*</span>
           </p>
           <p className="mt-0.5 text-[10.5px] leading-snug text-teks-sekunder">
-            Seret di gambar untuk menandai kotak tulisan berita, atau tekan Deteksi otomatis.
+            Pilih kotak yang mau diatur, lalu seret di gambar. Hijau = tulisan berita, oranye = kategori
+            (putus-putus = tebakan otomatis).
           </p>
+          <div className="mt-2 grid grid-cols-2 gap-2" role="group" aria-label="Kotak yang diatur">
+            {(["teks", "kategori"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setModeGambar(m)}
+                disabled={sibuk}
+                aria-pressed={modeGambar === m}
+                className={cn(
+                  "btn-tekan rounded-lg py-1.5 text-[11.5px] font-bold disabled:opacity-50",
+                  modeGambar === m ? "bg-pri/15 text-pri" : "glass text-teks-sekunder",
+                )}
+              >
+                {m === "teks" ? "Kotak tulisan" : "Kotak kategori"}
+              </button>
+            ))}
+          </div>
           <div className="mt-2 flex flex-wrap gap-2">
             <button
               type="button"
@@ -376,6 +409,16 @@ export function TemplateTvrModal({
               {mendeteksi ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanSearch className="h-3.5 w-3.5" />}
               Deteksi otomatis
             </button>
+            {modeGambar === "kategori" && badge && (
+              <button
+                type="button"
+                onClick={() => setBadge(null)}
+                disabled={sibuk}
+                className="glass btn-tekan flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11.5px] font-bold text-teks-utama disabled:opacity-50"
+              >
+                <Undo2 className="h-3.5 w-3.5" /> Pakai tebakan
+              </button>
+            )}
             <div className="ml-auto flex overflow-hidden rounded-lg" role="group" aria-label="Warna tulisan">
               {(["black", "white"] as const).map((w) => (
                 <button
@@ -393,6 +436,38 @@ export function TemplateTvrModal({
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="mt-2 flex items-center gap-2">
+            <label htmlFor="tvr-kategori" className="shrink-0 text-[11.5px] font-bold text-teks-utama">
+              Kategori
+            </label>
+            <input
+              id="tvr-kategori"
+              value={kategori}
+              onChange={(e) => setKategori(e.target.value.toUpperCase().slice(0, batas.maks_kategori))}
+              placeholder="NEWS (kosong = tanpa badge)"
+              disabled={sibuk}
+              className="glass-input h-9 min-w-0 flex-1 rounded-lg px-2.5 text-[12.5px] font-bold tracking-wide text-teks-utama uppercase"
+            />
+          </div>
+          <div className="mt-2 grid grid-cols-4 gap-1.5" role="group" aria-label="Perataan tulisan berita">
+            {PILIHAN_RATA.map((r) => (
+              <button
+                key={r.nilai}
+                type="button"
+                onClick={() => setRata(r.nilai)}
+                disabled={sibuk}
+                aria-pressed={rata === r.nilai}
+                title={r.judul}
+                className={cn(
+                  "btn-tekan rounded-lg py-1.5 text-[10.5px] font-bold disabled:opacity-50",
+                  rata === r.nilai ? "bg-pri/15 text-pri" : "glass text-teks-sekunder",
+                )}
+              >
+                {r.judul.replace("Rata ", "")}
+              </button>
+            ))}
           </div>
 
           {adaGambarLayer ? (
@@ -418,8 +493,17 @@ export function TemplateTvrModal({
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-white" />
                 </div>
               )}
-              {gayaKotak && (
-                <div className="pointer-events-none absolute border-2 border-emerald-400 bg-emerald-400/15" style={gayaKotak} />
+              {tampilKotak && (
+                <div className="pointer-events-none absolute border-2 border-emerald-400 bg-emerald-400/15" style={gaya(tampilKotak)} />
+              )}
+              {tampilBadge && (
+                <div
+                  className={cn(
+                    "pointer-events-none absolute border-2 border-amber-400 bg-amber-400/15",
+                    badgeTebakan && "border-dashed",
+                  )}
+                  style={gaya(tampilBadge)}
+                />
               )}
               {galatGambar && (
                 <p className="absolute inset-x-2 bottom-2 rounded-lg bg-black/70 p-2 text-[10.5px] text-white">{galatGambar}</p>

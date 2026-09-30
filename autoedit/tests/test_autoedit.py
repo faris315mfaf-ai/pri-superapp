@@ -635,3 +635,56 @@ def test_tvr_identitas_tidak_membuat_template_awal():
     a = "8105"
     KLIEN.get("/api/tvr/ringkas", headers=h(a))
     assert ve.list_templates(owner=f"pri-{a}") == []
+
+
+def test_tvr_template_persis_susunan_godam():
+    a = "8106"
+    assert _draf(a, "kotak", "kotak.png", _png_kotak()).status_code == 200
+    assert _draf(a, "bingkai", "bingkai.png", png(720, 120, (200, 0, 0, 255))).status_code == 200
+    assert _draf(a, "boom", "boom.gif", _gif()).status_code == 200
+    # Bawaan sama dengan GODAM: tulisan putih, rata kiri-kanan, tanpa kategori.
+    t = KLIEN.get("/api/tvr/ringkas", headers=h(a)).json()["template"]
+    assert t["teks_warna"] == "white" and t["rata"] == "justify" and t["kategori"] == ""
+    badge = {"x": 36, "y": 950, "w": 260, "h": 48}
+    r = KLIEN.put("/api/tvr/template", headers=h(a), json={
+        "text_box": KOTAK_UJI, "badge_box": badge, "kategori": "  news  ", "rata": "center", "teks_warna": "black"})
+    assert r.status_code == 200, r.text
+    t = r.json()["template"]
+    assert t["kategori"] == "NEWS" and t["badge_box"] == badge and t["rata"] == "center"
+    assert t["badge_box_default"] is not None
+    tpl = ve.load_template(f"tvr-{a}")
+    # Layer, teks, dan ukuran persis susunanBawaan GODAM.
+    assert [o["label"] for o in tpl["overlays"]] == ["kotak monas", "boom like share", "bingkai teratas"]
+    boom = tpl["overlays"][1]
+    assert (boom["x"], boom["y"], boom["w"], boom["h"], boom["loop"]) == (45, 55, 280, 158, True)
+    assert [x["name"] for x in tpl["texts"]] == ["hook", "kategori", "sumber"]
+    assert tpl["texts"][0]["align"] == "center" and tpl["texts"][1]["source"] == "kategori"
+    assert (tpl["width"], tpl["height"], tpl["fps"]) == (720, 1280, 30)
+    # Kategori terlalu panjang ditolak; perataan asing ditolak.
+    assert KLIEN.put("/api/tvr/template", headers=h(a), json={"text_box": KOTAK_UJI, "kategori": "X" * 31}).status_code == 422
+    assert KLIEN.put("/api/tvr/template", headers=h(a), json={"text_box": KOTAK_UJI, "rata": "miring"}).status_code == 422
+    # Pratinjau menerima pilihan yang belum disimpan.
+    r = KLIEN.get("/api/tvr/template/pratinjau.png?badge=36,950,260,48&kategori=hiburan&rata=left", headers=h(a))
+    assert r.status_code == 200 and r.content[:4] == b"\x89PNG"
+    # Badge benar-benar tergambar di video: render lalu periksa pikselnya.
+    r = KLIEN.post("/api/tvr/sumber", headers=h(a), files={"file": ("s.mp4", video_sumber(3), "video/mp4")})
+    TUGAS.clear()
+    assert KLIEN.post("/api/tvr/jobs", headers=h(a), json={"url": r.json()["url"], "hook": "UJI BADGE"}).status_code == 200
+    args, kwargs = TUGAS[0]
+    assert vt.render_video(*args, **kwargs)["status"] == "done"
+    berkas = MEDIA / "hasil-badge.mp4"
+    berkas.write_bytes(KLIEN.get("/api/tvr/jobs/saya/berkas", headers=h(a)).content)
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", "1", "-i", str(berkas),
+                    "-frames:v", "1", "-update", "1", str(MEDIA / "badge.png")], check=True)
+    from PIL import Image
+
+    im = Image.open(MEDIA / "badge.png").convert("RGB")
+    # Huruf badge (putih) tergambar di dalam kotaknya; video sumber di bagian
+    # itu tidak punya piksel putih murni.
+    putih = sum(
+        1
+        for x in range(100, badge["x"] + badge["w"])
+        for y in range(badge["y"], badge["y"] + badge["h"])
+        if min(im.getpixel((x, y))) > 235
+    )
+    assert putih > 150, putih
