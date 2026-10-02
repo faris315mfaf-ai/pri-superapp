@@ -37,3 +37,6 @@ Thumbs.db
 
 # Skrip server: dijalankan DI server, bukan di dalam aplikasi.
 vps
+# Kecuali dua berkas kecil yang dipanggang ke image mesin Auto Edit TS.
+!vps/autoedit-ts/paket-jalan.mjs
+!vps/autoedit-ts/sehat.mjs
