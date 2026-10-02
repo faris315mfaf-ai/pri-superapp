@@ -71,7 +71,7 @@ const PLATFORM6 = [
   "threads",
   "twitter",
 ] as const;
-/** 100 MB = batas Cloudinary; > 50 MB dikompres otomatis (5 Sep 2026). */
+/** 100 MB = batas penyimpanan video (2 Okt 2026: tanpa kompresi Cloudinary). */
 const MAKS_MB = 100;
 const MERAH = "linear-gradient(135deg, #DC2626, #B91C1C)";
 const UNGU = "linear-gradient(135deg, #7C3AED, #4F46E5)";

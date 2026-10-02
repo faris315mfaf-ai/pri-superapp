@@ -28,7 +28,7 @@ import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { beriKoin } from "@/lib/koin";
 import { pastikanKategoriBolehDipakai } from "@/lib/kategori-status";
-import { BATAS_BERKAS_CLOUDINARY_MB, BATAS_KOMPRES_MB, hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
+import { hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
 import { kompresLaluSalinKeR2 } from "@/lib/kompres-r2";
 import { BATAS_CAPTION_TVR, LABEL_SOSMED, solusiGagal } from "@/lib/batas-caption";
 import { kirimKabar } from "@/lib/notifikasi";
@@ -46,6 +46,9 @@ import {
 import { PENYEDIA_ANGGOTA, unggahVideoAnggota, type IdPenyedia } from "@/lib/sosmed-penyedia";
 import { kolomTabelAda, sisipkanLonggar } from "@/lib/kolom-struktur";
 import { naikkanSinyal } from "@/lib/sinyal-pribadi";
+
+/** Batas berkas penyimpanan video (bucket "tvrku" & FILE_SIZE_LIMIT Supabase sendiri). */
+const BATAS_PENYIMPANAN_MB = 100;
 
 export const dynamic = "force-dynamic";
 // upload-post mengunduh video dari URL kita lalu memposting ke banyak
@@ -245,34 +248,19 @@ export async function POST(request: Request) {
           status: 400,
         });
       }
-      // Batas atas = batas Pimred ATAU batas berkas Cloudinary (paket Free
-      // 100 MB), mana yang lebih kecil. Di atas 50 MB dikompres otomatis.
-      const batasAtasMb = Math.min(maksMb, BATAS_BERKAS_CLOUDINARY_MB);
+      // Batas atas = batas Pimred ATAU batas penyimpanan, mana yang lebih
+      // kecil. 2 Okt 2026: video > 50 MB TIDAK lagi lewat Cloudinary — akun
+      // Cloudinary dinonaktifkan ("cloud_name is disabled") sehingga semua
+      // video besar gagal. Penyimpanan kini Supabase milik sendiri (batas
+      // berkas 100 MB), jadi video langsung disimpan apa adanya.
+      const batasAtasMb = Math.min(maksMb, BATAS_PENYIMPANAN_MB);
       if (ukuran > batasAtasMb * 1024 * 1024) {
         throw Object.assign(
           new Error(
-            `Video ${Math.round(ukuran / 1048576)} MB terlalu besar. Maksimal ${batasAtasMb} MB — kecilkan dulu di HP; di atas ${BATAS_KOMPRES_MB} MB akan dikompres otomatis.`,
+            `Video ${Math.round(ukuran / 1048576)} MB terlalu besar. Maksimal ${batasAtasMb} MB — kecilkan dulu di HP.`,
           ),
           { status: 400 },
         );
-      }
-      // 5 Sep 2026: > 50 MB → lewat Cloudinary dulu (dikompres ke <= 50 MB
-      // dengan kualitas dijaga, lalu disalin ke R2/bucket — lib/kompres-r2).
-      if (ukuran > BATAS_KOMPRES_MB * 1024 * 1024) {
-        const konfigCld = konfigUploadCloudinary();
-        if (!konfigCld) {
-          throw Object.assign(
-            new Error("Kompresi otomatis belum siap (Cloudinary belum diatur). Kecilkan video sampai 50 MB."),
-            { status: 503 },
-          );
-        }
-        return {
-          sukses: true,
-          cara: "cloudinary" as const,
-          cloudName: konfigCld.cloudName,
-          uploadPreset: konfigCld.uploadPreset,
-          kompres_mb: BATAS_KOMPRES_MB,
-        };
       }
       const ext =
         /\.(mp4|mov|m4v|webm)$/i.exec(body.nama ?? "")?.[1]?.toLowerCase() ??

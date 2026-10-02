@@ -23,12 +23,12 @@ import {
   type ProfilTvAnggota,
   type Siaran,
 } from "@/services";
-import { KOMPRES_MB, unggahVideoTvrku } from "@/lib/unggah-video-klien";
+import { unggahVideoTvrku } from "@/lib/unggah-video-klien";
 import { jamWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const PLATFORM6 = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"] as const;
-/** 100 MB = batas Cloudinary; > 50 MB dikompres otomatis (5 Sep 2026). */
+/** 100 MB = batas penyimpanan video (2 Okt 2026: tanpa kompresi Cloudinary). */
 const MAKS_MB = 100;
 
 type ProfilPilihan = { profil: string; nama: string; akun: Record<string, string> };
@@ -135,7 +135,7 @@ export function SiaranSerentak() {
 
   function pilihBerkas(f: File | null) {
     if (f && f.size > MAKS_MB * 1024 * 1024) {
-      toast("peringatan", `Video ${Math.round(f.size / 1_048_576)} MB — maksimal ${MAKS_MB} MB`, "Kecilkan dulu di HP; di atas 50 MB dikompres otomatis.");
+      toast("peringatan", `Video ${Math.round(f.size / 1_048_576)} MB — maksimal ${MAKS_MB} MB`, "Kecilkan dulu di HP sampai di bawah batas.");
       if (inputRef.current) inputRef.current.value = "";
       setBerkas(null);
       return;
@@ -222,7 +222,7 @@ export function SiaranSerentak() {
           <UploadCloud className="h-5 w-5 text-pri" />
           {berkas ? `${berkas.name} (${Math.round(berkas.size / 1_048_576)} MB)` : "Pilih Video"}
         </button>
-        <p className="mt-1 text-[10.5px] text-teks-sekunder">Maksimal {MAKS_MB} MB (MP4/MOV/WebM). Di atas {KOMPRES_MB} MB dikompres otomatis sampai {KOMPRES_MB} MB, kualitas dijaga.</p>
+        <p className="mt-1 text-[10.5px] text-teks-sekunder">Maksimal {MAKS_MB} MB (MP4/MOV/WebM).</p>
 
         <input
           value={judul}

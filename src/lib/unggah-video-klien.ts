@@ -1,11 +1,13 @@
 // ============================================================
 // Unggah video TVR Saya — sisi PERAMBAN (5 Sep 2026). Satu pintu untuk
 // Unggah ke Sosmed Saya, Siaran Serentak, dan Studio PALUGODAM:
-//   <= 50 MB : langsung ke R2 (URL bertanda tangan dari server) — TIDAK diubah.
-//   50–100 MB: ke Cloudinary dulu → server mengompres (plafon bitrate
-//              sesuai durasi, kualitas dijaga) → hasil <= 50 MB disalin ke
-//              R2 → kembali sebagai r2_key seperti biasa.
-//   > 100 MB : ditolak server (batas berkas Cloudinary).
+//   <= 100 MB: langsung ke penyimpanan (R2 atau bucket Supabase sendiri)
+//              lewat URL bertanda tangan dari server, apa adanya.
+//   > 100 MB : ditolak server.
+// 2 Okt 2026: jalur kompresi Cloudinary (50–100 MB) tidak dipakai lagi —
+// akun Cloudinary dinonaktifkan ("cloud_name is disabled"). Server tidak
+// lagi menjawab cara "cloudinary"; cabangnya di bawah tinggal untuk
+// jawaban lama yang mungkin masih tersimpan di peramban.
 // ============================================================
 import { kompresUnggahTvrku, siapkanUnggahTvrku } from "@/services";
 

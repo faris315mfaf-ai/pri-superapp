@@ -39,7 +39,7 @@ import {
   type TvrkuPost,
 } from "@/services";
 import { PlatformIcon, labelPlatform } from "@/components/platform-icon";
-import { KOMPRES_MB, unggahVideoTvrku } from "@/lib/unggah-video-klien";
+import { unggahVideoTvrku } from "@/lib/unggah-video-klien";
 import { cn } from "@/lib/utils";
 import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 
@@ -52,7 +52,7 @@ const LABEL: Record<string, string> = {
   twitter: "X",
 };
 
-/** Batas berkas (5 Sep 2026): 100 MB = batas Cloudinary; > 50 MB dikompres otomatis. */
+/** Batas berkas: 100 MB = batas penyimpanan video (2 Okt 2026: tanpa Cloudinary, disimpan apa adanya). */
 const MAKS_MB = 100;
 
 function jamWib(iso: string): string {
@@ -528,8 +528,7 @@ export function UnggahSosmedSaya({
         </button>
         )}
         <p className="mt-1.5 text-[10.5px] text-teks-sekunder">
-          Maksimal {MAKS_MB} MB per video (MP4/MOV/WebM). Di atas {KOMPRES_MB} MB dikompres
-          otomatis sampai {KOMPRES_MB} MB — resolusi &amp; kualitas tampak dijaga.
+          Maksimal {MAKS_MB} MB per video (MP4/MOV/WebM).
         </p>
         {terlaluBesar && (
           <div className="mt-2 rounded-xl border border-amber-400/40 bg-amber-400/10 p-3 text-[11.5px] leading-relaxed text-teks-utama">
@@ -537,8 +536,8 @@ export function UnggahSosmedSaya({
               Video {terlaluBesar.mb} MB — melebihi batas {MAKS_MB} MB
             </p>
             <p className="mt-0.5 text-teks-sekunder">
-              Cloudinary hanya menerima berkas sampai {MAKS_MB} MB. Kecilkan dulu sampai di bawah{" "}
-              {MAKS_MB} MB (1080p, bitrate 4–6 Mbps), lalu pilih ulang — sisanya dikompres otomatis.
+              Penyimpanan video menerima berkas sampai {MAKS_MB} MB. Kecilkan dulu sampai di bawah{" "}
+              {MAKS_MB} MB (1080p, bitrate 4–6 Mbps), lalu pilih ulang.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <a
