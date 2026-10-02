@@ -1,0 +1,33 @@
+{
+  "name": "Uji T3",
+  "width": 540,
+  "height": 960,
+  "fps": 30,
+  "intro": null,
+  "outro": null,
+  "overlays": [
+    {
+      "file": "assets/e.png",
+      "x": -50,
+      "y": 900
+    },
+    {
+      "file": "assets/e.png",
+      "x": "12.7",
+      "y": "abc",
+      "w": 501
+    },
+    {
+      "file": "assets/e.png",
+      "x": 600,
+      "y": 10
+    }
+  ],
+  "texts": [],
+  "text_box": null,
+  "badge_box": null,
+  "kategori": "",
+  "teks_warna": "white",
+  "id": "uji-t3",
+  "owner": ""
+}

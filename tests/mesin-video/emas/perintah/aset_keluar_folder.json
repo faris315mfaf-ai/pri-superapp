@@ -1,0 +1,6 @@
+{
+ "nama": "aset_keluar_folder",
+ "error": "Aset '../../sumber/sumber.mp4' berada di luar folder template",
+ "jenis": "VideoError",
+ "teks": []
+}

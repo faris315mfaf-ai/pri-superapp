@@ -1,0 +1,29 @@
+{
+  "name": "Uji T5",
+  "width": 540,
+  "height": 960,
+  "fps": 30,
+  "intro": null,
+  "outro": null,
+  "overlays": [
+    {
+      "file": "assets/gelap.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "assets/bingkai.png",
+      "x": 0,
+      "y": 0,
+      "w": 270
+    }
+  ],
+  "texts": [],
+  "text_box": null,
+  "badge_box": null,
+  "kategori": "",
+  "teks_warna": "white",
+  "aset_dari": "uji-t1",
+  "id": "uji-t5",
+  "owner": ""
+}

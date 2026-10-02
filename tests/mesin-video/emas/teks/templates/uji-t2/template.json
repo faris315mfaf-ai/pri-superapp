@@ -1,0 +1,43 @@
+{
+  "name": "Uji T2",
+  "width": 540,
+  "height": 960,
+  "fps": 30,
+  "intro": null,
+  "outro": null,
+  "overlays": [
+    {
+      "file": "assets/a.png",
+      "x": "(W-w)/2",
+      "y": "main_h-h"
+    },
+    {
+      "file": "assets/b.png",
+      "x": "main_w-w",
+      "y": 40,
+      "w": 200,
+      "h": null
+    },
+    {
+      "file": "assets/c.jpg",
+      "x": null,
+      "y": null,
+      "w": null,
+      "h": 150
+    },
+    {
+      "file": "assets/a.png",
+      "x": "W-w",
+      "y": "(main_h-h)/2",
+      "w": 77,
+      "h": 333
+    }
+  ],
+  "texts": [],
+  "text_box": null,
+  "badge_box": null,
+  "kategori": "",
+  "teks_warna": "white",
+  "id": "uji-t2",
+  "owner": ""
+}

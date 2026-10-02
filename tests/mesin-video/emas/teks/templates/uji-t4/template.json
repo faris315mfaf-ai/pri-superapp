@@ -1,0 +1,32 @@
+{
+  "name": "Uji T4",
+  "width": 540,
+  "height": 960,
+  "fps": 30,
+  "intro": null,
+  "outro": null,
+  "overlays": [
+    {
+      "file": "assets/latar.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "assets/biru.png",
+      "x": 30,
+      "y": 700
+    },
+    {
+      "file": "assets/logo.webp",
+      "x": 440,
+      "y": 20
+    }
+  ],
+  "texts": [],
+  "text_box": null,
+  "badge_box": null,
+  "kategori": "",
+  "teks_warna": "white",
+  "id": "uji-t4",
+  "owner": ""
+}

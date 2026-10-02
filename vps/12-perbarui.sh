@@ -230,25 +230,55 @@ if [ "$SIAP" -ne 1 ]; then
   exit 1
 fi
 
-if [ "$AUTOEDIT_SIAP" = "1" ]; then
-  echo "== Auto Edit: membangun & menyalakan =="
+tunggu_sehat() {
+  # $1 = nama container; jawab 0 bila healthcheck-nya sehat dalam 90 detik.
+  local sehat=""
+  for i in $(seq 1 30); do
+    sehat="$(docker inspect -f '{{.State.Health.Status}}' "$1" 2>/dev/null || true)"
+    [ "$sehat" = "healthy" ] && return 0
+    sleep 3
+  done
+  echo "  status $1: ${sehat:-tidak ada}" >&2
+  return 1
+}
+
+nyalakan_autoedit_python() {
   # Image yang sama untuk API dan worker; compose hanya membuat ulang
   # container yang image/susunannya berubah. Render yang sedang berjalan
   # ikut terputus saat worker diganti — job itu ditandai gagal, bisa diulang.
-  if docker compose build autoedit-api && docker compose up -d autoedit-redis autoedit-api autoedit-worker; then
-    SEHAT=""
-    for i in $(seq 1 30); do
-      SEHAT="$(docker inspect -f '{{.State.Health.Status}}' pri-autoedit-api 2>/dev/null || true)"
-      [ "$SEHAT" = "healthy" ] && break
-      sleep 3
-    done
-    if [ "$SEHAT" = "healthy" ]; then
-      echo "  Auto Edit jalan."
+  docker compose --profile ts stop autoedit-ts-api autoedit-ts-worker >/dev/null 2>&1 || true
+  docker compose --profile ts rm -f autoedit-ts-api autoedit-ts-worker >/dev/null 2>&1 || true
+  docker compose build autoedit-api && docker compose up -d autoedit-redis autoedit-api autoedit-worker     && tunggu_sehat pri-autoedit-api
+}
+
+nyalakan_autoedit_ts() {
+  # Mesin TypeScript (src/mesin-video). Socket & disk sama dengan Python,
+  # jadi pasangan Python dimatikan dulu sebelum yang TS menyala.
+  docker compose --profile ts build autoedit-ts-api || return 1
+  docker compose stop autoedit-api autoedit-worker >/dev/null 2>&1 || true
+  docker compose rm -f autoedit-api autoedit-worker >/dev/null 2>&1 || true
+  docker compose --profile ts up -d autoedit-redis autoedit-ts-api autoedit-ts-worker     && tunggu_sehat pri-autoedit-ts-api
+}
+
+if [ "$AUTOEDIT_SIAP" = "1" ]; then
+  # Mesin dipilih lewat berkas $APP/autoedit-mesin ("python" | "ts").
+  # Tanpa berkas itu tetap Python — peralihan ke TS dilakukan sengaja.
+  MESIN_AUTOEDIT="$(tr -dc 'a-z' < "$APP/autoedit-mesin" 2>/dev/null || true)"
+  [ "$MESIN_AUTOEDIT" = "ts" ] || MESIN_AUTOEDIT="python"
+  echo "== Auto Edit: membangun & menyalakan (mesin $MESIN_AUTOEDIT) =="
+  if [ "$MESIN_AUTOEDIT" = "ts" ]; then
+    if nyalakan_autoedit_ts; then
+      echo "  Auto Edit (TS) jalan."
     else
-      echo "  PERINGATAN: API Auto Edit belum sehat ($SEHAT). Log: docker logs --tail 50 pri-autoedit-api" >&2
+      echo "  PERINGATAN: mesin TS gagal — kembali ke mesin Python. Log: docker logs --tail 50 pri-autoedit-ts-api" >&2
+      if nyalakan_autoedit_python; then echo "  Auto Edit (Python) jalan."; else echo "  PERINGATAN: Auto Edit Python juga gagal — aplikasi tetap jalan." >&2; fi
     fi
   else
-    echo "  PERINGATAN: Auto Edit gagal dibangun/dinyalakan — aplikasi tetap jalan." >&2
+    if nyalakan_autoedit_python; then
+      echo "  Auto Edit jalan."
+    else
+      echo "  PERINGATAN: Auto Edit gagal dibangun/sehat — aplikasi tetap jalan. Log: docker logs --tail 50 pri-autoedit-api" >&2
+    fi
   fi
 fi
 

@@ -1,0 +1,310 @@
+{
+ "posisi": [
+  {
+   "nilai": null,
+   "hasil": "(W-w)/2"
+  },
+  {
+   "nilai": "W-w",
+   "hasil": "W-w"
+  },
+  {
+   "nilai": " (H-h)/2 ",
+   "hasil": "(H-h)/2"
+  },
+  {
+   "nilai": "12.7",
+   "hasil": "12"
+  },
+  {
+   "nilai": " -7 ",
+   "hasil": "-7"
+  },
+  {
+   "nilai": "1e2",
+   "hasil": "100"
+  },
+  {
+   "nilai": "1_0",
+   "hasil": "10"
+  },
+  {
+   "nilai": "+5",
+   "hasil": "5"
+  },
+  {
+   "nilai": ".5",
+   "hasil": "0"
+  },
+  {
+   "nilai": "5.",
+   "hasil": "5"
+  },
+  {
+   "nilai": "abc",
+   "hasil": "(W-w)/2"
+  },
+  {
+   "nilai": "1;drawtext",
+   "hasil": "(W-w)/2"
+  },
+  {
+   "nilai": "nan",
+   "hasil": "(W-w)/2"
+  },
+  {
+   "nilai": "inf",
+   "error": "cannot convert float infinity to integer"
+  },
+  {
+   "nilai": "",
+   "hasil": "(W-w)/2"
+  },
+  {
+   "nilai": 33.9,
+   "hasil": "33"
+  },
+  {
+   "nilai": -5.5,
+   "hasil": "-5"
+  },
+  {
+   "nilai": 0,
+   "hasil": "0"
+  },
+  {
+   "nilai": true,
+   "hasil": "1"
+  },
+  {
+   "nilai": 1e+20,
+   "hasil": "100000000000000000000"
+  }
+ ],
+ "escape": [
+  {
+   "nilai": "C:\\a\\b.png",
+   "hasil": "C\\:\\\\a\\\\b.png"
+  },
+  {
+   "nilai": "a:b'c",
+   "hasil": "a\\:b\\'c"
+  },
+  {
+   "nilai": "biasa",
+   "hasil": "biasa"
+  },
+  {
+   "nilai": "x\\:y",
+   "hasil": "x\\\\\\:y"
+  }
+ ],
+ "situs": [
+  {
+   "url": "https://www.instagram.com/reel/x",
+   "hasil": "instagram.com"
+  },
+  {
+   "url": "https://m.tiktok.com/x",
+   "hasil": "tiktok.com"
+  },
+  {
+   "url": "https://vt.tiktok.com/x",
+   "hasil": "tiktok.com"
+  },
+  {
+   "url": "https://youtu.be/x",
+   "hasil": "youtu.be"
+  },
+  {
+   "url": "https://localhost:8000/",
+   "hasil": "localhost"
+  },
+  {
+   "url": "upload://abc",
+   "hasil": "abc"
+  },
+  {
+   "url": "https://WWW.X.COM:443/a",
+   "hasil": "x.com"
+  },
+  {
+   "url": "http://[::1/",
+   "hasil": ""
+  },
+  {
+   "url": "https://a.b.c.d.example.co.id/",
+   "hasil": "co.id"
+  }
+ ],
+ "ramah": [
+  {
+   "teks": "ERROR: Private video",
+   "hasil": "Akun atau videonya privat, jadi tidak bisa diambil. Pakai video yang bisa dibuka umum, atau unggah berkasnya langsung."
+  },
+  {
+   "teks": "This account is private",
+   "hasil": "Akun atau videonya privat, jadi tidak bisa diambil. Pakai video yang bisa dibuka umum, atau unggah berkasnya langsung."
+  },
+  {
+   "teks": "Video unavailable",
+   "hasil": "Videonya sudah tidak ada atau dihapus di sumbernya."
+  },
+  {
+   "teks": "Age-restricted video",
+   "hasil": "Videonya dibatasi umur, jadi tidak bisa diambil tanpa akun."
+  },
+  {
+   "teks": "ERROR: login required",
+   "hasil": "Postingan ini tidak bisa dibaca tanpa akun. Unggah berkas videonya lewat pilihan “File”, atau minta admin mengisi Session ID Instagram server (VIDEO_IG_SESSIONID)."
+  },
+  {
+   "teks": "Unable to download webpage: x",
+   "hasil": "Situs sumbernya tidak bisa dihubungi dari server ini. Coba lagi sebentar lagi."
+  },
+  {
+   "teks": "Connection refused",
+   "hasil": "Situs sumbernya tidak bisa dihubungi dari server ini. Coba lagi sebentar lagi."
+  },
+  {
+   "teks": "content isn't available",
+   "hasil": "Videonya sudah tidak ada atau dihapus di sumbernya."
+  },
+  {
+   "teks": "biasa saja",
+   "hasil": ""
+  },
+  {
+   "teks": "Sign in to confirm your age",
+   "hasil": "YouTube menolak permintaan dari server ini karena menganggapnya robot. Link YouTube memang belum bisa dipakai di sini. Pakai link Instagram atau TikTok, atau unduh videonya dulu lalu kirim lewat pilihan “File” di atas."
+  }
+ ],
+ "klip": [
+  [
+   "[3:v]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,fps=30,setsar=1,format=yuv420p[introv]"
+  ],
+  "introv"
+ ],
+ "probe": [
+  {
+   "nama": "audio.m4a",
+   "hasil": {
+    "duration": 3.0,
+    "width": 0,
+    "height": 0,
+    "has_audio": true
+   },
+   "alpha": false
+  },
+  {
+   "nama": "besar.mp4",
+   "hasil": {
+    "duration": 1.0,
+    "width": 1280,
+    "height": 720,
+    "has_audio": false
+   },
+   "alpha": false
+  },
+  {
+   "nama": "besar_alpha.mov",
+   "hasil": {
+    "duration": 0.5,
+    "width": 1280,
+    "height": 720,
+    "has_audio": false
+   },
+   "alpha": true
+  },
+  {
+   "nama": "hijau.mp4",
+   "hasil": {
+    "duration": 1.0,
+    "width": 200,
+    "height": 200,
+    "has_audio": false
+   },
+   "alpha": false
+  },
+  {
+   "nama": "intro.mp4",
+   "hasil": {
+    "duration": 1.2,
+    "width": 720,
+    "height": 1280,
+    "has_audio": true
+   },
+   "alpha": false
+  },
+  {
+   "nama": "logo.png",
+   "hasil": {
+    "duration": 0.0,
+    "width": 200,
+    "height": 100,
+    "has_audio": false
+   },
+   "alpha": false
+  },
+  {
+   "nama": "outro_bisu.mp4",
+   "hasil": {
+    "duration": 1.0,
+    "width": 480,
+    "height": 854,
+    "has_audio": false
+   },
+   "alpha": false
+  },
+  {
+   "nama": "rusak.png",
+   "hasil": {
+    "duration": 0.04,
+    "width": 0,
+    "height": 0,
+    "has_audio": false
+   },
+   "alpha": false
+  },
+  {
+   "nama": "stiker.mp4",
+   "hasil": {
+    "duration": 1.5,
+    "width": 160,
+    "height": 160,
+    "has_audio": false
+   },
+   "alpha": false
+  },
+  {
+   "nama": "sumber.mp4",
+   "hasil": {
+    "duration": 4.0,
+    "width": 360,
+    "height": 640,
+    "has_audio": true
+   },
+   "alpha": false
+  },
+  {
+   "nama": "sumber_bisu.mp4",
+   "hasil": {
+    "duration": 3.0,
+    "width": 640,
+    "height": 360,
+    "has_audio": false
+   },
+   "alpha": false
+  },
+  {
+   "nama": "sumber_panjang.mp4",
+   "hasil": {
+    "duration": 8.0,
+    "width": 320,
+    "height": 240,
+    "has_audio": true
+   },
+   "alpha": false
+  }
+ ]
+}

@@ -1,0 +1,27 @@
+{
+  "name": "Uji T6",
+  "width": 540,
+  "height": 960,
+  "fps": 30,
+  "intro": null,
+  "outro": null,
+  "overlays": [
+    {
+      "file": "assets/gelap.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "assets/merah.png",
+      "x": 100,
+      "y": 300
+    }
+  ],
+  "texts": [],
+  "text_box": null,
+  "badge_box": null,
+  "kategori": "",
+  "teks_warna": "white",
+  "id": "uji-t6",
+  "owner": ""
+}

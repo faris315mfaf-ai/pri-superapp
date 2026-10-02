@@ -1,0 +1,6 @@
+{
+ "nama": "crop_jahat",
+ "error": "Nilai crop layer tidak sah: '100:100:0:0,movie=/etc/passwd' (bentuknya lebar:tinggi:x:y)",
+ "jenis": "VideoError",
+ "teks": []
+}

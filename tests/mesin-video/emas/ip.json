@@ -1,0 +1,368 @@
+[
+ {
+  "ip": "127.0.0.1",
+  "sah": true,
+  "versi": 4,
+  "global": false
+ },
+ {
+  "ip": "10.1.2.3",
+  "sah": true,
+  "versi": 4,
+  "global": false
+ },
+ {
+  "ip": "172.16.0.1",
+  "sah": true,
+  "versi": 4,
+  "global": false
+ },
+ {
+  "ip": "172.32.0.1",
+  "sah": true,
+  "versi": 4,
+  "global": true
+ },
+ {
+  "ip": "192.168.1.1",
+  "sah": true,
+  "versi": 4,
+  "global": false
+ },
+ {
+  "ip": "100.64.0.1",
+  "sah": true,
+  "versi": 4,
+  "global": false
+ },
+ {
+  "ip": "100.127.255.255",
+  "sah": true,
+  "versi": 4,
+  "global": false
+ },
+ {
+  "ip": "100.128.0.1",
+  "sah": true,
+  "versi": 4,
+  "global": true
+ },
+ {
+  "ip": "169.254.1.1",
+  "sah": true,
+  "versi": 4,
+  "global": false
+ },
+ {
+  "ip": "0.0.0.0",
+  "sah": true,
+  "versi": 4,
+  "global": false
+ },
+ {
+  "ip": "255.255.255.255",
+  "sah": true,
+  "versi": 4,
+  "global": false
+ },
+ {
+  "ip": "224.0.0.1",
+  "sah": true,
+  "versi": 4,
+  "global": true
+ },
+ {
+  "ip": "240.0.0.1",
+  "sah": true,
+  "versi": 4,
+  "global": false
+ },
+ {
+  "ip": "192.0.0.9",
+  "sah": true,
+  "versi": 4,
+  "global": true
+ },
+ {
+  "ip": "192.0.0.8",
+  "sah": true,
+  "versi": 4,
+  "global": false
+ },
+ {
+  "ip": "192.0.0.171",
+  "sah": true,
+  "versi": 4,
+  "global": false
+ },
+ {
+  "ip": "192.0.2.1",
+  "sah": true,
+  "versi": 4,
+  "global": false
+ },
+ {
+  "ip": "198.18.0.1",
+  "sah": true,
+  "versi": 4,
+  "global": false
+ },
+ {
+  "ip": "203.0.113.5",
+  "sah": true,
+  "versi": 4,
+  "global": false
+ },
+ {
+  "ip": "8.8.8.8",
+  "sah": true,
+  "versi": 4,
+  "global": true
+ },
+ {
+  "ip": "157.240.1.1",
+  "sah": true,
+  "versi": 4,
+  "global": true
+ },
+ {
+  "ip": "::1",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "::",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "::ffff:127.0.0.1",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "::ffff:8.8.8.8",
+  "sah": true,
+  "versi": 6,
+  "global": true
+ },
+ {
+  "ip": "::ffff:100.64.0.1",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "fe80::1",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "fc00::1",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "fd12:3456::1",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "2001:db8::1",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "2002::1",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "2001:4860:4860::8888",
+  "sah": true,
+  "versi": 6,
+  "global": true
+ },
+ {
+  "ip": "ff02::1",
+  "sah": true,
+  "versi": 6,
+  "global": true
+ },
+ {
+  "ip": "fec0::1",
+  "sah": true,
+  "versi": 6,
+  "global": true
+ },
+ {
+  "ip": "64:ff9b::808:808",
+  "sah": true,
+  "versi": 6,
+  "global": true
+ },
+ {
+  "ip": "64:ff9b:1::1",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "2001:1::1",
+  "sah": true,
+  "versi": 6,
+  "global": true
+ },
+ {
+  "ip": "2001:1::3",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "2001:3::5",
+  "sah": true,
+  "versi": 6,
+  "global": true
+ },
+ {
+  "ip": "2001::1",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "2001:20::1",
+  "sah": true,
+  "versi": 6,
+  "global": true
+ },
+ {
+  "ip": "3fff::1",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "100::1",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "::7f00:1",
+  "sah": true,
+  "versi": 6,
+  "global": true
+ },
+ {
+  "ip": "fe80::1%eth0",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "fe80::1%",
+  "sah": false
+ },
+ {
+  "ip": "01.2.3.4",
+  "sah": false
+ },
+ {
+  "ip": "1.2.3",
+  "sah": false
+ },
+ {
+  "ip": "1.2.3.4.5",
+  "sah": false
+ },
+ {
+  "ip": "256.1.1.1",
+  "sah": false
+ },
+ {
+  "ip": "1::2::3",
+  "sah": false
+ },
+ {
+  "ip": "::ffff:1.2.3",
+  "sah": false
+ },
+ {
+  "ip": "1:2:3:4:5:6:7:8",
+  "sah": true,
+  "versi": 6,
+  "global": true
+ },
+ {
+  "ip": "1:2:3:4:5:6:7:8:9",
+  "sah": false
+ },
+ {
+  "ip": ":1:2:3:4:5:6:7",
+  "sah": false
+ },
+ {
+  "ip": "1:2:3:4:5:6:7::",
+  "sah": true,
+  "versi": 6,
+  "global": true
+ },
+ {
+  "ip": "::1.2.3.4",
+  "sah": true,
+  "versi": 6,
+  "global": true
+ },
+ {
+  "ip": "12345::",
+  "sah": false
+ },
+ {
+  "ip": "g::1",
+  "sah": false
+ },
+ {
+  "ip": "2130706433",
+  "sah": false
+ },
+ {
+  "ip": " 1.2.3.4",
+  "sah": false
+ },
+ {
+  "ip": "1.2.3.4/32",
+  "sah": false
+ },
+ {
+  "ip": "::1:2:3:4:5:6:7",
+  "sah": true,
+  "versi": 6,
+  "global": true
+ },
+ {
+  "ip": "1::",
+  "sah": true,
+  "versi": 6,
+  "global": true
+ },
+ {
+  "ip": "::FFFF:7F00:1",
+  "sah": true,
+  "versi": 6,
+  "global": false
+ },
+ {
+  "ip": "1.2.3.٤",
+  "sah": false
+ }
+]

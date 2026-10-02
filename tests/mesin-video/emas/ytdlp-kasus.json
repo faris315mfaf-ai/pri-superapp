@@ -1,0 +1,116 @@
+{
+  "_catatan": "Skenario unduh/pratinjau dengan yt-dlp palsu, dijalankan BERURUTAN (penahan situs & cache ikut terbawa antarskenario, sama di kedua mesin).",
+  "kasus": [
+    { "nama": "unggahan", "aksi": "unduh", "url": "upload://abc123", "respon": [] },
+    { "nama": "unggahan_hilang", "aksi": "unduh", "url": "upload://tidak-ada", "respon": [] },
+    { "nama": "url_ditolak", "aksi": "unduh", "url": "https://evil.example/a.mp4", "respon": [] },
+    {
+      "nama": "sukses_tiktok", "aksi": "unduh", "url": "https://www.tiktok.com/@a/video/1",
+      "respon": [{ "kode": 0, "stdout": "[download] selesai\n", "tulis": [{ "ext": "mp4", "dari": "sumber.mp4" }] }]
+    },
+    {
+      "nama": "cache_tiktok", "aksi": "unduh", "url": " https://www.tiktok.com/@a/video/1 ",
+      "respon": [{ "kode": 1, "stderr": "ERROR: tidak boleh dipanggil\n" }]
+    },
+    {
+      "nama": "ig_cookie", "aksi": "unduh", "url": "https://www.instagram.com/reel/AAA/",
+      "respon": [{ "kode": 0, "tulis": [{ "ext": "mp4", "dari": "sumber.mp4" }] }]
+    },
+    {
+      "nama": "cookie_ditolak", "aksi": "unduh", "url": "https://www.instagram.com/reel/BBB/",
+      "respon": [
+        { "kode": 1, "stderr": "WARNING: sesuatu\nERROR: [Instagram] BBB: Failed to parse JSON (caused by JSONDecodeError)\n" },
+        { "kode": 0, "tulis": [{ "ext": "mp4", "dari": "sumber.mp4" }] }
+      ]
+    },
+    {
+      "nama": "kena_429_lalu_sukses", "aksi": "unduh", "url": "https://www.tiktok.com/@a/video/2",
+      "respon": [
+        { "kode": 1, "stderr": "ERROR: [TikTok] 2: HTTP Error 429: Too Many Requests\n" },
+        { "kode": 0, "tulis": [{ "ext": "mp4", "dari": "sumber.mp4" }] }
+      ]
+    },
+    {
+      "nama": "kena_429_terus", "aksi": "unduh", "url": "https://m.tiktok.com/@a/video/3",
+      "respon": [{ "kode": 1, "stderr": "ERROR: rate-limit reached\n" }]
+    },
+    {
+      "nama": "ditahan", "aksi": "unduh", "url": "https://vt.tiktok.com/ZS4/",
+      "respon": [{ "kode": 0, "tulis": [{ "ext": "mp4", "dari": "sumber.mp4" }] }]
+    },
+    {
+      "nama": "cookie_429_ig", "aksi": "unduh", "url": "https://www.instagram.com/reel/CCC/",
+      "respon": [{ "kode": 1, "stderr": "ERROR: [Instagram] CCC: HTTP Error 429: Too Many Requests\n" }]
+    },
+    {
+      "nama": "pesan_ramah_youtube", "aksi": "unduh", "url": "https://www.youtube.com/watch?v=x",
+      "respon": [{ "kode": 1, "stderr": "ERROR: [youtube] x: Sign in to confirm you’re not a bot. Use --cookies-from-browser\n" }]
+    },
+    {
+      "nama": "galat_tak_dikenal", "aksi": "unduh", "url": "https://www.facebook.com/v/1",
+      "respon": [{ "kode": 2, "stderr": "WARNING: a\nERROR: sesuatu yang aneh terjadi\n\n" }]
+    },
+    {
+      "nama": "galat_tanpa_pesan", "aksi": "unduh", "url": "https://www.facebook.com/v/1b",
+      "respon": [{ "kode": 2 }]
+    },
+    {
+      "nama": "lewat_filter", "aksi": "unduh", "url": "https://www.facebook.com/v/2",
+      "respon": [{ "kode": 0, "stdout": "[download] Video does not pass filter (duration <= 600), skipping ..\n" }]
+    },
+    {
+      "nama": "terlalu_besar", "aksi": "unduh", "url": "https://www.facebook.com/v/3",
+      "respon": [{ "kode": 0, "stdout": "[download] File is larger than max-filesize (1 bytes > 2 bytes). Aborting.\n" }]
+    },
+    {
+      "nama": "tanpa_berkas", "aksi": "unduh", "url": "https://www.facebook.com/v/4",
+      "respon": [{ "kode": 0, "stdout": "ok\n" }]
+    },
+    {
+      "nama": "bisu_susulan", "aksi": "unduh", "url": "https://x.com/a/status/1",
+      "respon": [
+        { "kode": 0, "tulis": [{ "ext": "mp4", "dari": "sumber_bisu.mp4" }] },
+        { "kode": 0, "tulis": [{ "ext": "m4a", "dari": "audio.m4a" }] }
+      ]
+    },
+    {
+      "nama": "bisu_gagal_ig", "aksi": "unduh", "url": "https://www.instagram.com/reel/DDD/",
+      "respon": [
+        { "kode": 0, "tulis": [{ "ext": "mp4", "dari": "sumber_bisu.mp4" }] },
+        { "kode": 1, "stderr": "ERROR: [Instagram] DDD: Requested format is not available\n" }
+      ]
+    },
+    {
+      "nama": "cache_bisu_dibuang", "aksi": "unduh", "url": "https://www.instagram.com/reel/DDD/",
+      "respon": [{ "kode": 0, "tulis": [{ "ext": "mp4", "dari": "sumber.mp4" }] }]
+    },
+    {
+      "nama": "potongan", "aksi": "unduh", "url": "https://x.com/a/status/2",
+      "respon": [{ "kode": 0, "tulis": [{ "nama": "source.f137v.mp4", "dari": "besar.mp4" }, { "nama": "source.mp4", "dari": "sumber.mp4" }, { "nama": "source.mp4.part", "dari": "logo.png" }] }]
+    },
+    {
+      "nama": "pratinjau", "aksi": "pratinjau", "url": "https://www.threads.net/@a/post/1",
+      "respon": [{ "kode": 0, "stdout": "{\"title\": \"Judul\", \"description\": \"  Caption panjang  \", \"view_count\": 12, \"like_count\": null, \"upload_date\": \"20260930\", \"channel\": \"\", \"uploader\": \" Nama Tampil \", \"duration\": 700, \"thumbnail\": \"https://cdn/x.jpg\", \"extractor_key\": \"Threads\", \"width\": 720, \"height\": 1280}" }]
+    },
+    {
+      "nama": "pratinjau_ig_cookie", "aksi": "pratinjau", "url": "https://www.instagram.com/p/EEE/",
+      "respon": [{ "kode": 0, "stdout": "{\"title\": \"\", \"uploader_id\": \"@@akun\", \"duration\": \"12.5\", \"extractor\": \"instagram\", \"webpage_url\": \"\"}" }]
+    },
+    {
+      "nama": "pratinjau_429", "aksi": "pratinjau", "url": "https://www.youtube.com/shorts/z",
+      "respon": [{ "kode": 1, "stderr": "ERROR: HTTP Error 429: Too Many Requests\n" }]
+    },
+    {
+      "nama": "pratinjau_ditahan", "aksi": "pratinjau", "url": "https://m.youtube.com/watch?v=q",
+      "respon": [{ "kode": 0, "stdout": "{}" }]
+    },
+    {
+      "nama": "pratinjau_ramah", "aksi": "pratinjau", "url": "https://www.facebook.com/v/9",
+      "respon": [{ "kode": 1, "stderr": "ERROR: Unsupported URL: https://www.facebook.com/v/9\n" }]
+    },
+    {
+      "nama": "pratinjau_json_rusak", "aksi": "pratinjau", "url": "https://x.com/a/status/9",
+      "respon": [{ "kode": 0, "stdout": "bukan json" }]
+    }
+  ]
+}

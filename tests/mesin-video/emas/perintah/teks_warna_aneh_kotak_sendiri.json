@@ -1,0 +1,100 @@
+{
+ "nama": "teks_warna_aneh_kotak_sendiri",
+ "args": [
+  "ffmpeg",
+  "-hide_banner",
+  "-loglevel",
+  "error",
+  "-nostdin",
+  "-y",
+  "-threads",
+  "2",
+  "-filter_complex_threads",
+  "1",
+  "-t",
+  "3.000",
+  "-i",
+  "{MEDIA}/sumber/sumber_bisu.mp4",
+  "-i",
+  "{MEDIA}/kerja/teks_warna_aneh_kotak_sendiri/text_0.png",
+  "-i",
+  "{MEDIA}/kerja/teks_warna_aneh_kotak_sendiri/text_1.png",
+  "-f",
+  "lavfi",
+  "-t",
+  "3.000",
+  "-i",
+  "anullsrc=channel_layout=stereo:sample_rate=44100",
+  "-filter_complex",
+  "[0:v]scale=360:640:force_original_aspect_ratio=increase,crop=360:640,fps=24,setsar=1,format=yuv420p[b0];[b0][1:v]overlay=0:0[b1];[b1][2:v]overlay=0:0[b2];[3:a]anull[ba]",
+  "-map",
+  "[b2]",
+  "-map",
+  "[ba]",
+  "-c:v",
+  "libx264",
+  "-preset",
+  "veryfast",
+  "-crf",
+  "23",
+  "-pix_fmt",
+  "yuv420p",
+  "-profile:v",
+  "high",
+  "-r",
+  "24",
+  "-c:a",
+  "aac",
+  "-b:a",
+  "128k",
+  "-ar",
+  "44100",
+  "-ac",
+  "2",
+  "-movflags",
+  "+faststart",
+  "-threads",
+  "2",
+  "-progress",
+  "pipe:1",
+  "-nostats",
+  "{MEDIA}/kerja/teks_warna_aneh_kotak_sendiri/output.mp4"
+ ],
+ "total": 3.0,
+ "teks": [
+  {
+   "teks": {
+    "name": "hook",
+    "style": "Berita",
+    "box": {
+     "x": 0,
+     "y": 300,
+     "w": 360,
+     "h": 120
+    },
+    "color": "white"
+   },
+   "isi": "Halo dunia",
+   "lebar": 360,
+   "tinggi": 640,
+   "tujuan": "text_0.png"
+  },
+  {
+   "teks": {
+    "name": "kat",
+    "style": "kategori",
+    "default": "SHOWBIZ",
+    "box": {
+     "x": 5,
+     "y": 5,
+     "w": 100,
+     "h": 40
+    }
+   },
+   "isi": "SHOWBIZ",
+   "lebar": 360,
+   "tinggi": 640,
+   "tujuan": "text_1.png"
+  }
+ ]
+}

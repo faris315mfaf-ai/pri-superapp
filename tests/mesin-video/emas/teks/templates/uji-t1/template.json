@@ -1,0 +1,54 @@
+{
+  "name": "Uji T1",
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "intro": null,
+  "outro": null,
+  "overlays": [
+    {
+      "file": "assets/bingkai.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "assets/klip.mp4",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "assets/hilang.png",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "texts": [
+    {
+      "name": "hook",
+      "style": "berita"
+    },
+    {
+      "name": "kategori",
+      "style": "kategori",
+      "source": "kategori"
+    },
+    {
+      "name": "sumber",
+      "size": 30,
+      "y": 1760,
+      "color": "white",
+      "stroke": 2
+    }
+  ],
+  "text_box": {
+    "x": 70,
+    "y": 1380,
+    "w": 940,
+    "h": 320
+  },
+  "badge_box": null,
+  "kategori": "news",
+  "teks_warna": "black",
+  "id": "uji-t1",
+  "owner": ""
+}

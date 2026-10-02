@@ -1,0 +1,95 @@
+{
+ "nama": "teks_berita_kategori",
+ "args": [
+  "ffmpeg",
+  "-hide_banner",
+  "-loglevel",
+  "error",
+  "-nostdin",
+  "-y",
+  "-threads",
+  "2",
+  "-filter_complex_threads",
+  "1",
+  "-t",
+  "4.000",
+  "-i",
+  "{MEDIA}/sumber/sumber.mp4",
+  "-i",
+  "{MEDIA}/kerja/teks_berita_kategori/text_0.png",
+  "-i",
+  "{MEDIA}/kerja/teks_berita_kategori/text_1.png",
+  "-filter_complex",
+  "[0:v]scale=360:640:force_original_aspect_ratio=increase,crop=360:640,fps=30,setsar=1,format=yuv420p[b0];[b0][1:v]overlay=0:0[b1];[b1][2:v]overlay=0:0[b2];[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[ba]",
+  "-map",
+  "[b2]",
+  "-map",
+  "[ba]",
+  "-c:v",
+  "libx264",
+  "-preset",
+  "veryfast",
+  "-crf",
+  "23",
+  "-pix_fmt",
+  "yuv420p",
+  "-profile:v",
+  "high",
+  "-r",
+  "30",
+  "-c:a",
+  "aac",
+  "-b:a",
+  "128k",
+  "-ar",
+  "44100",
+  "-ac",
+  "2",
+  "-movflags",
+  "+faststart",
+  "-threads",
+  "2",
+  "-progress",
+  "pipe:1",
+  "-nostats",
+  "{MEDIA}/kerja/teks_berita_kategori/output.mp4"
+ ],
+ "total": 4.0,
+ "teks": [
+  {
+   "teks": {
+    "name": "hook",
+    "style": "berita",
+    "size": 30,
+    "color": "black",
+    "box": {
+     "x": 20,
+     "y": 420,
+     "w": 320,
+     "h": 150
+    }
+   },
+   "isi": "PRESIDEN resmikan jembatan baru di ibu kota hari ini",
+   "lebar": 360,
+   "tinggi": 640,
+   "tujuan": "text_0.png"
+  },
+  {
+   "teks": {
+    "name": "kat",
+    "style": "kategori",
+    "source": "kategori",
+    "box": {
+     "x": 26,
+     "y": 381,
+     "w": 131,
+     "h": 39
+    }
+   },
+   "isi": "NEWS",
+   "lebar": 360,
+   "tinggi": 640,
+   "tujuan": "text_1.png"
+  }
+ ]
+}

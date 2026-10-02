@@ -1,0 +1,209 @@
+{
+  "_catatan": "Kasus uji perakit perintah ffmpeg. Dibaca buat_emas.py (Python) dan uji-media.mts (TS). Kanvas kecil supaya kasus ber-'render' cepat dirender betulan.",
+  "kasus": [
+    {
+      "nama": "polos",
+      "sumber": "sumber.mp4",
+      "render": true,
+      "template": { "name": "Polos", "width": 360, "height": 640, "fps": 30, "overlays": [], "texts": [] }
+    },
+    {
+      "nama": "sumber_bisu",
+      "sumber": "sumber_bisu.mp4",
+      "template": { "name": "Bisu", "width": 360, "height": 640, "fps": 25, "overlays": [], "texts": [] }
+    },
+    {
+      "nama": "max_durasi_teks",
+      "sumber": "sumber_panjang.mp4",
+      "template": { "name": "Maks", "width": 360, "height": 640, "fps": 30, "max_duration": "2.5", "overlays": [], "texts": [] }
+    },
+    {
+      "nama": "overlay_png",
+      "sumber": "sumber.mp4",
+      "template": {
+        "name": "PNG", "width": 360, "height": 640, "fps": 30,
+        "overlays": [{ "file": "assets/logo.png", "x": 20, "y": 40, "w": 100 }],
+        "texts": []
+      }
+    },
+    {
+      "nama": "overlay_rumus_h_saja",
+      "sumber": "sumber.mp4",
+      "template": {
+        "name": "Rumus", "width": 360, "height": 640, "fps": 30,
+        "overlays": [{ "file": "assets/logo.png", "x": "(W-w)/2", "y": "main_h-h", "h": 50 }],
+        "texts": []
+      }
+    },
+    {
+      "nama": "overlay_crop_posisi_teks",
+      "sumber": "sumber.mp4",
+      "template": {
+        "name": "Crop", "width": 360, "height": 640, "fps": 30,
+        "overlays": [{ "file": "assets/logo.png", "crop": " 100:50:10:10 ", "w": 80.9, "h": 40, "x": "12.7", "y": -5.5 }],
+        "texts": []
+      }
+    },
+    {
+      "nama": "overlay_loop_mulai_selesai",
+      "sumber": "sumber.mp4",
+      "render": true,
+      "template": {
+        "name": "Loop", "width": 360, "height": 640, "fps": 30,
+        "overlays": [
+          { "file": "assets/logo.png", "x": 10, "y": 10, "w": 120 },
+          { "file": "assets/stiker.mp4", "loop": true, "start": 0.5, "end": 2, "x": "W-w", "y": "H-h", "w": 96 }
+        ],
+        "intro": "assets/intro.mp4",
+        "outro": "assets/outro_bisu.mp4",
+        "texts": []
+      }
+    },
+    {
+      "nama": "overlay_mulai_saja_tanpa_posisi",
+      "sumber": "sumber.mp4",
+      "template": {
+        "name": "Mulai", "width": 360, "height": 640, "fps": 30,
+        "overlays": [{ "file": "assets/logo.png", "start": 1, "x": null }, { "file": "assets/logo.png", "end": 3, "start": 0 }],
+        "texts": []
+      }
+    },
+    {
+      "nama": "kunci_hijau",
+      "sumber": "sumber_bisu.mp4",
+      "render": true,
+      "template": {
+        "name": "Hijau", "width": 360, "height": 640, "fps": 30, "max_duration": 2,
+        "overlays": [{ "file": "assets/hijau.mp4", "kunci_hijau": true, "crop": "180:180:10:10", "w": 150, "loop": 1, "x": 0, "y": "(H-h)/2" }],
+        "texts": []
+      }
+    },
+    {
+      "nama": "aset_ringan_lebar",
+      "sumber": "sumber.mp4",
+      "template": {
+        "name": "Ringan", "width": 360, "height": 640, "fps": 30,
+        "overlays": [{ "file": "assets/besar.mp4", "w": 321 }],
+        "texts": []
+      }
+    },
+    {
+      "nama": "aset_ringan_alpha_tinggi",
+      "sumber": "sumber.mp4",
+      "template": {
+        "name": "Alpha", "width": 360, "height": 640, "fps": 30,
+        "overlays": [{ "file": "assets/besar_alpha.mov", "h": 181 }],
+        "texts": []
+      }
+    },
+    {
+      "nama": "intro_outro",
+      "sumber": "sumber.mp4",
+      "template": { "name": "IO", "width": 360, "height": 640, "fps": 30, "intro": "assets/intro.mp4", "outro": "assets/outro_bisu.mp4", "overlays": [], "texts": [] }
+    },
+    {
+      "nama": "intro_sumber_bisu",
+      "sumber": "sumber_bisu.mp4",
+      "template": { "name": "IB", "width": 360, "height": 640, "fps": 30, "intro": "assets/intro.mp4", "outro": "", "overlays": [], "texts": [] }
+    },
+    {
+      "nama": "teks_berita_kategori",
+      "sumber": "sumber.mp4",
+      "render": true,
+      "template": {
+        "name": "Berita", "width": 360, "height": 640, "fps": 30, "teks_warna": " Black ", "kategori": "NEWS",
+        "text_box": { "x": 20, "y": 420, "w": 320, "h": 150 },
+        "badge_box": null,
+        "overlays": [],
+        "texts": [
+          { "name": "hook", "style": "berita", "size": 30, "color": "red" },
+          { "name": "kat", "style": "kategori", "source": "kategori" }
+        ]
+      },
+      "texts": { "hook": "PRESIDEN resmikan jembatan baru di ibu kota hari ini" }
+    },
+    {
+      "nama": "teks_kategori_tanpa_tempat",
+      "sumber": "sumber.mp4",
+      "template": {
+        "name": "TanpaTempat", "width": 360, "height": 640, "fps": 30, "kategori": "HIBURAN",
+        "overlays": [],
+        "texts": [{ "name": "kat", "style": "KATEGORI", "source": "kategori" }, { "name": "kosong", "default": "   " }]
+      }
+    },
+    {
+      "nama": "teks_biasa_mulai_selesai",
+      "sumber": "sumber.mp4",
+      "template": {
+        "name": "Biasa", "width": 360, "height": 640, "fps": 30,
+        "overlays": [{ "file": "assets/logo.png", "x": 5, "y": 5 }],
+        "texts": [
+          { "default": "Judul bawaan", "size": 40, "y": 100, "start": 0.25, "end": 3 },
+          { "name": "sub", "style": "biasa", "default": "x", "start": 1.5 }
+        ]
+      },
+      "texts": { "sub": "  Teks pengganti  ", "constructor": "jangan" }
+    },
+    {
+      "nama": "teks_warna_aneh_kotak_sendiri",
+      "sumber": "sumber_bisu.mp4",
+      "template": {
+        "name": "Aneh", "width": 360, "height": 640, "fps": 24, "teks_warna": "Merah",
+        "text_box": {},
+        "badge_box": { "x": 5, "y": 5, "w": 100, "h": 40 },
+        "overlays": [],
+        "texts": [
+          { "name": "hook", "style": "Berita", "box": { "x": 0, "y": 300, "w": 360, "h": 120 } },
+          { "name": "kat", "style": "kategori", "default": "SHOWBIZ" }
+        ]
+      },
+      "texts": { "hook": "Halo dunia" }
+    },
+    {
+      "nama": "posisi_aneh",
+      "sumber": "sumber.mp4",
+      "template": {
+        "name": "PosAneh", "width": 360, "height": 640, "fps": 30,
+        "overlays": [
+          { "file": "assets/logo.png", "x": "1;drawtext=text=x", "y": "1e2" },
+          { "file": "assets/logo.png", "x": 33.9, "y": " -7 ", "w": 0, "h": 0 },
+          { "file": "", "x": 1 }
+        ],
+        "texts": []
+      }
+    },
+    {
+      "nama": "crop_jahat",
+      "sumber": "sumber.mp4",
+      "template": {
+        "name": "Jahat", "width": 360, "height": 640, "fps": 30,
+        "overlays": [{ "file": "assets/logo.png", "crop": "100:100:0:0,movie=/etc/passwd" }],
+        "texts": []
+      }
+    },
+    {
+      "nama": "aset_hilang",
+      "sumber": "sumber.mp4",
+      "template": {
+        "name": "Hilang", "width": 360, "height": 640, "fps": 30,
+        "overlays": [{ "file": "assets/tidak-ada.png" }],
+        "texts": []
+      }
+    },
+    {
+      "nama": "aset_keluar_folder",
+      "sumber": "sumber.mp4",
+      "template": {
+        "name": "Keluar", "width": 360, "height": 640, "fps": 30,
+        "intro": "../../sumber/sumber.mp4",
+        "overlays": [],
+        "texts": []
+      }
+    },
+    {
+      "nama": "bawaan_kanvas",
+      "sumber": "sumber_panjang.mp4",
+      "template": { "name": "Bawaan", "overlays": [{ "file": "assets/logo.png", "w": "64" }], "texts": [] }
+    }
+  ]
+}

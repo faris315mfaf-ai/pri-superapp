@@ -1,0 +1,1370 @@
+{
+ "pillow": "12.3.0",
+ "numpy": "2.4.6",
+ "raqm": false,
+ "w": 360,
+ "h": 640,
+ "fps": 30,
+ "kasus": [
+  {
+   "mode": "biasa",
+   "seed": 1,
+   "channel": "Aceh Barat",
+   "nama": "biasa-1-aceh",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "gaya": {
+    "seed": 1,
+    "nama": "hijau pekat",
+    "atas": [
+     11,
+     17,
+     8
+    ],
+    "bawah": [
+     32,
+     51,
+     20
+    ],
+    "aksen": [
+     106,
+     216,
+     32
+    ],
+    "aksen2": [
+     233,
+     244,
+     225
+    ],
+    "dekor1": [
+     66,
+     114,
+     34
+    ],
+    "dekor2": [
+     91,
+     165,
+     41
+    ],
+    "glow": [
+     44,
+     76,
+     22
+    ],
+    "teks": [
+     245,
+     245,
+     245
+    ],
+    "palet": "hijau pekat",
+    "latar": "radial",
+    "dekor": "titik-sudut",
+    "bentuk": "lingkaran",
+    "tata": "baris-ikon",
+    "ikon": "warna",
+    "font_badge": "bebas",
+    "font_teks": "archivo",
+    "masuk_badge": "zoom",
+    "masuk_handle": "fade",
+    "gerak_latar": "geser",
+    "glow_badge": true,
+    "huruf_besar": true,
+    "miring": false,
+    "durasi": 6.0,
+    "sudut_sapuan": 0.6465005154413619,
+    "denting_detik": 1.9,
+    "acak": 0.762280082457942,
+    "acak2": 0.0021060533511106927
+   },
+   "ringkas": "palet hijau pekat · latar radial · dekor titik-sudut · badge lingkaran · tata baris-ikon · ikon warna · font bebas/archivo · masuk zoom/fade",
+   "gaya_job": "palet hijau pekat · latar radial · dekor titik-sudut · badge lingkaran · tata baris-ikon · ikon warna · font bebas/archivo · masuk zoom/fade",
+   "frame": [
+    {
+     "n": 0,
+     "md5": "f469358e978373c6d8aff5f78067e77e",
+     "md5_tanpa_glyph": "f469358e978373c6d8aff5f78067e77e"
+    },
+    {
+     "n": 36,
+     "md5": "1004144644b8deea9aa834b36e8232b4",
+     "md5_tanpa_glyph": "64310272d42da3df0b3244758bb67478"
+    },
+    {
+     "n": 69,
+     "md5": "a2ff6ea0a0c5a5e0b5b13095f5117da6",
+     "md5_tanpa_glyph": "d49b7f780974d503b96894ca8877560c"
+    },
+    {
+     "n": 179,
+     "md5": "1eff7339791aebc4da24d8b7a9eb0f1e",
+     "kecil": "biasa-1-aceh-179.png",
+     "md5_tanpa_glyph": "ac1a04d8c3a628fad3bcaa0190a6e120"
+    }
+   ],
+   "probe": {
+    "durasi": 6.0,
+    "w": 360,
+    "h": 640,
+    "audio": true
+   }
+  },
+  {
+   "mode": "biasa",
+   "seed": 2,
+   "channel": "Kabupaten Pegunungan Bintang",
+   "nama": "biasa-2-kabupaten",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "gaya": {
+    "seed": 2,
+    "nama": "jingga lembut",
+    "atas": [
+     9,
+     9,
+     12
+    ],
+    "bawah": [
+     40,
+     32,
+     26
+    ],
+    "aksen": [
+     242,
+     176,
+     133
+    ],
+    "aksen2": [
+     89,
+     57,
+     35
+    ],
+    "dekor1": [
+     44,
+     71,
+     89
+    ],
+    "dekor2": [
+     127,
+     96,
+     76
+    ],
+    "glow": [
+     63,
+     44,
+     31
+    ],
+    "teks": [
+     240,
+     240,
+     240
+    ],
+    "palet": "jingga lembut",
+    "latar": "sapuan",
+    "dekor": "gelombang-kiri",
+    "bentuk": "berlian",
+    "tata": "grid",
+    "ikon": "garis",
+    "font_badge": "oswald",
+    "font_teks": "anton",
+    "masuk_badge": "turun",
+    "masuk_handle": "kanan",
+    "gerak_latar": "diam",
+    "glow_badge": false,
+    "huruf_besar": true,
+    "miring": false,
+    "durasi": 6.0,
+    "sudut_sapuan": 0.9313330921092562,
+    "denting_detik": 1.9,
+    "acak": 0.8602441027374532,
+    "acak2": 0.5090674530669709
+   },
+   "ringkas": "palet jingga lembut · latar sapuan · dekor gelombang-kiri · badge berlian · tata grid · ikon garis · font oswald/anton · masuk turun/kanan",
+   "gaya_job": "palet jingga lembut · latar sapuan · dekor gelombang-kiri · badge berlian · tata grid · ikon garis · font oswald/anton · masuk turun/kanan",
+   "frame": [
+    {
+     "n": 0,
+     "md5": "2bbaa154800f2b572da4f9524af4fb5a",
+     "md5_tanpa_glyph": "2bbaa154800f2b572da4f9524af4fb5a"
+    },
+    {
+     "n": 36,
+     "md5": "81bc5a4275beda4a73bf42906b6fea09",
+     "md5_tanpa_glyph": "d306b109397fff50232da2d38584464d"
+    },
+    {
+     "n": 69,
+     "md5": "4db3e69e450b0de6d72cbc6feddff9f3",
+     "md5_tanpa_glyph": "34c51b0b7807669df0c10be8b33b6fa5"
+    },
+    {
+     "n": 179,
+     "md5": "d066ad4bd9eda1e5fb641adec0e553a3",
+     "kecil": "biasa-2-kabupaten-179.png",
+     "md5_tanpa_glyph": "a8085c16e6b885fdf7bc3e52585a0562"
+    }
+   ],
+   "probe": {
+    "durasi": 6.0,
+    "w": 360,
+    "h": 640,
+    "audio": true
+   }
+  },
+  {
+   "mode": "biasa",
+   "seed": 4,
+   "channel": "TV Rakyat",
+   "nama": "biasa-4-tv",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "gaya": {
+    "seed": 4,
+    "nama": "sian lembut",
+    "atas": [
+     9,
+     9,
+     12
+    ],
+    "bawah": [
+     26,
+     40,
+     37
+    ],
+    "aksen": [
+     133,
+     242,
+     220
+    ],
+    "aksen2": [
+     35,
+     89,
+     78
+    ],
+    "dekor1": [
+     89,
+     44,
+     53
+    ],
+    "dekor2": [
+     76,
+     127,
+     117
+    ],
+    "glow": [
+     31,
+     63,
+     57
+    ],
+    "teks": [
+     240,
+     240,
+     240
+    ],
+    "palet": "sian lembut",
+    "latar": "sinar",
+    "dekor": "gelombang-kiri",
+    "bentuk": "pil",
+    "tata": "kolom-kanan",
+    "ikon": "mono",
+    "font_badge": "poppins",
+    "font_teks": "poppins",
+    "masuk_badge": "lenting",
+    "masuk_handle": "fade",
+    "gerak_latar": "geser",
+    "glow_badge": false,
+    "huruf_besar": false,
+    "miring": false,
+    "durasi": 5.0,
+    "sudut_sapuan": 0.7137511384602472,
+    "denting_detik": 1.9,
+    "acak": 0.36024490950020127,
+    "acak2": 0.7797455502499977
+   },
+   "ringkas": "palet sian lembut · latar sinar · dekor gelombang-kiri · badge pil · tata kolom-kanan · ikon mono · font poppins/poppins · masuk lenting/fade",
+   "gaya_job": "palet sian lembut · latar sinar · dekor gelombang-kiri · badge pil · tata kolom-kanan · ikon mono · font poppins/poppins · masuk lenting/fade",
+   "frame": [
+    {
+     "n": 0,
+     "md5": "f768fea682fb8f603e86888e1777a4b7",
+     "md5_tanpa_glyph": "f768fea682fb8f603e86888e1777a4b7"
+    },
+    {
+     "n": 36,
+     "md5": "887afb0731fd8e4318052eb56fa3e403",
+     "md5_tanpa_glyph": "df60fbad46351da5edfa69cab35652e1"
+    },
+    {
+     "n": 69,
+     "md5": "5816c5f94a0c175258505b7416c97b6d",
+     "md5_tanpa_glyph": "fe0fe50d543224d45b2c373c471a5ce0"
+    },
+    {
+     "n": 149,
+     "md5": "3cefc41693114497216d504c5bd39c2c",
+     "kecil": "biasa-4-tv-149.png",
+     "md5_tanpa_glyph": "5f7dbed1076577f401113e82a34adc38"
+    }
+   ],
+   "probe": {
+    "durasi": 5.0,
+    "w": 360,
+    "h": 640,
+    "audio": true
+   }
+  },
+  {
+   "mode": "biasa",
+   "seed": 10,
+   "channel": "Jakarta",
+   "nama": "biasa-10-jakarta",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "gaya": {
+    "seed": 10,
+    "nama": "jingga pekat",
+    "atas": [
+     17,
+     11,
+     8
+    ],
+    "bawah": [
+     51,
+     32,
+     20
+    ],
+    "aksen": [
+     216,
+     106,
+     32
+    ],
+    "aksen2": [
+     244,
+     233,
+     225
+    ],
+    "dekor1": [
+     114,
+     66,
+     34
+    ],
+    "dekor2": [
+     165,
+     91,
+     41
+    ],
+    "glow": [
+     76,
+     44,
+     22
+    ],
+    "teks": [
+     245,
+     245,
+     245
+    ],
+    "palet": "jingga pekat",
+    "latar": "garis-miring",
+    "dekor": "bingkai",
+    "bentuk": "oktagon",
+    "tata": "dua-kolom",
+    "ikon": "lingkaran",
+    "font_badge": "archivo",
+    "font_teks": "bebas",
+    "masuk_badge": "putar",
+    "masuk_handle": "ketik",
+    "gerak_latar": "diam",
+    "glow_badge": true,
+    "huruf_besar": true,
+    "miring": true,
+    "durasi": 5.5,
+    "sudut_sapuan": 0.3483761107266458,
+    "denting_detik": 1.9,
+    "acak": 0.860161037286291,
+    "acak2": 0.603190610968185
+   },
+   "ringkas": "palet jingga pekat · latar garis-miring · dekor bingkai · badge oktagon · tata dua-kolom · ikon lingkaran · font archivo/bebas · masuk putar/ketik",
+   "gaya_job": "palet jingga pekat · latar garis-miring · dekor bingkai · badge oktagon · tata dua-kolom · ikon lingkaran · font archivo/bebas · masuk putar/ketik",
+   "frame": [
+    {
+     "n": 0,
+     "md5": "714341ba8bbf206e3c9022f9df4146e2",
+     "md5_tanpa_glyph": "714341ba8bbf206e3c9022f9df4146e2"
+    },
+    {
+     "n": 36,
+     "md5": "5b489a61417503875895b4e295c21ebb",
+     "md5_tanpa_glyph": "b511af16b182b74fbd274f8541e6adf9"
+    },
+    {
+     "n": 69,
+     "md5": "0bd26d34ebf995e3736654c86d9ba542",
+     "md5_tanpa_glyph": "ea6234585598696f7702edbba9dfebab"
+    },
+    {
+     "n": 164,
+     "md5": "a516bd8916647a65d6aacc68e3b80146",
+     "kecil": "biasa-10-jakarta-164.png",
+     "md5_tanpa_glyph": "b818f980de3958ce6d2a300bc3b78c2a"
+    }
+   ],
+   "probe": {
+    "durasi": 5.5,
+    "w": 360,
+    "h": 640,
+    "audio": true
+   }
+  },
+  {
+   "mode": "biasa",
+   "seed": 22,
+   "channel": "Kepulauan Bangka Belitung",
+   "nama": "biasa-22-kepulauan",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "gaya": {
+    "seed": 22,
+    "nama": "hijau pekat",
+    "atas": [
+     11,
+     17,
+     8
+    ],
+    "bawah": [
+     32,
+     51,
+     20
+    ],
+    "aksen": [
+     106,
+     216,
+     32
+    ],
+    "aksen2": [
+     233,
+     244,
+     225
+    ],
+    "dekor1": [
+     66,
+     114,
+     34
+    ],
+    "dekor2": [
+     91,
+     165,
+     41
+    ],
+    "glow": [
+     44,
+     76,
+     22
+    ],
+    "teks": [
+     245,
+     245,
+     245
+    ],
+    "palet": "hijau pekat",
+    "latar": "titik",
+    "dekor": "gelombang-kanan",
+    "bentuk": "lencana",
+    "tata": "grid",
+    "ikon": "warna",
+    "font_badge": "righteous",
+    "font_teks": "righteous",
+    "masuk_badge": "putar",
+    "masuk_handle": "kiri",
+    "gerak_latar": "diam",
+    "glow_badge": true,
+    "huruf_besar": true,
+    "miring": false,
+    "durasi": 5.0,
+    "sudut_sapuan": 1.0299511603233618,
+    "denting_detik": 1.9,
+    "acak": 0.6852603683853774,
+    "acak2": 0.9238491686434372
+   },
+   "ringkas": "palet hijau pekat · latar titik · dekor gelombang-kanan · badge lencana · tata grid · ikon warna · font righteous/righteous · masuk putar/kiri",
+   "gaya_job": "palet hijau pekat · latar titik · dekor gelombang-kanan · badge lencana · tata grid · ikon warna · font righteous/righteous · masuk putar/kiri",
+   "frame": [
+    {
+     "n": 0,
+     "md5": "f17aafdfa9d8d77ae9a9528281711c97",
+     "md5_tanpa_glyph": "f17aafdfa9d8d77ae9a9528281711c97"
+    },
+    {
+     "n": 36,
+     "md5": "ee8c991ba212244d7af736028e295339",
+     "md5_tanpa_glyph": "f3696de9723fb7edcd5cf3ea553f7af1"
+    },
+    {
+     "n": 69,
+     "md5": "9ce3ff8de167e0ffdac7e387b1cafde0",
+     "md5_tanpa_glyph": "b45bd70f507ec19bbef6791435c60b78"
+    },
+    {
+     "n": 149,
+     "md5": "6bddce97d0de7480dd93c28ab7f7c98f",
+     "kecil": "biasa-22-kepulauan-149.png",
+     "md5_tanpa_glyph": "034e542bf3704fe70bcf9f9957ebfc07"
+    }
+   ],
+   "probe": {
+    "durasi": 5.0,
+    "w": 360,
+    "h": 640,
+    "audio": true
+   }
+  },
+  {
+   "mode": "biasa",
+   "seed": 44,
+   "channel": "Papua Selatan",
+   "nama": "biasa-44-papua",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "gaya": {
+    "seed": 44,
+    "nama": "merah-muda pekat",
+    "atas": [
+     17,
+     8,
+     15
+    ],
+    "bawah": [
+     51,
+     20,
+     44
+    ],
+    "aksen": [
+     216,
+     32,
+     179
+    ],
+    "aksen2": [
+     244,
+     225,
+     240
+    ],
+    "dekor1": [
+     114,
+     34,
+     98
+    ],
+    "dekor2": [
+     165,
+     41,
+     140
+    ],
+    "glow": [
+     76,
+     22,
+     65
+    ],
+    "teks": [
+     245,
+     245,
+     245
+    ],
+    "palet": "merah-muda pekat",
+    "latar": "butir",
+    "dekor": "segitiga",
+    "bentuk": "lingkaran",
+    "tata": "grid",
+    "ikon": "lingkaran",
+    "font_badge": "montserrat",
+    "font_teks": "oswald",
+    "masuk_badge": "lenting",
+    "masuk_handle": "atas",
+    "gerak_latar": "diam",
+    "glow_badge": false,
+    "huruf_besar": true,
+    "miring": false,
+    "durasi": 5.5,
+    "sudut_sapuan": 0.8467369135261698,
+    "denting_detik": 1.9,
+    "acak": 0.37842657112328093,
+    "acak2": 0.4050477353192561
+   },
+   "ringkas": "palet merah-muda pekat · latar butir · dekor segitiga · badge lingkaran · tata grid · ikon lingkaran · font montserrat/oswald · masuk lenting/atas",
+   "gaya_job": "palet merah-muda pekat · latar butir · dekor segitiga · badge lingkaran · tata grid · ikon lingkaran · font montserrat/oswald · masuk lenting/atas",
+   "frame": [
+    {
+     "n": 0,
+     "md5": "b43818ef46ea2ea50203274c0e82c737",
+     "md5_tanpa_glyph": "b43818ef46ea2ea50203274c0e82c737"
+    },
+    {
+     "n": 36,
+     "md5": "896c247f35db2d3ce6111a764eabb9c4",
+     "md5_tanpa_glyph": "2747ef4f2632a2428a28d417532e95ba"
+    },
+    {
+     "n": 69,
+     "md5": "d1af82bb8a4a8703d2b24cf5a5239956",
+     "md5_tanpa_glyph": "7bd96b33862d6215b6ca2725b85189d3"
+    },
+    {
+     "n": 164,
+     "md5": "8898f572f1ca0b02e71bc9bb873d87e4",
+     "kecil": "biasa-44-papua-164.png",
+     "md5_tanpa_glyph": "e5bc73275af28837cab82f23f3946686"
+    }
+   ],
+   "probe": {
+    "durasi": 5.5,
+    "w": 360,
+    "h": 640,
+    "audio": true
+   }
+  },
+  {
+   "mode": "dpp",
+   "seed": 1,
+   "channel": "Aceh Barat",
+   "nama": "dpp-1-aceh",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "gaya": {
+    "seed": 1,
+    "nama": "hijau pekat",
+    "atas": [
+     11,
+     17,
+     8
+    ],
+    "bawah": [
+     32,
+     51,
+     20
+    ],
+    "aksen": [
+     106,
+     216,
+     32
+    ],
+    "aksen2": [
+     233,
+     244,
+     225
+    ],
+    "dekor1": [
+     66,
+     114,
+     34
+    ],
+    "dekor2": [
+     91,
+     165,
+     41
+    ],
+    "glow": [
+     44,
+     76,
+     22
+    ],
+    "teks": [
+     245,
+     245,
+     245
+    ],
+    "palet": "hijau pekat",
+    "latar": "radial",
+    "dekor": "titik-sudut",
+    "bentuk": "lingkaran",
+    "tata": "baris-ikon",
+    "ikon": "warna",
+    "font_badge": "bebas",
+    "font_teks": "archivo",
+    "masuk_badge": "zoom",
+    "masuk_handle": "fade",
+    "gerak_latar": "geser",
+    "glow_badge": true,
+    "huruf_besar": true,
+    "miring": false,
+    "durasi": 6.0,
+    "sudut_sapuan": 0.6465005154413619,
+    "denting_detik": 1.9,
+    "acak": 0.762280082457942,
+    "acak2": 0.0021060533511106927
+   },
+   "ringkas": "palet hijau pekat · latar radial · dekor titik-sudut · badge lingkaran · tata baris-ikon · ikon warna · font bebas/archivo · masuk zoom/fade",
+   "gaya_job": "DPP - meniru outro TV Rakyat",
+   "frame": [
+    {
+     "n": 0,
+     "md5": "a42f80eba1e18e1ae52c330d8dc3211f",
+     "md5_tanpa_glyph": "a42f80eba1e18e1ae52c330d8dc3211f"
+    },
+    {
+     "n": 36,
+     "md5": "7430aa10f695be2aee5686b04e911692",
+     "md5_tanpa_glyph": "70b88dec61874f9a5df44c6184e1b433"
+    },
+    {
+     "n": 96,
+     "md5": "3a8ce19d4a83317a77352297a3872d14",
+     "md5_tanpa_glyph": "0e9dff9c08f638723d004468d8257136"
+    },
+    {
+     "n": 164,
+     "md5": "e4c6a57d0a046df607e549a450f7b320",
+     "kecil": "dpp-1-aceh-164.png",
+     "md5_tanpa_glyph": "54c2d6f8c05296af865969d1e0d856be"
+    }
+   ],
+   "probe": {
+    "durasi": 5.463667,
+    "w": 360,
+    "h": 640,
+    "audio": true
+   }
+  },
+  {
+   "mode": "dpp",
+   "seed": 1,
+   "channel": "Kabupaten Pegunungan Bintang",
+   "nama": "dpp-1-kabupaten",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "gaya": {
+    "seed": 1,
+    "nama": "hijau pekat",
+    "atas": [
+     11,
+     17,
+     8
+    ],
+    "bawah": [
+     32,
+     51,
+     20
+    ],
+    "aksen": [
+     106,
+     216,
+     32
+    ],
+    "aksen2": [
+     233,
+     244,
+     225
+    ],
+    "dekor1": [
+     66,
+     114,
+     34
+    ],
+    "dekor2": [
+     91,
+     165,
+     41
+    ],
+    "glow": [
+     44,
+     76,
+     22
+    ],
+    "teks": [
+     245,
+     245,
+     245
+    ],
+    "palet": "hijau pekat",
+    "latar": "radial",
+    "dekor": "titik-sudut",
+    "bentuk": "lingkaran",
+    "tata": "baris-ikon",
+    "ikon": "warna",
+    "font_badge": "bebas",
+    "font_teks": "archivo",
+    "masuk_badge": "zoom",
+    "masuk_handle": "fade",
+    "gerak_latar": "geser",
+    "glow_badge": true,
+    "huruf_besar": true,
+    "miring": false,
+    "durasi": 6.0,
+    "sudut_sapuan": 0.6465005154413619,
+    "denting_detik": 1.9,
+    "acak": 0.762280082457942,
+    "acak2": 0.0021060533511106927
+   },
+   "ringkas": "palet hijau pekat · latar radial · dekor titik-sudut · badge lingkaran · tata baris-ikon · ikon warna · font bebas/archivo · masuk zoom/fade",
+   "gaya_job": "DPP - meniru outro TV Rakyat",
+   "frame": [
+    {
+     "n": 0,
+     "md5": "a42f80eba1e18e1ae52c330d8dc3211f",
+     "md5_tanpa_glyph": "a42f80eba1e18e1ae52c330d8dc3211f"
+    },
+    {
+     "n": 36,
+     "md5": "0a929ed110fa3c3870df382a9e5b99cb",
+     "md5_tanpa_glyph": "40950a631197962f72673c3b6bcc246f"
+    },
+    {
+     "n": 96,
+     "md5": "9f02cfccedb1189bdca6991f25c344a0",
+     "md5_tanpa_glyph": "5ed7d0fc4157c1e467ea6f4076ce8790"
+    },
+    {
+     "n": 164,
+     "md5": "47fc4318af13200f6435b074bdac16ca",
+     "kecil": "dpp-1-kabupaten-164.png",
+     "md5_tanpa_glyph": "388f0cce53880cf0a9817e7faeb9351a"
+    }
+   ],
+   "probe": {
+    "durasi": 5.463667,
+    "w": 360,
+    "h": 640,
+    "audio": true
+   }
+  },
+  {
+   "mode": "dpp",
+   "seed": 1,
+   "channel": "Ternate",
+   "nama": "dpp-1-ternate",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "gaya": {
+    "seed": 1,
+    "nama": "hijau pekat",
+    "atas": [
+     11,
+     17,
+     8
+    ],
+    "bawah": [
+     32,
+     51,
+     20
+    ],
+    "aksen": [
+     106,
+     216,
+     32
+    ],
+    "aksen2": [
+     233,
+     244,
+     225
+    ],
+    "dekor1": [
+     66,
+     114,
+     34
+    ],
+    "dekor2": [
+     91,
+     165,
+     41
+    ],
+    "glow": [
+     44,
+     76,
+     22
+    ],
+    "teks": [
+     245,
+     245,
+     245
+    ],
+    "palet": "hijau pekat",
+    "latar": "radial",
+    "dekor": "titik-sudut",
+    "bentuk": "lingkaran",
+    "tata": "baris-ikon",
+    "ikon": "warna",
+    "font_badge": "bebas",
+    "font_teks": "archivo",
+    "masuk_badge": "zoom",
+    "masuk_handle": "fade",
+    "gerak_latar": "geser",
+    "glow_badge": true,
+    "huruf_besar": true,
+    "miring": false,
+    "durasi": 6.0,
+    "sudut_sapuan": 0.6465005154413619,
+    "denting_detik": 1.9,
+    "acak": 0.762280082457942,
+    "acak2": 0.0021060533511106927
+   },
+   "ringkas": "palet hijau pekat · latar radial · dekor titik-sudut · badge lingkaran · tata baris-ikon · ikon warna · font bebas/archivo · masuk zoom/fade",
+   "gaya_job": "DPP - meniru outro TV Rakyat",
+   "frame": [
+    {
+     "n": 0,
+     "md5": "a42f80eba1e18e1ae52c330d8dc3211f",
+     "md5_tanpa_glyph": "a42f80eba1e18e1ae52c330d8dc3211f"
+    },
+    {
+     "n": 36,
+     "md5": "5396d32347808c4e634f0ba56763cc33",
+     "md5_tanpa_glyph": "730d826cbec99b3a5679d46769e926dc"
+    },
+    {
+     "n": 96,
+     "md5": "3b75bf50a9d5d934b945c4263e6a0aba",
+     "md5_tanpa_glyph": "36c4e17c388774d90c00372869b238a1"
+    },
+    {
+     "n": 164,
+     "md5": "442c7a052b3b2044622674d055b5a642",
+     "kecil": "dpp-1-ternate-164.png",
+     "md5_tanpa_glyph": "ec54c7345678975f38582160cfc737f8"
+    }
+   ],
+   "probe": {
+    "durasi": 5.463667,
+    "w": 360,
+    "h": 640,
+    "audio": true
+   }
+  }
+ ],
+ "indeks": [
+  {
+   "job_id": "20f1dd034677",
+   "status": "done",
+   "langkah": "selesai",
+   "progress": 100,
+   "channel": "Ternate",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "seed": 1,
+   "mode": "dpp",
+   "gaya": "DPP - meniru outro TV Rakyat",
+   "logo": "",
+   "video": "<MEDIA>\\outro\\20f1dd034677\\outro.mp4",
+   "message": "Video outro siap (0.3 MB).",
+   "logs": [
+    "Pekerjaan masuk antrean.",
+    "Merender outro (DPP - meniru outro TV Rakyat) ...",
+    "Merender outro ... 0%",
+    "Merender outro ... 7%",
+    "Merender outro ... 15%",
+    "Merender outro ... 23%",
+    "Merender outro ... 31%",
+    "Merender outro ... 39%",
+    "Merender outro ... 47%",
+    "Merender outro ... 55%",
+    "Merender outro ... 63%",
+    "Merender outro ... 70%",
+    "Merender outro ... 78%",
+    "Merender outro ... 86%",
+    "Merender outro ... 94%",
+    "Merender outro ... 100%",
+    "Menempel audio ...",
+    "Video outro siap (0.3 MB)."
+   ],
+   "created": 1790931380.941352,
+   "updated": 1790931382.7659743
+  },
+  {
+   "job_id": "e7814fbe6d31",
+   "status": "done",
+   "langkah": "selesai",
+   "progress": 100,
+   "channel": "Kabupaten Pegunungan Bintang",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "seed": 1,
+   "mode": "dpp",
+   "gaya": "DPP - meniru outro TV Rakyat",
+   "logo": "",
+   "video": "<MEDIA>\\outro\\e7814fbe6d31\\outro.mp4",
+   "message": "Video outro siap (0.3 MB).",
+   "logs": [
+    "Pekerjaan masuk antrean.",
+    "Merender outro (DPP - meniru outro TV Rakyat) ...",
+    "Merender outro ... 0%",
+    "Merender outro ... 7%",
+    "Merender outro ... 15%",
+    "Merender outro ... 23%",
+    "Merender outro ... 31%",
+    "Merender outro ... 39%",
+    "Merender outro ... 47%",
+    "Merender outro ... 55%",
+    "Merender outro ... 63%",
+    "Merender outro ... 70%",
+    "Merender outro ... 78%",
+    "Merender outro ... 86%",
+    "Merender outro ... 94%",
+    "Merender outro ... 100%",
+    "Menempel audio ...",
+    "Video outro siap (0.3 MB)."
+   ],
+   "created": 1790931376.8308716,
+   "updated": 1790931378.5514605
+  },
+  {
+   "job_id": "464f467b1cb2",
+   "status": "done",
+   "langkah": "selesai",
+   "progress": 100,
+   "channel": "Aceh Barat",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "seed": 1,
+   "mode": "dpp",
+   "gaya": "DPP - meniru outro TV Rakyat",
+   "logo": "",
+   "video": "<MEDIA>\\outro\\464f467b1cb2\\outro.mp4",
+   "message": "Video outro siap (0.3 MB).",
+   "logs": [
+    "Pekerjaan masuk antrean.",
+    "Merender outro (DPP - meniru outro TV Rakyat) ...",
+    "Merender outro ... 0%",
+    "Merender outro ... 7%",
+    "Merender outro ... 15%",
+    "Merender outro ... 23%",
+    "Merender outro ... 31%",
+    "Merender outro ... 39%",
+    "Merender outro ... 47%",
+    "Merender outro ... 55%",
+    "Merender outro ... 63%",
+    "Merender outro ... 70%",
+    "Merender outro ... 78%",
+    "Merender outro ... 86%",
+    "Merender outro ... 94%",
+    "Merender outro ... 100%",
+    "Menempel audio ...",
+    "Video outro siap (0.3 MB)."
+   ],
+   "created": 1790931372.4567091,
+   "updated": 1790931374.248128
+  },
+  {
+   "job_id": "eaedf0bfa3c3",
+   "status": "done",
+   "langkah": "selesai",
+   "progress": 100,
+   "channel": "Papua Selatan",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "seed": 44,
+   "mode": "biasa",
+   "gaya": "palet merah-muda pekat · latar butir · dekor segitiga · badge lingkaran · tata grid · ikon lingkaran · font montserrat/oswald · masuk lenting/atas",
+   "logo": "",
+   "video": "<MEDIA>\\outro\\eaedf0bfa3c3\\outro.mp4",
+   "message": "Video outro siap (0.2 MB).",
+   "logs": [
+    "Pekerjaan masuk antrean.",
+    "Merender outro (palet merah-muda pekat · latar butir · dekor segitiga · badge lingkaran · tata grid · ikon lingkaran · font montserrat/oswald · masuk lenting/atas) ...",
+    "Merender outro ... 0%",
+    "Merender outro ... 7%",
+    "Merender outro ... 15%",
+    "Merender outro ... 23%",
+    "Merender outro ... 31%",
+    "Merender outro ... 39%",
+    "Merender outro ... 47%",
+    "Merender outro ... 55%",
+    "Merender outro ... 63%",
+    "Merender outro ... 70%",
+    "Merender outro ... 78%",
+    "Merender outro ... 86%",
+    "Merender outro ... 94%",
+    "Merender outro ... 100%",
+    "Menempel audio ...",
+    "Video outro siap (0.2 MB)."
+   ],
+   "created": 1790931368.3367012,
+   "updated": 1790931369.9584196
+  },
+  {
+   "job_id": "7d1fadebf436",
+   "status": "done",
+   "langkah": "selesai",
+   "progress": 100,
+   "channel": "Kepulauan Bangka Belitung",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "seed": 22,
+   "mode": "biasa",
+   "gaya": "palet hijau pekat · latar titik · dekor gelombang-kanan · badge lencana · tata grid · ikon warna · font righteous/righteous · masuk putar/kiri",
+   "logo": "",
+   "video": "<MEDIA>\\outro\\7d1fadebf436\\outro.mp4",
+   "message": "Video outro siap (0.2 MB).",
+   "logs": [
+    "Pekerjaan masuk antrean.",
+    "Merender outro (palet hijau pekat · latar titik · dekor gelombang-kanan · badge lencana · tata grid · ikon warna · font righteous/righteous · masuk putar/kiri) ...",
+    "Merender outro ... 0%",
+    "Merender outro ... 8%",
+    "Merender outro ... 16%",
+    "Merender outro ... 24%",
+    "Merender outro ... 32%",
+    "Merender outro ... 40%",
+    "Merender outro ... 48%",
+    "Merender outro ... 56%",
+    "Merender outro ... 64%",
+    "Merender outro ... 72%",
+    "Merender outro ... 80%",
+    "Merender outro ... 88%",
+    "Merender outro ... 96%",
+    "Merender outro ... 100%",
+    "Menempel audio ...",
+    "Video outro siap (0.2 MB)."
+   ],
+   "created": 1790931363.4217885,
+   "updated": 1790931365.186698
+  },
+  {
+   "job_id": "44e0c5ab870e",
+   "status": "done",
+   "langkah": "selesai",
+   "progress": 100,
+   "channel": "Jakarta",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "seed": 10,
+   "mode": "biasa",
+   "gaya": "palet jingga pekat · latar garis-miring · dekor bingkai · badge oktagon · tata dua-kolom · ikon lingkaran · font archivo/bebas · masuk putar/ketik",
+   "logo": "",
+   "video": "<MEDIA>\\outro\\44e0c5ab870e\\outro.mp4",
+   "message": "Video outro siap (0.1 MB).",
+   "logs": [
+    "Pekerjaan masuk antrean.",
+    "Merender outro (palet jingga pekat · latar garis-miring · dekor bingkai · badge oktagon · tata dua-kolom · ikon lingkaran · font archivo/bebas · masuk putar/ketik) ...",
+    "Merender outro ... 0%",
+    "Merender outro ... 7%",
+    "Merender outro ... 15%",
+    "Merender outro ... 23%",
+    "Merender outro ... 31%",
+    "Merender outro ... 39%",
+    "Merender outro ... 47%",
+    "Merender outro ... 55%",
+    "Merender outro ... 63%",
+    "Merender outro ... 70%",
+    "Merender outro ... 78%",
+    "Merender outro ... 86%",
+    "Merender outro ... 94%",
+    "Merender outro ... 100%",
+    "Menempel audio ...",
+    "Video outro siap (0.1 MB)."
+   ],
+   "created": 1790931358.8355448,
+   "updated": 1790931360.5157135
+  },
+  {
+   "job_id": "1790c8553415",
+   "status": "done",
+   "langkah": "selesai",
+   "progress": 100,
+   "channel": "TV Rakyat",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "seed": 4,
+   "mode": "biasa",
+   "gaya": "palet sian lembut · latar sinar · dekor gelombang-kiri · badge pil · tata kolom-kanan · ikon mono · font poppins/poppins · masuk lenting/fade",
+   "logo": "",
+   "video": "<MEDIA>\\outro\\1790c8553415\\outro.mp4",
+   "message": "Video outro siap (0.2 MB).",
+   "logs": [
+    "Pekerjaan masuk antrean.",
+    "Merender outro (palet sian lembut · latar sinar · dekor gelombang-kiri · badge pil · tata kolom-kanan · ikon mono · font poppins/poppins · masuk lenting/fade) ...",
+    "Merender outro ... 0%",
+    "Merender outro ... 8%",
+    "Merender outro ... 16%",
+    "Merender outro ... 24%",
+    "Merender outro ... 32%",
+    "Merender outro ... 40%",
+    "Merender outro ... 48%",
+    "Merender outro ... 56%",
+    "Merender outro ... 64%",
+    "Merender outro ... 72%",
+    "Merender outro ... 80%",
+    "Merender outro ... 88%",
+    "Merender outro ... 96%",
+    "Merender outro ... 100%",
+    "Menempel audio ...",
+    "Video outro siap (0.2 MB)."
+   ],
+   "created": 1790931352.9255688,
+   "updated": 1790931356.047913
+  },
+  {
+   "job_id": "25bfee3c0b3e",
+   "status": "done",
+   "langkah": "selesai",
+   "progress": 100,
+   "channel": "Kabupaten Pegunungan Bintang",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "seed": 2,
+   "mode": "biasa",
+   "gaya": "palet jingga lembut · latar sapuan · dekor gelombang-kiri · badge berlian · tata grid · ikon garis · font oswald/anton · masuk turun/kanan",
+   "logo": "",
+   "video": "<MEDIA>\\outro\\25bfee3c0b3e\\outro.mp4",
+   "message": "Video outro siap (0.3 MB).",
+   "logs": [
+    "Pekerjaan masuk antrean.",
+    "Merender outro (palet jingga lembut · latar sapuan · dekor gelombang-kiri · badge berlian · tata grid · ikon garis · font oswald/anton · masuk turun/kanan) ...",
+    "Merender outro ... 0%",
+    "Merender outro ... 8%",
+    "Merender outro ... 16%",
+    "Merender outro ... 25%",
+    "Merender outro ... 33%",
+    "Merender outro ... 41%",
+    "Merender outro ... 50%",
+    "Merender outro ... 58%",
+    "Merender outro ... 66%",
+    "Merender outro ... 75%",
+    "Merender outro ... 83%",
+    "Merender outro ... 91%",
+    "Merender outro ... 100%",
+    "Menempel audio ...",
+    "Video outro siap (0.3 MB)."
+   ],
+   "created": 1790931343.1124938,
+   "updated": 1790931346.6261168
+  },
+  {
+   "job_id": "811f0d486e5f",
+   "status": "done",
+   "langkah": "selesai",
+   "progress": 100,
+   "channel": "Aceh Barat",
+   "akun": {
+    "instagram": "@tvrakyat.aceh",
+    "youtube": "TV Rakyat Aceh",
+    "facebook": "TVR Aceh Barat",
+    "tiktok": "@tvr_aceh",
+    "x": "",
+    "threads": "@tvrakyat"
+   },
+   "seed": 1,
+   "mode": "biasa",
+   "gaya": "palet hijau pekat · latar radial · dekor titik-sudut · badge lingkaran · tata baris-ikon · ikon warna · font bebas/archivo · masuk zoom/fade",
+   "logo": "",
+   "video": "<MEDIA>\\outro\\811f0d486e5f\\outro.mp4",
+   "message": "Video outro siap (0.2 MB).",
+   "logs": [
+    "Pekerjaan masuk antrean.",
+    "Merender outro (palet hijau pekat · latar radial · dekor titik-sudut · badge lingkaran · tata baris-ikon · ikon warna · font bebas/archivo · masuk zoom/fade) ...",
+    "Merender outro ... 0%",
+    "Merender outro ... 8%",
+    "Merender outro ... 16%",
+    "Merender outro ... 25%",
+    "Merender outro ... 33%",
+    "Merender outro ... 41%",
+    "Merender outro ... 50%",
+    "Merender outro ... 58%",
+    "Merender outro ... 66%",
+    "Merender outro ... 75%",
+    "Merender outro ... 83%",
+    "Merender outro ... 91%",
+    "Merender outro ... 100%",
+    "Menempel audio ...",
+    "Video outro siap (0.2 MB)."
+   ],
+   "created": 1790931334.4959576,
+   "updated": 1790931336.446368
+  }
+ ],
+ "indeks_mentah": "[{\"job_id\": \"20f1dd034677\", \"status\": \"done\", \"langkah\": \"selesai\", \"progress\": 100, \"channel\": \"Ternate\", \"akun\": {\"instagram\": \"@tvrakyat.aceh\", \"youtube\": \"TV Rakyat Aceh\", \"facebook\": \"TVR Aceh Barat\", \"tiktok\": \"@tvr_aceh\", \"x\": \"\", \"threads\": \"@tvrakyat\"}, \"seed\": 1, \"mode\": \"dpp\", \"gaya\": \"DPP - meniru outro TV Rakyat\", \"logo\": \"\", \"video\": \"<MEDIA>\\\\outro\\\\20f1dd034677\\\\outro.mp4\", \"message\": \"Video outro siap (0.3 MB).\", \"logs\": [\"Pekerjaan masuk antrean.\", \"Merender outro (DPP - meniru outro TV Rakyat) ...\", \"Merender outro ... 0%\", \"Merender outro ... 7%\", \"Merender outro ... 15%\", \"Merender outro ... 23%\", \"Merender outro ... 31%\", \"Merender outro ... 39%\", \"Merender outro ... 47%\", \"Merender outro ... 55%\", \"Merender outro ... 63%\", \"Merender outro ... 70%\", \"Merender outro ... 78%\", \"Merender outro ... 86%\", \"Merender outro ... 94%\", \"Merender outro ... 100%\", \"Menempel audio ...\", \"Video outro siap (0.3 MB).\"], \"created\": 1790931380.941352, \"updated\": 1790931382.7659743}, {\"job_id\": \"e7814fbe6d31\", \"status\": \"done\", \"langkah\": \"selesai\", \"progress\": 100, \"channel\": \"Kabupaten Pegunungan Bintang\", \"akun\": {\"instagram\": \"@tvrakyat.aceh\", \"youtube\": \"TV Rakyat Aceh\", \"facebook\": \"TVR Aceh Barat\", \"tiktok\": \"@tvr_aceh\", \"x\": \"\", \"threads\": \"@tvrakyat\"}, \"seed\": 1, \"mode\": \"dpp\", \"gaya\": \"DPP - meniru outro TV Rakyat\", \"logo\": \"\", \"video\": \"<MEDIA>\\\\outro\\\\e7814fbe6d31\\\\outro.mp4\", \"message\": \"Video outro siap (0.3 MB).\", \"logs\": [\"Pekerjaan masuk antrean.\", \"Merender outro (DPP - meniru outro TV Rakyat) ...\", \"Merender outro ... 0%\", \"Merender outro ... 7%\", \"Merender outro ... 15%\", \"Merender outro ... 23%\", \"Merender outro ... 31%\", \"Merender outro ... 39%\", \"Merender outro ... 47%\", \"Merender outro ... 55%\", \"Merender outro ... 63%\", \"Merender outro ... 70%\", \"Merender outro ... 78%\", \"Merender outro ... 86%\", \"Merender outro ... 94%\", \"Merender outro ... 100%\", \"Menempel audio ...\", \"Video outro siap (0.3 MB).\"], \"created\": 1790931376.8308716, \"updated\": 1790931378.5514605}, {\"job_id\": \"464f467b1cb2\", \"status\": \"done\", \"langkah\": \"selesai\", \"progress\": 100, \"channel\": \"Aceh Barat\", \"akun\": {\"instagram\": \"@tvrakyat.aceh\", \"youtube\": \"TV Rakyat Aceh\", \"facebook\": \"TVR Aceh Barat\", \"tiktok\": \"@tvr_aceh\", \"x\": \"\", \"threads\": \"@tvrakyat\"}, \"seed\": 1, \"mode\": \"dpp\", \"gaya\": \"DPP - meniru outro TV Rakyat\", \"logo\": \"\", \"video\": \"<MEDIA>\\\\outro\\\\464f467b1cb2\\\\outro.mp4\", \"message\": \"Video outro siap (0.3 MB).\", \"logs\": [\"Pekerjaan masuk antrean.\", \"Merender outro (DPP - meniru outro TV Rakyat) ...\", \"Merender outro ... 0%\", \"Merender outro ... 7%\", \"Merender outro ... 15%\", \"Merender outro ... 23%\", \"Merender outro ... 31%\", \"Merender outro ... 39%\", \"Merender outro ... 47%\", \"Merender outro ... 55%\", \"Merender outro ... 63%\", \"Merender outro ... 70%\", \"Merender outro ... 78%\", \"Merender outro ... 86%\", \"Merender outro ... 94%\", \"Merender outro ... 100%\", \"Menempel audio ...\", \"Video outro siap (0.3 MB).\"], \"created\": 1790931372.4567091, \"updated\": 1790931374.248128}, {\"job_id\": \"eaedf0bfa3c3\", \"status\": \"done\", \"langkah\": \"selesai\", \"progress\": 100, \"channel\": \"Papua Selatan\", \"akun\": {\"instagram\": \"@tvrakyat.aceh\", \"youtube\": \"TV Rakyat Aceh\", \"facebook\": \"TVR Aceh Barat\", \"tiktok\": \"@tvr_aceh\", \"x\": \"\", \"threads\": \"@tvrakyat\"}, \"seed\": 44, \"mode\": \"biasa\", \"gaya\": \"palet merah-muda pekat · latar butir · dekor segitiga · badge lingkaran · tata grid · ikon lingkaran · font montserrat/oswald · masuk lenting/atas\", \"logo\": \"\", \"video\": \"<MEDIA>\\\\outro\\\\eaedf0bfa3c3\\\\outro.mp4\", \"message\": \"Video outro siap (0.2 MB).\", \"logs\": [\"Pekerjaan masuk antrean.\", \"Merender outro (palet merah-muda pekat · latar butir · dekor segitiga · badge lingkaran · tata grid · ikon lingkaran · font montserrat/oswald · masuk lenting/atas) ...\", \"Merender outro ... 0%\", \"Merender outro ... 7%\", \"Merender outro ... 15%\", \"Merender outro ... 23%\", \"Merender outro ... 31%\", \"Merender outro ... 39%\", \"Merender outro ... 47%\", \"Merender outro ... 55%\", \"Merender outro ... 63%\", \"Merender outro ... 70%\", \"Merender outro ... 78%\", \"Merender outro ... 86%\", \"Merender outro ... 94%\", \"Merender outro ... 100%\", \"Menempel audio ...\", \"Video outro siap (0.2 MB).\"], \"created\": 1790931368.3367012, \"updated\": 1790931369.9584196}, {\"job_id\": \"7d1fadebf436\", \"status\": \"done\", \"langkah\": \"selesai\", \"progress\": 100, \"channel\": \"Kepulauan Bangka Belitung\", \"akun\": {\"instagram\": \"@tvrakyat.aceh\", \"youtube\": \"TV Rakyat Aceh\", \"facebook\": \"TVR Aceh Barat\", \"tiktok\": \"@tvr_aceh\", \"x\": \"\", \"threads\": \"@tvrakyat\"}, \"seed\": 22, \"mode\": \"biasa\", \"gaya\": \"palet hijau pekat · latar titik · dekor gelombang-kanan · badge lencana · tata grid · ikon warna · font righteous/righteous · masuk putar/kiri\", \"logo\": \"\", \"video\": \"<MEDIA>\\\\outro\\\\7d1fadebf436\\\\outro.mp4\", \"message\": \"Video outro siap (0.2 MB).\", \"logs\": [\"Pekerjaan masuk antrean.\", \"Merender outro (palet hijau pekat · latar titik · dekor gelombang-kanan · badge lencana · tata grid · ikon warna · font righteous/righteous · masuk putar/kiri) ...\", \"Merender outro ... 0%\", \"Merender outro ... 8%\", \"Merender outro ... 16%\", \"Merender outro ... 24%\", \"Merender outro ... 32%\", \"Merender outro ... 40%\", \"Merender outro ... 48%\", \"Merender outro ... 56%\", \"Merender outro ... 64%\", \"Merender outro ... 72%\", \"Merender outro ... 80%\", \"Merender outro ... 88%\", \"Merender outro ... 96%\", \"Merender outro ... 100%\", \"Menempel audio ...\", \"Video outro siap (0.2 MB).\"], \"created\": 1790931363.4217885, \"updated\": 1790931365.186698}, {\"job_id\": \"44e0c5ab870e\", \"status\": \"done\", \"langkah\": \"selesai\", \"progress\": 100, \"channel\": \"Jakarta\", \"akun\": {\"instagram\": \"@tvrakyat.aceh\", \"youtube\": \"TV Rakyat Aceh\", \"facebook\": \"TVR Aceh Barat\", \"tiktok\": \"@tvr_aceh\", \"x\": \"\", \"threads\": \"@tvrakyat\"}, \"seed\": 10, \"mode\": \"biasa\", \"gaya\": \"palet jingga pekat · latar garis-miring · dekor bingkai · badge oktagon · tata dua-kolom · ikon lingkaran · font archivo/bebas · masuk putar/ketik\", \"logo\": \"\", \"video\": \"<MEDIA>\\\\outro\\\\44e0c5ab870e\\\\outro.mp4\", \"message\": \"Video outro siap (0.1 MB).\", \"logs\": [\"Pekerjaan masuk antrean.\", \"Merender outro (palet jingga pekat · latar garis-miring · dekor bingkai · badge oktagon · tata dua-kolom · ikon lingkaran · font archivo/bebas · masuk putar/ketik) ...\", \"Merender outro ... 0%\", \"Merender outro ... 7%\", \"Merender outro ... 15%\", \"Merender outro ... 23%\", \"Merender outro ... 31%\", \"Merender outro ... 39%\", \"Merender outro ... 47%\", \"Merender outro ... 55%\", \"Merender outro ... 63%\", \"Merender outro ... 70%\", \"Merender outro ... 78%\", \"Merender outro ... 86%\", \"Merender outro ... 94%\", \"Merender outro ... 100%\", \"Menempel audio ...\", \"Video outro siap (0.1 MB).\"], \"created\": 1790931358.8355448, \"updated\": 1790931360.5157135}, {\"job_id\": \"1790c8553415\", \"status\": \"done\", \"langkah\": \"selesai\", \"progress\": 100, \"channel\": \"TV Rakyat\", \"akun\": {\"instagram\": \"@tvrakyat.aceh\", \"youtube\": \"TV Rakyat Aceh\", \"facebook\": \"TVR Aceh Barat\", \"tiktok\": \"@tvr_aceh\", \"x\": \"\", \"threads\": \"@tvrakyat\"}, \"seed\": 4, \"mode\": \"biasa\", \"gaya\": \"palet sian lembut · latar sinar · dekor gelombang-kiri · badge pil · tata kolom-kanan · ikon mono · font poppins/poppins · masuk lenting/fade\", \"logo\": \"\", \"video\": \"<MEDIA>\\\\outro\\\\1790c8553415\\\\outro.mp4\", \"message\": \"Video outro siap (0.2 MB).\", \"logs\": [\"Pekerjaan masuk antrean.\", \"Merender outro (palet sian lembut · latar sinar · dekor gelombang-kiri · badge pil · tata kolom-kanan · ikon mono · font poppins/poppins · masuk lenting/fade) ...\", \"Merender outro ... 0%\", \"Merender outro ... 8%\", \"Merender outro ... 16%\", \"Merender outro ... 24%\", \"Merender outro ... 32%\", \"Merender outro ... 40%\", \"Merender outro ... 48%\", \"Merender outro ... 56%\", \"Merender outro ... 64%\", \"Merender outro ... 72%\", \"Merender outro ... 80%\", \"Merender outro ... 88%\", \"Merender outro ... 96%\", \"Merender outro ... 100%\", \"Menempel audio ...\", \"Video outro siap (0.2 MB).\"], \"created\": 1790931352.9255688, \"updated\": 1790931356.047913}, {\"job_id\": \"25bfee3c0b3e\", \"status\": \"done\", \"langkah\": \"selesai\", \"progress\": 100, \"channel\": \"Kabupaten Pegunungan Bintang\", \"akun\": {\"instagram\": \"@tvrakyat.aceh\", \"youtube\": \"TV Rakyat Aceh\", \"facebook\": \"TVR Aceh Barat\", \"tiktok\": \"@tvr_aceh\", \"x\": \"\", \"threads\": \"@tvrakyat\"}, \"seed\": 2, \"mode\": \"biasa\", \"gaya\": \"palet jingga lembut · latar sapuan · dekor gelombang-kiri · badge berlian · tata grid · ikon garis · font oswald/anton · masuk turun/kanan\", \"logo\": \"\", \"video\": \"<MEDIA>\\\\outro\\\\25bfee3c0b3e\\\\outro.mp4\", \"message\": \"Video outro siap (0.3 MB).\", \"logs\": [\"Pekerjaan masuk antrean.\", \"Merender outro (palet jingga lembut · latar sapuan · dekor gelombang-kiri · badge berlian · tata grid · ikon garis · font oswald/anton · masuk turun/kanan) ...\", \"Merender outro ... 0%\", \"Merender outro ... 8%\", \"Merender outro ... 16%\", \"Merender outro ... 25%\", \"Merender outro ... 33%\", \"Merender outro ... 41%\", \"Merender outro ... 50%\", \"Merender outro ... 58%\", \"Merender outro ... 66%\", \"Merender outro ... 75%\", \"Merender outro ... 83%\", \"Merender outro ... 91%\", \"Merender outro ... 100%\", \"Menempel audio ...\", \"Video outro siap (0.3 MB).\"], \"created\": 1790931343.1124938, \"updated\": 1790931346.6261168}, {\"job_id\": \"811f0d486e5f\", \"status\": \"done\", \"langkah\": \"selesai\", \"progress\": 100, \"channel\": \"Aceh Barat\", \"akun\": {\"instagram\": \"@tvrakyat.aceh\", \"youtube\": \"TV Rakyat Aceh\", \"facebook\": \"TVR Aceh Barat\", \"tiktok\": \"@tvr_aceh\", \"x\": \"\", \"threads\": \"@tvrakyat\"}, \"seed\": 1, \"mode\": \"biasa\", \"gaya\": \"palet hijau pekat · latar radial · dekor titik-sudut · badge lingkaran · tata baris-ikon · ikon warna · font bebas/archivo · masuk zoom/fade\", \"logo\": \"\", \"video\": \"<MEDIA>\\\\outro\\\\811f0d486e5f\\\\outro.mp4\", \"message\": \"Video outro siap (0.2 MB).\", \"logs\": [\"Pekerjaan masuk antrean.\", \"Merender outro (palet hijau pekat · latar radial · dekor titik-sudut · badge lingkaran · tata baris-ikon · ikon warna · font bebas/archivo · masuk zoom/fade) ...\", \"Merender outro ... 0%\", \"Merender outro ... 8%\", \"Merender outro ... 16%\", \"Merender outro ... 25%\", \"Merender outro ... 33%\", \"Merender outro ... 41%\", \"Merender outro ... 50%\", \"Merender outro ... 58%\", \"Merender outro ... 66%\", \"Merender outro ... 75%\", \"Merender outro ... 83%\", \"Merender outro ... 91%\", \"Merender outro ... 100%\", \"Menempel audio ...\", \"Video outro siap (0.2 MB).\"], \"created\": 1790931334.4959576, \"updated\": 1790931336.446368}]"
+}

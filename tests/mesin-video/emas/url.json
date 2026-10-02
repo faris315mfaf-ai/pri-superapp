@@ -1,0 +1,465 @@
+{
+ "bawaan": [
+  {
+   "url": "http://127.0.0.1:8000/health",
+   "error": "Pakai link situs video (Instagram, TikTok, ...), bukan alamat IP."
+  },
+  {
+   "url": "http://10.0.0.1/a.mp4",
+   "error": "Pakai link situs video (Instagram, TikTok, ...), bukan alamat IP."
+  },
+  {
+   "url": "http://localhost/a.mp4",
+   "error": "Link ini bukan dari situs video yang didukung (Instagram, TikTok, YouTube, Facebook, X, Threads). Unggah berkasnya lewat pilihan “File”."
+  },
+  {
+   "url": "http://supabase-db:5432/",
+   "error": "Link ini bukan dari situs video yang didukung (Instagram, TikTok, YouTube, Facebook, X, Threads). Unggah berkasnya lewat pilihan “File”."
+  },
+  {
+   "url": "http://pri-redis:6379/",
+   "error": "Link ini bukan dari situs video yang didukung (Instagram, TikTok, YouTube, Facebook, X, Threads). Unggah berkasnya lewat pilihan “File”."
+  },
+  {
+   "url": "file:///etc/passwd",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "ftp://instagram.com/a.mp4",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "https://evil.example/a.mp4",
+   "error": "Link ini bukan dari situs video yang didukung (Instagram, TikTok, YouTube, Facebook, X, Threads). Unggah berkasnya lewat pilihan “File”."
+  },
+  {
+   "url": "https://instagram.com.evil.example/reel/x",
+   "error": "Link ini bukan dari situs video yang didukung (Instagram, TikTok, YouTube, Facebook, X, Threads). Unggah berkasnya lewat pilihan “File”."
+  },
+  {
+   "url": "https://user:pass@www.instagram.com/reel/x",
+   "error": "Link video tidak boleh memuat nama pengguna atau sandi."
+  },
+  {
+   "url": "http://[::1]/a.mp4",
+   "error": "Pakai link situs video (Instagram, TikTok, ...), bukan alamat IP."
+  },
+  {
+   "url": "https://jebakan.instagram.com/reel/x",
+   "error": "Link ini mengarah ke alamat yang tidak diizinkan."
+  },
+  {
+   "url": "https://www.instagram.com/reel/ABC123/",
+   "ok": "https://www.instagram.com/reel/ABC123/"
+  },
+  {
+   "url": "https://vt.tiktok.com/ZS123/",
+   "ok": "https://vt.tiktok.com/ZS123/"
+  },
+  {
+   "url": "HTTPS://WWW.Instagram.COM/reel/x",
+   "ok": "HTTPS://WWW.Instagram.COM/reel/x"
+  },
+  {
+   "url": "https://instagram.com./reel/x",
+   "ok": "https://instagram.com./reel/x"
+  },
+  {
+   "url": "https://cgnat.tiktok.com/x",
+   "error": "Link ini mengarah ke alamat yang tidak diizinkan."
+  },
+  {
+   "url": "https://v6.tiktok.com/x",
+   "error": "Link ini mengarah ke alamat yang tidak diizinkan."
+  },
+  {
+   "url": "https://mapped.tiktok.com/x",
+   "error": "Link ini mengarah ke alamat yang tidak diizinkan."
+  },
+  {
+   "url": "https://ula.tiktok.com/x",
+   "error": "Link ini mengarah ke alamat yang tidak diizinkan."
+  },
+  {
+   "url": "https://campur.tiktok.com/x",
+   "error": "Link ini mengarah ke alamat yang tidak diizinkan."
+  },
+  {
+   "url": "https://publik6.tiktok.com/x",
+   "ok": "https://publik6.tiktok.com/x"
+  },
+  {
+   "url": "https://mati.tiktok.com/x",
+   "error": "Situs sumbernya tidak bisa dihubungi dari server ini."
+  },
+  {
+   "url": "https://mc.tiktok.com/x",
+   "ok": "https://mc.tiktok.com/x"
+  },
+  {
+   "url": "http://[::ffff:127.0.0.1]/",
+   "error": "Pakai link situs video (Instagram, TikTok, ...), bukan alamat IP."
+  },
+  {
+   "url": "http://[::1",
+   "error": "Link video tidak sah."
+  },
+  {
+   "url": "http://::1]/",
+   "error": "Link video tidak sah."
+  },
+  {
+   "url": "http://2130706433/",
+   "error": "Link ini bukan dari situs video yang didukung (Instagram, TikTok, YouTube, Facebook, X, Threads). Unggah berkasnya lewat pilihan “File”."
+  },
+  {
+   "url": "https://www.youtube.com:443/watch?v=1",
+   "ok": "https://www.youtube.com:443/watch?v=1"
+  },
+  {
+   "url": "  https://vt.tiktok.com/ZS123/  ",
+   "ok": "https://vt.tiktok.com/ZS123/"
+  },
+  {
+   "url": "javascript:alert(1)",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": null,
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "https://@instagram.com/reel/x",
+   "ok": "https://@instagram.com/reel/x"
+  },
+  {
+   "url": "https://user@instagram.com/x",
+   "error": "Link video tidak boleh memuat nama pengguna atau sandi."
+  },
+  {
+   "url": "https://instagram.com:pass@evil.example/",
+   "error": "Link video tidak boleh memuat nama pengguna atau sandi."
+  },
+  {
+   "url": "//instagram.com/reel/x",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "https://ｉｎｓｔａｇｒａｍ.com/x",
+   "error": "Link ini bukan dari situs video yang didukung (Instagram, TikTok, YouTube, Facebook, X, Threads). Unggah berkasnya lewat pilihan “File”."
+  },
+  {
+   "url": "https://instagram.com℀.evil/",
+   "error": "Link video tidak sah."
+  },
+  {
+   "url": "https://[v1.abc]/x",
+   "error": "Link ini bukan dari situs video yang didukung (Instagram, TikTok, YouTube, Facebook, X, Threads). Unggah berkasnya lewat pilihan “File”."
+  },
+  {
+   "url": "https://[v1.]/x",
+   "error": "Link video tidak sah."
+  },
+  {
+   "url": "https://[1.2.3.4]/x",
+   "error": "Link video tidak sah."
+  },
+  {
+   "url": "https://x[::1]/",
+   "error": "Link video tidak sah."
+  },
+  {
+   "url": "https://[::1]x/",
+   "error": "Link video tidak sah."
+  },
+  {
+   "url": "https://www.tik\ttok.com/x",
+   "ok": "https://www.tik\ttok.com/x"
+  },
+  {
+   "url": "https://WWW.TIKTOK.COM.:8080/x",
+   "ok": "https://WWW.TIKTOK.COM.:8080/x"
+  },
+  {
+   "url": "https:/www.tiktok.com/x",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "https:www.tiktok.com",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "1https://www.tiktok.com/x",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "\u0000\u001f https://youtu.be/x",
+   "ok": "\u0000\u001f https://youtu.be/x"
+  },
+  {
+   "url": "https://[fe80::1%25eth0]/x",
+   "error": "Pakai link situs video (Instagram, TikTok, ...), bukan alamat IP."
+  },
+  {
+   "url": "https://instagram.com#@evil.example/",
+   "ok": "https://instagram.com#@evil.example/"
+  },
+  {
+   "url": "https://evil.example\\@instagram.com/",
+   "error": "Link video tidak boleh memuat nama pengguna atau sandi."
+  }
+ ],
+ "semua": [
+  {
+   "url": "http://127.0.0.1:8000/health",
+   "error": "Pakai link situs video (Instagram, TikTok, ...), bukan alamat IP."
+  },
+  {
+   "url": "http://10.0.0.1/a.mp4",
+   "error": "Pakai link situs video (Instagram, TikTok, ...), bukan alamat IP."
+  },
+  {
+   "url": "http://localhost/a.mp4",
+   "error": "Link ini mengarah ke alamat yang tidak diizinkan."
+  },
+  {
+   "url": "http://supabase-db:5432/",
+   "ok": "http://supabase-db:5432/"
+  },
+  {
+   "url": "http://pri-redis:6379/",
+   "ok": "http://pri-redis:6379/"
+  },
+  {
+   "url": "file:///etc/passwd",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "ftp://instagram.com/a.mp4",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "https://evil.example/a.mp4",
+   "ok": "https://evil.example/a.mp4"
+  },
+  {
+   "url": "https://instagram.com.evil.example/reel/x",
+   "ok": "https://instagram.com.evil.example/reel/x"
+  },
+  {
+   "url": "https://user:pass@www.instagram.com/reel/x",
+   "error": "Link video tidak boleh memuat nama pengguna atau sandi."
+  },
+  {
+   "url": "http://[::1]/a.mp4",
+   "error": "Pakai link situs video (Instagram, TikTok, ...), bukan alamat IP."
+  },
+  {
+   "url": "https://jebakan.instagram.com/reel/x",
+   "error": "Link ini mengarah ke alamat yang tidak diizinkan."
+  },
+  {
+   "url": "https://www.instagram.com/reel/ABC123/",
+   "ok": "https://www.instagram.com/reel/ABC123/"
+  },
+  {
+   "url": "https://vt.tiktok.com/ZS123/",
+   "ok": "https://vt.tiktok.com/ZS123/"
+  },
+  {
+   "url": "HTTPS://WWW.Instagram.COM/reel/x",
+   "ok": "HTTPS://WWW.Instagram.COM/reel/x"
+  },
+  {
+   "url": "https://instagram.com./reel/x",
+   "ok": "https://instagram.com./reel/x"
+  },
+  {
+   "url": "https://cgnat.tiktok.com/x",
+   "error": "Link ini mengarah ke alamat yang tidak diizinkan."
+  },
+  {
+   "url": "https://v6.tiktok.com/x",
+   "error": "Link ini mengarah ke alamat yang tidak diizinkan."
+  },
+  {
+   "url": "https://mapped.tiktok.com/x",
+   "error": "Link ini mengarah ke alamat yang tidak diizinkan."
+  },
+  {
+   "url": "https://ula.tiktok.com/x",
+   "error": "Link ini mengarah ke alamat yang tidak diizinkan."
+  },
+  {
+   "url": "https://campur.tiktok.com/x",
+   "error": "Link ini mengarah ke alamat yang tidak diizinkan."
+  },
+  {
+   "url": "https://publik6.tiktok.com/x",
+   "ok": "https://publik6.tiktok.com/x"
+  },
+  {
+   "url": "https://mati.tiktok.com/x",
+   "error": "Situs sumbernya tidak bisa dihubungi dari server ini."
+  },
+  {
+   "url": "https://mc.tiktok.com/x",
+   "ok": "https://mc.tiktok.com/x"
+  },
+  {
+   "url": "http://[::ffff:127.0.0.1]/",
+   "error": "Pakai link situs video (Instagram, TikTok, ...), bukan alamat IP."
+  },
+  {
+   "url": "http://[::1",
+   "error": "Link video tidak sah."
+  },
+  {
+   "url": "http://::1]/",
+   "error": "Link video tidak sah."
+  },
+  {
+   "url": "http://2130706433/",
+   "ok": "http://2130706433/"
+  },
+  {
+   "url": "https://www.youtube.com:443/watch?v=1",
+   "ok": "https://www.youtube.com:443/watch?v=1"
+  },
+  {
+   "url": "  https://vt.tiktok.com/ZS123/  ",
+   "ok": "https://vt.tiktok.com/ZS123/"
+  },
+  {
+   "url": "javascript:alert(1)",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": null,
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "https://@instagram.com/reel/x",
+   "ok": "https://@instagram.com/reel/x"
+  },
+  {
+   "url": "https://user@instagram.com/x",
+   "error": "Link video tidak boleh memuat nama pengguna atau sandi."
+  },
+  {
+   "url": "https://instagram.com:pass@evil.example/",
+   "error": "Link video tidak boleh memuat nama pengguna atau sandi."
+  },
+  {
+   "url": "//instagram.com/reel/x",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "https://ｉｎｓｔａｇｒａｍ.com/x",
+   "ok": "https://ｉｎｓｔａｇｒａｍ.com/x"
+  },
+  {
+   "url": "https://instagram.com℀.evil/",
+   "error": "Link video tidak sah."
+  },
+  {
+   "url": "https://[v1.abc]/x",
+   "ok": "https://[v1.abc]/x"
+  },
+  {
+   "url": "https://[v1.]/x",
+   "error": "Link video tidak sah."
+  },
+  {
+   "url": "https://[1.2.3.4]/x",
+   "error": "Link video tidak sah."
+  },
+  {
+   "url": "https://x[::1]/",
+   "error": "Link video tidak sah."
+  },
+  {
+   "url": "https://[::1]x/",
+   "error": "Link video tidak sah."
+  },
+  {
+   "url": "https://www.tik\ttok.com/x",
+   "ok": "https://www.tik\ttok.com/x"
+  },
+  {
+   "url": "https://WWW.TIKTOK.COM.:8080/x",
+   "ok": "https://WWW.TIKTOK.COM.:8080/x"
+  },
+  {
+   "url": "https:/www.tiktok.com/x",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "https:www.tiktok.com",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "1https://www.tiktok.com/x",
+   "error": "Link video harus diawali http:// atau https://"
+  },
+  {
+   "url": "\u0000\u001f https://youtu.be/x",
+   "ok": "\u0000\u001f https://youtu.be/x"
+  },
+  {
+   "url": "https://[fe80::1%25eth0]/x",
+   "error": "Pakai link situs video (Instagram, TikTok, ...), bukan alamat IP."
+  },
+  {
+   "url": "https://instagram.com#@evil.example/",
+   "ok": "https://instagram.com#@evil.example/"
+  },
+  {
+   "url": "https://evil.example\\@instagram.com/",
+   "error": "Link video tidak boleh memuat nama pengguna atau sandi."
+  }
+ ],
+ "dns": {
+  "jebakan.instagram.com": [
+   "10.0.0.5"
+  ],
+  "cgnat.tiktok.com": [
+   "100.64.1.1"
+  ],
+  "v6.tiktok.com": [
+   "::1"
+  ],
+  "mapped.tiktok.com": [
+   "::ffff:127.0.0.1"
+  ],
+  "ula.tiktok.com": [
+   "fd00::1"
+  ],
+  "campur.tiktok.com": [
+   "157.240.1.1",
+   "192.168.0.1"
+  ],
+  "publik6.tiktok.com": [
+   "2a03:2880:f12f:83:face:b00c:0:25de"
+  ],
+  "mc.tiktok.com": [
+   "224.0.0.1"
+  ],
+  "localhost": [
+   "127.0.0.1",
+   "::1"
+  ],
+  "evil.example": [
+   "93.184.216.34"
+  ],
+  "mati.tiktok.com": null
+ }
+}
