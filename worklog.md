@@ -191,3 +191,14 @@ Stage Summary:
 - Aplikasi PRI SuperApp SELESAI dan terverifikasi browser end-to-end: lint 0 error, tsc 0 error, semua API 200, LLM proses-video live
 - Lapisan migrasi Supabase/n8n siap: ganti isi src/services/index.ts saja, UI & data tidak tersentuh
 - Struktur sesuai prompt: src/data (dummy), src/services, src/features/{auth,dashboard,qc-konten,tv-rakyat,notifikasi,profil}, src/components, src/hooks, src/types, token desain di globals.css
+
+---
+Task ID: Setup Mac + Uji Pipeline
+Tanggal: 2026-10-05
+Agent: Claude (Opus 4.8)
+
+Work Log:
+- Rapikan working copy di Mac: hapus folder duplikat, pull ke origin/main terbaru
+- .env.local disalin dari VPS → Mac dev konek ke Supabase live VPS (db.pri-superapp.com)
+- Pasang akses SSH key ke VPS (alias `ssh pri-vps`), tanpa password
+- Uji aman pipeline: commit file .md ini untuk memastikan push + CI jalan TANPA memicu deploy (sesuai paths-ignore di deploy-vps.yml)
