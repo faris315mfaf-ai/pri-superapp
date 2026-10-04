@@ -31,7 +31,6 @@ const URUTAN_PLATFORM = [
   "facebook",
   "youtube",
   "threads",
-  "bilibili",
 ] as const;
 
 function tanggalWib(): string {

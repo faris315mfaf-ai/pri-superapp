@@ -33,7 +33,6 @@ const URUTAN: [string, string][] = [
   ["facebook", "FACEBOOK"],
   ["youtube", "YOUTUBE"],
   ["threads", "THREADS"],
-  ["bilibili", "BILIBILI"],
 ];
 const KENDALA_MAKS = 600;
 
@@ -85,7 +84,6 @@ export function RangkumanLink({ userId, judul }: { /** Rekap anggota lain (admin
             facebook: [],
             youtube: [],
             threads: [],
-            bilibili: [],
           },
           jumlah: 0,
           menunggu: [],

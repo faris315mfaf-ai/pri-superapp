@@ -55,7 +55,7 @@ const LABEL_PLATFORM: Record<string, string> = {
   twitter: "X",
   bilibili: "Bilibili",
 };
-const URUTAN_PLATFORM = ["tiktok", "instagram", "youtube", "facebook", "twitter", "threads", "bilibili"];
+const URUTAN_PLATFORM = ["tiktok", "instagram", "youtube", "facebook", "twitter", "threads"];
 
 const angka = (v: number | null | undefined) => (v == null ? "–" : formatAngkaRingkas(v));
 

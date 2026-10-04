@@ -23,7 +23,7 @@ import { jamWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { RangkumanLink } from "./rangkuman-link";
 
-const PLATFORM = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter", "bilibili"];
+const PLATFORM = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"];
 
 function tanggalWib(): string {
   return new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);

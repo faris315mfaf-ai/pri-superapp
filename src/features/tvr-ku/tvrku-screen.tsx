@@ -99,7 +99,6 @@ const PLATFORM_TVR = [
   { id: "facebook", label: "Facebook" },
   { id: "threads", label: "Threads" },
   { id: "twitter", label: "X" },
-  { id: "bilibili", label: "Bilibili" },
 ] as const;
 
 const NAMA_HARI_PENDEK = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
@@ -1079,14 +1078,27 @@ export function TvrKuScreen({
               },
             ]
           : []),
-        { id: "unggah-sosmed", segmen: "Unggah & Jadwal", judul: "Unggah ke Sosmed Saya", ikon: Clapperboard, render: () => (
-      <FadeInUp delay={0.1}>
-        <SectionTitle judul="Unggah ke Sosmed Saya" />
-        <div className="mt-2.5">
-          <UnggahSosmedSaya />
-        </div>
-      </FadeInUp>
-        ) },
+        // "Unggah ke Sosmed Saya" disembunyikan untuk akun ber-Auto Edit
+        // (faris dkini unggah lewat Stok di dalam Edit Otomatis). Akun lain
+        // tetap memakainya seperti biasa.
+        ...(bolehEditOtomatis
+          ? []
+          : [
+              {
+                id: "unggah-sosmed",
+                segmen: "Unggah & Jadwal",
+                judul: "Unggah ke Sosmed Saya",
+                ikon: Clapperboard,
+                render: () => (
+                  <FadeInUp delay={0.1}>
+                    <SectionTitle judul="Unggah ke Sosmed Saya" />
+                    <div className="mt-2.5">
+                      <UnggahSosmedSaya />
+                    </div>
+                  </FadeInUp>
+                ),
+              },
+            ]),
         // Versi hasil render Studio yang ditujukan untuk akun ini — diunduh
         // lalu diunggah manual (7 Sep 2026). Hanya anggota PALUGODAM yang
         // punya versi sendiri, jadi seksinya disembunyikan dari divisi lain.

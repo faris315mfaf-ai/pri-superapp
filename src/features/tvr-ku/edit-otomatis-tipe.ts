@@ -90,6 +90,8 @@ export type StokTvr = {
   durasi: number | null;
   size: number | null;
   sumber: "render" | "unggah";
+  /** Waktu (detik epoch) video terkirim ke sosmed; null = belum pernah. */
+  terunggah: number | null;
 };
 
 export type RingkasTvr = {

@@ -506,6 +506,9 @@ function ringkasStok(job: Job): Record<string, unknown> {
     durasi: job.durasi ?? null,
     size: job.size ?? null,
     sumber: String(job.sumber_stok ?? "render"),
+    // Waktu (detik) video ini terkirim ke sosmed; null = belum. Video yang
+    // sudah terunggah TIDAK dihapus — tetap di stok sampai masa simpannya habis.
+    terunggah: typeof job.terunggah === "number" ? job.terunggah : null,
   };
 }
 
@@ -826,6 +829,14 @@ export function pasangRuteTvr(r: Router): void {
       throw new GalatHttp(404, "Berkas videonya sudah tidak ada (lewat masa simpan).");
     }
     return kirimBerkas(pm, berkas, "video/mp4", `tvr-${st.job_id}.mp4`);
+  });
+
+  r.post(`${A}/stok/{id}/terunggah`, async (pm) => {
+    // Tandai sudah dikirim ke sosmed (dipanggil setelah upload-post sukses).
+    const p = penggunaTvr(pm);
+    const st = await stokMilik(akun(p), pm.params.id);
+    await tulisStatus(st.job_id, { terunggah: Date.now() / 1000, log: "Terkirim ke sosmed." });
+    return stokDanAntrean(p);
   });
 
   r.delete(`${A}/stok/{id}`, async (pm) => {

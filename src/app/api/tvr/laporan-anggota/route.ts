@@ -17,7 +17,7 @@ import { semuaBaris } from "@/lib/semua-baris";
 
 export const dynamic = "force-dynamic";
 
-const PLATFORM = new Set(["instagram", "tiktok", "youtube", "facebook", "threads", "twitter", "bilibili", "website"]);
+const PLATFORM = new Set(["instagram", "tiktok", "youtube", "facebook", "threads", "twitter", "website"]);
 
 type PenggunaGerbang = { role?: string; jabatan?: string | null; divisi?: string | null; posisi_divisi?: string | null };
 function bolehKelola(u: PenggunaGerbang): boolean {
@@ -36,7 +36,7 @@ async function pastikanTarget(u: PenggunaGerbang, userId: number): Promise<{ nam
   if (hanyaPalugodam(u) && divisi.trim() !== DIVISI_PALUGODAM) galat("Admin PALUGODAM hanya bisa mengelola anggota Divisi PALUGODAM.", 403);
   return { nama: String(data?.nama ?? ""), divisi };
 }
-/** Validasi link video (https + platform video yang dikenal, termasuk Bilibili). */
+/** Validasi link video (https + platform video yang dikenal). */
 function sahkanLink(url: string): string {
   let host = "";
   let bersih = url.trim();
@@ -48,8 +48,8 @@ function sahkanLink(url: string): string {
   } catch {
     galat("Link video tidak valid.");
   }
-  const sah = /(instagram|tiktok|youtube|youtu\.be|facebook|fb\.watch|threads|twitter|x|bilibili)\.(com|net|be|tv)$/i.test(host) || /^(youtu\.be|fb\.watch|x\.com|b23\.tv)$/i.test(host);
-  if (!sah) galat("Link harus menuju Instagram, TikTok, YouTube, Facebook, Threads, X, atau Bilibili.");
+  const sah = /(instagram|tiktok|youtube|youtu\.be|facebook|fb\.watch|threads|twitter|x)\.(com|net|be|tv)$/i.test(host) || /^(youtu\.be|fb\.watch|x\.com)$/i.test(host);
+  if (!sah) galat("Link harus menuju Instagram, TikTok, YouTube, Facebook, Threads, atau X.");
   return bersih.slice(0, 500);
 }
 function galat(pesan: string, status = 400): never {

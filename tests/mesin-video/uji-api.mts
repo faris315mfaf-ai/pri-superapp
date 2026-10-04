@@ -586,6 +586,12 @@ await uji("tvr antrean satu video per akun dan render", async () => {
   pastikan(stok2.length === 2 && stok2.some((s) => s.sumber === "unggah"), JSON.stringify(stok2));
   pastikan(stok2.some((s) => s.judul === "monas keren"), JSON.stringify(stok2));
 
+  // Tandai item sudah terunggah: DIBERI TANDA, tetap ada di stok (tak dihapus).
+  const rMark = await minta("POST", `/api/tvr/stok/${item.id}/terunggah`, { id: a });
+  pastikan(rMark.status === 200, rMark.teks);
+  const ditandai = (rMark.json().stok as { id: string; terunggah: number | null }[]).find((s) => s.id === item.id);
+  pastikan(ditandai !== undefined && typeof ditandai.terunggah === "number", JSON.stringify(ditandai));
+
   // Hapus satu item stok (hasil render): berkas & catatannya hilang.
   const folderItem = job.jobPath(item.id);
   pastikan(fs.existsSync(folderItem));
