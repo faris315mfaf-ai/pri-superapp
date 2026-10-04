@@ -26,6 +26,7 @@ import {
   Link2,
   Loader2,
   Pencil,
+  Play,
   Plus,
   RotateCcw,
   Send,
@@ -84,10 +85,13 @@ export function EditOtomatisTvr() {
   // Item yang sedang dilanjutkan ke upload-post (video diambil sebagai blob).
   const [unggahItem, setUnggahItem] = useState<{ id: string; judul: string; file: File } | null>(null);
   const [menyiapkan, setMenyiapkan] = useState("");
-  // Item stok yang detailnya dibuka (panel samping) + videonya (blob) untuk
-  // pratinjau/unduh/upload — diambil sekali saat dibuka.
+  // Item stok yang detailnya dibuka (panel samping). Saat dibuka hanya
+  // THUMBNAIL yang diambil (ringan); video penuh baru diambil saat thumbnail
+  // diklik (mainkan) / Unduh / Upload — hemat kuota & cepat.
   const [bukaItem, setBukaItem] = useState<StokTvr | null>(null);
-  const [preview, setPreview] = useState<{ id: string; url: string; file: File } | null>(null);
+  const [preview, setPreview] = useState<{ id: string; thumbUrl: string; videoUrl: string | null; file: File | null } | null>(null);
+  const [mainVideo, setMainVideo] = useState(false);
+  const [ambilVideo, setAmbilVideo] = useState(false);
   const [mengunduh, setMengunduh] = useState(false);
   const tabAktifRef = useRefTabAktif();
 
@@ -292,50 +296,89 @@ export function EditOtomatisTvr() {
 
   function lepasPreview() {
     setPreview((lama) => {
-      if (lama) URL.revokeObjectURL(lama.url);
+      if (lama) {
+        URL.revokeObjectURL(lama.thumbUrl);
+        if (lama.videoUrl) URL.revokeObjectURL(lama.videoUrl);
+      }
       return null;
     });
   }
 
-  // Buka panel detail satu item: ambil videonya sekali (blob) untuk pratinjau,
-  // unduh, dan upload — supaya tak berulang-ulang menarik dari server.
+  // Buka panel detail: cukup ambil THUMBNAIL (ringan). Video penuh baru
+  // ditarik saat thumbnail diklik / Unduh / Upload.
   async function bukaDetail(item: StokTvr) {
     if (menyiapkan) return;
     setBukaItem(item);
     setUnggahItem(null);
+    setMainVideo(false);
     setPesan("");
     if (preview?.id === item.id) return;
     lepasPreview();
     setMenyiapkan(item.id);
     try {
-      const res = await apiFetch(`/api/tvr/stok/${item.id}/berkas`, { cache: "no-store" });
-      if (!res.ok) throw new Error(pesanGalat(res.status, await bacaJson(res), "Video gagal diambil."));
+      const res = await apiFetch(`/api/tvr/stok/${item.id}/thumb`, { cache: "no-store" });
+      if (!res.ok) throw new Error(pesanGalat(res.status, await bacaJson(res), "Pratinjau gagal dimuat."));
       const blob = await res.blob();
-      const file = new File([blob], `${item.judul || "video"}.mp4`, { type: "video/mp4" });
-      setPreview({ id: item.id, url: URL.createObjectURL(blob), file });
+      setPreview({ id: item.id, thumbUrl: URL.createObjectURL(blob), videoUrl: null, file: null });
+    } catch (e) {
+      setPesan(e instanceof Error ? e.message : "Pratinjau gagal dimuat.");
+    } finally {
+      setMenyiapkan("");
+    }
+  }
+
+  /** Ambil video penuh sekali; kembalikan File-nya (null bila gagal). */
+  async function ambilBerkas(): Promise<File | null> {
+    if (!bukaItem) return null;
+    if (preview?.id === bukaItem.id && preview.file) return preview.file;
+    const res = await apiFetch(`/api/tvr/stok/${bukaItem.id}/berkas`, { cache: "no-store" });
+    if (!res.ok) throw new Error(pesanGalat(res.status, await bacaJson(res), "Video gagal diambil."));
+    const blob = await res.blob();
+    const file = new File([blob], `${bukaItem.judul || "video"}.mp4`, { type: "video/mp4" });
+    const videoUrl = URL.createObjectURL(blob);
+    setPreview((lama) => (lama && lama.id === bukaItem.id ? { ...lama, videoUrl, file } : lama));
+    return file;
+  }
+
+  // Klik thumbnail → muat video lalu putar di tempat.
+  async function mainkan() {
+    if (ambilVideo || !bukaItem) return;
+    setAmbilVideo(true);
+    setPesan("");
+    try {
+      await ambilBerkas();
+      setMainVideo(true);
     } catch (e) {
       setPesan(e instanceof Error ? e.message : "Video gagal diambil.");
     } finally {
-      setMenyiapkan("");
+      setAmbilVideo(false);
     }
   }
 
   function tutupDetail() {
     setBukaItem(null);
     setUnggahItem(null);
+    setMainVideo(false);
     lepasPreview();
   }
 
-  function unduh() {
-    if (!preview || mengunduh) return;
+  async function unduh() {
+    if (mengunduh || !bukaItem) return;
     setMengunduh(true);
+    setPesan("");
     try {
+      const file = await ambilBerkas();
+      if (!file) return;
+      const url = URL.createObjectURL(file);
       const a = document.createElement("a");
-      a.href = preview.url;
-      a.download = preview.file.name;
+      a.href = url;
+      a.download = file.name;
       document.body.appendChild(a);
       a.click();
       a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (e) {
+      setPesan(e instanceof Error ? e.message : "Video gagal diunduh.");
     } finally {
       setMengunduh(false);
     }
@@ -368,9 +411,18 @@ export function EditOtomatisTvr() {
     }
   }
 
-  function mulaiUnggah() {
-    if (!preview || !bukaItem) return;
-    setUnggahItem({ id: bukaItem.id, judul: bukaItem.judul, file: preview.file });
+  async function mulaiUnggah() {
+    if (ambilVideo || !bukaItem) return;
+    setAmbilVideo(true);
+    setPesan("");
+    try {
+      const file = await ambilBerkas();
+      if (file) setUnggahItem({ id: bukaItem.id, judul: bukaItem.judul, file });
+    } catch (e) {
+      setPesan(e instanceof Error ? e.message : "Video gagal diambil.");
+    } finally {
+      setAmbilVideo(false);
+    }
   }
 
   function templateTersimpan(t: KeadaanTemplateTvr) {
@@ -473,14 +525,17 @@ export function EditOtomatisTvr() {
           hapusId={hapusId}
           menyiapkan={menyiapkan}
           mengunduh={mengunduh}
+          mainVideo={mainVideo}
+          ambilVideo={ambilVideo}
           jenisSumber={batas.jenis_sumber}
           tambahStok={tambahStok}
           bukaItem={bukaItem}
           preview={preview}
           onBuka={(it) => void bukaDetail(it)}
           onTutupDetail={tutupDetail}
-          onUnduh={unduh}
-          onUpload={mulaiUnggah}
+          onMainkan={() => void mainkan()}
+          onUnduh={() => void unduh()}
+          onUpload={() => void mulaiUnggah()}
           onHapus={(id) => void hapusStok(id)}
           unggahItem={unggahItem}
           onTutupUnggah={() => setUnggahItem(null)}
@@ -760,12 +815,15 @@ type SeksiStokProps = {
   hapusId: string;
   menyiapkan: string;
   mengunduh: boolean;
+  mainVideo: boolean;
+  ambilVideo: boolean;
   jenisSumber: string[];
   tambahStok: (f: File | null) => void;
   bukaItem: StokTvr | null;
-  preview: { id: string; url: string; file: File } | null;
+  preview: { id: string; thumbUrl: string; videoUrl: string | null; file: File | null } | null;
   onBuka: (it: StokTvr) => void;
   onTutupDetail: () => void;
+  onMainkan: () => void;
   onUnduh: () => void;
   onUpload: () => void;
   onHapus: (id: string) => void;
@@ -835,13 +893,32 @@ function SeksiStok(p: SeksiStokProps) {
             </div>
 
             {p.preview && p.preview.id === p.bukaItem.id ? (
-              <video
-                src={p.preview.url}
-                controls
-                playsInline
-                preload="metadata"
-                className="mx-auto aspect-[9/16] max-h-[52vh] w-full max-w-[280px] rounded-2xl bg-black"
-              />
+              p.mainVideo && p.preview.videoUrl ? (
+                <video
+                  src={p.preview.videoUrl}
+                  controls
+                  autoPlay
+                  playsInline
+                  preload="metadata"
+                  className="mx-auto aspect-[9/16] max-h-[52vh] w-full max-w-[280px] rounded-2xl bg-black"
+                />
+              ) : (
+                // Thumbnail dulu; klik tombol putar untuk memuat & memutar video.
+                <button
+                  type="button"
+                  onClick={p.onMainkan}
+                  disabled={p.ambilVideo}
+                  aria-label="Putar video"
+                  className="group relative mx-auto block aspect-[9/16] max-h-[52vh] w-full max-w-[280px] overflow-hidden rounded-2xl bg-black"
+                >
+                  <img src={p.preview.thumbUrl} alt="" className="h-full w-full object-contain" />
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/25 transition-colors group-hover:bg-black/15">
+                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-pri shadow-lg backdrop-blur-sm">
+                      {p.ambilVideo ? <Loader2 className="h-6 w-6 animate-spin" /> : <Play className="ml-0.5 h-6 w-6 fill-current" />}
+                    </span>
+                  </span>
+                </button>
+              )
             ) : (
               <div className="mx-auto flex aspect-[9/16] max-h-[52vh] w-full max-w-[280px] items-center justify-center rounded-2xl bg-black/80">
                 <Loader2 className="h-6 w-6 animate-spin text-white/70" />
@@ -857,7 +934,7 @@ function SeksiStok(p: SeksiStokProps) {
               <button
                 type="button"
                 onClick={p.onUnduh}
-                disabled={!p.preview || p.mengunduh}
+                disabled={!p.preview || p.mengunduh || p.ambilVideo}
                 className="glass btn-tekan flex h-11 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-bold text-teks-utama disabled:opacity-50"
               >
                 <Download className="h-4 w-4" /> Unduh
@@ -865,7 +942,7 @@ function SeksiStok(p: SeksiStokProps) {
               <button
                 type="button"
                 onClick={p.onUpload}
-                disabled={!p.preview}
+                disabled={!p.preview || p.ambilVideo}
                 className="btn-tekan flex h-11 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-bold text-white disabled:opacity-50"
                 style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
               >

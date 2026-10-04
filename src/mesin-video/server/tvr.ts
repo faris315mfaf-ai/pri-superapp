@@ -831,6 +831,34 @@ export function pasangRuteTvr(r: Router): void {
     return kirimBerkas(pm, berkas, "video/mp4", `tvr-${st.job_id}.mp4`);
   });
 
+  r.get(`${A}/stok/{id}/thumb`, async (pm) => {
+    // Gambar sampul (1 frame) untuk ditampilkan sebelum video dimuat. Dibuat
+    // sekali lalu di-cache di folder job (ikut terhapus bersama jobnya).
+    const p = penggunaTvr(pm);
+    const st = await stokMilik(akun(p), pm.params.id);
+    const folder = jobPath(st.job_id);
+    const video = path.join(folder, aman(String(st.output)));
+    if (!fs.existsSync(video)) throw new GalatHttp(404, "Berkas videonya sudah tidak ada (lewat masa simpan).");
+    const thumb = path.join(folder, "thumb.jpg");
+    if (!fs.existsSync(thumb)) {
+      const dasar = ["-hide_banner", "-loglevel", "error", "-nostdin", "-y"];
+      const akhirCmd = ["-frames:v", "1", "-vf", "scale=360:-2", "-q:v", "4", thumb];
+      try {
+        // Lewati 0,5 dtk supaya tak kena frame hitam pembuka.
+        await jalankan(FFMPEG_BIN, [...dasar, "-ss", "0.5", "-i", video, ...akhirCmd], { timeout: 30_000 });
+      } catch {
+        // Video sangat pendek: ambil frame pertama tanpa seek.
+        try {
+          await jalankan(FFMPEG_BIN, [...dasar, "-i", video, ...akhirCmd], { timeout: 30_000 });
+        } catch {
+          // dibiarkan: dicek keberadaannya di bawah
+        }
+      }
+    }
+    if (!fs.existsSync(thumb)) throw new GalatHttp(404, "Pratinjau gagal dibuat.");
+    return kirimGambar(pm, fs.readFileSync(thumb), "image/jpeg");
+  });
+
   r.post(`${A}/stok/{id}/terunggah`, async (pm) => {
     // Tandai sudah dikirim ke sosmed (dipanggil setelah upload-post sukses).
     const p = penggunaTvr(pm);

@@ -564,6 +564,10 @@ await uji("tvr antrean satu video per akun dan render", async () => {
   pastikan((await minta("GET", "/api/tvr/jobs/saya", { id: b })).json().job?.status === "queued");
   const unduhan = await minta("GET", `/api/tvr/stok/${item.id}/berkas`, { id: a });
   pastikan(unduhan.status === 200 && unduhan.tipe === "video/mp4");
+  // Thumbnail: 1 frame JPEG, milik akun ini saja.
+  const thumb = await minta("GET", `/api/tvr/stok/${item.id}/thumb`, { id: a });
+  pastikan(thumb.status === 200 && thumb.tipe === "image/jpeg" && thumb.isi.subarray(0, 2).equals(Buffer.from([0xff, 0xd8])), `${thumb.status} ${thumb.tipe}`);
+  pastikan((await minta("GET", `/api/tvr/stok/${item.id}/thumb`, { id: b })).status === 404);
   const berkas = path.join(MEDIA, "hasil-tvr.mp4");
   fs.writeFileSync(berkas, unduhan.isi);
   const info = await media.probe(berkas);
