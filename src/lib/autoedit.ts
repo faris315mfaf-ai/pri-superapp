@@ -14,7 +14,8 @@
 import { request as mintaHttp } from "node:http";
 import { Readable } from "node:stream";
 import type { ReadableStream as AliranNode } from "node:stream/web";
-import { bolehEditOtomatisTvr } from "@/lib/peran";
+import { bolehEditOtomatisTvr, modulDibuka } from "@/lib/peran";
+import { jumlahAkunTerhubung } from "@/lib/koneksi-tvr";
 
 const HEADER_MASUK = ["content-type", "content-length", "range", "accept"];
 const HEADER_KELUAR = [
@@ -40,23 +41,46 @@ export function galatAutoEdit(status: number, detail: string): Response {
   return Response.json({ detail }, { status, headers: { "Cache-Control": "no-store" } });
 }
 
+type PenggunaGerbang =
+  | { id?: string | null; role?: string | null; ujiBeban?: boolean; modul_izin?: unknown }
+  | null
+  | undefined;
+
 /**
  * Keluarga rute layanan yang boleh dijangkau akun ini; kosong = tidak boleh.
  *   master (superadmin ikut: peran efektifnya master) → modul Auto Edit
  *     penuh ("video", "outro") + Edit Otomatis TVR Saya ("tvr").
- *   akun yang modul Edit Otomatis-nya dibuka master → "tvr" saja.
+ *   akun TVR Saya lain → "tvr" (5 Okt 2026). Di dalamnya hanya Stok Video
+ *     yang terbuka untuk semua; sisanya diperiksa bolehEditOtomatisServer.
  * Pengguna virtual uji beban tidak pernah boleh, dan id harus angka karena
  * menjadi nama pemilik berkas di layanan ("pri-<id>").
  */
-export function keluargaAutoEdit(
-  user:
-    | { id?: string | null; role?: string | null; ujiBeban?: boolean; modul_izin?: unknown }
-    | null
-    | undefined,
-): ReadonlySet<string> {
+export function keluargaAutoEdit(user: PenggunaGerbang): ReadonlySet<string> {
   if (!user || user.ujiBeban === true || !/^\d{1,12}$/.test(user.id ?? "")) return new Set();
   if (user.role === "master") return new Set(["video", "outro", "tvr"]);
-  return bolehEditOtomatisTvr(user) ? new Set(["tvr"]) : new Set();
+  // TVR Saya ditutup master untuk akun ini → Stok & Edit Otomatis ikut tertutup.
+  if (modulDibuka(user, "tvrku") === false) return new Set();
+  return new Set(["tvr"]);
+}
+
+/**
+ * Bagian layanan TVR yang terbuka untuk SEMUA akun TVR Saya (5 Okt 2026):
+ * Stok Video (daftar, tambah, berkas, sampul, tanda terunggah, hapus) dan
+ * ringkasan halaman. Template, sumber, tulisan, dan render butuh syarat
+ * Edit Otomatis.
+ */
+export function jalurStokTvr(jalur: string[]): boolean {
+  if (jalur[0] !== "tvr") return false;
+  return jalur[1] === "stok" || (jalur[1] === "ringkas" && jalur.length === 2);
+}
+
+/** Syarat Edit Otomatis di server — aturan yang sama dengan layar (lib/peran). */
+export async function bolehEditOtomatisServer(user: PenggunaGerbang): Promise<boolean> {
+  if (!user) return false;
+  if (user.role === "master" || modulDibuka(user, "autoedit") !== undefined) {
+    return bolehEditOtomatisTvr(user, null);
+  }
+  return bolehEditOtomatisTvr(user, await jumlahAkunTerhubung(Number(user.id)));
 }
 
 /** Teruskan permintaan ke layanan Auto Edit sebagai akun `idAkun`. */

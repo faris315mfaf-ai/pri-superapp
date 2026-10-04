@@ -19,7 +19,7 @@ import { RangkumanLink } from "./rangkuman-link";
 //    dan grafik laporan 7 hari terakhir.
 // ============================================================
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -31,6 +31,7 @@ import {
   ExternalLink,
   FileText,
   Globe,
+  GraduationCap,
   Hourglass,
   Link2,
   Loader2,
@@ -73,6 +74,7 @@ import {
   hubungkanSosmedTvr,
   sinkronSosmedTvr,
   type AnggotaKendali,
+  type KoneksiSosmedTvr,
 } from "@/services";
 import { jamWIB, urlProfilSosmed } from "@/lib/format";
 import type { KomponenIkon, User } from "@/types";
@@ -81,6 +83,9 @@ import { PanelTugasSaya } from "./tugas-saya";
 import { KirimVideoManual } from "./kirim-video-manual";
 import { UnggahSosmedSaya } from "./unggah-sosmed-saya";
 import { EditOtomatisTvr } from "./edit-otomatis-tvr";
+import { StokVideoTvr } from "./stok-video-tvr";
+import { KartuEditTerkunci, StatusKoneksiAkun } from "./status-koneksi-akun";
+import { mulaiTurTvr } from "@/lib/tur";
 import { AutoEditPanel } from "@/features/auto-edit/auto-edit-panel";
 import { bolehEditOtomatisTvr } from "@/lib/peran";
 import { VideoSiapUnggah } from "./video-siap-unggah";
@@ -599,8 +604,12 @@ export function TvrKuScreen({
   const bolehStudio = adalahAdminStudio(userAsli);
   // ACC ajuan komentar (3 Sep 2026): seluruh anggota Divisi PALUGODAM + pengurus.
   const bolehAccKomen = adalahPalugodam(userAsli);
-  // Edit Otomatis (30 Sep 2026): master, atau akun yang modulnya dibuka master.
-  const bolehEditOtomatis = bolehEditOtomatisTvr(userAsli);
+  // Status koneksi akun sosmed (5 Okt 2026): berapa yang terhubung sehat,
+  // mana yang perlu disambung ulang. Juga syarat Edit Otomatis (≥5 akun).
+  const [koneksi, setKoneksi] = useState<KoneksiSosmedTvr | null>(null);
+  const [galatKoneksi, setGalatKoneksi] = useState("");
+  // Edit Otomatis: master, dibuka master per akun, atau ≥5 akun terhubung.
+  const bolehEditOtomatis = bolehEditOtomatisTvr(userAsli, koneksi?.jumlah_terhubung);
   // Auto Edit penuh GODAM (1 Okt 2026, dulu dari Profil): khusus master
   // (superadmin ikut — peran efektifnya master); gerbang /api/autoedit
   // menegakkan aturan yang sama di server.
@@ -686,6 +695,24 @@ export function TvrKuScreen({
       hidup = false;
     };
   }, [muatUlang, versiSegar]);
+  // Status koneksi dimuat terpisah: penyedia sosmed lambat/gagal tidak boleh
+  // menahan KPI dan laporan. Server menyimpannya 10 menit.
+  useEffect(() => {
+    let hidup = true;
+    sinkronSosmedTvr()
+      .then((k) => {
+        if (!hidup) return;
+        setKoneksi(k);
+        setGalatKoneksi("");
+      })
+      .catch((e) => {
+        if (hidup) setGalatKoneksi(e instanceof Error ? e.message : "Penyedia sosmed tidak bisa dihubungi.");
+      });
+    return () => {
+      hidup = false;
+    };
+  }, [muatUlang, versiSegar]);
+
   // Gulir ke seksi yang diminta beranda ringkas — setelah data siap supaya
   // posisinya tidak bergeser lagi oleh kartu yang baru muncul.
   useEffect(() => {
@@ -707,12 +734,15 @@ export function TvrKuScreen({
 
   // Penautan sosmed sungguhan (spek 1.17): 1 pengguna = 1 profil penyedia.
   const [sedangHubung, setSedangHubung] = useState(false);
+  const menungguKembaliRef = useRef(false);
   async function hubungkanSosmed(platform?: string) {
     if (sedangHubung) return;
     setSedangHubung(true);
     try {
       const url = await hubungkanSosmedTvr(platform);
       window.open(url, "_blank", "noopener,noreferrer");
+      // Kembali dari tab login → status disegarkan sendiri (lihat efek di bawah).
+      menungguKembaliRef.current = true;
       // Facebook: upload-post hanya menerima HALAMAN (Page). Orang yang
       // memilih profil pribadi akan tersangkut tanpa tahu sebabnya —
       // jadi petunjuknya diberikan sebelum, bukan sesudah.
@@ -736,6 +766,8 @@ export function TvrKuScreen({
     try {
       // Tombol Segarkan: selalu tanya penyedia (lewati simpanan 10 menit).
       const hasil = await sinkronSosmedTvr({ segar: true });
+      setKoneksi(hasil);
+      setGalatKoneksi("");
       if (hasil.terhubung.length === 0) {
         toast("info", "Belum ada akun tertaut", "Tekan Hubungkan lalu login sosmedmu dulu.");
       } else {
@@ -753,6 +785,30 @@ export function TvrKuScreen({
       setSedangHubung(false);
     }
   }
+
+  // Kembali dari tab login sosmed → status koneksi disegarkan sekali, supaya
+  // anggota langsung melihat akunnya terhubung tanpa mencari tombol Segarkan.
+  useEffect(() => {
+    const kembali = () => {
+      if (document.visibilityState !== "visible" || !menungguKembaliRef.current) return;
+      menungguKembaliRef.current = false;
+      sinkronSosmedTvr({ segar: true })
+        .then((k) => {
+          setKoneksi(k);
+          setGalatKoneksi("");
+          setMuatUlang((n) => n + 1);
+        })
+        .catch(() => {
+          // Tombol Segarkan tetap tersedia.
+        });
+    };
+    document.addEventListener("visibilitychange", kembali);
+    window.addEventListener("focus", kembali);
+    return () => {
+      document.removeEventListener("visibilitychange", kembali);
+      window.removeEventListener("focus", kembali);
+    };
+  }, []);
 
   async function tambahWebsite(domain: string) {
     try {
@@ -874,9 +930,17 @@ export function TvrKuScreen({
           bawaanTerbuka
           keterangan="Sosmed & website TV Rakyat Anda"
         >
+        <StatusKoneksiAkun
+          koneksi={koneksi}
+          galat={galatKoneksi}
+          sedangHubung={sedangHubung}
+          onHubungkan={(platform) => void hubungkanSosmed(platform)}
+          onSegarkan={() => void segarkanTautan()}
+        />
         <div className="flex gap-2">
           <button
             type="button"
+            data-tur="tvr-tombol-hubungkan"
             disabled={sedangHubung}
             onClick={() => void hubungkanSosmed()}
             className="btn-tekan flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2 text-[12px] font-bold text-white disabled:opacity-60"
@@ -903,6 +967,7 @@ export function TvrKuScreen({
             type="button"
             disabled={sedangHubung}
             onClick={() => void segarkanTautan()}
+            data-tur="tvr-tombol-segarkan"
             aria-label="Segarkan akun terhubung"
             className="glass btn-tekan flex items-center justify-center rounded-xl px-3.5 disabled:opacity-60"
           >
@@ -1059,46 +1124,83 @@ export function TvrKuScreen({
               },
             ]
           : []),
-        ...(bolehEditOtomatis
-          ? [
-              {
-                id: "edit-otomatis",
-                segmen: "Unggah & Jadwal",
-                judul: "Edit Otomatis",
-                ikon: Clapperboard,
-                keterangan: "Template pribadi + edit video otomatis dengan antrean",
-                render: () => (
-                  <FadeInUp delay={0.08}>
-                    <SectionTitle judul="Edit Otomatis" />
-                    <div className="mt-2.5">
-                      <EditOtomatisTvr />
-                    </div>
-                  </FadeInUp>
-                ),
-              },
-            ]
-          : []),
-        // "Unggah ke Sosmed Saya" disembunyikan untuk akun ber-Auto Edit
-        // (faris dkini unggah lewat Stok di dalam Edit Otomatis). Akun lain
-        // tetap memakainya seperti biasa.
-        ...(bolehEditOtomatis
-          ? []
-          : [
-              {
-                id: "unggah-sosmed",
-                segmen: "Unggah & Jadwal",
-                judul: "Unggah ke Sosmed Saya",
-                ikon: Clapperboard,
-                render: () => (
-                  <FadeInUp delay={0.1}>
-                    <SectionTitle judul="Unggah ke Sosmed Saya" />
-                    <div className="mt-2.5">
-                      <UnggahSosmedSaya />
-                    </div>
-                  </FadeInUp>
-                ),
-              },
-            ]),
+        // Edit Otomatis untuk SEMUA akun TVR Saya (5 Okt 2026): terbuka bila
+        // ≥5 akun sosmed terhubung (atau dibuka master); selain itu tampil
+        // kartu terkunci yang menunjukkan apa yang kurang.
+        {
+          id: "edit-otomatis",
+          segmen: "Unggah & Jadwal",
+          judul: "Edit Otomatis",
+          ikon: Clapperboard,
+          keterangan: "Template pribadi + edit video otomatis (minimal 5 akun terhubung)",
+          render: () => (
+            <FadeInUp delay={0.08}>
+              <SectionTitle
+                judul="Edit Otomatis"
+                aksi={
+                  <button
+                    type="button"
+                    onClick={mulaiTurTvr}
+                    data-tur="tvr-buka-tutorial"
+                    className="btn-tekan flex items-center gap-1 rounded-full bg-amber-400/15 px-2.5 py-1 text-[10.5px] font-bold text-amber-600 dark:text-amber-400"
+                  >
+                    <GraduationCap className="h-3.5 w-3.5" aria-hidden="true" />
+                    Tutorial
+                  </button>
+                }
+              />
+              <div className="mt-2.5">
+                {bolehEditOtomatis ? (
+                  <EditOtomatisTvr />
+                ) : (
+                  <KartuEditTerkunci
+                    koneksi={koneksi}
+                    onLihatStatus={() =>
+                      (document.getElementById("tvrku-akun") ?? document.getElementById("tvrku-simpel-akun"))?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      })
+                    }
+                  />
+                )}
+              </div>
+            </FadeInUp>
+          ),
+        },
+        // Stok Video (5 Okt 2026): cara posting baru untuk semua akun — video
+        // jadi ditahan di stok dulu, lalu diunggah ke sosmed dari sana.
+        {
+          id: "stok-video",
+          segmen: "Unggah & Jadwal",
+          judul: "Stok Video",
+          ikon: Video,
+          keterangan: "Video jadi ditahan di sini sebelum diposting (terhapus otomatis 2 hari)",
+          render: () => (
+            <FadeInUp delay={0.09}>
+              <SectionTitle judul="Stok Video" />
+              <div className="mt-2.5">
+                <StokVideoTvr />
+              </div>
+            </FadeInUp>
+          ),
+        },
+        // Dulu "Unggah ke Sosmed Saya": unggah berkas langsung dipindah ke Stok
+        // Video (5 Okt 2026). Tersisa antrean jadwal, riwayat, dan fitur
+        // khusus PALUGODAM.
+        {
+          id: "unggah-sosmed",
+          segmen: "Unggah & Jadwal",
+          judul: "Jadwal & Riwayat Post",
+          ikon: Clapperboard,
+          render: () => (
+            <FadeInUp delay={0.1}>
+              <SectionTitle judul="Jadwal & Riwayat Post" />
+              <div className="mt-2.5">
+                <UnggahSosmedSaya lewatStok />
+              </div>
+            </FadeInUp>
+          ),
+        },
         // Versi hasil render Studio yang ditujukan untuk akun ini — diunduh
         // lalu diunggah manual (7 Sep 2026). Hanya anggota PALUGODAM yang
         // punya versi sendiri, jadi seksinya disembunyikan dari divisi lain.

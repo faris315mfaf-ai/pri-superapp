@@ -66,12 +66,20 @@ function jamWib(iso: string): string {
 export function UnggahSosmedSaya({
   berkasAwal = null,
   hanyaForm = false,
+  lewatStok = false,
   onTerkirim,
 }: {
   /** Video hasil Edit Otomatis (30 Sep 2026): langsung terpasang di form. */
   berkasAwal?: File | null;
-  /** Tertanam di Edit Otomatis: hanya form kirim, tanpa riwayat/antrean jadwal. */
+  /** Tertanam di Stok Video: hanya form kirim, tanpa riwayat/antrean jadwal. */
   hanyaForm?: boolean;
+  /**
+   * Seksi "Jadwal & Riwayat Post" (5 Okt 2026): unggah berkas langsung
+   * ditiadakan — video diposting lewat Stok Video. Yang tersisa: antrean
+   * jadwal, riwayat, dan fitur khusus PALUGODAM (kirim tautan, Edit & Upload
+   * Otomatis).
+   */
+  lewatStok?: boolean;
   /** Dipanggil setelah video berkas terkirim ke upload-post. */
   onTerkirim?: () => void;
 } = {}) {
@@ -177,7 +185,8 @@ export function UnggahSosmedSaya({
   // hasil editannya sendiri — tanpa unggah berkas sama sekali.
   const user = useAppStore((st) => st.user);
   const bolehLink = adalahPalugodam({ role: user?.role, divisi: user?.divisi });
-  const [modeLink, setModeLink] = useState(false);
+  // Lewat Stok: PALUGODAM tinggal punya mode kirim tautan di sini.
+  const [modeLink, setModeLink] = useState(lewatStok && bolehLink);
   const [tautan, setTautan] = useState("");
   // Antrean posting terjadwal (2 Sep 2026) — dari upload-post.
   const [jadwalAntre, setJadwalAntre] = useState<JadwalTvrku[] | null>(null);
@@ -449,10 +458,20 @@ export function UnggahSosmedSaya({
         />
       )}
 
-      {tertaut.length > 0 && (
+      {lewatStok && (
+        <GlassCard className="p-3.5">
+          <p className="text-[12px] leading-relaxed text-teks-sekunder">
+            <b className="text-teks-utama">Posting video sekarang lewat Stok Video:</b> tambah video ke stok, ketuk
+            videonya, lalu pilih <b className="text-teks-utama">Upload</b>. Di sini tampil postingan yang menunggu
+            tayang dan riwayat post Anda.
+          </p>
+        </GlassCard>
+      )}
+
+      {tertaut.length > 0 && (!lewatStok || bolehLink) && (
       <GlassCard className="p-4">
         {/* PALUGODAM: pilih cara kirim — unggah berkas atau tempel tautan */}
-        {bolehLink && !hanyaForm && (
+        {bolehLink && !hanyaForm && !lewatStok && (
           <div className="mb-3 grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -510,11 +529,11 @@ export function UnggahSosmedSaya({
           onChange={(e) => pilihBerkas(e.target.files?.[0] ?? null)}
         />
         {hanyaForm ? (
-          // Tertanam di Edit Otomatis: videonya hasil edit itu, tidak diganti
-          // di sini (sesudah terkirim, hasil edit di server ikut dihapus).
+          // Tertanam di Stok Video: videonya item stok itu, tidak diganti di
+          // sini (sesudah terkirim, item stok diberi tanda centang).
           <div className="glass flex w-full items-center justify-center gap-2 rounded-xl py-4 text-[13px] font-bold text-teks-utama">
             <Check className="h-5 w-5 text-emerald-500" />
-            {berkas ? `Video hasil edit (${Math.max(1, Math.round(berkas.size / 1_048_576))} MB)` : "Video hasil edit"}
+            {berkas ? `Video dari Stok (${Math.max(1, Math.round(berkas.size / 1_048_576))} MB)` : "Video dari Stok"}
           </div>
         ) : (
         <button

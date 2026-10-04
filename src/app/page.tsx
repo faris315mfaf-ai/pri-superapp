@@ -108,6 +108,7 @@ const BannerKendali = dynamic(() => import("@/components/banner-kendali").then((
 const PilihUcapanUltah = dynamic(() => import("@/features/notifikasi/pilih-ucapan-ultah").then((m) => m.PilihUcapanUltah), { ssr: false, loading: () => null });
 const ModalChangelog = dynamic(() => import("@/features/profil/modal-changelog").then((m) => m.ModalChangelog), { ssr: false, loading: () => null });
 const TurPemandu = dynamic(() => import("@/features/tur/tur-pemandu").then((m) => m.TurPemandu), { ssr: false, loading: () => null });
+const TurTvr = dynamic(() => import("@/features/tur/tur-tvr").then((m) => m.TurTvr), { ssr: false, loading: () => null });
 const ModalKembangApi = dynamic(() => import("@/features/beranda/modal-kembang-api").then((m) => m.ModalKembangApi), { ssr: false, loading: () => null });
 const PetMelayang = dynamic(() => import("@/features/pet/pet-melayang").then((m) => m.PetMelayang), { ssr: false, loading: () => null });
 const ModalHadiahHarian = dynamic(() => import("@/features/pet/modal-hadiah-harian").then((m) => m.ModalHadiahHarian), { ssr: false, loading: () => null });
@@ -1323,6 +1324,8 @@ export default function Page() {
       {aplikasiAktif && user && <ModalHadiahHarian tunda={changelogBuka} />}
       {/* Tutorial ini menuntun ke Kepatuhan Komen — ikut sakelar modulnya. */}
       {aplikasiAktif && !changelogBuka && komenAktif && <TurPemandu />}
+      {/* Tutorial TVR Saya (5 Okt 2026): sambung ulang akun → Edit Otomatis → Stok Video. */}
+      {aplikasiAktif && !changelogBuka && tabBoleh.includes("tvrku") && <TurTvr />}
 
       {/* Pemilih ucapan ulang tahun (dari notifikasi ultah yang diklik) */}
       {siap && user && !menyambut && ultahBuka && (

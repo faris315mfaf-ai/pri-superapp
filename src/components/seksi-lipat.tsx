@@ -97,6 +97,7 @@ export function SeksiLipat({
         onClick={toggle}
         aria-expanded={terbuka}
         aria-controls={`isi-${id}`}
+        data-tur={`seksi-${id}`}
         className="btn-tekan flex w-full items-center gap-2.5 px-4 py-3 text-left"
       >
         {Ikon && (

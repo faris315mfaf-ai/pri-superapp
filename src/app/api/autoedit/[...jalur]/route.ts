@@ -1,9 +1,16 @@
 /**
- * /api/autoedit/* — gerbang modul Auto Edit (master) dan Edit Otomatis TVR
- * Saya (akun yang dibuka master), 30 Sep 2026. Penjaga peran dan penerusan
- * ke layanan ada di lib/autoedit.
+ * /api/autoedit/* — gerbang modul Auto Edit (master), Stok Video TVR Saya
+ * (semua akun) dan Edit Otomatis TVR Saya (≥5 akun sosmed terhubung, atau
+ * dibuka master). Penjaga peran dan penerusan ke layanan ada di lib/autoedit.
  */
-import { galatAutoEdit, keluargaAutoEdit, teruskanAutoEdit } from "@/lib/autoedit";
+import {
+  bolehEditOtomatisServer,
+  galatAutoEdit,
+  jalurStokTvr,
+  keluargaAutoEdit,
+  teruskanAutoEdit,
+} from "@/lib/autoedit";
+import { MINIMAL_AKUN_EDIT_OTOMATIS } from "@/lib/peran";
 import { pastikanMasuk } from "@/lib/sesi";
 
 export const runtime = "nodejs";
@@ -23,7 +30,16 @@ async function tangani(
   const keluarga = keluargaAutoEdit(user);
   if (keluarga.size === 0) return galatAutoEdit(404, "Tidak ditemukan");
   const { jalur } = await params;
-  return teruskanAutoEdit(request, jalur ?? [], user.id, keluarga);
+  const j = jalur ?? [];
+  // Edit Otomatis TVR (template, sumber, tulisan, render) butuh minimal 5
+  // akun sosmed terhubung; Stok Video terbuka untuk semua (5 Okt 2026).
+  if (j[0] === "tvr" && !jalurStokTvr(j) && !(await bolehEditOtomatisServer(user))) {
+    return galatAutoEdit(
+      403,
+      `Edit Otomatis terbuka setelah minimal ${MINIMAL_AKUN_EDIT_OTOMATIS} akun sosmed terhubung. Sambung ulang akun Anda di TVR Saya → Hubungkan, lalu tekan Segarkan.`,
+    );
+  }
+  return teruskanAutoEdit(request, j, user.id, keluarga);
 }
 
 export const GET = tangani;

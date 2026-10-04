@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 448" font-family="Arial, Helvetica, sans-serif">
+  <!-- Empat bahan template Edit Otomatis TVR Saya (tutorial, 5 Okt 2026).
+       Tiap kotak = kanvas 720x1280 diperkecil; kotak-kotak abu = TRANSPARAN. -->
+  <defs>
+    <pattern id="cek" width="80" height="80" patternUnits="userSpaceOnUse">
+      <rect width="80" height="80" fill="#FFFFFF"/>
+      <rect width="40" height="40" fill="#E5E7EB"/>
+      <rect x="40" y="40" width="40" height="40" fill="#E5E7EB"/>
+    </pattern>
+    <linearGradient id="panelB" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FEE2E2"/>
+    </linearGradient>
+    <linearGradient id="gelap" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7F1D1D"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="448" fill="#FFFFFF"/>
+
+  <!-- 1. BINGKAI TERATAS -->
+  <g transform="translate(20,16) scale(0.2431)">
+    <rect width="720" height="1280" fill="url(#cek)"/>
+    <rect x="0" y="0" width="720" height="128" fill="#DC2626"/>
+    <rect x="0" y="122" width="720" height="8" fill="#F59E0B"/>
+    <rect x="34" y="26" width="76" height="76" rx="18" fill="#FFFFFF"/>
+    <text x="72" y="78" text-anchor="middle" font-size="40" font-weight="900" fill="#DC2626">TV</text>
+    <text x="128" y="78" font-size="52" font-weight="900" fill="#FFFFFF">TV RAKYAT</text>
+    <rect x="0" y="0" width="720" height="1280" fill="none" stroke="#DC2626" stroke-width="14"/>
+    <rect x="0" y="1214" width="720" height="66" fill="#DC2626"/>
+    <text x="360" y="1260" text-anchor="middle" font-size="34" font-weight="700" fill="#FFFFFF">@tvrakyat_anda</text>
+    <text x="360" y="660" text-anchor="middle" font-size="58" font-weight="700" fill="#9CA3AF">tengah</text>
+    <text x="360" y="730" text-anchor="middle" font-size="58" font-weight="700" fill="#9CA3AF">transparan</text>
+  </g>
+  <rect x="20" y="16" width="175" height="311" rx="6" fill="none" stroke="#D1D5DB" stroke-width="2"/>
+
+  <!-- 2. KOTAK MONAS -->
+  <g transform="translate(215,16) scale(0.2431)">
+    <rect width="720" height="1280" fill="url(#cek)"/>
+    <rect x="30" y="868" width="660" height="290" rx="26" fill="url(#panelB)" stroke="#DC2626" stroke-width="8"/>
+    <rect x="30" y="868" width="20" height="290" rx="10" fill="#DC2626"/>
+    <g transform="translate(612,1150)" fill="#B91C1C" opacity="0.2">
+      <rect x="-70" y="-24" width="140" height="24"/>
+      <polygon points="-45,-24 45,-24 30,-56 -30,-56"/>
+      <polygon points="-14,-56 14,-56 8,-250 -8,-250"/>
+      <rect x="-16" y="-262" width="32" height="12"/>
+    </g>
+    <!-- area tulisan (hijau) & badge kategori (oranye) — ditandai di editor -->
+    <rect x="70" y="905" width="470" height="220" fill="#10B981" fill-opacity="0.12" stroke="#10B981" stroke-width="8" stroke-dasharray="26 16"/>
+    <rect x="58" y="800" width="176" height="62" fill="#F97316" fill-opacity="0.15" stroke="#F97316" stroke-width="8" stroke-dasharray="20 12"/>
+    <text x="305" y="1030" text-anchor="middle" font-size="54" font-weight="700" fill="#047857">tulisan</text>
+  </g>
+  <rect x="215" y="16" width="175" height="311" rx="6" fill="none" stroke="#D1D5DB" stroke-width="2"/>
+
+  <!-- 3. BOOM LIKE SHARE -->
+  <g transform="translate(410,16) scale(0.2431)">
+    <rect width="720" height="1280" fill="url(#cek)"/>
+    <g transform="translate(360,520) scale(1.6)">
+      <circle r="54" fill="#DC2626"/>
+      <path d="M-22 6 h12 v28 h-12 Z M-6 34 v-30 l14-24 c6-8 16-2 13 7 l-5 13 h17 c8 0 12 6 10 13 l-7 22 c-2 6-6 9-12 9 Z" fill="#FFFFFF"/>
+      <circle cy="128" r="54" fill="#FFFFFF" stroke="#DC2626" stroke-width="5"/>
+      <path d="M-20 140 v-16 c0-16 14-28 32-28 h4 v-16 l26 28 l-26 28 v-16 h-6 c-14 0-24 6-30 20 Z" fill="#DC2626" transform="translate(-6,-4)"/>
+      <text y="214" text-anchor="middle" font-size="26" font-weight="900" fill="#FFFFFF" stroke="#7F1D1D" stroke-width="5" paint-order="stroke">LIKE &amp; SHARE</text>
+    </g>
+  </g>
+  <rect x="410" y="16" width="175" height="311" rx="6" fill="none" stroke="#D1D5DB" stroke-width="2"/>
+
+  <!-- 4. VIDEO PENUTUP -->
+  <g transform="translate(605,16) scale(0.2431)">
+    <rect width="720" height="1280" fill="url(#gelap)"/>
+    <circle cx="360" cy="520" r="110" fill="#DC2626"/>
+    <polygon points="325,460 325,580 425,520" fill="#FFFFFF"/>
+    <text x="360" y="760" text-anchor="middle" font-size="70" font-weight="900" fill="#FFFFFF">TERIMA KASIH</text>
+    <text x="360" y="840" text-anchor="middle" font-size="44" font-weight="700" fill="#FECACA">Ikuti TV Rakyat</text>
+  </g>
+  <rect x="605" y="16" width="175" height="311" rx="6" fill="none" stroke="#D1D5DB" stroke-width="2"/>
+
+  <!-- Label -->
+  <g>
+    <circle cx="32" cy="346" r="12" fill="#F59E0B"/>
+    <text x="32" y="352" text-anchor="middle" font-size="16" font-weight="900" fill="#111827">1</text>
+    <text x="50" y="352" font-size="18" font-weight="900" fill="#111827">Bingkai teratas</text>
+    <text x="20" y="377" font-size="15" font-weight="900" fill="#DC2626">WAJIB</text>
+    <text x="20" y="397" font-size="14" font-weight="700" fill="#111827">PNG transparan</text>
+    <text x="20" y="418" font-size="14" fill="#4B5563">Logo &amp; bingkai, tampil</text>
+    <text x="20" y="437" font-size="14" fill="#4B5563">sepanjang video</text>
+  </g>
+  <g>
+    <circle cx="227" cy="346" r="12" fill="#F59E0B"/>
+    <text x="227" y="352" text-anchor="middle" font-size="16" font-weight="900" fill="#111827">2</text>
+    <text x="245" y="352" font-size="18" font-weight="900" fill="#111827">Kotak monas</text>
+    <text x="215" y="377" font-size="15" font-weight="900" fill="#DC2626">WAJIB</text>
+    <text x="215" y="397" font-size="14" font-weight="700" fill="#111827">PNG transparan</text>
+    <text x="215" y="418" font-size="14" fill="#4B5563">Panel tulisan berita,</text>
+    <text x="215" y="437" font-size="14" fill="#4B5563">tampil 3 detik awal</text>
+  </g>
+  <g>
+    <circle cx="422" cy="346" r="12" fill="#F59E0B"/>
+    <text x="422" y="352" text-anchor="middle" font-size="16" font-weight="900" fill="#111827">3</text>
+    <text x="440" y="352" font-size="18" font-weight="900" fill="#111827">Boom like share</text>
+    <text x="410" y="377" font-size="15" font-weight="900" fill="#6B7280">OPSIONAL</text>
+    <text x="410" y="397" font-size="14" font-weight="700" fill="#111827">PNG, GIF, atau video</text>
+    <text x="410" y="418" font-size="14" fill="#4B5563">Animasi ajakan like</text>
+    <text x="410" y="437" font-size="14" fill="#4B5563">&amp; share</text>
+  </g>
+  <g>
+    <circle cx="617" cy="346" r="12" fill="#F59E0B"/>
+    <text x="617" y="352" text-anchor="middle" font-size="16" font-weight="900" fill="#111827">4</text>
+    <text x="635" y="352" font-size="18" font-weight="900" fill="#111827">Video penutup</text>
+    <text x="605" y="377" font-size="15" font-weight="900" fill="#6B7280">OPSIONAL</text>
+    <text x="605" y="397" font-size="14" font-weight="700" fill="#111827">MP4, MOV, atau WEBM</text>
+    <text x="605" y="418" font-size="14" fill="#4B5563">Disambung di akhir</text>
+    <text x="605" y="437" font-size="14" fill="#4B5563">video</text>
+  </g>
+</svg>

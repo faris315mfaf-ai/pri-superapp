@@ -19,7 +19,7 @@ import { GalatVideo, type Job, type Template } from "../jenis";
 import { aman, folderUnggahan, pemilikUnggahan, templatePath } from "../jalur";
 import { FFMPEG_BIN, FFPROBE_BIN, MAX_SOURCE_UPLOAD_MB } from "../konfig";
 import { kompositStatis, pngRgb } from "../komposit";
-import { lupakan } from "../kuota";
+import { batasByte, lupakan, pemakaianByte } from "../kuota";
 import { denganKunci } from "../kunci";
 import { pastikanIsiMedia, probe, punyaAlpha, rapikanVideo } from "../media";
 import {
@@ -523,7 +523,19 @@ async function stokDanAntrean(p: Pengguna): Promise<Record<string, unknown>> {
   const aktif = await jobAktif(a);
   const antrean = aktif ? await posisiAntrean(aktif.job_id) : null;
   const stok = (await daftarStok(a)).map(ringkasStok);
-  return { job: aktif ? ringkasJob(aktif) : null, antrean, stok };
+  // Pemakaian penyimpanan akun (template + stok + render) untuk ditampilkan
+  // di Stok Video (5 Okt 2026). Gagal dibaca tidak menggagalkan halaman.
+  const dipakai = await pemakaianByte(a).catch(() => null);
+  return {
+    job: aktif ? ringkasJob(aktif) : null,
+    antrean,
+    stok,
+    maks_stok: MAKS_STOK,
+    kuota: {
+      dipakai_mb: dipakai === null ? null : Math.round(dipakai / 1_048_576),
+      batas_mb: Math.round(batasByte(a) / 1_048_576),
+    },
+  };
 }
 
 // ============================================================

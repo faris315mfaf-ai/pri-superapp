@@ -17,11 +17,13 @@ type GlassCardProps = {
   /** Nonaktifkan efek tekan pada kartu yang bisa diklik */
   tanpaTekan?: boolean;
   ariaLabel?: string;
+  /** Penanda bagian untuk tutorial interaktif (lib/tur): atribut data-tur. */
+  dataTur?: string;
 };
 
 export const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(
   function GlassCard(
-    { children, className, onClick, kuat = false, tanpaTekan = false, ariaLabel },
+    { children, className, onClick, kuat = false, tanpaTekan = false, ariaLabel, dataTur },
     ref,
   ) {
     const bisaDiklik = typeof onClick === "function";
@@ -32,6 +34,7 @@ export const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(
           ref={ref as React.Ref<HTMLButtonElement>}
           type="button"
           aria-label={ariaLabel}
+          data-tur={dataTur}
           onClick={onClick}
           className={cn(
             "block w-full text-left",
@@ -50,6 +53,7 @@ export const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(
       <div
         ref={ref}
         aria-label={ariaLabel}
+        data-tur={dataTur}
         className={cn(
           kuat ? "glass-strong" : "glass",
           "rounded-[1.25rem]",

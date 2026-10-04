@@ -5484,21 +5484,35 @@ export async function hubungkanSosmedTvr(platform?: string): Promise<string> {
  * TVR Saya: baca akun tertaut + sinkron ke daftar akunku. Server menyimpan
  * hasilnya 10 menit; `segar` (tombol Segarkan) memaksa bertanya ke penyedia.
  */
-export async function sinkronSosmedTvr(opsi: { segar?: boolean } = {}): Promise<{
+export type KeadaanAkunTvr = "terhubung" | "ulang" | "belum";
+
+/** Status satu platform TVR Saya: terhubung, perlu sambung ulang, atau belum. */
+export type StatusAkunTvr = { platform: string; username: string | null; keadaan: KeadaanAkunTvr };
+
+export type KoneksiSosmedTvr = {
   terhubung: { platform: string; username: string }[];
   tersinkron: number;
   konflik: string[];
-}> {
+  /** Satu baris per platform (5 Okt 2026). */
+  status: StatusAkunTvr[];
+  /** Akun terhubung yang sehat — syarat Edit Otomatis. */
+  jumlah_terhubung: number;
+  minimal: number;
+};
+
+export async function sinkronSosmedTvr(opsi: { segar?: boolean } = {}): Promise<KoneksiSosmedTvr> {
   const json = await fetchJson(opsi.segar ? "/api/tvr/hubungkan?segar=1" : "/api/tvr/hubungkan", {
     headers: headerToken(),
   });
+  const terhubung = (json.terhubung ?? []) as { platform: string; username: string }[];
+  const status = (Array.isArray(json.status) ? json.status : []) as StatusAkunTvr[];
   return {
-    terhubung: (json.terhubung ?? []) as {
-      platform: string;
-      username: string;
-    }[],
+    terhubung,
     tersinkron: Number(json.tersinkron ?? 0),
     konflik: (json.konflik ?? []) as string[],
+    status,
+    jumlah_terhubung: Number(json.jumlah_terhubung ?? status.filter((s) => s.keadaan === "terhubung").length),
+    minimal: Number(json.minimal ?? 5),
   };
 }
 

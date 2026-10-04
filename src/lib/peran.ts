@@ -61,12 +61,13 @@ export const MODUL_AKUN = [
   { kunci: "chat", label: "Chat", keterangan: "Percakapan antar anggota" },
   { kunci: "asisten", label: "Asisten AI", keterangan: "Chatbot & perintah suara" },
   { kunci: "acara", label: "Acara", keterangan: "Tanggal penting partai" },
-  // Bukan tab (30 Sep 2026): seksi di dalam TVR Saya. Tertutup untuk semua
-  // kecuali dibuka master per akun — masih uji coba, dan render memakan CPU.
+  // Bukan tab (30 Sep 2026): seksi di dalam TVR Saya. Sejak 5 Okt 2026
+  // terbuka sendiri bila minimal 5 akun sosmed terhubung; master tetap bisa
+  // membuka paksa (true) atau menutup paksa (false) per akun.
   {
     kunci: "autoedit",
     label: "Edit Otomatis (TVR Saya)",
-    keterangan: "Template pribadi + edit video otomatis dengan antrean (uji coba)",
+    keterangan: "Template pribadi + edit video otomatis. Ikut peran = terbuka sendiri bila ≥5 akun sosmed terhubung",
     bukanTab: true,
   },
 ] as const;
@@ -87,14 +88,24 @@ export function modulDibuka(
   return typeof v === "boolean" ? v : undefined;
 }
 
+/** Akun sosmed terhubung (sehat) minimal untuk membuka Edit Otomatis. */
+export const MINIMAL_AKUN_EDIT_OTOMATIS = 5;
+
 /**
- * Edit Otomatis di TVR Saya (30 Sep 2026): master selalu boleh; yang lain
- * hanya bila master MEMBUKA modulnya untuk akun itu ("ikut peran" = tidak).
+ * Edit Otomatis di TVR Saya. Master selalu boleh. Modul per akun dari master
+ * menang: dibuka (true) = boleh, ditutup (false) = tidak. Selain itu (ikut
+ * peran) terbuka sendiri bila akun sosmed terhubung yang SEHAT — tertaut dan
+ * tidak perlu login ulang — minimal MINIMAL_AKUN_EDIT_OTOMATIS (5 Okt 2026).
+ * `jumlahTerhubung` belum diketahui (null) = anggap belum memenuhi.
  */
 export function bolehEditOtomatisTvr(
   u: { role?: string | null; modul_izin?: unknown } | null | undefined,
+  jumlahTerhubung: number | null | undefined,
 ): boolean {
-  return u?.role === "master" || modulDibuka(u, "autoedit") === true;
+  if (u?.role === "master") return true;
+  const izin = modulDibuka(u, "autoedit");
+  if (izin !== undefined) return izin;
+  return (jumlahTerhubung ?? 0) >= MINIMAL_AKUN_EDIT_OTOMATIS;
 }
 
 /** Saring masukan mentah jadi peta modul yang sah; null bila kosong. */

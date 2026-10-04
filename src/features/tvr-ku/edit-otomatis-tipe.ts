@@ -102,6 +102,10 @@ export type RingkasTvr = {
   /** Video jadi siap pakai (disimpan sementara), terbaru dulu. */
   stok: StokTvr[];
   batas: BatasTvr;
+  /** Batas jumlah video di stok (mesin TS, 5 Okt 2026; tidak ada di mesin Python). */
+  maks_stok?: number;
+  /** Pemakaian penyimpanan akun: template + stok + render. */
+  kuota?: { dipakai_mb: number | null; batas_mb: number };
 };
 
 /** "4 Okt, 14:30" ringkas untuk tanggal stok (detik epoch). */

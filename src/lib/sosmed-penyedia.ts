@@ -19,7 +19,12 @@ import {
 } from "@/lib/ayrshare";
 
 export type ProfilPenyedia = { profileKey: string; refId: string };
-export type AkunTertautPenyedia = { platform: string; username: string };
+export type AkunTertautPenyedia = {
+  platform: string;
+  username: string;
+  /** Tertaut tapi izinnya kedaluwarsa — harus login ulang (5 Okt 2026). */
+  perluSambungUlang?: boolean;
+};
 
 export type IdPenyedia = "ayrshare" | "upload-post" | "postiz";
 
@@ -77,9 +82,9 @@ const ayrshare: PenyediaSosmed = {
 // Implementasi API-nya di lib/upload-post (kontrak diverifikasi live).
 // ------------------------------------------------------------
 import {
-  akunTertautUp,
   buatProfilUp,
   hapusProfilUp,
+  statusAkunUp,
   tautanHubungkanUp,
   uploadPostSiap,
 } from "@/lib/upload-post";
@@ -104,8 +109,12 @@ const uploadPost: PenyediaSosmed = {
   hapusProfil: (profileKey) => hapusProfilUp(profileKey),
   tautanHubungkan: (profileKey, platforms) => tautanHubungkanUp(profileKey, platforms),
   async akunTertaut(profileKey) {
-    const akun = await akunTertautUp(profileKey);
-    return Object.entries(akun).map(([platform, username]) => ({ platform, username }));
+    const { akun, perluUlang } = await statusAkunUp(profileKey);
+    return Object.entries(akun).map(([platform, username]) => ({
+      platform,
+      username,
+      perluSambungUlang: perluUlang.includes(platform),
+    }));
   },
 };
 

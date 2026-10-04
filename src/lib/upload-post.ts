@@ -131,6 +131,8 @@ export type ProfilUp = {
   username: string;
   /** platform (nama APLIKASI: twitter, bukan x) → username akun tertaut */
   akun: Record<string, string>;
+  /** Platform tertaut yang ditandai upload-post `reauth_required` (5 Okt 2026). */
+  perluUlang: string[];
   dibuat: string;
 };
 
@@ -171,6 +173,21 @@ function petaAkun(social: Record<string, unknown> | undefined): Record<string, s
   return hasil;
 }
 
+/**
+ * Platform yang masih tertaut tapi izinnya kedaluwarsa (5 Okt 2026). Tiap
+ * akun di balasan upload-post membawa `reauth_required`; bila true, unggahan
+ * ke sana gagal sampai pemiliknya login ulang lewat halaman penautan.
+ */
+function platformPerluUlang(social: Record<string, unknown> | undefined): string[] {
+  const hasil: string[] = [];
+  for (const [kunciUp, nilai] of Object.entries(social ?? {})) {
+    if (typeof nilai === "object" && nilai && (nilai as { reauth_required?: unknown }).reauth_required === true) {
+      hasil.push(DARI_UP[kunciUp] ?? kunciUp);
+    }
+  }
+  return hasil;
+}
+
 const KUNCI_CACHE_PROFIL = "upload-post:profil";
 
 /** Semua profil + kuota. Di-cache singkat supaya buka layar tidak menembak ulang. */
@@ -185,6 +202,7 @@ export async function daftarProfilUp(): Promise<{
       profil: (d.profiles ?? []).map((p) => ({
         username: String(p.username ?? ""),
         akun: petaAkun(p.social_accounts),
+        perluUlang: platformPerluUlang(p.social_accounts),
         dibuat: String(p.created_at ?? ""),
       })),
       kuota: Number(d.limit ?? 0),
@@ -238,6 +256,15 @@ export async function akunTertautUp(username: string): Promise<Record<string, st
   const { profil } = await daftarProfilUp();
   const p = profil.find((x) => x.username === username);
   return p?.akun ?? {};
+}
+
+/** Seperti akunTertautUp, ditambah platform yang perlu login ulang. */
+export async function statusAkunUp(
+  username: string,
+): Promise<{ akun: Record<string, string>; perluUlang: string[] }> {
+  const { profil } = await daftarProfilUp();
+  const p = profil.find((x) => x.username === username);
+  return { akun: p?.akun ?? {}, perluUlang: p?.perluUlang ?? [] };
 }
 
 // ------------------------------------------------------------

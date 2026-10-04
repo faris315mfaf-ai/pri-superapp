@@ -300,7 +300,13 @@ export function ModeSimpelApp() {
           ) : layar === "upload" ? (
             <div className="mode-simpel-layar">
               <KepalaSimpel judul="Upload Video" onKembali={keBeranda} />
-              <TvrKuScreen user={user} hanyaSeksi={["video-wajib", "akun", "unggah-sosmed"]} tanpaHeader />
+              {/* 5 Okt 2026: unggah berkas pindah ke Stok Video; Edit Otomatis
+                  ikut tampil (terkunci bila < 5 akun terhubung). */}
+              <TvrKuScreen
+                user={user}
+                hanyaSeksi={["video-wajib", "akun", "edit-otomatis", "stok-video", "unggah-sosmed"]}
+                tanpaHeader
+              />
             </div>
           ) : layar === "postingan" ? (
             <div className="mode-simpel-layar">
