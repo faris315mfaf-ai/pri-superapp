@@ -16,17 +16,19 @@
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Check,
+  ChevronDown,
   ChevronLeft,
   Clapperboard,
   Download,
+  Eye,
   Film,
   Link2,
   Loader2,
   Pencil,
-  Play,
   Plus,
   RotateCcw,
   Send,
@@ -81,18 +83,14 @@ export function EditOtomatisTvr() {
   // Stok
   const [membatalkan, setMembatalkan] = useState(false);
   const [hapusId, setHapusId] = useState("");
+  const [unduhId, setUnduhId] = useState("");
   const [persenStok, setPersenStok] = useState<number | null>(null);
   // Item yang sedang dilanjutkan ke upload-post (video diambil sebagai blob).
   const [unggahItem, setUnggahItem] = useState<{ id: string; judul: string; file: File } | null>(null);
+  // id item yang videonya sedang ditarik (untuk lihat/upload); menahan aksi ganda.
   const [menyiapkan, setMenyiapkan] = useState("");
-  // Item stok yang detailnya dibuka (panel samping). Saat dibuka hanya
-  // THUMBNAIL yang diambil (ringan); video penuh baru diambil saat thumbnail
-  // diklik (mainkan) / Unduh / Upload — hemat kuota & cepat.
-  const [bukaItem, setBukaItem] = useState<StokTvr | null>(null);
-  const [preview, setPreview] = useState<{ id: string; thumbUrl: string; videoUrl: string | null; file: File | null } | null>(null);
-  const [mainVideo, setMainVideo] = useState(false);
-  const [ambilVideo, setAmbilVideo] = useState(false);
-  const [mengunduh, setMengunduh] = useState(false);
+  // Preview BESAR (modal) yang membuka dari thumbnail: item + alamat videonya.
+  const [lihat, setLihat] = useState<{ item: StokTvr; url: string } | null>(null);
   const tabAktifRef = useRefTabAktif();
 
   useEffect(() => {
@@ -294,81 +292,58 @@ export function EditOtomatisTvr() {
     }
   }
 
-  function lepasPreview() {
-    setPreview((lama) => {
-      if (lama) {
-        URL.revokeObjectURL(lama.thumbUrl);
-        if (lama.videoUrl) URL.revokeObjectURL(lama.videoUrl);
-      }
-      return null;
-    });
+  /** Tarik video penuh satu item (blob → File). */
+  async function ambilBerkas(item: StokTvr): Promise<File> {
+    const res = await apiFetch(`/api/tvr/stok/${item.id}/berkas`, { cache: "no-store" });
+    if (!res.ok) throw new Error(pesanGalat(res.status, await bacaJson(res), "Video gagal diambil."));
+    const blob = await res.blob();
+    return new File([blob], `${item.judul || "video"}.mp4`, { type: "video/mp4" });
   }
 
-  // Buka panel detail: cukup ambil THUMBNAIL (ringan). Video penuh baru
-  // ditarik saat thumbnail diklik / Unduh / Upload.
-  async function bukaDetail(item: StokTvr) {
+  // Mata: buka pratinjau BESAR yang membuka-membesar dari thumbnail.
+  async function lihatPreview(item: StokTvr) {
     if (menyiapkan) return;
-    setBukaItem(item);
-    setUnggahItem(null);
-    setMainVideo(false);
-    setPesan("");
-    if (preview?.id === item.id) return;
-    lepasPreview();
     setMenyiapkan(item.id);
+    setPesan("");
     try {
-      const res = await apiFetch(`/api/tvr/stok/${item.id}/thumb`, { cache: "no-store" });
-      if (!res.ok) throw new Error(pesanGalat(res.status, await bacaJson(res), "Pratinjau gagal dimuat."));
-      const blob = await res.blob();
-      setPreview({ id: item.id, thumbUrl: URL.createObjectURL(blob), videoUrl: null, file: null });
+      const file = await ambilBerkas(item);
+      setLihat({ item, url: URL.createObjectURL(file) });
     } catch (e) {
-      setPesan(e instanceof Error ? e.message : "Pratinjau gagal dimuat.");
+      setPesan(e instanceof Error ? e.message : "Video gagal diambil.");
     } finally {
       setMenyiapkan("");
     }
   }
 
-  /** Ambil video penuh sekali; kembalikan File-nya (null bila gagal). */
-  async function ambilBerkas(): Promise<File | null> {
-    if (!bukaItem) return null;
-    if (preview?.id === bukaItem.id && preview.file) return preview.file;
-    const res = await apiFetch(`/api/tvr/stok/${bukaItem.id}/berkas`, { cache: "no-store" });
-    if (!res.ok) throw new Error(pesanGalat(res.status, await bacaJson(res), "Video gagal diambil."));
-    const blob = await res.blob();
-    const file = new File([blob], `${bukaItem.judul || "video"}.mp4`, { type: "video/mp4" });
-    const videoUrl = URL.createObjectURL(blob);
-    setPreview((lama) => (lama && lama.id === bukaItem.id ? { ...lama, videoUrl, file } : lama));
-    return file;
+  function tutupLihat() {
+    setLihat((l) => {
+      if (l) URL.revokeObjectURL(l.url);
+      return null;
+    });
   }
 
-  // Klik thumbnail → muat video lalu putar di tempat.
-  async function mainkan() {
-    if (ambilVideo || !bukaItem) return;
-    setAmbilVideo(true);
+  // Upload: tarik video lalu buka form upload-post.
+  async function unggahDari(item: StokTvr) {
+    if (menyiapkan) return;
+    setMenyiapkan(item.id);
     setPesan("");
     try {
-      await ambilBerkas();
-      setMainVideo(true);
+      const file = await ambilBerkas(item);
+      setUnggahItem({ id: item.id, judul: item.judul, file });
     } catch (e) {
       setPesan(e instanceof Error ? e.message : "Video gagal diambil.");
     } finally {
-      setAmbilVideo(false);
+      setMenyiapkan("");
     }
   }
 
-  function tutupDetail() {
-    setBukaItem(null);
-    setUnggahItem(null);
-    setMainVideo(false);
-    lepasPreview();
-  }
-
-  async function unduh() {
-    if (mengunduh || !bukaItem) return;
-    setMengunduh(true);
+  // Unduh: tarik video lalu simpan otomatis ke perangkat.
+  async function unduhDari(item: StokTvr) {
+    if (unduhId) return;
+    setUnduhId(item.id);
     setPesan("");
     try {
-      const file = await ambilBerkas();
-      if (!file) return;
+      const file = await ambilBerkas(item);
       const url = URL.createObjectURL(file);
       const a = document.createElement("a");
       a.href = url;
@@ -380,7 +355,7 @@ export function EditOtomatisTvr() {
     } catch (e) {
       setPesan(e instanceof Error ? e.message : "Video gagal diunduh.");
     } finally {
-      setMengunduh(false);
+      setUnduhId("");
     }
   }
 
@@ -391,7 +366,7 @@ export function EditOtomatisTvr() {
       const res = await apiFetch(`/api/tvr/stok/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(pesanGalat(res.status, await bacaJson(res), "Gagal menghapus."));
       setData((d) => (d ? { ...d, stok: d.stok.filter((s) => s.id !== id) } : d));
-      if (bukaItem?.id === id) tutupDetail();
+      if (lihat?.item.id === id) tutupLihat();
     } catch (e) {
       toast("error", "Gagal", e instanceof Error ? e.message : "Coba lagi.");
     } finally {
@@ -408,20 +383,6 @@ export function EditOtomatisTvr() {
       setData((lama) => (lama ? { ...lama, stok: (d.stok as StokTvr[]) ?? lama.stok } : lama));
     } catch {
       // Tanda gagal tersimpan bukan hal kritis; status upload-post sudah aman.
-    }
-  }
-
-  async function mulaiUnggah() {
-    if (ambilVideo || !bukaItem) return;
-    setAmbilVideo(true);
-    setPesan("");
-    try {
-      const file = await ambilBerkas();
-      if (file) setUnggahItem({ id: bukaItem.id, judul: bukaItem.judul, file });
-    } catch (e) {
-      setPesan(e instanceof Error ? e.message : "Video gagal diambil.");
-    } finally {
-      setAmbilVideo(false);
     }
   }
 
@@ -523,22 +484,16 @@ export function EditOtomatisTvr() {
           umurJam={batas.umur_simpan_jam}
           persenStok={persenStok}
           hapusId={hapusId}
+          unduhId={unduhId}
           menyiapkan={menyiapkan}
-          mengunduh={mengunduh}
-          mainVideo={mainVideo}
-          ambilVideo={ambilVideo}
           jenisSumber={batas.jenis_sumber}
           tambahStok={tambahStok}
-          bukaItem={bukaItem}
-          preview={preview}
-          onBuka={(it) => void bukaDetail(it)}
-          onTutupDetail={tutupDetail}
-          onMainkan={() => void mainkan()}
-          onUnduh={() => void unduh()}
-          onUpload={() => void mulaiUnggah()}
-          onHapus={(id) => void hapusStok(id)}
           unggahItem={unggahItem}
           onTutupUnggah={() => setUnggahItem(null)}
+          onLihat={(it) => void lihatPreview(it)}
+          onUpload={(it) => void unggahDari(it)}
+          onUnduh={(it) => void unduhDari(it)}
+          onHapus={(id) => void hapusStok(id)}
           onTerkirim={() => {
             // Terkirim ke sosmed: DIBERI TANDA, tidak dihapus dari stok.
             const id = unggahItem?.id ?? "";
@@ -564,6 +519,51 @@ export function EditOtomatisTvr() {
           onTersimpan={templateTersimpan}
         />
       )}
+
+      {/* Pratinjau BESAR (mata) — di-portal ke body: GlassCard pakai
+          backdrop-filter yang bikin position:fixed relatif ke kartu, bukan layar. */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+        {lihat && (
+          <motion.div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            onClick={tutupLihat}
+          >
+            <motion.div
+              className="relative w-full max-w-[340px]"
+              initial={{ scale: 0.86, opacity: 0, y: 12 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 8 }}
+              transition={{ type: "spring", stiffness: 420, damping: 34 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <video
+                src={lihat.url}
+                controls
+                autoPlay
+                playsInline
+                className="aspect-[9/16] max-h-[80vh] w-full rounded-2xl bg-black shadow-2xl"
+              />
+              <p className="mt-2 truncate text-center text-[12px] font-bold text-white/90">{lihat.item.judul}</p>
+              <button
+                type="button"
+                onClick={tutupLihat}
+                aria-label="Tutup"
+                className="btn-tekan absolute -right-2 -top-2 flex h-9 w-9 items-center justify-center rounded-full bg-white text-teks-utama shadow-lg"
+              >
+                <X className="h-4.5 w-4.5" />
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+          </AnimatePresence>,
+          document.body,
+        )}
     </GlassCard>
   );
 }
@@ -813,244 +813,265 @@ type SeksiStokProps = {
   umurJam: number;
   persenStok: number | null;
   hapusId: string;
+  unduhId: string;
   menyiapkan: string;
-  mengunduh: boolean;
-  mainVideo: boolean;
-  ambilVideo: boolean;
   jenisSumber: string[];
   tambahStok: (f: File | null) => void;
-  bukaItem: StokTvr | null;
-  preview: { id: string; thumbUrl: string; videoUrl: string | null; file: File | null } | null;
-  onBuka: (it: StokTvr) => void;
-  onTutupDetail: () => void;
-  onMainkan: () => void;
-  onUnduh: () => void;
-  onUpload: () => void;
-  onHapus: (id: string) => void;
   unggahItem: { id: string; judul: string; file: File } | null;
   onTutupUnggah: () => void;
+  onLihat: (it: StokTvr) => void;
+  onUpload: (it: StokTvr) => void;
+  onUnduh: (it: StokTvr) => void;
+  onHapus: (id: string) => void;
   onTerkirim: () => void;
-};
-
-// Geseran lateral ala iOS: tampilan masuk dari kanan, keluar ke kiri, dengan
-// pegas ringan. prefers-reduced-motion dihormati otomatis oleh Framer Motion.
-const SLIDE = {
-  awal: { opacity: 0, x: 28 },
-  masuk: { opacity: 1, x: 0 },
-  keluar: { opacity: 0, x: -28 },
-  transisi: { type: "spring" as const, stiffness: 520, damping: 42, mass: 0.8 },
 };
 
 function SeksiStok(p: SeksiStokProps) {
   const inputStokRef = useRef<HTMLInputElement>(null);
-  const mode = p.unggahItem ? "upload" : p.bukaItem ? "detail" : "daftar";
+
+  if (p.unggahItem) {
+    return (
+      <motion.div
+        key="upload"
+        initial={{ opacity: 0, x: 24 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ type: "spring", stiffness: 520, damping: 42 }}
+        className="mt-4 border-t border-black/5 pt-3 dark:border-white/10"
+      >
+        <div className="mb-2 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={p.onTutupUnggah}
+            className="glass btn-tekan flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold text-teks-sekunder"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" /> Kembali
+          </button>
+          <p className="min-w-0 flex-1 truncate text-[12.5px] font-bold text-teks-utama">Upload: {p.unggahItem.judul}</p>
+        </div>
+        <UnggahSosmedSaya key={p.unggahItem.id} berkasAwal={p.unggahItem.file} hanyaForm onTerkirim={p.onTerkirim} />
+      </motion.div>
+    );
+  }
 
   return (
-    <div className="mt-4 overflow-hidden border-t border-black/5 pt-3 dark:border-white/10">
-      <AnimatePresence mode="wait" initial={false}>
-        {mode === "upload" && p.unggahItem ? (
-          <motion.div
-            key="upload"
-            initial={SLIDE.awal}
-            animate={SLIDE.masuk}
-            exit={SLIDE.keluar}
-            transition={SLIDE.transisi}
-          >
-            <div className="mb-2 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={p.onTutupUnggah}
-                className="glass btn-tekan flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold text-teks-sekunder"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" /> Kembali
-              </button>
-              <p className="min-w-0 flex-1 truncate text-[12.5px] font-bold text-teks-utama">Upload: {p.unggahItem.judul}</p>
-            </div>
-            <UnggahSosmedSaya key={p.unggahItem.id} berkasAwal={p.unggahItem.file} hanyaForm onTerkirim={p.onTerkirim} />
-          </motion.div>
-        ) : mode === "detail" && p.bukaItem ? (
-          <motion.div
-            key="detail"
-            initial={SLIDE.awal}
-            animate={SLIDE.masuk}
-            exit={SLIDE.keluar}
-            transition={SLIDE.transisi}
-          >
-            <div className="mb-2 flex items-center gap-2">
-              <button
-                type="button"
-                onClick={p.onTutupDetail}
-                className="glass btn-tekan flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold text-teks-sekunder"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" /> Stok
-              </button>
-              <p className="min-w-0 flex-1 truncate text-[12.5px] font-bold text-teks-utama">{p.bukaItem.judul}</p>
-              {p.bukaItem.terunggah && (
-                <span className="flex items-center gap-1 rounded-full bg-sukses/15 px-2 py-0.5 text-[10px] font-bold text-sukses">
-                  <Check className="h-3 w-3" /> Terunggah
-                </span>
-              )}
-            </div>
+    <div className="mt-4 border-t border-black/5 pt-3 dark:border-white/10">
+      <div className="flex items-center gap-2">
+        <p className="flex flex-1 items-center gap-1.5 text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">
+          <Film className="h-3.5 w-3.5" /> Stok video ({p.stok.length})
+        </p>
+        <input
+          ref={inputStokRef}
+          type="file"
+          accept={p.jenisSumber.join(",")}
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0] ?? null;
+            e.target.value = "";
+            p.tambahStok(f);
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => inputStokRef.current?.click()}
+          disabled={p.persenStok !== null}
+          className="glass btn-tekan flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10.5px] font-bold text-teks-utama disabled:opacity-60"
+        >
+          {p.persenStok !== null ? (
+            <>
+              <Loader2 className="h-3 w-3 animate-spin" /> {p.persenStok}%
+            </>
+          ) : (
+            <>
+              <Plus className="h-3 w-3" /> Tambah dari internal
+            </>
+          )}
+        </button>
+      </div>
 
-            {p.preview && p.preview.id === p.bukaItem.id ? (
-              p.mainVideo && p.preview.videoUrl ? (
-                <video
-                  src={p.preview.videoUrl}
-                  controls
-                  autoPlay
-                  playsInline
-                  preload="metadata"
-                  className="mx-auto aspect-[9/16] max-h-[52vh] w-full max-w-[280px] rounded-2xl bg-black"
-                />
-              ) : (
-                // Thumbnail dulu; klik tombol putar untuk memuat & memutar video.
-                <button
-                  type="button"
-                  onClick={p.onMainkan}
-                  disabled={p.ambilVideo}
-                  aria-label="Putar video"
-                  className="group relative mx-auto block aspect-[9/16] max-h-[52vh] w-full max-w-[280px] overflow-hidden rounded-2xl bg-black"
-                >
-                  <img src={p.preview.thumbUrl} alt="" className="h-full w-full object-contain" />
-                  <span className="absolute inset-0 flex items-center justify-center bg-black/25 transition-colors group-hover:bg-black/15">
-                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-pri shadow-lg backdrop-blur-sm">
-                      {p.ambilVideo ? <Loader2 className="h-6 w-6 animate-spin" /> : <Play className="ml-0.5 h-6 w-6 fill-current" />}
-                    </span>
-                  </span>
-                </button>
-              )
-            ) : (
-              <div className="mx-auto flex aspect-[9/16] max-h-[52vh] w-full max-w-[280px] items-center justify-center rounded-2xl bg-black/80">
-                <Loader2 className="h-6 w-6 animate-spin text-white/70" />
-              </div>
-            )}
-            <p className="mt-1.5 text-center text-[10.5px] text-teks-sekunder">
-              {[tanggalRingkas(p.bukaItem.tanggal), p.bukaItem.durasi ? `${Math.round(p.bukaItem.durasi)} dtk` : "", ukuranMb(p.bukaItem.size)]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
+      {p.stok.length === 0 ? (
+        <p className="mt-2 text-[11.5px] leading-relaxed text-teks-sekunder">
+          Belum ada video jadi. Hasil edit otomatis muncul di sini, atau tambah video jadi dari perangkatmu. Disimpan ~{p.umurJam} jam.
+        </p>
+      ) : (
+        <ul className="mt-2 space-y-2">
+          {p.stok.map((it) => (
+            <StokItem
+              key={it.id}
+              item={it}
+              menyiapkan={p.menyiapkan}
+              hapusId={p.hapusId}
+              unduhId={p.unduhId}
+              onLihat={p.onLihat}
+              onUpload={p.onUpload}
+              onUnduh={p.onUnduh}
+              onHapus={p.onHapus}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={p.onUnduh}
-                disabled={!p.preview || p.mengunduh || p.ambilVideo}
-                className="glass btn-tekan flex h-11 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-bold text-teks-utama disabled:opacity-50"
-              >
-                <Download className="h-4 w-4" /> Unduh
-              </button>
-              <button
-                type="button"
-                onClick={p.onUpload}
-                disabled={!p.preview || p.ambilVideo}
-                className="btn-tekan flex h-11 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-bold text-white disabled:opacity-50"
-                style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
-              >
-                <Send className="h-4 w-4" /> Upload
-              </button>
-              <button
-                type="button"
-                onClick={() => p.onHapus(p.bukaItem!.id)}
-                disabled={p.hapusId !== ""}
-                className="glass btn-tekan flex h-11 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-bold text-gagal disabled:opacity-50"
-              >
-                {p.hapusId === p.bukaItem.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                Hapus
-              </button>
-            </div>
-          </motion.div>
-        ) : (
+// Satu item stok: thumbnail (ditarik sendiri), klik baris -> opsi mengembang.
+type StokItemProps = {
+  item: StokTvr;
+  menyiapkan: string;
+  hapusId: string;
+  unduhId: string;
+  onLihat: (it: StokTvr) => void;
+  onUpload: (it: StokTvr) => void;
+  onUnduh: (it: StokTvr) => void;
+  onHapus: (id: string) => void;
+};
+
+function StokItem(q: StokItemProps) {
+  const { item } = q;
+  const [thumb, setThumb] = useState("");
+  const [terbuka, setTerbuka] = useState(false);
+  const [konfirmHapus, setKonfirmHapus] = useState(false);
+
+  // Thumbnail butuh token (lewat gerbang), jadi diambil sebagai blob.
+  useEffect(() => {
+    let hidup = true;
+    let url = "";
+    void (async () => {
+      try {
+        const res = await apiFetch(`/api/tvr/stok/${item.id}/thumb`, { cache: "no-store" });
+        if (!res.ok) return;
+        const blob = await res.blob();
+        if (!hidup) return;
+        url = URL.createObjectURL(blob);
+        setThumb(url);
+      } catch {
+        // thumbnail opsional - jatuh ke ikon bawaan
+      }
+    })();
+    return () => {
+      hidup = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [item.id]);
+
+  const sibuk = q.menyiapkan === item.id; // sedang menarik video (lihat/upload)
+  const mengunduh = q.unduhId === item.id;
+  const menghapus = q.hapusId === item.id;
+
+  return (
+    <li className="glass-soft overflow-hidden rounded-xl">
+      <button
+        type="button"
+        onClick={() => setTerbuka((v) => !v)}
+        className="btn-tekan flex w-full items-center gap-2.5 p-2.5 text-left"
+      >
+        <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-black/80">
+          {thumb ? (
+            <img src={thumb} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center text-white/60">
+              {item.sumber === "unggah" ? <UploadCloud className="h-4 w-4" /> : <Wand2 className="h-4 w-4" />}
+            </span>
+          )}
+          {item.terunggah && (
+            <span className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-sukses text-white shadow">
+              <Check className="h-2.5 w-2.5" />
+            </span>
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[12.5px] font-bold text-teks-utama">{item.judul}</p>
+          <p className="text-[10.5px] text-teks-sekunder">
+            {[
+              item.terunggah ? "Terunggah" : "",
+              tanggalRingkas(item.tanggal),
+              item.durasi ? `${Math.round(item.durasi)} dtk` : "",
+              ukuranMb(item.size),
+            ]
+              .filter(Boolean)
+              .join(" \u00b7 ")}
+          </p>
+        </div>
+        <ChevronDown className={cn("h-4 w-4 shrink-0 text-teks-sekunder transition-transform", terbuka && "rotate-180")} />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {terbuka && (
           <motion.div
-            key="daftar"
-            initial={SLIDE.awal}
-            animate={SLIDE.masuk}
-            exit={SLIDE.keluar}
-            transition={SLIDE.transisi}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 480, damping: 40, mass: 0.7 }}
+            className="overflow-hidden"
           >
-            <div className="flex items-center gap-2">
-              <p className="flex flex-1 items-center gap-1.5 text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">
-                <Film className="h-3.5 w-3.5" /> Stok video ({p.stok.length})
-              </p>
-              <input
-                ref={inputStokRef}
-                type="file"
-                accept={p.jenisSumber.join(",")}
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  e.target.value = "";
-                  p.tambahStok(f);
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => inputStokRef.current?.click()}
-                disabled={p.persenStok !== null}
-                className="glass btn-tekan flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10.5px] font-bold text-teks-utama disabled:opacity-60"
-              >
-                {p.persenStok !== null ? (
-                  <>
-                    <Loader2 className="h-3 w-3 animate-spin" /> {p.persenStok}%
-                  </>
-                ) : (
-                  <>
-                    <Plus className="h-3 w-3" /> Tambah dari internal
-                  </>
-                )}
-              </button>
-            </div>
-
-            {p.stok.length === 0 ? (
-              <p className="mt-2 text-[11.5px] leading-relaxed text-teks-sekunder">
-                Belum ada video jadi. Hasil edit otomatis muncul di sini, atau tambah video jadi dari perangkatmu. Disimpan ~{p.umurJam} jam.
-              </p>
-            ) : (
-              <ul className="mt-2 space-y-2">
-                {p.stok.map((it) => (
-                  <li key={it.id}>
+            <div className="px-2.5 pb-2.5">
+              {konfirmHapus ? (
+                <div className="rounded-xl border border-gagal/30 bg-gagal/10 p-2.5">
+                  <p className="text-[11.5px] font-bold text-teks-utama">Hapus video ini dari stok?</p>
+                  <p className="mt-0.5 text-[10.5px] text-teks-sekunder">Tindakan ini tidak bisa dibatalkan.</p>
+                  <div className="mt-2 flex gap-2">
                     <button
                       type="button"
-                      onClick={() => p.onBuka(it)}
-                      disabled={p.menyiapkan !== ""}
-                      className="glass-soft btn-tekan flex w-full items-center gap-2.5 rounded-xl p-2.5 text-left disabled:opacity-60"
+                      onClick={() => setKonfirmHapus(false)}
+                      disabled={menghapus}
+                      className="glass btn-tekan flex-1 rounded-lg py-1.5 text-[11.5px] font-bold text-teks-utama disabled:opacity-50"
                     >
-                      <span
-                        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pri/15 text-pri"
-                        aria-hidden="true"
-                      >
-                        {it.sumber === "unggah" ? <UploadCloud className="h-4 w-4" /> : <Wand2 className="h-4 w-4" />}
-                        {it.terunggah && (
-                          <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-sukses text-white">
-                            <Check className="h-2.5 w-2.5" />
-                          </span>
-                        )}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[12.5px] font-bold text-teks-utama">{it.judul}</p>
-                        <p className="text-[10.5px] text-teks-sekunder">
-                          {[
-                            it.terunggah ? "Terunggah" : "",
-                            tanggalRingkas(it.tanggal),
-                            it.durasi ? `${Math.round(it.durasi)} dtk` : "",
-                            ukuranMb(it.size),
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </p>
-                      </div>
-                      {p.menyiapkan === it.id ? (
-                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-teks-sekunder" />
-                      ) : (
-                        <ChevronLeft className="h-4 w-4 shrink-0 rotate-180 text-teks-sekunder" />
-                      )}
+                      Batal
                     </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+                    <button
+                      type="button"
+                      onClick={() => q.onHapus(item.id)}
+                      disabled={menghapus}
+                      className="btn-tekan flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gagal py-1.5 text-[11.5px] font-bold text-white disabled:opacity-50"
+                    >
+                      {menghapus ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      Hapus
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 gap-1.5">
+                  <AksiStok ikon={<Eye className="h-4 w-4" />} label="Lihat" onClick={() => q.onLihat(item)} loading={sibuk} />
+                  <AksiStok ikon={<Send className="h-4 w-4" />} label="Upload" onClick={() => q.onUpload(item)} loading={sibuk} utama />
+                  <AksiStok ikon={<Download className="h-4 w-4" />} label="Unduh" onClick={() => q.onUnduh(item)} loading={mengunduh} />
+                  <AksiStok ikon={<Trash2 className="h-4 w-4" />} label="Hapus" onClick={() => setKonfirmHapus(true)} danger />
+                </div>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </li>
+  );
+}
+
+function AksiStok({
+  ikon,
+  label,
+  onClick,
+  loading,
+  utama,
+  danger,
+}: {
+  ikon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  loading?: boolean;
+  utama?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={loading}
+      className={cn(
+        "btn-tekan flex h-14 flex-col items-center justify-center gap-1 rounded-xl text-[10.5px] font-bold disabled:opacity-50",
+        utama ? "text-white" : danger ? "glass text-gagal" : "glass text-teks-utama",
+      )}
+      style={utama ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" } : undefined}
+    >
+      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : ikon}
+      {label}
+    </button>
   );
 }
