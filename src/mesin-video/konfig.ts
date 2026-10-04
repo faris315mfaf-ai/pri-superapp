@@ -66,7 +66,10 @@ export const POLA_CROP = /^\d{1,5}:\d{1,5}:\d{1,5}:\d{1,5}$/;
 
 export const BATAS_FRAME_MB = angka("VIDEO_ASET_FRAME_MB", 2);
 export const RUANG_CADANGAN_MB = angka("VIDEO_RUANG_CADANGAN_MB", 80);
-export const UMUR_SIMPAN_JAM = angka("VIDEO_JOB_RETENTION_HOURS", 24);
+// 48 jam = 2 hari: masa simpan Stok video TVR Saya (hasil render + unggahan
+// manual) sesuai permintaan. Berlaku juga untuk hasil Edit Video master —
+// retensi lebih panjang, beban disk masih kecil.
+export const UMUR_SIMPAN_JAM = angka("VIDEO_JOB_RETENTION_HOURS", 48);
 export const SELANG_SAPUAN_MENIT = angka("VIDEO_SAPUAN_MENIT", 30);
 
 export const FONT_BUNDLED = path.join(ASET_DIR, "Poppins-Bold.ttf");

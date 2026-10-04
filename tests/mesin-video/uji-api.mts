@@ -546,7 +546,7 @@ await uji("tvr antrean satu video per akun dan render", async () => {
   const d = r.json();
   pastikan(d.job.status === "queued" && d.antrean.posisi === 1, JSON.stringify(d));
   r = await minta("POST", "/api/tvr/jobs", { id: a, json: { url: sumberA, hook: "LAGI" } });
-  pastikan(r.status === 409 && r.json().detail.includes("masih diproses"), r.teks);
+  pastikan(r.status === 409 && r.json().detail.includes("sedang diproses"), r.teks);
   r = await minta("POST", "/api/tvr/jobs", { id: b, json: { url: "https://www.instagram.com/reel/B/", hook: "UJI B" } });
   pastikan(r.status === 200, r.teks);
   const antreB = r.json().antrean;
@@ -555,10 +555,14 @@ await uji("tvr antrean satu video per akun dan render", async () => {
 
   const hasil = await pekerja.renderVideo(TUGAS[0]);
   pastikan(hasil.status === "done", JSON.stringify(hasil));
+  // a: video jadi masuk STOK, antrean bebas (tak ada job aktif).
   let st = (await minta("GET", "/api/tvr/jobs/saya", { id: a })).json();
-  pastikan(st.job.status === "done" && st.antrean === null, JSON.stringify(st));
-  pastikan((await minta("GET", "/api/tvr/jobs/saya", { id: b })).json().antrean.posisi === 1);
-  const unduhan = await minta("GET", "/api/tvr/jobs/saya/berkas", { id: a });
+  pastikan(st.job === null && st.antrean === null && st.stok.length === 1, JSON.stringify(st));
+  const item = st.stok[0];
+  pastikan(item.sumber === "render" && item.judul && item.durasi && item.size, JSON.stringify(item));
+  // b masih mengantre; setelah a selesai, b jadi posisi 1.
+  pastikan((await minta("GET", "/api/tvr/jobs/saya", { id: b })).json().job?.status === "queued");
+  const unduhan = await minta("GET", `/api/tvr/stok/${item.id}/berkas`, { id: a });
   pastikan(unduhan.status === 200 && unduhan.tipe === "video/mp4");
   const berkas = path.join(MEDIA, "hasil-tvr.mp4");
   fs.writeFileSync(berkas, unduhan.isi);
@@ -566,23 +570,35 @@ await uji("tvr antrean satu video per akun dan render", async () => {
   pastikan(info.width === 720 && info.height === 1280 && info.has_audio, JSON.stringify(info));
   // 3 detik video sumber + 2 detik video penutup.
   pastikan(Number(info.duration) > 4.5 && Number(info.duration) < 5.6, `${info.duration}`);
-  pastikan((await minta("GET", "/api/tvr/jobs/saya/berkas", { id: b })).status === 409);
-  r = await minta("POST", "/api/tvr/jobs", { id: a, json: { url: sumberA, hook: "LAGI" } });
-  pastikan(r.status === 409 && r.json().detail.includes("sudah jadi"), r.teks);
+  // b belum punya stok; stok & berkas orang lain tak bisa diakses.
+  pastikan((await minta("GET", "/api/tvr/stok", { id: b })).json().stok.length === 0);
+  pastikan((await minta("GET", `/api/tvr/stok/${item.id}/berkas`, { id: b })).status === 404);
 
-  const folderJob = job.jobPath(d.job.job_id);
-  pastikan(fs.existsSync(folderJob));
-  pastikan((await minta("DELETE", "/api/tvr/jobs/saya", { id: a })).json().ok);
-  pastikan(!fs.existsSync(folderJob));
-  st = (await minta("GET", "/api/tvr/jobs/saya", { id: a })).json();
-  pastikan(st.job === null);
-  pastikan(fs.existsSync(jalur.folderUnggahan(sumberA) as string));
-  r = await minta("POST", "/api/tvr/jobs", { id: a, json: { url: sumberA, hook: "ULANG" } });
+  // Antrean bebas: a boleh mulai video baru lagi (bukan lagi "sudah jadi" 409).
+  r = await minta("POST", "/api/tvr/jobs", { id: a, json: { url: sumberA, hook: "LAGI" } });
   pastikan(r.status === 200, r.teks);
-  const jobUlang = r.json().job.job_id;
+  const jobBaru = r.json().job.job_id as string;
+
+  // Tambah video JADI dari perangkat langsung ke stok (tanpa diedit).
+  const rUp = await minta("POST", "/api/tvr/stok", { id: a, berkas: { nama: "monas keren.mp4", isi: penutup(), tipe: "video/mp4" } });
+  pastikan(rUp.status === 200, rUp.teks);
+  const stok2 = rUp.json().stok as { id: string; sumber: string; judul: string }[];
+  pastikan(stok2.length === 2 && stok2.some((s) => s.sumber === "unggah"), JSON.stringify(stok2));
+  pastikan(stok2.some((s) => s.judul === "monas keren"), JSON.stringify(stok2));
+
+  // Hapus satu item stok (hasil render): berkas & catatannya hilang.
+  const folderItem = job.jobPath(item.id);
+  pastikan(fs.existsSync(folderItem));
+  pastikan((await minta("DELETE", `/api/tvr/stok/${item.id}`, { id: a })).json().ok);
+  pastikan(!fs.existsSync(folderItem));
+  pastikan((await minta("GET", "/api/tvr/stok", { id: a })).json().stok.length === 1);
+
+  // Batalkan job aktif baru + buang video sumbernya.
+  pastikan(fs.existsSync(jalur.folderUnggahan(sumberA) as string));
   pastikan((await minta("DELETE", "/api/tvr/jobs/saya?hapus_sumber=1", { id: a })).json().ok);
-  pastikan((await job.posisiAntrean(jobUlang)) === null);
+  pastikan((await job.posisiAntrean(jobBaru)) === null);
   pastikan(!fs.existsSync(jalur.folderUnggahan(sumberA) as string));
+  // Tugas yang terlanjur di antrean dilewati worker karena job-nya sudah tiada.
   pastikan((await pekerja.renderVideo(TUGAS[TUGAS.length - 1])).status === "hilang");
 });
 
@@ -596,7 +612,7 @@ await uji("tvr render dengan gif berulang", async () => {
   r = await minta("POST", "/api/tvr/jobs", { id: a, json: { url: r.json().url, hook: "UJI GIF" } });
   pastikan(r.status === 200, r.teks);
   pastikan((await pekerja.renderVideo(TUGAS[0])).status === "done");
-  pastikan((await minta("GET", "/api/tvr/jobs/saya", { id: a })).json().job.status === "done");
+  pastikan((await minta("GET", "/api/tvr/jobs/saya", { id: a })).json().stok.length === 1);
 });
 
 await uji("tvr unggahan baru membuang unggahan lama", async () => {
@@ -646,7 +662,8 @@ await uji("tvr template persis susunan GODAM", async () => {
   pastikan(TUGAS[0].texts.kategori === "HIBURAN", JSON.stringify(TUGAS[0].texts));
   pastikan((await pekerja.renderVideo(TUGAS[0])).status === "done");
   const berkas = path.join(MEDIA, "hasil-badge.mp4");
-  fs.writeFileSync(berkas, (await minta("GET", "/api/tvr/jobs/saya/berkas", { id: a })).isi);
+  const sid = (await minta("GET", "/api/tvr/jobs/saya", { id: a })).json().stok[0].id;
+  fs.writeFileSync(berkas, (await minta("GET", `/api/tvr/stok/${sid}/berkas`, { id: a })).isi);
   const bingkai = path.join(MEDIA, "badge.png");
   ffmpeg("-ss", "1", "-i", berkas, "-frames:v", "1", "-update", "1", bingkai);
   const { default: sharp } = await import("sharp");

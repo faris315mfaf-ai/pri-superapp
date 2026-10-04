@@ -26,6 +26,7 @@ import {
   bacaStatus,
   buangJob,
   buatJob,
+  daftarJob,
   JOB_RETENTION_HOURS,
   jobPath,
   mintaBatal,
@@ -93,7 +94,6 @@ const MAKS_DURASI_DETIK = angkaEnv("TVR_MAKS_DURASI_DETIK", 180);
 const MAKS_SUMBER = 60;
 // Penunjuk akun -> job hidup sedikit lebih lama dari job-nya sendiri.
 const UMUR_PENUNJUK = Math.trunc(JOB_RETENTION_HOURS * 3600) + 3600;
-const KUNCI_JOB_AKUN = "tvrjob:";
 const KUNCI_UNGGAHAN = "tvrunggah:";
 
 // Susunan tulisan PERSIS template GODAM (kanvas 720x1280).
@@ -449,31 +449,44 @@ const JobBody = z.object({
 });
 
 // ============================================================
-//  JOB: SATU PER AKUN
+//  ANTREAN (1 render/akun) + STOK VIDEO (hasil render + unggahan manual)
 // ============================================================
+//
+// Model baru (4 Okt 2026): video jadi TIDAK lagi menempel di satu slot.
+// Begitu selesai, ia masuk STOK (daftar video jadi milik akun, disimpan 2
+// hari = JOB_RETENTION_HOURS lalu tersapu otomatis), dan antrean langsung
+// bebas untuk video berikutnya. Stok juga bisa diisi UNGGAHAN MANUAL (video
+// jadi dari perangkat, tanpa diedit). Di langkah Unggah ke Sosmed, pengguna
+// memilih dari stok ini.
 
-/** Job yang sedang dipegang akun ini, atau null (penunjuk basi dibuang). */
-async function jobDipegang(a: string): Promise<Job | null> {
-  const r = redis();
-  const jobId = await r.get(KUNCI_JOB_AKUN + a);
-  if (!jobId) return null;
-  let status: Job;
-  try {
-    status = await bacaStatus(jobId);
-  } catch (e) {
-    if (!(e instanceof GalatVideo)) throw e;
-    await r.del(KUNCI_JOB_AKUN + a);
-    return null;
+const MAKS_STOK = Math.max(1, Math.trunc(angkaEnv("TVR_MAKS_STOK", 50)));
+
+/** Judul otomatis item stok dari tulisan berita (hook). */
+function judulDariHook(hook: string): string {
+  const t = String(hook || "").replace(/\s+/g, " ").trim();
+  if (!t) return "Video";
+  const potong = ((t.split(/[.!?\n]/)[0] || t).trim() || t);
+  const huruf = Array.from(potong);
+  return huruf.length > 48 ? huruf.slice(0, 48).join("").trimEnd() + "…" : potong;
+}
+
+/** Judul item unggahan manual dari nama berkasnya (tanpa ekstensi). */
+function judulDariBerkas(nama: string): string {
+  const dasar = String(nama || "").replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+  const huruf = Array.from(dasar);
+  return huruf.length > 48 ? huruf.slice(0, 48).join("").trimEnd() + "…" : dasar || "Video";
+}
+
+/** Job yang masih diproses (queued/downloading/rendering) milik akun, atau null. */
+async function jobAktif(a: string): Promise<Job | null> {
+  for (const j of await daftarJob(50, a)) {
+    if (STATUS_AKTIF_JOB.includes(j.status)) return segarkanKalauTerlantar(j);
   }
-  if (String(status.owner ?? "") !== a) {
-    await r.del(KUNCI_JOB_AKUN + a);
-    return null;
-  }
-  return segarkanKalauTerlantar(status);
+  return null;
 }
 
 async function dipakaiJobAktif(a: string, url: string): Promise<boolean> {
-  const job = await jobDipegang(a);
+  const job = await jobAktif(a);
   return Boolean(job && STATUS_AKTIF_JOB.includes(job.status) && job.sumber_url === url);
 }
 
@@ -482,11 +495,32 @@ function ringkasJob(status: Job): Record<string, unknown> {
   return Object.fromEntries(kunci.map((k) => [k, (status as Record<string, unknown>)[k] ?? null]));
 }
 
-async function jobDanAntrean(p: Pengguna): Promise<Record<string, unknown>> {
-  const job = await jobDipegang(akun(p));
-  if (job === null) return { job: null, antrean: null };
-  const antrean = STATUS_AKTIF_JOB.includes(job.status) ? await posisiAntrean(job.job_id) : null;
-  return { job: ringkasJob(job), antrean };
+/** Satu item Stok untuk halaman: judul, tanggal upload, durasi, ukuran. */
+function ringkasStok(job: Job): Record<string, unknown> {
+  const texts = (job.texts as Record<string, string> | undefined) ?? {};
+  const judul = String(job.judul ?? "").trim() || judulDariHook(texts.hook ?? "");
+  return {
+    id: job.job_id,
+    judul,
+    tanggal: job.created ?? null,
+    durasi: job.durasi ?? null,
+    size: job.size ?? null,
+    sumber: String(job.sumber_stok ?? "render"),
+  };
+}
+
+/** Stok = video jadi milik akun (hasil render + unggahan manual), terbaru dulu. */
+async function daftarStok(a: string): Promise<Job[]> {
+  return (await daftarJob(MAKS_STOK * 2, a)).filter((j) => j.status === "done" && Boolean(j.output));
+}
+
+/** Keadaan yang dipantau halaman: job aktif (bila ada) + antrean + stok. */
+async function stokDanAntrean(p: Pengguna): Promise<Record<string, unknown>> {
+  const a = akun(p);
+  const aktif = await jobAktif(a);
+  const antrean = aktif ? await posisiAntrean(aktif.job_id) : null;
+  const stok = (await daftarStok(a)).map(ringkasStok);
+  return { job: aktif ? ringkasJob(aktif) : null, antrean, stok };
 }
 
 // ============================================================
@@ -501,7 +535,7 @@ export function pasangRuteTvr(r: Router): void {
     const p = penggunaTvr(pm);
     return {
       template: await keadaan(p),
-      ...(await jobDanAntrean(p)),
+      ...(await stokDanAntrean(p)),
       batas: {
         maks_aset_mb: MAX_ASSET_MB,
         maks_gif_mb: MAKS_GIF_MB,
@@ -714,16 +748,11 @@ export function pasangRuteTvr(r: Router): void {
           throw new GalatHttp(409, "Bahan template ada yang hilang. Unggah ulang lewat Edit Template.");
         }
       }
-      const lama = await jobDipegang(a);
-      if (lama !== null) {
-        if (STATUS_AKTIF_JOB.includes(lama.status)) {
-          throw new GalatHttp(409, "Videomu sebelumnya masih diproses. Tunggu sampai selesai.");
-        }
-        if (lama.status === "done") {
-          throw new GalatHttp(409, "Videomu sebelumnya sudah jadi. Unggah ke sosmed atau edit ulang dulu.");
-        }
-        // Gagal/dibatalkan: dibuang, diganti yang baru.
-        await buangJob(lama.job_id);
+      // Hanya SATU render berjalan per akun; video jadi masuk Stok (tak
+      // memblok). Job gagal/dibatalkan tidak menghalangi — biarkan tersapu.
+      if (await jobAktif(a)) throw new GalatHttp(409, "Masih ada video yang sedang diproses. Tunggu sampai selesai.");
+      if ((await daftarStok(a)).length >= MAKS_STOK) {
+        throw new GalatHttp(409, `Stok video penuh (maksimal ${MAKS_STOK}). Hapus beberapa dulu.`);
       }
       const url = await sumberSah(body.url, p);
       await pastikanKuota(p);
@@ -734,40 +763,25 @@ export function pasangRuteTvr(r: Router): void {
         kategori: bersihKategori(body.kategori),
       };
       const jobId = await buatJob(url, tid, texts, a);
-      await redis().set(KUNCI_JOB_AKUN + a, jobId, "EX", UMUR_PENUNJUK);
       await kirimRender({ job_id: jobId, url, template_id: tid, texts });
     });
-    return jobDanAntrean(p);
+    return stokDanAntrean(p);
   });
 
-  r.get(`${A}/jobs/saya`, async (pm) => jobDanAntrean(penggunaTvr(pm)));
-
-  r.get(`${A}/jobs/saya/berkas`, async (pm) => {
-    const p = penggunaTvr(pm);
-    const job = await jobDipegang(akun(p));
-    if (job === null || job.status !== "done" || !job.output) throw new GalatHttp(409, "Videonya belum jadi.");
-    const berkas = path.join(jobPath(job.job_id), aman(String(job.output)));
-    if (!fs.existsSync(berkas) || !fs.statSync(berkas).isFile()) {
-      throw new GalatHttp(404, "Berkas hasil sudah tidak ada (lewat masa simpan). Edit ulang.");
-    }
-    return kirimBerkas(pm, berkas, "video/mp4", `tvr-edit-${job.job_id}.mp4`);
-  });
+  r.get(`${A}/jobs/saya`, async (pm) => stokDanAntrean(penggunaTvr(pm)));
 
   r.delete(`${A}/jobs/saya`, async (pm) => {
-    // Edit ulang / batal / sesudah diunggah: hasil dihapus, antrean kosong.
-    // hapus_sumber ikut membuang video unggahan sumbernya.
+    // Batalkan video yang sedang diproses (atau bersihkan job gagal) dan,
+    // bila diminta, buang video unggahan sumbernya.
     const p = penggunaTvr(pm);
     const hapusSumber = boolQuery(pm, "hapus_sumber");
     const a = akun(p);
     const rd = redis();
     await denganKunci(a, async () => {
-      const job = await jobDipegang(a);
-      await rd.del(KUNCI_JOB_AKUN + a);
+      const job = await jobAktif(a);
       let sumber = String(job?.sumber_url ?? "");
       if (job !== null) {
         if (STATUS_BERJALAN_JOB.includes(job.status)) {
-          // Sedang dikerjakan worker: diminta berhenti; berkasnya dibersihkan
-          // worker/penyapu.
           await mintaBatal(job.job_id);
           await tulisStatus(job.job_id, { log: "Dibatalkan pemiliknya." });
         } else {
@@ -784,6 +798,92 @@ export function pasangRuteTvr(r: Router): void {
     });
     lupakan(a);
     return { ok: true };
+  });
+
+  // ---- STOK VIDEO -------------------------------------------------
+  r.get(`${A}/stok`, async (pm) => stokDanAntrean(penggunaTvr(pm)));
+
+  /** Satu item stok milik akun ini (status done), atau galat. */
+  async function stokMilik(a: string, id: string): Promise<Job> {
+    let st: Job;
+    try {
+      st = await bacaStatus(id);
+    } catch (e) {
+      if (e instanceof GalatVideo) throw new GalatHttp(404, "Video stok tidak ditemukan.");
+      throw e;
+    }
+    if (String(st.owner ?? "") !== a || st.status !== "done" || !st.output) {
+      throw new GalatHttp(404, "Video stok tidak ditemukan.");
+    }
+    return st;
+  }
+
+  r.get(`${A}/stok/{id}/berkas`, async (pm) => {
+    const p = penggunaTvr(pm);
+    const st = await stokMilik(akun(p), pm.params.id);
+    const berkas = path.join(jobPath(st.job_id), aman(String(st.output)));
+    if (!fs.existsSync(berkas) || !fs.statSync(berkas).isFile()) {
+      throw new GalatHttp(404, "Berkas videonya sudah tidak ada (lewat masa simpan).");
+    }
+    return kirimBerkas(pm, berkas, "video/mp4", `tvr-${st.job_id}.mp4`);
+  });
+
+  r.delete(`${A}/stok/{id}`, async (pm) => {
+    const p = penggunaTvr(pm);
+    await stokMilik(akun(p), pm.params.id);
+    await buangJob(pm.params.id);
+    lupakan(akun(p));
+    return { ok: true };
+  });
+
+  r.post(`${A}/stok`, async (pm) => {
+    // Tambah video JADI dari perangkat langsung ke stok (tanpa diedit).
+    const p = penggunaTvr(pm);
+    const a = akun(p);
+    await pastikanKuota(p);
+    if ((await daftarStok(a)).length >= MAKS_STOK) {
+      throw new GalatHttp(409, `Stok video penuh (maksimal ${MAKS_STOK}). Hapus beberapa dulu.`);
+    }
+    const batas = Math.trunc(MAX_SOURCE_UPLOAD_MB * 1_048_576);
+    await sediakanRuangUnggah(pm, batas);
+    const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+    const folder = jobPath(id);
+    let namaAsli = "";
+    let hasil: { jalur: string; ukuran: number };
+    let info: Record<string, unknown>;
+    try {
+      hasil = await tulisUnggahan(
+        pm,
+        (asli) => {
+          namaAsli = aman(path.basename(asli || "video"));
+          if (!JENIS_VIDEO.has(akhiran(namaAsli))) {
+            throw new GalatHttp(415, `Jenis berkas tidak didukung. Pakai: ${urut(JENIS_VIDEO).join(", ")}`);
+          }
+          fs.mkdirSync(folder, { recursive: true });
+          return path.join(folder, `output${akhiran(namaAsli)}`);
+        },
+        batas,
+        `Video melebihi ${f0(MAX_SOURCE_UPLOAD_MB)} MB.`,
+      );
+      await pastikanIsiMedia(hasil.jalur);
+      info = await probe(hasil.jalur);
+    } catch (e) {
+      fs.rmSync(folder, { recursive: true, force: true });
+      throw e;
+    }
+    await tulisStatus(id, {
+      status: "done",
+      progress: 100,
+      owner: a,
+      output: path.basename(hasil.jalur),
+      durasi: Math.round((Number(info.duration) || 0) * 10) / 10,
+      size: hasil.ukuran,
+      judul: judulDariBerkas(namaAsli),
+      sumber_stok: "unggah",
+      log: "Ditambahkan ke stok.",
+    });
+    lupakan(a);
+    return stokDanAntrean(p);
   });
 }
 

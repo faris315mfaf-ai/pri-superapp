@@ -82,12 +82,38 @@ export type BatasTvr = {
   umur_simpan_jam: number;
 };
 
+/** Satu video jadi di Stok (hasil render atau unggahan manual). */
+export type StokTvr = {
+  id: string;
+  judul: string;
+  tanggal: number | null;
+  durasi: number | null;
+  size: number | null;
+  sumber: "render" | "unggah";
+};
+
 export type RingkasTvr = {
   template: KeadaanTemplateTvr;
+  /** Job yang sedang diproses (queued/downloading/rendering), atau null. */
   job: JobTvr | null;
   antrean: AntreanTvr | null;
+  /** Video jadi siap pakai (disimpan sementara), terbaru dulu. */
+  stok: StokTvr[];
   batas: BatasTvr;
 };
+
+/** "4 Okt, 14:30" ringkas untuk tanggal stok (detik epoch). */
+export function tanggalRingkas(detikEpoch: number | null | undefined): string {
+  if (!detikEpoch) return "";
+  const d = new Date(detikEpoch * 1000);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+/** Ukuran berkas → "12 MB" (minimal 1). */
+export function ukuranMb(byte: number | null | undefined): string {
+  return byte ? `${Math.max(1, Math.round(byte / 1_048_576))} MB` : "";
+}
 
 export const STATUS_AKTIF: StatusJobTvr[] = ["queued", "downloading", "rendering"];
 
