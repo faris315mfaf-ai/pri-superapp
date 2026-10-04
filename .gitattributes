@@ -1,17 +1,37 @@
-# Skrip yang dijalankan di server Linux WAJIB berakhiran baris LF.
-# Tanpa aturan ini, Git di Windows menyimpannya sebagai CRLF dan bash di
-# VPS menolaknya dengan galat aneh seperti: "$'\r': command not found".
-vps/*.sh   text eol=lf
-vps/*.mjs  text eol=lf
-vps/*.sql  text eol=lf
-vps/*.txt  text eol=lf
-# Termasuk isi subfolder (mis. vps/migrator/): Dockerfile tidak berakhiran
-# apa pun, jadi harus disebut sendiri — kalau tersimpan CRLF, baris
-# pertamanya gagal dibaca dan container tidak bisa dibangun.
-vps/**/*.sh      text eol=lf
-vps/**/Dockerfile text eol=lf
-vps/**/*.yml    text eol=lf
-.dockerignore   text eol=lf
-# Backend Auto Edit dibangun di Linux (Docker): semua berkas teksnya LF,
-# berkas biner (font, gambar) dikenali otomatis.
-autoedit/**     text=auto eol=lf
+# Normalisasi akhir baris lintas-OS (Windows <-> macOS <-> Linux).
+# Repo SELALU menyimpan LF; checkout juga LF di semua OS supaya tidak ada
+# berkas yang "berubah" hanya karena pindah laptop.
+* text=auto eol=lf
+
+# Skrip & berkas yang DIJALANKAN di Linux/VPS wajib LF (CRLF membuatnya gagal).
+*.sh text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+Dockerfile text eol=lf
+*.Dockerfile text eol=lf
+
+# Berkas biner: jangan disentuh git (jangan dinormalisasi / di-diff).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.svg -text
+*.mp4 binary
+*.mov binary
+*.webm binary
+*.m4v binary
+*.mp3 binary
+*.wav binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+*.zip binary
+*.jar binary
+*.apk binary
+*.keystore binary
+*.jks binary
+*.ico binary
