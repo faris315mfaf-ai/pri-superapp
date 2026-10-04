@@ -442,6 +442,10 @@ const JobBody = z.object({
       return n;
     }),
   sumber: z.string().max(MAKS_SUMBER).default(""),
+  // Kategori (badge NEWS/HIBURAN) kini DITENTUKAN PER VIDEO di langkah Buat
+  // Video, bukan lagi disimpan di template. Engine memakai texts["kategori"]
+  // lebih dulu, baru template.kategori; jadi nilai ini yang tampil.
+  kategori: z.string().max(MAKS_KATEGORI).default(""),
 });
 
 // ============================================================
@@ -724,7 +728,11 @@ export function pasangRuteTvr(r: Router): void {
       const url = await sumberSah(body.url, p);
       await pastikanKuota(p);
       await pastikanAntreanMuat(1, p);
-      const texts = { hook: body.hook, sumber: body.sumber.split(/\s+/).filter(Boolean).join(" ") };
+      const texts = {
+        hook: body.hook,
+        sumber: body.sumber.split(/\s+/).filter(Boolean).join(" "),
+        kategori: bersihKategori(body.kategori),
+      };
       const jobId = await buatJob(url, tid, texts, a);
       await redis().set(KUNCI_JOB_AKUN + a, jobId, "EX", UMUR_PENUNJUK);
       await kirimRender({ job_id: jobId, url, template_id: tid, texts });

@@ -641,7 +641,9 @@ await uji("tvr template persis susunan GODAM", async () => {
   pastikan(r.status === 200 && r.isi.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47])));
   r = await minta("POST", "/api/tvr/sumber", { id: a, berkas: { nama: "s.mp4", isi: videoSumber(3), tipe: "video/mp4" } });
   TUGAS.length = 0;
-  pastikan((await minta("POST", "/api/tvr/jobs", { id: a, json: { url: r.json().url, hook: "UJI BADGE" } })).status === 200);
+  pastikan((await minta("POST", "/api/tvr/jobs", { id: a, json: { url: r.json().url, hook: "UJI BADGE", kategori: "hiburan" } })).status === 200);
+  // Kategori PER VIDEO masuk ke texts.kategori (dibersihkan → kapital), bukan template.
+  pastikan(TUGAS[0].texts.kategori === "HIBURAN", JSON.stringify(TUGAS[0].texts));
   pastikan((await pekerja.renderVideo(TUGAS[0])).status === "done");
   const berkas = path.join(MEDIA, "hasil-badge.mp4");
   fs.writeFileSync(berkas, (await minta("GET", "/api/tvr/jobs/saya/berkas", { id: a })).isi);

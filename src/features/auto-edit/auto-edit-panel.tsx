@@ -32,16 +32,19 @@ const Outro = dynamic(() => import("./outro").then((m) => m.Outro), { ssr: false
 
 type Tab = "edit" | "outro";
 
+// Auto Outro disembunyikan dulu (4 Okt 2026) — nyalakan lagi dengan true.
+const TAMPILKAN_OUTRO = false;
+
 const DAFTAR_TAB: { id: Tab; label: string; ikon: typeof Scissors }[] = [
   { id: "edit", label: "Edit Video", ikon: Scissors },
-  { id: "outro", label: "Outro", ikon: Film },
+  ...(TAMPILKAN_OUTRO ? [{ id: "outro" as const, label: "Outro", ikon: Film }] : []),
 ];
 
 type Status = { jenis: "cek" } | { jenis: "siap" } | { jenis: "galat"; pesan: string };
 
 function tabTersimpan(): Tab {
   const { tab } = bacaSimpanan("tab", { tab: "edit" });
-  return tab === "outro" ? "outro" : "edit";
+  return TAMPILKAN_OUTRO && tab === "outro" ? "outro" : "edit";
 }
 
 export function AutoEditPanel() {

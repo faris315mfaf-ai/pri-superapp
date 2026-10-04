@@ -48,7 +48,9 @@ export function TemplateTvrModal({
   const [warna, setWarna] = useState<"white" | "black">(awal.teks_warna);
   // Badge kategori & perataan: sama dengan editor template GODAM.
   const [badge, setBadge] = useState<KotakTeks | null>(awal.badge_box);
-  const [kategori, setKategori] = useState(awal.kategori);
+  // Kategori (teks badge) kini diisi PER VIDEO di langkah Buat Video, bukan di
+  // template. Di sini hanya contoh supaya letak badge terlihat saat diatur.
+  const KATEGORI_CONTOH = "NEWS";
   const [rata, setRata] = useState<RataTeks>(awal.rata);
   const [modeGambar, setModeGambar] = useState<"teks" | "kategori">("teks");
   const [kunciHijau, setKunciHijau] = useState(Boolean(awal.slot.boom.kunci_hijau));
@@ -70,7 +72,7 @@ export function TemplateTvrModal({
   const adaDraf = URUTAN_SLOT.some((s) => tpl.slot[s].draf);
   const kotakKunci = kotak ? `${kotak.x},${kotak.y},${kotak.w},${kotak.h}` : "";
   const badgeKunci = badge ? `${badge.x},${badge.y},${badge.w},${badge.h}` : "";
-  const kategoriBersih = kategori.trim().replace(/\s+/g, " ").toUpperCase();
+  const kategoriBersih = KATEGORI_CONTOH;
   const kunciGambar = `${versi}|${kotakKunci}|${badgeKunci}|${kategoriBersih}|${rata}|${warna}`;
   const adaGambarLayer = tpl.slot.kotak.ada || tpl.slot.kotak.draf || tpl.slot.bingkai.ada || tpl.slot.bingkai.draf;
 
@@ -234,7 +236,8 @@ export function TemplateTvrModal({
         body: JSON.stringify({
           text_box: kotak,
           badge_box: badge,
-          kategori: kategoriBersih,
+          // Kategori dipindah ke langkah Buat Video; template tak menyimpannya lagi.
+          kategori: "",
           rata,
           teks_warna: warna,
           kunci_hijau: boomVideoTanpaAlpha && kunciHijau,
@@ -438,19 +441,10 @@ export function TemplateTvrModal({
             </div>
           </div>
 
-          <div className="mt-2 flex items-center gap-2">
-            <label htmlFor="tvr-kategori" className="shrink-0 text-[11.5px] font-bold text-teks-utama">
-              Kategori
-            </label>
-            <input
-              id="tvr-kategori"
-              value={kategori}
-              onChange={(e) => setKategori(e.target.value.toUpperCase().slice(0, batas.maks_kategori))}
-              placeholder="NEWS (kosong = tanpa badge)"
-              disabled={sibuk}
-              className="glass-input h-9 min-w-0 flex-1 rounded-lg px-2.5 text-[12.5px] font-bold tracking-wide text-teks-utama uppercase"
-            />
-          </div>
+          <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder">
+            Atur <b className="text-teks-utama">letak</b> badge kategori di sini (mode “Kotak kategori”). Teksnya
+            (mis. NEWS) diisi nanti per video di langkah Buat Video.
+          </p>
           <div className="mt-2 grid grid-cols-4 gap-1.5" role="group" aria-label="Perataan tulisan berita">
             {PILIHAN_RATA.map((r) => (
               <button

@@ -58,7 +58,7 @@ export type JobTvr = {
   size?: number | null;
   created?: number | null;
   sumber_url?: string | null;
-  texts?: { hook?: string; sumber?: string } | null;
+  texts?: { hook?: string; sumber?: string; kategori?: string } | null;
 };
 
 export type AntreanTvr = {

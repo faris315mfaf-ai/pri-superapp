@@ -63,6 +63,8 @@ export function EditOtomatisTvr() {
   const [persenSumber, setPersenSumber] = useState<number | null>(null);
   const [hook, setHook] = useState("");
   const [teksSumber, setTeksSumber] = useState("");
+  // Kategori (badge NEWS/HIBURAN) kini diisi per video, bukan di template.
+  const [kategori, setKategori] = useState("");
   const [naskah, setNaskah] = useState("");
   const [bukaNaskah, setBukaNaskah] = useState(false);
   const [membuatHook, setMembuatHook] = useState(false);
@@ -234,7 +236,7 @@ export function EditOtomatisTvr() {
       const res = await apiFetch("/api/tvr/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: alamatSumber, hook: hook.trim(), sumber: teksSumber.trim() }),
+        body: JSON.stringify({ url: alamatSumber, hook: hook.trim(), sumber: teksSumber.trim(), kategori: kategori.trim() }),
       });
       const d = await bacaJson(res);
       if (!res.ok) {
@@ -271,10 +273,12 @@ export function EditOtomatisTvr() {
         setLink("");
         setHook("");
         setTeksSumber("");
+        setKategori("");
         setNaskah("");
       } else if (isiUlang && lama) {
         setHook(lama.texts?.hook ?? "");
         setTeksSumber(lama.texts?.sumber ?? "");
+        setKategori(lama.texts?.kategori ?? "");
         const asal = lama.sumber_url ?? "";
         if (asal.startsWith(AWALAN_UNGGAHAN)) {
           setModeSumber("unggah");
@@ -602,6 +606,19 @@ export function EditOtomatisTvr() {
               disabled={mengirim}
               className="glass-input mt-1 h-10 w-full rounded-xl px-3 text-[12.5px] text-teks-utama"
             />
+            <div className="mt-2 flex items-center gap-2">
+              <label htmlFor="tvr-kategori-video" className="shrink-0 text-[12px] font-bold text-teks-utama">
+                Kategori
+              </label>
+              <input
+                id="tvr-kategori-video"
+                value={kategori}
+                onChange={(e) => setKategori(e.target.value.toUpperCase().slice(0, batas.maks_kategori))}
+                placeholder="NEWS (opsional — kosong = tanpa badge)"
+                disabled={mengirim}
+                className="glass-input h-10 min-w-0 flex-1 rounded-xl px-3 text-[12.5px] font-bold tracking-wide text-teks-utama uppercase"
+              />
+            </div>
 
             <button
               type="button"
