@@ -31,19 +31,23 @@
   --bulat: 12px;
   --bulat-penuh: 999px;
 
-  /* Warna */
+  /* Warna. Aksen FOKUS/HOVER mengikuti merah merek SuperApp (dulu hijau
+     GODAM); hijau tetap dipakai khusus penanda STATUS (queued/rendering/done)
+     karena itu semantik "progres/berhasil", sama seperti token sukses app. */
   --hijau: #7fe0a0;
-  --hijau-tua: #3fce6f;
+  --hijau-tua: #dc2626;
   --merah: #ff7d7d;
   --kuning: #f0b429;
   --garis: #2a3a2e;
   --redup: #9aa89f;
 
+  /* Ikut tipografi SuperApp supaya menyatu dengan sisa aplikasi. */
+  font-family: var(--font-sans, inherit);
   color: #eef2ee;
   /* Kontrol bawaan peramban (pemilih berkas, kotak centang, daftar pilihan)
      ikut gelap, tidak tampil sebagai kotak putih menyilaukan. */
   color-scheme: dark;
-  accent-color: #3fce6f;
+  accent-color: #dc2626;
   /* Tata letak dua kolom mengikuti lebar kolom aplikasi, bukan lebar
      jendela: di PC kolomnya menyempit oleh navigasi samping. */
   container-type: inline-size;
@@ -73,8 +77,9 @@
   cursor: pointer;
   transition: border-color .15s, color .15s, background .15s, opacity .15s;
   border: none;
-  background: var(--hijau);
-  color: #051008;
+  /* Tombol utama = gradien merah khas SuperApp, teks putih. */
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: #fff;
 }
 
 .btnSekunder {
@@ -225,7 +230,7 @@
 .panel input:focus,
 .panel select:focus {
   outline: none;
-  border-color: #3fce6f;
+  border-color: #dc2626;
 }
 
 /* Tombol "Pilih berkas" bawaan dilucuti gaya dasar Tailwind sampai tinggal
@@ -558,7 +563,7 @@
 
 .kotakTeksLayer {
   position: absolute;
-  border: 2px solid #4ade80;
+  border: 2px solid #dc2626;
   background: rgba(74, 222, 128, 0.18);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
   pointer-events: none;
@@ -647,8 +652,8 @@
 
 .bantuanTombol:hover {
   opacity: 1;
-  border-color: #4ade80;
-  color: #4ade80;
+  border-color: #dc2626;
+  color: #dc2626;
 }
 
 .bantuanIsi {
@@ -680,6 +685,7 @@
    kecil dibuat lebih redup agar tidak bersaing dengan isian. */
 .panelHead h2 {
   margin: 0;
+  font-family: var(--font-heading, inherit);
   font-size: var(--teks-judul);
   font-weight: 800;
   letter-spacing: -0.01em;
@@ -954,7 +960,7 @@
 
 .rataAktif {
   background: #1c2b21;
-  border-color: #3fce6f;
+  border-color: #dc2626;
 }
 
 .rataBtn:disabled,
@@ -1043,7 +1049,7 @@
 }
 
 .ulangiBtn {
-  border-color: #3fce6f;
+  border-color: #dc2626;
   color: #7fe0a0;
 }
 

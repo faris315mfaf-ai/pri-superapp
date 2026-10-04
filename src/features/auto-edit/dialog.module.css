@@ -71,7 +71,7 @@
 
 .isian input:focus {
   outline: none;
-  border-color: #3fce6f;
+  border-color: #dc2626;
 }
 
 .petunjuk {
@@ -114,8 +114,8 @@
 }
 
 .utama {
-  background: #7fe0a0;
-  color: #051008;
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: #fff;
 }
 
 .utama:hover:not(:disabled) {
