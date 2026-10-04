@@ -24,6 +24,9 @@ const angka = (nama: string, bawaan: number) => {
 export const JOB_RETENTION_HOURS = UMUR_SIMPAN_JAM;
 export const RATA_AWAL_DETIK = angka("VIDEO_PERKIRAAN_AWAL_DETIK", 90);
 export const WORKER_PARALEL = Math.max(1, Math.trunc(angka("VIDEO_WORKER_PARALEL", 1)));
+// Batas atas slot serentak yang boleh dipilih master (jaga CPU/RAM VPS).
+export const SLOT_MAKS = Math.max(1, Math.trunc(angka("VIDEO_SLOT_MAKS", 8)));
+export const KUNCI_SLOT = "videojob:slot";
 export const TERLANTAR_DETIK = angka("VIDEO_JOB_TERLANTAR_DETIK", 900);
 export const STATUS_AKTIF_JOB: readonly StatusJob[] = ["queued", "downloading", "rendering"];
 export const STATUS_BERJALAN_JOB: readonly StatusJob[] = ["downloading", "rendering"];
@@ -210,6 +213,24 @@ function sisaDetik(st: Job, rata: number, kini: number): number {
 export type Antrean = { posisi: number; di_depan: number; sedang_dikerjakan: boolean; perkiraan_detik: number };
 
 /** Nomor antrean & perkiraan tunggu; null bila job sudah tidak aktif. */
+/** Berapa render boleh berjalan SERENTAK (diatur master, disimpan di Redis). */
+export async function slotSerentak(): Promise<number> {
+  try {
+    const n = Number.parseInt((await redis().get(KUNCI_SLOT)) ?? "", 10);
+    if (Number.isFinite(n) && n >= 1 && n <= SLOT_MAKS) return n;
+  } catch {
+    // Redis bermasalah: pakai bawaan dari env.
+  }
+  return Math.min(WORKER_PARALEL, SLOT_MAKS);
+}
+
+/** Setel jumlah slot serentak (dibatasi 1..SLOT_MAKS). */
+export async function aturSlotSerentak(n: number): Promise<number> {
+  const v = Math.max(1, Math.min(SLOT_MAKS, Math.trunc(Number(n) || 1)));
+  await redis().set(KUNCI_SLOT, String(v));
+  return v;
+}
+
 export async function posisiAntrean(jobId: string): Promise<Antrean | null> {
   const id = amanId(jobId);
   const r = redis();
@@ -230,6 +251,9 @@ export async function posisiAntrean(jobId: string): Promise<Antrean | null> {
   });
   if (basi.length) await r.zrem(KUNCI_AKTIF, ...basi);
   const rata = await rataDurasi();
+  // Perkiraan tunggu dibagi jumlah slot serentak yang berlaku (diatur master):
+  // makin banyak slot, makin cepat antrean dikerjakan.
+  const slot = await slotSerentak();
   const kini = sekarang();
   let tunggu = 0;
   let diDepan = 0;
@@ -238,7 +262,7 @@ export async function posisiAntrean(jobId: string): Promise<Antrean | null> {
       if (STATUS_BERJALAN_JOB.includes(st.status)) {
         return { posisi: 1, di_depan: 0, sedang_dikerjakan: true, perkiraan_detik: Math.round(sisaDetik(st, rata, kini)) };
       }
-      return { posisi: diDepan + 1, di_depan: diDepan, sedang_dikerjakan: false, perkiraan_detik: Math.round(tunggu / WORKER_PARALEL + rata) };
+      return { posisi: diDepan + 1, di_depan: diDepan, sedang_dikerjakan: false, perkiraan_detik: Math.round(tunggu / slot + rata) };
     }
     diDepan += 1;
     tunggu += STATUS_BERJALAN_JOB.includes(st.status) ? sisaDetik(st, rata, kini) : rata;

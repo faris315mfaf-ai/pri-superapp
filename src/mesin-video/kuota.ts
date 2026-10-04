@@ -9,7 +9,9 @@ const angka = (nama: string, bawaan: number) => {
   const n = Number.parseFloat(process.env[nama] ?? "");
   return Number.isFinite(n) ? n : bawaan;
 };
-export const KUOTA_AKUN_MB = Math.trunc(angka("KUOTA_AKUN_MB", 2048));
+// 1 GB per akun (permintaan 4 Okt 2026). Template + hasil render + unggahan
+// manual dihitung; cukup untuk puluhan video pendek sekaligus.
+export const KUOTA_AKUN_MB = Math.trunc(angka("KUOTA_AKUN_MB", 1024));
 const CACHE_DETIK = angka("KUOTA_CACHE_DETIK", 20);
 const cache = new Map<string, { byte: number; sampai: number }>();
 

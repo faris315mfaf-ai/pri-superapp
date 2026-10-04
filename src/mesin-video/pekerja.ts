@@ -15,7 +15,7 @@ import {
   redis,
   tandaiTerlantar,
   tulisStatus,
-  WORKER_PARALEL,
+  slotSerentak,
 } from "./job";
 import { probe } from "./media";
 import { render } from "./render";
@@ -181,9 +181,10 @@ async function mulai(): Promise<void> {
   await detak();
   const pewaktu = setInterval(detak, DETAK_DETIK * 1000);
 
+  const slotAwal = await slotSerentak();
   const worker = new Worker<MuatanRender>(NAMA_ANTREAN, (j: JobBull<MuatanRender>) => renderVideo(j.data), {
     connection: koneksiBull(),
-    concurrency: WORKER_PARALEL,
+    concurrency: slotAwal,
     // Unduhan (10 mnt) + render (30 mnt): kunci diperpanjang otomatis selama
     // proses hidup; kalau proses mati, tugasnya dianggap macet lalu dikirim
     // ulang — dan dilewati karena statusnya sudah bukan queued.
@@ -191,10 +192,26 @@ async function mulai(): Promise<void> {
     maxStalledCount: 1,
   });
   worker.on("error", (e) => console.error("Worker antrean galat", e));
-  console.info(`Worker Auto Edit (TS) siap, ${WORKER_PARALEL} video sekaligus`);
+  console.info(`Worker Auto Edit (TS) siap, ${slotAwal} video sekaligus`);
+
+  // Slot serentak bisa diubah master tanpa restart: ikuti nilai Redis.
+  const selarasSlot = async () => {
+    try {
+      const n = await slotSerentak();
+      if (worker.concurrency !== n) {
+        worker.concurrency = n;
+        console.info(`Slot serentak diubah jadi ${n}`);
+      }
+    } catch {
+      // nilai lama dipertahankan
+    }
+  };
+  const pewaktuSlot = setInterval(selarasSlot, 5000);
+  pewaktuSlot.unref();
 
   const tutup = async () => {
     clearInterval(pewaktu);
+    clearInterval(pewaktuSlot);
     try {
       await redis().del(KUNCI_DETAK_WORKER);
     } catch {

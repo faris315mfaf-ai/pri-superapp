@@ -17,10 +17,13 @@ import { pastikanIsiMedia, probe, rapikanVideo } from "../media";
 import { POSISI_RUMUS } from "../perintah";
 import {
   amanId,
+  aturSlotSerentak,
   buangJob,
   daftarJob,
   jobPath,
   segarkanKalauTerlantar,
+  SLOT_MAKS,
+  slotSerentak,
   STATUS_AKTIF_JOB,
   tandaiTerlantar,
 } from "../job";
@@ -343,6 +346,19 @@ export function pasangRuteVideo(r: Router): void {
         tamu: false,
       },
     };
+  });
+
+  // Slot serentak Auto Edit — HANYA master (rute /api/video dibatasi gerbang
+  // SuperApp ke master). Mengatur berapa render jalan bersamaan di VPS.
+  r.get(`${A}/slot`, async (pm) => {
+    penggunaWajib(pm);
+    return { slot: await slotSerentak(), min: 1, maks: SLOT_MAKS };
+  });
+
+  r.post(`${A}/slot`, async (pm) => {
+    penggunaWajib(pm);
+    const body = await bacaJson(pm, z.object({ slot: intLax.pipe(z.number().min(1).max(SLOT_MAKS)) }));
+    return { slot: await aturSlotSerentak(body.slot), min: 1, maks: SLOT_MAKS };
   });
 
   r.post(`${A}/preview`, async (pm) => {

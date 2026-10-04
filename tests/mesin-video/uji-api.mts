@@ -279,6 +279,20 @@ await uji("batas job aktif per akun", async () => {
   }
 });
 
+await uji("slot serentak diatur & dibaca master", async () => {
+  const id = "1011";
+  let r = await minta("GET", "/api/video/slot", { id });
+  pastikan(r.status === 200 && r.json().slot >= 1 && r.json().maks >= 1, r.teks);
+  r = await minta("POST", "/api/video/slot", { id, json: { slot: 3 } });
+  pastikan(r.status === 200 && r.json().slot === 3, r.teks);
+  pastikan((await minta("GET", "/api/video/slot", { id })).json().slot === 3);
+  // di luar batas ditolak
+  pastikan((await minta("POST", "/api/video/slot", { id, json: { slot: 999 } })).status === 422);
+  pastikan((await minta("POST", "/api/video/slot", { id, json: { slot: 0 } })).status === 422);
+  // kembalikan ke 1 supaya tak mengubah perkiraan antrean uji lain
+  pastikan((await minta("POST", "/api/video/slot", { id, json: { slot: 1 } })).json().slot === 1);
+});
+
 // ---------------------------------------------------------------- 5. render sungguhan
 
 console.log("Render ujung-ke-ujung dengan ffmpeg sungguhan");
@@ -316,7 +330,8 @@ await uji("render video sampai jadi", async () => {
   // Tugas yang dikirim ulang setelah selesai tidak dirender dua kali.
   pastikan((await pekerja.renderVideo(TUGAS[0])).status === "done");
   pastikan((await kuota.pemakaianByte("pri-1006", true)) > 50_000);
-  pastikan((await minta("GET", "/api/video/info", { id })).json().kuota.tamu === false);
+  const infoKuota = (await minta("GET", "/api/video/info", { id })).json().kuota;
+  pastikan(infoKuota.tamu === false && infoKuota.batas_mb === 1024, JSON.stringify(infoKuota));
   // Rentang byte (pemutar video menggeser) dilayani 206.
   const jid = (r.json().jobs as { job_id: string }[])[0].job_id;
   const sebagian = await fetch(`${DASAR}/api/video/jobs/${jid}/file`, { headers: { "X-Autoedit-Pengguna": id, Range: "bytes=0-99" } });
