@@ -1,0 +1,145 @@
+# =====================================================================
+# VPS MESIN AUTO EDIT (5 Okt 2026) — 72.61.143.158, /opt/pri-mesin
+#
+# Server kedua yang KHUSUS menjalankan mesin Auto Edit (src/mesin-video):
+# API, worker render ffmpeg, dan Redis antreannya. VPS aplikasi tidak lagi
+# merender — aplikasi, Supabase, dan situs lain di sana tidak terganggu
+# saat antrean render penuh.
+#
+# Jalan masuk satu-satunya: jalur privat WireGuard (wg0, 10.77.0.2).
+#   aplikasi (VPS lama) -> socket /srv/godam/sock/api.sock milik jembatan di
+#   sana -> TCP 10.77.0.2:7700 -> autoedit-jembatan di sini -> socket API.
+# Tidak ada port yang terbuka ke internet; UFW hanya mengizinkan 7700 dari
+# 10.77.0.1 di wg0 (vps/mesin/pasang.sh).
+#
+# Disk media sama polanya dengan VPS lama (vps/autoedit/siapkan-disk.sh):
+# berkas image ext4 berukuran tetap di /srv/godam/media — template, stok
+# video (hasil render & unggahan manual), unggahan sumber, cache, outro.
+#
+# Image pri-autoedit-ts:terbaru DIBANGUN di VPS aplikasi (sumber kode ada di
+# sana) lalu dikirim ke sini oleh 12-perbarui.sh — bukan dibangun di sini.
+# =====================================================================
+name: pri-mesin
+
+services:
+  autoedit-redis:
+    image: redis:7-alpine
+    container_name: pri-autoedit-redis
+    restart: unless-stopped
+    # Antrean render & catatan stok: AOF menyala dan TIDAK ada pembuangan kunci.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "192mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - autoedit-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [autoedit]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  autoedit-ts-api:
+    image: pri-autoedit-ts:terbaru
+    container_name: pri-autoedit-ts-api
+    restart: unless-stopped
+    init: true
+    command: ["node", "--enable-source-maps", "utama.mjs"]
+    env_file:
+      - path: ./autoedit.env
+        required: false
+    environment:
+      AUTOEDIT_PERAN: api
+      REDIS_URL: redis://autoedit-redis:6379/0
+      MEDIA_DIR: /data/media
+      VIDEO_SLOT_MAKS: "4"
+      TZ: Asia/Jakarta
+    volumes:
+      - /srv/godam/media:/data/media
+      - /srv/godam/sock:/run/autoedit
+    depends_on:
+      autoedit-redis:
+        condition: service_healthy
+    networks: [autoedit]
+    healthcheck:
+      test: ["CMD", "node", "sehat.mjs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    # Unggahan, sampul stok, pratinjau template, dan outro (ffmpeg) di sini.
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 3G, pids: 256 }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # Render serentak diatur master dari HR Center (Redis videojob:slot),
+  # 1..VIDEO_SLOT_MAKS. Tiap video 2 utas encoder: 4 slot ≈ 8 utas.
+  autoedit-ts-worker:
+    image: pri-autoedit-ts:terbaru
+    container_name: pri-autoedit-ts-worker
+    restart: unless-stopped
+    init: true
+    command: ["node", "--enable-source-maps", "pekerja.mjs"]
+    env_file:
+      - path: ./autoedit.env
+        required: false
+    environment:
+      AUTOEDIT_PERAN: worker
+      REDIS_URL: redis://autoedit-redis:6379/0
+      MEDIA_DIR: /data/media
+      VIDEO_WORKER_PARALEL: "3"
+      VIDEO_SLOT_MAKS: "4"
+      VIDEO_THREADS: "2"
+      TZ: Asia/Jakarta
+    volumes:
+      - /srv/godam/media:/data/media
+    depends_on:
+      autoedit-redis:
+        condition: service_healthy
+    networks: [autoedit]
+    deploy:
+      resources:
+        limits: { cpus: "6.5", memory: 16G, pids: 1024 }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # Jembatan TCP (jalur privat) -> socket API. Hanya mendengar di 10.77.0.2.
+  autoedit-jembatan:
+    image: alpine/socat:latest
+    container_name: pri-autoedit-jembatan
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - "TCP-LISTEN:7700,bind=10.77.0.2,reuseaddr,fork,backlog=128"
+      - "UNIX-CONNECT:/run/autoedit/api.sock"
+    volumes:
+      - /srv/godam/sock:/run/autoedit
+    depends_on:
+      autoedit-ts-api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 256M }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  autoedit-redis-data:
+
+networks:
+  # Subnet tetap: firewall keluar (vps/autoedit/firewall-keluar.sh) menutup
+  # akses container ke alamat privat — termasuk jalur WireGuard 10.77.0.0/24.
+  autoedit:
+    name: pri-autoedit
+    ipam:
+      config:
+        - subnet: 10.251.0.0/24

@@ -296,6 +296,30 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
+  # --- Auto Edit di VPS MESIN (5 Okt 2026) ---------------------------
+  # Mode "jauh" ($APP/autoedit-mesin = jauh): mesin Auto Edit berjalan di
+  # VPS kedua (vps/mesin/). Jembatan ini memegang socket yang dipasang
+  # aplikasi (/srv/godam/sock/api.sock) dan meneruskan tiap koneksi lewat
+  # jalur privat WireGuard ke 10.77.0.2:7700 — aplikasi tidak tahu bedanya.
+  # Saat mode ini aktif, autoedit-* di atas tidak dinyalakan (12-perbarui.sh).
+  autoedit-jembatan:
+    profiles: ["jauh"]
+    image: alpine/socat:latest
+    container_name: pri-autoedit-jembatan
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - "UNIX-LISTEN:/run/autoedit/api.sock,fork,mode=666,unlink-early,backlog=128"
+      - "TCP:10.77.0.2:7700,connect-timeout=5"
+    volumes:
+      - /srv/godam/sock:/run/autoedit
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 256M }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
 volumes:
   redis-data:
   autoedit-redis-data:

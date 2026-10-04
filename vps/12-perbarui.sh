@@ -260,13 +260,62 @@ nyalakan_autoedit_ts() {
   docker compose --profile ts up -d autoedit-redis autoedit-ts-api autoedit-ts-worker     && tunggu_sehat pri-autoedit-ts-api
 }
 
+# --- Mode "jauh" (5 Okt 2026): mesin Auto Edit di VPS kedua ---------
+# Kode sumber ada di sini, jadi image DIBANGUN di sini lalu dikirim lewat
+# jalur privat WireGuard ke VPS mesin (10.77.0.2) — hanya bila berubah.
+# Di sini cukup jembatan socket -> TCP. Kunci SSH /root/.ssh/pri-mesin
+# hanya diterima VPS mesin bila datang dari 10.77.0.1 (jalur privat).
+MESIN_HOST=root@10.77.0.2
+MESIN_DIR=/opt/pri-mesin
+MESIN_SSH=(ssh -o BatchMode=yes -o ConnectTimeout=10 -i /root/.ssh/pri-mesin "$MESIN_HOST")
+MESIN_SCP=(scp -q -o BatchMode=yes -o ConnectTimeout=10 -i /root/.ssh/pri-mesin)
+
+nyalakan_autoedit_jauh() {
+  docker compose --profile ts build autoedit-ts-api || return 1
+  # Socket di sini milik jembatan: mesin lokal (TS & Python) tidak boleh menyala.
+  docker compose --profile ts stop autoedit-ts-api autoedit-ts-worker autoedit-api autoedit-worker autoedit-redis >/dev/null 2>&1 || true
+  docker compose --profile ts rm -f autoedit-ts-api autoedit-ts-worker autoedit-api autoedit-worker autoedit-redis >/dev/null 2>&1 || true
+  # Susunan, skrip, dan kunci DeepSeek ikut versi terbaru.
+  "${MESIN_SSH[@]}" "mkdir -p $MESIN_DIR/autoedit && chmod 700 $MESIN_DIR" || return 1
+  "${MESIN_SCP[@]}" "$SKRIP/mesin/docker-compose.yml" "$SKRIP/mesin/pasang.sh" "$MESIN_HOST:$MESIN_DIR/" || return 1
+  "${MESIN_SCP[@]}" "$SKRIP/autoedit/siapkan-disk.sh" "$SKRIP/autoedit/firewall-keluar.sh" \
+    "$SKRIP/autoedit/cadangan-template.sh" "$MESIN_HOST:$MESIN_DIR/autoedit/" || return 1
+  "${MESIN_SCP[@]}" "$APP/autoedit.env" "$MESIN_HOST:$MESIN_DIR/autoedit.env" || return 1
+  "${MESIN_SSH[@]}" "chmod 600 $MESIN_DIR/autoedit.env && bash $MESIN_DIR/pasang.sh" || return 1
+  # Image dikirim hanya bila berbeda dari yang sudah ada di sana.
+  local lokal jauh
+  lokal="$(docker image inspect -f '{{.Id}}' pri-autoedit-ts:terbaru)"
+  jauh="$("${MESIN_SSH[@]}" "docker image inspect -f '{{.Id}}' pri-autoedit-ts:terbaru 2>/dev/null" || true)"
+  if [ "$lokal" != "$jauh" ]; then
+    echo "  mengirim image mesin ke VPS mesin ..."
+    docker save pri-autoedit-ts:terbaru | gzip -1 | "${MESIN_SSH[@]}" "gunzip | docker load -q" >/dev/null || return 1
+  fi
+  "${MESIN_SSH[@]}" "cd $MESIN_DIR && docker compose up -d >/dev/null 2>&1 \
+    && for i in \$(seq 1 30); do [ \"\$(docker inspect -f '{{.State.Health.Status}}' pri-autoedit-ts-api 2>/dev/null)\" = healthy ] && exit 0; sleep 3; done; exit 1" || return 1
+  docker compose --profile jauh up -d autoedit-jembatan >/dev/null 2>&1 || return 1
+  # Ujung ke ujung, lewat socket yang sama dengan yang dipakai aplikasi.
+  for i in $(seq 1 10); do
+    curl -fsS --max-time 10 --unix-socket /srv/godam/sock/api.sock http://mesin/health >/dev/null 2>&1 && return 0
+    sleep 2
+  done
+  return 1
+}
+
 if [ "$AUTOEDIT_SIAP" = "1" ]; then
-  # Mesin dipilih lewat berkas $APP/autoedit-mesin ("python" | "ts").
+  # Mesin dipilih lewat berkas $APP/autoedit-mesin ("python" | "ts" | "jauh").
   # Tanpa berkas itu tetap Python — peralihan ke TS dilakukan sengaja.
   MESIN_AUTOEDIT="$(tr -dc 'a-z' < "$APP/autoedit-mesin" 2>/dev/null || true)"
-  [ "$MESIN_AUTOEDIT" = "ts" ] || MESIN_AUTOEDIT="python"
+  case "$MESIN_AUTOEDIT" in ts|jauh) ;; *) MESIN_AUTOEDIT="python" ;; esac
   echo "== Auto Edit: membangun & menyalakan (mesin $MESIN_AUTOEDIT) =="
-  if [ "$MESIN_AUTOEDIT" = "ts" ]; then
+  if [ "$MESIN_AUTOEDIT" = "jauh" ]; then
+    # TIDAK jatuh ke mesin lokal bila gagal: data (template, stok, antrean)
+    # ada di VPS mesin; mesin lokal yang kosong hanya membingungkan anggota.
+    if nyalakan_autoedit_jauh; then
+      echo "  Auto Edit jalan di VPS mesin (${MESIN_HOST#root@})."
+    else
+      echo "  PERINGATAN: Auto Edit di VPS mesin gagal diperbarui/dihubungi — aplikasi tetap jalan. Periksa: ssh -i /root/.ssh/pri-mesin $MESIN_HOST 'cd $MESIN_DIR && docker compose ps'" >&2
+    fi
+  elif [ "$MESIN_AUTOEDIT" = "ts" ]; then
     if nyalakan_autoedit_ts; then
       echo "  Auto Edit (TS) jalan."
     else
