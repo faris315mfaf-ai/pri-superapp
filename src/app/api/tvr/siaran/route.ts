@@ -14,7 +14,7 @@ import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { daftarProfilUp, uploadPostSiap } from "@/lib/upload-post";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
-import { MAKS_UMUR_URL_DETIK, presignR2, r2Siap } from "@/lib/r2";
+import { MAKS_UMUR_URL_DETIK, pastikanUkuranR2Wajar, presignR2, r2Siap } from "@/lib/r2";
 import { prosesSiaranSerentak } from "@/lib/siaran";
 import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 
@@ -142,6 +142,9 @@ export async function POST(request: Request) {
       if (!r2Siap()) {
         throw Object.assign(new Error("Penyimpanan video (R2) belum diatur."), { status: 503 });
       }
+      // Presigned PUT tak mengikat ukuran; pastikan objek yang benar-benar
+      // terunggah tidak berukuran raksasa (fail-open bila HEAD gagal).
+      await pastikanUkuranR2Wajar(r2Key);
     } else if (!path.startsWith(`${user.id}/`) || !/^[\w./-]+$/.test(path)) {
       throw Object.assign(new Error("Berkas video tidak dikenal."), { status: 400 });
     }

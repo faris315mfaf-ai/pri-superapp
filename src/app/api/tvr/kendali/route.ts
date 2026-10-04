@@ -5,6 +5,7 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { buatSesi, keUserPublik, kolomUser, pastikanMasuk, type BarisUser } from "@/lib/sesi";
+import { adalahPengurusPusat } from "@/lib/peran";
 import { adalahAdminStudio, DIVISI_PALUGODAM } from "@/lib/struktur";
 import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 
@@ -75,7 +76,19 @@ export async function POST(request: Request) {
     const b = data as unknown as BarisUser;
     if (b.aktif !== true || String(b.status) !== "aktif") throw Object.assign(new Error("Akun itu tidak aktif."), { status: 403 });
     if (String(b.divisi ?? "").trim() !== DIVISI_PALUGODAM) throw Object.assign(new Error("Hanya akun anggota Divisi PALUGODAM yang bisa dimasuki."), { status: 403 });
-    if (b.role === "master" || b.role === "super_admin") throw Object.assign(new Error("Akun pengurus tertinggi tidak bisa dimasuki."), { status: 403 });
+    // Exclusion pakai peran EFEKTIF, bukan kolom role mentah: superadmin
+    // dipetakan ke master di keUserPublik, dan Ketua Umum = super_admin
+    // efektif walau role DB-nya 'anggota'. Tanpa ini, seorang Ketum/
+    // superadmin yang kebetulan ada di Divisi PALUGODAM bisa diambil-alih
+    // sesinya oleh kepala PALUGODAM → naik ke kuasa penuh se-aplikasi.
+    const targetPublik = keUserPublik(b);
+    if (
+      adalahPengurusPusat(targetPublik) ||
+      targetPublik.superadmin ||
+      String(b.jabatan ?? "").trim() === "Ketua Umum"
+    ) {
+      throw Object.assign(new Error("Akun pengurus tertinggi tidak bisa dimasuki."), { status: 403 });
+    }
     const token = await buatSesi(targetId, `Kendali PALUGODAM oleh ${admin.nama}`.slice(0, 120));
     console.log(`[kendali] ${admin.nama} (#${admin.id}) masuk sebagai #${targetId}`);
     return { sukses: true, token, user: keUserPublik(b) };

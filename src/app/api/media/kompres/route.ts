@@ -11,6 +11,7 @@
 // diberi napas 300 detik dan klien menampilkan penghitung waktu.
 import { bungkus } from "@/lib/api-helper";
 import { pastikanMasuk } from "@/lib/sesi";
+import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import { BATAS_KOMPRES_MB, konfigUploadCloudinary, kompresVideoCloudinary } from "@/lib/cloudinary";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,13 @@ export const maxDuration = 300;
 
 export async function POST(request: Request) {
   return bungkus(async () => {
-    await pastikanMasuk(request);
+    const user = await pastikanMasuk(request);
+    // Kompresi sinkron membakar kredit Cloudinary + menduduki fungsi 300 dtk.
+    // public_id datang dari klien dan tak bisa diikat ke pemilik (preset
+    // unsigned memberi id acak), jadi rem penyalahgunaan = batas per akun:
+    // 12 kompresi / 10 menit cukup untuk pemakaian wajar.
+    const tolak = await pastikanTidakMelebihiBatas(request, "media-kompres", 12, 600, String(user.id));
+    if (tolak) return tolak;
     if (!konfigUploadCloudinary()) {
       throw Object.assign(new Error("Penyimpanan video (Cloudinary) belum diatur."), { status: 503 });
     }

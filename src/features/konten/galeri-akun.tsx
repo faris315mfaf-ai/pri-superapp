@@ -25,6 +25,7 @@ import {
   type VideoGaleri,
 } from "@/services";
 import { cn } from "@/lib/utils";
+import { hrefAman } from "@/lib/href-aman";
 
 /** 6 kolom x 6 baris per halaman lingkaran. */
 const PER_HALAMAN = 36;
@@ -345,7 +346,7 @@ function KartuVideo({ video }: { video: VideoGaleri }) {
   return (
     <article className="glass-soft flex flex-col overflow-hidden rounded-2xl">
       <a
-        href={video.url}
+        href={hrefAman(video.url)}
         target="_blank"
         rel="noopener noreferrer"
         className="relative block aspect-[3/4] w-full bg-black/10 dark:bg-white/10"
@@ -399,7 +400,7 @@ function KartuVideo({ video }: { video: VideoGaleri }) {
           </div>
         )}
         <a
-          href={video.url}
+          href={hrefAman(video.url)}
           target="_blank"
           rel="noopener noreferrer"
           className="btn-tekan mt-auto flex h-8 w-full items-center justify-center gap-1.5 rounded-xl text-[11.5px] font-bold text-white"

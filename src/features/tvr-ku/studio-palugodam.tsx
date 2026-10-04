@@ -62,6 +62,7 @@ import { TabAnggota } from "./studio-anggota";
 import { StudioPerAkun } from "./studio-per-akun";
 import { LaporanHarianPanel } from "./laporan-harian";
 import { cn } from "@/lib/utils";
+import { hrefAman } from "@/lib/href-aman";
 
 const PLATFORM6 = [
   "instagram",
@@ -689,7 +690,7 @@ function EditorProyek({
           )}
           {data.proyek.sumber_link ? (
             <a
-              href={data.proyek.sumber_link}
+              href={hrefAman(data.proyek.sumber_link)}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-1.5 flex items-center gap-1 text-[10.5px] text-teks-sekunder"

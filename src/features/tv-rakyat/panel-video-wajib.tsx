@@ -47,6 +47,7 @@ import {
 } from "@/services";
 import { unggahKeUrlTanda } from "@/lib/unggah-video-klien";
 import { cn } from "@/lib/utils";
+import { hrefAman } from "@/lib/href-aman";
 
 function mb(byte: number): string {
   return `${Math.max(1, Math.round(byte / 1048576))} MB`;
@@ -452,7 +453,7 @@ export function PanelVideoWajib() {
               </div>
               {v.berkas_url && (
                 <a
-                  href={v.berkas_url}
+                  href={hrefAman(v.berkas_url)}
                   target="_blank"
                   rel="noopener noreferrer"
                   download={v.berkas_nama || undefined}
@@ -465,7 +466,7 @@ export function PanelVideoWajib() {
               )}
               {v.link_doksli && (
                 <a
-                  href={v.link_doksli}
+                  href={hrefAman(v.link_doksli)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={cn(

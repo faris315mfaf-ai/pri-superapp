@@ -20,6 +20,7 @@ import { toast } from "@/hooks/use-app-store";
 import { ajukanKomentar, getKepatuhanDetail, type KepatuhanDetail, type KepatuhanDetailPost } from "@/services";
 import { jamWIB, tanggalIndonesia } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { hrefAman } from "@/lib/href-aman";
 
 function waktuUnggah(iso: string | null): string {
   if (!iso) return "jam unggah tidak diketahui";
@@ -228,7 +229,7 @@ export function ModalKepatuhanDetail({ nama, onTutup }: { nama: string; onTutup:
 
                         {/* KANAN: mata → buka postingan */}
                         <a
-                          href={d.url_postingan}
+                          href={hrefAman(d.url_postingan)}
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label="Lihat postingan"

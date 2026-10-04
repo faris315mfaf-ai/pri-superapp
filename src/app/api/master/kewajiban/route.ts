@@ -51,7 +51,9 @@ export async function GET(request: Request) {
     const db = supabase();
     const cari = (new URL(request.url).searchParams.get("cari") ?? "").trim().slice(0, 60);
     // Karakter khusus pola ilike dinetralkan supaya pencarian apa adanya.
-    const pola = `%${cari.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+    // Koma/kurung/kutip ikut dibuang: keduanya memecah sintaks `.or(...)`
+    // PostgREST dan bisa menyisipkan kondisi tambahan.
+    const pola = `%${cari.replace(/[%_\\]/g, (c) => `\\${c}`).replace(/[,()"]/g, "")}%`;
     const [{ data: hasil }, { data: dibebaskan }] = await Promise.all([
       cari.length >= 2
         ? db

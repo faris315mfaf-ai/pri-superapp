@@ -40,8 +40,18 @@ function siapkanVapid() {
 
 export async function POST(request: Request) {
   return bungkus(async () => {
+    // Fail-CLOSED: endpoint ini membunyikan notifikasi SEMUA perangkat,
+    // jadi rahasia WAJIB terpasang. Dulu "if (rahasia && ...)" berarti
+    // kalau env kosong (mis. lupa saat pindah VPS) penjaga dilewati total
+    // dan siapa pun bisa mengirim push phishing.
     const rahasia = process.env.N8N_WEBHOOK_SECRET;
-    if (rahasia && request.headers.get("x-pri-secret") !== rahasia) {
+    if (!rahasia) {
+      throw Object.assign(
+        new Error("Pengiriman push belum dikonfigurasi (N8N_WEBHOOK_SECRET kosong)."),
+        { status: 503 },
+      );
+    }
+    if (request.headers.get("x-pri-secret") !== rahasia) {
       throw Object.assign(new Error("Tidak berwenang"), { status: 401 });
     }
 

@@ -19,6 +19,7 @@ import { urlEmbedDari } from "@/lib/embed-sosmed";
 import { dengarkanRealtime } from "@/lib/realtime-klien";
 import { waktuJelasWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { hrefAman } from "@/lib/href-aman";
 import {
   getKepatuhanKomenLeaderboard,
   getPengumuman,
@@ -459,7 +460,7 @@ export function KomenVideoSimpel({ onKembali }: { onKembali: () => void }) {
                       type="button"
                       onClick={() => {
                         if (embed) setDimuat((s) => new Set(s).add(kunci));
-                        else window.open(item.url, "_blank", "noopener,noreferrer");
+                        else { const _u = hrefAman(item.url); if (_u) window.open(_u, "_blank", "noopener,noreferrer"); }
                       }}
                       aria-label={embed ? "Putar video di sini" : "Buka video"}
                       className="relative block w-full bg-slate-100 dark:bg-slate-800"
@@ -499,7 +500,7 @@ export function KomenVideoSimpel({ onKembali }: { onKembali: () => void }) {
                     {item.caption ? <p className="mt-1.5 line-clamp-2 text-[12px] leading-snug text-slate-700 dark:text-slate-300">{item.caption}</p> : null}
                     <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Tayang: {item.waktu_posting ? waktuJelasWIB(item.waktu_posting) : "-"}</p>
                     <a
-                      href={item.url}
+                      href={hrefAman(item.url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={() => {

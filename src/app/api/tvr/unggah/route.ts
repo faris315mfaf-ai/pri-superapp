@@ -21,6 +21,7 @@ import { userEfektifTvr } from "@/lib/sebagai";
 import { periksaJadwal } from "@/lib/jadwal-unggah";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { cekBatas } from "@/lib/rate-limit";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { maksUploadMb } from "@/lib/pengaturan-tv";
@@ -298,6 +299,12 @@ export async function POST(request: Request) {
     // ---- Langkah 1b (5 Sep 2026): video besar sudah di Cloudinary →
     //      kompres <= 50 MB, salin ke R2, hapus dari Cloudinary ----
     if (body.aksi === "kompres") {
+      // Kompresi sinkron (membakar kredit Cloudinary + menduduki fungsi):
+      // batasi per akun, public_id dari klien tak bisa diikat pemilik.
+      const remKompres = await cekBatas(`tvr-kompres|${user.id}`, 12, 600);
+      if (!remKompres.boleh) {
+        throw Object.assign(new Error("Terlalu banyak kompresi berturut-turut. Coba lagi beberapa menit lagi."), { status: 429 });
+      }
       const publicId = String(body.public_id ?? "").trim();
       if (!publicId || publicId.length > 200 || !/^[\w/-]+$/.test(publicId)) {
         throw Object.assign(new Error("Berkas video tidak dikenal."), { status: 400 });

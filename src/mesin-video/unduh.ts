@@ -340,8 +340,17 @@ export function alamatPublik(ip: AlamatIp): boolean {
 //  PENJAGA SSRF
 // ============================================================
 
+let sudahWartaBintang = false;
 export function situsDiizinkan(inang: string, daftar: readonly string[] = SITUS_DIIZINKAN): boolean {
-  if (daftar.includes("*")) return true;
+  if (daftar.includes("*")) {
+    // `*` mematikan SELURUH filter host → hanya tersisa cek IP saat-resolve.
+    // Digabung DNS rebinding ini jadi SSRF penuh. Jangan dipasang di produksi.
+    if (!sudahWartaBintang) {
+      sudahWartaBintang = true;
+      console.warn("[mesin-video] PERINGATAN: VIDEO_SITUS_DIIZINKAN berisi '*' — filter host MATI (risiko SSRF).");
+    }
+    return true;
+  }
   return daftar.some((s) => inang === s || inang.endsWith(`.${s}`));
 }
 
@@ -455,7 +464,7 @@ export async function bebaskanSitus(url: string): Promise<void> {
 /** Situs yang baru menolak 429 tidak ditembak lagi sebelum jedanya habis. */
 export async function tolakKalauDitahan(url: string): Promise<void> {
   const tahanan = await sisaTahanan(url);
-  if (tahanan > 0 && !(IG_SESSIONID && url.toLowerCase().includes("instagram.com"))) {
+  if (tahanan > 0 && !(IG_SESSIONID && situs(url) === "instagram.com")) {
     throw new GalatVideo(
       `${situs(url) || "Situs ini"} sedang membatasi permintaan dari server ` +
         `ini (429). Tunggu ${Math.trunc(tahanan) + 1} detik lagi, atau unggah berkas ` +
@@ -616,7 +625,7 @@ export async function ytdlpDenganMundur(
 
 /** Berkas cookie dari Session ID server, khusus link Instagram. */
 export function cookieInstagram(url: string, folder: string): string | null {
-  if (!IG_SESSIONID || !url.toLowerCase().includes("instagram.com")) return null;
+  if (!IG_SESSIONID || situs(url) !== "instagram.com") return null;
   fs.mkdirSync(folder, { recursive: true });
   const berkas = path.join(folder, "cookies.txt");
   const kedaluwarsa = Math.trunc(sekarangDetik()) + 86400 * 30;
@@ -718,7 +727,7 @@ export async function susulkanAudio(
   const audio = globSumber(folder, "audio-susulan.").sort(urutNama)[0] ?? null;
   if (hasil === null || hasil.returncode !== 0 || audio === null) {
     if (log) {
-      if (url.toLowerCase().includes("instagram.com")) {
+      if (situs(url) === "instagram.com") {
         // Terbukti 27 Sep 2026 (reel Ddvp79eTigN): Instagram membisukan
         // postingan tertentu untuk negara server (lagunya dibatasi wilayah).
         log(

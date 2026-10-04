@@ -47,6 +47,7 @@ import {
 import { DIVISI } from "@/lib/struktur";
 import { Target } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { hrefAman } from "@/lib/href-aman";
 
 function tanggalWibSekarang(): string {
   return new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
@@ -189,7 +190,8 @@ export function KpiAnggotaDashboard() {
     setPdfSibuk(true);
     try {
       const r = await unduhPdfKpiVideo(fTanggal);
-      window.open(r.url, "_blank", "noopener,noreferrer");
+      const _u = hrefAman(r.url);
+      if (_u) window.open(_u, "_blank", "noopener,noreferrer");
       toast("sukses", "PDF siap", `${r.jumlah_orang} pengguna · ${r.jumlah_link} link. Tautan berlaku 24 jam.`);
     } catch (e) {
       toast("error", "Gagal membuat PDF", e instanceof Error ? e.message : "");
@@ -959,7 +961,7 @@ function VideoHariIniPerSosmed({ links }: { links: LaporanVideo[] }) {
               {daftar.map((l) => (
                 <a
                   key={l.id}
-                  href={l.url_video}
+                  href={hrefAman(l.url_video)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn-tekan flex items-center gap-1.5 rounded-lg bg-black/5 px-2 py-1.5 text-[10.5px] text-teks-utama dark:bg-white/10"

@@ -42,6 +42,7 @@ import {
 import { jamWIB, tanggalIndonesia } from "@/lib/format";
 import { labelPlatform } from "@/components/platform-icon";
 import { useModulAktif } from "@/hooks/use-modul";
+import { hrefAman } from "@/lib/href-aman";
 
 const PER_HALAMAN = 10;
 
@@ -194,7 +195,7 @@ function DetailPengguna({ id, onKembali }: { id: string; onKembali: () => void }
               {data.video.daftar.map((v, i) => (
                 <a
                   key={i}
-                  href={v.url_video}
+                  href={hrefAman(v.url_video)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-[12px]"

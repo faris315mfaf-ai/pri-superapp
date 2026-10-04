@@ -33,6 +33,11 @@ type BarisAkun = {
 async function cariAkun(identitasMentah: string): Promise<BarisAkun | null> {
   const identitas = (identitasMentah ?? "").trim().toLowerCase();
   if (!identitas) return null;
+  // Nilai ini dirangkai ke filter `.or(...)` PostgREST. Koma, kurung, dan
+  // kutip memecah sintaks filter → bisa menyisipkan kondisi tambahan
+  // (mis. "x,status.eq.aktif"). Username/email/nomor WA yang sah tidak
+  // pernah memuat karakter itu, jadi tolak (jawaban tetap netral di PUT).
+  if (/[,()"\s]/.test(identitas) || identitas.length > 120) return null;
 
   const db = supabase();
   const sebagaiNomor = normalkanNomorWa(identitas);

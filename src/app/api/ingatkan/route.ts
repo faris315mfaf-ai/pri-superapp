@@ -8,6 +8,7 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus, pastikanSukses } from "@/lib/api-helper";
 import { panggilWebhookN8n, N8nBelumDiaturError } from "@/lib/n8n";
+import { adalahPengurus, pastikanMasuk } from "@/lib/sesi";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,14 @@ type BarisRekap = {
 
 export async function POST(request: Request) {
   return bungkus(async () => {
+    // Memicu blast WhatsApp ke banyak kader (lewat n8n→Fonnte): wajib
+    // pengurus. Dulu endpoint ini terbuka tanpa login — siapa pun bisa
+    // menghujani nomor anggota & membuat akun Fonnte kena banned.
+    const user = await pastikanMasuk(request);
+    if (!adalahPengurus(user.role)) {
+      throw Object.assign(new Error("Hanya pengurus yang boleh mengirim pengingat"), { status: 403 });
+    }
+
     const body = (await request.json().catch(() => ({}))) as {
       id_postingan?: string;
     };

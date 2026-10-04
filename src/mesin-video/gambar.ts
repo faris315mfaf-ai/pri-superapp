@@ -27,6 +27,13 @@ export const MAX_SISI_GAMBAR = (() => {
 
 export const JENIS_GAMBAR: ReadonlySet<string> = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 
+// Batas jumlah piksel saat MENDEKODE gambar dari luar (bukan buffer sendiri):
+// berkas dimensi raksasa yang amat terkompres (mis. 30000×30000 PNG < 200 MB)
+// kalau didekode penuh membengkak jadi buffer RGBA raksasa di memori saat
+// unggah. 64 MP (±8000×8000) jauh di atas kebutuhan overlay nyata (kanvas
+// maksimum 4096²=16 MP) tapi menolak bom-dekompresi. `false` = tanpa batas.
+export const LIMIT_PIKSEL_DEKODE = 64_000_000;
+
 export function gambarKosong(width: number, height: number, isi: [number, number, number, number] = [0, 0, 0, 0]): GambarRgba {
   const data = new Uint8Array(width * height * 4);
   if (isi.some((v) => v !== 0)) {
@@ -55,7 +62,7 @@ export function gambarKosong(width: number, height: number, isi: [number, number
  * (Pillow pun tidak).
  */
 export async function bacaGambarRgba(sumber: string | Buffer): Promise<GambarRgba> {
-  const { data, info } = await sharp(sumber, { ignoreIcc: true, limitInputPixels: false })
+  const { data, info } = await sharp(sumber, { ignoreIcc: true, limitInputPixels: LIMIT_PIKSEL_DEKODE })
     .toColourspace("srgb")
     .ensureAlpha()
     .raw({ depth: "uchar" })

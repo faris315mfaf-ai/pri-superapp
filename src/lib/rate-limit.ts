@@ -97,14 +97,23 @@ function cekMemori(kunci: string, maks: number, jendelaDetik: number): HasilBata
 // ------------------------------------------------------------
 
 /**
- * Ambil IP klien dari header proxy, urutan kepercayaan:
- * CF-Connecting-IP (Cloudflare) → X-Real-IP (Caddy) → X-Forwarded-For
- * (ambil yang PERTAMA — sisanya bisa dipalsukan klien) → "tidak-dikenal".
+ * Ambil IP klien dari header proxy.
+ *
+ * PENTING: produksi berjalan LANGSUNG di belakang Caddy di VPS (bukan
+ * Cloudflare), dan Caddy yang menyetel `X-Real-IP`/`X-Forwarded-For` dari
+ * alamat sambungan sebenarnya. `CF-Connecting-IP` TIDAK disentuh siapa pun
+ * di jalur ini, jadi kalau dipercaya, klien tinggal mengirim header itu
+ * dengan nilai acak tiap permintaan dan SELURUH rate-limit (login, OTP,
+ * daftar, lupa-sandi) runtuh. Karena itu header Cloudflare hanya dipercaya
+ * bila operator benar-benar menaruh Cloudflare di depan, lewat
+ * `TRUST_CLOUDFLARE=1`. Default: X-Real-IP (Caddy) → X-Forwarded-For[0].
  */
 export function ipDari(request: Request): string {
   const h = request.headers;
-  const cf = h.get("cf-connecting-ip");
-  if (cf) return cf.trim();
+  if (process.env.TRUST_CLOUDFLARE === "1") {
+    const cf = h.get("cf-connecting-ip");
+    if (cf) return cf.trim();
+  }
   const nyata = h.get("x-real-ip");
   if (nyata) return nyata.trim();
   const diteruskan = h.get("x-forwarded-for");

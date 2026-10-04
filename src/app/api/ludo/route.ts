@@ -225,7 +225,10 @@ export async function GET(request: Request) {
     const cari = (url.searchParams.get("cari") ?? "").trim().slice(0, 60);
     if (cari.length > 0) {
       if (cari.length < 2) return { hasil: [] };
-      const pola = `%${cari.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+      // Escape wildcard ilike (% _ \) DAN buang karakter yang memecah
+      // sintaks filter `.or(...)` PostgREST (koma/kurung/kutip) — tanpa ini
+      // koma pada `cari` menyisipkan kondisi tambahan (mis. ".ilike.%" cocok semua).
+      const pola = `%${cari.replace(/[%_\\]/g, (c) => `\\${c}`).replace(/[,()"]/g, "")}%`;
       const { data } = await db
         .from("app_user")
         .select("id, nama, username, jabatan, divisi, avatar_url")

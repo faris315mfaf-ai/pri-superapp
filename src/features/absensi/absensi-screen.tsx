@@ -59,6 +59,7 @@ import { statusTelat, tepatWaktu } from "@/lib/absensi-status";
 import type { KomponenIkon, User } from "@/types";
 import { cn } from "@/lib/utils";
 import { PanelAbsensiSadar } from "./panel-absensi-sadar";
+import { hrefAman } from "@/lib/href-aman";
 
 /**
  * Dua tampilan (14 Sep 2026):
@@ -520,7 +521,7 @@ export function AbsensiScreen({ user, onKembali }: AbsensiScreenProps) {
 
           {/* Pintu ke SADAR — di sinilah absen dilakukan */}
           <a
-            href={sadar?.url || "https://sadar-pri.id"}
+            href={hrefAman(sadar?.url) || "https://sadar-pri.id"}
             target="_blank"
             rel="noopener noreferrer"
             className="btn-tekan mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-white"
@@ -595,7 +596,7 @@ export function AbsensiScreen({ user, onKembali }: AbsensiScreenProps) {
                     </p>
                     {a.surat_url && (
                       <a
-                        href={a.surat_url}
+                        href={hrefAman(a.surat_url)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold text-pri underline-offset-4 hover:underline"

@@ -13,8 +13,16 @@ export const maxDuration = 60;
 
 export async function POST(request: Request) {
   return bungkus(async () => {
+    // Fail-CLOSED: rahasia WAJIB ada (kalau env kosong, dulu penjaga
+    // dilewati dan siapa pun bisa memicu scrape TikHub sinkron → boros kuota).
     const rahasia = process.env.N8N_WEBHOOK_SECRET;
-    if (rahasia && request.headers.get("x-pri-secret") !== rahasia) {
+    if (!rahasia) {
+      throw Object.assign(
+        new Error("Scrape terjadwal belum dikonfigurasi (N8N_WEBHOOK_SECRET kosong)."),
+        { status: 503 },
+      );
+    }
+    if (request.headers.get("x-pri-secret") !== rahasia) {
       throw Object.assign(new Error("Tidak berwenang"), { status: 401 });
     }
     // Gerbang interval: n8n boleh memanggil tiap 5 menit, tapi scrape

@@ -21,6 +21,7 @@ import { toast } from "@/hooks/use-app-store";
 import { getPersetujuanKpi, putusPersetujuanKpi, type PersetujuanKpi } from "@/services";
 import { jamWIB } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { hrefAman } from "@/lib/href-aman";
 
 
 function Avatar({ src, nama }: { src: string; nama: string }) {
@@ -156,7 +157,7 @@ export function PersetujuanKpiScreen({ onKembali }: { onKembali: () => void }) {
               {b.keterangan ? (
                 <p className="mt-1.5 text-[11.5px] leading-relaxed text-teks-utama">"{b.keterangan}"</p>
               ) : null}
-              <a href={b.bukti_url} target="_blank" rel="noopener noreferrer" className="btn-tekan mt-2 block">
+              <a href={hrefAman(b.bukti_url)} target="_blank" rel="noopener noreferrer" className="btn-tekan mt-2 block">
                 <img
                   src={b.bukti_url}
                   alt={`Bukti blokir ${b.platform} ${b.nama}`}

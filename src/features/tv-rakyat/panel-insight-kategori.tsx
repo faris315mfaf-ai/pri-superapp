@@ -38,6 +38,7 @@ import {
   type InsightKategori,
 } from "@/services";
 import { cn } from "@/lib/utils";
+import { hrefAman } from "@/lib/href-aman";
 
 const TILE_KATEGORI: { kunci: "tayangan" | "suka" | "komentar" | "bagikan"; label: string }[] = [
   { kunci: "tayangan", label: "Tayangan" },
@@ -369,7 +370,7 @@ export function PanelInsightKategori({
                           </span>
                           {m.post_url && (
                             <a
-                              href={m.post_url}
+                              href={hrefAman(m.post_url)}
                               target="_blank"
                               rel="noopener noreferrer"
                               aria-label={`Buka di ${LABEL_PLATFORM[pf] ?? pf}`}
@@ -495,7 +496,7 @@ export function PanelInsightKategori({
                     )}
                   </div>
                   <a
-                    href={v.url}
+                    href={hrefAman(v.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Buka video"

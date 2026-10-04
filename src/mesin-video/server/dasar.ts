@@ -203,7 +203,12 @@ export function kirimBerkas(p: Permintaan, jalur: string, jenis: string, namaUnd
     "accept-ranges": "bytes",
     "last-modified": st.mtime.toUTCString(),
   };
-  if (namaUnduh) header["content-disposition"] = `attachment; filename="${namaUnduh.replace(/"/g, "")}"`;
+  if (namaUnduh) {
+    // Buang kutip DAN CR/LF/backslash: nilai header ber-CRLF ditolak runtime
+    // Node (ERR_INVALID_CHAR → 500) dan backslash/kutip mengotori nama berkas.
+    const bersih = namaUnduh.replace(/["\\\r\n]/g, "");
+    header["content-disposition"] = `attachment; filename="${bersih}"`;
+  }
   const range = /^bytes=(\d*)-(\d*)$/.exec(String(p.req.headers.range ?? ""));
   if (range && (range[1] || range[2])) {
     let awal = range[1] ? Number(range[1]) : st.size - Number(range[2]);

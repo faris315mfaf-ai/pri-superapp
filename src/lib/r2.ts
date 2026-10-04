@@ -76,7 +76,7 @@ function sha256hex(s: string): string {
  * (aturan SigV4) — pemanggil yang meminta lebih akan dipangkas.
  */
 export function presignR2(
-  metode: "PUT" | "GET" | "DELETE",
+  metode: "PUT" | "GET" | "DELETE" | "HEAD",
   key: string,
   detik: number,
 ): string {
@@ -124,6 +124,45 @@ export function presignR2(
     .digest("hex");
 
   return `https://${host}${jalurKanonik}?${kueriKanonik}&X-Amz-Signature=${tandaTangan}`;
+}
+
+/**
+ * Ukuran objek R2 (byte) lewat HEAD bertanda tangan, atau null bila tak
+ * terbaca (belum ada / galat jaringan / tanda tangan).
+ *
+ * Dipakai memverifikasi unggahan: presigned PUT tidak mengikat ukuran, jadi
+ * klien bisa minta presign "kecil" lalu PUT berkas raksasa ke prefix miliknya
+ * → biaya simpan menumpuk. Pemanggil memperlakukan null sebagai "tidak tahu"
+ * (fail-open: jangan blokir posting sah hanya karena HEAD gagal).
+ */
+export async function ukuranObjekR2(key: string): Promise<number | null> {
+  if (!r2Siap() || !key) return null;
+  try {
+    const res = await fetch(presignR2("HEAD", key, 300), { method: "HEAD" });
+    if (!res.ok) return null;
+    const n = Number(res.headers.get("content-length"));
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  } catch (e) {
+    console.error("[r2] head:", e);
+    return null;
+  }
+}
+
+/**
+ * Lempar 413 bila objek R2 ini TERBUKTI lebih besar dari batas; diam bila
+ * ukuran tak terbaca (fail-open). `batasMb` default sangat longgar supaya
+ * unggahan wajar tak pernah tertolak — hanya penyalahgunaan nyata (berkas
+ * raksasa) yang kena.
+ */
+export async function pastikanUkuranR2Wajar(key: string, batasMb = 300): Promise<void> {
+  const ukuran = await ukuranObjekR2(key);
+  if (ukuran !== null && ukuran > batasMb * 1_048_576) {
+    void hapusVideoR2(key);
+    throw Object.assign(
+      new Error(`Berkas video terlalu besar (${Math.round(ukuran / 1_048_576)} MB, maksimal ${batasMb} MB).`),
+      { status: 413 },
+    );
+  }
 }
 
 /**

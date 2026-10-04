@@ -16,6 +16,7 @@ import { batasByte, lupakan, pemakaianByte } from "../kuota";
 import { pastikanIsiMedia, probe, rapikanVideo } from "../media";
 import { POSISI_RUMUS } from "../perintah";
 import {
+  amanId,
   buangJob,
   daftarJob,
   jobPath,
@@ -97,7 +98,10 @@ export function penggunaWajib(pm: Permintaan): Pengguna {
 // overlays/texts masuk ke perintah ffmpeg dan ke perender teks. Nilai yang
 // tidak masuk akal ditolak di pintu depan, bukan saat worker merender.
 
-const BATAS_OVERLAY: Record<string, [number, number]> = { w: [0, 8192], h: [0, 8192], start: [0, 3600], end: [0, 3600] };
+// w/h overlay dibatasi ke dimensi kanvas maksimum (bukan 8192): nilai di
+// atas kanvas hanya memaksa ffmpeg menskala-naik aset ke buffer raksasa
+// (sampai 30 overlay sekaligus) → risiko OOM, tanpa manfaat visual.
+const BATAS_OVERLAY: Record<string, [number, number]> = { w: [0, 4096], h: [0, 4096], start: [0, 3600], end: [0, 3600] };
 const BATAS_TEKS: Record<string, [number, number]> = {
   size: [1, 400], min_size: [1, 400], max_lines: [1, 50], stroke: [0, 50],
   line_spacing: [0, 400], box_padding: [0, 400], line_height: [0.5, 5],
@@ -201,11 +205,16 @@ const TemplateBody = z
     teks_warna: b.teks_warna === "black" || b.teks_warna === "white" ? b.teks_warna : "white",
   }));
 
+// Nilai teks dibatasi 2000 char/entri: tanpa ini `texts.hook` boleh ~2 MB
+// (batas badan JSON) dan tata letak teks (O(k²) per baris, sinkron di worker)
+// memblok worker bermenit-menit → menahan render semua orang. Samakan dengan
+// cap `teks.default` template dan MAKS_HOOK rute TVR.
+const teksBody = z.record(z.string(), z.string().max(2000)).default({});
 const DuplikatBody = z.object({ name: z.string().min(1).max(100) });
 const BatchBody = z.object({
   url: z.string().min(5).max(2000),
   template_ids: MAX_BATCH ? z.array(z.string()).min(1).max(MAX_BATCH) : z.array(z.string()).min(1),
-  texts: z.record(z.string(), z.string()).default({}),
+  texts: teksBody,
   teks_warna: z
     .string()
     .nullable()
@@ -215,7 +224,7 @@ const BatchBody = z.object({
 const JobBody = z.object({
   url: z.string().min(5).max(2000),
   template_id: z.string().min(1).max(80),
-  texts: z.record(z.string(), z.string()).default({}),
+  texts: teksBody,
 });
 const PreviewBody = z.object({ url: z.string().min(5).max(2000) });
 const HookBody = z.object({ naskah: z.string().min(3).max(5000) });
@@ -583,7 +592,9 @@ export function pasangRuteVideo(r: Router): void {
     if (!status.output) throw new GalatHttp(409, "Video belum selesai disusun");
     const berkas = path.join(jobPath(pm.params.job_id), aman(String(status.output)));
     if (!fs.existsSync(berkas) || !fs.statSync(berkas).isFile()) throw new GalatHttp(404, "Berkas hasil sudah tidak ada");
-    return kirimBerkas(pm, berkas, "video/mp4", `${pm.params.job_id}.mp4`);
+    // Nama unduh dari id yang SUDAH disanitasi (amanId), bukan segmen URL
+    // mentah yang bisa menyelipkan CR/LF ke header content-disposition.
+    return kirimBerkas(pm, berkas, "video/mp4", `${amanId(pm.params.job_id)}.mp4`);
   });
 
   r.delete(`${A}/jobs/{job_id}`, async (pm) => {

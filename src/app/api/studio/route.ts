@@ -42,6 +42,7 @@ import {
 import { creatomateSiap } from "@/lib/creatomate";
 import {
   MAKS_UMUR_URL_DETIK,
+  pastikanUkuranR2Wajar,
   presignR2,
   r2Siap,
   hapusVideoR2,
@@ -781,6 +782,8 @@ export async function POST(request: Request) {
           status: 400,
         });
       }
+      // Presigned PUT tak mengikat ukuran — tolak objek R2 raksasa (fail-open).
+      if (pakaiR2) await pastikanUkuranR2Wajar(r2Key);
       const urlAwal = pakaiR2
         ? presignR2("GET", r2Key, MAKS_UMUR_URL_DETIK)
         : db.storage.from("tvrku").getPublicUrl(path).data.publicUrl;
