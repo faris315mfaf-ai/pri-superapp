@@ -784,9 +784,11 @@ export async function POST(request: Request) {
       }
       // Presigned PUT tak mengikat ukuran — tolak objek R2 raksasa (fail-open).
       if (pakaiR2) await pastikanUkuranR2Wajar(r2Key);
+      // Bucket tvrku PRIVAT: tautan bertanda tangan, bukan getPublicUrl.
       const urlAwal = pakaiR2
         ? presignR2("GET", r2Key, MAKS_UMUR_URL_DETIK)
-        : db.storage.from("tvrku").getPublicUrl(path).data.publicUrl;
+        : (await db.storage.from("tvrku").createSignedUrl(path, MAKS_UMUR_URL_DETIK)).data?.signedUrl ?? "";
+      if (!urlAwal) throw Object.assign(new Error("Gagal menyiapkan tautan video."), { status: 500 });
       const { data, error } = await db
         .from("studio_proyek")
         .insert({

@@ -203,9 +203,12 @@ export async function POST(request: Request) {
       );
     }
 
+    // Bucket tvrku PRIVAT: URL bertanda tangan berumur pendek, bukan
+    // getPublicUrl permanen yang bisa ditebak & diunduh siapa saja.
     const videoUrl = pakaiR2
       ? presignR2("GET", r2Key, MAKS_UMUR_URL_DETIK)
-      : db.storage.from("tvrku").getPublicUrl(path).data.publicUrl;
+      : (await db.storage.from("tvrku").createSignedUrl(path, MAKS_UMUR_URL_DETIK)).data?.signedUrl ?? "";
+    if (!videoUrl) throw Object.assign(new Error("Gagal menyiapkan tautan video."), { status: 500 });
     // Berkas dihapus 2 jam setelah tayang (jadwal) — atau 2 jam setelah
     // sekarang bila kirim langsung; antrean 14+ profil selesai jauh sebelum itu.
     const dasarMs = jadwal ? Date.parse(jadwal) : Date.now();

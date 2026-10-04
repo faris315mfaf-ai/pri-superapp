@@ -20,6 +20,7 @@
 //
 // Siapa yang berwenang: seluruh anggota TV Rakyat (wewenangTv), Direktur
 // Eksekutif, Pimpinan Redaksi, dan jabatan TV Rakyat Nasional.
+import { randomBytes } from "node:crypto";
 import { supabase } from "@/lib/supabase";
 import { bungkus, tabelBelumAda } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
@@ -237,7 +238,7 @@ async function siapkanUnggah(uid: number, body: Record<string, unknown>) {
   // Awalan sendiri: penyapu media TVR Saya bekerja per baris tvrku_post,
   // tidak menyentuh awalan ini — bahan video wajib harus tetap ada
   // selama perintahnya ada.
-  const key = `video-wajib/${uid}/${Date.now()}.${ext}`;
+  const key = `video-wajib/${uid}/${Date.now()}-${randomBytes(6).toString("hex")}.${ext}`;
   if (r2Siap()) {
     return { sukses: true, cara: "r2" as const, key, url: presignR2("PUT", key, 15 * 60) };
   }

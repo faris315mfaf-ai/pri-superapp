@@ -21,6 +21,7 @@ import { userEfektifTvr } from "@/lib/sebagai";
 import { periksaJadwal } from "@/lib/jadwal-unggah";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { randomBytes } from "node:crypto";
 import { cekBatas } from "@/lib/rate-limit";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
@@ -266,7 +267,7 @@ export async function POST(request: Request) {
       const ext =
         /\.(mp4|mov|m4v|webm)$/i.exec(body.nama ?? "")?.[1]?.toLowerCase() ??
         "mp4";
-      const path = `${user.id}/${Date.now()}.${ext}`;
+      const path = `${user.id}/${Date.now()}-${randomBytes(6).toString("hex")}.${ext}`;
 
       // JALUR UTAMA (1 Sep 2026): Cloudflare R2 — bandwidth keluar
       // gratis, jadi video yang cuma numpang 2 jam nyaris tanpa biaya.
@@ -314,7 +315,7 @@ export async function POST(request: Request) {
         throw Object.assign(new Error("Ukuran berkas tidak dikenal."), { status: 400 });
       }
       const durasi = Number(body.durasi ?? 0);
-      const key = `${user.id}/${Date.now()}.mp4`;
+      const key = `${user.id}/${Date.now()}-${randomBytes(6).toString("hex")}.mp4`;
       const hasil = await kompresLaluSalinKeR2(publicId, ukuran, Number.isFinite(durasi) ? durasi : 0, key);
       return {
         sukses: true,
@@ -495,7 +496,9 @@ export async function POST(request: Request) {
           ? presignR2("GET", r2Key, MAKS_UMUR_URL_DETIK)
           : pakaiCloudinary
             ? videoUrlCloud
-            : db.storage.from("tvrku").getPublicUrl(path).data.publicUrl;
+            // Bucket tvrku PRIVAT: tautan bertanda tangan, bukan getPublicUrl.
+            : ((await db.storage.from("tvrku").createSignedUrl(path, MAKS_UMUR_URL_DETIK)).data?.signedUrl ?? "");
+      if (!videoUrl) throw Object.assign(new Error("Gagal menyiapkan tautan video."), { status: 500 });
       // Hanya langkah ini yang butuh penyedia luar; validasi masukan dilakukan
       // lebih dulu supaya pesan galatnya jelas (dan bisa diuji tanpa kunci).
       // Penyedianya mengikuti setelan master untuk ORANG INI — bila belum
