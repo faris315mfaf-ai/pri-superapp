@@ -1111,6 +1111,7 @@ export default function Page() {
         isi: (
           <QcScreen
             bolehHR={adalahHR(user)}
+            bolehAturMesin={user?.role === "master"}
             onBukaHalaman={(nama) =>
               setSubLayar({
                 nama: nama as

@@ -58,6 +58,7 @@ import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 import { RiwayatAnalisisModal } from "./riwayat-analisis-modal";
 import { KepatuhanKaderPanel } from "./kepatuhan-kader-panel";
 import { RiwayatUpdateKomentar } from "./riwayat-update-komentar";
+import { KontrolSlot } from "@/features/auto-edit/kontrol-slot";
 import { TataLetakModul, type SeksiModul } from "@/components/tata-letak-modul";
 import { SeksiLipat } from "@/components/seksi-lipat";
 import { TombolLonceng } from "@/components/tombol-lonceng";
@@ -112,6 +113,9 @@ type PropsQc = {
   /** Orang HR (peran admin_hr / Divisi HR) — memunculkan menu Kelola
    *  Pengguna & Kirim Pengumuman (fitur 1.22.x/1). */
   bolehHR?: boolean;
+  /** Master — memunculkan kontrol render serentak Auto Edit (pindah dari
+   *  layar Auto Edit, 5 Okt 2026). Rute /api/video tetap khusus master. */
+  bolehAturMesin?: boolean;
 };
 
 /**
@@ -123,7 +127,7 @@ type PropsQc = {
 export function QcScreen(props: PropsQc) {
   const komenAktif = useModulAktif("kepatuhan_komen");
   if (komenAktif) return <QcScreenPenuh {...props} />;
-  const { onBukaNotifikasi, onBukaHalaman, bolehHR = false } = props;
+  const { onBukaNotifikasi, onBukaHalaman, bolehHR = false, bolehAturMesin = false } = props;
   return (
     <div className="kolom-aplikasi px-4 pb-32">
       <header className="flex items-start justify-between gap-3 pt-5">
@@ -139,6 +143,7 @@ export function QcScreen(props: PropsQc) {
         </div>
       </header>
       {onBukaHalaman && <MenuHrCenter onBukaHalaman={onBukaHalaman} bolehHR={bolehHR} />}
+      {bolehAturMesin && <KontrolSlot className="mt-3" />}
     </div>
   );
 }
@@ -148,6 +153,7 @@ function QcScreenPenuh({
   onBukaNotifikasi,
   onBukaHalaman,
   bolehHR = false,
+  bolehAturMesin = false,
 }: PropsQc) {
   // PERIODE TERPILIH — jantung fitur Riwayat: semua data layar mengikuti
   // label periode ini. Bawaan = jendela QC yang SEDANG berjalan
@@ -334,6 +340,7 @@ function QcScreenPenuh({
       </AnimatePresence>
 
       {onBukaHalaman && <MenuHrCenter onBukaHalaman={onBukaHalaman} bolehHR={bolehHR} />}
+      {bolehAturMesin && <KontrolSlot className="mt-3" />}
 
       {/* Atur Tata Letak (fitur 1.22.x): seret/sembunyikan/lipat tiap seksi.
           Seksi Mulai Analisis / Akun Belum Tertaut / Tingkat / Tren /
