@@ -56,7 +56,7 @@ services:
       AUTOEDIT_PERAN: api
       REDIS_URL: redis://autoedit-redis:6379/0
       MEDIA_DIR: /data/media
-      VIDEO_SLOT_MAKS: "4"
+      VIDEO_SLOT_MAKS: "10"
       TZ: Asia/Jakarta
     volumes:
       - /srv/godam/media:/data/media
@@ -80,7 +80,9 @@ services:
       options: { max-size: "10m", max-file: "3" }
 
   # Render serentak diatur master dari HR Center (Redis videojob:slot),
-  # 1..VIDEO_SLOT_MAKS. Tiap video 2 utas encoder: 4 slot ≈ 8 utas.
+  # 1..VIDEO_SLOT_MAKS (10, permintaan user 5 Okt 2026). Diukur di VPS ini:
+  # CPU jenuh di ±3–4 slot (2 utas/video) — di atas itu video berjalan
+  # bersamaan tetapi masing-masing melambat; total waktu antrean hampir sama.
   autoedit-ts-worker:
     image: pri-autoedit-ts:terbaru
     container_name: pri-autoedit-ts-worker
@@ -95,7 +97,7 @@ services:
       REDIS_URL: redis://autoedit-redis:6379/0
       MEDIA_DIR: /data/media
       VIDEO_WORKER_PARALEL: "3"
-      VIDEO_SLOT_MAKS: "4"
+      VIDEO_SLOT_MAKS: "10"
       VIDEO_THREADS: "2"
       TZ: Asia/Jakarta
     volumes:
