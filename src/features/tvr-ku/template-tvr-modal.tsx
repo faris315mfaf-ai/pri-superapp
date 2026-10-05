@@ -12,7 +12,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ImagePlus, Loader2, ScanSearch, Trash2, Undo2, X } from "lucide-react";
+import { Check, ImagePlus, Loader2, ScanSearch, Trash2, Undo2, Wand2, X } from "lucide-react";
 import { toast } from "@/hooks/use-app-store";
 import { cn } from "@/lib/utils";
 import { bacaJson, pesanGalat } from "@/features/auto-edit/api";
@@ -33,16 +33,32 @@ import {
 const LEBAR = 720;
 const TINGGI = 1280;
 
+/** Proses Hapus Latar Boom di mesin (uji coba, 5 Okt 2026). */
+type HapusLatar = {
+  id: string;
+  status: "queued" | "downloading" | "rendering" | "done" | "error" | "dibatalkan";
+  progress: number;
+  mode: "warna" | "ai" | null;
+  warna: string | null;
+  log: string | null;
+  error: string | null;
+  antrean: { posisi: number } | null;
+};
+const HL_AKTIF = ["queued", "downloading", "rendering"];
+
 export function TemplateTvrModal({
   awal,
   batas,
   onTutup,
   onTersimpan,
+  bolehHapusLatar = false,
 }: {
   awal: KeadaanTemplateTvr;
   batas: BatasTvr;
   onTutup: () => void;
   onTersimpan: (t: KeadaanTemplateTvr) => void;
+  /** Fitur uji coba "Hapus latar otomatis" di slot Boom (modul hapuslatar). */
+  bolehHapusLatar?: boolean;
 }) {
   const api = useApiAutoEdit();
   const [tpl, setTpl] = useState<KeadaanTemplateTvr>(awal);
@@ -70,7 +86,12 @@ export function TemplateTvrModal({
   const pratinjauRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<Record<SlotTvr, HTMLInputElement | null>>({ kotak: null, boom: null, bingkai: null, penutup: null });
 
-  const sibuk = unggah !== null || menyimpan || menutup;
+  const [hl, setHl] = useState<HapusLatar | null>(null);
+  const [hlMulai, setHlMulai] = useState(false);
+  const hlAktif = hl !== null && HL_AKTIF.includes(hl.status);
+  // Menutup editor tetap boleh selagi latar diproses (prosesnya ikut dibatalkan).
+  const sibukDasar = unggah !== null || menyimpan || menutup;
+  const sibuk = sibukDasar || hlAktif || hlMulai;
   const adaDraf = URUTAN_SLOT.some((s) => tpl.slot[s].draf);
   const kotakKunci = kotak ? `${kotak.x},${kotak.y},${kotak.w},${kotak.h}` : "";
   const badgeKunci = badge ? `${badge.x},${badge.y},${badge.w},${badge.h}` : "";
@@ -160,6 +181,74 @@ export function TemplateTvrModal({
       setPesan(e instanceof Error ? e.message : "Unggah gagal.");
     } finally {
       setUnggah(null);
+    }
+  }
+
+  // ===== Hapus latar Boom (uji coba) =====
+  // Editor dibuka lagi selagi masih diproses (mis. halaman dimuat ulang): lanjutkan pantauannya.
+  useEffect(() => {
+    if (!bolehHapusLatar) return;
+    void (async () => {
+      const res = await api.fetch("/api/tvr/template/hapus-latar", { cache: "no-store" }).catch(() => null);
+      if (!res?.ok) return;
+      const d = await bacaJson(res);
+      const h = d.hapus_latar as HapusLatar | null;
+      if (h && HL_AKTIF.includes(h.status)) setHl(h);
+    })();
+  }, [api, bolehHapusLatar]);
+
+  const idHl = hlAktif ? hl?.id : null;
+  useEffect(() => {
+    if (!idHl) return;
+    const t = window.setInterval(async () => {
+      try {
+        const res = await api.fetch("/api/tvr/template/hapus-latar", { cache: "no-store" });
+        const d = await bacaJson(res);
+        if (!res.ok) return;
+        const h = d.hapus_latar as HapusLatar | null;
+        if (!h || h.id !== idHl || h.status === "dibatalkan") {
+          setHl(null);
+        } else if (h.status === "done") {
+          setHl(null);
+          setTpl(d.template as KeadaanTemplateTvr);
+          setKunciHijau(false);
+          setVersi((v) => v + 1);
+          toast(
+            "sukses",
+            "Latar Boom dibuang",
+            `${h.mode === "warna" ? "Latar warna polos dihapus." : "Latar dihapus dengan AI."} Cek pratinjau, lalu Simpan & Tetapkan.`,
+          );
+        } else {
+          setHl(h);
+        }
+      } catch {
+        // jaringan sesaat putus: coba lagi di putaran berikutnya
+      }
+    }, 2000);
+    return () => window.clearInterval(t);
+  }, [api, idHl]);
+
+  async function mulaiHapusLatar() {
+    if (sibuk) return;
+    setHlMulai(true);
+    setPesan("");
+    try {
+      const res = await api.fetch("/api/tvr/template/hapus-latar", { method: "POST" });
+      const d = await bacaJson(res);
+      if (!res.ok) throw new Error(pesanGalat(res.status, d, "Hapus latar gagal dimulai."));
+      setHl(d.hapus_latar as HapusLatar | null);
+    } catch (e) {
+      setPesan(e instanceof Error ? e.message : "Hapus latar gagal dimulai.");
+    } finally {
+      setHlMulai(false);
+    }
+  }
+
+  async function batalHapusLatar() {
+    try {
+      await api.fetch("/api/tvr/template/hapus-latar", { method: "DELETE" });
+    } finally {
+      setHl(null);
     }
   }
 
@@ -257,8 +346,9 @@ export function TemplateTvrModal({
   }
 
   async function tutup() {
-    if (sibuk) return;
-    if (adaDraf) {
+    if (sibukDasar) return;
+    // Draf dibuang — hapus latar yang masih berjalan ikut dibatalkan server.
+    if (adaDraf || hlAktif) {
       setMenutup(true);
       // Draf yang tidak disimpan dibuang; gagal pun tidak menahan penutupan —
       // draf lama akan tertimpa unggahan berikutnya.
@@ -297,7 +387,7 @@ export function TemplateTvrModal({
           <button
             type="button"
             onClick={() => void tutup()}
-            disabled={sibuk}
+            disabled={sibukDasar}
             aria-label="Tutup tanpa menyimpan"
             className="glass btn-tekan ml-auto flex h-9 w-9 items-center justify-center rounded-xl text-teks-utama disabled:opacity-40"
           >
@@ -373,6 +463,62 @@ export function TemplateTvrModal({
                       />
                       Latar hijau (green screen) — hapus warna hijaunya
                     </label>
+                  )}
+                  {s === "boom" && bolehHapusLatar && boomVideoTanpaAlpha && !hlAktif && (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => void mulaiHapusLatar()}
+                        disabled={sibuk}
+                        className="btn-tekan flex items-center gap-1.5 rounded-lg bg-violet-500/15 px-3 py-1.5 text-[11.5px] font-bold text-violet-600 disabled:opacity-50 dark:text-violet-300"
+                      >
+                        {hlMulai ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+                        Hapus latar otomatis
+                        <span className="text-[9px] font-bold text-amber-500">UJI COBA</span>
+                      </button>
+                      <p className="mt-1 text-[10px] leading-snug text-teks-sekunder">
+                        Latar warna polos dibuang langsung. Latar lain memakai AI: video maks 10 detik, ±2–3 menit.
+                      </p>
+                    </div>
+                  )}
+                  {s === "boom" && hlAktif && hl && (
+                    <div className="mt-2 rounded-lg border border-violet-500/30 bg-violet-500/10 p-2" aria-live="polite">
+                      <p className="flex items-center gap-1.5 text-[11px] text-teks-utama">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500" />
+                        {hl.status === "queued"
+                          ? hl.antrean
+                            ? `Antrean #${hl.antrean.posisi}…`
+                            : "Menunggu giliran…"
+                          : hl.progress < 5
+                            ? "Memeriksa latar…"
+                            : `Membuang latar… ${hl.progress}%`}
+                      </p>
+                      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                        <div
+                          className="h-full rounded-full bg-violet-500 transition-[width] duration-500"
+                          style={{ width: `${Math.max(3, hl.progress)}%` }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void batalHapusLatar()}
+                        className="glass btn-tekan mt-1.5 flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10.5px] font-bold text-teks-utama"
+                      >
+                        <X className="h-3 w-3" /> Batalkan
+                      </button>
+                    </div>
+                  )}
+                  {s === "boom" && hl?.status === "error" && (
+                    <div className="mt-2 rounded-lg border border-gagal/30 bg-gagal/10 p-2" role="alert">
+                      <p className="text-[11px] text-teks-utama">{hl.error || "Hapus latar gagal."}</p>
+                      <button
+                        type="button"
+                        onClick={() => setHl(null)}
+                        className="glass btn-tekan mt-1.5 rounded-lg px-2.5 py-1 text-[10.5px] font-bold text-teks-utama"
+                      >
+                        Tutup
+                      </button>
+                    </div>
                   )}
                 </div>
               );
@@ -525,7 +671,7 @@ export function TemplateTvrModal({
           <button
             type="button"
             onClick={() => void tutup()}
-            disabled={sibuk}
+            disabled={sibukDasar}
             className="glass btn-tekan h-11 flex-1 rounded-xl text-[13px] font-bold text-teks-utama disabled:opacity-50"
           >
             Batal

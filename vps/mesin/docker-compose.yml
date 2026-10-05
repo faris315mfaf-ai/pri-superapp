@@ -115,6 +115,8 @@ services:
       # tetap diatur slot serentak global (HR Center).
       TVR_JOB_AKTIF_KHUSUS: "pri-900000001=60"
       VIDEO_WORKER_PARALEL: "3"
+      # Hapus Latar Boom (uji coba): AI isnet di container autoedit-rembg.
+      REMBG_URL: http://autoedit-rembg:7000
       VIDEO_SLOT_MAKS: "10"
       VIDEO_THREADS: "2"
       TZ: Asia/Jakarta
@@ -127,6 +129,40 @@ services:
     deploy:
       resources:
         limits: { cpus: "6.5", memory: 16G, pids: 1024 }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # Hapus Latar Boom (uji coba, 5 Okt 2026): rembg (github.com/danielgatis/rembg)
+  # sebagai layanan HTTP di jaringan internal saja — tanpa port ke host. Worker
+  # mengirim frame satu per satu (src/mesin-video/hapus-latar.ts). Dipatok ke
+  # 2.0.85 + digest. --threads 1 = satu frame sekaligus untuk SEMUA akun, dan
+  # 4 core: render video tetap mendapat sisa CPU. Model isnet (±170 MB)
+  # diunduh sekali saat pertama dipakai ke volume pri-rembg-model.
+  # Diukur di VPS ini: isnet ±1 detik/frame; BiRefNet ±23 detik/frame (tidak dipakai).
+  autoedit-rembg:
+    image: danielgatis/rembg:2.0.85@sha256:98e72b790093dec3b21967e22c8eb75a0a67d458fdba7ef5fcc1900cad76396b
+    container_name: pri-autoedit-rembg
+    restart: unless-stopped
+    init: true
+    command: ["s", "--host", "0.0.0.0", "--port", "7000", "--no-ui", "--threads", "1", "--log_level", "warning"]
+    environment:
+      OMP_NUM_THREADS: "4"
+      # Folder model rembg 2.x (bukan ~/.u2net lagi).
+      REMBG_HOME: /model
+    volumes:
+      - rembg-model:/model
+    networks: [autoedit]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7000/api', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # Impor pustakanya lambat: ±1 menit sampai siap.
+      start_period: 120s
+    deploy:
+      resources:
+        limits: { cpus: "4.0", memory: 4G, pids: 256 }
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
@@ -154,6 +190,8 @@ services:
 
 volumes:
   autoedit-redis-data:
+  rembg-model:
+    name: pri-rembg-model
 
 networks:
   # Subnet tetap: firewall keluar (vps/autoedit/firewall-keluar.sh) menutup

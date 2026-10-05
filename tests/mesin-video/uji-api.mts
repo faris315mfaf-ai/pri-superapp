@@ -7,6 +7,7 @@
 import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
@@ -20,7 +21,22 @@ fs.writeFileSync(
   '#!/bin/sh\necho "sample 1/1 crf 30 VMAF 94.6 (40%)"\necho "crf 30 VMAF 94.60 predicted video stream size 1.00 MiB (40%) taking 1 minutes"\n',
   { mode: 0o755 },
 );
+// rembg TIRUAN untuk uji Hapus Latar (jalan AI): tiap frame dibalas PNG beralpha.
+const PNG_ALFA = path.join(MEDIA, "rembg-tiruan.png");
+execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=red@0.5:s=64x36,format=rgba", "-frames:v", "1", PNG_ALFA]);
+let panggilanRembg = 0;
+const rembgTiruan = http.createServer((req, res) => {
+  req.resume();
+  req.on("end", () => {
+    panggilanRembg++;
+    res.writeHead(200, { "content-type": "image/png" });
+    res.end(fs.readFileSync(PNG_ALFA));
+  });
+});
+await new Promise<void>((ok) => rembgTiruan.listen(0, "127.0.0.1", ok));
 Object.assign(process.env, {
+  REMBG_URL: `http://127.0.0.1:${(rembgTiruan.address() as AddressInfo).port}`,
+  HAPUS_LATAR_FPS: "5",
   MEDIA_DIR: MEDIA,
   OUTRO_VIDEO_W: "360",
   OUTRO_VIDEO_H: "640",
@@ -814,9 +830,65 @@ await uji("kompres video: antre, satu aktif, worker, masuk stok, tak memblok edi
   pastikan((await minta("GET", "/api/tvr/kompres", { id: a })).json().kompres.length === 0);
 });
 
+await uji("hapus latar boom: warna polos, AI, Boom diganti, tak memblok edit", async () => {
+  const a = "8401";
+  await templateSiap(a);
+  const hapus = (metode: string) => minta(metode, "/api/tvr/template/hapus-latar", { id: a });
+  const tugas = () => {
+    const m = TUGAS.find((t) => t.jenis === "hapuslatar");
+    pastikan(Boolean(m), JSON.stringify(TUGAS));
+    return m!;
+  };
+
+  // 1. Green screen → jalan WARNA (tanpa AI).
+  pastikan((await draf(a, "boom", "boom.mp4", hijau())).status === 200);
+  TUGAS.length = 0;
+  panggilanRembg = 0;
+  let r = await hapus("POST");
+  pastikan(r.status === 200 && r.json().hapus_latar.status === "queued", r.teks);
+  pastikan((await hapus("POST")).status === 409);
+  pastikan((await minta("GET", "/api/tvr/jobs/saya", { id: a })).json().job === null);
+  pastikan((await pekerja.hapusLatarJob(tugas())).status === "done");
+  let d = (await hapus("GET")).json();
+  pastikan(d.hapus_latar.status === "done" && d.hapus_latar.mode === "warna" && panggilanRembg === 0, JSON.stringify(d.hapus_latar));
+  pastikan(d.template.slot.boom.draf === true && d.template.slot.boom.alpha === true, JSON.stringify(d.template.slot.boom));
+  // Sudah transparan: tidak ada yang perlu dibuang.
+  pastikan((await hapus("POST")).status === 400);
+
+  // 2. Latar ramai → jalan AI, frame demi frame lewat rembg.
+  const ramai = () =>
+    berkasVideo("boom-ramai.mp4", "-f", "lavfi", "-i", "testsrc2=s=280x158:d=1.2:r=25", "-c:v", "libx264", "-pix_fmt", "yuv420p");
+  pastikan((await draf(a, "boom", "boom.mp4", ramai())).status === 200);
+  TUGAS.length = 0;
+  pastikan((await hapus("POST")).status === 200);
+  pastikan((await pekerja.hapusLatarJob(tugas())).status === "done");
+  d = (await hapus("GET")).json();
+  pastikan(d.hapus_latar.mode === "ai" && panggilanRembg >= 5, `${panggilanRembg} ${JSON.stringify(d.hapus_latar)}`);
+  pastikan(d.template.slot.boom.alpha === true);
+
+  // 3. Boom diunggah ulang selagi antre → job dibatalkan, Boom baru utuh.
+  pastikan((await draf(a, "boom", "boom.mp4", ramai())).status === 200);
+  TUGAS.length = 0;
+  pastikan((await hapus("POST")).status === 200);
+  const m3 = tugas();
+  pastikan((await draf(a, "boom", "boom.mp4", hijau())).status === 200);
+  pastikan((await pekerja.hapusLatarJob(m3)).status !== "done");
+  pastikan((await hapus("GET")).json().template.slot.boom.alpha === false);
+
+  // 4. Boom berubah di tengah proses → hasil dibuang, tidak menimpa.
+  TUGAS.length = 0;
+  pastikan((await hapus("POST")).status === 200);
+  const boomDraf = path.join(jalur.templatePath(`tvr-${a}`), "assets", ".draf", "boom.mp4");
+  fs.utimesSync(boomDraf, new Date(), new Date(Date.now() + 5000));
+  pastikan((await pekerja.hapusLatarJob(tugas())).status === "dibatalkan");
+  d = (await hapus("GET")).json();
+  pastikan(d.template.slot.boom.alpha === false && /diganti/.test(d.hapus_latar.log), JSON.stringify(d.hapus_latar));
+});
+
 // ---------------------------------------------------------------- selesai
 
 server.close();
+rembgTiruan.close();
 await job.redis().quit();
 fs.rmSync(MEDIA, { recursive: true, force: true });
 console.log(`\n${lolos} lolos, ${gagal.length} gagal`);

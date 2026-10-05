@@ -490,10 +490,14 @@ function judulDariBerkas(nama: string): string {
 /** Job yang masih diproses (queued/downloading/rendering) milik akun, atau null. */
 /** Job Kompres Video berjalan di jalurnya sendiri — tidak memblokir Edit Otomatis. */
 const jobKompres = (j: Job) => (j as Record<string, unknown>).jenis === "kompres";
+/** Job Hapus Latar Boom: menulis ke draf template, bukan ke stok. */
+const jobHapusLatar = (j: Job) => (j as Record<string, unknown>).jenis === "hapuslatar";
+/** Job "sampingan" tidak memblokir antrean Edit Otomatis akun. */
+const jobSampingan = (j: Job) => jobKompres(j) || jobHapusLatar(j);
 
 async function jobAktif(a: string): Promise<Job | null> {
   for (const j of await daftarJob(50, a)) {
-    if (STATUS_AKTIF_JOB.includes(j.status) && !jobKompres(j)) return segarkanKalauTerlantar(j);
+    if (STATUS_AKTIF_JOB.includes(j.status) && !jobSampingan(j)) return segarkanKalauTerlantar(j);
   }
   return null;
 }
@@ -502,7 +506,7 @@ async function jobAktif(a: string): Promise<Job | null> {
 async function semuaJobAktif(a: string): Promise<Job[]> {
   const hasil: Job[] = [];
   for (const j of await daftarJob(Math.max(50, maksJobAktif(a) * 3), a)) {
-    if (!STATUS_AKTIF_JOB.includes(j.status) || jobKompres(j)) continue;
+    if (!STATUS_AKTIF_JOB.includes(j.status) || jobSampingan(j)) continue;
     const segar = await segarkanKalauTerlantar(j);
     if (STATUS_AKTIF_JOB.includes(segar.status)) hasil.push(segar);
   }
@@ -578,6 +582,47 @@ async function stokDanAntrean(p: Pengguna): Promise<Record<string, unknown>> {
 }
 
 // ============================================================
+//  HAPUS LATAR BOOM (uji coba, 5 Okt 2026) — lihat ../hapus-latar.ts
+// ============================================================
+
+/** Job hapus latar terbaru milik akun, atau null. */
+async function hapusLatarTerakhir(a: string): Promise<Job | null> {
+  for (const j of await daftarJob(30, a)) if (jobHapusLatar(j)) return j;
+  return null;
+}
+
+/** Ringkasan untuk editor: yang masih jalan, atau yang selesai < 30 menit lalu. */
+async function ringkasHapusLatar(a: string): Promise<Record<string, unknown> | null> {
+  const j = await hapusLatarTerakhir(a);
+  if (!j) return null;
+  const aktif = STATUS_AKTIF_JOB.includes(j.status);
+  if (!aktif && Date.now() / 1000 - Number(j.created ?? 0) > 30 * 60) return null;
+  const r = j as Record<string, unknown>;
+  return {
+    id: j.job_id,
+    status: j.status,
+    progress: j.progress ?? 0,
+    mode: r.mode ?? null,
+    warna: r.warna ?? null,
+    log: j.message ?? null,
+    error: j.error ?? null,
+    antrean: aktif && j.status === "queued" ? await posisiAntrean(j.job_id) : null,
+  };
+}
+
+/** Hentikan hapus latar yang masih jalan (Boom diganti / editor ditutup). */
+async function batalkanHapusLatar(a: string): Promise<void> {
+  const j = await hapusLatarTerakhir(a);
+  if (!j || !STATUS_AKTIF_JOB.includes(j.status)) return;
+  if (STATUS_BERJALAN_JOB.includes(j.status)) {
+    await mintaBatal(j.job_id);
+  } else {
+    await cabutTugas(j);
+    await buangJob(j.job_id);
+  }
+}
+
+// ============================================================
 //  RUTE
 // ============================================================
 
@@ -615,6 +660,7 @@ export function pasangRuteTvr(r: Router): void {
     // diperiksa begitu terbaca, sebelum satu bita pun ditulis (lihat
     // tulisUnggahanSlot).
     await pastikanKuota(p);
+    if (slot === "boom") await batalkanHapusLatar(akun(p));
     const batasMaks = Math.trunc(Math.max(MAKS_GIF_MB, MAX_ASSET_MB) * 1_048_576);
     await sediakanRuangUnggah(pm, batasMaks);
     const draf = folderDraf(p);
@@ -646,6 +692,7 @@ export function pasangRuteTvr(r: Router): void {
   r.delete(`${A}/template/draf`, async (pm) => {
     // Batal: semua draf dibuang, template yang berlaku tetap.
     const p = penggunaTvr(pm);
+    await batalkanHapusLatar(akun(p));
     await denganKunci(akun(p), () => fs.rmSync(folderDraf(p), { recursive: true, force: true }));
     lupakan(akun(p));
     return { template: await keadaan(p) };
@@ -908,7 +955,7 @@ export function pasangRuteTvr(r: Router): void {
         judul: r.judul ?? "Video",
         mutu: r.mutu ?? "seimbang",
         size_awal: r.size_awal ?? null,
-        log: r.log ?? null,
+        log: j.message ?? null,
         error: j.error ?? null,
         antrean: aktif && j.status === "queued" ? await posisiAntrean(j.job_id) : null,
       });
@@ -994,6 +1041,54 @@ export function pasangRuteTvr(r: Router): void {
     }
     lupakan(a);
     return { kompres: await daftarKompres(a) };
+  });
+
+  // ---- HAPUS LATAR BOOM (uji coba) ---------------------------------
+  // Gerbang SuperApp membatasi jalur ini ke akun yang modul "hapuslatar"-nya
+  // dibuka master. Hasilnya menjadi DRAF Boom di editor template.
+  r.get(`${A}/template/hapus-latar`, async (pm) => {
+    const p = penggunaTvr(pm);
+    return { hapus_latar: await ringkasHapusLatar(akun(p)), template: await keadaan(p) };
+  });
+
+  r.post(`${A}/template/hapus-latar`, async (pm) => {
+    const p = penggunaTvr(pm);
+    const a = akun(p);
+    const lama = await hapusLatarTerakhir(a);
+    if (lama && STATUS_AKTIF_JOB.includes(lama.status)) {
+      throw new GalatHttp(409, "Latar Boom masih diproses. Tunggu sampai selesai.");
+    }
+    await pastikanKuota(p);
+    const sumberDraf = berkasSlot(folderDraf(p), "boom");
+    const sumber = sumberDraf ?? berkasSlot(folderAset(p), "boom");
+    if (!sumber || jenis(sumber) !== "video") throw new GalatHttp(400, "Unggah video Boom like share dulu.");
+    if (await punyaAlpha(sumber)) throw new GalatHttp(400, "Video Boom ini sudah transparan — tidak ada latar yang perlu dibuang.");
+    const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+    const folder = jobPath(id);
+    fs.mkdirSync(folder, { recursive: true });
+    const masukan = `masukan${akhiran(sumber)}`;
+    fs.copyFileSync(sumber, path.join(folder, masukan));
+    await tulisStatus(id, {
+      status: "queued",
+      progress: 0,
+      owner: a,
+      jenis: "hapuslatar",
+      masukan,
+      tid: idTemplate(p),
+      // Penanda Boom saat dimulai: hasil hanya dipasang bila belum berubah.
+      draf_sumber: sumberDraf ? { nama: path.basename(sumberDraf), mtime: fs.statSync(sumberDraf).mtimeMs } : null,
+      judul: "Hapus latar Boom",
+      log: "Masuk antrean hapus latar.",
+    });
+    await kirimRender({ job_id: id, url: "", template_id: idTemplate(p), texts: {}, jenis: "hapuslatar" });
+    lupakan(a);
+    return { hapus_latar: await ringkasHapusLatar(a), template: await keadaan(p) };
+  });
+
+  r.delete(`${A}/template/hapus-latar`, async (pm) => {
+    const p = penggunaTvr(pm);
+    await batalkanHapusLatar(akun(p));
+    return { hapus_latar: await ringkasHapusLatar(akun(p)), template: await keadaan(p) };
   });
 
   // ---- STOK VIDEO -------------------------------------------------

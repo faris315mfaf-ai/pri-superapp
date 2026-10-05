@@ -18,6 +18,8 @@ import {
   slotSerentak,
 } from "./job";
 import { probe } from "./media";
+import { hapusLatar } from "./hapus-latar";
+import { templatePath } from "./jalur";
 import { kompresVideo, mutuSah } from "./kompres";
 import { render } from "./render";
 import { loadTemplate } from "./template";
@@ -219,6 +221,105 @@ export async function kompresJob(m: MuatanRender): Promise<{ job_id: string; sta
   }
 }
 
+/** Berkas "boom.*" terbaru di folder, atau null. */
+function boomDi(folder: string): string | null {
+  try {
+    const calon = fs
+      .readdirSync(folder)
+      .filter((n) => n.startsWith("boom."))
+      .map((n) => path.join(folder, n))
+      .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+    return calon[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Hapus Latar Boom (uji coba, 5 Okt 2026). Salinan video Boom (draf atau
+ * yang terpasang) sudah ada di folder job; hasil MOV beralpha dipasang
+ * sebagai DRAF Boom template — pengguna melihatnya di pratinjau lalu
+ * menekan Simpan & Tetapkan. Bila Boom sudah diganti/dibuang selagi diproses,
+ * hasilnya dibuang (tidak menimpa pilihan baru pengguna).
+ */
+export async function hapusLatarJob(m: MuatanRender): Promise<{ job_id: string; status: string; [k: string]: unknown }> {
+  const jobId = m.job_id;
+  const folder = jobPath(jobId);
+  const buangSisa = () => {
+    try {
+      for (const n of fs.existsSync(folder) ? fs.readdirSync(folder) : []) {
+        if (n.startsWith("masukan.") || n === "boom.mov") hapusDiam(path.join(folder, n));
+      }
+    } catch {
+      // folder sudah hilang
+    }
+  };
+  try {
+    const st = (await bacaStatus(jobId).catch(() => null)) as (Record<string, unknown> & { status: string }) | null;
+    if (!st || st.status !== "queued") return { job_id: jobId, status: st?.status ?? "hilang" };
+    if (await dimintaBatal(jobId)) {
+      await lupakanBatal(jobId);
+      buangSisa();
+      await tulisStatus(jobId, { status: "dibatalkan", progress: 0, log: "Dihentikan sebelum mulai." });
+      return { job_id: jobId, status: "dibatalkan" };
+    }
+    const masukan = path.join(folder, String(st.masukan ?? ""));
+    const tid = String(st.tid ?? "");
+    if (!tid || !fs.existsSync(masukan)) throw new GalatVideo("Video Boom yang akan diproses tidak ditemukan.");
+    await tulisStatus(jobId, { status: "rendering", progress: 0, task_id: jobId, mulai_proses: Date.now() / 1000 });
+    const hasil = await hapusLatar(masukan, folder, await durasiVideo(masukan), {
+      progress: (p) => tulisStatus(jobId, { progress: p }).then(() => undefined),
+      batal: () => dimintaBatal(jobId),
+    });
+    hapusDiam(masukan);
+
+    // Pasang sebagai draf — hanya bila Boom belum berubah sejak dimulai.
+    const draf = path.join(templatePath(tid), "assets", ".draf");
+    const kini = boomDi(draf);
+    const asal = st.draf_sumber as { nama?: string; mtime?: number } | null | undefined;
+    const masihSama = asal
+      ? kini !== null && path.basename(kini) === asal.nama && Math.abs(fs.statSync(kini).mtimeMs - Number(asal.mtime)) < 1
+      : kini === null;
+    if (!masihSama || (await dimintaBatal(jobId))) {
+      await lupakanBatal(jobId);
+      buangSisa();
+      await tulisStatus(jobId, { status: "dibatalkan", progress: 0, log: "Bahan Boom sudah diganti — hasil hapus latar dibuang." });
+      return { job_id: jobId, status: "dibatalkan" };
+    }
+    fs.mkdirSync(draf, { recursive: true });
+    for (const n of fs.readdirSync(draf)) if (n.startsWith("boom.")) hapusDiam(path.join(draf, n));
+    fs.renameSync(hasil.berkas, path.join(draf, "boom.mov"));
+    await tulisStatus(jobId, {
+      status: "done",
+      progress: 100,
+      mode: hasil.mode,
+      warna: hasil.warna,
+      frame: hasil.frame,
+      log:
+        hasil.mode === "warna"
+          ? `Latar warna polos (${hasil.warna}) dibuang.`
+          : `Latar dibuang dengan AI (${hasil.frame} frame).`,
+    });
+    return { job_id: jobId, status: "done" };
+  } catch (e) {
+    const dibatal = e instanceof Dibatalkan;
+    const pesan = e instanceof GalatVideo ? e.message : e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    if (dibatal) await lupakanBatal(jobId);
+    else console.error(`Hapus latar ${jobId} gagal`, e);
+    buangSisa();
+    await tulisStatus(jobId, dibatal ? { status: "dibatalkan", log: "Hapus latar dihentikan." } : { status: "error", error: pesan, log: `Gagal: ${pesan}` });
+    hapusDiam(path.join(folder, "kerja"), true);
+    return { job_id: jobId, status: dibatal ? "dibatalkan" : "error" };
+  }
+}
+
+/** Satu pintu worker: render template, Kompres Video, atau Hapus Latar Boom. */
+function kerjakan(m: MuatanRender) {
+  if (m.jenis === "kompres") return kompresJob(m);
+  if (m.jenis === "hapuslatar") return hapusLatarJob(m);
+  return renderVideo(m);
+}
+
 async function mulai(): Promise<void> {
   // Penahan situs (jeda setelah 429) dibagi bersama API lewat Redis.
   pasangRedisBatas(redis());
@@ -245,7 +346,7 @@ async function mulai(): Promise<void> {
   const pewaktu = setInterval(detak, DETAK_DETIK * 1000);
 
   const slotAwal = await slotSerentak();
-  const worker = new Worker<MuatanRender>(NAMA_ANTREAN, (j: JobBull<MuatanRender>) => (j.data.jenis === "kompres" ? kompresJob(j.data) : renderVideo(j.data)), {
+  const worker = new Worker<MuatanRender>(NAMA_ANTREAN, (j: JobBull<MuatanRender>) => kerjakan(j.data), {
     connection: koneksiBull(),
     concurrency: slotAwal,
     // Unduhan (10 mnt) + render (30 mnt): kunci diperpanjang otomatis selama

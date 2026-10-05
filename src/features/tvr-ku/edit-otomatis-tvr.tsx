@@ -34,6 +34,7 @@ import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 import { cn } from "@/lib/utils";
 import { bacaJson, pesanGalat } from "@/features/auto-edit/api";
 import { useApiAutoEdit } from "@/features/auto-edit/tim";
+import { bolehFiturUji } from "@/lib/peran";
 import { TemplateTvrModal } from "./template-tvr-modal";
 import { segarkanStokTvr } from "./stok-video-tvr";
 import {
@@ -97,6 +98,7 @@ export function EditOtomatisTvr() {
   // Akun TIM (TV Rakyat Official): banyak video sekaligus dalam satu antrean.
   const modeTim = Boolean(api.tim);
   const idSaya = useAppStore((s) => String(s.user?.id ?? ""));
+  const bolehHapusLatar = useAppStore((s) => bolehFiturUji(s.user, "hapuslatar"));
   const jobsTim: JobTimTvr[] = data?.jobs ?? [];
   const adaJobTim = modeTim && jobsTim.length > 0;
   const idSayaAktif = modeTim
@@ -435,6 +437,7 @@ export function EditOtomatisTvr() {
             segarkan();
           }}
           onTersimpan={templateTersimpan}
+          bolehHapusLatar={bolehHapusLatar}
         />
       )}
 
