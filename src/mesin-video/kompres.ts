@@ -4,7 +4,7 @@
 //
 //   1. ab-av1 crf-search mencari CRF x264 terbesar (berkas terkecil) yang
 //      masih memenuhi target VMAF (skor kualitas Netflix: Tinggi 96,
-//      Seimbang 94, Hemat 92). ab-av1 butuh ffmpeg ber-libvmaf: build statis
+//      Seimbang 94, Hemat 92, Paling Kecil 86). ab-av1 butuh ffmpeg ber-libvmaf: build statis
 //      di /opt/vmaf/bin (vps/autoedit-ts/Dockerfile), bukan ffmpeg apt.
 //   2. Encode akhir H.264 (format paling aman untuk semua sosmed) dengan
 //      ffmpeg biasa, resolusi & fps ASLI, audio AAC disalin apa adanya.
@@ -16,11 +16,11 @@ import path from "node:path";
 import { FFMPEG_BIN, FFPROBE_BIN } from "./konfig";
 import { Dibatalkan, GalatVideo } from "./jenis";
 
-export const TARGET_VMAF = { tinggi: 96, seimbang: 94, hemat: 92 } as const;
+export const TARGET_VMAF = { tinggi: 96, seimbang: 94, hemat: 92, kecil: 86 } as const;
 export type MutuKompres = keyof typeof TARGET_VMAF;
 
 export function mutuSah(m: unknown): MutuKompres {
-  return m === "tinggi" || m === "hemat" ? m : "seimbang";
+  return m === "tinggi" || m === "hemat" || m === "kecil" ? m : "seimbang";
 }
 
 const teks = (nama: string, bawaan: string) => String(process.env[nama] ?? "").trim() || bawaan;

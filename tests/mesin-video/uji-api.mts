@@ -806,10 +806,10 @@ await uji("kompres video: antre, satu aktif, worker, masuk stok, tak memblok edi
   const besar = path.join(MEDIA, "kompres-sumber.mp4");
   ffmpeg("-f", "lavfi", "-i", "testsrc2=s=360x640:r=25", "-t", "3", "-c:v", "libx264", "-crf", "8", "-pix_fmt", "yuv420p", besar);
   TUGAS.length = 0;
-  let r = await minta("POST", "/api/tvr/kompres?mutu=hemat", { id: a, berkas: { nama: "rekaman hp.mp4", isi: fs.readFileSync(besar), tipe: "video/mp4" } });
+  let r = await minta("POST", "/api/tvr/kompres?mutu=kecil", { id: a, berkas: { nama: "rekaman hp.mp4", isi: fs.readFileSync(besar), tipe: "video/mp4" } });
   pastikan(r.status === 200, r.teks);
   const k = r.json().kompres as { id: string; status: string; mutu: string }[];
-  pastikan(k.length === 1 && k[0].status === "queued" && k[0].mutu === "hemat", JSON.stringify(k));
+  pastikan(k.length === 1 && k[0].status === "queued" && k[0].mutu === "kecil", JSON.stringify(k));
   // Satu kompres aktif per akun.
   r = await minta("POST", "/api/tvr/kompres", { id: a, berkas: { nama: "lagi.mp4", isi: fs.readFileSync(besar), tipe: "video/mp4" } });
   pastikan(r.status === 409, `${r.status}`);

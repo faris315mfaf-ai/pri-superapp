@@ -7,7 +7,8 @@
 // Unggah video dari perangkat (≤100 MB) → mesin mencari setelan x264 terkecil
 // yang masih memenuhi target VMAF (ab-av1 + Netflix VMAF) → encode H.264
 // resolusi asli → hasilnya masuk Stok Video (bisa diunggah ke sosmed atau
-// diunduh). Kualitas dipilih: Tinggi (VMAF 96), Seimbang (94), Hemat (92).
+// diunduh). Kualitas dipilih: Tinggi (VMAF 96), Seimbang (94), Hemat (92),
+// Paling Kecil (86).
 // ============================================================
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -21,7 +22,7 @@ import { useApiAutoEdit } from "@/features/auto-edit/tim";
 import { segarkanStokTvr } from "./stok-video-tvr";
 import { perkiraanWaktu, ukuranMb, type AntreanTvr } from "./edit-otomatis-tipe";
 
-type Mutu = "tinggi" | "seimbang" | "hemat";
+type Mutu = "tinggi" | "seimbang" | "hemat" | "kecil";
 
 type ItemKompres = {
   id: string;
@@ -38,7 +39,8 @@ type ItemKompres = {
 const PILIHAN: { nilai: Mutu; judul: string; vmaf: number; ket: string }[] = [
   { nilai: "tinggi", judul: "Tinggi", vmaf: 96, ket: "Paling mirip aslinya, berkas sedikit lebih besar" },
   { nilai: "seimbang", judul: "Seimbang", vmaf: 94, ket: "Bedanya tidak terlihat mata, jauh lebih kecil" },
-  { nilai: "hemat", judul: "Hemat", vmaf: 92, ket: "Paling kecil, untuk unggahan cepat" },
+  { nilai: "hemat", judul: "Hemat", vmaf: 92, ket: "Lebih kecil, cocok untuk unggahan sosmed" },
+  { nilai: "kecil", judul: "Paling Kecil", vmaf: 86, ket: "Berkas terkecil; detail halus bisa sedikit berkurang" },
 ];
 
 // Sama dengan yang diterima mesin (src/mesin-video/server/tvr.ts JENIS_VIDEO).
@@ -152,12 +154,12 @@ export function KompresVideo() {
             Kompres Video <span className="text-[10px] font-bold text-amber-500">UJI COBA</span>
           </p>
           <p className="mt-0.5 text-[11px] leading-snug text-teks-sekunder">
-            Perkecil video tanpa turun kualitas yang terlihat. Hasil masuk Stok Video.
+            Perkecil video dengan kualitas yang terukur. Hasil masuk Stok Video.
           </p>
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Kualitas hasil">
+      <div className="mt-3 grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Kualitas hasil">
         {PILIHAN.map((p) => (
           <button
             key={p.nilai}
