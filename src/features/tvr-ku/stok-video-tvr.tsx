@@ -600,9 +600,11 @@ function StokItem(q: StokItemProps) {
                   ? item.hemat_persen && item.hemat_persen > 0
                     ? `Hasil kompres · hemat ${item.hemat_persen}%`
                     : "Hasil kompres · sudah efisien"
-                  : item.sumber === "unggah"
-                    ? "Dari perangkat"
-                    : "Hasil Edit Otomatis",
+                  : item.sumber === "blur"
+                    ? "Hasil blur watermark"
+                    : item.sumber === "unggah"
+                      ? "Dari perangkat"
+                      : "Hasil Edit Otomatis",
               tanggalRingkas(item.tanggal),
               item.durasi ? `${Math.round(item.durasi)} dtk` : "",
               ukuranMb(item.size),

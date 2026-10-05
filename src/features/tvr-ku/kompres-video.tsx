@@ -83,10 +83,12 @@ export function KompresVideo() {
   // Pantau selama ada yang dikompres; selesai = hilang dari daftar aktif.
   const idAktif = aktif?.id ?? null;
   const sebelumnyaRef = useRef<string | null>(null);
+  // Yang dibatalkan sendiri ikut hilang dari daftar — jangan dikira selesai.
+  const dibatalkanRef = useRef(new Set<string>());
   useEffect(() => {
     const lama = sebelumnyaRef.current;
     sebelumnyaRef.current = idAktif;
-    if (lama && !idAktif && !(daftar ?? []).some((k) => k.id === lama && k.status !== "dibatalkan")) {
+    if (lama && !idAktif && !dibatalkanRef.current.has(lama) && !(daftar ?? []).some((k) => k.id === lama)) {
       toast("sukses", "Kompres selesai", "Hasilnya sudah di Stok Video — ketuk untuk Unduh atau Upload.");
       segarkanStokTvr();
     }
@@ -126,6 +128,7 @@ export function KompresVideo() {
 
   async function batalkan(id: string) {
     if (membatalkan) return;
+    dibatalkanRef.current.add(id);
     setMembatalkan(id);
     try {
       const res = await api.fetch(`/api/tvr/kompres/${id}`, { method: "DELETE" });

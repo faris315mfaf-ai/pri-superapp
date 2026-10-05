@@ -72,7 +72,8 @@ export type Template = {
   [lain: string]: unknown;
 };
 
-export type StatusJob = "queued" | "downloading" | "rendering" | "done" | "error" | "dibatalkan";
+// "draf" (5 Okt 2026): Blur Watermark — video sudah diunggah, area belum ditandai.
+export type StatusJob = "queued" | "downloading" | "rendering" | "done" | "error" | "dibatalkan" | "draf";
 
 export type Job = {
   job_id: string;

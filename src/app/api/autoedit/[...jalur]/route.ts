@@ -29,10 +29,18 @@ async function tangani(
   }
   const { jalur } = await params;
   const j = jalur ?? [];
-  // Fitur uji coba (Kompres Video, Hapus Latar Boom): hanya master atau akun
-  // yang modulnya dibuka master — juga lewat jalur tim. Tanpa izin: 404.
+  // Fitur uji coba (Kompres Video, Hapus Latar Boom, Blur Watermark): hanya
+  // master atau akun yang modulnya dibuka master — juga lewat jalur tim. Tanpa izin: 404.
   const fiturUji =
-    j[0] !== "tvr" ? null : j[1] === "kompres" ? "kompres" : j[1] === "template" && j[2] === "hapus-latar" ? "hapuslatar" : null;
+    j[0] !== "tvr"
+      ? null
+      : j[1] === "kompres"
+        ? "kompres"
+        : j[1] === "blur"
+          ? "blurwm"
+          : j[1] === "template" && j[2] === "hapus-latar"
+            ? "hapuslatar"
+            : null;
   if (fiturUji && !bolehFiturUji(user, fiturUji)) return galatAutoEdit(404, "Tidak ditemukan");
   // Akun TIM (5 Okt 2026): modul TV Rakyat Official memakai template & stok
   // bersama tim. Hanya jalur TVR; anggota tim dipastikan di identitasTim.
@@ -46,8 +54,8 @@ async function tangani(
   // Tanpa izin: 404, bukan 403 — modul ini tidak perlu diumumkan.
   const keluarga = keluargaAutoEdit(user);
   if (keluarga.size === 0) return galatAutoEdit(404, "Tidak ditemukan");
-  // Kompres Video tidak memerlukan Edit Otomatis (izinnya sudah dicek di atas).
-  if (fiturUji === "kompres") return teruskanAutoEdit(request, j, user.id, keluarga);
+  // Kompres & Blur Watermark tidak memerlukan Edit Otomatis (izinnya sudah dicek di atas).
+  if (fiturUji === "kompres" || fiturUji === "blurwm") return teruskanAutoEdit(request, j, user.id, keluarga);
   // Edit Otomatis TVR (template, sumber, tulisan, render) butuh minimal 5
   // akun sosmed terhubung; Stok Video terbuka untuk semua (5 Okt 2026).
   if (j[0] === "tvr" && !jalurStokTvr(j) && !(await bolehEditOtomatisServer(user))) {

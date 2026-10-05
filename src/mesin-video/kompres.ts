@@ -47,7 +47,7 @@ type Opsi = {
 };
 
 /** Jalankan proses; tiap baris stderr/stdout ke `baris`; bisa dihentikan lewat `batal`. */
-function jalankan(
+export function jalankan(
   bin: string,
   args: string[],
   opsi: { env?: NodeJS.ProcessEnv; cwd?: string; baris?: (b: string) => void; batal: () => Promise<boolean> },
@@ -87,7 +87,7 @@ function jalankan(
   });
 }
 
-async function kodekAudio(berkas: string, batal: () => Promise<boolean>): Promise<string> {
+export async function kodekAudio(berkas: string, batal: () => Promise<boolean>): Promise<string> {
   const h = await jalankan(
     FFPROBE_BIN,
     ["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", berkas],

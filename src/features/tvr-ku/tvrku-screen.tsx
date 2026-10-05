@@ -33,6 +33,7 @@ import {
   Globe,
   GraduationCap,
   Minimize2,
+  EyeOff,
   Hourglass,
   Link2,
   Loader2,
@@ -90,6 +91,7 @@ import { mulaiTurTvr } from "@/lib/tur";
 import { AutoEditPanel } from "@/features/auto-edit/auto-edit-panel";
 import { bolehEditOtomatisTvr, bolehFiturUji } from "@/lib/peran";
 import { KompresVideo } from "./kompres-video";
+import { BlurWatermark } from "./blur-watermark";
 import { VideoSiapUnggah } from "./video-siap-unggah";
 import { RekapAnggotaPalugodam } from "./rekap-anggota-palugodam";
 import { SiaranSerentak } from "./siaran-serentak";
@@ -1183,6 +1185,26 @@ export function TvrKuScreen({
                     <SectionTitle judul="Kompres Video" />
                     <div className="mt-2.5">
                       <KompresVideo />
+                    </div>
+                  </FadeInUp>
+                ),
+              },
+            ]
+          : []),
+        // Blur Watermark (uji coba, 5 Okt 2026): akun yang modulnya dibuka master.
+        ...(bolehFiturUji(userAsli, "blurwm")
+          ? [
+              {
+                id: "blur-watermark",
+                segmen: "Unggah & Jadwal",
+                judul: "Blur Watermark",
+                ikon: EyeOff,
+                keterangan: "Samarkan watermark video (uji coba)",
+                render: () => (
+                  <FadeInUp delay={0.088}>
+                    <SectionTitle judul="Blur Watermark" />
+                    <div className="mt-2.5">
+                      <BlurWatermark />
                     </div>
                   </FadeInUp>
                 ),

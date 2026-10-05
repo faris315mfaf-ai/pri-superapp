@@ -18,7 +18,7 @@ export type MuatanRender = {
   texts: Record<string, string>;
   teks_warna?: string;
   /** Jenis tugas (5 Okt 2026): kosong = render template; "kompres" = Kompres Video; "hapuslatar" = Hapus Latar Boom. */
-  jenis?: "kompres" | "hapuslatar";
+  jenis?: "kompres" | "hapuslatar" | "blur";
   mutu?: string;
 };
 

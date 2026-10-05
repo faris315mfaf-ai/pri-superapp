@@ -21,6 +21,7 @@ import { FFMPEG_BIN, FFPROBE_BIN, MAX_SOURCE_UPLOAD_MB } from "../konfig";
 import { kompositStatis, pngRgb } from "../komposit";
 import { batasByte, lupakan, pemakaianByte, petaKhusus } from "../kuota";
 import { mutuSah, TARGET_VMAF } from "../kompres";
+import { buatPratinjau, EFEK_BLUR, MAKS_KOTAK, ukuranTampil } from "../blur-watermark";
 import { denganKunci } from "../kunci";
 import { pastikanIsiMedia, probe, punyaAlpha, rapikanVideo } from "../media";
 import {
@@ -492,8 +493,10 @@ function judulDariBerkas(nama: string): string {
 const jobKompres = (j: Job) => (j as Record<string, unknown>).jenis === "kompres";
 /** Job Hapus Latar Boom: menulis ke draf template, bukan ke stok. */
 const jobHapusLatar = (j: Job) => (j as Record<string, unknown>).jenis === "hapuslatar";
+/** Job Blur Watermark: hasilnya masuk Stok seperti Kompres. */
+const jobBlur = (j: Job) => (j as Record<string, unknown>).jenis === "blur";
 /** Job "sampingan" tidak memblokir antrean Edit Otomatis akun. */
-const jobSampingan = (j: Job) => jobKompres(j) || jobHapusLatar(j);
+const jobSampingan = (j: Job) => jobKompres(j) || jobHapusLatar(j) || jobBlur(j);
 
 async function jobAktif(a: string): Promise<Job | null> {
   for (const j of await daftarJob(50, a)) {
@@ -1089,6 +1092,228 @@ export function pasangRuteTvr(r: Router): void {
     const p = penggunaTvr(pm);
     await batalkanHapusLatar(akun(p));
     return { hapus_latar: await ringkasHapusLatar(akun(p)), template: await keadaan(p) };
+  });
+
+  // ---- BLUR WATERMARK (uji coba) ----------------------------------
+  // Gerbang SuperApp membatasi jalur ini ke akun yang modul "blurwm"-nya
+  // dibuka master. Alur: video (unggahan / dari Stok) → DRAF + gambar
+  // pratinjau → pengguna menandai ≤3 kotak & memilih efek → antrean →
+  // hasilnya masuk Stok Video. Lihat ../blur-watermark.ts.
+  const KotakBlur = z.object({
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+    w: z.number().min(0.01).max(1),
+    h: z.number().min(0.01).max(1),
+  });
+  const ProsesBlurBody = z.object({
+    efek: z.enum(EFEK_BLUR),
+    kotak: z.array(KotakBlur).min(1).max(MAKS_KOTAK),
+  });
+
+  function ringkasBlur(j: Job, antrean: unknown = null): Record<string, unknown> {
+    const r = j as Record<string, unknown>;
+    return {
+      id: j.job_id,
+      status: j.status,
+      progress: j.progress ?? 0,
+      judul: r.judul ?? "Video",
+      efek: r.efek ?? null,
+      kotak: r.kotak ?? [],
+      lebar: r.lebar ?? null,
+      tinggi: r.tinggi ?? null,
+      durasi: r.durasi ?? null,
+      size_awal: r.size_awal ?? null,
+      log: j.message ?? null,
+      error: j.error ?? null,
+      antrean,
+    };
+  }
+
+  /** Draf, yang sedang diproses, dan yang gagal/dibatalkan < 6 jam (bisa diulang). */
+  async function daftarBlur(a: string): Promise<Record<string, unknown>[]> {
+    const hasil: Record<string, unknown>[] = [];
+    for (const j of await daftarJob(30, a)) {
+      if (!jobBlur(j) || j.status === "done") continue;
+      const aktif = STATUS_AKTIF_JOB.includes(j.status);
+      if (!aktif && Date.now() / 1000 - Number(j.created ?? 0) > 6 * 3600) continue;
+      hasil.push(ringkasBlur(j, aktif && j.status === "queued" ? await posisiAntrean(j.job_id) : null));
+    }
+    return hasil;
+  }
+
+  async function blurMilik(a: string, id: string): Promise<Job> {
+    let j: Job;
+    try {
+      j = await bacaStatus(id);
+    } catch (e) {
+      if (e instanceof GalatVideo) throw new GalatHttp(404, "Video tidak ditemukan.");
+      throw e;
+    }
+    if (String(j.owner ?? "") !== a || !jobBlur(j)) throw new GalatHttp(404, "Video tidak ditemukan.");
+    return j;
+  }
+
+  /** Satu draf per akun: draf/gagal lama dibuang; tolak bila masih ada yang diproses. */
+  async function siapkanDrafBaru(a: string): Promise<void> {
+    for (const j of await daftarJob(30, a)) {
+      if (!jobBlur(j)) continue;
+      if (STATUS_AKTIF_JOB.includes(j.status)) {
+        throw new GalatHttp(409, "Masih ada video yang sedang di-blur. Tunggu sampai selesai.");
+      }
+      if (j.status !== "done") await buangJob(j.job_id);
+    }
+  }
+
+  async function catatDrafBlur(p: Pengguna, id: string, masukan: string, judul: string): Promise<Record<string, unknown>> {
+    const folder = jobPath(id);
+    try {
+      await pastikanIsiMedia(masukan);
+      const durasi = Number((await probe(masukan)).duration ?? 0) || 0;
+      const { lebar, tinggi } = await ukuranTampil(masukan);
+      await buatPratinjau(masukan, path.join(folder, "pratinjau.jpg"), durasi);
+      const st = await tulisStatus(id, {
+        status: "draf",
+        progress: 0,
+        owner: akun(p),
+        jenis: "blur",
+        masukan: path.basename(masukan),
+        judul,
+        sumber_stok: "blur",
+        size_awal: fs.statSync(masukan).size,
+        durasi: Math.round(durasi * 10) / 10,
+        lebar,
+        tinggi,
+        log: "Tandai area watermark.",
+      });
+      return ringkasBlur(st);
+    } catch (e) {
+      fs.rmSync(folder, { recursive: true, force: true });
+      if (e instanceof GalatVideo) throw new GalatHttp(415, e.message);
+      throw e;
+    }
+  }
+
+  r.get(`${A}/blur`, async (pm) => {
+    const p = penggunaTvr(pm);
+    return { blur: await daftarBlur(akun(p)), maks_mb: MAX_SOURCE_UPLOAD_MB, maks_kotak: MAKS_KOTAK, efek: EFEK_BLUR };
+  });
+
+  r.post(`${A}/blur`, async (pm) => {
+    // Unggahan dari perangkat → draf.
+    const p = penggunaTvr(pm);
+    const a = akun(p);
+    await siapkanDrafBaru(a);
+    await pastikanKuota(p);
+    const batas = Math.trunc(MAX_SOURCE_UPLOAD_MB * 1_048_576);
+    await sediakanRuangUnggah(pm, batas);
+    const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+    const folder = jobPath(id);
+    let namaAsli = "";
+    let hasil: { jalur: string };
+    try {
+      hasil = await tulisUnggahan(
+        pm,
+        (asli) => {
+          namaAsli = aman(path.basename(asli || "video"));
+          if (!JENIS_VIDEO.has(akhiran(namaAsli))) {
+            throw new GalatHttp(415, `Jenis berkas tidak didukung. Pakai: ${urut(JENIS_VIDEO).join(", ")}`);
+          }
+          fs.mkdirSync(folder, { recursive: true });
+          return path.join(folder, `masukan${akhiran(namaAsli)}`);
+        },
+        batas,
+        `Video melebihi ${f0(MAX_SOURCE_UPLOAD_MB)} MB.`,
+      );
+    } catch (e) {
+      fs.rmSync(folder, { recursive: true, force: true });
+      throw e;
+    }
+    const draf = await catatDrafBlur(p, id, hasil.jalur, judulDariBerkas(namaAsli));
+    lupakan(a);
+    return { draf, blur: await daftarBlur(a) };
+  });
+
+  r.post(`${A}/blur/dari-stok/{id}`, async (pm) => {
+    // Video yang sudah ada di Stok → draf (berkas ditautkan, bukan disalin).
+    const p = penggunaTvr(pm);
+    const a = akun(p);
+    const stok = await stokMilik(a, pm.params.id);
+    const asal = path.join(jobPath(stok.job_id), aman(String(stok.output)));
+    if (!fs.existsSync(asal)) throw new GalatHttp(404, "Berkas videonya sudah tidak ada (lewat masa simpan).");
+    await siapkanDrafBaru(a);
+    await pastikanKuota(p);
+    const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+    const folder = jobPath(id);
+    fs.mkdirSync(folder, { recursive: true });
+    const masukan = path.join(folder, `masukan${akhiran(asal) || ".mp4"}`);
+    try {
+      fs.linkSync(asal, masukan);
+    } catch {
+      fs.copyFileSync(asal, masukan);
+    }
+    const judulStok = String(ringkasStok(stok).judul ?? "Video");
+    const draf = await catatDrafBlur(p, id, masukan, `Blur — ${judulStok}`.slice(0, 60));
+    lupakan(a);
+    return { draf, blur: await daftarBlur(a) };
+  });
+
+  r.get(`${A}/blur/{id}/pratinjau.jpg`, async (pm) => {
+    const p = penggunaTvr(pm);
+    const j = await blurMilik(akun(p), pm.params.id);
+    const folder = jobPath(j.job_id);
+    const gambar = path.join(folder, "pratinjau.jpg");
+    if (!fs.existsSync(gambar)) {
+      const masukan = path.join(folder, aman(String((j as Record<string, unknown>).masukan ?? "")));
+      if (!fs.existsSync(masukan)) throw new GalatHttp(404, "Video sudah tidak ada.");
+      await buatPratinjau(masukan, gambar, Number((j as Record<string, unknown>).durasi ?? 0));
+    }
+    return kirimGambar(pm, fs.readFileSync(gambar), "image/jpeg");
+  });
+
+  r.post(`${A}/blur/{id}/proses`, async (pm) => {
+    const p = penggunaTvr(pm);
+    const a = akun(p);
+    const body = await bacaJson(pm, ProsesBlurBody);
+    const j = await blurMilik(a, pm.params.id);
+    if (!["draf", "error", "dibatalkan"].includes(j.status)) {
+      throw new GalatHttp(409, "Video ini sedang diproses atau sudah selesai.");
+    }
+    const masukan = path.join(jobPath(j.job_id), aman(String((j as Record<string, unknown>).masukan ?? "")));
+    if (!fs.existsSync(masukan)) throw new GalatHttp(410, "Video sudah tidak ada. Unggah ulang.");
+    if ((await daftarStok(a)).length >= maksStok(a)) {
+      throw new GalatHttp(409, `Stok video penuh (maksimal ${maksStok(a)}). Hapus beberapa dulu.`);
+    }
+    const kotak = body.kotak.map((k) => ({
+      x: Math.min(k.x, 0.99),
+      y: Math.min(k.y, 0.99),
+      w: Math.min(k.w, 1 - Math.min(k.x, 0.99)),
+      h: Math.min(k.h, 1 - Math.min(k.y, 0.99)),
+    }));
+    await tulisStatus(j.job_id, {
+      status: "queued",
+      progress: 0,
+      error: null,
+      efek: body.efek,
+      kotak,
+      log: "Masuk antrean blur.",
+    });
+    await kirimRender({ job_id: j.job_id, url: "", template_id: "", texts: {}, jenis: "blur" });
+    lupakan(a);
+    return { blur: await daftarBlur(a) };
+  });
+
+  r.delete(`${A}/blur/{id}`, async (pm) => {
+    const p = penggunaTvr(pm);
+    const a = akun(p);
+    const j = await blurMilik(a, pm.params.id);
+    if (STATUS_BERJALAN_JOB.includes(j.status)) {
+      await mintaBatal(j.job_id);
+    } else if (j.status !== "done") {
+      if (j.status === "queued") await cabutTugas(j);
+      await buangJob(j.job_id);
+    }
+    lupakan(a);
+    return { blur: await daftarBlur(a) };
   });
 
   // ---- STOK VIDEO -------------------------------------------------

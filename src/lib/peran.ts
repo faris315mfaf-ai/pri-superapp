@@ -85,6 +85,12 @@ export const MODUL_AKUN = [
     keterangan: "Buang latar video Boom like share otomatis di editor template (rembg)",
     bukanTab: true,
   },
+  {
+    kunci: "blurwm",
+    label: "Blur Watermark (uji coba)",
+    keterangan: "Samarkan area watermark video (blur/mosaik/halus, ffmpeg), hasil ke Stok Video",
+    bukanTab: true,
+  },
 ] as const;
 
 export type KunciModul = (typeof MODUL_AKUN)[number]["kunci"];
@@ -103,10 +109,10 @@ export function modulDibuka(
   return typeof v === "boolean" ? v : undefined;
 }
 
-/** Fitur uji coba per akun (Kompres Video, Hapus Latar): master, atau dibuka master. */
+/** Fitur uji coba per akun (Kompres Video, Hapus Latar, Blur Watermark): master, atau dibuka master. */
 export function bolehFiturUji(
   u: { role?: string | null; modul_izin?: unknown } | null | undefined,
-  kunci: "kompres" | "hapuslatar",
+  kunci: "kompres" | "hapuslatar" | "blurwm",
 ): boolean {
   return u?.role === "master" || modulDibuka(u, kunci) === true;
 }

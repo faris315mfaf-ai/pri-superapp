@@ -885,6 +885,61 @@ await uji("hapus latar boom: warna polos, AI, Boom diganti, tak memblok edit", a
   pastikan(d.template.slot.boom.alpha === false && /diganti/.test(d.hapus_latar.log), JSON.stringify(d.hapus_latar));
 });
 
+await uji("blur watermark: draf, pratinjau, 3 efek, dari stok, validasi", async () => {
+  const a = "8501";
+  for (const sisa of await job.redis().zrange(job.KUNCI_AKTIF, 0, -1)) {
+    await job.tulisStatus(sisa, { status: "error", log: "dibereskan uji" });
+  }
+  const sumber = videoSumber(2);
+  TUGAS.length = 0;
+  // 1. Unggah → draf + ukuran tampil + pratinjau JPEG.
+  let r = await minta("POST", "/api/tvr/blur", { id: a, berkas: { nama: "watermark.mp4", isi: sumber, tipe: "video/mp4" } });
+  pastikan(r.status === 200, r.teks);
+  const draf = r.json().draf as { id: string; status: string; lebar: number; tinggi: number };
+  pastikan(draf.status === "draf" && draf.lebar > 0 && draf.tinggi > 0, JSON.stringify(draf));
+  const g = await minta("GET", `/api/tvr/blur/${draf.id}/pratinjau.jpg`, { id: a });
+  pastikan(g.status === 200 && g.isi[0] === 0xff && g.isi[1] === 0xd8, `pratinjau ${g.status}`);
+  // Validasi: 4 kotak ditolak, efek asing ditolak.
+  const kotak4 = Array.from({ length: 4 }, () => ({ x: 0.1, y: 0.1, w: 0.2, h: 0.1 }));
+  pastikan((await minta("POST", `/api/tvr/blur/${draf.id}/proses`, { id: a, json: { efek: "blur", kotak: kotak4 } })).status === 422);
+  pastikan((await minta("POST", `/api/tvr/blur/${draf.id}/proses`, { id: a, json: { efek: "api", kotak: kotak4.slice(0, 1) } })).status === 422);
+  // Akun lain tidak bisa menyentuh draf ini.
+  pastikan((await minta("GET", `/api/tvr/blur/${draf.id}/pratinjau.jpg`, { id: "8502" })).status === 404);
+
+  // 2. Proses: 2 kotak mosaik (satu menempel tepi kanan-bawah).
+  const kotak = [{ x: 0.02, y: 0.03, w: 0.45, h: 0.11 }, { x: 0.6, y: 0.9, w: 0.5, h: 0.2 }];
+  r = await minta("POST", `/api/tvr/blur/${draf.id}/proses`, { id: a, json: { efek: "mosaik", kotak } });
+  pastikan(r.status === 200, r.teks);
+  pastikan((await minta("POST", "/api/tvr/blur", { id: a, berkas: { nama: "lagi.mp4", isi: sumber, tipe: "video/mp4" } })).status === 409);
+  pastikan((await minta("GET", "/api/tvr/jobs/saya", { id: a })).json().job === null);
+  let m = TUGAS.find((t) => t.job_id === draf.id);
+  pastikan(Boolean(m) && m!.jenis === "blur", JSON.stringify(TUGAS));
+  pastikan((await pekerja.blurJob(m!)).status === "done");
+  let stok = (await minta("GET", "/api/tvr/stok", { id: a })).json().stok as { id: string; sumber: string; size: number }[];
+  pastikan(stok.some((s) => s.id === draf.id && s.sumber === "blur" && s.size > 0), JSON.stringify(stok));
+  pastikan((await minta("GET", "/api/tvr/blur", { id: a })).json().blur.length === 0);
+
+  // 3. Dari Stok → draf baru (stok asal tetap utuh), efek blur & halus.
+  for (const efek of ["blur", "halus"]) {
+    TUGAS.length = 0;
+    r = await minta("POST", `/api/tvr/blur/dari-stok/${draf.id}`, { id: a });
+    pastikan(r.status === 200, r.teks);
+    const d2 = r.json().draf as { id: string; judul: string };
+    pastikan(d2.judul.startsWith("Blur — "), d2.judul);
+    r = await minta("POST", `/api/tvr/blur/${d2.id}/proses`, { id: a, json: { efek, kotak: [{ x: 0, y: 0, w: 1, h: 0.2 }] } });
+    pastikan(r.status === 200, r.teks);
+    m = TUGAS.find((t) => t.job_id === d2.id);
+    pastikan((await pekerja.blurJob(m!)).status === "done", efek);
+  }
+  stok = (await minta("GET", "/api/tvr/stok", { id: a })).json().stok;
+  pastikan(stok.filter((s) => s.sumber === "blur").length === 3, JSON.stringify(stok));
+
+  // 4. Draf dibuang lewat DELETE.
+  r = await minta("POST", "/api/tvr/blur", { id: a, berkas: { nama: "buang.mp4", isi: sumber, tipe: "video/mp4" } });
+  const d3 = r.json().draf as { id: string };
+  pastikan((await minta("DELETE", `/api/tvr/blur/${d3.id}`, { id: a })).json().blur.length === 0);
+});
+
 // ---------------------------------------------------------------- selesai
 
 server.close();

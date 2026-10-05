@@ -18,6 +18,7 @@ import {
   slotSerentak,
 } from "./job";
 import { probe } from "./media";
+import { blurWatermark, EFEK_BLUR, type EfekBlur, type KotakRelatif } from "./blur-watermark";
 import { hapusLatar } from "./hapus-latar";
 import { templatePath } from "./jalur";
 import { kompresVideo, mutuSah } from "./kompres";
@@ -313,9 +314,59 @@ export async function hapusLatarJob(m: MuatanRender): Promise<{ job_id: string; 
   }
 }
 
-/** Satu pintu worker: render template, Kompres Video, atau Hapus Latar Boom. */
+/**
+ * Blur Watermark (uji coba, 5 Okt 2026). Masukan & kotak area sudah ada di
+ * status job (ditandai di draf lewat API); hasil output.mp4 → Stok Video.
+ */
+export async function blurJob(m: MuatanRender): Promise<{ job_id: string; status: string; [k: string]: unknown }> {
+  const jobId = m.job_id;
+  const folder = jobPath(jobId);
+  try {
+    const st = (await bacaStatus(jobId).catch(() => null)) as (Record<string, unknown> & { status: string }) | null;
+    if (!st || st.status !== "queued") return { job_id: jobId, status: st?.status ?? "hilang" };
+    if (await dimintaBatal(jobId)) {
+      await lupakanBatal(jobId);
+      await tulisStatus(jobId, { status: "dibatalkan", progress: 0, log: "Dihentikan sebelum mulai." });
+      return { job_id: jobId, status: "dibatalkan" };
+    }
+    const masukan = path.join(folder, String(st.masukan ?? ""));
+    if (!fs.existsSync(masukan)) throw new GalatVideo("Berkas video tidak ditemukan.");
+    const efek: EfekBlur = (EFEK_BLUR as readonly string[]).includes(String(st.efek)) ? (st.efek as EfekBlur) : "blur";
+    const kotak = Array.isArray(st.kotak) ? (st.kotak as KotakRelatif[]) : [];
+    await tulisStatus(jobId, { status: "rendering", progress: 0, task_id: jobId, mulai_proses: Date.now() / 1000 });
+    const hasil = await blurWatermark(masukan, folder, efek, kotak, await durasiVideo(masukan), {
+      progress: (p) => tulisStatus(jobId, { progress: p }).then(() => undefined),
+      batal: () => dimintaBatal(jobId),
+    });
+    hapusDiam(masukan);
+    hapusDiam(path.join(folder, "pratinjau.jpg"));
+    await tulisStatus(jobId, {
+      status: "done",
+      progress: 100,
+      output: path.basename(hasil.berkas),
+      url: "",
+      durasi: await durasiVideo(hasil.berkas),
+      size: hasil.size,
+      log: `Selesai: ${kotak.length} area disamarkan (${efek}).`,
+    });
+    await bersihkanJobLama();
+    return { job_id: jobId, status: "done" };
+  } catch (e) {
+    const dibatal = e instanceof Dibatalkan;
+    const pesan = e instanceof GalatVideo ? e.message : e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    if (dibatal) await lupakanBatal(jobId);
+    else console.error(`Blur watermark ${jobId} gagal`, e);
+    // Masukan tetap disimpan: pengguna bisa mengubah area lalu memproses ulang.
+    hapusDiam(path.join(folder, "output.mp4"));
+    await tulisStatus(jobId, dibatal ? { status: "dibatalkan", log: "Blur dihentikan." } : { status: "error", error: pesan, log: `Gagal: ${pesan}` });
+    return { job_id: jobId, status: dibatal ? "dibatalkan" : "error" };
+  }
+}
+
+/** Satu pintu worker: render template, Kompres Video, Hapus Latar Boom, Blur Watermark. */
 function kerjakan(m: MuatanRender) {
   if (m.jenis === "kompres") return kompresJob(m);
+  if (m.jenis === "blur") return blurJob(m);
   if (m.jenis === "hapuslatar") return hapusLatarJob(m);
   return renderVideo(m);
 }
