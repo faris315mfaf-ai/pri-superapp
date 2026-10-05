@@ -3,17 +3,18 @@
 // Body: { stok_id, judul? }
 //
 // Video di Stok Video Tim (mesin Auto Edit, akun tim TV Rakyat Official)
-// disalin ke R2 lalu dicatat di video_antrian — sama seperti unggahan manual
+// disalin ke penyimpanan — R2 bila sudah diatur, selain itu bucket privat
+// Supabase "tvrku" (sama dengan TVR Saya) — lalu dicatat di video_antrian — sama seperti unggahan manual
 // — sehingga pratinjau & unggah Official yang sudah ada (/api/tv/unggah:
 // pilih platform, caption, jadwal, Ayrshare) langsung bisa dipakai.
 //
 //   • Pengirim harus anggota tim TV (identitasTim) DAN berhak unggah ke
 //     sosmed Official (lib/tv-tim bolehUploadVideo).
 //   • Berhak ACC → langsung "SIAP DITINJAU"/disetujui; selain itu "MENUNGGU ACC".
-//   • Berkas di R2: tv-stok/<kode>.mp4. Tautannya bertanda tangan 7 hari
-//     (batas SigV4), jadi media dihapus 6 hari setelah dikirim — penyapunya
-//     berjalan di rute ini setiap kali dipanggil (tanpa kolom database baru:
-//     kunci R2 diturunkan dari kode).
+//   • Berkas: tv-stok/<kode>.mp4. Tautannya bertanda tangan 7 hari (batas
+//     SigV4), jadi media dihapus 6 hari setelah dikirim — penyapunya berjalan
+//     di rute ini setiap kali dipanggil (tanpa kolom database baru: jalur
+//     berkas diturunkan dari kode).
 // =====================================================================
 import { request as mintaHttp, type IncomingMessage } from "node:http";
 import { request as mintaHttps } from "node:https";
@@ -56,11 +57,14 @@ function bukaBerkasStok(stokId: string): Promise<IncomingMessage> {
   });
 }
 
-/** Alirkan isi `sumber` ke R2 lewat PUT bertanda tangan (tanpa ditampung di memori). */
-function alirkanKeR2(sumber: IncomingMessage, key: string, panjang: number): Promise<void> {
+/** Bucket cadangan bila R2 belum diatur — sama dengan TVR Saya (privat). */
+const BUCKET = "tvrku";
+
+/** Alirkan isi `sumber` lewat PUT bertanda tangan (tanpa ditampung di memori). */
+function alirkanPut(sumber: IncomingMessage, url: string, panjang: number): Promise<void> {
   return new Promise((ok, gagal) => {
     const req = mintaHttps(
-      presignR2("PUT", key, 900),
+      url,
       { method: "PUT", headers: { "Content-Length": String(panjang), "Content-Type": "video/mp4" } },
       (res) => {
         res.resume();
@@ -89,7 +93,10 @@ async function sapuKedaluwarsa(): Promise<void> {
     .limit(20);
   for (const b of data ?? []) {
     const kode = String(b.kode);
-    if (await hapusVideoR2(kunciR2(kode)).catch(() => false)) {
+    // Berkasnya bisa di R2 atau di bucket cadangan — bersihkan keduanya.
+    const r2 = r2Siap() ? await hapusVideoR2(kunciR2(kode)).catch(() => false) : false;
+    const { error } = await db.storage.from(BUCKET).remove([kunciR2(kode)]);
+    if (r2 || !error) {
       await db.from("video_antrian").update({ hapus_media_pada: null, hasil_render_url: "", video_asli: "" }).eq("kode", kode);
     }
   }
@@ -102,7 +109,6 @@ export async function POST(request: Request) {
     if (!(await bolehUploadVideo(user))) {
       throw galat("Anda belum berhak mengunggah ke akun TV Rakyat Official.", 403);
     }
-    if (!r2Siap()) throw galat("Penyimpanan video (R2) belum diatur di server.", 503);
 
     const body = (await request.json().catch(() => ({}))) as { stok_id?: string; judul?: string };
     const stokId = String(body.stok_id ?? "").trim();
@@ -130,12 +136,27 @@ export async function POST(request: Request) {
       sumber.resume();
       throw galat("Video terlalu besar untuk dikirim ke akun Official.", 413);
     }
-    await alirkanKeR2(sumber, key, panjang).catch((e) => {
-      console.error("[tv/stok-tim] R2:", e);
+    // R2 bila diatur (bandwidth keluar gratis), selain itu bucket Supabase.
+    const pakaiR2 = r2Siap();
+    let urlPut = pakaiR2 ? presignR2("PUT", key, 900) : "";
+    if (!pakaiR2) {
+      const { data, error } = await supabase().storage.from(BUCKET).createSignedUploadUrl(key);
+      if (error || !data) {
+        sumber.resume();
+        console.error("[tv/stok-tim] siapkan unggahan:", error?.message);
+        throw galat("Penyimpanan video belum siap. Coba lagi.", 502);
+      }
+      urlPut = data.signedUrl;
+    }
+    await alirkanPut(sumber, urlPut, panjang).catch((e) => {
+      console.error("[tv/stok-tim] simpan berkas:", e);
       throw galat("Video gagal disalin ke penyimpanan. Coba lagi.", 502);
     });
 
-    const urlVideo = presignR2("GET", key, MAKS_UMUR_URL_DETIK);
+    const urlVideo = pakaiR2
+      ? presignR2("GET", key, MAKS_UMUR_URL_DETIK)
+      : ((await supabase().storage.from(BUCKET).createSignedUrl(key, MAKS_UMUR_URL_DETIK)).data?.signedUrl ?? "");
+    if (!urlVideo) throw galat("Tautan video gagal dibuat. Coba lagi.", 502);
     const acc = await bolehAccVideo(user);
     const kini = new Date().toISOString();
     const judul = String(body.judul ?? "").trim().slice(0, 60) || `Video tim ${user.nama.split(" ")[0]}`;
@@ -166,7 +187,8 @@ export async function POST(request: Request) {
     const { error } = await supabase().from("video_antrian").insert(baris);
     if (error) {
       console.error("[tv/stok-tim] simpan:", error.message);
-      await hapusVideoR2(key).catch(() => false);
+      if (pakaiR2) await hapusVideoR2(key).catch(() => false);
+      else await supabase().storage.from(BUCKET).remove([key]);
       throw new Error("Gagal mencatat video. Coba lagi.");
     }
 
