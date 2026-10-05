@@ -16,6 +16,7 @@
 // datanya tidak ditarik — aturan lama BerandaScreen dipertahankan.
 // ============================================================
 import { useEffect, useState } from "react";
+import { DompetKoinBeranda } from "@/features/koin/dompet-koin";
 import {
   CalendarCheck,
   ChevronRight,
@@ -309,6 +310,9 @@ export function BerandaSimpelGlass({
           <ThemeToggle />
         </div>
       </header>
+
+      {/* Dompet koin ala e-wallet (5 Okt 2026): tampil di semua beranda */}
+      <DompetKoinBeranda />
 
       <KartuUltah idKu={user.id} />
       {komenAktif && sakelarFitur.juara_efek !== false && <RunningTextJuara />}

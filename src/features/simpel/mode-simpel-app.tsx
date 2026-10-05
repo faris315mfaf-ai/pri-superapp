@@ -22,6 +22,7 @@ import { MotionConfig } from "framer-motion";
 import { Bell, Crown, LogOut, Megaphone } from "lucide-react";
 import { PagarGalat } from "@/components/pagar-galat";
 import { AbsensiScreen } from "@/features/absensi/absensi-screen";
+import { DompetKoinBeranda } from "@/features/koin/dompet-koin";
 import { NotifikasiScreen } from "@/features/notifikasi/notifikasi-screen";
 import { ModalAkunSosmed } from "@/features/profil/pengaturan-akun";
 import { EmbedTerbaru } from "@/features/tv-rakyat/embed-terbaru";
@@ -229,6 +230,9 @@ export function ModeSimpelApp() {
                   Keluar
                 </button>
               </div>
+
+              {/* Dompet koin (5 Okt 2026): tampil di semua beranda */}
+              <DompetKoinBeranda />
 
               {/* Dashboard singkat */}
               <div className="mt-3 grid grid-cols-2 gap-2.5">

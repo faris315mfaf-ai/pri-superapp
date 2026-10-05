@@ -31,6 +31,7 @@ import { IkonSinyal } from "@/components/ikon-sinyal";
 import { RingkasanUtama } from "./ringkasan-utama";
 import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
 import { TombolPeringkat } from "@/features/peringkat/tombol-peringkat";
+import { DompetKoinBeranda } from "@/features/koin/dompet-koin";
 import { CincinJuara } from "@/features/peringkat/cincin-mythic";
 
 import { LencanaOnline } from "@/components/lencana-online";
@@ -214,6 +215,9 @@ export function DashboardScreen({
           <ThemeToggle />
         </div>
       </header>
+
+      {/* Dompet koin ala e-wallet (5 Okt 2026): tampil di semua beranda */}
+      <DompetKoinBeranda />
 
       {/* Pengumuman terbaru — beranda tidak boleh ketinggalan info */}
       <KartuPengumumanTerbaru />
