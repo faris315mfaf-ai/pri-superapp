@@ -56,6 +56,8 @@ services:
       AUTOEDIT_PERAN: api
       REDIS_URL: redis://autoedit-redis:6379/0
       MEDIA_DIR: /data/media
+      # Jatah penyimpanan per akun (template + stok + render): 2 GB (5 Okt 2026).
+      KUOTA_AKUN_MB: "2048"
       VIDEO_SLOT_MAKS: "10"
       TZ: Asia/Jakarta
     volumes:
@@ -96,6 +98,8 @@ services:
       AUTOEDIT_PERAN: worker
       REDIS_URL: redis://autoedit-redis:6379/0
       MEDIA_DIR: /data/media
+      # Jatah penyimpanan per akun (template + stok + render): 2 GB (5 Okt 2026).
+      KUOTA_AKUN_MB: "2048"
       VIDEO_WORKER_PARALEL: "3"
       VIDEO_SLOT_MAKS: "10"
       VIDEO_THREADS: "2"

@@ -273,7 +273,7 @@ export const LANGKAH_TUR_TVR: LangkahTur[] = [
   {
     target: ["tvr-stok"],
     judul: "Stok Video — cara posting baru",
-    isi: "Mulai sekarang video DITAHAN dulu di Stok sebelum diposting. Hasil Edit Otomatis masuk ke sini sendiri; video jadi bisa ditambah dari HP. Video di stok TERHAPUS OTOMATIS setelah 2 hari, maksimal 50 video & 1 GB per akun — posting secepatnya.",
+    isi: "Mulai sekarang video DITAHAN dulu di Stok sebelum diposting. Hasil Edit Otomatis masuk ke sini sendiri; video jadi bisa ditambah dari HP. Video di stok TERHAPUS OTOMATIS setelah 2 hari, maksimal 50 video & 2 GB per akun — posting secepatnya.",
     maju: "lanjut",
   },
   {
