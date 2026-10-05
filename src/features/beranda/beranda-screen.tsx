@@ -41,6 +41,7 @@ import { TataLetakModul } from "@/components/tata-letak-modul";
 import { KartuUltah } from "@/components/ultah";
 import { RunningTextJuara } from "./running-text-juara";
 import { KartuServerAutoEdit } from "./kartu-server-autoedit";
+import { DompetKoinBeranda } from "@/features/koin/dompet-koin";
 import { useModulAktif } from "@/hooks/use-modul";
 import {
   getAbsensi,
@@ -244,6 +245,9 @@ export function BerandaScreen({
           <ThemeToggle />
         </div>
       </header>
+
+      {/* Dompet koin ala e-wallet (5 Okt 2026): saldo, riwayat, Kelola Koin */}
+      <DompetKoinBeranda />
 
       {/* Ulang tahun hari ini */}
       <KartuUltah idKu={user.id} />

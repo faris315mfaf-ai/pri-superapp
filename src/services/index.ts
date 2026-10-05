@@ -5425,26 +5425,62 @@ export async function getEmbedTerbaru(): Promise<PostinganEmbed[]> {
   return (json.data ?? []) as PostinganEmbed[];
 }
 
-/** Besaran bonus koin per aktivitas (utk Pengaturan Fitur master). */
-export async function getBonusKoin(): Promise<Record<string, number>> {
-  const json = await fetchJson("/api/koin", { headers: headerToken() });
-  return (json.bonus ?? {}) as Record<string, number>;
+// ---- Dompet & Kelola Koin (5 Okt 2026) ----------------------------
+
+export type RiwayatKoin = { id: string; jumlah: number; label: string; catatan: string; tanggal: string };
+export type DompetKoin = { saldo: number; riwayat: RiwayatKoin[]; boleh_kelola: boolean };
+
+/** Dompet koin saya: saldo, riwayat terbaru, hak kelola. */
+export async function getDompetKoin(): Promise<DompetKoin> {
+  return (await fetchJson("/api/koin", { headers: headerToken() })) as unknown as DompetKoin;
 }
 
-/** Master mengubah bonus koin satu aktivitas. */
-export async function setBonusKoin(
-  aktivitas: string,
-  nilai: number,
-): Promise<void> {
-  await fetchJson("/api/master", {
+export type AnggotaKoin = { id: string; nama: string; jabatan: string; avatar_url: string | null; saldo?: number };
+export type VideoKoin = {
+  sumber: "tvrku" | "laporan" | "official";
+  sumber_label: string;
+  id: string;
+  judul: string;
+  platform: string[];
+  tanggal: string;
+  url: string | null;
+  /** Koin yang sudah diberikan untuk video ini; null = belum. */
+  koin: number | null;
+};
+
+export async function cariAnggotaKoin(q: string): Promise<AnggotaKoin[]> {
+  const json = await fetchJson(`/api/koin/kelola?q=${encodeURIComponent(q)}`, { headers: headerToken() });
+  return (json.anggota ?? []) as AnggotaKoin[];
+}
+
+export async function getKoinAnggota(userId: string): Promise<{ anggota: AnggotaKoin; saldo: number; video: VideoKoin[] }> {
+  const json = await fetchJson(`/api/koin/kelola?user_id=${encodeURIComponent(userId)}`, { headers: headerToken() });
+  return json as unknown as { anggota: AnggotaKoin; saldo: number; video: VideoKoin[] };
+}
+
+async function aksiKoin(isi: Record<string, unknown>): Promise<Record<string, unknown>> {
+  return fetchJson("/api/koin/kelola", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({
-      aksi: "koin_bonus",
-      username: aktivitas,
-      nilai: String(nilai),
-    }),
+    body: JSON.stringify(isi),
   });
+}
+
+export async function beriKoinVideo(
+  userId: string,
+  video: Pick<VideoKoin, "sumber" | "id">,
+  jumlah: number,
+): Promise<{ saldo: number; video: VideoKoin[] }> {
+  const json = await aksiKoin({ aksi: "beri", user_id: userId, sumber: video.sumber, video_id: video.id, jumlah });
+  return json as unknown as { saldo: number; video: VideoKoin[] };
+}
+
+export async function resetKoinAnggota(userId: string): Promise<{ saldo_sebelum: number; saldo: number }> {
+  return (await aksiKoin({ aksi: "reset", user_id: userId })) as unknown as { saldo_sebelum: number; saldo: number };
+}
+
+export async function resetKoinSemua(): Promise<{ jumlah_orang: number }> {
+  return (await aksiKoin({ aksi: "reset_semua", konfirmasi: "RESET" })) as unknown as { jumlah_orang: number };
 }
 
 // ------------------------------------------------------------

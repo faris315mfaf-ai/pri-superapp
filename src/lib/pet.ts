@@ -1747,7 +1747,9 @@ export function terangkan(hex: string, f: number): string {
 /** Batas nama robot. */
 export const NAMA_MAKS = 16;
 /** Hadiah koin harian saat merawat robot (sekali per hari WIB). */
-export const HADIAH_HARIAN_KOIN = 10;
+// 5 Okt 2026: bonus otomatis dihentikan (lib/koin BONUS_OTOMATIS_AKTIF) —
+// perawatan pertama tiap hari tidak lagi memberi koin.
+export const HADIAH_HARIAN_KOIN: number = 0;
 /** XP per level. */
 export const XP_PER_LEVEL = 100;
 /** XP tiap kali makan. */

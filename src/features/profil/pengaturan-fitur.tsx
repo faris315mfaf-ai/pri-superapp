@@ -21,10 +21,8 @@ import { FadeInUp, GlassSkeleton, SectionTitle } from "@/components/pri-ui";
 import { SwitchKaca } from "./switch-kaca";
 import { toast, useAppStore } from "@/hooks/use-app-store";
 import {
-  getBonusKoin,
   getIzinFitur,
   getMatriksFitur,
-  setBonusKoin,
   setIzinFitur,
   type MatriksFitur,
 } from "@/services";
@@ -192,9 +190,6 @@ export function PengaturanFiturScreen({ onKembali }: { onKembali: () => void }) 
             disembunyikan. Bila mati di peran ATAU divisi, fiturnya mati.
           </p>
 
-          {/* Bonus Koin (spek 1.16) — hanya master yang bisa mengubah */}
-          <SeksiBonusKoin />
-
           {/* Daftar fitur per kelompok */}
           {kelompok.map((k, ik) => (
             <FadeInUp key={k} delay={Math.min(ik * 0.03, 0.2)}>
@@ -236,91 +231,3 @@ export function PengaturanFiturScreen({ onKembali }: { onKembali: () => void }) 
   );
 }
 
-// ------------------------------------------------------------
-// SeksiBonusKoin — master mengatur jumlah koin tiap aktivitas
-// (spek 1.16). 0 = aktivitas itu tidak berhadiah.
-// ------------------------------------------------------------
-
-const AKTIVITAS_TAMPIL = [
-  { id: "absen", label: "Absen masuk harian" },
-  { id: "login_harian", label: "Hadiah login harian (hari ke-7 dua kali lipat)" },
-  { id: "upload_video", label: "Mengunggah video lewat TV Rakyat Saya" },
-  { id: "laporan_video", label: "Laporan video tersimpan / disetujui HR" },
-  { id: "komen_video", label: "Komentar terverifikasi di postingan wajib" },
-  { id: "chat_baru", label: "Chat pertama ke teman baru" },
-  { id: "akun_sosmed", label: "Menambahkan akun sosmed" },
-] as const;
-
-function SeksiBonusKoin() {
-  const user = useAppStore((s) => s.user);
-  const [bonus, setBonus] = useState<Record<string, number> | null>(null);
-  const [sedang, setSedang] = useState<string | null>(null);
-
-  useEffect(() => {
-    let hidup = true;
-    void (async () => {
-      try {
-        const hasil = await getBonusKoin();
-        if (hidup) setBonus(hasil);
-      } catch {
-        if (hidup) setBonus({});
-      }
-    })();
-    return () => {
-      hidup = false;
-    };
-  }, []);
-
-  if (user?.role !== "master") return null;
-
-  async function simpan(id: string, nilai: number) {
-    if (sedang) return;
-    setSedang(id);
-    try {
-      await setBonusKoin(id, nilai);
-      setBonus((b) => ({ ...(b ?? {}), [id]: nilai }));
-      toast("sukses", "Bonus koin tersimpan", `${nilai} koin per aktivitas.`);
-    } catch (e) {
-      toast("error", "Gagal menyimpan bonus", e instanceof Error ? e.message : "");
-    } finally {
-      setSedang(null);
-    }
-  }
-
-  return (
-    <>
-      <SectionTitle judul="Bonus Koin" className="mt-6" />
-      <p className="mb-2 text-[11px] leading-relaxed text-teks-sekunder">
-        Jumlah koin yang didapat anggota dari tiap aktivitas. Isi 0 untuk
-        mematikan hadiah aktivitas itu.
-      </p>
-      <div className="flex flex-col gap-2">
-        {AKTIVITAS_TAMPIL.map((a) => (
-          <GlassCard key={a.id} className="flex items-center gap-3 p-3">
-            <img src="/KMP.svg" alt="" aria-hidden="true" className="h-6 w-6 shrink-0" />
-            <p className="min-w-0 flex-1 text-[12.5px] font-semibold text-teks-utama">
-              {a.label}
-            </p>
-            {bonus === null ? (
-              <Loader2 className="h-4 w-4 animate-spin text-teks-sekunder" />
-            ) : (
-              <input
-                type="number"
-                min={0}
-                max={1000}
-                defaultValue={bonus[a.id] ?? 0}
-                disabled={sedang === a.id}
-                aria-label={`Bonus koin ${a.label}`}
-                onBlur={(e) => {
-                  const n = Math.max(0, Math.min(1000, Math.floor(Number(e.target.value) || 0)));
-                  if (n !== (bonus[a.id] ?? 0)) void simpan(a.id, n);
-                }}
-                className="glass angka-tab h-9 w-20 rounded-lg px-2 text-center text-sm font-bold text-teks-utama focus:outline-none disabled:opacity-50"
-              />
-            )}
-          </GlassCard>
-        ))}
-      </div>
-    </>
-  );
-}

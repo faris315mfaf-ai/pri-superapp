@@ -460,7 +460,7 @@ export async function POST(request: Request) {
 
     // Hadiah koin harian: aktivitas pertama tiap hari WIB (idempoten lewat referensi tanggal).
     async function hadiahHarian(): Promise<boolean> {
-      if (!b || b.hadiah_terakhir === hariIni) return false;
+      if (!b || HADIAH_HARIAN_KOIN <= 0 || b.hadiah_terakhir === hariIni) return false;
       const { error } = await db.from("koin_transaksi").upsert(
         {
           user_id: uid,

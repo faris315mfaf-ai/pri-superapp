@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     const uid = Number(user.id);
     const k = await keadaan(uid);
     if (k.sudah_klaim) return { ...k, pesan: "Hadiah hari ini sudah diklaim. Sampai jumpa besok!" };
-    if (k.koin_hari_ini <= 0) return { ...k, pesan: "Hadiah login sedang dimatikan master." };
+    if (k.koin_hari_ini <= 0) return { ...k, pesan: "Hadiah login harian sudah dihentikan — koin kini diberikan Pimpinan Redaksi per video." };
     const { error } = await supabase()
       .from("koin_transaksi")
       .upsert(

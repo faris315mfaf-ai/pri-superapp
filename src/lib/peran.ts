@@ -14,6 +14,8 @@
 // cukup ditambahkan di sini.
 // ============================================================
 
+import { adalahPimred } from "@/lib/jabatan";
+
 export const PERAN_TERSEMBUNYI = ["master", "superadmin"] as const;
 
 /** Nilai untuk `.not("role", "in", PERAN_TERSEMBUNYI_IN)` di supabase-js. */
@@ -107,6 +109,18 @@ export function bolehFiturUji(
   kunci: "kompres" | "hapuslatar",
 ): boolean {
   return u?.role === "master" || modulDibuka(u, kunci) === true;
+}
+
+/**
+ * Pengelola koin (5 Okt 2026): memberi koin per video & me-reset koin orang
+ * lain. Pimpinan Redaksi, superadmin, dan master (adalahPimred sudah
+ * menganggap master — termasuk superadmin yang di sesi berperan master).
+ */
+export function bolehKelolaKoin(
+  u: { role?: string | null; jabatan?: string | null; superadmin?: boolean } | null | undefined,
+): boolean {
+  if (!u) return false;
+  return adalahSuperadmin(u) || adalahPimred({ role: u.role ?? undefined, jabatan: u.jabatan });
 }
 
 /** Akun sosmed terhubung (sehat) minimal untuk membuka Edit Otomatis. */

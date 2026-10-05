@@ -7,8 +7,10 @@
 // dibayar dua kali (anti-farming). Saldo = penjumlahan di database
 // (view v_app_koin_saldo).
 //
-// Besaran bonus per aktivitas dibaca dari pengaturan_sistem —
-// master mengubahnya lewat Pengaturan Fitur tanpa deploy ulang.
+// 5 Okt 2026: SELURUH BONUS OTOMATIS DIHENTIKAN (permintaan pemilik).
+// Koin kini hanya masuk lewat pemberian Pimpinan Redaksi / superadmin /
+// master per video (api/koin/kelola), dan bisa direset oleh mereka.
+// Belanja pet & pasar tetap memakai saldo seperti biasa.
 // ============================================================
 import { supabase } from "@/lib/supabase";
 import { AKTIVITAS_KIRIMAN_MASTER } from "@/lib/koin-chat";
@@ -33,10 +35,65 @@ export const AKTIVITAS_KOIN = [
 
 export type AktivitasKoin = (typeof AKTIVITAS_KOIN)[number]["id"];
 
+/** Saklar pusat bonus otomatis — false sejak 5 Okt 2026 (semua bonus 0). */
+export const BONUS_OTOMATIS_AKTIF = false;
+
+/** Aktivitas pemberian koin per video oleh pengelola koin. */
+export const AKTIVITAS_HADIAH_VIDEO = "hadiah_video";
+/** Asal video yang bisa diberi koin; referensi buku besarnya "<sumber>-<id>". */
+export type SumberVideoKoin = "tvrku" | "laporan" | "official";
+export const LABEL_SUMBER_VIDEO: Record<SumberVideoKoin, string> = {
+  tvrku: "Upload TVR Saya",
+  laporan: "Laporan link video",
+  official: "Upload ke TV Official",
+};
+/** Aktivitas penolan saldo oleh pengelola koin. */
+export const AKTIVITAS_RESET_KOIN = "reset_koin";
+
+/** Label buku besar untuk riwayat di dompet. */
+const LABEL_AKTIVITAS: Record<string, string> = {
+  hadiah_video: "Hadiah video",
+  reset_koin: "Koin direset",
+  kiriman_master: "Kiriman koin",
+  bonus_master: "Bonus dari master",
+  pet_beli: "Belanja toko robot",
+  pasar_beli: "Beli di pasar robot",
+  pasar_jual: "Jual di pasar robot",
+  pet_harian: "Hadiah harian robot",
+  ...Object.fromEntries(AKTIVITAS_KOIN.map((a) => [a.id, a.label])),
+};
+
+export type BarisRiwayatKoin = { id: string; jumlah: number; label: string; catatan: string; tanggal: string };
+
+/** Riwayat transaksi koin terbaru seseorang (terbaru dulu). */
+export async function riwayatKoin(userId: number, batas = 30): Promise<BarisRiwayatKoin[]> {
+  const { data, error } = await supabase()
+    .from("koin_transaksi")
+    .select("id, jumlah, aktivitas, referensi, dibuat_pada")
+    .eq("user_id", userId)
+    .order("dibuat_pada", { ascending: false })
+    .limit(batas);
+  if (error) throw new Error("Riwayat koin gagal dimuat.");
+  return (data ?? []).map((b) => {
+    const akt = String(b.aktivitas);
+    const ref = String(b.referensi ?? "");
+    // Hadiah video: referensi "<sumber>-<id>" — tampilkan asal videonya.
+    const catatan = akt === AKTIVITAS_HADIAH_VIDEO ? (LABEL_SUMBER_VIDEO[ref.split("-")[0] as SumberVideoKoin] ?? "") : "";
+    return {
+      id: String(b.id),
+      jumlah: Number(b.jumlah) || 0,
+      label: LABEL_AKTIVITAS[akt] ?? akt.replace(/_/g, " "),
+      catatan,
+      tanggal: String(b.dibuat_pada),
+    };
+  });
+}
+
 /** Baca besaran bonus seluruh aktivitas (sekali kueri). */
 export async function bacaBonusKoin(): Promise<Record<string, number>> {
   const hasil: Record<string, number> = {};
-  for (const a of AKTIVITAS_KOIN) hasil[a.id] = a.bawaan;
+  for (const a of AKTIVITAS_KOIN) hasil[a.id] = BONUS_OTOMATIS_AKTIF ? a.bawaan : 0;
+  if (!BONUS_OTOMATIS_AKTIF) return hasil;
   try {
     const { data } = await supabase()
       .from("pengaturan_sistem")

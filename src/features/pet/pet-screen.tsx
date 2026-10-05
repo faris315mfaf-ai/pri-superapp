@@ -710,11 +710,14 @@ export function PetScreen({
             Kebutuhan turun perlahan seiring waktu; energi turun lebih cepat
             bila robot banyak beraktivitas (hari ini{" "}
             <b className="text-teks-utama">{st.aktivitas_hari_ini}</b>{" "}
-            aktivitas). Perawatan pertama tiap hari memberi{" "}
-            <b className="text-teks-utama">+{HADIAH_HARIAN_KOIN} koin</b>
-            {st.hadiah_hari_ini
-              ? " — sudah diambil hari ini."
-              : " — belum diambil hari ini!"}
+            aktivitas).
+            {HADIAH_HARIAN_KOIN > 0 && (
+              <>
+                {" "}Perawatan pertama tiap hari memberi{" "}
+                <b className="text-teks-utama">+{HADIAH_HARIAN_KOIN} koin</b>
+                {st.hadiah_hari_ini ? " — sudah diambil hari ini." : " — belum diambil hari ini!"}
+              </>
+            )}
           </p>
 
           <div className="mt-3 grid grid-cols-2 gap-2">
