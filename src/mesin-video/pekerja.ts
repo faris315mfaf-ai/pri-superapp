@@ -18,6 +18,7 @@ import {
   slotSerentak,
 } from "./job";
 import { probe } from "./media";
+import { kompresVideo, mutuSah } from "./kompres";
 import { render } from "./render";
 import { loadTemplate } from "./template";
 import { downloadSource, pasangRedisBatas } from "./unduh";
@@ -156,6 +157,68 @@ export async function renderVideo(m: MuatanRender): Promise<{ job_id: string; st
   }
 }
 
+/**
+ * Kompres Video (uji coba, 5 Okt 2026). Berkas masukan sudah ada di folder
+ * job (diunggah lewat API); hasilnya output.mp4 di folder yang sama → otomatis
+ * masuk Stok Video pemiliknya.
+ */
+export async function kompresJob(m: MuatanRender): Promise<{ job_id: string; status: string; [k: string]: unknown }> {
+  const jobId = m.job_id;
+  const folder = jobPath(jobId);
+  const catat = (teks: string) => tulisStatus(jobId, { log: teks }).then(() => undefined);
+  try {
+    const st = await bacaStatus(jobId).catch(() => null);
+    if (!st || st.status !== "queued") return { job_id: jobId, status: st?.status ?? "hilang" };
+    if (await dimintaBatal(jobId)) {
+      await lupakanBatal(jobId);
+      await tulisStatus(jobId, { status: "dibatalkan", progress: 0, log: "Dihentikan sebelum mulai." });
+      return { job_id: jobId, status: "dibatalkan" };
+    }
+    const masukan = path.join(folder, String((st as Record<string, unknown>).masukan ?? ""));
+    if (!fs.existsSync(masukan)) throw new GalatVideo("Berkas video yang akan dikompres tidak ditemukan.");
+    await tulisStatus(jobId, { status: "rendering", progress: 0, task_id: jobId, mulai_proses: Date.now() / 1000 });
+    const hasil = await kompresVideo(masukan, folder, mutuSah(m.mutu), await durasiVideo(masukan), {
+      progress: (p) => tulisStatus(jobId, { progress: p }).then(() => undefined),
+      log: catat,
+      batal: () => dimintaBatal(jobId),
+    });
+    hapusDiam(masukan);
+    const hemat = hasil.size_awal > 0 ? Math.round((100 * (hasil.size_awal - hasil.size)) / hasil.size_awal) : 0;
+    await tulisStatus(jobId, {
+      status: "done",
+      progress: 100,
+      output: path.basename(hasil.berkas),
+      url: "",
+      durasi: await durasiVideo(hasil.berkas),
+      size: hasil.size,
+      size_awal: hasil.size_awal,
+      crf: hasil.crf,
+      vmaf: hasil.vmaf,
+      hemat_persen: hemat,
+      diperkecil: hasil.diperkecil,
+      log: hasil.diperkecil
+        ? `Selesai: ${hemat}% lebih kecil, VMAF ${hasil.vmaf}.`
+        : "Video sudah efisien — tidak bisa diperkecil tanpa menurunkan kualitas. Video asli disimpan.",
+    });
+    await bersihkanJobLama();
+    return { job_id: jobId, status: "done" };
+  } catch (e) {
+    const dibatal = e instanceof Dibatalkan;
+    const pesan = e instanceof GalatVideo ? e.message : e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    if (dibatal) await lupakanBatal(jobId);
+    else console.error(`Kompres ${jobId} gagal`, e);
+    // Masukan (sampai 100 MB) tak berguna lagi; jangan makan kuota 48 jam.
+    try {
+      for (const n of fs.existsSync(folder) ? fs.readdirSync(folder) : []) if (n.startsWith("masukan.")) hapusDiam(path.join(folder, n));
+    } catch {
+      // folder sudah hilang
+    }
+    await tulisStatus(jobId, dibatal ? { status: "dibatalkan", log: "Kompres dihentikan." } : { status: "error", error: pesan, log: `Gagal: ${pesan}` });
+    await bersihkanSetelahGagal(jobId, folder);
+    return { job_id: jobId, status: dibatal ? "dibatalkan" : "error" };
+  }
+}
+
 async function mulai(): Promise<void> {
   // Penahan situs (jeda setelah 429) dibagi bersama API lewat Redis.
   pasangRedisBatas(redis());
@@ -182,7 +245,7 @@ async function mulai(): Promise<void> {
   const pewaktu = setInterval(detak, DETAK_DETIK * 1000);
 
   const slotAwal = await slotSerentak();
-  const worker = new Worker<MuatanRender>(NAMA_ANTREAN, (j: JobBull<MuatanRender>) => renderVideo(j.data), {
+  const worker = new Worker<MuatanRender>(NAMA_ANTREAN, (j: JobBull<MuatanRender>) => (j.data.jenis === "kompres" ? kompresJob(j.data) : renderVideo(j.data)), {
     connection: koneksiBull(),
     concurrency: slotAwal,
     // Unduhan (10 mnt) + render (30 mnt): kunci diperpanjang otomatis selama

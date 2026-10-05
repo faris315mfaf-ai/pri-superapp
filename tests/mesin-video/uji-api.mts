@@ -12,6 +12,14 @@ import path from "node:path";
 import type { AddressInfo } from "node:net";
 
 const MEDIA = fs.mkdtempSync(path.join(os.tmpdir(), "autoedit-uji-"));
+// ab-av1 TIRUAN untuk uji Kompres Video: mencetak hasil crf-search seperti
+// aslinya (ab-av1 hanya ada untuk Linux/Windows). Encode akhirnya tetap ffmpeg asli.
+const AB_AV1_TIRUAN = path.join(MEDIA, "ab-av1-tiruan.sh");
+fs.writeFileSync(
+  AB_AV1_TIRUAN,
+  '#!/bin/sh\necho "sample 1/1 crf 30 VMAF 94.6 (40%)"\necho "crf 30 VMAF 94.60 predicted video stream size 1.00 MiB (40%) taking 1 minutes"\n',
+  { mode: 0o755 },
+);
 Object.assign(process.env, {
   MEDIA_DIR: MEDIA,
   OUTRO_VIDEO_W: "360",
@@ -21,6 +29,8 @@ Object.assign(process.env, {
   KUOTA_KHUSUS_MB: "pri-8201=5120",
   TVR_MAKS_STOK_KHUSUS: "pri-8201=150",
   TVR_JOB_AKTIF_KHUSUS: "pri-8201=4",
+  AB_AV1_BIN: AB_AV1_TIRUAN,
+  KOMPRES_THREADS: "1",
 });
 delete process.env.REDIS_URL;
 delete process.env.DEEPSEEK_API_KEY;
@@ -769,6 +779,39 @@ await uji("tvr akun tim: antre bersamaan, unggahan per anggota, batal milik send
   for (const sisa of await job.redis().zrange(job.KUNCI_AKTIF, 0, -1)) {
     await job.tulisStatus(sisa, { status: "error", log: "dibereskan uji" });
   }
+});
+
+await uji("kompres video: antre, satu aktif, worker, masuk stok, tak memblok edit", async () => {
+  const a = "8301";
+  for (const sisa of await job.redis().zrange(job.KUNCI_AKTIF, 0, -1)) {
+    await job.tulisStatus(sisa, { status: "error", log: "dibereskan uji" });
+  }
+  // Sumber bitrate tinggi supaya hasil kompres CRF 30 jelas lebih kecil.
+  const besar = path.join(MEDIA, "kompres-sumber.mp4");
+  ffmpeg("-f", "lavfi", "-i", "testsrc2=s=360x640:r=25", "-t", "3", "-c:v", "libx264", "-crf", "8", "-pix_fmt", "yuv420p", besar);
+  TUGAS.length = 0;
+  let r = await minta("POST", "/api/tvr/kompres?mutu=hemat", { id: a, berkas: { nama: "rekaman hp.mp4", isi: fs.readFileSync(besar), tipe: "video/mp4" } });
+  pastikan(r.status === 200, r.teks);
+  const k = r.json().kompres as { id: string; status: string; mutu: string }[];
+  pastikan(k.length === 1 && k[0].status === "queued" && k[0].mutu === "hemat", JSON.stringify(k));
+  // Satu kompres aktif per akun.
+  r = await minta("POST", "/api/tvr/kompres", { id: a, berkas: { nama: "lagi.mp4", isi: fs.readFileSync(besar), tipe: "video/mp4" } });
+  pastikan(r.status === 409, `${r.status}`);
+  // Tidak memblok Edit Otomatis: ringkasan tak menganggapnya job aktif.
+  pastikan((await minta("GET", "/api/tvr/jobs/saya", { id: a })).json().job === null);
+
+  const muatan = TUGAS.find((t) => t.job_id === k[0].id);
+  pastikan(Boolean(muatan) && muatan!.jenis === "kompres", JSON.stringify(TUGAS));
+  const hasil = await pekerja.kompresJob(muatan!);
+  pastikan(hasil.status === "done", JSON.stringify(hasil));
+  const st = (await minta("GET", "/api/tvr/stok", { id: a })).json();
+  const item = st.stok.find((s: { id: string }) => s.id === k[0].id);
+  pastikan(item && item.sumber === "kompres" && item.hemat_persen > 0 && item.vmaf === 94.6, JSON.stringify(item));
+  pastikan(item.size < item.size_awal, JSON.stringify(item));
+  // Masukan dibuang; hasil bisa diunduh.
+  const unduhan = await minta("GET", `/api/tvr/stok/${item.id}/berkas`, { id: a });
+  pastikan(unduhan.status === 200 && unduhan.isi.length === item.size);
+  pastikan((await minta("GET", "/api/tvr/kompres", { id: a })).json().kompres.length === 0);
 });
 
 // ---------------------------------------------------------------- selesai

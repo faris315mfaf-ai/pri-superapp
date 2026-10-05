@@ -70,6 +70,19 @@ export const MODUL_AKUN = [
     keterangan: "Template pribadi + edit video otomatis. Ikut peran = terbuka sendiri bila ≥5 akun sosmed terhubung",
     bukanTab: true,
   },
+  // Uji coba (5 Okt 2026): tertutup untuk semua kecuali dibuka master per akun.
+  {
+    kunci: "kompres",
+    label: "Kompres Video (uji coba)",
+    keterangan: "Perkecil video tanpa turun kualitas (ab-av1 + VMAF), hasil ke Stok Video",
+    bukanTab: true,
+  },
+  {
+    kunci: "hapuslatar",
+    label: "Hapus Latar Video (uji coba)",
+    keterangan: "Buang latar video Boom like share otomatis di editor template (rembg)",
+    bukanTab: true,
+  },
 ] as const;
 
 export type KunciModul = (typeof MODUL_AKUN)[number]["kunci"];
@@ -86,6 +99,14 @@ export function modulDibuka(
   if (!izin || typeof izin !== "object" || Array.isArray(izin)) return undefined;
   const v = (izin as Record<string, unknown>)[kunci];
   return typeof v === "boolean" ? v : undefined;
+}
+
+/** Fitur uji coba per akun (Kompres Video, Hapus Latar): master, atau dibuka master. */
+export function bolehFiturUji(
+  u: { role?: string | null; modul_izin?: unknown } | null | undefined,
+  kunci: "kompres" | "hapuslatar",
+): boolean {
+  return u?.role === "master" || modulDibuka(u, kunci) === true;
 }
 
 /** Akun sosmed terhubung (sehat) minimal untuk membuka Edit Otomatis. */

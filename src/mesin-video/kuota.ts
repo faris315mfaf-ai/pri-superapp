@@ -2,8 +2,8 @@
 // akun + folder hasil render-nya. Video sumber sementara tidak dihitung.
 import fs from "node:fs";
 import path from "node:path";
-import { templatesDir } from "./jalur";
-import { daftarJob, jobPath } from "./job";
+import { jobsDir, templatesDir } from "./jalur";
+import { bacaStatus, daftarJob, jobPath } from "./job";
 
 const angka = (nama: string, bawaan: number) => {
   const n = Number.parseFloat(process.env[nama] ?? "");
@@ -98,6 +98,31 @@ export async function pastikanMuat(pemilik: string, tambahan = 0): Promise<void>
     `Jatah penyimpanan akun sudah terpakai ${(dipakai / 1_048_576).toFixed(0)} MB dari ` +
       `${(batas / 1_048_576).toFixed(0)} MB. Hapus beberapa template atau hasil render dulu.`,
   );
+}
+
+/**
+ * Pemakaian penyimpanan SEMUA pemilik (template + job/stok), byte — untuk
+ * kartu server di Beranda master (5 Okt 2026). Folder job tanpa catatan
+ * (sudah tersapu dari Redis) dihitung sebagai "?".
+ */
+export async function pemakaianPerPemilik(): Promise<Map<string, number>> {
+  const hasil = new Map<string, number>();
+  const tambah = (k: string, n: number) => hasil.set(k || "?", (hasil.get(k || "?") ?? 0) + n);
+  for (const d of fs.readdirSync(templatesDir(), { withFileTypes: true })) {
+    const folder = path.join(templatesDir(), d.name);
+    if (d.isDirectory()) tambah(pemilikTemplateDiFolder(folder), ukuranFolder(folder));
+  }
+  for (const d of fs.readdirSync(jobsDir(), { withFileTypes: true })) {
+    if (!d.isDirectory()) continue;
+    let pemilik = "";
+    try {
+      pemilik = String((await bacaStatus(d.name)).owner ?? "").trim().toLowerCase();
+    } catch {
+      pemilik = "";
+    }
+    tambah(pemilik, ukuranFolder(path.join(jobsDir(), d.name)));
+  }
+  return hasil;
 }
 
 export function lupakan(pemilik: string): void {

@@ -17,6 +17,9 @@ export type MuatanRender = {
   template_id: string;
   texts: Record<string, string>;
   teks_warna?: string;
+  /** Jenis tugas (5 Okt 2026): kosong = render template; "kompres" = Kompres Video. */
+  jenis?: "kompres";
+  mutu?: string;
 };
 
 /** Koneksi untuk BullMQ: wajib maxRetriesPerRequest null (perintah blok). */

@@ -106,6 +106,31 @@ export async function bolehEditOtomatisServer(user: PenggunaGerbang): Promise<bo
   return bolehEditOtomatisTvr(user, await jumlahAkunTerhubung(Number(user.id)));
 }
 
+/** GET JSON dari layanan Auto Edit sebagai akun `idAkun` (untuk rute server sendiri). */
+export function mintaJsonMesin<T = Record<string, unknown>>(jalur: string, idAkun: string, batasMs = 30_000): Promise<T> {
+  return new Promise((ok, gagal) => {
+    const req = mintaHttp(
+      { socketPath: socketAutoEdit(), path: jalur, method: "GET", headers: { "x-autoedit-pengguna": idAkun }, timeout: batasMs },
+      (res) => {
+        const potongan: Buffer[] = [];
+        res.on("data", (b: Buffer) => potongan.push(b));
+        res.on("end", () => {
+          const teks = Buffer.concat(potongan).toString("utf8");
+          if ((res.statusCode ?? 0) !== 200) return gagal(new Error(`Mesin Auto Edit menjawab ${res.statusCode}.`));
+          try {
+            ok(JSON.parse(teks) as T);
+          } catch {
+            gagal(new Error("Jawaban mesin Auto Edit tidak terbaca."));
+          }
+        });
+      },
+    );
+    req.on("timeout", () => req.destroy(new Error("Mesin Auto Edit tidak menjawab.")));
+    req.on("error", gagal);
+    req.end();
+  });
+}
+
 /** Teruskan permintaan ke layanan Auto Edit sebagai akun `idAkun`. */
 export function teruskanAutoEdit(
   request: Request,

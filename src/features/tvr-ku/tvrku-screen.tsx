@@ -32,6 +32,7 @@ import {
   FileText,
   Globe,
   GraduationCap,
+  Minimize2,
   Hourglass,
   Link2,
   Loader2,
@@ -87,7 +88,8 @@ import { StokVideoTvr } from "./stok-video-tvr";
 import { KartuEditTerkunci, StatusKoneksiAkun } from "./status-koneksi-akun";
 import { mulaiTurTvr } from "@/lib/tur";
 import { AutoEditPanel } from "@/features/auto-edit/auto-edit-panel";
-import { bolehEditOtomatisTvr } from "@/lib/peran";
+import { bolehEditOtomatisTvr, bolehFiturUji } from "@/lib/peran";
+import { KompresVideo } from "./kompres-video";
 import { VideoSiapUnggah } from "./video-siap-unggah";
 import { RekapAnggotaPalugodam } from "./rekap-anggota-palugodam";
 import { SiaranSerentak } from "./siaran-serentak";
@@ -1167,6 +1169,26 @@ export function TvrKuScreen({
             </FadeInUp>
           ),
         },
+        // Kompres Video (uji coba, 5 Okt 2026): akun yang modulnya dibuka master.
+        ...(bolehFiturUji(userAsli, "kompres")
+          ? [
+              {
+                id: "kompres-video",
+                segmen: "Unggah & Jadwal",
+                judul: "Kompres Video",
+                ikon: Minimize2,
+                keterangan: "Perkecil video tanpa turun kualitas (uji coba)",
+                render: () => (
+                  <FadeInUp delay={0.085}>
+                    <SectionTitle judul="Kompres Video" />
+                    <div className="mt-2.5">
+                      <KompresVideo />
+                    </div>
+                  </FadeInUp>
+                ),
+              },
+            ]
+          : []),
         // Stok Video (5 Okt 2026): cara posting baru untuk semua akun — video
         // jadi ditahan di stok dulu, lalu diunggah ke sosmed dari sana.
         {

@@ -20,6 +20,7 @@ import { aman, folderUnggahan, pemilikUnggahan, templatePath } from "../jalur";
 import { FFMPEG_BIN, FFPROBE_BIN, MAX_SOURCE_UPLOAD_MB } from "../konfig";
 import { kompositStatis, pngRgb } from "../komposit";
 import { batasByte, lupakan, pemakaianByte, petaKhusus } from "../kuota";
+import { mutuSah, TARGET_VMAF } from "../kompres";
 import { denganKunci } from "../kunci";
 import { pastikanIsiMedia, probe, punyaAlpha, rapikanVideo } from "../media";
 import {
@@ -487,9 +488,12 @@ function judulDariBerkas(nama: string): string {
 }
 
 /** Job yang masih diproses (queued/downloading/rendering) milik akun, atau null. */
+/** Job Kompres Video berjalan di jalurnya sendiri — tidak memblokir Edit Otomatis. */
+const jobKompres = (j: Job) => (j as Record<string, unknown>).jenis === "kompres";
+
 async function jobAktif(a: string): Promise<Job | null> {
   for (const j of await daftarJob(50, a)) {
-    if (STATUS_AKTIF_JOB.includes(j.status)) return segarkanKalauTerlantar(j);
+    if (STATUS_AKTIF_JOB.includes(j.status) && !jobKompres(j)) return segarkanKalauTerlantar(j);
   }
   return null;
 }
@@ -498,7 +502,7 @@ async function jobAktif(a: string): Promise<Job | null> {
 async function semuaJobAktif(a: string): Promise<Job[]> {
   const hasil: Job[] = [];
   for (const j of await daftarJob(Math.max(50, maksJobAktif(a) * 3), a)) {
-    if (!STATUS_AKTIF_JOB.includes(j.status)) continue;
+    if (!STATUS_AKTIF_JOB.includes(j.status) || jobKompres(j)) continue;
     const segar = await segarkanKalauTerlantar(j);
     if (STATUS_AKTIF_JOB.includes(segar.status)) hasil.push(segar);
   }
@@ -528,6 +532,14 @@ function ringkasStok(job: Job): Record<string, unknown> {
     // Waktu (detik) video ini terkirim ke sosmed; null = belum. Video yang
     // sudah terunggah TIDAK dihapus — tetap di stok sampai masa simpannya habis.
     terunggah: typeof job.terunggah === "number" ? job.terunggah : null,
+    // Hasil Kompres Video: ukuran asli, penghematan, dan skor kualitas.
+    ...(job.sumber_stok === "kompres"
+      ? {
+          size_awal: (job as Record<string, unknown>).size_awal ?? null,
+          hemat_persen: (job as Record<string, unknown>).hemat_persen ?? null,
+          vmaf: (job as Record<string, unknown>).vmaf ?? null,
+        }
+      : {}),
   };
 }
 
@@ -875,6 +887,113 @@ export function pasangRuteTvr(r: Router): void {
     }
     lupakan(a);
     return stokDanAntrean(p);
+  });
+
+  // ---- KOMPRES VIDEO (uji coba, 5 Okt 2026) -----------------------
+  // Gerbang SuperApp membatasi jalur ini ke akun yang modul "kompres"-nya
+  // dibuka master. Hasilnya masuk Stok Video pemiliknya.
+  async function daftarKompres(a: string): Promise<Record<string, unknown>[]> {
+    const hasil: Record<string, unknown>[] = [];
+    for (const j of await daftarJob(30, a)) {
+      if (!jobKompres(j)) continue;
+      const aktif = STATUS_AKTIF_JOB.includes(j.status);
+      // Yang aktif, plus yang gagal/dibatalkan dalam 6 jam terakhir.
+      if (!aktif && !(j.status === "error" || j.status === "dibatalkan")) continue;
+      if (!aktif && Date.now() / 1000 - Number(j.created ?? 0) > 6 * 3600) continue;
+      const r = j as Record<string, unknown>;
+      hasil.push({
+        id: j.job_id,
+        status: j.status,
+        progress: j.progress ?? 0,
+        judul: r.judul ?? "Video",
+        mutu: r.mutu ?? "seimbang",
+        size_awal: r.size_awal ?? null,
+        log: r.log ?? null,
+        error: j.error ?? null,
+        antrean: aktif && j.status === "queued" ? await posisiAntrean(j.job_id) : null,
+      });
+    }
+    return hasil;
+  }
+
+  r.get(`${A}/kompres`, async (pm) => {
+    const p = penggunaTvr(pm);
+    return { kompres: await daftarKompres(akun(p)), target_vmaf: TARGET_VMAF, maks_mb: MAX_SOURCE_UPLOAD_MB };
+  });
+
+  r.post(`${A}/kompres`, async (pm) => {
+    const p = penggunaTvr(pm);
+    const a = akun(p);
+    const mutu = mutuSah(pm.query.get("mutu"));
+    if ((await daftarKompres(a)).some((k) => STATUS_AKTIF_JOB.includes(k.status as Job["status"]))) {
+      throw new GalatHttp(409, "Masih ada video yang sedang dikompres. Tunggu sampai selesai.");
+    }
+    await pastikanKuota(p);
+    if ((await daftarStok(a)).length >= maksStok(a)) {
+      throw new GalatHttp(409, `Stok video penuh (maksimal ${maksStok(a)}). Hapus beberapa dulu.`);
+    }
+    const batas = Math.trunc(MAX_SOURCE_UPLOAD_MB * 1_048_576);
+    await sediakanRuangUnggah(pm, batas);
+    const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+    const folder = jobPath(id);
+    let namaAsli = "";
+    let hasil: { jalur: string; ukuran: number };
+    try {
+      hasil = await tulisUnggahan(
+        pm,
+        (asli) => {
+          namaAsli = aman(path.basename(asli || "video"));
+          if (!JENIS_VIDEO.has(akhiran(namaAsli))) {
+            throw new GalatHttp(415, `Jenis berkas tidak didukung. Pakai: ${urut(JENIS_VIDEO).join(", ")}`);
+          }
+          fs.mkdirSync(folder, { recursive: true });
+          return path.join(folder, `masukan${akhiran(namaAsli)}`);
+        },
+        batas,
+        `Video melebihi ${f0(MAX_SOURCE_UPLOAD_MB)} MB.`,
+      );
+      await pastikanIsiMedia(hasil.jalur);
+      await probe(hasil.jalur);
+    } catch (e) {
+      fs.rmSync(folder, { recursive: true, force: true });
+      throw e;
+    }
+    await tulisStatus(id, {
+      status: "queued",
+      progress: 0,
+      owner: a,
+      jenis: "kompres",
+      mutu,
+      masukan: path.basename(hasil.jalur),
+      judul: judulDariBerkas(namaAsli),
+      sumber_stok: "kompres",
+      size_awal: hasil.ukuran,
+      log: "Masuk antrean kompres.",
+    });
+    await kirimRender({ job_id: id, url: "", template_id: "", texts: {}, jenis: "kompres", mutu });
+    lupakan(a);
+    return { kompres: await daftarKompres(a) };
+  });
+
+  r.delete(`${A}/kompres/{id}`, async (pm) => {
+    const p = penggunaTvr(pm);
+    const a = akun(p);
+    let job: Job;
+    try {
+      job = await bacaStatus(pm.params.id);
+    } catch (e) {
+      if (e instanceof GalatVideo) throw new GalatHttp(404, "Video tidak ditemukan.");
+      throw e;
+    }
+    if (String(job.owner ?? "") !== a || !jobKompres(job)) throw new GalatHttp(404, "Video tidak ditemukan.");
+    if (STATUS_BERJALAN_JOB.includes(job.status)) {
+      await mintaBatal(job.job_id);
+    } else {
+      if (job.status === "queued") await cabutTugas(job);
+      await buangJob(job.job_id);
+    }
+    lupakan(a);
+    return { kompres: await daftarKompres(a) };
   });
 
   // ---- STOK VIDEO -------------------------------------------------

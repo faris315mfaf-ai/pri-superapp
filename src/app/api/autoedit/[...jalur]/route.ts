@@ -11,7 +11,7 @@ import {
   keluargaAutoEdit,
   teruskanAutoEdit,
 } from "@/lib/autoedit";
-import { MINIMAL_AKUN_EDIT_OTOMATIS } from "@/lib/peran";
+import { bolehFiturUji, MINIMAL_AKUN_EDIT_OTOMATIS } from "@/lib/peran";
 import { pastikanMasuk } from "@/lib/sesi";
 
 export const runtime = "nodejs";
@@ -43,6 +43,11 @@ async function tangani(
   if (keluarga.size === 0) return galatAutoEdit(404, "Tidak ditemukan");
   const { jalur } = await params;
   const j = jalur ?? [];
+  // Kompres Video (uji coba): hanya akun yang modulnya dibuka master.
+  if (j[0] === "tvr" && j[1] === "kompres") {
+    if (!bolehFiturUji(user, "kompres")) return galatAutoEdit(404, "Tidak ditemukan");
+    return teruskanAutoEdit(request, j, user.id, keluarga);
+  }
   // Edit Otomatis TVR (template, sumber, tulisan, render) butuh minimal 5
   // akun sosmed terhubung; Stok Video terbuka untuk semua (5 Okt 2026).
   if (j[0] === "tvr" && !jalurStokTvr(j) && !(await bolehEditOtomatisServer(user))) {

@@ -23,7 +23,7 @@ import {
   CalendarCheck,
   ClipboardList,
   MessageCircle,
-  Video, Megaphone, Newspaper } from "lucide-react";
+  Video, Megaphone, Newspaper, Server } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { TitikOnline, AvatarInisial, FadeInUp, StatusBadge, ThemeToggle } from "@/components/pri-ui";
 import { ProgressRing } from "@/components/progress-ring";
@@ -40,6 +40,7 @@ import { SeksiLipat } from "@/components/seksi-lipat";
 import { TataLetakModul } from "@/components/tata-letak-modul";
 import { KartuUltah } from "@/components/ultah";
 import { RunningTextJuara } from "./running-text-juara";
+import { KartuServerAutoEdit } from "./kartu-server-autoedit";
 import { useModulAktif } from "@/hooks/use-modul";
 import {
   getAbsensi,
@@ -361,6 +362,19 @@ export function BerandaScreen({
                         )}
                       </div>
                     ),
+                  },
+                ]
+              : []),
+            // Kondisi VPS mesin Auto Edit — khusus master (5 Okt 2026).
+            ...(user.role === "master"
+              ? [
+                  {
+                    id: "server-autoedit",
+                    judul: "Server Auto Edit",
+                    ikon: Server,
+                    keterangan: "Kapasitas disk video, antrean render, pemakaian per akun",
+                    bawaanTerbuka: true,
+                    render: () => <KartuServerAutoEdit />,
                   },
                 ]
               : []),

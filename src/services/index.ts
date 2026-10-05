@@ -2288,6 +2288,21 @@ export async function kirimStokTimKeOfficial(stokId: string, judul: string): Pro
   return json.video as VideoAntrian;
 }
 
+export type StatusMesinAutoEdit = {
+  waktu: number;
+  disk: { total_mb: number; dipakai_mb: number; sisa_mb: number };
+  isi: Record<string, number>;
+  render: { slot: number; slot_maks: number; berjalan: number; antre: number; worker_aktif: boolean };
+  beban: { cpu: number; load1: number; ram_total_mb: number; ram_sisa_mb: number };
+  pemakaian: { pemilik: string; nama: string; mb: number; batas_mb: number }[];
+  jumlah_pemilik: number;
+};
+
+/** Kondisi VPS mesin Auto Edit — kartu Beranda master (5 Okt 2026). */
+export async function getStatusMesinAutoEdit(): Promise<StatusMesinAutoEdit> {
+  return (await fetchJson("/api/master/mesin", { headers: headerToken() })) as StatusMesinAutoEdit;
+}
+
 /** Unggah video ke sosmed lewat Ayrshare — SUNGGUHAN, tidak bisa ditarik kembali. */
 export async function unggahVideoSosmed(
   kode: string,

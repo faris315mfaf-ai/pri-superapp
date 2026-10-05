@@ -93,7 +93,11 @@ export type StokTvr = {
   tanggal: number | null;
   durasi: number | null;
   size: number | null;
-  sumber: "render" | "unggah";
+  sumber: "render" | "unggah" | "kompres";
+  /** Hasil Kompres Video: ukuran asli, penghematan (%), skor kualitas. */
+  size_awal?: number | null;
+  hemat_persen?: number | null;
+  vmaf?: number | null;
   /** Waktu (detik epoch) video terkirim ke sosmed; null = belum pernah. */
   terunggah: number | null;
 };

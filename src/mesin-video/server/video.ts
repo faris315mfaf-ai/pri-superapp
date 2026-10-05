@@ -12,15 +12,20 @@ import { GalatVideo, type Template } from "../jenis";
 import { aman, templatePath, uploadsDir } from "../jalur";
 import { AWALAN_UNGGAHAN, MAX_SOURCE_SECONDS, MAX_SOURCE_UPLOAD_MB, POLA_CROP } from "../konfig";
 import { kompositStatis, pngRgb } from "../komposit";
-import { batasByte, lupakan, pemakaianByte } from "../kuota";
+import { batasByte, lupakan, pemakaianByte, pemakaianPerPemilik } from "../kuota";
+import { isiMedia, ruangMedia } from "../volume";
+import os from "node:os";
 import { pastikanIsiMedia, probe, rapikanVideo } from "../media";
 import { POSISI_RUMUS } from "../perintah";
 import {
   amanId,
   aturSlotSerentak,
+  bacaStatus,
   buangJob,
   daftarJob,
   jobPath,
+  KUNCI_AKTIF,
+  redis,
   segarkanKalauTerlantar,
   SLOT_MAKS,
   slotSerentak,
@@ -345,6 +350,43 @@ export function pasangRuteVideo(r: Router): void {
         persen: batas ? Math.min(100, Math.round((dipakai * 100) / batas)) : 0,
         tamu: false,
       },
+    };
+  });
+
+  // Kondisi server mesin untuk kartu Beranda master (5 Okt 2026) — HANYA
+  // master (gerbang /api/video). Disk media, antrean render, beban, dan
+  // pemakaian penyimpanan per akun teratas.
+  r.get(`${A}/mesin`, async (pm) => {
+    penggunaWajib(pm);
+    const rd = redis();
+    let berjalan = 0;
+    let antre = 0;
+    for (const id of await rd.zrange(KUNCI_AKTIF, 0, -1)) {
+      try {
+        const st = await bacaStatus(id);
+        if (st.status === "queued") antre++;
+        else if (STATUS_AKTIF_JOB.includes(st.status)) berjalan++;
+      } catch {
+        // catatan job sudah tersapu
+      }
+    }
+    const per = [...(await pemakaianPerPemilik()).entries()]
+      .filter(([, b]) => b > 0)
+      .sort((a, b) => b[1] - a[1]);
+    const mb = (b: number) => Math.round((b / 1_048_576) * 10) / 10;
+    return {
+      waktu: Date.now() / 1000,
+      disk: ruangMedia(),
+      isi: isiMedia(),
+      render: { slot: await slotSerentak(), slot_maks: SLOT_MAKS, berjalan, antre, worker_aktif: await workerHidup() },
+      beban: {
+        cpu: os.cpus().length,
+        load1: Math.round(os.loadavg()[0] * 100) / 100,
+        ram_total_mb: Math.round(os.totalmem() / 1_048_576),
+        ram_sisa_mb: Math.round(os.freemem() / 1_048_576),
+      },
+      pemakaian: per.slice(0, 8).map(([pemilik, b]) => ({ pemilik, mb: mb(b), batas_mb: Math.round(batasByte(pemilik) / 1_048_576) })),
+      jumlah_pemilik: per.length,
     };
   });
 

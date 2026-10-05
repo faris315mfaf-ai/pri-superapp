@@ -594,7 +594,15 @@ function StokItem(q: StokItemProps) {
           <p className="truncate text-[12.5px] font-bold text-teks-utama">{item.judul}</p>
           <p className="text-[10.5px] text-teks-sekunder">
             {[
-              item.terunggah ? "Terunggah" : item.sumber === "unggah" ? "Dari perangkat" : "Hasil Edit Otomatis",
+              item.terunggah
+                ? "Terunggah"
+                : item.sumber === "kompres"
+                  ? item.hemat_persen && item.hemat_persen > 0
+                    ? `Hasil kompres · hemat ${item.hemat_persen}%`
+                    : "Hasil kompres · sudah efisien"
+                  : item.sumber === "unggah"
+                    ? "Dari perangkat"
+                    : "Hasil Edit Otomatis",
               tanggalRingkas(item.tanggal),
               item.durasi ? `${Math.round(item.durasi)} dtk` : "",
               ukuranMb(item.size),
