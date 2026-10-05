@@ -59,7 +59,11 @@ export type JobTvr = {
   created?: number | null;
   sumber_url?: string | null;
   texts?: { hook?: string; sumber?: string; kategori?: string } | null;
+  /** Akun tim: id anggota pembuatnya. */
+  anggota?: string | null;
 };
+
+export type JobTimTvr = JobTvr & { antrean: AntreanTvr | null };
 
 export type AntreanTvr = {
   posisi: number;
@@ -102,6 +106,9 @@ export type RingkasTvr = {
   /** Video jadi siap pakai (disimpan sementara), terbaru dulu. */
   stok: StokTvr[];
   batas: BatasTvr;
+  /** Akun tim: seluruh antrean tim beserta nomor antrean tiap video. */
+  jobs?: JobTimTvr[];
+  maks_job_aktif?: number;
   /** Batas jumlah video di stok (mesin TS, 5 Okt 2026; tidak ada di mesin Python). */
   maks_stok?: number;
   /** Pemakaian penyimpanan akun: template + stok + render. */

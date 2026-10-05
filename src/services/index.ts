@@ -2274,6 +2274,20 @@ export type BalasanUnggah = {
   catatan_simpan: string | null;
 };
 
+/**
+ * "Upload Official" dari Stok Video Tim (5 Okt 2026): video disalin ke
+ * penyimpanan & dicatat di antrean TV Rakyat Official. Hasilnya dibuka di
+ * pratinjau unggah Official (pilih platform, caption, jadwal).
+ */
+export async function kirimStokTimKeOfficial(stokId: string, judul: string): Promise<VideoAntrian> {
+  const json = await fetchJson("/api/tv/stok-tim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ stok_id: stokId, judul }),
+  });
+  return json.video as VideoAntrian;
+}
+
 /** Unggah video ke sosmed lewat Ayrshare — SUNGGUHAN, tidak bisa ditarik kembali. */
 export async function unggahVideoSosmed(
   kode: string,

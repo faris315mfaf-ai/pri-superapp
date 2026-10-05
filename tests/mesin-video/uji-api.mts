@@ -12,7 +12,16 @@ import path from "node:path";
 import type { AddressInfo } from "node:net";
 
 const MEDIA = fs.mkdtempSync(path.join(os.tmpdir(), "autoedit-uji-"));
-Object.assign(process.env, { MEDIA_DIR: MEDIA, OUTRO_VIDEO_W: "360", OUTRO_VIDEO_H: "640", VIDEO_THREADS: "1" });
+Object.assign(process.env, {
+  MEDIA_DIR: MEDIA,
+  OUTRO_VIDEO_W: "360",
+  OUTRO_VIDEO_H: "640",
+  VIDEO_THREADS: "1",
+  // Akun TIM uji (pri-8201): kuota, stok, dan antrean khusus.
+  KUOTA_KHUSUS_MB: "pri-8201=5120",
+  TVR_MAKS_STOK_KHUSUS: "pri-8201=150",
+  TVR_JOB_AKTIF_KHUSUS: "pri-8201=4",
+});
 delete process.env.REDIS_URL;
 delete process.env.DEEPSEEK_API_KEY;
 
@@ -79,10 +88,11 @@ type Jawaban = { status: number; json: () => any; teks: string; isi: Buffer; tip
 async function minta(
   method: string,
   url: string,
-  opsi: { id?: string | null; json?: unknown; berkas?: { nama: string; isi: Buffer; tipe?: string } } = {},
+  opsi: { id?: string | null; anggota?: string; json?: unknown; berkas?: { nama: string; isi: Buffer; tipe?: string } } = {},
 ): Promise<Jawaban> {
   const headers: Record<string, string> = {};
   if (opsi.id !== undefined && opsi.id !== null) headers["X-Autoedit-Pengguna"] = opsi.id;
+  if (opsi.anggota) headers["X-Autoedit-Anggota"] = opsi.anggota;
   let body: BodyInit | undefined;
   if (opsi.json !== undefined) {
     headers["content-type"] = "application/json";
@@ -703,6 +713,62 @@ await uji("tvr template persis susunan GODAM", async () => {
     }
   }
   pastikan(putih > 150, `${putih}`);
+});
+
+await uji("tvr akun tim: antre bersamaan, unggahan per anggota, batal milik sendiri", async () => {
+  const tim = "8201";
+  for (const sisa of await job.redis().zrange(job.KUNCI_AKTIF, 0, -1)) {
+    await job.tulisStatus(sisa, { status: "error", log: "dibereskan uji" });
+  }
+  await templateSiap(tim);
+  // Kuota & batas stok khusus akun tim.
+  let st = (await minta("GET", "/api/tvr/ringkas", { id: tim, anggota: "11" })).json();
+  pastikan(st.kuota.batas_mb === 5120 && st.maks_stok === 150 && st.maks_job_aktif === 4, JSON.stringify(st));
+  pastikan(Array.isArray(st.jobs) && st.jobs.length === 0, JSON.stringify(st.jobs));
+
+  // Dua anggota mengunggah sumber: unggahan anggota 11 TIDAK dibuang oleh anggota 12.
+  let r = await minta("POST", "/api/tvr/sumber", { id: tim, anggota: "11", berkas: { nama: "a.mp4", isi: videoSumber(2), tipe: "video/mp4" } });
+  pastikan(r.status === 200, r.teks);
+  const urlA = r.json().url as string;
+  r = await minta("POST", "/api/tvr/sumber", { id: tim, anggota: "12", berkas: { nama: "b.mp4", isi: videoSumber(2), tipe: "video/mp4" } });
+  pastikan(r.status === 200, r.teks);
+  const urlB = r.json().url as string;
+  pastikan(urlA !== urlB, "dua unggahan harus berbeda");
+
+  // Keduanya mengantre bersamaan (akun pribadi akan 409). Job anggota 11
+  // diterima SETELAH anggota 12 mengunggah — mesin menolak sumber yang
+  // berkasnya sudah dibuang, jadi ini bukti unggahannya tidak terhapus.
+  r = await minta("POST", "/api/tvr/jobs", { id: tim, anggota: "11", json: { url: urlA, hook: "TIM A" } });
+  pastikan(r.status === 200, r.teks);
+  r = await minta("POST", "/api/tvr/jobs", { id: tim, anggota: "12", json: { url: urlB, hook: "TIM B" } });
+  pastikan(r.status === 200, r.teks);
+  let jobs = r.json().jobs as { job_id: string; anggota: string; antrean: { posisi: number } | null }[];
+  pastikan(jobs.length === 2 && jobs.every((j) => j.antrean !== null), JSON.stringify(jobs));
+  const milikA = jobs.find((j) => j.anggota === "11");
+  const milikB = jobs.find((j) => j.anggota === "12");
+  pastikan(Boolean(milikA && milikB), JSON.stringify(jobs));
+
+  // Anggota 12 tidak bisa membatalkan video anggota 11; pembuatnya bisa.
+  r = await minta("DELETE", `/api/tvr/jobs/${milikA!.job_id}`, { id: tim, anggota: "12" });
+  pastikan(r.status === 404, `${r.status}`);
+  r = await minta("DELETE", `/api/tvr/jobs/${milikA!.job_id}`, { id: tim, anggota: "11" });
+  pastikan(r.status === 200, r.teks);
+  jobs = r.json().jobs;
+  pastikan(jobs.length === 1 && jobs[0].anggota === "12", JSON.stringify(jobs));
+
+  // Batas antrean tim (4): 3 lagi masuk, yang ke-5 ditolak.
+  for (const n of [1, 2, 3]) {
+    r = await minta("POST", "/api/tvr/jobs", { id: tim, anggota: "13", json: { url: `https://www.instagram.com/reel/TIM${n}/`, hook: `TIM ${n}` } });
+    pastikan(r.status === 200, r.teks);
+  }
+  r = await minta("POST", "/api/tvr/jobs", { id: tim, anggota: "13", json: { url: "https://www.instagram.com/reel/TIM9/", hook: "TIM 9" } });
+  pastikan(r.status === 409 && r.json().detail.includes("Antrean tim penuh"), r.teks);
+
+  // Akun pribadi tetap satu render aktif.
+  pastikan(st.jobs !== undefined && (await minta("GET", "/api/tvr/ringkas", { id: "8102" })).json().jobs === undefined);
+  for (const sisa of await job.redis().zrange(job.KUNCI_AKTIF, 0, -1)) {
+    await job.tulisStatus(sisa, { status: "error", log: "dibereskan uji" });
+  }
 });
 
 // ---------------------------------------------------------------- selesai

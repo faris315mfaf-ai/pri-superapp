@@ -35,6 +35,7 @@ import { PanelJadwalTayang } from "./panel-jadwal-tayang";
 import { EditOtomatisTvr } from "@/features/tvr-ku/edit-otomatis-tvr";
 import { StokVideoTvr } from "@/features/tvr-ku/stok-video-tvr";
 import { KonteksTimAutoEdit } from "@/features/auto-edit/tim";
+import { kirimStokTimKeOfficial } from "@/services";
 
 type FaseTv = "form" | "proses" | "pratinjau";
 
@@ -371,7 +372,19 @@ export function TvScreen({
             bawaanTerbuka
           >
             <KonteksTimAutoEdit.Provider value="tv">
-              <StokVideoTvr />
+              <StokVideoTvr
+                onKirimOfficial={
+                  bolehUpload
+                    ? async (item) => {
+                        // Disalin ke antrean Official lalu langsung dibuka di
+                        // pratinjau unggah (platform, caption, jadwal).
+                        const v = await kirimStokTimKeOfficial(item.id, item.judul);
+                        bukaDariRiwayat(v);
+                        setRefreshKey((k) => k + 1);
+                      }
+                    : undefined
+                }
+              />
             </KonteksTimAutoEdit.Provider>
           </SeksiLipat>
         ) },

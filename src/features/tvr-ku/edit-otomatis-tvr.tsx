@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
-import { toast } from "@/hooks/use-app-store";
+import { toast, useAppStore } from "@/hooks/use-app-store";
 import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 import { cn } from "@/lib/utils";
 import { bacaJson, pesanGalat } from "@/features/auto-edit/api";
@@ -40,6 +40,7 @@ import {
   STATUS_AKTIF,
   akhiranBerkas,
   perkiraanWaktu,
+  type JobTimTvr,
   type JobTvr,
   type KeadaanTemplateTvr,
   type RingkasTvr,
@@ -93,11 +94,24 @@ export function EditOtomatisTvr() {
 
   const job = data?.job ?? null;
   const idAktif = job !== null && STATUS_AKTIF.includes(job.status) ? job.job_id : null;
+  // Akun TIM (TV Rakyat Official): banyak video sekaligus dalam satu antrean.
+  const modeTim = Boolean(api.tim);
+  const idSaya = useAppStore((s) => String(s.user?.id ?? ""));
+  const jobsTim: JobTimTvr[] = data?.jobs ?? [];
+  const adaJobTim = modeTim && jobsTim.length > 0;
+  const idSayaAktif = modeTim
+    ? jobsTim
+        .filter((j) => String(j.anggota ?? "") === idSaya)
+        .map((j) => j.job_id)
+        .sort()
+        .join(",")
+    : "";
+  const [membatalkanId, setMembatalkanId] = useState("");
 
   // Pantau selama ada render berjalan: job/antrean/stok disegarkan tiap 2 detik
   // selama tab terlihat. Satu permintaan pada satu waktu.
   useEffect(() => {
-    if (!idAktif) return;
+    if (!idAktif && !adaJobTim) return;
     let hidup = true;
     let sedang = false;
     const t = window.setInterval(async () => {
@@ -109,7 +123,15 @@ export function EditOtomatisTvr() {
         const d = await bacaJson(res);
         if (!hidup) return;
         setData((lama) =>
-          lama ? { ...lama, job: (d.job as JobTvr | null) ?? null, antrean: d.antrean ?? null, stok: (d.stok as StokTvr[]) ?? [] } : lama,
+          lama
+            ? {
+                ...lama,
+                job: (d.job as JobTvr | null) ?? null,
+                antrean: d.antrean ?? null,
+                jobs: (d.jobs as JobTimTvr[] | undefined) ?? lama.jobs,
+                stok: (d.stok as StokTvr[]) ?? [],
+              }
+            : lama,
         );
       } catch {
         // Jaringan putus sesaat — dicoba lagi pada detik berikutnya.
@@ -121,18 +143,31 @@ export function EditOtomatisTvr() {
       hidup = false;
       window.clearInterval(t);
     };
-  }, [idAktif, tabAktifRef]);
+  }, [idAktif, adaJobTim, tabAktifRef, api]);
 
   // Render selesai (job aktif lenyap tanpa galat) → video sudah di Stok Video.
   const idSebelumnyaRef = useRef<string | null>(null);
   useEffect(() => {
     const lama = idSebelumnyaRef.current;
     idSebelumnyaRef.current = idAktif;
-    if (lama && !idAktif && data && data.job === null) {
+    if (!modeTim && lama && !idAktif && data && data.job === null) {
       toast("sukses", "Video jadi!", "Sudah masuk Stok Video di bawah — ketuk videonya lalu Upload.");
       segarkanStokTvr();
     }
-  }, [idAktif, data]);
+  }, [idAktif, data, modeTim]);
+
+  // Akun tim: video MILIK SAYA yang lenyap dari antrean = sudah jadi (atau dibatalkan).
+  const idSayaSebelumnyaRef = useRef("");
+  useEffect(() => {
+    if (!modeTim) return;
+    const lama = idSayaSebelumnyaRef.current ? idSayaSebelumnyaRef.current.split(",") : [];
+    const kini = new Set(idSayaAktif ? idSayaAktif.split(",") : []);
+    idSayaSebelumnyaRef.current = idSayaAktif;
+    if (lama.some((id) => !kini.has(id))) {
+      toast("sukses", "Video Anda selesai diproses", "Cek Stok Video Tim di bawah.");
+      segarkanStokTvr();
+    }
+  }, [modeTim, idSayaAktif]);
 
   if (galatMuat && !data) {
     return (
@@ -225,8 +260,17 @@ export function EditOtomatisTvr() {
         throw new Error(pesanGalat(res.status, d, "Video gagal dikirim ke antrean."));
       }
       setData((lama) =>
-        lama ? { ...lama, job: (d.job as JobTvr | null) ?? null, antrean: d.antrean ?? null, stok: (d.stok as StokTvr[]) ?? lama.stok } : lama,
+        lama
+          ? {
+              ...lama,
+              job: (d.job as JobTvr | null) ?? null,
+              antrean: d.antrean ?? null,
+              jobs: (d.jobs as JobTimTvr[] | undefined) ?? lama.jobs,
+              stok: (d.stok as StokTvr[]) ?? lama.stok,
+            }
+          : lama,
       );
+      if (modeTim) toast("sukses", "Masuk antrean tim", "Anda bisa langsung membuat video berikutnya.");
       // Bahan sumber dilepas; tulisan/kategori dibiarkan supaya mudah bikin lagi.
       setUnggahan(null);
       setLink("");
@@ -235,6 +279,22 @@ export function EditOtomatisTvr() {
       setPesan(e instanceof Error ? e.message : "Video gagal dikirim ke antrean.");
     } finally {
       setMengirim(false);
+    }
+  }
+
+  /** Akun tim: batalkan SATU video milik sendiri di antrean tim. */
+  async function batalkanJobTim(id: string) {
+    if (membatalkanId) return;
+    setMembatalkanId(id);
+    try {
+      const res = await api.fetch(`/api/tvr/jobs/${id}`, { method: "DELETE" });
+      const d = await bacaJson(res);
+      if (!res.ok) throw new Error(pesanGalat(res.status, d, "Gagal membatalkan."));
+      setData((lama) => (lama ? { ...lama, jobs: (d.jobs as JobTimTvr[] | undefined) ?? lama.jobs } : lama));
+    } catch (e) {
+      toast("error", "Gagal", e instanceof Error ? e.message : "Coba lagi.");
+    } finally {
+      setMembatalkanId("");
     }
   }
 
@@ -304,10 +364,18 @@ export function EditOtomatisTvr() {
           <li>Unggah kotak monas &amp; bingkai teratas (PNG), boom like share dan video penutup (opsional).</li>
           <li>Tandai posisi tulisan, lalu <b className="text-teks-utama">Simpan &amp; Tetapkan</b>.</li>
         </ol>
-      ) : aktif && job ? (
+      ) : aktif && job && !modeTim ? (
         <PanelAktif job={job} antrean={antrean} membatalkan={membatalkan} onBatal={() => void batalkan()} />
       ) : (
         <>
+          {modeTim && jobsTim.length > 0 && (
+            <AntreanTim
+              jobs={jobsTim}
+              idSaya={idSaya}
+              membatalkanId={membatalkanId}
+              onBatal={(id) => void batalkanJobTim(id)}
+            />
+          )}
           {gagal && (
             <div className="mt-3 rounded-xl border border-gagal/30 bg-gagal/10 p-3" role="alert">
               <p className="text-[12.5px] font-bold text-teks-utama">
@@ -428,6 +496,74 @@ function PanelAktif({
         {membatalkan ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
         Batalkan
       </button>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------ antrean tim
+function AntreanTim({
+  jobs,
+  idSaya,
+  membatalkanId,
+  onBatal,
+}: {
+  jobs: JobTimTvr[];
+  idSaya: string;
+  membatalkanId: string;
+  onBatal: (id: string) => void;
+}) {
+  // Urut sesuai antrean: yang sedang dikerjakan dulu, lalu nomor antrean.
+  const urut = [...jobs].sort((x, y) => (x.antrean?.posisi ?? 999) - (y.antrean?.posisi ?? 999));
+  return (
+    <div className="mt-3 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3" aria-live="polite">
+      <p className="text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">Antrean tim ({jobs.length})</p>
+      <ul className="mt-2 space-y-2">
+        {urut.map((j) => {
+          const milikSaya = String(j.anggota ?? "") === idSaya;
+          const jalan = j.status !== "queued";
+          return (
+            <li key={j.job_id} className="glass-soft rounded-xl p-2.5">
+              <div className="flex items-center gap-2">
+                <p className="min-w-0 flex-1 truncate text-[12px] font-bold text-teks-utama">
+                  {(j.texts?.hook || "Video").slice(0, 70)}
+                </p>
+                {milikSaya && (
+                  <span className="shrink-0 rounded-full bg-pri/15 px-1.5 py-0.5 text-[9.5px] font-bold text-pri">Milik Anda</span>
+                )}
+              </div>
+              <p className="mt-0.5 flex items-center gap-1.5 text-[10.5px] text-teks-sekunder">
+                {jalan && <Loader2 className="h-3 w-3 animate-spin text-sky-500" />}
+                {j.status === "downloading"
+                  ? "Mengambil video sumber…"
+                  : j.status === "rendering"
+                    ? `Sedang diedit · ${j.progress ?? 0}%`
+                    : j.antrean
+                      ? `Antrean #${j.antrean.posisi} · ${j.antrean.di_depan > 0 ? `${j.antrean.di_depan} di depan` : "berikutnya"} · selesai ${perkiraanWaktu(j.antrean.perkiraan_detik)}`
+                      : "Menunggu giliran"}
+              </p>
+              {j.status === "rendering" && (
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                  <div className="h-full rounded-full bg-sky-500 transition-[width] duration-500" style={{ width: `${Math.max(3, j.progress ?? 0)}%` }} />
+                </div>
+              )}
+              {milikSaya && (
+                <button
+                  type="button"
+                  onClick={() => onBatal(j.job_id)}
+                  disabled={membatalkanId === j.job_id}
+                  className="glass btn-tekan mt-1.5 flex items-center gap-1 rounded-lg px-2.5 py-1 text-[10.5px] font-bold text-teks-utama disabled:opacity-50"
+                >
+                  {membatalkanId === j.job_id ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                  Batalkan
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder">
+        Video yang jadi masuk Stok Video Tim. Boleh tinggalkan halaman ini.
+      </p>
     </div>
   );
 }

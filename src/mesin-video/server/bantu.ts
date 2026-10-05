@@ -40,7 +40,12 @@ export function f0(n: number): string {
 /** Urutan seperti sorted() Python (titik kode, bukan locale). */
 export const urut = (it: Iterable<string>) => [...it].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
-export type Pengguna = { user_id: string; username: string };
+export type Pengguna = {
+  user_id: string;
+  username: string;
+  /** Akun TIM (5 Okt 2026): id anggota tim yang mengirim permintaan. */
+  anggota?: string;
+};
 
 export const akunDari = (p: Pengguna) => String(p.username).trim().toLowerCase();
 

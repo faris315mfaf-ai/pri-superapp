@@ -35,7 +35,7 @@ async function tangani(
     const { jalur } = await params;
     const j = jalur ?? [];
     if (!idTim || j[0] !== "tvr") return galatAutoEdit(404, "Tidak ditemukan");
-    return teruskanAutoEdit(request, j, idTim, new Set(["tvr"]));
+    return teruskanAutoEdit(request, j, idTim, new Set(["tvr"]), String(user.id));
   }
 
   // Tanpa izin: 404, bukan 403 — modul ini tidak perlu diumumkan.

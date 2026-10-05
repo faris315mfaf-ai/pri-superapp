@@ -238,8 +238,10 @@ export function kirimGambar(p: Permintaan, isi: Buffer, jenis = "image/png"): ty
 const POLA_ID = /^[0-9]{1,12}$/;
 
 /** Identitas dari SuperApp (lihat akses.py): header X-Autoedit-Pengguna = id akun. */
-export function identitas(p: Permintaan): { user_id: string; username: string } {
+export function identitas(p: Permintaan): { user_id: string; username: string; anggota?: string } {
   const id = String(p.req.headers["x-autoedit-pengguna"] ?? "").trim();
   if (!POLA_ID.test(id)) throw new GalatHttp(401, "Permintaan tidak lewat SuperApp.");
-  return { user_id: id, username: `pri-${id}` };
+  // Akun TIM: SuperApp menyertakan id anggota yang sebenarnya mengirim.
+  const anggota = String(p.req.headers["x-autoedit-anggota"] ?? "").trim();
+  return { user_id: id, username: `pri-${id}`, ...(POLA_ID.test(anggota) ? { anggota } : {}) };
 }

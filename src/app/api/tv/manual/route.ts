@@ -99,7 +99,10 @@ export async function GET(request: Request) {
     return {
       data: (data ?? []).map((v) => ({
         ...v,
-        media_masih_ada: Boolean(v.cloudinary_public_id),
+        // Video dari Stok Video Tim tersimpan di R2, bukan Cloudinary (5 Okt 2026).
+        media_masih_ada:
+          Boolean(v.cloudinary_public_id) ||
+          (String(v.kode).startsWith("vid-stok-") && Boolean(v.hasil_render_url)),
         cloudinary_public_id: undefined,
       })),
       retensi_jam: RETENSI_JAM,

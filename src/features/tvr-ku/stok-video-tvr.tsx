@@ -71,7 +71,12 @@ type KeadaanStok = {
 
 const MAKS_STOK_BAWAAN = 50;
 
-export function StokVideoTvr() {
+export function StokVideoTvr({
+  onKirimOfficial,
+}: {
+  /** Stok Video Tim: kirim item ke antrean TV Rakyat Official (pratinjau unggah). */
+  onKirimOfficial?: (item: StokTvr) => Promise<void>;
+} = {}) {
   const api = useApiAutoEdit();
   const [batas, setBatas] = useState<BatasTvr | null>(null);
   const [data, setData] = useState<KeadaanStok | null>(null);
@@ -238,6 +243,19 @@ export function StokVideoTvr() {
     }
   }
 
+  async function kirimOfficial(item: StokTvr) {
+    if (!onKirimOfficial || menyiapkan) return;
+    setMenyiapkan(item.id);
+    setPesan("");
+    try {
+      await onKirimOfficial(item);
+    } catch (e) {
+      setPesan(e instanceof Error ? e.message : "Video gagal dikirim ke akun Official.");
+    } finally {
+      setMenyiapkan("");
+    }
+  }
+
   async function unduhDari(item: StokTvr) {
     if (unduhId) return;
     setUnduhId(item.id);
@@ -299,7 +317,7 @@ export function StokVideoTvr() {
         <p className="font-heading text-[14px] font-bold text-teks-utama">{api.tim ? "Stok Video Tim" : "Stok Video"}</p>
         <p className="mt-0.5 text-[11px] leading-snug text-teks-sekunder">
           {api.tim
-            ? "Dipakai bersama seluruh tim TV Rakyat Official. Unduh videonya untuk diunggah ke akun Official."
+            ? "Dipakai bersama seluruh tim TV Rakyat Official. Ketuk video lalu Official untuk mengunggahnya ke akun TV Rakyat Official."
             : "Video jadi ditahan di sini dulu, lalu diposting ke sosmed dari sini."}
         </p>
       </div>
@@ -422,12 +440,13 @@ export function StokVideoTvr() {
               key={it.id}
               item={it}
               tandaTur={i === 0 && !api.tim ? "tvr-stok-item" : undefined}
-              bolehUpload={!api.tim}
+              bolehUpload={!api.tim || Boolean(onKirimOfficial)}
+              labelUpload={api.tim ? "Official" : "Upload"}
               menyiapkan={menyiapkan}
               hapusId={hapusId}
               unduhId={unduhId}
               onLihat={(x) => void lihatPreview(x)}
-              onUpload={(x) => void unggahDari(x)}
+              onUpload={(x) => void (api.tim ? kirimOfficial(x) : unggahDari(x))}
               onUnduh={(x) => void unduhDari(x)}
               onHapus={(id) => void hapusStok(id)}
             />
@@ -504,8 +523,9 @@ function InfoAturan({ ikon, nilai, label }: { ikon: React.ReactNode; nilai: stri
 // Satu item stok: thumbnail (ditarik sendiri), klik baris -> opsi mengembang.
 type StokItemProps = {
   item: StokTvr;
-  /** false di Stok Video Tim: Upload = akun sosmed PRIBADI, bukan Official. */
+  /** Tampilkan tombol kirim (Upload pribadi / Official untuk tim). */
   bolehUpload: boolean;
+  labelUpload: string;
   tandaTur?: string;
   menyiapkan: string;
   hapusId: string;
@@ -627,7 +647,7 @@ function StokItem(q: StokItemProps) {
                 >
                   <AksiStok ikon={<Eye className="h-4 w-4" />} label="Lihat" onClick={() => q.onLihat(item)} loading={sibuk} />
                   {q.bolehUpload && (
-                    <AksiStok ikon={<Send className="h-4 w-4" />} label="Upload" onClick={() => q.onUpload(item)} loading={sibuk} utama />
+                    <AksiStok ikon={<Send className="h-4 w-4" />} label={q.labelUpload} onClick={() => q.onUpload(item)} loading={sibuk} utama />
                   )}
                   <AksiStok ikon={<Download className="h-4 w-4" />} label="Unduh" onClick={() => q.onUnduh(item)} loading={mengunduh} />
                   <AksiStok ikon={<Trash2 className="h-4 w-4" />} label="Hapus" onClick={() => setKonfirmHapus(true)} danger />

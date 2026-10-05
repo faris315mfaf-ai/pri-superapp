@@ -34,7 +34,7 @@ const HEADER_KELUAR = [
 // ±45 dtk di sisi layanan.
 const BATAS_DIAM_MS = 10 * 60 * 1000;
 
-function socketAutoEdit(): string {
+export function socketAutoEdit(): string {
   return process.env.AUTOEDIT_SOCKET || "/run/autoedit/api.sock";
 }
 
@@ -112,6 +112,8 @@ export function teruskanAutoEdit(
   jalur: string[],
   idAkun: string,
   keluarga: ReadonlySet<string>,
+  /** Akun tim: id anggota yang sebenarnya mengirim (antrean & unggahan per anggota). */
+  idAnggota?: string,
 ): Promise<Response> {
   if (!jalur.length || !keluarga.has(jalur[0]) || jalur.some((b) => b === "." || b === "..")) {
     return Promise.resolve(galatAutoEdit(404, "Tidak ditemukan"));
@@ -119,6 +121,7 @@ export function teruskanAutoEdit(
   const tujuan = `/api/${jalur.map(encodeURIComponent).join("/")}${new URL(request.url).search}`;
 
   const header: Record<string, string> = { "x-autoedit-pengguna": idAkun };
+  if (idAnggota && /^\d{1,12}$/.test(idAnggota)) header["x-autoedit-anggota"] = idAnggota;
   for (const nama of HEADER_MASUK) {
     const nilai = request.headers.get(nama);
     if (nilai) header[nama] = nilai;
