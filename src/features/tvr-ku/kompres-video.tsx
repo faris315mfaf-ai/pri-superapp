@@ -1,8 +1,9 @@
 "use client";
 
 // ============================================================
-// Kompres Video (uji coba, 5 Okt 2026) — TVR Saya, akun yang modul
-// "kompres"-nya dibuka master.
+// Kompres Video (5 Okt 2026) — TVR Saya, semua akun kecuali modul
+// "kompres"-nya ditutup master. Hasil Auto Edit juga dikompres otomatis ke
+// VMAF 90 (mesin-video/pekerja.ts kompresOtomatis).
 //
 // Unggah video dari perangkat (≤100 MB) → mesin mencari setelan x264 terkecil
 // yang masih memenuhi target VMAF (ab-av1 + Netflix VMAF) → encode H.264
@@ -154,7 +155,7 @@ export function KompresVideo() {
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-heading text-[14px] font-bold text-teks-utama">
-            Kompres Video <span className="text-[10px] font-bold text-amber-500">UJI COBA</span>
+            Kompres Video
           </p>
           <p className="mt-0.5 text-[11px] leading-snug text-teks-sekunder">
             Perkecil video dengan kualitas yang terukur. Hasil masuk Stok Video.

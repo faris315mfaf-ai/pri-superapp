@@ -72,23 +72,24 @@ export const MODUL_AKUN = [
     keterangan: "Template pribadi + edit video otomatis. Ikut peran = terbuka sendiri bila ≥5 akun sosmed terhubung",
     bukanTab: true,
   },
-  // Uji coba (5 Okt 2026): tertutup untuk semua kecuali dibuka master per akun.
+  // Alat video TVR Saya (5 Okt 2026): dibuka untuk SEMUA akun; master bisa
+  // menutup per akun (false). Ikut peran = terbuka.
   {
     kunci: "kompres",
-    label: "Kompres Video (uji coba)",
-    keterangan: "Perkecil video tanpa turun kualitas (ab-av1 + VMAF), hasil ke Stok Video",
+    label: "Kompres Video (TVR Saya)",
+    keterangan: "Perkecil video (ab-av1 + VMAF), hasil ke Stok Video. Ikut peran = terbuka",
     bukanTab: true,
   },
   {
     kunci: "hapuslatar",
-    label: "Hapus Latar Video (uji coba)",
-    keterangan: "Buang latar video Boom like share otomatis di editor template (rembg)",
+    label: "Hapus Latar Boom (TVR Saya)",
+    keterangan: "Buang latar video Boom like share di editor template (rembg). Ikut peran = terbuka",
     bukanTab: true,
   },
   {
     kunci: "blurwm",
-    label: "Blur Watermark (uji coba)",
-    keterangan: "Samarkan area watermark video (blur/mosaik/halus, ffmpeg), hasil ke Stok Video",
+    label: "Blur Watermark (TVR Saya)",
+    keterangan: "Samarkan area watermark video (blur/mosaik/halus), hasil ke Stok Video. Ikut peran = terbuka",
     bukanTab: true,
   },
 ] as const;
@@ -109,12 +110,17 @@ export function modulDibuka(
   return typeof v === "boolean" ? v : undefined;
 }
 
-/** Fitur uji coba per akun (Kompres Video, Hapus Latar, Blur Watermark): master, atau dibuka master. */
-export function bolehFiturUji(
+/**
+ * Alat video TVR Saya (Kompres Video, Hapus Latar Boom, Blur Watermark):
+ * terbuka untuk semua akun sejak 5 Okt 2026, kecuali master menutupnya per
+ * akun (modul_izin = false). Master selalu boleh.
+ */
+export function bolehAlatVideo(
   u: { role?: string | null; modul_izin?: unknown } | null | undefined,
   kunci: "kompres" | "hapuslatar" | "blurwm",
 ): boolean {
-  return u?.role === "master" || modulDibuka(u, kunci) === true;
+  if (!u) return false;
+  return u.role === "master" || modulDibuka(u, kunci) !== false;
 }
 
 /**

@@ -1,5 +1,5 @@
 // ============================================================
-// Blur Watermark (uji coba, 5 Okt 2026) — TVR Saya.
+// Blur Watermark (5 Okt 2026) — TVR Saya, semua akun.
 //
 // Menyamarkan area watermark yang DITANDAI pengguna (maks 3 kotak, berlaku
 // sepanjang video) dengan ffmpeg saja — tanpa AI, beberapa detik per video.

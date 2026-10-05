@@ -604,7 +604,9 @@ function StokItem(q: StokItemProps) {
                     ? "Hasil blur watermark"
                     : item.sumber === "unggah"
                       ? "Dari perangkat"
-                      : "Hasil Edit Otomatis",
+                      : item.hemat_persen && item.hemat_persen > 0
+                        ? `Hasil Edit Otomatis · dikompres ${item.hemat_persen}%`
+                        : "Hasil Edit Otomatis",
               tanggalRingkas(item.tanggal),
               item.durasi ? `${Math.round(item.durasi)} dtk` : "",
               ukuranMb(item.size),

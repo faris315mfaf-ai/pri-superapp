@@ -33,7 +33,7 @@ import {
 const LEBAR = 720;
 const TINGGI = 1280;
 
-/** Proses Hapus Latar Boom di mesin (uji coba, 5 Okt 2026). */
+/** Proses Hapus Latar Boom di mesin (5 Okt 2026). */
 type HapusLatar = {
   id: string;
   status: "queued" | "downloading" | "rendering" | "done" | "error" | "dibatalkan";
@@ -57,7 +57,7 @@ export function TemplateTvrModal({
   batas: BatasTvr;
   onTutup: () => void;
   onTersimpan: (t: KeadaanTemplateTvr) => void;
-  /** Fitur uji coba "Hapus latar otomatis" di slot Boom (modul hapuslatar). */
+  /** Tombol "Hapus latar otomatis" di slot Boom (modul hapuslatar, terbuka kecuali ditutup master). */
   bolehHapusLatar?: boolean;
 }) {
   const api = useApiAutoEdit();
@@ -184,7 +184,7 @@ export function TemplateTvrModal({
     }
   }
 
-  // ===== Hapus latar Boom (uji coba) =====
+  // ===== Hapus latar Boom =====
   // Editor dibuka lagi selagi masih diproses (mis. halaman dimuat ulang): lanjutkan pantauannya.
   useEffect(() => {
     if (!bolehHapusLatar) return;
@@ -474,7 +474,6 @@ export function TemplateTvrModal({
                       >
                         {hlMulai ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
                         Hapus latar otomatis
-                        <span className="text-[9px] font-bold text-amber-500">UJI COBA</span>
                       </button>
                       <p className="mt-1 text-[10px] leading-snug text-teks-sekunder">
                         Latar warna polos dibuang langsung. Latar lain memakai AI: video maks 10 detik, ±2–3 menit.

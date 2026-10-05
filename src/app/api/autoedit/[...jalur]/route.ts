@@ -11,7 +11,7 @@ import {
   keluargaAutoEdit,
   teruskanAutoEdit,
 } from "@/lib/autoedit";
-import { bolehFiturUji, MINIMAL_AKUN_EDIT_OTOMATIS } from "@/lib/peran";
+import { bolehAlatVideo, MINIMAL_AKUN_EDIT_OTOMATIS } from "@/lib/peran";
 import { pastikanMasuk } from "@/lib/sesi";
 
 export const runtime = "nodejs";
@@ -29,8 +29,8 @@ async function tangani(
   }
   const { jalur } = await params;
   const j = jalur ?? [];
-  // Fitur uji coba (Kompres Video, Hapus Latar Boom, Blur Watermark): hanya
-  // master atau akun yang modulnya dibuka master — juga lewat jalur tim. Tanpa izin: 404.
+  // Alat video (Kompres Video, Hapus Latar Boom, Blur Watermark): terbuka
+  // untuk semua kecuali ditutup master per akun — juga lewat jalur tim. Tanpa izin: 404.
   const fiturUji =
     j[0] !== "tvr"
       ? null
@@ -41,7 +41,7 @@ async function tangani(
           : j[1] === "template" && j[2] === "hapus-latar"
             ? "hapuslatar"
             : null;
-  if (fiturUji && !bolehFiturUji(user, fiturUji)) return galatAutoEdit(404, "Tidak ditemukan");
+  if (fiturUji && !bolehAlatVideo(user, fiturUji)) return galatAutoEdit(404, "Tidak ditemukan");
   // Akun TIM (5 Okt 2026): modul TV Rakyat Official memakai template & stok
   // bersama tim. Hanya jalur TVR; anggota tim dipastikan di identitasTim.
   const tim = (request.headers.get("x-autoedit-tim") ?? "").trim().toLowerCase();

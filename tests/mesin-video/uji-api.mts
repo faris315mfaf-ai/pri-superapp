@@ -18,7 +18,8 @@ const MEDIA = fs.mkdtempSync(path.join(os.tmpdir(), "autoedit-uji-"));
 const AB_AV1_TIRUAN = path.join(MEDIA, "ab-av1-tiruan.sh");
 fs.writeFileSync(
   AB_AV1_TIRUAN,
-  '#!/bin/sh\necho "sample 1/1 crf 30 VMAF 94.6 (40%)"\necho "crf 30 VMAF 94.60 predicted video stream size 1.00 MiB (40%) taking 1 minutes"\n',
+  // Berkas penanda "ab-av1-gagal" membuat tiruan ini gagal (uji kompres otomatis gagal).
+  `#!/bin/sh\n[ -f "${path.join(MEDIA, "ab-av1-gagal")}" ] && { echo "error: tiruan gagal" >&2; exit 1; }\necho "sample 1/1 crf 30 VMAF 94.6 (40%)"\necho "crf 30 VMAF 94.60 predicted video stream size 1.00 MiB (40%) taking 1 minutes"\n`,
   { mode: 0o755 },
 );
 // rembg TIRUAN untuk uji Hapus Latar (jalan AI): tiap frame dibalas PNG beralpha.
@@ -611,6 +612,13 @@ await uji("tvr antrean satu video per akun dan render", async () => {
   pastikan(st.job === null && st.antrean === null && st.stok.length === 1, JSON.stringify(st));
   const item = st.stok[0];
   pastikan(item.sumber === "render" && item.judul && item.durasi && item.size, JSON.stringify(item));
+  // Kompres otomatis (VMAF 90) dijalankan pada hasil render; dipakai hanya
+  // bila memperkecil (video uji ini kecil & didominasi audio, jadi bisa tidak).
+  const logRender = ((await job.bacaStatus(item.id)).logs ?? []) as string[];
+  pastikan(logRender.some((l) => l.includes("Mengompres otomatis (kualitas VMAF 90)")), JSON.stringify(logRender));
+  pastikan(item.hemat_persen === undefined || (item.hemat_persen > 0 && item.size < item.size_awal), JSON.stringify(item));
+  pastikan(!fs.existsSync(path.join(jalur.jobsDir(), item.id, "kompres.mp4")));
+  pastikan(!fs.existsSync(path.join(jalur.jobsDir(), item.id, "kerja-kompres")));
   // b masih mengantre; setelah a selesai, b jadi posisi 1.
   pastikan((await minta("GET", "/api/tvr/jobs/saya", { id: b })).json().job?.status === "queued");
   const unduhan = await minta("GET", `/api/tvr/stok/${item.id}/berkas`, { id: a });
@@ -672,8 +680,17 @@ await uji("tvr render dengan gif berulang", async () => {
   TUGAS.length = 0;
   r = await minta("POST", "/api/tvr/jobs", { id: a, json: { url: r.json().url, hook: "UJI GIF" } });
   pastikan(r.status === 200, r.teks);
-  pastikan((await pekerja.renderVideo(TUGAS[0])).status === "done");
-  pastikan((await minta("GET", "/api/tvr/jobs/saya", { id: a })).json().stok.length === 1);
+  // Kompres otomatis GAGAL tidak boleh menggagalkan render: video asli dipakai.
+  const penanda = path.join(MEDIA, "ab-av1-gagal");
+  fs.writeFileSync(penanda, "");
+  try {
+    pastikan((await pekerja.renderVideo(TUGAS[0])).status === "done");
+  } finally {
+    fs.rmSync(penanda, { force: true });
+  }
+  const stokGif = (await minta("GET", "/api/tvr/jobs/saya", { id: a })).json().stok;
+  pastikan(stokGif.length === 1 && stokGif[0].hemat_persen === undefined, JSON.stringify(stokGif));
+  pastikan(!fs.existsSync(path.join(jalur.jobsDir(), stokGif[0].id, "kompres.mp4")));
 });
 
 await uji("tvr unggahan baru membuang unggahan lama", async () => {

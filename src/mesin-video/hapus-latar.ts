@@ -1,5 +1,5 @@
 // ============================================================
-// Hapus latar video Boom like share (uji coba, 5 Okt 2026).
+// Hapus latar video Boom like share (5 Okt 2026, semua akun).
 //
 // Dua jalan, dipilih otomatis per video:
 //   1. WARNA: tepi bingkai berwarna polos & BERWARNA (green screen, biru,

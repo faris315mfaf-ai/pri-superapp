@@ -539,8 +539,9 @@ function ringkasStok(job: Job): Record<string, unknown> {
     // Waktu (detik) video ini terkirim ke sosmed; null = belum. Video yang
     // sudah terunggah TIDAK dihapus — tetap di stok sampai masa simpannya habis.
     terunggah: typeof job.terunggah === "number" ? job.terunggah : null,
-    // Hasil Kompres Video: ukuran asli, penghematan, dan skor kualitas.
-    ...(job.sumber_stok === "kompres"
+    // Hasil Kompres Video (dan render yang dikompres otomatis): ukuran asli,
+    // penghematan, dan skor kualitas.
+    ...(job.sumber_stok === "kompres" || (job as Record<string, unknown>).hemat_persen !== undefined
       ? {
           size_awal: (job as Record<string, unknown>).size_awal ?? null,
           hemat_persen: (job as Record<string, unknown>).hemat_persen ?? null,

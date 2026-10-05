@@ -1,5 +1,5 @@
 // ============================================================
-// Kompres video (uji coba, 5 Okt 2026): sekecil mungkin TANPA penurunan
+// Kompres video (5 Okt 2026; juga otomatis untuk hasil Auto Edit, VMAF 90): sekecil mungkin TANPA penurunan
 // kualitas yang terlihat — diukur, bukan ditebak.
 //
 //   1. ab-av1 crf-search mencari CRF x264 terbesar (berkas terkecil) yang
@@ -44,6 +44,10 @@ type Opsi = {
   progress: (persen: number) => Promise<void>;
   log: (teks: string) => Promise<void>;
   batal: () => Promise<boolean>;
+  /** Berkas hasil; bawaan <folder>/output.mp4. */
+  keluaran?: string;
+  /** Utas x264; bawaan KOMPRES_THREADS (kompres otomatis memakai VIDEO_THREADS). */
+  utas?: string;
 };
 
 /** Jalankan proses; tiap baris stderr/stdout ke `baris`; bisa dihentikan lewat `batal`. */
@@ -97,21 +101,22 @@ export async function kodekAudio(berkas: string, batal: () => Promise<boolean>):
 }
 
 /**
- * Kompres `masukan` ke `<folder>/output.mp4`. Melempar Dibatalkan bila
- * dihentikan, GalatVideo bila videonya tidak bisa diproses.
+ * Kompres `masukan` ke `opsi.keluaran` (bawaan `<folder>/output.mp4`) dengan
+ * target VMAF `target`. Melempar Dibatalkan bila dihentikan, GalatVideo bila
+ * videonya tidak bisa diproses.
  */
 export async function kompresVideo(
   masukan: string,
   folder: string,
-  mutu: MutuKompres,
+  target: number,
   durasiDetik: number,
   opsi: Opsi,
 ): Promise<HasilKompres> {
   const sizeAwal = fs.statSync(masukan).size;
-  const keluaran = path.join(folder, "output.mp4");
-  const kerja = path.join(folder, "kerja");
+  const keluaran = opsi.keluaran ?? path.join(folder, "output.mp4");
+  const kerja = path.join(folder, "kerja-kompres");
   fs.mkdirSync(kerja, { recursive: true });
-  const target = TARGET_VMAF[mutu];
+  const utas = opsi.utas ?? UTAS;
 
   // ---- 1. Cari CRF (5..45%) ----
   await opsi.progress(5);
@@ -126,7 +131,7 @@ export async function kompresVideo(
       "--max-encoded-percent", "95",
       "--sample-duration", "4s",
       "--temp-dir", kerja,
-      "--enc", `x264-params=threads=${UTAS}`,
+      "--enc", `x264-params=threads=${utas}`,
     ],
     {
       env: { ...process.env, PATH: `${VMAF_BIN_DIR}:${process.env.PATH ?? ""}` },
@@ -145,9 +150,11 @@ export async function kompresVideo(
     // Tak ada CRF yang lebih kecil sambil tetap memenuhi target: berkasnya
     // sudah efisien. Bukan galat — video asli dipakai apa adanya.
     if (/Failed to find a suitable crf|max-encoded-percent/i.test(cari.keluaran)) {
+      fs.rmSync(kerja, { recursive: true, force: true });
       fs.copyFileSync(masukan, keluaran);
       return { berkas: keluaran, size_awal: sizeAwal, size: sizeAwal, crf: null, vmaf: null, diperkecil: false };
     }
+    fs.rmSync(kerja, { recursive: true, force: true });
     console.error("ab-av1 gagal:", cari.keluaran.slice(-1500));
     throw new GalatVideo("Pencarian setelan kompres gagal. Pastikan berkasnya video yang utuh.");
   }
@@ -164,7 +171,7 @@ export async function kompresVideo(
       "-hide_banner", "-nostdin", "-y", "-i", masukan,
       "-map", "0:v:0", "-map", "0:a:0?",
       "-c:v", "libx264", "-preset", PRESET, "-crf", String(crf), "-pix_fmt", "yuv420p",
-      "-threads", UTAS,
+      "-threads", utas,
       ...argAudio,
       "-movflags", "+faststart",
       "-progress", "pipe:1", "-nostats",

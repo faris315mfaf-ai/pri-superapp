@@ -89,7 +89,7 @@ import { StokVideoTvr } from "./stok-video-tvr";
 import { KartuEditTerkunci, StatusKoneksiAkun } from "./status-koneksi-akun";
 import { mulaiTurTvr } from "@/lib/tur";
 import { AutoEditPanel } from "@/features/auto-edit/auto-edit-panel";
-import { bolehEditOtomatisTvr, bolehFiturUji } from "@/lib/peran";
+import { bolehEditOtomatisTvr, bolehAlatVideo } from "@/lib/peran";
 import { KompresVideo } from "./kompres-video";
 import { BlurWatermark } from "./blur-watermark";
 import { VideoSiapUnggah } from "./video-siap-unggah";
@@ -1171,15 +1171,15 @@ export function TvrKuScreen({
             </FadeInUp>
           ),
         },
-        // Kompres Video (uji coba, 5 Okt 2026): akun yang modulnya dibuka master.
-        ...(bolehFiturUji(userAsli, "kompres")
+        // Kompres Video (5 Okt 2026): semua akun, kecuali ditutup master.
+        ...(bolehAlatVideo(userAsli, "kompres")
           ? [
               {
                 id: "kompres-video",
                 segmen: "Unggah & Jadwal",
                 judul: "Kompres Video",
                 ikon: Minimize2,
-                keterangan: "Perkecil video tanpa turun kualitas (uji coba)",
+                keterangan: "Perkecil ukuran video dengan kualitas terukur",
                 render: () => (
                   <FadeInUp delay={0.085}>
                     <SectionTitle judul="Kompres Video" />
@@ -1191,15 +1191,15 @@ export function TvrKuScreen({
               },
             ]
           : []),
-        // Blur Watermark (uji coba, 5 Okt 2026): akun yang modulnya dibuka master.
-        ...(bolehFiturUji(userAsli, "blurwm")
+        // Blur Watermark (5 Okt 2026): semua akun, kecuali ditutup master.
+        ...(bolehAlatVideo(userAsli, "blurwm")
           ? [
               {
                 id: "blur-watermark",
                 segmen: "Unggah & Jadwal",
                 judul: "Blur Watermark",
                 ikon: EyeOff,
-                keterangan: "Samarkan watermark video (uji coba)",
+                keterangan: "Samarkan watermark video",
                 render: () => (
                   <FadeInUp delay={0.088}>
                     <SectionTitle judul="Blur Watermark" />

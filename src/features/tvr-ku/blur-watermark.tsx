@@ -1,8 +1,8 @@
 "use client";
 
 // ============================================================
-// Blur Watermark (uji coba, 5 Okt 2026) — TVR Saya, akun yang modul
-// "blurwm"-nya dibuka master.
+// Blur Watermark (5 Okt 2026) — TVR Saya, semua akun kecuali modul
+// "blurwm"-nya ditutup master.
 //
 // 1. Pilih video: unggah dari perangkat (≤100 MB) atau ambil dari Stok Video.
 // 2. Seret kotak di gambar pratinjau (maks 3) — atau tombol "Pojok TikTok"
@@ -215,7 +215,7 @@ export function BlurWatermark() {
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-heading text-[14px] font-bold text-teks-utama">
-            Blur Watermark <span className="text-[10px] font-bold text-amber-500">UJI COBA</span>
+            Blur Watermark
           </p>
           <p className="mt-0.5 text-[11px] leading-snug text-teks-sekunder">
             Samarkan watermark di video milik sendiri atau yang sudah diizinkan. Hasil masuk Stok Video.

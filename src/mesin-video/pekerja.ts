@@ -21,7 +21,7 @@ import { probe } from "./media";
 import { blurWatermark, EFEK_BLUR, type EfekBlur, type KotakRelatif } from "./blur-watermark";
 import { hapusLatar } from "./hapus-latar";
 import { templatePath } from "./jalur";
-import { kompresVideo, mutuSah } from "./kompres";
+import { kompresVideo, mutuSah, TARGET_VMAF } from "./kompres";
 import { render } from "./render";
 import { loadTemplate } from "./template";
 import { downloadSource, pasangRedisBatas } from "./unduh";
@@ -66,7 +66,9 @@ async function bersihkanSetelahGagal(jobId: string, folder: string): Promise<voi
     }
     // Hasil setengah jadi dari render yang dihentikan/gagal tidak berguna.
     hapusDiam(path.join(folder, "output.mp4"));
+    hapusDiam(path.join(folder, "kompres.mp4"));
     hapusDiam(path.join(folder, "kerja"), true);
+    hapusDiam(path.join(folder, "kerja-kompres"), true);
   } catch (e) {
     console.warn(`Sisa job ${jobId} gagal dibersihkan:`, e instanceof Error ? e.message : e);
   }
@@ -74,6 +76,53 @@ async function bersihkanSetelahGagal(jobId: string, folder: string): Promise<voi
     await bersihkanJobLama();
   } catch (e) {
     console.error("Pembersihan job lama gagal", e);
+  }
+}
+
+/**
+ * KOMPRES OTOMATIS hasil Auto Edit (5 Okt 2026): setiap video jadi dikompres
+ * ke target VMAF ini (bawaan 90) di slot render yang sama, sebelum masuk Stok.
+ * AUTO_KOMPRES_VMAF=0 mematikannya. Tidak pernah menggagalkan render: bila
+ * kompres gagal atau tidak memperkecil, video hasil render dipakai apa adanya.
+ */
+const AUTO_KOMPRES_VMAF = (() => {
+  const n = Number.parseFloat(process.env.AUTO_KOMPRES_VMAF ?? "90");
+  return Number.isFinite(n) && n > 0 && n <= 99 ? n : 0;
+})();
+
+async function kompresOtomatis(
+  jobId: string,
+  hasil: string,
+  folder: string,
+  catat: (teks: string) => Promise<void>,
+): Promise<{ size_awal: number; hemat_persen: number; vmaf: number | null } | null> {
+  if (!AUTO_KOMPRES_VMAF) return null;
+  const sementara = path.join(folder, "kompres.mp4");
+  try {
+    await tulisStatus(jobId, { progress: 99, log: `Mengompres otomatis (kualitas VMAF ${AUTO_KOMPRES_VMAF})…` });
+    const k = await kompresVideo(hasil, folder, AUTO_KOMPRES_VMAF, await durasiVideo(hasil), {
+      keluaran: sementara,
+      utas: String(process.env.VIDEO_THREADS ?? "").trim() || "2",
+      progress: async () => {},
+      log: catat,
+      batal: () => dimintaBatal(jobId),
+    });
+    if (!k.diperkecil) {
+      hapusDiam(sementara);
+      return null;
+    }
+    fs.renameSync(sementara, hasil);
+    return {
+      size_awal: k.size_awal,
+      hemat_persen: Math.round((100 * (k.size_awal - k.size)) / k.size_awal),
+      vmaf: k.vmaf,
+    };
+  } catch (e) {
+    hapusDiam(sementara);
+    hapusDiam(path.join(folder, "kerja-kompres"), true);
+    if (e instanceof Dibatalkan) throw e;
+    console.warn(`Kompres otomatis ${jobId} dilewati:`, e instanceof Error ? e.message : e);
+    return null;
   }
 }
 
@@ -118,6 +167,7 @@ export async function renderVideo(m: MuatanRender): Promise<{ job_id: string; st
     });
     // Sumber tidak dipakai lagi; hapus supaya disk hemat.
     hapusDiam(sumber);
+    const kompres = await kompresOtomatis(jobId, hasil, folder, catat);
 
     try {
       const mulai = Number((await bacaStatus(jobId)).mulai_proses ?? 0);
@@ -133,7 +183,8 @@ export async function renderVideo(m: MuatanRender): Promise<{ job_id: string; st
       url: "",
       durasi: await durasiVideo(hasil),
       size: fs.statSync(hasil).size,
-      log: "Video siap diunduh.",
+      ...(kompres ? { size_awal: kompres.size_awal, hemat_persen: kompres.hemat_persen, vmaf: kompres.vmaf } : {}),
+      log: kompres ? `Video siap — dikompres otomatis, hemat ${kompres.hemat_persen}%.` : "Video siap diunduh.",
     });
     bersihkanBerkasKerja(folder);
     await bersihkanJobLama();
@@ -180,7 +231,7 @@ export async function kompresJob(m: MuatanRender): Promise<{ job_id: string; sta
     const masukan = path.join(folder, String((st as Record<string, unknown>).masukan ?? ""));
     if (!fs.existsSync(masukan)) throw new GalatVideo("Berkas video yang akan dikompres tidak ditemukan.");
     await tulisStatus(jobId, { status: "rendering", progress: 0, task_id: jobId, mulai_proses: Date.now() / 1000 });
-    const hasil = await kompresVideo(masukan, folder, mutuSah(m.mutu), await durasiVideo(masukan), {
+    const hasil = await kompresVideo(masukan, folder, TARGET_VMAF[mutuSah(m.mutu)], await durasiVideo(masukan), {
       progress: (p) => tulisStatus(jobId, { progress: p }).then(() => undefined),
       log: catat,
       batal: () => dimintaBatal(jobId),
