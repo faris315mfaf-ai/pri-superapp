@@ -19,12 +19,20 @@ export function urlApi(path: string): string {
   return path.startsWith("/api/") ? `/api/autoedit/${path.slice(5)}` : path;
 }
 
+/**
+ * Header penanda AKUN TIM (5 Okt 2026): permintaan dari modul TV Rakyat
+ * Official memakai template & stok bersama tim, bukan milik pribadi.
+ * Gerbang /api/autoedit yang memeriksa keanggotaan timnya.
+ */
+export const HEADER_TIM = "X-Autoedit-Tim";
+
 /** `fetch` ke layanan Auto Edit dengan token SuperApp di header Authorization. */
-export function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+export function apiFetch(path: string, init: RequestInit = {}, tim?: string | null): Promise<Response> {
   const headers = new Headers(init.headers || {});
   // Token hanya untuk jalur sendiri — alamat luar tidak boleh ikut menerimanya.
   const token = path.startsWith("/api/") ? ambilToken() : "";
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (tim && path.startsWith("/api/")) headers.set(HEADER_TIM, tim);
   return fetch(urlApi(path), { ...init, headers });
 }
 
@@ -79,12 +87,14 @@ export function apiUnggah(
   path: string,
   file: File,
   onProgres: (persen: number) => void,
+  tim?: string | null,
 ): Promise<{ ok: boolean; status: number; data: Record<string, any> }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", urlApi(path));
     const token = path.startsWith("/api/") ? ambilToken() : "";
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    if (tim && path.startsWith("/api/")) xhr.setRequestHeader(HEADER_TIM, tim);
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && e.total > 0) {
         onProgres(Math.min(100, Math.round((e.loaded / e.total) * 100)));

@@ -6,6 +6,7 @@
 import {
   bolehEditOtomatisServer,
   galatAutoEdit,
+  identitasTim,
   jalurStokTvr,
   keluargaAutoEdit,
   teruskanAutoEdit,
@@ -26,6 +27,17 @@ async function tangani(
   } catch {
     return galatAutoEdit(401, "Sesi tidak berlaku. Silakan masuk lagi.");
   }
+  // Akun TIM (5 Okt 2026): modul TV Rakyat Official memakai template & stok
+  // bersama tim. Hanya jalur TVR; anggota tim dipastikan di identitasTim.
+  const tim = (request.headers.get("x-autoedit-tim") ?? "").trim().toLowerCase();
+  if (tim) {
+    const idTim = await identitasTim(user, tim);
+    const { jalur } = await params;
+    const j = jalur ?? [];
+    if (!idTim || j[0] !== "tvr") return galatAutoEdit(404, "Tidak ditemukan");
+    return teruskanAutoEdit(request, j, idTim, new Set(["tvr"]));
+  }
+
   // Tanpa izin: 404, bukan 403 — modul ini tidak perlu diumumkan.
   const keluarga = keluargaAutoEdit(user);
   if (keluarga.size === 0) return galatAutoEdit(404, "Tidak ditemukan");

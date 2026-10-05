@@ -58,6 +58,10 @@ services:
       MEDIA_DIR: /data/media
       # Jatah penyimpanan per akun (template + stok + render): 2 GB (5 Okt 2026).
       KUOTA_AKUN_MB: "2048"
+      # Akun TIM TV Rakyat Official (lib/autoedit ID_TIM.tv = 900000001):
+      # 5 GB & 150 video bersama seluruh tim.
+      KUOTA_KHUSUS_MB: "pri-900000001=5120"
+      TVR_MAKS_STOK_KHUSUS: "pri-900000001=150"
       VIDEO_SLOT_MAKS: "10"
       TZ: Asia/Jakarta
     volumes:
@@ -100,6 +104,10 @@ services:
       MEDIA_DIR: /data/media
       # Jatah penyimpanan per akun (template + stok + render): 2 GB (5 Okt 2026).
       KUOTA_AKUN_MB: "2048"
+      # Akun TIM TV Rakyat Official (lib/autoedit ID_TIM.tv = 900000001):
+      # 5 GB & 150 video bersama seluruh tim.
+      KUOTA_KHUSUS_MB: "pri-900000001=5120"
+      TVR_MAKS_STOK_KHUSUS: "pri-900000001=150"
       VIDEO_WORKER_PARALEL: "3"
       VIDEO_SLOT_MAKS: "10"
       VIDEO_THREADS: "2"

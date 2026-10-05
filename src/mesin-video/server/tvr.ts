@@ -19,7 +19,7 @@ import { GalatVideo, type Job, type Template } from "../jenis";
 import { aman, folderUnggahan, pemilikUnggahan, templatePath } from "../jalur";
 import { FFMPEG_BIN, FFPROBE_BIN, MAX_SOURCE_UPLOAD_MB } from "../konfig";
 import { kompositStatis, pngRgb } from "../komposit";
-import { batasByte, lupakan, pemakaianByte } from "../kuota";
+import { batasByte, lupakan, pemakaianByte, petaKhusus } from "../kuota";
 import { denganKunci } from "../kunci";
 import { pastikanIsiMedia, probe, punyaAlpha, rapikanVideo } from "../media";
 import {
@@ -460,6 +460,9 @@ const JobBody = z.object({
 // memilih dari stok ini.
 
 const MAKS_STOK = Math.max(1, Math.trunc(angkaEnv("TVR_MAKS_STOK", 50)));
+// Batas stok khusus per pemilik, mis. akun tim TV Rakyat Official (5 Okt 2026).
+const MAKS_STOK_KHUSUS = petaKhusus("TVR_MAKS_STOK_KHUSUS");
+const maksStok = (a: string) => MAKS_STOK_KHUSUS.get(a.trim().toLowerCase()) ?? MAKS_STOK;
 
 /** Judul otomatis item stok dari tulisan berita (hook). */
 function judulDariHook(hook: string): string {
@@ -514,7 +517,7 @@ function ringkasStok(job: Job): Record<string, unknown> {
 
 /** Stok = video jadi milik akun (hasil render + unggahan manual), terbaru dulu. */
 async function daftarStok(a: string): Promise<Job[]> {
-  return (await daftarJob(MAKS_STOK * 2, a)).filter((j) => j.status === "done" && Boolean(j.output));
+  return (await daftarJob(maksStok(a) * 2, a)).filter((j) => j.status === "done" && Boolean(j.output));
 }
 
 /** Keadaan yang dipantau halaman: job aktif (bila ada) + antrean + stok. */
@@ -530,7 +533,7 @@ async function stokDanAntrean(p: Pengguna): Promise<Record<string, unknown>> {
     job: aktif ? ringkasJob(aktif) : null,
     antrean,
     stok,
-    maks_stok: MAKS_STOK,
+    maks_stok: maksStok(a),
     kuota: {
       dipakai_mb: dipakai === null ? null : Math.round(dipakai / 1_048_576),
       batas_mb: Math.round(batasByte(a) / 1_048_576),
@@ -766,8 +769,8 @@ export function pasangRuteTvr(r: Router): void {
       // Hanya SATU render berjalan per akun; video jadi masuk Stok (tak
       // memblok). Job gagal/dibatalkan tidak menghalangi — biarkan tersapu.
       if (await jobAktif(a)) throw new GalatHttp(409, "Masih ada video yang sedang diproses. Tunggu sampai selesai.");
-      if ((await daftarStok(a)).length >= MAKS_STOK) {
-        throw new GalatHttp(409, `Stok video penuh (maksimal ${MAKS_STOK}). Hapus beberapa dulu.`);
+      if ((await daftarStok(a)).length >= maksStok(a)) {
+        throw new GalatHttp(409, `Stok video penuh (maksimal ${maksStok(a)}). Hapus beberapa dulu.`);
       }
       const url = await sumberSah(body.url, p);
       await pastikanKuota(p);
@@ -892,8 +895,8 @@ export function pasangRuteTvr(r: Router): void {
     const p = penggunaTvr(pm);
     const a = akun(p);
     await pastikanKuota(p);
-    if ((await daftarStok(a)).length >= MAKS_STOK) {
-      throw new GalatHttp(409, `Stok video penuh (maksimal ${MAKS_STOK}). Hapus beberapa dulu.`);
+    if ((await daftarStok(a)).length >= maksStok(a)) {
+      throw new GalatHttp(409, `Stok video penuh (maksimal ${maksStok(a)}). Hapus beberapa dulu.`);
     }
     const batas = Math.trunc(MAX_SOURCE_UPLOAD_MB * 1_048_576);
     await sediakanRuangUnggah(pm, batas);

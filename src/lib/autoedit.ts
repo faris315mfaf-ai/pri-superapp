@@ -16,6 +16,7 @@ import { Readable } from "node:stream";
 import type { ReadableStream as AliranNode } from "node:stream/web";
 import { bolehEditOtomatisTvr, modulDibuka } from "@/lib/peran";
 import { jumlahAkunTerhubung } from "@/lib/koneksi-tvr";
+import { wewenangTv } from "@/lib/tv-tim";
 
 const HEADER_MASUK = ["content-type", "content-length", "range", "accept"];
 const HEADER_KELUAR = [
@@ -72,6 +73,28 @@ export function keluargaAutoEdit(user: PenggunaGerbang): ReadonlySet<string> {
 export function jalurStokTvr(jalur: string[]): boolean {
   if (jalur[0] !== "tvr") return false;
   return jalur[1] === "stok" || (jalur[1] === "ringkas" && jalur.length === 2);
+}
+
+/**
+ * AKUN TIM di mesin (5 Okt 2026): template & stok video milik bersama satu
+ * tim, bukan pribadi. Identitasnya angka yang tidak mungkin dimiliki akun
+ * sungguhan (mesin hanya menerima id angka). Kuota & batas stoknya diatur
+ * di VPS mesin (KUOTA_KHUSUS_MB, TVR_MAKS_STOK_KHUSUS untuk pri-<id>).
+ */
+export const ID_TIM: Readonly<Record<string, string>> = { tv: "900000001" };
+
+/**
+ * Identitas akun tim bila `user` boleh memakainya, selain itu null.
+ * Tim "tv" (TV Rakyat Official): master, super admin, dan siapa pun yang
+ * berwenang memproses video TV — Pimred, ketua & anggota Divisi TV Rakyat,
+ * admin_tv, akun yang modul TV-nya dibuka master (lib/tv-tim).
+ */
+export async function identitasTim(user: PenggunaGerbang, tim: string): Promise<string | null> {
+  const id = ID_TIM[tim];
+  if (!id || !user || user.ujiBeban === true || !/^\d{1,12}$/.test(user.id ?? "")) return null;
+  if (user.role === "master" || user.role === "super_admin") return id;
+  const w = await wewenangTv(user as Parameters<typeof wewenangTv>[0]).catch(() => null);
+  return w?.proses ? id : null;
 }
 
 /** Syarat Edit Otomatis di server — aturan yang sama dengan layar (lib/peran). */

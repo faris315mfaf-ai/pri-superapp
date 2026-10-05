@@ -10,7 +10,7 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Tv, Newspaper, Send, Clapperboard, Activity, History, ListChecks, Settings, Tag, CalendarClock } from "lucide-react";
+import { Tv, Newspaper, Send, Clapperboard, Activity, History, ListChecks, Settings, Tag, CalendarClock, Film, Wand2 } from "lucide-react";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
 import { BeritaPanel } from "./berita-panel";
@@ -32,6 +32,9 @@ import type { Berita, HasilProsesVideo, User, VideoAntrian } from "@/types";
 import { adalahPimred } from "@/lib/jabatan";
 import { PanelVideoWajib } from "./panel-video-wajib";
 import { PanelJadwalTayang } from "./panel-jadwal-tayang";
+import { EditOtomatisTvr } from "@/features/tvr-ku/edit-otomatis-tvr";
+import { StokVideoTvr } from "@/features/tvr-ku/stok-video-tvr";
+import { KonteksTimAutoEdit } from "@/features/auto-edit/tim";
 
 type FaseTv = "form" | "proses" | "pratinjau";
 
@@ -79,6 +82,9 @@ export function TvScreen({
   const wewenang = useAppStore((s) => s.wewenangTv);
   const bolehProses = pimred || wewenang.proses;
   const bolehUpload = pimred || wewenang.upload;
+  // Edit Otomatis & Stok Video Tim: tim TV (wewenang proses) + super admin.
+  // Gerbang /api/autoedit menegakkan aturan yang sama (identitasTim).
+  const bolehAutoEditTim = bolehProses || user.role === "super_admin";
   const bolehAcc = pimred || wewenang.acc;
 
   // Video sumber yang dipilih admin untuk direplikasi (dari panel Berita).
@@ -337,6 +343,36 @@ export function TvScreen({
                 </motion.div>
               )}
             </AnimatePresence>
+          </SeksiLipat>
+        ) },
+        // Edit Otomatis & Stok Video TIM (5 Okt 2026): satu template & satu
+        // stok (5 GB) bersama seluruh tim TV Rakyat Official. Komponennya
+        // sama dengan TVR Saya; penanda tim "tv" membuat gerbang memakai
+        // akun tim, bukan akun pribadi.
+        bolehAutoEditTim && { id: "edit-otomatis-tim", judul: "Edit Otomatis Tim", ikon: Wand2, render: () => (
+          <SeksiLipat
+            id="tv-edit-otomatis-tim"
+            judul="Edit Otomatis Tim"
+            ikon={Wand2}
+            keterangan="Template bersama tim + edit video otomatis"
+            bawaanTerbuka
+          >
+            <KonteksTimAutoEdit.Provider value="tv">
+              <EditOtomatisTvr />
+            </KonteksTimAutoEdit.Provider>
+          </SeksiLipat>
+        ) },
+        bolehAutoEditTim && { id: "stok-video-tim", judul: "Stok Video Tim", ikon: Film, render: () => (
+          <SeksiLipat
+            id="tv-stok-video-tim"
+            judul="Stok Video Tim"
+            ikon={Film}
+            keterangan="Video jadi milik tim (maks 5 GB, terhapus otomatis 2 hari)"
+            bawaanTerbuka
+          >
+            <KonteksTimAutoEdit.Provider value="tv">
+              <StokVideoTvr />
+            </KonteksTimAutoEdit.Provider>
           </SeksiLipat>
         ) },
         bolehUpload && { id: "log", judul: "Log", ikon: Clapperboard, render: () => (

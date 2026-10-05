@@ -15,7 +15,8 @@ import { createPortal } from "react-dom";
 import { Check, ImagePlus, Loader2, ScanSearch, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "@/hooks/use-app-store";
 import { cn } from "@/lib/utils";
-import { apiFetch, apiUnggah, bacaJson, pesanGalat } from "@/features/auto-edit/api";
+import { bacaJson, pesanGalat } from "@/features/auto-edit/api";
+import { useApiAutoEdit } from "@/features/auto-edit/tim";
 import {
   INFO_SLOT,
   PILIHAN_RATA,
@@ -43,6 +44,7 @@ export function TemplateTvrModal({
   onTutup: () => void;
   onTersimpan: (t: KeadaanTemplateTvr) => void;
 }) {
+  const api = useApiAutoEdit();
   const [tpl, setTpl] = useState<KeadaanTemplateTvr>(awal);
   const [kotak, setKotak] = useState<KotakTeks | null>(awal.text_box);
   const [warna, setWarna] = useState<"white" | "black">(awal.teks_warna);
@@ -87,7 +89,7 @@ export function TemplateTvrModal({
         const q = new URLSearchParams({ warna, rata, kategori: kategoriBersih });
         if (kotakKunci) q.set("kotak", kotakKunci);
         if (badgeKunci) q.set("badge", badgeKunci);
-        const res = await apiFetch(`/api/tvr/template/pratinjau.png?${q.toString()}`, { cache: "no-store" });
+        const res = await api.fetch(`/api/tvr/template/pratinjau.png?${q.toString()}`, { cache: "no-store" });
         if (!res.ok) throw new Error(pesanGalat(res.status, await bacaJson(res), "Pratinjau gagal dimuat."));
         const blob = await res.blob();
         if (!hidup) return;
@@ -140,7 +142,7 @@ export function TemplateTvrModal({
     setPesan("");
     setUnggah({ slot, persen: 0 });
     try {
-      const { ok, status, data } = await apiUnggah(`/api/tvr/template/draf/${slot}`, file, (persen) =>
+      const { ok, status, data } = await api.unggah(`/api/tvr/template/draf/${slot}`, file, (persen) =>
         setUnggah((u) => (u && u.slot === slot ? { ...u, persen } : u)),
       );
       if (!ok) throw new Error(pesanGalat(status, data, `${INFO_SLOT[slot].judul} gagal diunggah.`));
@@ -205,7 +207,7 @@ export function TemplateTvrModal({
     setMendeteksi(true);
     setPesan("");
     try {
-      const res = await apiFetch("/api/tvr/template/deteksi", { method: "POST" });
+      const res = await api.fetch("/api/tvr/template/deteksi", { method: "POST" });
       const data = await bacaJson(res);
       if (!res.ok) throw new Error(pesanGalat(res.status, data, "Kotak tulisan tidak ditemukan."));
       setKotak(data.text_box as KotakTeks);
@@ -230,7 +232,7 @@ export function TemplateTvrModal({
     setMenyimpan(true);
     setPesan("");
     try {
-      const res = await apiFetch("/api/tvr/template", {
+      const res = await api.fetch("/api/tvr/template", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -260,7 +262,7 @@ export function TemplateTvrModal({
       setMenutup(true);
       // Draf yang tidak disimpan dibuang; gagal pun tidak menahan penutupan —
       // draf lama akan tertimpa unggahan berikutnya.
-      await apiFetch("/api/tvr/template/draf", { method: "DELETE" }).catch(() => undefined);
+      await api.fetch("/api/tvr/template/draf", { method: "DELETE" }).catch(() => undefined);
     }
     onTutup();
   }

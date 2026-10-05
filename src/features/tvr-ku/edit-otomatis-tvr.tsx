@@ -32,7 +32,8 @@ import { GlassSkeleton } from "@/components/pri-ui";
 import { toast } from "@/hooks/use-app-store";
 import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 import { cn } from "@/lib/utils";
-import { apiFetch, apiUnggah, bacaJson, pesanGalat } from "@/features/auto-edit/api";
+import { bacaJson, pesanGalat } from "@/features/auto-edit/api";
+import { useApiAutoEdit } from "@/features/auto-edit/tim";
 import { TemplateTvrModal } from "./template-tvr-modal";
 import { segarkanStokTvr } from "./stok-video-tvr";
 import {
@@ -48,6 +49,7 @@ import {
 type Unggahan = { url: string; name: string; size?: number; duration?: number | null };
 
 export function EditOtomatisTvr() {
+  const api = useApiAutoEdit();
   const [data, setData] = useState<RingkasTvr | null>(null);
   const [galatMuat, setGalatMuat] = useState("");
   const [muatUlang, setMuatUlang] = useState(0);
@@ -74,7 +76,7 @@ export function EditOtomatisTvr() {
     let hidup = true;
     void (async () => {
       try {
-        const res = await apiFetch("/api/tvr/ringkas", { cache: "no-store" });
+        const res = await api.fetch("/api/tvr/ringkas", { cache: "no-store" });
         const d = await bacaJson(res);
         if (!res.ok) throw new Error(pesanGalat(res.status, d, "Edit Otomatis gagal dimuat."));
         if (!hidup) return;
@@ -102,7 +104,7 @@ export function EditOtomatisTvr() {
       if (sedang || document.visibilityState !== "visible" || !tabAktifRef.current) return;
       sedang = true;
       try {
-        const res = await apiFetch("/api/tvr/jobs/saya", { cache: "no-store" });
+        const res = await api.fetch("/api/tvr/jobs/saya", { cache: "no-store" });
         if (!res.ok) return;
         const d = await bacaJson(res);
         if (!hidup) return;
@@ -170,7 +172,7 @@ export function EditOtomatisTvr() {
     setPesan("");
     setPersenSumber(0);
     try {
-      const { ok, status, data: d } = await apiUnggah("/api/tvr/sumber", file, setPersenSumber);
+      const { ok, status, data: d } = await api.unggah("/api/tvr/sumber", file, setPersenSumber);
       if (!ok) throw new Error(pesanGalat(status, d, "Video sumber gagal diunggah."));
       setUnggahan({ url: String(d.url), name: file.name, size: Number(d.size) || file.size, duration: d.duration ?? null });
     } catch (e) {
@@ -185,7 +187,7 @@ export function EditOtomatisTvr() {
     setMembuatHook(true);
     setPesan("");
     try {
-      const res = await apiFetch("/api/tvr/hook", {
+      const res = await api.fetch("/api/tvr/hook", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ naskah: naskah.trim().slice(0, 5000) }),
@@ -212,7 +214,7 @@ export function EditOtomatisTvr() {
     setMengirim(true);
     setPesan("");
     try {
-      const res = await apiFetch("/api/tvr/jobs", {
+      const res = await api.fetch("/api/tvr/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: alamatSumber, hook: hook.trim(), sumber: teksSumber.trim(), kategori: kategori.trim() }),
@@ -240,7 +242,7 @@ export function EditOtomatisTvr() {
     if (membatalkan) return;
     setMembatalkan(true);
     try {
-      const res = await apiFetch("/api/tvr/jobs/saya?hapus_sumber=false", { method: "DELETE" });
+      const res = await api.fetch("/api/tvr/jobs/saya?hapus_sumber=false", { method: "DELETE" });
       if (!res.ok) throw new Error(pesanGalat(res.status, await bacaJson(res), "Gagal. Coba lagi."));
       const lama = job;
       setData((d) => (d ? { ...d, job: null, antrean: null } : d));
@@ -273,15 +275,16 @@ export function EditOtomatisTvr() {
         <Wand2 className="h-5 w-5" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="font-heading text-[14px] font-bold text-teks-utama">Edit Otomatis</p>
+        <p className="font-heading text-[14px] font-bold text-teks-utama">{api.tim ? "Edit Otomatis Tim" : "Edit Otomatis"}</p>
         <p className="mt-0.5 text-[11px] leading-snug text-teks-sekunder">
           {template.siap ? "Template terpasang otomatis di setiap video." : "Buat template dulu, lalu buat video otomatis."}
+          {api.tim && " Template & antrean dipakai bersama seluruh tim — satu video diproses bergantian."}
         </p>
       </div>
       <button
         type="button"
         onClick={() => setBukaTemplate(true)}
-        data-tur="tvr-tombol-template"
+        data-tur={api.tim ? undefined : "tvr-tombol-template"}
         aria-label={template.siap ? "Edit template" : "Buat template"}
         title={template.siap ? "Edit template" : "Buat template"}
         className="btn-tekan flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-pri/15 text-pri"
@@ -292,7 +295,7 @@ export function EditOtomatisTvr() {
   );
 
   return (
-    <GlassCard className="p-4" dataTur="tvr-edit-otomatis">
+    <GlassCard className="p-4" dataTur={api.tim ? undefined : "tvr-edit-otomatis"}>
       {kepala}
 
       {!template.siap ? (

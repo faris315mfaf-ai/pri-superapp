@@ -17,9 +17,25 @@ const cache = new Map<string, { byte: number; sampai: number }>();
 
 export class KuotaHabis extends Error {}
 
-export function batasByte(_pemilik: string): number {
-  void _pemilik;
-  return KUOTA_AKUN_MB * 1_048_576;
+/**
+ * Batas khusus per pemilik dari env berbentuk "pri-900000001=5120,pri-7=3072"
+ * (5 Okt 2026: akun tim TV Rakyat Official 5 GB, anggota tetap KUOTA_AKUN_MB).
+ */
+export function petaKhusus(nama: string): Map<string, number> {
+  const peta = new Map<string, number>();
+  for (const bagian of String(process.env[nama] ?? "").split(",")) {
+    const [kunci, nilai] = bagian.split("=").map((x) => x.trim());
+    const n = Number(nilai);
+    if (kunci && Number.isFinite(n) && n > 0) peta.set(kunci.toLowerCase(), Math.trunc(n));
+  }
+  return peta;
+}
+
+const KUOTA_KHUSUS_MB = petaKhusus("KUOTA_KHUSUS_MB");
+
+export function batasByte(pemilik: string): number {
+  const khusus = KUOTA_KHUSUS_MB.get(String(pemilik ?? "").trim().toLowerCase());
+  return (khusus ?? KUOTA_AKUN_MB) * 1_048_576;
 }
 
 function ukuranFolder(folder: string): number {

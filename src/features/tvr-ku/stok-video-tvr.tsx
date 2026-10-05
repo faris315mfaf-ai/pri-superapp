@@ -41,7 +41,8 @@ import { GlassSkeleton } from "@/components/pri-ui";
 import { toast } from "@/hooks/use-app-store";
 import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 import { cn } from "@/lib/utils";
-import { apiFetch, apiUnggah, bacaJson, pesanGalat } from "@/features/auto-edit/api";
+import { bacaJson, pesanGalat } from "@/features/auto-edit/api";
+import { useApiAutoEdit } from "@/features/auto-edit/tim";
 import { UnggahSosmedSaya } from "./unggah-sosmed-saya";
 import {
   STATUS_AKTIF,
@@ -71,6 +72,7 @@ type KeadaanStok = {
 const MAKS_STOK_BAWAAN = 50;
 
 export function StokVideoTvr() {
+  const api = useApiAutoEdit();
   const [batas, setBatas] = useState<BatasTvr | null>(null);
   const [data, setData] = useState<KeadaanStok | null>(null);
   const [galatMuat, setGalatMuat] = useState("");
@@ -101,7 +103,7 @@ export function StokVideoTvr() {
     let hidup = true;
     void (async () => {
       try {
-        const res = await apiFetch("/api/tvr/ringkas", { cache: "no-store" });
+        const res = await api.fetch("/api/tvr/ringkas", { cache: "no-store" });
         const d = await bacaJson(res);
         if (!res.ok) throw new Error(pesanGalat(res.status, d, "Stok video gagal dimuat."));
         if (!hidup) return;
@@ -119,7 +121,7 @@ export function StokVideoTvr() {
 
   const segarStok = useCallback(async () => {
     try {
-      const res = await apiFetch("/api/tvr/stok", { cache: "no-store" });
+      const res = await api.fetch("/api/tvr/stok", { cache: "no-store" });
       if (!res.ok) return;
       terapkan(await bacaJson(res));
     } catch {
@@ -151,7 +153,7 @@ export function StokVideoTvr() {
 
   if (galatMuat && !data) {
     return (
-      <GlassCard className="p-4" dataTur="tvr-stok">
+      <GlassCard className="p-4" dataTur={api.tim ? undefined : "tvr-stok"}>
         <p className="text-[12.5px] text-teks-utama">{galatMuat}</p>
         <button
           type="button"
@@ -182,10 +184,10 @@ export function StokVideoTvr() {
     setPesan("");
     setPersenStok(0);
     try {
-      const { ok, status, data: d } = await apiUnggah("/api/tvr/stok", file, setPersenStok);
+      const { ok, status, data: d } = await api.unggah("/api/tvr/stok", file, setPersenStok);
       if (!ok) throw new Error(pesanGalat(status, d, "Gagal menambah ke stok."));
       terapkan(d);
-      toast("sukses", "Masuk stok", "Ketuk videonya lalu pilih Upload untuk memposting.");
+      toast("sukses", "Masuk stok", api.tim ? "Video tersimpan di Stok Video Tim." : "Ketuk videonya lalu pilih Upload untuk memposting.");
     } catch (e) {
       setPesan(e instanceof Error ? e.message : "Gagal menambah ke stok.");
     } finally {
@@ -195,7 +197,7 @@ export function StokVideoTvr() {
 
   /** Tarik video penuh satu item (blob → File). */
   async function ambilBerkas(item: StokTvr): Promise<File> {
-    const res = await apiFetch(`/api/tvr/stok/${item.id}/berkas`, { cache: "no-store" });
+    const res = await api.fetch(`/api/tvr/stok/${item.id}/berkas`, { cache: "no-store" });
     if (!res.ok) throw new Error(pesanGalat(res.status, await bacaJson(res), "Video gagal diambil."));
     const blob = await res.blob();
     return new File([blob], `${item.judul || "video"}.mp4`, { type: "video/mp4" });
@@ -261,7 +263,7 @@ export function StokVideoTvr() {
     if (hapusId) return;
     setHapusId(id);
     try {
-      const res = await apiFetch(`/api/tvr/stok/${id}`, { method: "DELETE" });
+      const res = await api.fetch(`/api/tvr/stok/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(pesanGalat(res.status, await bacaJson(res), "Gagal menghapus."));
       setData((d) => (d ? { ...d, stok: d.stok.filter((s) => s.id !== id) } : d));
       if (lihat?.item.id === id) tutupLihat();
@@ -276,7 +278,7 @@ export function StokVideoTvr() {
   /** Tandai item sudah dikirim ke sosmed (TIDAK dihapus — tetap di stok). */
   async function tandaiTerunggah(id: string) {
     try {
-      const res = await apiFetch(`/api/tvr/stok/${id}/terunggah`, { method: "POST" });
+      const res = await api.fetch(`/api/tvr/stok/${id}/terunggah`, { method: "POST" });
       if (!res.ok) throw new Error(pesanGalat(res.status, await bacaJson(res), "Gagal menandai."));
       terapkan(await bacaJson(res));
     } catch {
@@ -294,9 +296,11 @@ export function StokVideoTvr() {
         <Film className="h-5 w-5" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="font-heading text-[14px] font-bold text-teks-utama">Stok Video</p>
+        <p className="font-heading text-[14px] font-bold text-teks-utama">{api.tim ? "Stok Video Tim" : "Stok Video"}</p>
         <p className="mt-0.5 text-[11px] leading-snug text-teks-sekunder">
-          Video jadi ditahan di sini dulu, lalu diposting ke sosmed dari sini.
+          {api.tim
+            ? "Dipakai bersama seluruh tim TV Rakyat Official. Unduh videonya untuk diunggah ke akun Official."
+            : "Video jadi ditahan di sini dulu, lalu diposting ke sosmed dari sini."}
         </p>
       </div>
     </div>
@@ -305,7 +309,7 @@ export function StokVideoTvr() {
   // Form upload-post untuk satu item stok.
   if (unggahItem) {
     return (
-      <GlassCard className="p-4" dataTur="tvr-stok">
+      <GlassCard className="p-4" dataTur={api.tim ? undefined : "tvr-stok"}>
         <div className="mb-2 flex items-center gap-2">
           <button
             type="button"
@@ -336,7 +340,7 @@ export function StokVideoTvr() {
     kuota && kuota.dipakai_mb !== null && kuota.batas_mb > 0 ? Math.min(100, Math.round((100 * kuota.dipakai_mb) / kuota.batas_mb)) : null;
 
   return (
-    <GlassCard className="p-4" dataTur="tvr-stok">
+    <GlassCard className="p-4" dataTur={api.tim ? undefined : "tvr-stok"}>
       {kepala}
 
       {/* Aturan penyimpanan — ringkas, selalu terlihat */}
@@ -383,7 +387,7 @@ export function StokVideoTvr() {
       />
       <button
         type="button"
-        data-tur="tvr-stok-tambah"
+        data-tur={api.tim ? undefined : "tvr-stok-tambah"}
         onClick={() => inputStokRef.current?.click()}
         disabled={persenStok !== null || stok.length >= maksStok}
         className="btn-tekan mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-white disabled:opacity-60"
@@ -417,7 +421,8 @@ export function StokVideoTvr() {
             <StokItem
               key={it.id}
               item={it}
-              tandaTur={i === 0 ? "tvr-stok-item" : undefined}
+              tandaTur={i === 0 && !api.tim ? "tvr-stok-item" : undefined}
+              bolehUpload={!api.tim}
               menyiapkan={menyiapkan}
               hapusId={hapusId}
               unduhId={unduhId}
@@ -499,6 +504,8 @@ function InfoAturan({ ikon, nilai, label }: { ikon: React.ReactNode; nilai: stri
 // Satu item stok: thumbnail (ditarik sendiri), klik baris -> opsi mengembang.
 type StokItemProps = {
   item: StokTvr;
+  /** false di Stok Video Tim: Upload = akun sosmed PRIBADI, bukan Official. */
+  bolehUpload: boolean;
   tandaTur?: string;
   menyiapkan: string;
   hapusId: string;
@@ -510,6 +517,7 @@ type StokItemProps = {
 };
 
 function StokItem(q: StokItemProps) {
+  const api = useApiAutoEdit();
   const { item } = q;
   const [thumb, setThumb] = useState("");
   const [terbuka, setTerbuka] = useState(false);
@@ -521,7 +529,7 @@ function StokItem(q: StokItemProps) {
     let url = "";
     void (async () => {
       try {
-        const res = await apiFetch(`/api/tvr/stok/${item.id}/thumb`, { cache: "no-store" });
+        const res = await api.fetch(`/api/tvr/stok/${item.id}/thumb`, { cache: "no-store" });
         if (!res.ok) return;
         const blob = await res.blob();
         if (!hidup) return;
@@ -613,9 +621,14 @@ function StokItem(q: StokItemProps) {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-4 gap-1.5" data-tur={q.tandaTur ? "tvr-stok-aksi" : undefined}>
+                <div
+                  className={cn("grid gap-1.5", q.bolehUpload ? "grid-cols-4" : "grid-cols-3")}
+                  data-tur={q.tandaTur ? "tvr-stok-aksi" : undefined}
+                >
                   <AksiStok ikon={<Eye className="h-4 w-4" />} label="Lihat" onClick={() => q.onLihat(item)} loading={sibuk} />
-                  <AksiStok ikon={<Send className="h-4 w-4" />} label="Upload" onClick={() => q.onUpload(item)} loading={sibuk} utama />
+                  {q.bolehUpload && (
+                    <AksiStok ikon={<Send className="h-4 w-4" />} label="Upload" onClick={() => q.onUpload(item)} loading={sibuk} utama />
+                  )}
                   <AksiStok ikon={<Download className="h-4 w-4" />} label="Unduh" onClick={() => q.onUnduh(item)} loading={mengunduh} />
                   <AksiStok ikon={<Trash2 className="h-4 w-4" />} label="Hapus" onClick={() => setKonfirmHapus(true)} danger />
                 </div>
