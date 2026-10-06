@@ -43,6 +43,10 @@ export const DOWNLOAD_TIMEOUT_SECONDS = angka("VIDEO_DOWNLOAD_TIMEOUT", 600);
 export const PREVIEW_TIMEOUT_SECONDS = angka("VIDEO_PREVIEW_TIMEOUT", 45);
 export const SOURCE_CACHE_SECONDS = angka("VIDEO_SOURCE_CACHE_SECONDS", 21600);
 export const MAX_SOURCE_UPLOAD_MB = angka("VIDEO_MAX_SOURCE_UPLOAD_MB", 100);
+// Kompres Video menerima video lebih besar (6 Okt 2026): 1 GB. Video asli
+// dihapus begitu hasil kompresnya jadi (atau gagal) — yang tersisa hanya hasil.
+// Caddy di VPS aplikasi memberi jalur kompres batas tersendiri (vps/11, vps/21).
+export const MAX_KOMPRES_UPLOAD_MB = angka("VIDEO_MAX_KOMPRES_UPLOAD_MB", 1024);
 export const MAX_UNDUH_MB = Math.trunc(angka("VIDEO_MAX_UNDUH_MB", 200));
 export const AWALAN_UNGGAHAN = "upload://";
 

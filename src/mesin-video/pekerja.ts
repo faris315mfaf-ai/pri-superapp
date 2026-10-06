@@ -261,7 +261,7 @@ export async function kompresJob(m: MuatanRender): Promise<{ job_id: string; sta
     const pesan = e instanceof GalatVideo ? e.message : e instanceof Error ? `${e.name}: ${e.message}` : String(e);
     if (dibatal) await lupakanBatal(jobId);
     else console.error(`Kompres ${jobId} gagal`, e);
-    // Masukan (sampai 100 MB) tak berguna lagi; jangan makan kuota 48 jam.
+    // Masukan (sampai 1 GB) tak berguna lagi; jangan makan kuota 48 jam.
     try {
       for (const n of fs.existsSync(folder) ? fs.readdirSync(folder) : []) if (n.startsWith("masukan.")) hapusDiam(path.join(folder, n));
     } catch {

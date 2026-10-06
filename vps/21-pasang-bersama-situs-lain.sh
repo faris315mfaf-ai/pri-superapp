@@ -154,7 +154,15 @@ echo "  Caddy meneruskan ke: $TUJUAN"
 cat > /tmp/blok-aplikasi.caddy <<EOF
 $DOMAIN_APP {
 	encode zstd gzip
-	request_body {
+	# Unggahan video umumnya <= 100 MB; beri ruang lebih. Kompres Video
+	# menerima sampai 1 GB (6 Okt 2026, VIDEO_MAX_KOMPRES_UPLOAD_MB) —
+	# hanya jalur itu yang dilonggarkan.
+	@kompres path /api/autoedit/tvr/kompres /api/autoedit/tvr/kompres/*
+	request_body @kompres {
+		max_size 1100MB
+	}
+	@bukan_kompres not path /api/autoedit/tvr/kompres /api/autoedit/tvr/kompres/*
+	request_body @bukan_kompres {
 		max_size 210MB
 	}
 	reverse_proxy $TUJUAN {

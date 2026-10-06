@@ -17,7 +17,7 @@ import { rapikanGambar } from "../gambar";
 import { buatHook } from "../hook";
 import { GalatVideo, type Job, type Template } from "../jenis";
 import { aman, folderUnggahan, pemilikUnggahan, templatePath } from "../jalur";
-import { FFMPEG_BIN, FFPROBE_BIN, MAX_SOURCE_UPLOAD_MB } from "../konfig";
+import { FFMPEG_BIN, FFPROBE_BIN, MAX_KOMPRES_UPLOAD_MB, MAX_SOURCE_UPLOAD_MB } from "../konfig";
 import { kompositStatis, pngRgb } from "../komposit";
 import { batasByte, lupakan, pemakaianByte, petaKhusus } from "../kuota";
 import { mutuSah, TARGET_VMAF } from "../kompres";
@@ -1000,7 +1000,7 @@ export function pasangRuteTvr(r: Router): void {
 
   r.get(`${A}/kompres`, async (pm) => {
     const p = penggunaTvr(pm);
-    return { kompres: await daftarKompres(akun(p)), target_vmaf: TARGET_VMAF, maks_mb: MAX_SOURCE_UPLOAD_MB };
+    return { kompres: await daftarKompres(akun(p)), target_vmaf: TARGET_VMAF, maks_mb: MAX_KOMPRES_UPLOAD_MB };
   });
 
   r.post(`${A}/kompres`, async (pm) => {
@@ -1011,7 +1011,7 @@ export function pasangRuteTvr(r: Router): void {
     await pastikanAntreanMuat(1, p, maksJobAktif(a));
     await pastikanKuota(p);
     await pastikanStokMuat(a);
-    const batas = Math.trunc(MAX_SOURCE_UPLOAD_MB * 1_048_576);
+    const batas = Math.trunc(MAX_KOMPRES_UPLOAD_MB * 1_048_576);
     await sediakanRuangUnggah(pm, batas);
     const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
     const folder = jobPath(id);
@@ -1029,7 +1029,7 @@ export function pasangRuteTvr(r: Router): void {
           return path.join(folder, `masukan${akhiran(namaAsli)}`);
         },
         batas,
-        `Video melebihi ${f0(MAX_SOURCE_UPLOAD_MB)} MB.`,
+        `Video melebihi ${f0(MAX_KOMPRES_UPLOAD_MB)} MB.`,
       );
       await pastikanIsiMedia(hasil.jalur);
       await probe(hasil.jalur);

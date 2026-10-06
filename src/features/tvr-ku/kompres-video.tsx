@@ -48,6 +48,11 @@ const PILIHAN: { nilai: Mutu; judul: string; vmaf: number; ket: string }[] = [
 const JENIS = [".mp4", ".mov", ".m4v", ".webm"];
 const AKTIF = ["queued", "downloading", "rendering"];
 
+/** "1 GB", "100 MB" */
+function labelBatas(mb: number): string {
+  return mb >= 1024 ? `${Math.round((mb / 1024) * 10) / 10} GB` : `${mb} MB`;
+}
+
 export function KompresVideo() {
   const api = useApiAutoEdit();
   const [mutu, setMutu] = useState<Mutu>("seimbang");
@@ -117,7 +122,7 @@ export function KompresVideo() {
       return;
     }
     if (file.size > maksMb * 1_048_576) {
-      setPesan(`Video ${Math.round(file.size / 1_048_576)} MB melebihi batas ${maksMb} MB.`);
+      setPesan(`Video ${Math.round(file.size / 1_048_576)} MB melebihi batas ${labelBatas(maksMb)}.`);
       return;
     }
     setPesan("");
@@ -257,7 +262,7 @@ export function KompresVideo() {
         )}
       </button>
       <p className="mt-1.5 text-center text-[10.5px] text-teks-sekunder">
-        Maks {maksMb} MB · resolusi tetap asli · ±2–4 menit per menit video
+        Maks {labelBatas(maksMb)} · video asli dihapus setelah jadi · resolusi tetap asli · ±2–4 menit per menit video
       </p>
       {gagal.length > 0 && (
         <div className="mt-3 rounded-xl border border-gagal/30 bg-gagal/10 p-2.5" role="alert">
