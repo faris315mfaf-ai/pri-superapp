@@ -10,6 +10,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # PRI SuperApp — panduan agen (Codex / Claude)
 
+> **Mulai 7 Okt 2026 seluruh update dikerjakan Codex.** Baca dulu
+> [`docs/SERAH-TERIMA-CODEX.md`](docs/SERAH-TERIMA-CODEX.md): update terbaru
+> (desain Apple & tema master, tata letak lebar, Sayap Partai), cara migrasi
+> produksi, jebakan teknis, dan pekerjaan tertunda.
+
 Ditulis 5 Okt 2026 sebagai serah-terima antar-agen. **Jangan pernah menulis
 rahasia (password, kunci API, isi env) di berkas ini atau di repo.**
 
