@@ -7,7 +7,7 @@ import { bebasKewajiban } from "@/lib/jabatan";
 // modal tentang aplikasi, dan konfirmasi keluar.
 // ============================================================
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Bell,
@@ -91,6 +91,8 @@ import {
 import type { KomponenIkon, Role, User } from "@/types";
 import { LoncengDropdown } from "@/components/lonceng-dropdown";
 import { cn } from "@/lib/utils";
+import { useTataLebar } from "@/hooks/use-tata-lebar";
+import { useLebarWadah } from "@/hooks/use-kolom-wadah";
 import { SwitchKaca } from "./switch-kaca";
 import {
   ModalAkunSosmed,
@@ -432,6 +434,11 @@ export function ProfilScreen({
   // supaya sakelarnya langsung bergerak begitu ditekan.
   const [statusManual, setStatusManual] = useState<StatusPush | null>(null);
   // Pengaturan 2 tab (spek 1.2): Display vs Profil & Keamanan
+  // Tata letak lebar (7 Okt 2026, master): di bawah kartu profil, isi
+  // dibagi dua kolom — menu & kinerja di kiri, Pengaturan di kanan.
+  const lebar = useTataLebar();
+  const wadahRef = useRef<HTMLDivElement>(null);
+  const lebarWadah = useLebarWadah(wadahRef) ?? 0;
   const [tabPengaturan, setTabPengaturan] = useState<"display" | "keamanan">(
     "display",
   );
@@ -531,7 +538,7 @@ export function ProfilScreen({
   }, [muatMomen]);
 
   return (
-    <div className="kolom-aplikasi px-4 pt-5 pb-32">
+    <div ref={wadahRef} className={cn("kolom-aplikasi px-4 pt-5 pb-32", lebar && "kolom-lebar")}>
       {ultah && <ConfettiUltah />}
       {/* HERO GRADIENT (fix 1.19/4.3a): lonceng dropdown di kanan
           atas DALAM area gradient, avatar menumpuk setengah keluar. */}
@@ -707,6 +714,8 @@ export function ProfilScreen({
         </div>
       </FadeInUp>
 
+      <div className={cn(lebar && lebarWadah >= 900 && "grid grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] items-start gap-x-6")}>
+      <div className="min-w-0">
       {/* Ajakan melengkapi data baru (panggilan/tgl lahir/divisi) */}
       <KartuLengkapiData user={user} />
 
@@ -941,6 +950,9 @@ export function ProfilScreen({
         </FadeInUp>
       ) : null}
 
+      </div>
+
+      <div className="min-w-0">
       {/* Daftar pengaturan */}
       <FadeInUp delay={0.08}>
         <SectionTitle judul="Pengaturan" className="mt-6" />
@@ -972,7 +984,7 @@ export function ProfilScreen({
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:items-start">
+        <div className={cn("grid grid-cols-1 gap-2", !lebar && "md:grid-cols-2 md:items-start")}>
           {tabPengaturan === "display" && (
             <>
               {/* 1. Mode Tema — sinkron dengan store global */}
@@ -1226,6 +1238,8 @@ export function ProfilScreen({
           PRI SuperApp · © 2026 Partai Rakyat Indonesia
         </p>
       </FadeInUp>
+      </div>
+      </div>
 
       {modalChangelog && (
         <ModalChangelog onTutup={() => setModalChangelog(false)} />

@@ -8,7 +8,7 @@
 // aktivitas terbaru — semua dengan animasi FadeInUp bertahap.
 // ============================================================
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { JamDigital } from "@/components/jam-digital";
 import { AlertTriangle, Bell } from "lucide-react";
 import { TitikOnline, AvatarInisial, EmptyState, FadeInUp, GlassSkeleton, ThemeToggle, SectionTitle } from "@/components/pri-ui";
@@ -37,6 +37,9 @@ import { CincinJuara } from "@/features/peringkat/cincin-mythic";
 import { LencanaOnline } from "@/components/lencana-online";
 import { ModalStatus } from "@/components/modal-status";
 import { useModulAktif } from "@/hooks/use-modul";
+import { useTataLebar } from "@/hooks/use-tata-lebar";
+import { useLebarWadah } from "@/hooks/use-kolom-wadah";
+import { cn } from "@/lib/utils";
 type DashboardScreenProps = {
   user: User;
   /** Buka HR Center — kosong bila pemakai tidak punya modulnya (10 Sep 2026). */
@@ -144,9 +147,16 @@ export function DashboardScreen({
   });
 
   const namaPanggilan = namaSapaan(user);
+  // Tata letak lebar (7 Okt 2026, master): dompet | pengumuman + ringkasan
+  // berdampingan, Semua Dashboard 4 kolom, seksi bawah 2 kolom.
+  const lebar = useTataLebar();
+  // Lebar diukur dari wadah (bukan @container CSS: containment membuat
+  // modal fixed di dalamnya terkurung di wadah).
+  const wadahRef = useRef<HTMLDivElement>(null);
+  const lebarWadah = useLebarWadah(wadahRef) ?? 0;
 
   return (
-    <div className="kolom-aplikasi px-4 pt-5 pb-32">
+    <div ref={wadahRef} className={cn("kolom-aplikasi px-4 pt-5 pb-32", lebar && "kolom-lebar")}>
       {/* ===== Header sapaan ===== */}
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -216,9 +226,11 @@ export function DashboardScreen({
         </div>
       </header>
 
+      <div className={cn(lebar && lebarWadah >= 880 && "grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.6fr)] items-start gap-x-3")}>
       {/* Dompet koin ala e-wallet (5 Okt 2026): tampil di semua beranda */}
       <DompetKoinBeranda />
 
+      <div className="min-w-0">
       {/* Pengumuman terbaru — beranda tidak boleh ketinggalan info */}
       <KartuPengumumanTerbaru />
 
@@ -233,6 +245,8 @@ export function DashboardScreen({
             onBukaVideo={onBukaKpiVideo}
           />
         </FadeInUp>
+      </div>
+      </div>
       </div>
 
       {/* Database Anggota TIDAK lagi di sini (11 Sep 2026, permintaan user
@@ -261,7 +275,7 @@ export function DashboardScreen({
               <p className="mb-2 font-heading text-[13px] font-bold text-teks-utama">
                 Semua Dashboard
               </p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className={cn("grid grid-cols-2 gap-2", lebar && lebarWadah >= 680 && "grid-cols-[repeat(auto-fit,minmax(180px,1fr))]")}>
                 {daftar.map((d) => (
                   <button
                     key={d.kunci}
@@ -327,6 +341,8 @@ export function DashboardScreen({
           <TataLetakModul
             modul="dashboard"
             bungkusSeksi={false}
+            lebar={lebar}
+            maksKolom={2}
             seksi={
               [
                 onBukaKelolaPengguna && {
@@ -344,6 +360,7 @@ export function DashboardScreen({
                   id: "tvnasional",
                   judul: "TV Rakyat Nasional",
                   ikon: Globe2,
+                  bobot: 3,
                   render: () => (
                     <div>
                       <SectionTitle judul="TV Rakyat Nasional" className="mt-6" />

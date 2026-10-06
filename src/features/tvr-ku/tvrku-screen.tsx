@@ -99,6 +99,7 @@ import { SiaranSerentak } from "./siaran-serentak";
 import { StudioPalugodam } from "./studio-palugodam";
 import { InsightSayaPanel } from "./insight-saya-panel";
 import { cn } from "@/lib/utils";
+import { useTataLebar } from "@/hooks/use-tata-lebar";
 import { useModulAktif } from "@/hooks/use-modul";
 import { PanelVideoWajib } from "@/features/tv-rakyat/panel-video-wajib";
 
@@ -595,6 +596,7 @@ export function TvrKuScreen({
   // tanpa kata sandi, seluruh aplikasi) — bukan lagi header X-Sebagai yang
   // hanya berlaku di modul ini. Lihat lib/kendali-klien.
   const bolehKendali = adalahAdminStudio(userAsli);
+  const tataLebar = useTataLebar();
   const _user: User = userAsli;
   function pilihKendali(a: AnggotaKendali | null) {
     if (!a) return;
@@ -846,7 +848,7 @@ export function TvrKuScreen({
   }
 
   return (
-    <div className="kolom-aplikasi px-4 pt-5 pb-32">
+    <div className={cn("kolom-aplikasi px-4 pt-5 pb-32", tataLebar && "kolom-lebar")}>
       {/* Header */}
       {!tanpaHeader && (
       <header className="flex items-start justify-between gap-3">
@@ -885,6 +887,8 @@ export function TvrKuScreen({
         // disembunyikan pengguna di mode lengkap tidak ikut hilang di sini.
         modul={hanyaSeksi ? "tvrku-simpel" : "tvrku"}
         bungkusSeksi={false}
+        // Tata letak lebar (7 Okt 2026, master): seksi dibagi 2–3 kolom.
+        lebar={tataLebar}
         seksi={([
         // Stok Video (5 Okt 2026): cara posting baru untuk semua akun — video
         // jadi ditahan di stok dulu, lalu diunggah ke sosmed dari sana.
@@ -893,6 +897,7 @@ export function TvrKuScreen({
         {
           id: "stok-video",
           pin: true,
+          bobot: 3,
           segmen: "Stok Video",
           judul: "Stok Video",
           ikon: Video,
@@ -1180,6 +1185,7 @@ export function TvrKuScreen({
         {
           id: "edit-otomatis",
           segmen: "Unggah & Jadwal",
+          bobot: 4,
           judul: "Edit Otomatis",
           ikon: Clapperboard,
           keterangan: "Template pribadi + edit video otomatis",

@@ -1636,3 +1636,11 @@ html[data-desain="apple"] .hero-profil input[class*="border-white"] {
 html[data-desain="apple"] .kartu-identitas {
   margin-top: 10px !important;
 }
+
+/* Layar setinggi layar (Chat terbagi, 7 Okt 2026): saat navigasi berupa
+   Dock, sisakan ruang bawah supaya isi tidak tertutup Dock. */
+@media (min-width: 1024px) {
+  html[data-nav="dock"] .ruang-dock {
+    padding-bottom: 104px;
+  }
+}

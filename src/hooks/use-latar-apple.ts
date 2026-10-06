@@ -10,6 +10,9 @@
 // pemakai (latar di belakang setiap layar + pemilih di Profil) lewat
 // useSyncExternalStore.
 //
+// Belum pernah memilih = null → tema bawaan akun (latarBawaan: akun uji
+// coba Pagi, master lain Classic).
+//
 // Aturan: latar Malam hanya berlaku di mode gelap — di mode terang yang
 // tampil Pagi (lihat latarEfektif). Classic mematikan desain Apple
 // sepenuhnya (tema, latar, Dock) — lihat temaApple.
@@ -17,6 +20,8 @@
 
 import { useCallback, useSyncExternalStore } from "react";
 import { getPreferensi, simpanPreferensi } from "@/services";
+import { useAppStore } from "@/hooks/use-app-store";
+import { latarBawaan } from "@/lib/desain-apple";
 
 export type Latar = "pagi" | "sore" | "malam" | "classic";
 const SAH: readonly Latar[] = ["pagi", "sore", "malam", "classic"];
@@ -24,18 +29,20 @@ const KUNCI_LOKAL = "pri:latar";
 const PERISTIWA = "pri:latar";
 
 let nilai: Latar | null = null;
+let sudahBaca = false;
 let sudahTarikServer = false;
 
 function sah(v: unknown): Latar | null {
   return SAH.includes(v as Latar) ? (v as Latar) : null;
 }
 
-function baca(): Latar {
-  if (nilai) return nilai;
+function baca(): Latar | null {
+  if (sudahBaca) return nilai;
+  sudahBaca = true;
   try {
-    nilai = sah(localStorage.getItem(KUNCI_LOKAL)) ?? "pagi";
+    nilai = sah(localStorage.getItem(KUNCI_LOKAL));
   } catch {
-    nilai = "pagi";
+    nilai = null;
   }
   return nilai;
 }
@@ -76,9 +83,12 @@ export function temaApple(latar: Latar): boolean {
 }
 
 export function useLatarApple(): [Latar, (l: Latar) => void] {
-  const latar = useSyncExternalStore(langgan, baca, () => "pagi" as Latar);
+  const tersimpan = useSyncExternalStore(langgan, baca, () => null);
+  const bawaan = useAppStore((s) => latarBawaan(s.user));
+  const latar = tersimpan ?? bawaan;
   const atur = useCallback((l: Latar) => {
     nilai = l;
+    sudahBaca = true;
     try {
       localStorage.setItem(KUNCI_LOKAL, l);
     } catch {

@@ -46,6 +46,7 @@ export function PanelGrup({
   anggota,
   onKembali,
   onSegarkanDaftar,
+  tertanam = false,
 }: {
   user: User;
   divisi: string;
@@ -55,6 +56,8 @@ export function PanelGrup({
   anggota: number;
   onKembali: () => void;
   onSegarkanDaftar: () => void;
+  /** true = panel kanan Chat terbagi (bukan layar penuh). */
+  tertanam?: boolean;
 }) {
   const [pesan, setPesan] = useState<PesanGrup[]>([]);
   const [tulisan, setTulisan] = useState("");
@@ -192,7 +195,16 @@ export function PanelGrup({
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col lg:left-60">
+    <div
+      className={
+        tertanam
+          // Terbagi (7 Okt 2026, master): panel kanan Chat, tanpa
+          // backdrop-filter di akar supaya modal fixed di dalamnya tetap
+          // menutupi seluruh layar (filter membuat containing block baru).
+          ? "relative flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border border-white/50 bg-white/60 shadow-[0_8px_28px_rgba(0,0,0,0.1)] dark:border-white/10 dark:bg-black/35"
+          : "fixed inset-0 z-[60] flex flex-col lg:left-60"
+      }
+    >
       {/* Header grup */}
       <header className="glass-strong flex shrink-0 items-center gap-3 px-4 py-3">
         <button

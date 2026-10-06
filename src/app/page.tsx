@@ -22,7 +22,8 @@ import { BottomNav, type KunciTab } from "@/components/bottom-nav";
 import { PagarGalat } from "@/components/pagar-galat";
 import { SideNav } from "@/components/side-nav";
 import { Dock } from "@/components/dock";
-import { bolehDesainApple } from "@/lib/desain-apple";
+import { bolehDesainApple, tataLebar } from "@/lib/desain-apple";
+import { useLayarLebar } from "@/hooks/use-layar-lebar";
 import { useModeNav } from "@/hooks/use-mode-nav";
 import { temaApple, useLatarApple } from "@/hooks/use-latar-apple";
 import { SplashScreen } from "@/features/auth/splash-screen";
@@ -360,6 +361,15 @@ export default function Page() {
     if (desainApple) document.documentElement.dataset.desain = "apple";
     else delete document.documentElement.dataset.desain;
   }, [desainApple]);
+  // <html data-nav="dock">: layar setinggi layar (Chat terbagi) memberi
+  // ruang bawah untuk Dock lewat kelas .ruang-dock (globals.css).
+  useEffect(() => {
+    if (pakaiDock) document.documentElement.dataset.nav = "dock";
+    else delete document.documentElement.dataset.nav;
+  }, [pakaiDock]);
+  // Tata letak lebar (7 Okt 2026, master): di PC notifikasi tampil sebagai
+  // panel samping kanan di atas layar yang sedang dibuka, bukan layar penuh.
+  const layarLebar = useLayarLebar();
   // Jarak konten dari navigasi kiri: Dock = tanpa rel; sidebar Apple
   // mengambang (12 + 240 + 12 px); sidebar biasa menempel (240 px).
   const kiriKonten = pakaiDock ? "" : desainApple ? "lg:pl-[264px]" : "lg:pl-60";
@@ -1283,6 +1293,7 @@ export default function Page() {
     });
   }
 
+  const panelNotif = subLayar?.nama === "notifikasi" && layarLebar && tataLebar(user);
   const kunciSub = subLayar
     ? subLayar.nama === "qc-akun"
       ? `qc-akun-${subLayar.akunWajib}`
@@ -1437,16 +1448,33 @@ export default function Page() {
 
           {/* Sub-layar QC: slide dari kanan, menutupi layar tab */}
           <AnimatePresence>
+            {panelNotif && (
+              <motion.div
+                key="tirai-notif"
+                aria-hidden="true"
+                onClick={() => setSubLayar(null)}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="fixed inset-0 z-40 bg-black/15"
+              />
+            )}
             {subLayar && (
               <motion.div
                 key={kunciSub}
-                initial={{ x: "100%" }}
+                initial={{ x: panelNotif ? "110%" : "100%" }}
                 animate={{ x: 0 }}
-                exit={{ x: "100%" }}
+                exit={{ x: panelNotif ? "110%" : "100%" }}
                 transition={{ type: "spring", stiffness: 340, damping: 34 }}
-                className={cn("fixed inset-0 z-40 overflow-y-auto overscroll-contain", kiriSubLayar)}
+                className={cn(
+                  "fixed z-40 overflow-y-auto overscroll-contain",
+                  panelNotif
+                    ? "glass-strong top-3 right-3 bottom-3 w-[420px] rounded-3xl shadow-2xl"
+                    : cn("inset-0", kiriSubLayar),
+                )}
               >
-                <MeshBackground />
+                {!panelNotif && <MeshBackground />}
                 <PagarGalat nama={subLayar.nama}>
                   {subLayar.nama === "kelola-pengguna" || subLayar.nama === "tabel-anggota" ? (
                     // Kelola Pengguna DIGABUNG ke Database Anggota (23 Sep 2026):

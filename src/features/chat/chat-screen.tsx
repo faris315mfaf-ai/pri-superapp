@@ -81,6 +81,8 @@ import { jamWIB, tanggalIndonesia } from "@/lib/format";
 import type { User } from "@/types";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { cn } from "@/lib/utils";
+import { useTataLebar } from "@/hooks/use-tata-lebar";
+import { useLebarWadah } from "@/hooks/use-kolom-wadah";
 import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 
 const EMOJI = [
@@ -100,6 +102,7 @@ function PanelPercakapan({
   bolehKirimKoin,
   onKembali,
   onSegarkanDaftar,
+  tertanam = false,
 }: {
   kontak: ChatKontak;
   idKu: string;
@@ -107,6 +110,8 @@ function PanelPercakapan({
   bolehKirimKoin: boolean;
   onKembali: () => void;
   onSegarkanDaftar: () => void;
+  /** true = panel kanan Chat terbagi (bukan layar penuh). */
+  tertanam?: boolean;
 }) {
   // Titik hijau "sedang membuka aplikasi" (10 Sep 2026) — daftar hadir
   // diperbarui detak tiap 10 detik.
@@ -276,7 +281,16 @@ function PanelPercakapan({
   const menungguDia = statusKontak === "menunggu" && dimintaOleh === idKu;
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col lg:left-60">
+    <div
+      className={
+        tertanam
+          // Terbagi (7 Okt 2026, master): panel kanan Chat, tanpa
+          // backdrop-filter di akar supaya modal fixed di dalamnya tetap
+          // menutupi seluruh layar (filter membuat containing block baru).
+          ? "relative flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border border-white/50 bg-white/60 shadow-[0_8px_28px_rgba(0,0,0,0.1)] dark:border-white/10 dark:bg-black/35"
+          : "fixed inset-0 z-[60] flex flex-col lg:left-60"
+      }
+    >
       {/* Header percakapan */}
       <header className="glass-strong flex shrink-0 items-center gap-3 px-4 py-3">
         <button
@@ -945,6 +959,14 @@ export function ChatScreen({
   // Grup divisi (spek 4.2) — null bila belum berdivisi
   const [grup, setGrup] = useState<InfoGrupDivisi | null>(null);
   const [grupBuka, setGrupBuka] = useState(false);
+  // CHAT TERBAGI (7 Okt 2026, akun master): bila wadah ≥ 760 px, daftar
+  // di kiri dan percakapan di panel kanan — ala Messages di Mac — bukan
+  // layar penuh yang menutupi daftar. Lebar WADAH, jadi rel kiri/Dock
+  // ikut dihitung. Di HP tetap layar penuh meluncur seperti biasa.
+  const tataLebar = useTataLebar();
+  const wadahRef = useRef<HTMLDivElement>(null);
+  const lebarWadah = useLebarWadah(wadahRef);
+  const terbagi = tataLebar && (lebarWadah ?? 0) >= 760;
   const [modalPantau, setModalPantau] = useState(false);
   const tabAktifRef = useRefTabAktif();
 
@@ -1020,7 +1042,18 @@ export function ChatScreen({
   }
 
   return (
-    <div className="kolom-aplikasi px-4 pt-5 pb-32">
+    <div
+      ref={wadahRef}
+      className={cn(
+        "kolom-aplikasi px-4 pt-5",
+        tataLebar && "kolom-lebar",
+        // Terbagi: setinggi layar; daftar & percakapan bergulir sendiri.
+        // Ruang bawah untuk BottomNav (tablet) / Dock (ruang-dock).
+        terbagi ? "ruang-dock flex h-dvh flex-col pb-28 lg:pb-5" : "pb-32",
+      )}
+    >
+      <div className={cn(terbagi && "grid min-h-0 flex-1 grid-cols-[minmax(300px,380px)_minmax(0,1fr)] gap-4")}>
+      <div className={cn(terbagi && "scrollbar-tipis min-h-0 overflow-y-auto pr-1 pb-4")}>
       {/* Header */}
       <header className="flex items-start justify-between gap-3">
         <div>
@@ -1078,7 +1111,10 @@ export function ChatScreen({
         <FadeInUp>
           <button
             type="button"
-            onClick={() => setGrupBuka(true)}
+            onClick={() => {
+              setKontakAktif(null);
+              setGrupBuka(true);
+            }}
             className="btn-tekan mt-4 w-full text-left"
           >
             <GlassCard className="flex items-center gap-3 border border-pri/25 p-3">
@@ -1167,10 +1203,19 @@ export function ChatScreen({
                 <button
                   key={k.id}
                   type="button"
-                  onClick={() => setKontakAktif(k)}
+                  onClick={() => {
+                    setGrupBuka(false);
+                    setKontakAktif(k);
+                  }}
+                  aria-current={terbagi && kontakAktif?.id === k.id ? "true" : undefined}
                   className="btn-tekan text-left"
                 >
-                  <GlassCard className="flex items-center gap-3 p-3">
+                  <GlassCard
+                    className={cn(
+                      "flex items-center gap-3 p-3",
+                      terbagi && kontakAktif?.id === k.id && "ring-2 ring-pri/50",
+                    )}
+                  >
                     <span className="relative shrink-0">
                       <CincinJuara userId={k.lawan_id} ukuran={44}>
                         {k.lawan_avatar ? (
@@ -1223,7 +1268,71 @@ export function ChatScreen({
         </div>
       </FadeInUp>
 
+      {terbagi && (
+        <button
+          type="button"
+          onClick={() => void bukaModalBaru()}
+          className="btn-tekan mt-3 flex h-10 w-full items-center justify-center gap-1.5 rounded-xl text-[13px] font-bold text-white"
+          style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+        >
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Chat baru
+        </button>
+      )}
+      </div>
+
+      {/* Panel kanan (terbagi): percakapan / grup yang dipilih */}
+      {terbagi && (
+        <div className="min-h-0">
+          {grupBuka && grup ? (
+            <PanelGrup
+              key={`grup-${grup.divisi}`}
+              tertanam
+              user={user}
+              divisi={grup.divisi}
+              namaGrup={grup.nama_grup}
+              fotoGrup={grup.foto_grup}
+              anggota={grup.anggota}
+              onKembali={() => {
+                setGrupBuka(false);
+                setMuatUlang((n) => n + 1);
+              }}
+              onSegarkanDaftar={() => setMuatUlang((n) => n + 1)}
+            />
+          ) : kontakAktif ? (
+            <PanelPercakapan
+              key={`chat-${kontakAktif.id}`}
+              tertanam
+              kontak={kontakAktif}
+              idKu={user.id}
+              bolehKirimKoin={user.role === "master"}
+              onKembali={() => {
+                setKontakAktif(null);
+                setMuatUlang((n) => n + 1);
+              }}
+              onSegarkanDaftar={() => setMuatUlang((n) => n + 1)}
+            />
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center gap-3 rounded-3xl border border-white/50 bg-white/40 p-8 text-center dark:border-white/10 dark:bg-black/25">
+              <span
+                className="flex h-14 w-14 items-center justify-center rounded-2xl text-white"
+                style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
+                aria-hidden="true"
+              >
+                <MessagesSquare className="h-6 w-6" />
+              </span>
+              <p className="font-heading text-base font-bold text-teks-utama">Pilih percakapan</p>
+              <p className="max-w-[280px] text-xs leading-snug text-teks-sekunder">
+                Ketuk nama di daftar kiri untuk membuka percakapannya di sini.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+      </div>
+
       {/* Tombol chat baru mengambang */}
+      {!terbagi && (
       <button
         type="button"
         onClick={() => void bukaModalBaru()}
@@ -1236,11 +1345,12 @@ export function ChatScreen({
       >
         <Plus className="h-6 w-6" />
       </button>
+      )}
 
       {/* Panel percakapan penuh */}
       <AnimatePresence>
         {/* Grup divisi meluncur masuk dengan animasi yang sama */}
-        {grupBuka && grup && (
+        {!terbagi && grupBuka && grup && (
           <motion.div
             key={`grup-${grup.divisi}`}
             initial={{ x: "100%" }}
@@ -1264,7 +1374,7 @@ export function ChatScreen({
             />
           </motion.div>
         )}
-        {kontakAktif && (
+        {!terbagi && kontakAktif && (
           <motion.div
             key={`chat-${kontakAktif.id}`}
             initial={{ x: "100%" }}

@@ -16,7 +16,7 @@
 // modul (aturan reusable 1.19 tetap dipegang).
 // ============================================================
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Reorder } from "framer-motion";
 import {
   Check,
@@ -31,6 +31,7 @@ import { SegmenJudul } from "@/components/pri-ui";
 import { getPreferensi, simpanPreferensi } from "@/services";
 import { toast } from "@/hooks/use-app-store";
 import { cn } from "@/lib/utils";
+import { useKolomWadah } from "@/hooks/use-kolom-wadah";
 
 export type SeksiModul = {
   /** Unik dalam modulnya — jadi bagian kunci preferensi & localStorage */
@@ -47,6 +48,11 @@ export type SeksiModul = {
   segmen?: string;
   /** true = selalu di atas mengikuti urutan bawaan, tak tergeser preferensi. */
   pin?: boolean;
+  /**
+   * Perkiraan tinggi relatif (bawaan 1) — dipakai mode `lebar` untuk
+   * membagi seksi ke kolom secara seimbang (mis. panel besar = 3).
+   */
+  bobot?: number;
   render: () => ReactNode;
 };
 
@@ -76,10 +82,38 @@ function susun(seksi: SeksiModul[], urutan: string[] | null): SeksiModul[] {
   return [...dipin, ...hasil];
 }
 
+/**
+ * Bagi butir ke n kolom BERURUTAN (kolom kiri diisi dulu) dengan total
+ * bobot tiap kolom sedekat mungkin ke rata-rata — tanpa memindah urutan.
+ */
+function bagiKolom<T extends { bobot: number }>(butir: T[], n: number): T[][] {
+  const kolom: T[][] = Array.from({ length: n }, () => []);
+  let sisa = butir.reduce((a, b) => a + b.bobot, 0);
+  let k = 0;
+  let isi = 0;
+  for (let i = 0; i < butir.length; i++) {
+    const b = butir[i];
+    const kolomSisa = n - k;
+    const target = sisa / kolomSisa;
+    // Pindah kolom bila menambah butir ini menjauhkan dari target, selama
+    // masih ada kolom berikutnya & butir yang cukup untuk mengisinya.
+    if (k < n - 1 && isi > 0 && isi + b.bobot / 2 > target && butir.length - i >= kolomSisa - 1) {
+      sisa -= isi;
+      k += 1;
+      isi = 0;
+    }
+    kolom[k].push(b);
+    isi += b.bobot;
+  }
+  return kolom.filter((kol) => kol.length > 0);
+}
+
 export function TataLetakModul({
   modul,
   seksi,
   bungkusSeksi = true,
+  lebar = false,
+  maksKolom = 3,
 }: {
   /** Nama modul, huruf kecil (mis. "beranda") — jadi kunci preferensi */
   modul: string;
@@ -90,7 +124,17 @@ export function TataLetakModul({
    * supaya tak ada kepala dobel — reorder & sembunyikan tetap jalan.
    */
   bungkusSeksi?: boolean;
+  /**
+   * Tata letak LEBAR (7 Okt 2026, akun master): di tablet & PC seksi
+   * dibagi ke 2–3 kolom menurut lebar wadah (bukan layar). Pembagian
+   * berurutan — kolom kiri dulu — dan seimbang menurut `bobot`, jadi
+   * urutan pilihan pengguna tetap terbaca. Mode Atur tetap satu lajur.
+   */
+  lebar?: boolean;
+  maksKolom?: 1 | 2 | 3;
 }) {
+  const wadahRef = useRef<HTMLDivElement>(null);
+  const kolomTerukur = useKolomWadah(wadahRef);
   const [urutan, setUrutan] = useState<string[] | null>(null);
   const [sembunyi, setSembunyi] = useState<string[]>([]);
   const [modeAtur, setModeAtur] = useState(false);
@@ -145,7 +189,7 @@ export function TataLetakModul({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div ref={wadahRef} className="flex flex-col gap-3">
       {/* Tombol mode atur — kecil, rata kanan, tidak mengganggu isi */}
       <div className="flex justify-end">
         <button
@@ -223,33 +267,54 @@ export function TataLetakModul({
         // Pembatas kelompok (SegmenJudul) muncul tiap kali `segmen` berganti.
         (() => {
           let segmenTerakhir: string | undefined;
-          return tersusun.map((s) => {
-            if (sembunyi.includes(s.id)) return null;
-            const kepala =
-              s.segmen && s.segmen !== segmenTerakhir ? <SegmenJudul label={s.segmen} /> : null;
-            if (s.segmen) segmenTerakhir = s.segmen;
-            // Seksi yang sudah punya kepala/kartu sendiri dirender apa adanya.
-            // id pembungkus dipakai untuk menggulir ke seksi (mis. dari beranda).
-            const isi = !bungkusSeksi ? (
-              s.render()
-            ) : (
-              <SeksiLipat
-                id={`${modul}-${s.id}`}
-                judul={s.judul}
-                ikon={s.ikon}
-                keterangan={s.keterangan}
-                bawaanTerbuka={s.bawaanTerbuka}
-              >
-                {s.render()}
-              </SeksiLipat>
-            );
-            return (
-              <div key={s.id} id={bungkusSeksi ? undefined : `${modul}-${s.id}`} className="scroll-mt-4">
-                {kepala}
-                {isi}
-              </div>
-            );
-          });
+          const butir = tersusun
+            .filter((s) => !sembunyi.includes(s.id))
+            .map((s) => {
+              const kepala =
+                s.segmen && s.segmen !== segmenTerakhir ? <SegmenJudul label={s.segmen} /> : null;
+              if (s.segmen) segmenTerakhir = s.segmen;
+              // Seksi yang sudah punya kepala/kartu sendiri dirender apa adanya.
+              // id pembungkus dipakai untuk menggulir ke seksi (mis. dari beranda).
+              const isi = !bungkusSeksi ? (
+                s.render()
+              ) : (
+                <SeksiLipat
+                  id={`${modul}-${s.id}`}
+                  judul={s.judul}
+                  ikon={s.ikon}
+                  keterangan={s.keterangan}
+                  bawaanTerbuka={s.bawaanTerbuka}
+                >
+                  {s.render()}
+                </SeksiLipat>
+              );
+              return {
+                bobot: s.bobot ?? 1,
+                el: (
+                  <div key={s.id} id={bungkusSeksi ? undefined : `${modul}-${s.id}`} className="min-w-0 scroll-mt-4">
+                    {kepala}
+                    {isi}
+                  </div>
+                ),
+              };
+            });
+          if (!lebar) return butir.map((b) => b.el);
+          // Mode lebar menunggu wadah terukur supaya seksi tidak dipasang
+          // dua kali (satu lajur lalu pindah kolom).
+          if (kolomTerukur === null) return null;
+          const n = Math.min(kolomTerukur, maksKolom);
+          return (
+            <div
+              className="grid items-start gap-3"
+              style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
+            >
+              {bagiKolom(butir, n).map((kol, i) => (
+                <div key={i} className="flex min-w-0 flex-col gap-3">
+                  {kol.map((b) => b.el)}
+                </div>
+              ))}
+            </div>
+          );
         })()
       )}
     </div>

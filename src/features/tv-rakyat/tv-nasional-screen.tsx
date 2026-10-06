@@ -21,7 +21,7 @@
 //     tren, platform, akun terbaik, jam posting terbaik, video teratas.
 // ============================================================
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Radio } from "lucide-react";
 import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
@@ -32,6 +32,9 @@ import { PanelInsightKategori } from "./panel-insight-kategori";
 import { PanelKenaikanNasional } from "./panel-kenaikan-nasional";
 import { PanelVideoHarian } from "./panel-video-harian";
 import { PanelAnalisisRingkas } from "./panel-analisis-ringkas";
+import { useTataLebar } from "@/hooks/use-tata-lebar";
+import { useLebarWadah } from "@/hooks/use-kolom-wadah";
+import { cn } from "@/lib/utils";
 
 // Halaman analisis membawa recharts — dimuat hanya saat dibuka.
 const AnalisisVideoScreen = dynamic(() => import("./analisis-video-screen").then((m) => m.AnalisisVideoScreen), {
@@ -48,6 +51,12 @@ export function TvNasionalScreen({
   // terpisah di navigasi: kembalinya ke tempat yang sama persis.
   const [halamanKategori, setHalamanKategori] = useState<string | null>(null);
   const [halamanAnalisis, setHalamanAnalisis] = useState(false);
+  // Tata letak lebar (7 Okt 2026, master): panel angka | panel insight
+  // berdampingan di layar lebar.
+  const lebar = useTataLebar();
+  const wadahRef = useRef<HTMLDivElement>(null);
+  const lebarWadah = useLebarWadah(wadahRef) ?? 0;
+  const duaKolom = lebar && lebarWadah >= 880;
 
   if (halamanAnalisis) {
     return <AnalisisVideoScreen onKembali={() => setHalamanAnalisis(false)} />;
@@ -63,7 +72,7 @@ export function TvNasionalScreen({
   }
 
   return (
-    <div className="kolom-aplikasi px-4 pb-32">
+    <div ref={wadahRef} className={cn("kolom-aplikasi px-4 pb-32", lebar && "kolom-lebar")}>
       <header className="flex items-start justify-between gap-3 pt-5">
         <div className="flex items-center gap-3">
           <span
@@ -91,6 +100,8 @@ export function TvNasionalScreen({
         </div>
       </header>
 
+      <div className={cn(duaKolom && "grid grid-cols-2 items-start gap-x-4")}>
+      <div className="min-w-0">
       <FadeInUp delay={0.03} className="mt-5">
         <PanelKenaikanNasional />
       </FadeInUp>
@@ -102,14 +113,19 @@ export function TvNasionalScreen({
       <FadeInUp delay={0.045} className="mt-4">
         <PanelVideoHarian />
       </FadeInUp>
+      </div>
 
-      <FadeInUp delay={0.06} className="mt-4">
+      <div className="min-w-0">
+
+      <FadeInUp delay={0.06} className={duaKolom ? "mt-5" : "mt-4"}>
         <PanelInsightKategori onBukaHalaman={(k) => setHalamanKategori(k)} />
       </FadeInUp>
 
       <FadeInUp delay={0.09} className="mt-4">
         <TvNasionalDashboard />
       </FadeInUp>
+      </div>
+      </div>
     </div>
   );
 }

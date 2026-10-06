@@ -54,7 +54,11 @@ function embedTerbaik(v: VideoInteraksi): { src: string; platform: string } | nu
   return null;
 }
 
-export function KartuVideoBaru() {
+/**
+ * lebar (7 Okt 2026, tata letak master): video tampil sebagai galeri
+ * 2–3 kolom menurut lebar kartu, bukan satu lajur embed raksasa.
+ */
+export function KartuVideoBaru({ lebar = false }: { lebar?: boolean } = {}) {
   const versiSegar = useVersiSegar();
   const [daftar, setDaftar] = useState<VideoInteraksi[] | null>(null);
 
@@ -112,7 +116,7 @@ export function KartuVideoBaru() {
 
   return (
     <FadeInUp delay={0.1}>
-      <GlassCard className="mt-4 p-4">
+      <GlassCard className={cn("mt-4 p-4", lebar && "@container")}>
         <div className="flex items-center gap-2">
           <PlaySquare className="h-4.5 w-4.5 text-pri" aria-hidden="true" />
           <p className="font-heading text-sm font-bold text-teks-utama">
@@ -129,7 +133,12 @@ export function KartuVideoBaru() {
           WhatsApp.
         </p>
 
-        <div className="mt-3 flex flex-col gap-2.5">
+        <div
+          className={cn(
+            "mt-3 flex flex-col gap-2.5",
+            lebar && "@min-[620px]:grid @min-[620px]:grid-cols-2 @min-[620px]:items-start @min-[940px]:grid-cols-3",
+          )}
+        >
           {daftar === null ? (
             <GlassSkeleton className="h-16 rounded-xl" />
           ) : (

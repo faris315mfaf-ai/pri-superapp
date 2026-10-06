@@ -64,6 +64,7 @@ import { SeksiLipat } from "@/components/seksi-lipat";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { useModulAktif } from "@/hooks/use-modul";
 import { cn } from "@/lib/utils";
+import { useTataLebar } from "@/hooks/use-tata-lebar";
 import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 
 // ------------------------------------------------------------
@@ -161,6 +162,8 @@ function QcScreenPenuh({
   // dengan mengeklik entri riwayat (memakai label PERSIS entri itu, jadi
   // data berlabel lama 00:00-23:59 pun tetap terbuka).
   const [periodePilih, setPeriodePilih] = useState<string>(() => periodeSaatIni());
+  // Tata letak lebar (7 Okt 2026, master): seksi & daftar akun berkolom.
+  const tataLebar = useTataLebar();
   const tanggalPilih = periodePilih.slice(0, 10);
   const hariIni = periodePilih === periodeSaatIni();
 
@@ -309,7 +312,7 @@ function QcScreenPenuh({
   }
 
   return (
-    <div className="kolom-aplikasi px-4 pb-32">
+    <div className={cn("kolom-aplikasi px-4 pb-32", tataLebar && "kolom-lebar")}>
       {/* Header modul */}
       <header className="flex items-start justify-between gap-3 pt-5">
         <div>
@@ -349,6 +352,7 @@ function QcScreenPenuh({
       <TataLetakModul
         modul="qc"
         bungkusSeksi={false}
+        lebar={tataLebar}
         seksi={[
         { id: "riwayat", judul: "1 · Riwayat", ikon: History, render: () => (
       <SeksiLipat
@@ -628,7 +632,7 @@ function QcScreenPenuh({
           </FadeInUp>
 
           {/* Daftar akun */}
-          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 md:items-start">
+          <div className={cn("mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 md:items-start", tataLebar && "xl:grid-cols-3")}>
             {akunList === null && !gagalMuat ? (
               [0, 1, 2].map((i) => (
                 <GlassCard key={i} className="flex items-center gap-4 p-4">

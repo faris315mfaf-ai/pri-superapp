@@ -28,6 +28,10 @@ import { TombolLonceng } from "@/components/tombol-lonceng";
 import { bebasKewajiban } from "@/lib/jabatan";
 import { useModulAktif } from "@/hooks/use-modul";
 import type { User } from "@/types";
+import { useRef } from "react";
+import { useTataLebar } from "@/hooks/use-tata-lebar";
+import { useLebarWadah } from "@/hooks/use-kolom-wadah";
+import { cn } from "@/lib/utils";
 
 export function KontenScreen({
   terbenam = false,
@@ -43,9 +47,14 @@ export function KontenScreen({
 }) {
   const komenAktif = useModulAktif("kepatuhan_komen");
   const sapaan = user.nama.split(" ")[0];
+  // Tata letak lebar (7 Okt 2026, master; bukan saat tertanam di Beranda):
+  // pengumuman/KPI | galeri akun berdampingan, video baru jadi galeri.
+  const lebar = useTataLebar() && !terbenam;
+  const wadahRef = useRef<HTMLDivElement>(null);
+  const lebarWadah = useLebarWadah(wadahRef) ?? 0;
 
   return (
-    <div className={terbenam ? "" : "kolom-aplikasi px-4 pb-32"}>
+    <div ref={wadahRef} className={terbenam ? "" : cn("kolom-aplikasi px-4 pb-32", lebar && "kolom-lebar")}>
       {!terbenam && (
         <header className="flex items-start justify-between gap-3 pt-5">
           <div className="min-w-0">
@@ -63,21 +72,29 @@ export function KontenScreen({
         </header>
       )}
 
+      <div className={cn(lebar && lebarWadah >= 880 && "grid grid-cols-2 items-start gap-x-4")}>
+      <div className="min-w-0">
       {/* Beranda anggota: pengumuman terbaru + KPI wajib komentar */}
       <BerandaAnggotaPanel user={user} onBukaLaporanKerja={onBukaLaporanKerja} />
 
       {/* Video TV Rakyat terbaru hasil tarikan Ayrshare/upload-post
           (fitur 1.20/5 & 7): bentuk EMBED tanpa judul + jam presisi,
           lengkap dengan kewajiban komen & share. */}
-      <KartuVideoBaru />
+      {!lebar && <KartuVideoBaru />}
 
       {/* Postingan wajib dikomentari kader hari ini — status DIVERIFIKASI
           dari komentar asli (rekap QC), hasil sinkron otomatis Ayrshare.
           Disembunyikan untuk yang bebas kewajiban (Panel Master, 3 Sep 2026). */}
       {!bebasKewajiban(user) && komenAktif && <KartuWajibKomen />}
+      </div>
 
+      <div className="min-w-0">
       {/* Lingkaran akun TV Rakyat (official + anggota) → galeri video */}
       <GaleriLingkaran />
+      </div>
+      </div>
+
+      {lebar && <KartuVideoBaru lebar />}
     </div>
   );
 }
