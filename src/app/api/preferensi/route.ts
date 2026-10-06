@@ -11,9 +11,10 @@ import { denganCache, hapusCacheBersama } from "@/lib/cache-bersama";
 
 export const dynamic = "force-dynamic";
 
-// Kunci yang sah: "footer" (susunan modul nav bawah) dan
-// "layout:<modul>" (urutan/lipatan seksi satu modul).
-const POLA_KUNCI = /^(footer|layout:[a-z-]{1,24})$/;
+// Kunci yang sah: "footer" (susunan modul nav bawah),
+// "layout:<modul>" (urutan/lipatan seksi satu modul), dan "latar"
+// (latar belakang desain Apple: pagi/sore/malam, 6 Okt 2026).
+const POLA_KUNCI = /^(footer|latar|layout:[a-z-]{1,24})$/;
 const MAKS_NILAI_BYTE = 4096;
 
 function tokenDari(request: Request): string {

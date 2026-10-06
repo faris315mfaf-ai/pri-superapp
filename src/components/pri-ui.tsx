@@ -122,7 +122,7 @@ export function ScreenHeader({ judul, onKembali, kanan, className }: ScreenHeade
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 -mx-4 mb-4 flex items-center gap-3 px-4 pb-3 pt-4",
+        "kepala-layar sticky top-0 z-30 -mx-4 mb-4 flex items-center gap-3 px-4 pb-3 pt-4",
         "bg-gradient-to-b from-[var(--app-bg)] via-[var(--app-bg)] to-transparent",
         className,
       )}
@@ -319,7 +319,7 @@ export function SegmenJudul({ label, className }: { label: string; className?: s
   return (
     <div className={cn("mt-6 mb-2 flex items-center gap-2.5", className)} role="presentation">
       <span className="segmen-garis" aria-hidden="true" />
-      <span className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-teks-sekunder">
+      <span className="segmen-label text-[11px] font-extrabold uppercase tracking-[0.14em] text-teks-sekunder">
         {label}
       </span>
       <span

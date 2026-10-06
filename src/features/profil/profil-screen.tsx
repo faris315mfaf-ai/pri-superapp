@@ -106,6 +106,8 @@ import { ModalChangelog } from "./modal-changelog";
 import { AntreanAccTim, KartuTim, MenuUpdateAplikasi } from "./keanggotaan-tim";
 import { BarisUkuranTeks, SeksiMasukan } from "./masukan-dan-font";
 import { useModulAktif } from "@/hooks/use-modul";
+import { bolehDesainApple } from "@/lib/desain-apple";
+import { PemilihLatar } from "./pemilih-latar";
 
 // ------------------------------------------------------------
 // Tipe & konstanta
@@ -534,7 +536,7 @@ export function ProfilScreen({
       {/* HERO GRADIENT (fix 1.19/4.3a): lonceng dropdown di kanan
           atas DALAM area gradient, avatar menumpuk setengah keluar. */}
       <section
-        className="relative -mx-4 overflow-visible rounded-b-[2rem] px-4 pt-4 pb-16 text-center md:pb-20"
+        className="hero-profil relative -mx-4 overflow-visible rounded-b-[2rem] px-4 pt-4 pb-16 text-center md:pb-20"
         style={{
           background:
             "linear-gradient(150deg, #DC2626 0%, #B91C1C 55%, #7F1D1D 100%)",
@@ -659,7 +661,7 @@ export function ProfilScreen({
 
       {/* Kartu profil kaca — MENUMPUK ke gradient (avatar overlap) */}
       <FadeInUp>
-        <div className="glass kartu-hover -mt-10 rounded-[1.25rem] px-5 py-6">
+        <div className="kartu-identitas glass kartu-hover -mt-10 rounded-[1.25rem] px-5 py-6">
           <div className="flex flex-col items-center text-center">
             <p className="text-xs text-teks-sekunder">{user.email}</p>
             {/* Saldo koin gamifikasi (spek 1.16) — di bawah nama anggota */}
@@ -986,6 +988,9 @@ export function ProfilScreen({
                   />
                 }
               />
+
+              {/* Tema tampilan Pagi/Sore/Malam/Classic — akun uji coba (6 Okt 2026) */}
+              {bolehDesainApple(user) && <PemilihLatar />}
 
               {/* 2. Notifikasi Push */}
               <BarisPengaturan

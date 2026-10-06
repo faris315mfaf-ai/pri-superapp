@@ -24,6 +24,7 @@ import { SideNav } from "@/components/side-nav";
 import { Dock } from "@/components/dock";
 import { bolehDesainApple } from "@/lib/desain-apple";
 import { useModeNav } from "@/hooks/use-mode-nav";
+import { temaApple, useLatarApple } from "@/hooks/use-latar-apple";
 import { SplashScreen } from "@/features/auth/splash-screen";
 import { bolehPet } from "@/lib/pet-akses";
 import { MODUL_AKUN, bolehAudit, modulDibuka } from "@/lib/peran";
@@ -350,7 +351,9 @@ export default function Page() {
   }, [tab, subLayar]);
   // Desain Apple (6 Okt 2026, uji coba akun Faris): tema lewat
   // <html data-desain="apple"> (globals.css) + pilihan Sidebar ↔ Dock.
-  const desainApple = bolehDesainApple(user);
+  // Tema "Classic" (6 Okt 2026) = tampilan asli aplikasi: desain Apple mati.
+  const [temaPilihan] = useLatarApple();
+  const desainApple = bolehDesainApple(user) && temaApple(temaPilihan);
   const [modeNav, aturModeNav] = useModeNav();
   const pakaiDock = desainApple && modeNav === "dock";
   useEffect(() => {

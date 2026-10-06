@@ -5,7 +5,17 @@
 // 5 blob warna besar dengan blur berat supaya efek kaca terbaca.
 // ============================================================
 
+import { useAppStore } from "@/hooks/use-app-store";
+import { bolehDesainApple } from "@/lib/desain-apple";
+import { LatarApple } from "@/components/latar-apple";
+import { temaApple, useLatarApple } from "@/hooks/use-latar-apple";
+
 export function MeshBackground() {
+  // Desain Apple (6 Okt 2026, akun uji coba): latar ilustrasi Pagi/Sore/Malam
+  // pilihan pengguna menggantikan gumpalan warna.
+  const apple = useAppStore((s) => bolehDesainApple(s.user));
+  const [latar] = useLatarApple();
+  if (apple && temaApple(latar)) return <LatarApple />;
   return (
     <div
       aria-hidden="true"

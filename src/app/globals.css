@@ -1277,9 +1277,11 @@ html[data-desain="apple"] {
   --text-primary: #1d1d1f;
   --text-secondary: #6e6e73;
 
-  --glass-bg: rgba(255, 255, 255, 0.72);
-  --glass-bg-strong: rgba(255, 255, 255, 0.86);
-  --glass-bg-soft: rgba(255, 255, 255, 0.56);
+  /* Kaca lebih bening: latar ilustrasi (Pagi/Sore/Malam) ikut terlihat */
+  --glass-bg: rgba(255, 255, 255, 0.64);
+  --glass-bg-strong: rgba(255, 255, 255, 0.8);
+  --glass-bg-soft: rgba(255, 255, 255, 0.5);
+  --apple-bayang-teks: rgba(255, 255, 255, 0.6);
   --glass-border: rgba(0, 0, 0, 0.06);
   --glass-highlight: rgba(255, 255, 255, 0.75);
   --glass-shadow:
@@ -1321,9 +1323,10 @@ html[data-desain="apple"].dark {
   --text-primary: #f5f5f7;
   --text-secondary: #98989d;
 
-  --glass-bg: rgba(28, 28, 30, 0.72);
-  --glass-bg-strong: rgba(36, 36, 38, 0.86);
-  --glass-bg-soft: rgba(28, 28, 30, 0.5);
+  --glass-bg: rgba(28, 28, 30, 0.6);
+  --glass-bg-strong: rgba(36, 36, 38, 0.78);
+  --glass-bg-soft: rgba(28, 28, 30, 0.45);
+  --apple-bayang-teks: rgba(0, 0, 0, 0.55);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-highlight: rgba(255, 255, 255, 0.1);
   --glass-shadow:
@@ -1505,4 +1508,123 @@ html[data-desain="apple"] ::-webkit-scrollbar-track {
   html[data-desain="apple"] .blob-mesh {
     animation: none;
   }
+}
+
+/* ============================================================
+   DESAIN APPLE — SELURUH MODUL (6 Okt 2026)
+   Satu lapisan untuk semua layar: margin samping 5 px, header layar
+   berbahan kaca, teks tetap terbaca di atas latar ilustrasi, dan latar
+   Pagi/Sore/Malam (components/latar-apple). Komponen tiap modul tidak
+   diubah satu per satu — semuanya sudah memakai kelas bersama ini.
+   ============================================================ */
+
+/* ---- Latar ilustrasi ---- */
+.latar-lapis {
+  position: absolute;
+  inset: 0;
+  transition: opacity 700ms var(--ease-laci);
+}
+.latar-lapis svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.latar-potret {
+  display: none !important;
+}
+@media (orientation: portrait) and (max-width: 900px) {
+  .latar-lanskap {
+    display: none !important;
+  }
+  .latar-potret {
+    display: block !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .latar-lapis {
+    transition: opacity 200ms linear;
+  }
+}
+
+/* ---- Margin samping 5 px di semua modul ---- */
+html[data-desain="apple"] .kolom-aplikasi {
+  padding-left: 5px;
+  padding-right: 5px;
+}
+html[data-desain="apple"] .kolom-aplikasi .\-mx-4 {
+  margin-left: -5px;
+  margin-right: -5px;
+}
+
+/* ---- Header layar (ScreenHeader): bilah kaca yang memudar ke bawah ---- */
+html[data-desain="apple"] .kepala-layar {
+  margin-left: -5px;
+  margin-right: -5px;
+  padding-left: 5px;
+  padding-right: 5px;
+  background: transparent;
+}
+html[data-desain="apple"] .kepala-layar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: color-mix(in srgb, var(--app-bg) 55%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  -webkit-mask-image: linear-gradient(#000 65%, transparent);
+  mask-image: linear-gradient(#000 65%, transparent);
+}
+
+/* ---- Keterbacaan teks di atas latar ilustrasi ---- */
+html[data-desain="apple"] .font-heading {
+  text-shadow: 0 1px 2px var(--apple-bayang-teks);
+}
+html[data-desain="apple"] .segmen-label {
+  color: var(--text-primary);
+  text-shadow: 0 1px 2px var(--apple-bayang-teks);
+}
+
+/* ---- Profil: tanpa banner merah — judul besar ala iOS, identitas di kaca ---- */
+html[data-desain="apple"] .hero-profil {
+  background: none !important;
+  min-height: 0 !important;
+  margin-left: 0;
+  margin-right: 0;
+  padding: 10px 6px 0 !important;
+  border-radius: 0;
+}
+html[data-desain="apple"] .hero-profil > [aria-hidden="true"] {
+  display: none;
+}
+html[data-desain="apple"] .hero-profil h1 {
+  font-size: 34px;
+  line-height: 1.05;
+  letter-spacing: -0.028em;
+}
+html[data-desain="apple"] .hero-profil > .mt-4 {
+  margin-top: 14px;
+  padding: 24px 16px 20px;
+  border-radius: 22px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 0.5px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+html[data-desain="apple"] .hero-profil [class*="text-white"] {
+  color: var(--text-primary) !important;
+}
+html[data-desain="apple"] .hero-profil [class*="bg-white/"] {
+  background: var(--glass-bg-strong) !important;
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
+html[data-desain="apple"] .hero-profil input[class*="border-white"] {
+  border-color: var(--glass-border) !important;
+}
+html[data-desain="apple"] .kartu-identitas {
+  margin-top: 10px !important;
 }
