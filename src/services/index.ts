@@ -1065,6 +1065,37 @@ export async function tandaiGagalDitangani(kode: string): Promise<void> {
   });
 }
 
+// ---- Ruang tim TV Official langsung (7 Okt 2026, /api/tv/langsung) ----
+export type AktivitasTv = { id: number; user_id: string; jenis: string; ringkasan: string; gagal: string[]; waktu: string };
+export type PesanTimTv = { id: number; user_id: string; isi: string; gambar_url: string | null; waktu: string };
+export type RuangTv = {
+  aktivitas: AktivitasTv[];
+  pesan: PesanTimTv[];
+  orang: Record<string, { nama: string; avatar_url: string }>;
+  saya: string;
+};
+
+export async function getTvLangsung(opsi: { hadir?: string[]; sejakPesan?: number } = {}): Promise<RuangTv> {
+  const q = new URLSearchParams();
+  if (opsi.hadir?.length) q.set("hadir", opsi.hadir.slice(0, 60).join(","));
+  if (opsi.sejakPesan) q.set("sejak_pesan", String(opsi.sejakPesan));
+  const json = await fetchJson(`/api/tv/langsung${q.size ? `?${q}` : ""}`);
+  return {
+    aktivitas: (json.aktivitas ?? []) as AktivitasTv[],
+    pesan: (json.pesan ?? []) as PesanTimTv[],
+    orang: (json.orang ?? {}) as RuangTv["orang"],
+    saya: String(json.saya ?? ""),
+  };
+}
+
+export async function kirimObrolanTv(isi: string): Promise<void> {
+  await fetchJson("/api/tv/langsung", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ isi }),
+  });
+}
+
 // ---- Akun TV Rakyat Official di upload-post (7 Okt 2026) ----
 export async function getOfficialUp(): Promise<{ profil: string; akun: Record<string, string>; perlu_ulang: string[] }> {
   const json = await fetchJson("/api/tv/official-up");

@@ -31,6 +31,7 @@ import { simpanSampul } from "@/lib/sampul";
 import { daftarkanVideoUnggahan } from "@/lib/sinkron-konten-tv";
 import { after } from "next/server";
 import { catatAudit } from "@/lib/audit";
+import { siarkanTv } from "@/lib/tv-langsung";
 
 export const dynamic = "force-dynamic";
 
@@ -493,6 +494,7 @@ export async function POST(request: Request) {
       console.error("[tv/unggah] simpan hasil:", eSimpan.message);
     }
 
+    siarkanTv("posting");
     catatAudit(
       pengguna.id,
       "unggah_official",

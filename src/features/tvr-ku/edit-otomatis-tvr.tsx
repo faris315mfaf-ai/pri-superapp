@@ -49,6 +49,9 @@ import {
   type StokTvr,
 } from "./edit-otomatis-tipe";
 
+/** Peristiwa jendela: muat ulang Edit Otomatis (siaran tim TV Official). */
+export const PERISTIWA_AUTOEDIT_SEGAR = "pri:autoedit-segar";
+
 type Unggahan = { url: string; name: string; size?: number; duration?: number | null };
 
 export function EditOtomatisTvr() {
@@ -75,6 +78,13 @@ export function EditOtomatisTvr() {
 
   const [membatalkan, setMembatalkan] = useState(false);
   const tabAktifRef = useRefTabAktif();
+
+  // Modul bersama TV Official (7 Okt 2026): aksi anggota tim lain → muat ulang.
+  useEffect(() => {
+    const segar = () => setMuatUlang((n) => n + 1);
+    window.addEventListener(PERISTIWA_AUTOEDIT_SEGAR, segar);
+    return () => window.removeEventListener(PERISTIWA_AUTOEDIT_SEGAR, segar);
+  }, []);
 
   useEffect(() => {
     let hidup = true;

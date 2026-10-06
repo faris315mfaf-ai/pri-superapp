@@ -23,6 +23,8 @@ import { ProgressPanel } from "./progress-panel";
 import { PreviewModal } from "./preview-modal";
 import { TombolRiwayatTv } from "./riwayat-tv";
 import { KartuOfficialUp } from "./kartu-official-up";
+import { IndikatorHadir, PanelTimLangsung, useTvLangsung } from "./tim-langsung";
+import { PERISTIWA_AUTOEDIT_SEGAR } from "@/features/tvr-ku/edit-otomatis-tvr";
 import { SeksiLipat } from "@/components/seksi-lipat";
 import { useAppStore } from "@/hooks/use-app-store";
 import type { Berita, HasilProsesVideo, User, VideoAntrian } from "@/types";
@@ -30,7 +32,7 @@ import { adalahPimred } from "@/lib/jabatan";
 import { PanelVideoWajib } from "./panel-video-wajib";
 import { PanelJadwalTayang } from "./panel-jadwal-tayang";
 import { EditOtomatisTvr } from "@/features/tvr-ku/edit-otomatis-tvr";
-import { StokVideoTvr } from "@/features/tvr-ku/stok-video-tvr";
+import { StokVideoTvr, segarkanStokTvr } from "@/features/tvr-ku/stok-video-tvr";
 import { KonteksTimAutoEdit } from "@/features/auto-edit/tim";
 import { kirimStokTimKeOfficial } from "@/services";
 import { useKolomWadah, type JumlahKolom } from "@/hooks/use-kolom-wadah";
@@ -52,9 +54,9 @@ type FaseTv = "form" | "proses" | "pratinjau";
 // Stok Video Tim (beserta tombol Riwayat) selalu PALING ATAS, selebar modul —
 // tidak ikut bento.
 const BENTO_MASTER: Record<JumlahKolom, string[][]> = {
-  3: [["edit-otomatis-tim"], ["video-wajib"]],
-  2: [["edit-otomatis-tim"], ["video-wajib"]],
-  1: [["video-wajib", "edit-otomatis-tim"]],
+  3: [["edit-otomatis-tim"], ["video-wajib"], ["tim-langsung"]],
+  2: [["edit-otomatis-tim", "video-wajib"], ["tim-langsung"]],
+  1: [["tim-langsung", "video-wajib", "edit-otomatis-tim"]],
 };
 /** Seksi pendukung di bawah bento ("Akses cepat"), dua kolom di layar lebar. */
 const AKSES_MASTER = ["jadwal-tayang", "hasil-scraping", "bagi-tugas", "buat-video"];
@@ -108,6 +110,9 @@ export function TvScreen({
   const bolehAutoEditTim = bolehProses || user.role === "super_admin";
   const bolehAcc = pimred || wewenang.acc;
   const tataMaster = user.role === "master";
+  // MODUL BERSAMA (7 Okt 2026): tim melihat aksi satu sama lain seketika —
+  // siaran Realtime memuat ulang panel, kehadiran, aktivitas & obrolan tim.
+  const bolehRuang = bolehAutoEditTim || bolehUpload || bolehAcc;
   const wadahBentoRef = useRef<HTMLDivElement>(null);
   const kolomBento = useKolomWadah(wadahBentoRef);
 
@@ -199,6 +204,16 @@ export function TvScreen({
     setRefreshKey((k) => k + 1);
   }
 
+  const langsung = useTvLangsung({
+    userId: String(user.id),
+    aktif: bolehRuang,
+    onBerubah: () => {
+      setRefreshKey((k) => k + 1);
+      segarkanStokTvr();
+      window.dispatchEvent(new Event(PERISTIWA_AUTOEDIT_SEGAR));
+    },
+  });
+
   // Riwayat (7 Okt 2026): siapa mengedit/mengirim/memposting + lonceng
   // video yang gagal diposting — di dalam seksi Stok Video Tim.
   const tombolRiwayat = (
@@ -231,6 +246,11 @@ export function TvScreen({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {bolehRuang && (
+            <div className="hidden sm:block">
+              <IndikatorHadir langsung={langsung} />
+            </div>
+          )}
           {/* Gerigi: pengaturan yang jarang disentuh, disimpan di balik
               satu tombol supaya alur produksi tetap lapang. */}
           {pimred && (
@@ -432,6 +452,7 @@ export function TvScreen({
     const perId = new Map(daftarSeksi.map((s) => [s.id, s]));
     const tampilkan = (id: string): ReactNode => {
       if (id === "video-wajib") return <PanelVideoWajib key={id} />;
+      if (id === "tim-langsung") return bolehRuang ? <PanelTimLangsung key={id} langsung={langsung} /> : null;
       const s = perId.get(id);
       return s ? (
         <div key={id} id={`tv-${id}`} className="min-w-0 scroll-mt-4">
@@ -487,6 +508,11 @@ export function TvScreen({
       {kepala}
       {stokAtas}
       {kartuOfficial}
+      {bolehRuang && (
+        <div className="mt-3">
+          <PanelTimLangsung langsung={langsung} />
+        </div>
+      )}
 
       {/* Video wajib (12 Sep 2026): perintah video untuk seluruh anggota,
           DIKELOLA dari sini — di modul tempat tim TV Rakyat Official

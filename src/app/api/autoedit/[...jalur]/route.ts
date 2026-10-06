@@ -15,6 +15,7 @@ import { bolehAlatVideo } from "@/lib/peran";
 import { pastikanMasuk } from "@/lib/sesi";
 import { catatAudit } from "@/lib/audit";
 import type { JenisAudit } from "@/lib/audit-jenis";
+import { siarkanTv } from "@/lib/tv-langsung";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -119,7 +120,11 @@ async function tangani(
     if (request.method === "DELETE" && j[1] === "template" && j.length === 2 && user.role !== "master") {
       return galatAutoEdit(403, "Template tim hanya bisa dihapus master.");
     }
-    return teruskanDanCatat(request, j, user.id, (r) => teruskanAutoEdit(r, j, idTim, new Set(["tvr"]), String(user.id)), true);
+    const jawaban = await teruskanDanCatat(request, j, user.id, (r) => teruskanAutoEdit(r, j, idTim, new Set(["tvr"]), String(user.id)), true);
+    // Modul bersama (7 Okt 2026): aksi tim di mesin (edit, batal, stok,
+    // template) langsung terlihat di layar anggota tim lain.
+    if (tim === "tv" && request.method !== "GET" && jawaban.status < 400) siarkanTv("mesin");
+    return jawaban;
   }
 
   // Tanpa izin: 404, bukan 403 — modul ini tidak perlu diumumkan.

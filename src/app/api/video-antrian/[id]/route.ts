@@ -11,6 +11,7 @@ import { userDariToken } from "@/lib/sesi";
 import { bolehProsesVideo } from "@/types";
 import { adalahPimred } from "@/lib/jabatan";
 import { hapusVideoCloudinary } from "@/lib/cloudinary";
+import { siarkanTv } from "@/lib/tv-langsung";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +116,8 @@ export async function PATCH(
       throw new Error("Gagal menyimpan perubahan");
     }
 
+    // Modul bersama (7 Okt 2026): layar tim lain ikut diperbarui.
+    siarkanTv("acc");
     return { sukses: true };
   });
 }
@@ -179,6 +182,7 @@ export async function DELETE(
       console.error("[video-antrian] hapus:", error.message);
       throw new Error("Gagal menghapus video.");
     }
+    siarkanTv("hapus");
     return { sukses: true };
   });
 }

@@ -12,6 +12,7 @@ import { pastikanMasuk } from "@/lib/sesi";
 import { bolehUploadVideo } from "@/lib/tv-tim";
 import { tayangAtauDiproses } from "@/lib/ayrshare-status";
 import { catatAudit } from "@/lib/audit";
+import { siarkanTv } from "@/lib/tv-langsung";
 
 export const dynamic = "force-dynamic";
 
@@ -163,6 +164,7 @@ export async function PATCH(request: Request) {
       .maybeSingle();
     if (error) throw new Error("Gagal menyimpan tanda.");
     if (!data) throw Object.assign(new Error("Video tidak ditemukan."), { status: 404 });
+    siarkanTv("manual");
     catatAudit(user.id, "tv_riwayat", `Menandai video sudah diposting manual: "${data.judul_overlay || data.judul || kode}"`, {
       request,
       detail: { kode },
