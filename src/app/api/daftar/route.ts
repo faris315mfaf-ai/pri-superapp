@@ -31,6 +31,7 @@ import { kirimKabar } from "@/lib/notifikasi";
 import { buatSesi, keUserPublik, kolomUser, type BarisUser } from "@/lib/sesi";
 import { penerimaKabarHR } from "@/lib/penerima-hr";
 import { DIVISI_DPC, DIVISI_DPD, NAMA_DAERAH_MIN, rapikanNamaDaerah } from "@/lib/struktur";
+import { catatAudit } from "@/lib/audit";
 
 /** Kategori pendaftar (24 Sep 2026). */
 const KATEGORI_DAFTAR = ["sekretariat", "dpd", "dpc"] as const;
@@ -332,6 +333,7 @@ async function daftarTanpaEmail(isian: {
   }
   const user = baru as unknown as BarisUser;
   const token = await buatSesi(user.id, namaPerangkat);
+  catatAudit(user.id, "daftar", "Mendaftar akun baru", { detail: { perangkat: namaPerangkat ?? "" } });
 
   if (!autoAktif) {
     const label =

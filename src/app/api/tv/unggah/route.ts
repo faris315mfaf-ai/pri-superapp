@@ -30,6 +30,7 @@ import { tayangAtauDiproses } from "@/lib/ayrshare-status";
 import { simpanSampul } from "@/lib/sampul";
 import { daftarkanVideoUnggahan } from "@/lib/sinkron-konten-tv";
 import { after } from "next/server";
+import { catatAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -486,6 +487,20 @@ export async function POST(request: Request) {
       console.error("[tv/unggah] simpan hasil:", eSimpan.message);
     }
 
+    catatAudit(
+      pengguna.id,
+      "unggah_official",
+      `Mengunggah "${video.judul_overlay || video.judul || kode}" ke akun Official (${berhasil.length}/${hasil.length} sosmed)`,
+      {
+        request,
+        detail: {
+          kode,
+          judul: video.judul_overlay || video.judul || "",
+          berhasil: berhasil.map((h) => ({ platform: h.platform, url: h.postUrl ?? null })),
+          gagal: hasil.filter((h) => h.status === "error").map((h) => h.platform),
+        },
+      },
+    );
     return {
       sukses: berhasil.length > 0,
       id_ayrshare: idAyrshare,

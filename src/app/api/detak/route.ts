@@ -18,7 +18,9 @@
 // aplikasi — berapa pun jumlah penggunanya — plus satu GET Redis per
 // panggilan untuk sinyal pribadi.
 // ============================================================
+import { after } from "next/server";
 import { bungkus } from "@/lib/api-helper";
+import { catatWaktuAktif } from "@/lib/audit";
 import { denganCache } from "@/lib/cache-bersama";
 import { pastikanMasuk } from "@/lib/sesi";
 import { supabase } from "@/lib/supabase";
@@ -91,6 +93,13 @@ export async function GET(request: Request) {
     // Pengguna virtual uji beban tidak dicatat online — ia meminjam id orang
     // sungguhan, dan titik hijau palsu menyesatkan lawan bicaranya di Chat.
     if (!user.ujiBeban) await catatHadir(user.id);
+    // AUDIT (6 Okt 2026): detak yang sama mengukur berapa lama aplikasinya
+    // menyala & layar apa yang sedang dibuka — di latar, setelah jawaban
+    // terkirim, supaya detak tidak melambat.
+    if (!user.ujiBeban) {
+      const layar = new URL(request.url).searchParams.get("layar");
+      after(() => catatWaktuAktif(user.id, layar));
+    }
     const [tanda, hadir, sakelar, tandaSaya] = await Promise.all([
       denganCache("detak:global", TTL_DETIK, hitungTanda),
       daftarHadir(),

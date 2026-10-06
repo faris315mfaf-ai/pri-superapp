@@ -11,6 +11,7 @@ import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import { pastikanBukanPerbaikan } from "@/lib/perbaikan";
 import { normalkanNomorWa } from "@/lib/fonnte";
 import { buatSesi, keUserPublik, kolomUser, type BarisUser } from "@/lib/sesi";
+import { catatAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -141,6 +142,7 @@ export async function POST(request: Request) {
       .then(() => {}, () => {});
 
     const token = await buatSesi(baris.id, body.nama_perangkat);
+    catatAudit(baris.id, "login", "Masuk dengan username & sandi", { request, detail: { cara: "sandi" } });
 
     return { user: keUserPublik(baris), token };
   });

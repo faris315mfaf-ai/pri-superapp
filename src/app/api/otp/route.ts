@@ -16,6 +16,7 @@ import {
   kolomUser,
   type BarisUser,
 } from "@/lib/sesi";
+import { catatAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
     // bisa melengkapi profil dan melihat layar "menunggu persetujuan".
     // Akses ke data partai tetap dijaga terpisah lewat status akun.
     const token = await buatSesi(user.id, body.nama_perangkat);
+    catatAudit(user.id, "login", "Masuk lewat OTP WhatsApp", { request, detail: { cara: "otp-wa" } });
 
     return {
       sukses: true,

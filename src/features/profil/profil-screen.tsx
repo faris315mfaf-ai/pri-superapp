@@ -40,6 +40,7 @@ import {
   GraduationCap,
   Bot,
   Dice5,
+  ScanSearch,
 } from "lucide-react";
 import { mulaiTur } from "@/lib/tur";
 import { LogoPri } from "@/components/logo-pri";
@@ -119,6 +120,8 @@ type ProfilScreenProps = {
   onBukaKelolaLaporanKpi?: () => void;
   onBukaNotifikasi?: () => void;
   onBukaPanelMaster?: () => void;
+  /** Modul Audit (6 Okt 2026) — diisi page.tsx hanya untuk superadmin & master. */
+  onBukaAudit?: () => void;
   /** Pet Robot (3 Sep 2026, terbuka untuk semua) */
   onBukaPet?: () => void;
   /** Ludo Robot multipemain (3 Sep 2026, terbuka untuk semua) */
@@ -361,6 +364,7 @@ export function ProfilScreen({
   onBukaKelolaLaporanKpi,
   onBukaNotifikasi,
   onBukaPanelMaster,
+  onBukaAudit,
   onBukaPet,
   onBukaLudo,
   onBukaPengaturanFitur,
@@ -841,6 +845,31 @@ export function ProfilScreen({
               </span>
               <span className="block text-[11px] text-teks-sekunder">
                 Peran istimewa, akun wajib QC, log galat
+              </span>
+            </span>
+          </button>
+        </FadeInUp>
+      )}
+
+      {/* Audit aktivitas pengguna (6 Okt 2026) — superadmin & master */}
+      {onBukaAudit && (
+        <FadeInUp delay={0.035}>
+          <button
+            type="button"
+            onClick={onBukaAudit}
+            className="btn-tekan mt-2 flex w-full items-center gap-3 rounded-2xl border border-pri/30 bg-pri/10 px-4 py-3 text-left"
+          >
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
+              style={{ background: "linear-gradient(135deg, #DC2626, #7C3AED)" }}
+              aria-hidden="true"
+            >
+              <ScanSearch className="h-4.5 w-4.5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold text-teks-utama">Audit</span>
+              <span className="block text-[11px] text-teks-sekunder">
+                Login, lama aplikasi menyala, alat & unggahan seluruh pengguna
               </span>
             </span>
           </button>

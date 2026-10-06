@@ -8,6 +8,7 @@ import { buatSesi, keUserPublik, kolomUser, pastikanMasuk, type BarisUser } from
 import { adalahPengurusPusat } from "@/lib/peran";
 import { adalahAdminStudio, DIVISI_PALUGODAM } from "@/lib/struktur";
 import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
+import { catatAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +91,10 @@ export async function POST(request: Request) {
       throw Object.assign(new Error("Akun pengurus tertinggi tidak bisa dimasuki."), { status: 403 });
     }
     const token = await buatSesi(targetId, `Kendali PALUGODAM oleh ${admin.nama}`.slice(0, 120));
+    catatAudit(targetId, "kendali", `Akun dimasuki ${admin.nama} (Kendali PALUGODAM)`, {
+      request,
+      detail: { oleh_id: Number(admin.id), oleh_nama: admin.nama },
+    });
     console.log(`[kendali] ${admin.nama} (#${admin.id}) masuk sebagai #${targetId}`);
     return { sukses: true, token, user: keUserPublik(b) };
   });

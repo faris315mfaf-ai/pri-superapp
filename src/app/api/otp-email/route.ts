@@ -17,6 +17,7 @@ import {
   kolomUser,
   type BarisUser,
 } from "@/lib/sesi";
+import { catatAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
     // Token diberikan meski status masih 'menunggu' — pengguna perlu bisa
     // melengkapi profil dan melihat layar "menunggu persetujuan".
     const token = await buatSesi(user.id, body.nama_perangkat);
+    catatAudit(user.id, "login", "Masuk lewat OTP email", { request, detail: { cara: "otp-email" } });
 
     return { sukses: true, token, user: keUserPublik(user) };
   });

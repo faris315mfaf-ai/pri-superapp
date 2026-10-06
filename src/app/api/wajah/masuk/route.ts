@@ -11,6 +11,7 @@ import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import { pastikanBukanPerbaikan } from "@/lib/perbaikan";
 import { buatSesi, keUserPublik, kolomUser, type BarisUser } from "@/lib/sesi";
 import { identifikasiWajah, WajahBelumDiaturError, WajahLayananError, wajahSiap } from "@/lib/wajah";
+import { catatAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
       .then(() => {}, () => {});
 
     const token = await buatSesi(baris.id, "Masuk Wajah");
+    catatAudit(baris.id, "login", "Masuk dengan wajah", { request, detail: { cara: "wajah" } });
     return { user: keUserPublik(baris), token };
   });
 }

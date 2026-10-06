@@ -24,6 +24,7 @@ import { pastikanMasuk } from "@/lib/sesi";
 import { bolehAccVideo, bolehUploadVideo } from "@/lib/tv-tim";
 import { ID_TIM, identitasTim, socketAutoEdit } from "@/lib/autoedit";
 import { hapusVideoR2, MAKS_UMUR_URL_DETIK, presignR2, r2Siap } from "@/lib/r2";
+import { catatAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -192,6 +193,10 @@ export async function POST(request: Request) {
       throw new Error("Gagal mencatat video. Coba lagi.");
     }
 
+    catatAudit(user.id, "stok_tim", `Mengirim video Stok Tim ke antrean Official: "${judul}"`, {
+      request,
+      detail: { kode, judul, stok_id: stokId },
+    });
     // Bentuk VideoAntrian (id = kode) supaya layar langsung membuka pratinjau unggah.
     return {
       video: {

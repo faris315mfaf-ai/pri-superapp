@@ -22,6 +22,7 @@ import {
   challengeDariResponse,
   kredensialByCredentialId,
 } from "@/lib/webauthn";
+import { catatAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -116,6 +117,7 @@ export async function POST(request: Request) {
       .then(() => {}, () => {});
 
     const token = await buatSesi(kred.user_id, "Login Sidik Jari");
+    catatAudit(kred.user_id, "login", "Masuk dengan sidik jari", { request, detail: { cara: "sidik-jari" } });
     return { user: keUserPublik(u), token };
   });
 }

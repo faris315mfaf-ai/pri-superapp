@@ -39,6 +39,14 @@ export function adalahMasterAsli(u: { role?: string | null; superadmin?: boolean
 }
 
 /**
+ * Modul AUDIT (6 Okt 2026): jejak aktivitas seluruh pengguna — superadmin
+ * dan master saja (superadmin di sesi berperan "master" + penanda).
+ */
+export function bolehAudit(u: { role?: string | null; superadmin?: boolean } | null | undefined): boolean {
+  return u?.role === "master" || adalahSuperadmin(u);
+}
+
+/**
  * master / super_admin (Ketua Umum) / superadmin — pemegang data lintas
  * anggota (dashboard penuh, kelola laporan KPI, rekap semua anggota).
  */

@@ -23,7 +23,7 @@ import { PagarGalat } from "@/components/pagar-galat";
 import { SideNav } from "@/components/side-nav";
 import { SplashScreen } from "@/features/auth/splash-screen";
 import { bolehPet } from "@/lib/pet-akses";
-import { MODUL_AKUN, modulDibuka } from "@/lib/peran";
+import { MODUL_AKUN, bolehAudit, modulDibuka } from "@/lib/peran";
 import { useDetakGlobal } from "@/hooks/use-detak-global";
 import { KonteksTabAktif } from "@/hooks/use-tab-aktif";
 import dynamic from "next/dynamic";
@@ -89,6 +89,7 @@ const ProfilScreen = dynamic(() => import("@/features/profil/profil-screen").the
 const AbsensiScreen = dynamic(() => import("@/features/absensi/absensi-screen").then((m) => m.AbsensiScreen), { ssr: false, loading: MuatLayar });
 const LaporanKerjaScreen = dynamic(() => import("@/features/laporan-kerja/laporan-kerja-screen").then((m) => m.LaporanKerjaScreen), { ssr: false, loading: MuatLayar });
 const KelolaLaporanKpiScreen = dynamic(() => import("@/features/laporan-kerja/kelola-laporan-kpi-screen").then((m) => m.KelolaLaporanKpiScreen), { ssr: false, loading: MuatLayar });
+const AuditScreen = dynamic(() => import("@/features/audit/audit-screen").then((m) => m.AuditScreen), { ssr: false, loading: MuatLayar });
 const PanelMasterScreen = dynamic(() => import("@/features/profil/panel-master").then((m) => m.PanelMasterScreen), { ssr: false, loading: MuatLayar });
 const PengaturanFiturScreen = dynamic(() => import("@/features/profil/pengaturan-fitur").then((m) => m.PengaturanFiturScreen), { ssr: false, loading: MuatLayar });
 const BerandaScreen = dynamic(() => import("@/features/beranda/beranda-screen").then((m) => m.BerandaScreen), { ssr: false, loading: MuatLayar });
@@ -189,6 +190,8 @@ type SubLayar =
   | { nama: "notifikasi" }
   // Panel Master — kewenangan tertinggi, hanya peran master
   | { nama: "panel-master" }
+  // Audit aktivitas seluruh pengguna — superadmin & master (6 Okt 2026)
+  | { nama: "audit" }
   // Pet Robot (percobaan master, 3 Sep 2026)
   | { nama: "pet"; tab?: "rawat" | "toko" | "lemari" | "pasar" }
   // Ludo Robot multipemain (percobaan, 3 Sep 2026)
@@ -337,6 +340,11 @@ export default function Page() {
       ? (bacaNavTersimpan(tersimpan.id)?.subLayar ?? null)
       : null;
   });
+  // Audit (6 Okt 2026): layar yang sedang dibuka ditaruh di <html data-layar>;
+  // detak berikutnya membawanya ke server (lama pemakaian per layar).
+  useEffect(() => {
+    document.documentElement.dataset.layar = subLayar?.nama ?? tab;
+  }, [tab, subLayar]);
   // Kunci sub-dashboard yang boleh dibuka jabatan ini (fitur 1.19/3.3).
   // Diisi effect di bawah; dipakai tabBoleh, jadi dideklarasikan di sini.
   const [aksesDashboard, setAksesDashboard] = useState<string[]>([]);
@@ -1244,6 +1252,7 @@ export default function Page() {
           }
           onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           onBukaPanelMaster={() => setSubLayar({ nama: "panel-master" })}
+          onBukaAudit={bolehAudit(user) ? () => setSubLayar({ nama: "audit" }) : undefined}
           onBukaPet={bolehPet(user) ? () => setSubLayar({ nama: "pet" }) : undefined}
           onBukaLudo={sakelar.fitur.ludo === false ? undefined : () => setSubLayar({ nama: "ludo" })}
           onBukaPengaturanFitur={() =>
@@ -1434,6 +1443,8 @@ export default function Page() {
                     user?.role === "master" && !user.superadmin ? (
                       <PanelMasterScreen onKembali={() => setSubLayar(null)} />
                     ) : null
+                  ) : subLayar.nama === "audit" ? (
+                    bolehAudit(user) ? <AuditScreen onKembali={() => setSubLayar(null)} /> : null
                   ) : subLayar.nama === "ludo" ? (
                     <LudoScreen onKembali={() => setSubLayar(null)} />
                   ) : subLayar.nama === "pet" ? (

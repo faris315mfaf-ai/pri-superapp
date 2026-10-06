@@ -22,6 +22,7 @@ import { bacaStateGoogle, urlAplikasi } from "@/lib/google-oauth";
 import { buatHashSandi } from "@/lib/sandi";
 import { pastikanBukanPerbaikan } from "@/lib/perbaikan";
 import { randomBytes } from "node:crypto";
+import { catatAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -199,6 +200,7 @@ export async function GET(request: Request) {
 
     await db.from("app_user").update({ last_login_at: kini }).eq("id", userId);
     const token = await buatSesi(userId, "Login Google");
+    catatAudit(userId, "login", "Masuk dengan Google", { request, detail: { cara: "google" } });
     return keBeranda(request, `gtoken=${encodeURIComponent(token)}`);
   } catch (e) {
     console.error("[google] callback:", e);

@@ -17,6 +17,7 @@ import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { MAKS_UMUR_URL_DETIK, pastikanUkuranR2Wajar, presignR2, r2Siap } from "@/lib/r2";
 import { prosesSiaranSerentak } from "@/lib/siaran";
 import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
+import { catatAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 // Pemrosesan di latar memanggil upload-post berulang — beri napas panjang.
@@ -258,6 +259,10 @@ export async function POST(request: Request) {
       throw new Error("Gagal menyimpan daftar profil tujuan.");
     }
 
+    catatAudit(user.id, "siaran", `Siaran Serentak "${judul}" ke ${item.length} profil`, {
+      request,
+      detail: { judul, platforms, profil: profilDiminta, siaran_id: Number(induk.id), jadwal: jadwal ?? null },
+    });
     after(() => prosesSiaranSerentak(ANGGARAN_PROSES_MS));
     return {
       sukses: true,

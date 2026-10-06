@@ -48,6 +48,7 @@ import {
 import { PENYEDIA_ANGGOTA, unggahVideoAnggota, type IdPenyedia } from "@/lib/sosmed-penyedia";
 import { kolomTabelAda, sisipkanLonggar } from "@/lib/kolom-struktur";
 import { naikkanSinyal } from "@/lib/sinyal-pribadi";
+import { catatAudit } from "@/lib/audit";
 
 /** Batas berkas penyimpanan video (bucket "tvrku" & FILE_SIZE_LIMIT Supabase sendiri). */
 const BATAS_PENYIMPANAN_MB = 100;
@@ -566,6 +567,19 @@ export async function POST(request: Request) {
 
       const { data: baris, error } = await sisipkanLonggar("tvrku_post", isiRiwayat);
       if (error) console.error("[tvrku/unggah] simpan riwayat:", error.message);
+      catatAudit(user.id, "unggah_sosmed", `${jadwal ? "Menjadwalkan" : "Mengunggah"} "${judul}"`, {
+        request,
+        detail: {
+          judul,
+          kategori,
+          platforms,
+          jadwal: jadwal ?? null,
+          penyedia: profil.penyedia,
+          tvrku_post_id: baris?.id ?? null,
+          gagal: gagalAwal.map((g) => g.platform),
+          lewat_tautan: pakaiLink,
+        },
+      });
       // 5 Sep 2026: bonus koin unggah video.
       if (baris?.id) {
         const idPost = Number(baris.id);

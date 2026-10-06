@@ -6895,7 +6895,10 @@ export async function getStatus(): Promise<StatusAplikasi> {
 }
 
 export async function getDetak(): Promise<HasilDetak> {
-  const json = await fetchJson("/api/detak", { cache: "no-store" });
+  // Layar yang sedang dibuka (page.tsx menaruhnya di <html data-layar>)
+  // ikut dikirim untuk Audit: berapa lama tiap layar dipakai.
+  const layar = typeof document !== "undefined" ? (document.documentElement.dataset.layar ?? "") : "";
+  const json = await fetchJson(layar ? `/api/detak?layar=${encodeURIComponent(layar)}` : "/api/detak", { cache: "no-store" });
   const jeda = Number(json?.jeda);
   return {
     tanda: String(json?.tanda ?? ""),
@@ -6966,4 +6969,88 @@ export async function getAnalisisVideo(opsi: { rentang: RentangAnalisis; platfor
   if (opsi.akun) q.set("akun", opsi.akun);
   const json = await fetchJson(`/api/tv-nasional/analisis?${q.toString()}`, { headers: headerToken() });
   return json as unknown as DataAnalisisVideo;
+}
+
+// ============================================================
+// Audit aktivitas pengguna (6 Okt 2026) — /api/audit (superadmin & master)
+// ============================================================
+export type BarisAuditRingkas = {
+  id: string;
+  nama: string;
+  username: string | null;
+  avatar_url: string;
+  divisi: string;
+  jabatan: string;
+  role: string;
+  online: boolean;
+  detik_aktif: number;
+  jumlah_sesi: number;
+  pertama: string | null;
+  terakhir: string | null;
+  aksi_terakhir: string | null;
+  /** jenis peristiwa (lib/audit-jenis) → jumlah */
+  hitung: Record<string, number>;
+  unggahan: number;
+};
+
+export type RingkasanAudit = {
+  tanggal: string;
+  belum_siap: boolean;
+  online: number;
+  data: BarisAuditRingkas[];
+};
+
+export type PeristiwaAudit = {
+  id: string;
+  user_id: string;
+  jenis: string;
+  ringkasan: string;
+  detail: Record<string, unknown> | null;
+  ip: string;
+  perangkat: string;
+  dibuat_pada: string;
+};
+
+export type RincianAudit = {
+  tanggal: string;
+  belum_siap: boolean;
+  pengguna: {
+    id: string;
+    nama: string;
+    username: string | null;
+    avatar_url: string | null;
+    divisi: string | null;
+    jabatan: string | null;
+    role: string;
+    online: boolean;
+  };
+  harian: {
+    detik_aktif: number;
+    pertama: string | null;
+    terakhir: string | null;
+    /** [mulai, akhir] dalam detik epoch */
+    sesi: [number, number][];
+    layar: Record<string, number>;
+  } | null;
+  aktivitas: PeristiwaAudit[];
+  unggahan: {
+    id: string;
+    judul: string;
+    platforms: string[] | null;
+    jadwal: string | null;
+    dibuat_pada: string;
+    video_url: string;
+    tautan: Record<string, string>;
+  }[];
+};
+
+export async function getRingkasanAudit(tanggal: string): Promise<RingkasanAudit> {
+  const json = await fetchJson(`/api/audit?tanggal=${encodeURIComponent(tanggal)}`, { headers: headerToken() });
+  return json as RingkasanAudit;
+}
+
+export async function getRincianAudit(tanggal: string, userId: string): Promise<RincianAudit> {
+  const q = new URLSearchParams({ tanggal, user: userId });
+  const json = await fetchJson(`/api/audit?${q.toString()}`, { headers: headerToken() });
+  return json as RincianAudit;
 }
