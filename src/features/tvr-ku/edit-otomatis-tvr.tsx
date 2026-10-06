@@ -11,7 +11,7 @@
 //      render per akun; sisanya mengantre.
 //   3. Hasilnya masuk STOK VIDEO — sejak 5 Okt 2026 seksi tersendiri yang
 //      terbuka untuk semua akun TVR Saya (stok-video-tvr.tsx). Edit Otomatis
-//      sendiri terbuka bila minimal 5 akun sosmed terhubung (lib/peran).
+//      sendiri terbuka untuk semua akun sejak 6 Okt 2026 (lib/peran).
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
@@ -23,6 +23,7 @@ import {
   Plus,
   RotateCcw,
   Sparkles,
+  Trash2,
   UploadCloud,
   Wand2,
   X,
@@ -56,6 +57,7 @@ export function EditOtomatisTvr() {
   const [galatMuat, setGalatMuat] = useState("");
   const [muatUlang, setMuatUlang] = useState(0);
   const [bukaTemplate, setBukaTemplate] = useState(false);
+  const [menghapusTemplate, setMenghapusTemplate] = useState(false);
 
   // Form Buat Video
   const [modeSumber, setModeSumber] = useState<"unggah" | "link">("unggah");
@@ -94,26 +96,27 @@ export function EditOtomatisTvr() {
   }, [muatUlang]);
 
   const job = data?.job ?? null;
-  const idAktif = job !== null && STATUS_AKTIF.includes(job.status) ? job.job_id : null;
-  // Akun TIM (TV Rakyat Official): banyak video sekaligus dalam satu antrean.
+  // Akun TIM (TV Rakyat Official): antrean bersama seluruh tim.
   const modeTim = Boolean(api.tim);
   const idSaya = useAppStore((s) => String(s.user?.id ?? ""));
   const bolehHapusLatar = useAppStore((s) => bolehAlatVideo(s.user, "hapuslatar"));
-  const jobsTim: JobTimTvr[] = data?.jobs ?? [];
-  const adaJobTim = modeTim && jobsTim.length > 0;
-  const idSayaAktif = modeTim
-    ? jobsTim
-        .filter((j) => String(j.anggota ?? "") === idSaya)
-        .map((j) => j.job_id)
-        .sort()
-        .join(",")
-    : "";
+  // Template tim dipakai bersama — hanya master yang boleh menghapusnya.
+  const bolehHapusTemplate = useAppStore((s) => !modeTim || s.user?.role === "master");
+  // Semua akun boleh mengantre banyak video sekaligus (6 Okt 2026).
+  const jobsAntre: JobTimTvr[] = data?.jobs ?? [];
+  const adaJob = jobsAntre.length > 0;
+  // Video MILIK SAYA yang sedang mengantre (akun tim: buatan anggota ini).
+  const idSayaAktif = jobsAntre
+    .filter((j) => !modeTim || String(j.anggota ?? "") === idSaya)
+    .map((j) => j.job_id)
+    .sort()
+    .join(",");
   const [membatalkanId, setMembatalkanId] = useState("");
 
   // Pantau selama ada render berjalan: job/antrean/stok disegarkan tiap 2 detik
   // selama tab terlihat. Satu permintaan pada satu waktu.
   useEffect(() => {
-    if (!idAktif && !adaJobTim) return;
+    if (!adaJob) return;
     let hidup = true;
     let sedang = false;
     const t = window.setInterval(async () => {
@@ -145,28 +148,20 @@ export function EditOtomatisTvr() {
       hidup = false;
       window.clearInterval(t);
     };
-  }, [idAktif, adaJobTim, tabAktifRef, api]);
+  }, [adaJob, tabAktifRef, api]);
 
-  // Render selesai (job aktif lenyap tanpa galat) → video sudah di Stok Video.
-  const idSebelumnyaRef = useRef<string | null>(null);
-  useEffect(() => {
-    const lama = idSebelumnyaRef.current;
-    idSebelumnyaRef.current = idAktif;
-    if (!modeTim && lama && !idAktif && data && data.job === null) {
-      toast("sukses", "Video jadi!", "Sudah masuk Stok Video di bawah — ketuk videonya lalu Upload.");
-      segarkanStokTvr();
-    }
-  }, [idAktif, data, modeTim]);
-
-  // Akun tim: video MILIK SAYA yang lenyap dari antrean = sudah jadi (atau dibatalkan).
+  // Video MILIK SAYA yang lenyap dari antrean = sudah jadi (atau dibatalkan).
   const idSayaSebelumnyaRef = useRef("");
   useEffect(() => {
-    if (!modeTim) return;
     const lama = idSayaSebelumnyaRef.current ? idSayaSebelumnyaRef.current.split(",") : [];
     const kini = new Set(idSayaAktif ? idSayaAktif.split(",") : []);
     idSayaSebelumnyaRef.current = idSayaAktif;
     if (lama.some((id) => !kini.has(id))) {
-      toast("sukses", "Video Anda selesai diproses", "Cek Stok Video Tim di bawah.");
+      toast(
+        "sukses",
+        "Video selesai diproses",
+        modeTim ? "Cek Stok Video Tim di bawah." : "Sudah masuk Stok Video — ketuk videonya lalu Upload.",
+      );
       segarkanStokTvr();
     }
   }, [modeTim, idSayaAktif]);
@@ -187,8 +182,7 @@ export function EditOtomatisTvr() {
   }
   if (!data) return <GlassSkeleton className="h-32 rounded-2xl" />;
 
-  const { template, batas, antrean } = data;
-  const aktif = job !== null && STATUS_AKTIF.includes(job.status);
+  const { template, batas } = data;
   const gagal = job && (job.status === "error" || job.status === "dibatalkan") ? job : null;
 
   function segarkan() {
@@ -272,7 +266,7 @@ export function EditOtomatisTvr() {
             }
           : lama,
       );
-      if (modeTim) toast("sukses", "Masuk antrean tim", "Anda bisa langsung membuat video berikutnya.");
+      toast("sukses", modeTim ? "Masuk antrean tim" : "Masuk antrean", "Anda bisa langsung membuat video berikutnya.");
       // Bahan sumber dilepas; tulisan/kategori dibiarkan supaya mudah bikin lagi.
       setUnggahan(null);
       setLink("");
@@ -284,8 +278,8 @@ export function EditOtomatisTvr() {
     }
   }
 
-  /** Akun tim: batalkan SATU video milik sendiri di antrean tim. */
-  async function batalkanJobTim(id: string) {
+  /** Batalkan SATU video di antrean (akun tim: hanya milik sendiri). */
+  async function batalkanJob(id: string) {
     if (membatalkanId) return;
     setMembatalkanId(id);
     try {
@@ -321,6 +315,24 @@ export function EditOtomatisTvr() {
     }
   }
 
+  /** Hapus template seluruhnya (6 Okt 2026) — setelah konfirmasi. */
+  async function hapusTemplate() {
+    if (menghapusTemplate) return;
+    if (!window.confirm("Hapus template ini? Semua bahan (kotak monas, bingkai, boom, penutup) dan posisi tulisan ikut terhapus.")) return;
+    setMenghapusTemplate(true);
+    try {
+      const res = await api.fetch("/api/tvr/template", { method: "DELETE" });
+      const d = await bacaJson(res);
+      if (!res.ok) throw new Error(pesanGalat(res.status, d, "Template gagal dihapus."));
+      setData((lama) => (lama ? { ...lama, template: d.template as KeadaanTemplateTvr } : lama));
+      toast("sukses", "Template dihapus", "Tekan + untuk membuat template baru.");
+    } catch (e) {
+      toast("error", "Gagal menghapus template", e instanceof Error ? e.message : "Coba lagi.");
+    } finally {
+      setMenghapusTemplate(false);
+    }
+  }
+
   function templateTersimpan(t: KeadaanTemplateTvr) {
     setData((d) => (d ? { ...d, template: t } : d));
     setBukaTemplate(false);
@@ -353,6 +365,18 @@ export function EditOtomatisTvr() {
       >
         {template.siap ? <Pencil className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
       </button>
+      {template.ada && bolehHapusTemplate && (
+        <button
+          type="button"
+          onClick={() => void hapusTemplate()}
+          disabled={menghapusTemplate}
+          aria-label="Hapus template"
+          title="Hapus template"
+          className="btn-tekan flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gagal/10 text-gagal disabled:opacity-50"
+        >
+          {menghapusTemplate ? <Loader2 className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
+        </button>
+      )}
     </div>
   );
 
@@ -366,16 +390,15 @@ export function EditOtomatisTvr() {
           <li>Unggah kotak monas &amp; bingkai teratas (PNG), boom like share dan video penutup (opsional).</li>
           <li>Tandai posisi tulisan, lalu <b className="text-teks-utama">Simpan &amp; Tetapkan</b>.</li>
         </ol>
-      ) : aktif && job && !modeTim ? (
-        <PanelAktif job={job} antrean={antrean} membatalkan={membatalkan} onBatal={() => void batalkan()} />
       ) : (
         <>
-          {modeTim && jobsTim.length > 0 && (
-            <AntreanTim
-              jobs={jobsTim}
+          {adaJob && (
+            <DaftarAntrean
+              jobs={jobsAntre}
+              tim={modeTim}
               idSaya={idSaya}
               membatalkanId={membatalkanId}
-              onBatal={(id) => void batalkanJobTim(id)}
+              onBatal={(id) => void batalkanJob(id)}
             />
           )}
           {gagal && (
@@ -445,72 +468,17 @@ export function EditOtomatisTvr() {
   );
 }
 
-// ------------------------------------------------------------ panel render aktif
-function PanelAktif({
-  job,
-  antrean,
-  membatalkan,
-  onBatal,
-}: {
-  job: JobTvr;
-  antrean: RingkasTvr["antrean"];
-  membatalkan: boolean;
-  onBatal: () => void;
-}) {
-  const sedang = job.status !== "queued";
-  return (
-    <div className="mt-3 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3.5" aria-live="polite">
-      {sedang ? (
-        <>
-          <p className="flex items-center gap-2 text-[13px] font-bold text-teks-utama">
-            <Loader2 className="h-4 w-4 animate-spin text-sky-500" />
-            {job.status === "downloading" ? "Mengambil video sumber…" : `Sedang diedit · ${job.progress ?? 0}%`}
-          </p>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-            <div
-              className="h-full rounded-full bg-sky-500 transition-[width] duration-500"
-              style={{ width: `${job.status === "downloading" ? 3 : Math.max(3, job.progress ?? 0)}%` }}
-            />
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">Nomor antrean</p>
-          <p className="angka-tab font-heading text-3xl font-extrabold text-teks-utama">{antrean?.posisi ?? "…"}</p>
-          <p className="text-[11.5px] text-teks-sekunder">
-            {antrean ? (antrean.di_depan > 0 ? `${antrean.di_depan} video di depanmu` : "Berikutnya dikerjakan") : "Menunggu giliran"}
-          </p>
-        </>
-      )}
-      {antrean && (
-        <p className="mt-2 text-[11.5px] text-teks-utama">
-          Perkiraan selesai: <b>{perkiraanWaktu(antrean.perkiraan_detik)}</b>
-        </p>
-      )}
-      <p className="mt-1 text-[10.5px] leading-relaxed text-teks-sekunder">
-        Boleh tinggalkan halaman ini — videonya tetap diproses lalu masuk Stok Video.
-      </p>
-      <button
-        type="button"
-        onClick={onBatal}
-        disabled={membatalkan}
-        className="glass btn-tekan mt-2.5 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11.5px] font-bold text-teks-utama disabled:opacity-50"
-      >
-        {membatalkan ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
-        Batalkan
-      </button>
-    </div>
-  );
-}
-
-// ------------------------------------------------------------ antrean tim
-function AntreanTim({
+// ------------------------------------------------------------ daftar antrean
+function DaftarAntrean({
   jobs,
+  tim,
   idSaya,
   membatalkanId,
   onBatal,
 }: {
   jobs: JobTimTvr[];
+  /** Akun tim: antrean bersama — tandai milik sendiri, hanya itu yang bisa dibatalkan. */
+  tim: boolean;
   idSaya: string;
   membatalkanId: string;
   onBatal: (id: string) => void;
@@ -519,10 +487,12 @@ function AntreanTim({
   const urut = [...jobs].sort((x, y) => (x.antrean?.posisi ?? 999) - (y.antrean?.posisi ?? 999));
   return (
     <div className="mt-3 rounded-2xl border border-sky-500/30 bg-sky-500/10 p-3" aria-live="polite">
-      <p className="text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">Antrean tim ({jobs.length})</p>
+      <p className="text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">
+        {tim ? "Antrean tim" : "Antrean video Anda"} ({jobs.length})
+      </p>
       <ul className="mt-2 space-y-2">
         {urut.map((j) => {
-          const milikSaya = String(j.anggota ?? "") === idSaya;
+          const milikSaya = !tim || String(j.anggota ?? "") === idSaya;
           const jalan = j.status !== "queued";
           return (
             <li key={j.job_id} className="glass-soft rounded-xl p-2.5">
@@ -530,7 +500,7 @@ function AntreanTim({
                 <p className="min-w-0 flex-1 truncate text-[12px] font-bold text-teks-utama">
                   {(j.texts?.hook || "Video").slice(0, 70)}
                 </p>
-                {milikSaya && (
+                {tim && milikSaya && (
                   <span className="shrink-0 rounded-full bg-pri/15 px-1.5 py-0.5 text-[9.5px] font-bold text-pri">Milik Anda</span>
                 )}
               </div>
@@ -565,7 +535,8 @@ function AntreanTim({
         })}
       </ul>
       <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder">
-        Video yang jadi masuk Stok Video Tim. Boleh tinggalkan halaman ini.
+        Video yang jadi masuk {tim ? "Stok Video Tim" : "Stok Video"}. Boleh tinggalkan halaman ini — dan boleh
+        langsung membuat video berikutnya di bawah.
       </p>
     </div>
   );

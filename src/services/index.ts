@@ -5560,9 +5560,8 @@ export type KoneksiSosmedTvr = {
   konflik: string[];
   /** Satu baris per platform (5 Okt 2026). */
   status: StatusAkunTvr[];
-  /** Akun terhubung yang sehat — syarat Edit Otomatis. */
+  /** Akun terhubung yang sehat (tidak perlu login ulang). */
   jumlah_terhubung: number;
-  minimal: number;
 };
 
 export async function sinkronSosmedTvr(opsi: { segar?: boolean } = {}): Promise<KoneksiSosmedTvr> {
@@ -5577,7 +5576,6 @@ export async function sinkronSosmedTvr(opsi: { segar?: boolean } = {}): Promise<
     konflik: (json.konflik ?? []) as string[],
     status,
     jumlah_terhubung: Number(json.jumlah_terhubung ?? status.filter((s) => s.keadaan === "terhubung").length),
-    minimal: Number(json.minimal ?? 5),
   };
 }
 

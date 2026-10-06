@@ -6,7 +6,7 @@ import { z } from "zod";
 import { kirimRender } from "../antrean";
 import { GalatVideo, type Job, type Template } from "../jenis";
 import { folderUnggahan, pemilikUnggahan } from "../jalur";
-import { bacaStatus, buatJob, daftarJob, mintaBatal, STATUS_AKTIF_JOB, tulisStatus } from "../job";
+import { bacaStatus, buatJob, daftarJob, jumlahMenunggu, mintaBatal, STATUS_AKTIF_JOB, tulisStatus } from "../job";
 import { KuotaHabis, lupakan, pastikanMuat } from "../kuota";
 import { bolehLihat, bolehUbah, loadTemplate } from "../template";
 import { periksaUrl } from "../unduh";
@@ -18,9 +18,12 @@ const angkaEnv = (nama: string, bawaan: number) => {
   return Number.isFinite(n) ? n : bawaan;
 };
 
-// Berapa render berjalan BERSAMAAN ditentukan worker. Di sini tiga rem supaya
-// satu orang tidak bisa memenuhi antrean semua orang atau disk server.
-export const MAX_QUEUED_JOBS = Math.max(0, Math.trunc(angkaEnv("VIDEO_MAX_QUEUED_JOBS", 30)));
+// Berapa render berjalan BERSAMAAN ditentukan worker (slot serentak). Di sini
+// rem supaya satu orang tidak bisa memenuhi antrean semua orang atau disk
+// server. Antrean server dinaikkan 30 → 500 (6 Okt 2026): pengguna boleh
+// terus menambah video dan menunggu gilirannya; keadilan antar-orang diatur
+// prioritas antrean (antrean.ts), bukan dengan menolak.
+export const MAX_QUEUED_JOBS = Math.max(0, Math.trunc(angkaEnv("VIDEO_MAX_QUEUED_JOBS", 500)));
 export const MAX_BATCH = Math.max(0, Math.trunc(angkaEnv("VIDEO_MAX_BATCH", 20)));
 // Bisa diubah uji (pengganti monkeypatch di uji Python).
 export const rem = { aktifPerAkun: Math.max(0, Math.trunc(angkaEnv("VIDEO_MAX_AKTIF_PER_AKUN", 20))) };
@@ -121,25 +124,28 @@ export async function sumberSah(url: string, p: Pengguna): Promise<string> {
   }
 }
 
-/** Tolak kalau antrean server atau job aktif akun ini sudah penuh. */
-export async function pastikanAntreanMuat(tambahan: number, p: Pengguna): Promise<void> {
-  const maksAktif = rem.aktifPerAkun;
+/**
+ * Tolak kalau antrean server atau job aktif akun ini sudah penuh. `maksAkun`
+ * menimpa batas per akun (TVR Saya punya batasnya sendiri, termasuk akun tim).
+ */
+export async function pastikanAntreanMuat(tambahan: number, p: Pengguna, maksAkun?: number): Promise<void> {
+  const maksAktif = maksAkun ?? rem.aktifPerAkun;
   if (maksAktif > 0) {
     const aktif = (await daftarJob(maksAktif + tambahan + 1, akunDari(p))).filter((j) => STATUS_AKTIF_JOB.includes(j.status));
     if (aktif.length + tambahan > maksAktif) {
       throw new GalatHttp(
         429,
-        `Masih ada ${aktif.length} video milikmu yang belum selesai (maksimal ${maksAktif}). ` +
-          "Tunggu sebagian selesai lalu coba lagi.",
+        `Antrean Anda penuh: ${aktif.length} video belum selesai (maksimal ${maksAktif}). ` +
+          "Tunggu sebagian selesai lalu tambah lagi.",
       );
     }
   }
   if (MAX_QUEUED_JOBS > 0) {
-    const antre = (await daftarJob(MAX_QUEUED_JOBS + tambahan + 1)).filter((j) => j.status === "queued");
-    if (antre.length + tambahan > MAX_QUEUED_JOBS) {
+    const antre = await jumlahMenunggu();
+    if (antre + tambahan > MAX_QUEUED_JOBS) {
       throw new GalatHttp(
         429,
-        `Antrean server penuh: ${antre.length} video menunggu (maksimal ${MAX_QUEUED_JOBS}). Coba lagi beberapa menit lagi.`,
+        `Antrean server penuh: ${antre} video menunggu (maksimal ${MAX_QUEUED_JOBS}). Coba lagi beberapa menit lagi.`,
       );
     }
   }

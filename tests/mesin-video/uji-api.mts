@@ -571,7 +571,7 @@ await uji("tvr penutup dibatasi durasinya", async () => {
   }
 });
 
-await uji("tvr antrean satu video per akun dan render", async () => {
+await uji("tvr antrean banyak video per akun, giliran adil, dan render", async () => {
   const [a, b] = ["8101", "8102"];
   for (const sisa of await job.redis().zrange(job.KUNCI_AKTIF, 0, -1)) {
     await job.tulisStatus(sisa, { status: "error", log: "dibereskan uji" });
@@ -597,13 +597,23 @@ await uji("tvr antrean satu video per akun dan render", async () => {
   pastikan(r.status === 200, r.teks);
   const d = r.json();
   pastikan(d.job.status === "queued" && d.antrean.posisi === 1, JSON.stringify(d));
-  r = await minta("POST", "/api/tvr/jobs", { id: a, json: { url: sumberA, hook: "LAGI" } });
-  pastikan(r.status === 409 && r.json().detail.includes("sedang diproses"), r.teks);
+  // Boleh menambah video lagi selagi yang pertama mengantre (6 Okt 2026).
+  r = await minta("POST", "/api/tvr/jobs", { id: a, json: { url: "https://www.instagram.com/reel/LAGI/", hook: "LAGI" } });
+  pastikan(r.status === 200, r.teks);
+  const jobsA = r.json().jobs as { job_id: string; antrean: { posisi: number } }[];
+  pastikan(jobsA.length === 2, JSON.stringify(jobsA));
+  const keduaA = jobsA.find((j) => j.job_id !== d.job.job_id)!;
   r = await minta("POST", "/api/tvr/jobs", { id: b, json: { url: "https://www.instagram.com/reel/B/", hook: "UJI B" } });
   pastikan(r.status === 200, r.teks);
+  // Giliran adil: video PERTAMA b mendahului video KEDUA a.
   const antreB = r.json().antrean;
   pastikan(antreB.posisi === 2 && antreB.di_depan === 1, JSON.stringify(antreB));
   pastikan(antreB.perkiraan_detik >= 2 * (await job.rataDurasi()) - 1);
+  pastikan((await job.posisiAntrean(keduaA.job_id))?.posisi === 3, JSON.stringify(await job.posisiAntrean(keduaA.job_id)));
+  pastikan(TUGAS.length === 3);
+  // Video kedua a dibatalkan lagi supaya sisa uji ini tetap satu video.
+  r = await minta("DELETE", `/api/tvr/jobs/${keduaA.job_id}`, { id: a });
+  pastikan(r.status === 200, r.teks);
 
   const hasil = await pekerja.renderVideo(TUGAS[0]);
   pastikan(hasil.status === "done", JSON.stringify(hasil));
@@ -805,16 +815,16 @@ await uji("tvr akun tim: antre bersamaan, unggahan per anggota, batal milik send
     pastikan(r.status === 200, r.teks);
   }
   r = await minta("POST", "/api/tvr/jobs", { id: tim, anggota: "13", json: { url: "https://www.instagram.com/reel/TIM9/", hook: "TIM 9" } });
-  pastikan(r.status === 409 && r.json().detail.includes("Antrean tim penuh"), r.teks);
+  pastikan(r.status === 429 && r.json().detail.includes("Antrean Anda penuh"), r.teks);
 
-  // Akun pribadi tetap satu render aktif.
-  pastikan(st.jobs !== undefined && (await minta("GET", "/api/tvr/ringkas", { id: "8102" })).json().jobs === undefined);
+  // Akun pribadi juga mendapat daftar antrean (bisa banyak video, 6 Okt 2026).
+  pastikan(Array.isArray((await minta("GET", "/api/tvr/ringkas", { id: "8102" })).json().jobs));
   for (const sisa of await job.redis().zrange(job.KUNCI_AKTIF, 0, -1)) {
     await job.tulisStatus(sisa, { status: "error", log: "dibereskan uji" });
   }
 });
 
-await uji("kompres video: antre, satu aktif, worker, masuk stok, tak memblok edit", async () => {
+await uji("kompres video: antre banyak, worker, masuk stok, tak memblok edit", async () => {
   const a = "8301";
   for (const sisa of await job.redis().zrange(job.KUNCI_AKTIF, 0, -1)) {
     await job.tulisStatus(sisa, { status: "error", log: "dibereskan uji" });
@@ -827,9 +837,13 @@ await uji("kompres video: antre, satu aktif, worker, masuk stok, tak memblok edi
   pastikan(r.status === 200, r.teks);
   const k = r.json().kompres as { id: string; status: string; mutu: string }[];
   pastikan(k.length === 1 && k[0].status === "queued" && k[0].mutu === "kecil", JSON.stringify(k));
-  // Satu kompres aktif per akun.
+  // Boleh mengantre kompres berikutnya (6 Okt 2026); yang kedua lalu dibatalkan.
   r = await minta("POST", "/api/tvr/kompres", { id: a, berkas: { nama: "lagi.mp4", isi: fs.readFileSync(besar), tipe: "video/mp4" } });
-  pastikan(r.status === 409, `${r.status}`);
+  pastikan(r.status === 200, r.teks);
+  const k2 = (r.json().kompres as { id: string }[]).find((x) => x.id !== k[0].id);
+  pastikan(Boolean(k2) && r.json().kompres.length === 2, r.teks);
+  r = await minta("DELETE", `/api/tvr/kompres/${k2!.id}`, { id: a });
+  pastikan(r.status === 200 && r.json().kompres.length === 1, r.teks);
   // Tidak memblok Edit Otomatis: ringkasan tak menganggapnya job aktif.
   pastikan((await minta("GET", "/api/tvr/jobs/saya", { id: a })).json().job === null);
 
@@ -927,7 +941,11 @@ await uji("blur watermark: draf, pratinjau, 3 efek, dari stok, validasi", async 
   const kotak = [{ x: 0.02, y: 0.03, w: 0.45, h: 0.11 }, { x: 0.6, y: 0.9, w: 0.5, h: 0.2 }];
   r = await minta("POST", `/api/tvr/blur/${draf.id}/proses`, { id: a, json: { efek: "mosaik", kotak } });
   pastikan(r.status === 200, r.teks);
-  pastikan((await minta("POST", "/api/tvr/blur", { id: a, berkas: { nama: "lagi.mp4", isi: sumber, tipe: "video/mp4" } })).status === 409);
+  // Boleh menyiapkan video berikutnya selagi yang ini mengantre (6 Okt 2026).
+  r = await minta("POST", "/api/tvr/blur", { id: a, berkas: { nama: "lagi.mp4", isi: sumber, tipe: "video/mp4" } });
+  pastikan(r.status === 200 && r.json().blur.length === 2, r.teks);
+  const lagi = r.json().draf as { id: string };
+  pastikan((await minta("DELETE", `/api/tvr/blur/${lagi.id}`, { id: a })).json().blur.length === 1);
   pastikan((await minta("GET", "/api/tvr/jobs/saya", { id: a })).json().job === null);
   let m = TUGAS.find((t) => t.job_id === draf.id);
   pastikan(Boolean(m) && m!.jenis === "blur", JSON.stringify(TUGAS));
@@ -955,6 +973,26 @@ await uji("blur watermark: draf, pratinjau, 3 efek, dari stok, validasi", async 
   r = await minta("POST", "/api/tvr/blur", { id: a, berkas: { nama: "buang.mp4", isi: sumber, tipe: "video/mp4" } });
   const d3 = r.json().draf as { id: string };
   pastikan((await minta("DELETE", `/api/tvr/blur/${d3.id}`, { id: a })).json().blur.length === 0);
+});
+
+await uji("tvr hapus template: ditolak selama ada antrean, lalu bersih", async () => {
+  const a = "8601";
+  for (const sisa of await job.redis().zrange(job.KUNCI_AKTIF, 0, -1)) {
+    await job.tulisStatus(sisa, { status: "error", log: "dibereskan uji" });
+  }
+  await templateSiap(a);
+  let r = await minta("POST", "/api/tvr/jobs", { id: a, json: { url: "https://www.instagram.com/reel/HAPUS/", hook: "UJI HAPUS" } });
+  pastikan(r.status === 200, r.teks);
+  const idJob = r.json().job.job_id as string;
+  r = await minta("DELETE", "/api/tvr/template", { id: a });
+  pastikan(r.status === 409 && r.json().detail.includes("antrean"), r.teks);
+  pastikan((await minta("DELETE", `/api/tvr/jobs/${idJob}`, { id: a })).status === 200);
+  r = await minta("DELETE", "/api/tvr/template", { id: a });
+  pastikan(r.status === 200 && r.json().template.ada === false && r.json().template.siap === false, r.teks);
+  pastikan(!fs.existsSync(path.join(MEDIA, "templates", "tvr-8601")));
+  // Tanpa template, Edit Otomatis kembali minta template dibuat dulu.
+  r = await minta("POST", "/api/tvr/jobs", { id: a, json: { url: "https://www.instagram.com/reel/HAPUS2/", hook: "UJI" } });
+  pastikan(r.status === 409, `${r.status}`);
 });
 
 // ---------------------------------------------------------------- selesai

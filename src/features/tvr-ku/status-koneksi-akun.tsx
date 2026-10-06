@@ -5,11 +5,11 @@
 //
 // Memberi tahu berapa dari 6 akun yang terhubung SEHAT, mana yang perlu
 // disambung ulang (izinnya kedaluwarsa di upload-post), dan mana yang belum
-// ditautkan — lengkap dengan tombol untuk masing-masing. Edit Otomatis
-// terbuka sendiri bila minimal 5 akun sehat (lib/peran).
+// ditautkan — lengkap dengan tombol untuk masing-masing. Video hanya
+// terbit di akun yang terhubung.
 //
-// KartuEditTerkunci menggantikan Edit Otomatis selama syarat itu belum
-// terpenuhi, supaya anggota tahu persis apa yang kurang.
+// KartuEditTerkunci menggantikan Edit Otomatis bila master menutupnya untuk
+// akun ini (sejak 6 Okt 2026 Edit Otomatis terbuka untuk semua akun).
 // ============================================================
 
 import { AlertTriangle, CheckCircle2, Link2, Loader2, Lock, RefreshCw, RotateCcw } from "lucide-react";
@@ -21,18 +21,13 @@ import { cn } from "@/lib/utils";
 
 const JUMLAH_PLATFORM = 6;
 
-function BilahKemajuan({ jumlah, minimal }: { jumlah: number; minimal: number }) {
-  const cukup = jumlah >= minimal;
+function BilahKemajuan({ jumlah }: { jumlah: number }) {
+  const lengkap = jumlah >= JUMLAH_PLATFORM;
   return (
     <div className="relative mt-2 h-2.5 rounded-full bg-black/10 dark:bg-white/10" aria-hidden="true">
       <div
-        className={cn("h-full rounded-full transition-[width] duration-500", cukup ? "bg-sukses" : "bg-amber-500")}
+        className={cn("h-full rounded-full transition-[width] duration-500", lengkap ? "bg-sukses" : "bg-amber-500")}
         style={{ width: `${Math.min(100, (100 * jumlah) / JUMLAH_PLATFORM)}%` }}
-      />
-      {/* Penanda batas minimal */}
-      <span
-        className="absolute -top-1 h-4.5 w-0.5 rounded-full bg-teks-utama/60"
-        style={{ left: `${(100 * minimal) / JUMLAH_PLATFORM}%` }}
       />
     </div>
   );
@@ -69,8 +64,8 @@ export function StatusKoneksiAkun({
     );
   }
 
-  const { jumlah_terhubung: jumlah, minimal, status } = koneksi;
-  const cukup = jumlah >= minimal;
+  const { jumlah_terhubung: jumlah, status } = koneksi;
+  const cukup = jumlah >= JUMLAH_PLATFORM;
   const perluUlang = status.filter((s) => s.keadaan === "ulang").length;
   const idUlangPertama = status.find((s) => s.keadaan === "ulang")?.platform;
 
@@ -82,7 +77,7 @@ export function StatusKoneksiAkun({
           <div className="min-w-0 flex-1">
             <p className="text-[13px] font-bold text-teks-utama">Status akun sosmed</p>
             <p className="mt-0.5 text-[11px] leading-snug text-teks-sekunder">
-              Minimal {minimal} akun terhubung untuk membuka Edit Otomatis.
+              Video hanya terbit di sosmed yang terhubung.
             </p>
           </div>
           <p className="angka-tab shrink-0 font-heading text-2xl font-extrabold text-teks-utama">
@@ -90,17 +85,17 @@ export function StatusKoneksiAkun({
             <span className="text-[14px] font-bold text-teks-sekunder">/{JUMLAH_PLATFORM}</span>
           </p>
         </div>
-        <BilahKemajuan jumlah={jumlah} minimal={minimal} />
+        <BilahKemajuan jumlah={jumlah} />
         <p
           className={cn(
             "mt-2 flex items-center gap-1.5 text-[11.5px] font-bold",
             cukup ? "text-sukses" : "text-amber-600 dark:text-amber-400",
           )}
         >
-          {cukup ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <Lock className="h-4 w-4 shrink-0" />}
+          {cukup ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
           {cukup
-            ? "Edit Otomatis terbuka untuk akun Anda."
-            : `Kurang ${minimal - jumlah} akun lagi untuk membuka Edit Otomatis.`}
+            ? "Semua sosmed terhubung."
+            : `${JUMLAH_PLATFORM - jumlah} sosmed belum terhubung — video tidak terbit di sana.`}
         </p>
       </div>
 
@@ -181,23 +176,8 @@ function BarisStatus({
   );
 }
 
-/** Pengganti Edit Otomatis selama akun terhubung belum mencapai minimal. */
-export function KartuEditTerkunci({
-  koneksi,
-  onLihatStatus,
-}: {
-  koneksi: KoneksiSosmedTvr | null;
-  onLihatStatus: () => void;
-}) {
-  if (!koneksi) {
-    return (
-      <GlassCard className="flex items-center gap-2 p-4" dataTur="tvr-edit-otomatis">
-        <Loader2 className="h-4 w-4 animate-spin text-teks-sekunder" />
-        <p className="text-[12px] text-teks-sekunder">Memeriksa akun sosmed yang terhubung…</p>
-      </GlassCard>
-    );
-  }
-  const { jumlah_terhubung: jumlah, minimal } = koneksi;
+/** Pengganti Edit Otomatis bila master menutupnya untuk akun ini. */
+export function KartuEditTerkunci() {
   return (
     <GlassCard className="p-4" dataTur="tvr-edit-otomatis">
       <div className="flex items-center gap-3">
@@ -205,23 +185,12 @@ export function KartuEditTerkunci({
           <Lock className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="font-heading text-[14px] font-bold text-teks-utama">Edit Otomatis terkunci</p>
+          <p className="font-heading text-[14px] font-bold text-teks-utama">Edit Otomatis ditutup</p>
           <p className="mt-0.5 text-[11px] leading-snug text-teks-sekunder">
-            Terbuka sendiri setelah minimal {minimal} akun sosmed terhubung. Sekarang {jumlah} dari {JUMLAH_PLATFORM}.
+            Admin menutup Edit Otomatis untuk akun Anda. Anda tetap bisa memposting lewat Stok Video.
           </p>
         </div>
       </div>
-      <BilahKemajuan jumlah={jumlah} minimal={minimal} />
-      <button
-        type="button"
-        onClick={onLihatStatus}
-        className="glass btn-tekan mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[12px] font-bold text-teks-utama"
-      >
-        <Link2 className="h-3.5 w-3.5" /> Lihat & sambung akun
-      </button>
-      <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder">
-        Sambil menunggu, Anda tetap bisa memposting lewat Stok Video di bawah.
-      </p>
     </GlassCard>
   );
 }

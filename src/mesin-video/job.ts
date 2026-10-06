@@ -232,10 +232,20 @@ export async function aturSlotSerentak(n: number): Promise<number> {
 }
 
 export async function posisiAntrean(jobId: string): Promise<Antrean | null> {
-  const id = amanId(jobId);
+  return (await petaAntrean()).get(amanId(jobId)) ?? null;
+}
+
+/**
+ * Nomor antrean SEMUA job aktif sekaligus — satu pembacaan Redis untuk
+ * daftar berisi banyak video (6 Okt 2026: satu orang bisa mengantre 20).
+ * `posisi` = urutan di antara yang MENUNGGU (yang sedang dikerjakan tidak
+ * dihitung); perkiraan tetap memperhitungkan sisa waktu yang sedang jalan.
+ */
+export async function petaAntrean(): Promise<Map<string, Antrean>> {
+  const hasil = new Map<string, Antrean>();
   const r = redis();
   const ids = await r.zrange(KUNCI_AKTIF, 0, -1);
-  if (!ids.includes(id)) return null;
+  if (ids.length === 0) return hasil;
   const isi = await r.mget(ids.map((i) => KUNCI_JOB + i));
   const hidup: Job[] = [];
   const basi: string[] = [];
@@ -250,24 +260,65 @@ export async function posisiAntrean(jobId: string): Promise<Antrean | null> {
     else hidup.push(st);
   });
   if (basi.length) await r.zrem(KUNCI_AKTIF, ...basi);
+  // Urutan sama dengan pengambilan worker (6 Okt 2026): yang berjalan dulu,
+  // lalu prioritas antrean (antrean.ts — video ke-n seseorang menunggu
+  // giliran ke-n semua orang), lalu yang masuk lebih dulu.
+  hidup.sort((x, y) => {
+    const jalanX = STATUS_BERJALAN_JOB.includes(x.status) ? 0 : 1;
+    const jalanY = STATUS_BERJALAN_JOB.includes(y.status) ? 0 : 1;
+    if (jalanX !== jalanY) return jalanX - jalanY;
+    const p = prioritasJob(x) - prioritasJob(y);
+    if (p !== 0) return p;
+    return (Number(x.created) || 0) - (Number(y.created) || 0);
+  });
   const rata = await rataDurasi();
   // Perkiraan tunggu dibagi jumlah slot serentak yang berlaku (diatur master):
   // makin banyak slot, makin cepat antrean dikerjakan.
   const slot = await slotSerentak();
   const kini = sekarang();
   let tunggu = 0;
-  let diDepan = 0;
+  let menunggu = 0;
   for (const st of hidup) {
-    if (st.job_id === id) {
-      if (STATUS_BERJALAN_JOB.includes(st.status)) {
-        return { posisi: 1, di_depan: 0, sedang_dikerjakan: true, perkiraan_detik: Math.round(sisaDetik(st, rata, kini)) };
-      }
-      return { posisi: diDepan + 1, di_depan: diDepan, sedang_dikerjakan: false, perkiraan_detik: Math.round(tunggu / slot + rata) };
+    if (STATUS_BERJALAN_JOB.includes(st.status)) {
+      const sisa = sisaDetik(st, rata, kini);
+      hasil.set(st.job_id, { posisi: 1, di_depan: 0, sedang_dikerjakan: true, perkiraan_detik: Math.round(sisa) });
+      tunggu += sisa;
+      continue;
     }
-    diDepan += 1;
-    tunggu += STATUS_BERJALAN_JOB.includes(st.status) ? sisaDetik(st, rata, kini) : rata;
+    hasil.set(st.job_id, {
+      posisi: menunggu + 1,
+      di_depan: menunggu,
+      sedang_dikerjakan: false,
+      perkiraan_detik: Math.round(tunggu / slot + rata),
+    });
+    menunggu += 1;
+    tunggu += rata;
   }
-  return null;
+  return hasil;
+}
+
+/** Prioritas antrean job (antrean.ts); job lama tanpa prioritas = 0 (didahulukan BullMQ). */
+export function prioritasJob(st: Job): number {
+  const n = Number((st as Record<string, unknown>).prioritas);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** Jumlah job yang MENUNGGU giliran (bukan yang sedang dikerjakan) di seluruh server. */
+export async function jumlahMenunggu(): Promise<number> {
+  const r = redis();
+  const ids = await r.zrange(KUNCI_AKTIF, 0, -1);
+  if (ids.length === 0) return 0;
+  const isi = await r.mget(ids.map((i) => KUNCI_JOB + i));
+  let n = 0;
+  for (const mentah of isi) {
+    if (!mentah) continue;
+    try {
+      if ((JSON.parse(mentah) as Job).status === "queued") n += 1;
+    } catch {
+      // status rusak: abaikan
+    }
+  }
+  return n;
 }
 
 export async function mintaBatal(jobId: string): Promise<void> {

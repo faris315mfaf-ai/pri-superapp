@@ -62,8 +62,9 @@ services:
       # 5 GB, 150 video stok, 60 video antre — bersama seluruh tim.
       KUOTA_KHUSUS_MB: "pri-900000001=5120"
       TVR_MAKS_STOK_KHUSUS: "pri-900000001=150"
-      # Tim boleh mengantre banyak video sekaligus (pribadi tetap 1); kecepatan
-      # tetap diatur slot serentak global (HR Center).
+      # Antrean per akun: pribadi 20 (TVR_JOB_AKTIF, bawaan kode), tim 60;
+      # kecepatan diatur slot serentak global (HR Center), giliran antar-orang
+      # adil (prioritas BullMQ, antrean.ts).
       TVR_JOB_AKTIF_KHUSUS: "pri-900000001=60"
       VIDEO_SLOT_MAKS: "10"
       TZ: Asia/Jakarta
@@ -111,8 +112,9 @@ services:
       # 5 GB, 150 video stok, 60 video antre — bersama seluruh tim.
       KUOTA_KHUSUS_MB: "pri-900000001=5120"
       TVR_MAKS_STOK_KHUSUS: "pri-900000001=150"
-      # Tim boleh mengantre banyak video sekaligus (pribadi tetap 1); kecepatan
-      # tetap diatur slot serentak global (HR Center).
+      # Antrean per akun: pribadi 20 (TVR_JOB_AKTIF, bawaan kode), tim 60;
+      # kecepatan diatur slot serentak global (HR Center), giliran antar-orang
+      # adil (prioritas BullMQ, antrean.ts).
       TVR_JOB_AKTIF_KHUSUS: "pri-900000001=60"
       VIDEO_WORKER_PARALEL: "3"
       # Hapus Latar Boom (uji coba): AI isnet di container autoedit-rembg.

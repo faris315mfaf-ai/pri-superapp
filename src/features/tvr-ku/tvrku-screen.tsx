@@ -610,13 +610,13 @@ export function TvrKuScreen({
   // ACC ajuan komentar (3 Sep 2026): seluruh anggota Divisi PALUGODAM + pengurus.
   const bolehAccKomen = adalahPalugodam(userAsli);
   // Status koneksi akun sosmed (5 Okt 2026): berapa yang terhubung sehat,
-  // mana yang perlu disambung ulang. Juga syarat Edit Otomatis (≥5 akun).
+  // mana yang perlu disambung ulang.
   const [koneksi, setKoneksi] = useState<KoneksiSosmedTvr | null>(null);
   const [galatKoneksi, setGalatKoneksi] = useState("");
   // Tombol "Hubungkan TV Rakyat Saya" (6 Okt 2026): isinya tertutup bawaan.
   const [bukaHubungkan, setBukaHubungkan] = useState(false);
-  // Edit Otomatis: master, dibuka master per akun, atau ≥5 akun terhubung.
-  const bolehEditOtomatis = bolehEditOtomatisTvr(userAsli, koneksi?.jumlah_terhubung);
+  // Edit Otomatis: semua akun sejak 6 Okt 2026, kecuali ditutup master.
+  const bolehEditOtomatis = bolehEditOtomatisTvr(userAsli);
   // Auto Edit penuh GODAM (1 Okt 2026, dulu dari Profil): khusus master
   // (superadmin ikut — peran efektifnya master); gerbang /api/autoedit
   // menegakkan aturan yang sama di server.
@@ -965,7 +965,7 @@ export function TvrKuScreen({
             <span
               className={cn(
                 "angka-tab rounded-full px-1.5 py-0.5 text-[10px] font-extrabold",
-                koneksi.jumlah_terhubung >= koneksi.minimal
+                koneksi.jumlah_terhubung >= 6
                   ? "bg-sukses/15 text-sukses"
                   : "bg-amber-500/15 text-amber-600 dark:text-amber-400",
               )}
@@ -1175,15 +1175,14 @@ export function TvrKuScreen({
               },
             ]
           : []),
-        // Edit Otomatis untuk SEMUA akun TVR Saya (5 Okt 2026): terbuka bila
-        // ≥5 akun sosmed terhubung (atau dibuka master); selain itu tampil
-        // kartu terkunci yang menunjukkan apa yang kurang.
+        // Edit Otomatis untuk SEMUA akun TVR Saya (6 Okt 2026; dulu syarat
+        // ≥5 akun sosmed terhubung). Ditutup master per akun → kartu terkunci.
         {
           id: "edit-otomatis",
           segmen: "Unggah & Jadwal",
           judul: "Edit Otomatis",
           ikon: Clapperboard,
-          keterangan: "Template pribadi + edit video otomatis (minimal 5 akun terhubung)",
+          keterangan: "Template pribadi + edit video otomatis",
           render: () => (
             <FadeInUp delay={0.08}>
               <SectionTitle
@@ -1204,16 +1203,7 @@ export function TvrKuScreen({
                 {bolehEditOtomatis ? (
                   <EditOtomatisTvr />
                 ) : (
-                  <KartuEditTerkunci
-                    koneksi={koneksi}
-                    onLihatStatus={() => {
-                      setBukaHubungkan(true);
-                      (document.getElementById("tvrku-akun") ?? document.getElementById("tvrku-simpel-akun"))?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "start",
-                      });
-                    }}
-                  />
+                  <KartuEditTerkunci />
                 )}
               </div>
             </FadeInUp>

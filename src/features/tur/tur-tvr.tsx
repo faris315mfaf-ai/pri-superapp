@@ -2,7 +2,7 @@
 
 // ============================================================
 // TurTvr (5 Okt 2026) — tutorial interaktif TVR Saya: sambung ulang akun
-// sosmed sampai minimal 5 terhubung → Edit Otomatis (template + buat video)
+// sosmed → Edit Otomatis (template + buat video)
 // → Stok Video (cara posting baru). Mesinnya LapisanTur.
 //
 // Muncul otomatis SEKALI per pengguna (penanda localStorage berversi),
@@ -79,7 +79,7 @@ export function TurTvr() {
       label="Tutorial TVR Saya"
       judulSelesai="Tutorial TVR Saya selesai!"
       isiSelesai={
-        "Ringkasnya:\n1. Sambung ulang akun sosmed sampai minimal 5 terhubung.\n2. Buat template (Kotak monas + Bingkai).\n3. Buat video otomatis, atau tambah video jadi ke Stok Video.\n4. Upload dari Stok Video ke sosmed.\n\nVideo di Stok terhapus otomatis setelah 2 hari. Tutorial ini bisa dibuka lagi dari tombol Tutorial di Edit Otomatis."
+        "Ringkasnya:\n1. Sambungkan akun sosmed (sebaiknya keenamnya).\n2. Buat template (Kotak monas + Bingkai).\n3. Buat video otomatis, atau tambah video jadi ke Stok Video.\n4. Upload dari Stok Video ke sosmed.\n\nVideo di Stok terhapus otomatis setelah 2 hari. Tutorial ini bisa dibuka lagi dari tombol Tutorial di Edit Otomatis."
       }
       onAkhiri={akhiri}
     />

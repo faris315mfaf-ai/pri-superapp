@@ -89,18 +89,27 @@ export function BlurWatermark() {
     })();
   }, [muat]);
 
-  const aktif = (daftar ?? []).find((b) => AKTIF.includes(b.status)) ?? null;
+  // Boleh mengantre banyak video sekaligus (6 Okt 2026): yang sedang
+  // diproses/mengantre tampil sebagai daftar, sementara video berikutnya
+  // bisa langsung disiapkan di bawahnya.
+  const aktif = (daftar ?? [])
+    .filter((b) => AKTIF.includes(b.status))
+    .sort((x, y) => (x.antrean?.posisi ?? 0) - (y.antrean?.posisi ?? 0));
   // Draf (atau yang gagal/dibatalkan — bisa diproses ulang) yang sedang diedit.
-  const draf = aktif ? null : ((daftar ?? []).find((b) => !AKTIF.includes(b.status)) ?? null);
+  const draf = (daftar ?? []).find((b) => !AKTIF.includes(b.status)) ?? null;
 
   // Pantau selama diproses; selesai = hilang dari daftar (kecuali dibatalkan sendiri).
-  const idAktif = aktif?.id ?? null;
-  const sebelumnyaRef = useRef<string | null>(null);
+  const idAktif = aktif.map((b) => b.id).sort().join(",");
+  const sebelumnyaRef = useRef("");
   const dibuangRef = useRef(new Set<string>());
   useEffect(() => {
-    const lama = sebelumnyaRef.current;
+    const lama = sebelumnyaRef.current ? sebelumnyaRef.current.split(",") : [];
     sebelumnyaRef.current = idAktif;
-    if (lama && !idAktif && !dibuangRef.current.has(lama) && !(daftar ?? []).some((b) => b.id === lama)) {
+    const kini = new Set(idAktif ? idAktif.split(",") : []);
+    const selesai = lama.filter(
+      (id) => !kini.has(id) && !dibuangRef.current.has(id) && !(daftar ?? []).some((b) => b.id === id),
+    );
+    if (selesai.length > 0) {
       toast("sukses", "Watermark disamarkan", "Hasilnya sudah di Stok Video — ketuk untuk Unduh atau Upload.");
       segarkanStokTvr();
     }
@@ -195,7 +204,7 @@ export function BlurWatermark() {
       const d = await bacaJson(res);
       if (!res.ok) throw new Error(pesanGalat(res.status, d, "Video gagal diproses."));
       setDaftar((d.blur as ItemBlur[]) ?? []);
-      toast("sukses", "Masuk antrean", "Boleh tinggalkan halaman ini — hasilnya masuk Stok Video.");
+      toast("sukses", "Masuk antrean", "Boleh menyiapkan video berikutnya atau tinggalkan halaman ini — hasilnya masuk Stok Video.");
     } catch (e) {
       setPesan(e instanceof Error ? e.message : "Video gagal diproses.");
     } finally {
@@ -223,32 +232,38 @@ export function BlurWatermark() {
         </div>
       </div>
 
+      {aktif.length > 0 && (
+        <div className="mt-3 flex flex-col gap-2" aria-live="polite">
+          {aktif.map((b) => (
+            <div key={b.id} className="rounded-2xl border border-violet-500/30 bg-violet-500/10 p-3">
+              <p className="truncate text-[12.5px] font-bold text-teks-utama">{b.judul}</p>
+              <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-teks-sekunder">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500" />
+                {b.status === "queued"
+                  ? b.antrean
+                    ? `Antrean #${b.antrean.posisi} · selesai ${perkiraanWaktu(b.antrean.perkiraan_detik)}`
+                    : "Menunggu giliran"
+                  : `Menyamarkan watermark… ${b.progress}%`}
+              </p>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+                <div className="h-full rounded-full bg-violet-500 transition-[width] duration-500" style={{ width: `${Math.max(3, b.progress)}%` }} />
+              </div>
+              <button
+                type="button"
+                onClick={() => void buang(b.id)}
+                disabled={sibuk}
+                className="glass btn-tekan mt-2 flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold text-teks-utama disabled:opacity-50"
+              >
+                <X className="h-3 w-3" /> Batalkan
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {daftar === null ? (
         <div className="flex justify-center py-6">
           <Loader2 className="h-5 w-5 animate-spin text-teks-sekunder" />
-        </div>
-      ) : aktif ? (
-        <div className="mt-3 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-3" aria-live="polite">
-          <p className="truncate text-[12.5px] font-bold text-teks-utama">{aktif.judul}</p>
-          <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-teks-sekunder">
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-500" />
-            {aktif.status === "queued"
-              ? aktif.antrean
-                ? `Antrean #${aktif.antrean.posisi} · selesai ${perkiraanWaktu(aktif.antrean.perkiraan_detik)}`
-                : "Menunggu giliran"
-              : `Menyamarkan watermark… ${aktif.progress}%`}
-          </p>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-            <div className="h-full rounded-full bg-violet-500 transition-[width] duration-500" style={{ width: `${Math.max(3, aktif.progress)}%` }} />
-          </div>
-          <button
-            type="button"
-            onClick={() => void buang(aktif.id)}
-            disabled={sibuk}
-            className="glass btn-tekan mt-2 flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold text-teks-utama disabled:opacity-50"
-          >
-            <X className="h-3 w-3" /> Batalkan
-          </button>
         </div>
       ) : draf ? (
         <EditorArea key={draf.id} item={draf} sibuk={sibuk} onProses={proses} onBuang={buang} />

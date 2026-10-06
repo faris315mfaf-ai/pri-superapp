@@ -71,13 +71,13 @@ export const MODUL_AKUN = [
   { kunci: "chat", label: "Chat", keterangan: "Percakapan antar anggota" },
   { kunci: "asisten", label: "Asisten AI", keterangan: "Chatbot & perintah suara" },
   { kunci: "acara", label: "Acara", keterangan: "Tanggal penting partai" },
-  // Bukan tab (30 Sep 2026): seksi di dalam TVR Saya. Sejak 5 Okt 2026
-  // terbuka sendiri bila minimal 5 akun sosmed terhubung; master tetap bisa
-  // membuka paksa (true) atau menutup paksa (false) per akun.
+  // Bukan tab (30 Sep 2026): seksi di dalam TVR Saya. Sejak 6 Okt 2026
+  // terbuka untuk SEMUA akun (dulu syarat ≥5 akun sosmed terhubung);
+  // master tetap bisa menutup paksa (false) per akun.
   {
     kunci: "autoedit",
     label: "Edit Otomatis (TVR Saya)",
-    keterangan: "Template pribadi + edit video otomatis. Ikut peran = terbuka sendiri bila ≥5 akun sosmed terhubung",
+    keterangan: "Template pribadi + edit video otomatis. Ikut peran = terbuka",
     bukanTab: true,
   },
   // Alat video TVR Saya (5 Okt 2026): dibuka untuk SEMUA akun; master bisa
@@ -143,24 +143,16 @@ export function bolehKelolaKoin(
   return adalahSuperadmin(u) || adalahPimred({ role: u.role ?? undefined, jabatan: u.jabatan });
 }
 
-/** Akun sosmed terhubung (sehat) minimal untuk membuka Edit Otomatis. */
-export const MINIMAL_AKUN_EDIT_OTOMATIS = 5;
-
 /**
- * Edit Otomatis di TVR Saya. Master selalu boleh. Modul per akun dari master
- * menang: dibuka (true) = boleh, ditutup (false) = tidak. Selain itu (ikut
- * peran) terbuka sendiri bila akun sosmed terhubung yang SEHAT — tertaut dan
- * tidak perlu login ulang — minimal MINIMAL_AKUN_EDIT_OTOMATIS (5 Okt 2026).
- * `jumlahTerhubung` belum diketahui (null) = anggap belum memenuhi.
+ * Edit Otomatis di TVR Saya — terbuka untuk SEMUA akun sejak 6 Okt 2026
+ * (dulu syarat minimal 5 akun sosmed terhubung). Master selalu boleh; selain
+ * itu hanya tertutup bila master menutupnya per akun (modul_izin = false).
  */
 export function bolehEditOtomatisTvr(
   u: { role?: string | null; modul_izin?: unknown } | null | undefined,
-  jumlahTerhubung: number | null | undefined,
 ): boolean {
-  if (u?.role === "master") return true;
-  const izin = modulDibuka(u, "autoedit");
-  if (izin !== undefined) return izin;
-  return (jumlahTerhubung ?? 0) >= MINIMAL_AKUN_EDIT_OTOMATIS;
+  if (!u) return false;
+  return u.role === "master" || modulDibuka(u, "autoedit") !== false;
 }
 
 /** Saring masukan mentah jadi peta modul yang sah; null bila kosong. */

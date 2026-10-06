@@ -1,11 +1,8 @@
 // ============================================================
 // Status koneksi akun sosmed TVR Saya (5 Okt 2026).
 //
-// Satu sumber untuk dua pemakai:
-//   • GET /api/tvr/hubungkan — layar TVR Saya menampilkan berapa akun
-//     terhubung dan mana yang perlu disambung ulang.
-//   • gerbang /api/autoedit — Edit Otomatis terbuka bila akun terhubung
-//     yang SEHAT minimal MINIMAL_AKUN_EDIT_OTOMATIS (lib/peran).
+// Dipakai GET /api/tvr/hubungkan: layar TVR Saya menampilkan berapa akun
+// terhubung dan mana yang perlu disambung ulang.
 //
 // "Sehat" = tertaut di penyedia DAN tidak ditandai perlu login ulang
 // (upload-post: reauth_required). Hasilnya disimpan 10 menit per orang
@@ -15,7 +12,6 @@ import { supabase } from "@/lib/supabase";
 import { sinkronkanAkunTertaut } from "@/lib/sinkron-akun-tertaut";
 import { penyediaUntukAnggota } from "@/lib/sosmed-penyedia";
 import { denganCache, hapusCacheBersama } from "@/lib/cache-bersama";
-import { MINIMAL_AKUN_EDIT_OTOMATIS } from "@/lib/peran";
 
 /** Enam sosmed TVR Saya, urut seperti di layar. */
 export const PLATFORM_TVR = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"] as const;
@@ -39,7 +35,6 @@ export type KoneksiTvr = {
   status: StatusAkunTvr[];
   /** Akun terhubung yang sehat (tidak perlu login ulang). */
   jumlah_terhubung: number;
-  minimal: number;
 };
 
 function bersihkan(u: string): string {
@@ -48,7 +43,7 @@ function bersihkan(u: string): string {
 
 function susunStatus(
   tertaut: { platform: string; username: string; perluSambungUlang?: boolean }[],
-): Pick<KoneksiTvr, "status" | "jumlah_terhubung" | "minimal"> {
+): Pick<KoneksiTvr, "status" | "jumlah_terhubung"> {
   const per = new Map(tertaut.map((a) => [a.platform, a]));
   const status: StatusAkunTvr[] = PLATFORM_TVR.map((platform) => {
     const a = per.get(platform);
@@ -58,7 +53,6 @@ function susunStatus(
   return {
     status,
     jumlah_terhubung: status.filter((s) => s.keadaan === "terhubung").length,
-    minimal: MINIMAL_AKUN_EDIT_OTOMATIS,
   };
 }
 
@@ -146,15 +140,3 @@ export async function koneksiTvr(userId: number, opsi: { segar?: boolean } = {})
   return dihitung ? hasil : { ...hasil, tersinkron: 0 };
 }
 
-/**
- * Jumlah akun terhubung yang sehat — untuk gerbang Edit Otomatis. Penyedia
- * bermasalah tidak boleh mengunci orang yang dulu sudah lolos: jatuh ke akun
- * yang tersimpan terhubung di database.
- */
-export async function jumlahAkunTerhubung(userId: number): Promise<number> {
-  try {
-    return (await koneksiTvr(userId)).jumlah_terhubung;
-  } catch {
-    return susunStatus(await tertautTersimpan(userId).catch(() => [])).jumlah_terhubung;
-  }
-}

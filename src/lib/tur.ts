@@ -210,7 +210,7 @@ export const LANGKAH_TUR_TVR: LangkahTur[] = [
   {
     target: ["tvr-status-akun"],
     judul: "Cek status akun sosmed",
-    isi: "Angka besar = berapa akun yang terhubung dari 6 sosmed (Instagram, TikTok, YouTube, Facebook Page, Threads, X). MINIMAL 5 harus terhubung supaya Edit Otomatis terbuka. Kurang dari 5 = Edit Otomatis terkunci.",
+    isi: "Angka besar = berapa akun yang terhubung dari 6 sosmed (Instagram, TikTok, YouTube, Facebook Page, Threads, X). Video hanya terbit di sosmed yang terhubung — sambungkan keenamnya.",
     maju: "lanjut",
   },
   {
@@ -235,7 +235,7 @@ export const LANGKAH_TUR_TVR: LangkahTur[] = [
   {
     target: ["tvr-edit-otomatis"],
     judul: "Edit Otomatis",
-    isi: "Begitu minimal 5 akun terhubung, kartu ini terbuka: template Anda dipasang otomatis di setiap video. Masih terkunci? Ulangi sambung ulang akun di atas, lalu Segarkan.",
+    isi: "Di sini template Anda dipasang otomatis di setiap video. Buat template dulu, lalu buat videonya.",
     maju: "lanjut",
   },
   {

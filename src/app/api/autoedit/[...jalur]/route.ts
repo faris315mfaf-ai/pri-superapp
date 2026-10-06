@@ -1,7 +1,7 @@
 /**
  * /api/autoedit/* — gerbang modul Auto Edit (master), Stok Video TVR Saya
- * (semua akun) dan Edit Otomatis TVR Saya (≥5 akun sosmed terhubung, atau
- * dibuka master). Penjaga peran dan penerusan ke layanan ada di lib/autoedit.
+ * (semua akun) dan Edit Otomatis TVR Saya (semua akun sejak 6 Okt 2026,
+ * kecuali ditutup master per akun). Penjaga peran dan penerusan ke layanan ada di lib/autoedit.
  */
 import {
   bolehEditOtomatisServer,
@@ -11,7 +11,7 @@ import {
   keluargaAutoEdit,
   teruskanAutoEdit,
 } from "@/lib/autoedit";
-import { bolehAlatVideo, MINIMAL_AKUN_EDIT_OTOMATIS } from "@/lib/peran";
+import { bolehAlatVideo } from "@/lib/peran";
 import { pastikanMasuk } from "@/lib/sesi";
 import { catatAudit } from "@/lib/audit";
 import type { JenisAudit } from "@/lib/audit-jenis";
@@ -32,6 +32,7 @@ function aksiAudit(metode: string, j: string[]): { jenis: JenisAudit; ringkasan:
     if (metode === "POST" && a1 === "blur" && a3 === "proses") return { jenis: "blur_watermark", ringkasan: "Memproses Blur Watermark" };
     if (metode === "POST" && a1 === "template" && a2 === "hapus-latar") return { jenis: "hapus_latar", ringkasan: "Menghapus latar bahan template" };
     if (metode === "PUT" && a1 === "template" && !a2) return { jenis: "template", ringkasan: "Menyimpan template Edit Otomatis" };
+    if (metode === "DELETE" && a1 === "template" && !a2) return { jenis: "template", ringkasan: "Menghapus template Edit Otomatis" };
     if (metode === "POST" && a1 === "stok" && !a2) return { jenis: "stok_tambah", ringkasan: "Menambah video ke Stok" };
     if (metode === "DELETE" && a1 === "stok" && a2) return { jenis: "stok_hapus", ringkasan: "Menghapus video dari Stok" };
   }
@@ -114,6 +115,10 @@ async function tangani(
   if (tim) {
     const idTim = await identitasTim(user, tim);
     if (!idTim || j[0] !== "tvr") return galatAutoEdit(404, "Tidak ditemukan");
+    // Template tim dipakai bersama seluruh tim: hanya master yang boleh menghapusnya.
+    if (request.method === "DELETE" && j[1] === "template" && j.length === 2 && user.role !== "master") {
+      return galatAutoEdit(403, "Template tim hanya bisa dihapus master.");
+    }
     return teruskanDanCatat(request, j, user.id, (r) => teruskanAutoEdit(r, j, idTim, new Set(["tvr"]), String(user.id)), true);
   }
 
@@ -124,13 +129,10 @@ async function tangani(
   if (fiturUji === "kompres" || fiturUji === "blurwm") {
     return teruskanDanCatat(request, j, user.id, (r) => teruskanAutoEdit(r, j, user.id, keluarga));
   }
-  // Edit Otomatis TVR (template, sumber, tulisan, render) butuh minimal 5
-  // akun sosmed terhubung; Stok Video terbuka untuk semua (5 Okt 2026).
-  if (j[0] === "tvr" && !jalurStokTvr(j) && !(await bolehEditOtomatisServer(user))) {
-    return galatAutoEdit(
-      403,
-      `Edit Otomatis terbuka setelah minimal ${MINIMAL_AKUN_EDIT_OTOMATIS} akun sosmed terhubung. Sambung ulang akun Anda di TVR Saya → Hubungkan, lalu tekan Segarkan.`,
-    );
+  // Edit Otomatis TVR (template, sumber, tulisan, render): semua akun sejak
+  // 6 Okt 2026, kecuali ditutup master; Stok Video selalu terbuka.
+  if (j[0] === "tvr" && !jalurStokTvr(j) && !bolehEditOtomatisServer(user)) {
+    return galatAutoEdit(403, "Edit Otomatis ditutup admin untuk akun Anda.");
   }
   return teruskanDanCatat(request, j, user.id, (r) => teruskanAutoEdit(r, j, user.id, keluarga));
 }

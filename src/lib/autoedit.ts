@@ -15,7 +15,6 @@ import { request as mintaHttp } from "node:http";
 import { Readable } from "node:stream";
 import type { ReadableStream as AliranNode } from "node:stream/web";
 import { bolehEditOtomatisTvr, modulDibuka } from "@/lib/peran";
-import { jumlahAkunTerhubung } from "@/lib/koneksi-tvr";
 import { wewenangTv } from "@/lib/tv-tim";
 
 const HEADER_MASUK = ["content-type", "content-length", "range", "accept"];
@@ -98,12 +97,8 @@ export async function identitasTim(user: PenggunaGerbang, tim: string): Promise<
 }
 
 /** Syarat Edit Otomatis di server — aturan yang sama dengan layar (lib/peran). */
-export async function bolehEditOtomatisServer(user: PenggunaGerbang): Promise<boolean> {
-  if (!user) return false;
-  if (user.role === "master" || modulDibuka(user, "autoedit") !== undefined) {
-    return bolehEditOtomatisTvr(user, null);
-  }
-  return bolehEditOtomatisTvr(user, await jumlahAkunTerhubung(Number(user.id)));
+export function bolehEditOtomatisServer(user: PenggunaGerbang): boolean {
+  return bolehEditOtomatisTvr(user);
 }
 
 /** GET JSON dari layanan Auto Edit sebagai akun `idAkun` (untuk rute server sendiri). */
