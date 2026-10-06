@@ -30,11 +30,20 @@ import { EmailBelumDiaturError } from "@/lib/email";
 import { kirimKabar } from "@/lib/notifikasi";
 import { buatSesi, keUserPublik, kolomUser, type BarisUser } from "@/lib/sesi";
 import { penerimaKabarHR } from "@/lib/penerima-hr";
-import { DIVISI_DPC, DIVISI_DPD, NAMA_DAERAH_MIN, rapikanNamaDaerah } from "@/lib/struktur";
+import {
+  DIVISI_DPC,
+  DIVISI_DPD,
+  DIVISI_SAYAP,
+  NAMA_DAERAH_MIN,
+  SUB_SAYAP,
+  jabatanSayapSah,
+  rapikanNamaDaerah,
+} from "@/lib/struktur";
+import { kotaSah, provinsiSah } from "@/lib/wilayah";
 import { catatAudit } from "@/lib/audit";
 
-/** Kategori pendaftar (24 Sep 2026). */
-const KATEGORI_DAFTAR = ["sekretariat", "dpd", "dpc"] as const;
+/** Kategori pendaftar (24 Sep 2026; "sayap" 7 Okt 2026). */
+const KATEGORI_DAFTAR = ["sekretariat", "dpd", "dpc", "sayap"] as const;
 type KategoriDaftar = (typeof KATEGORI_DAFTAR)[number];
 
 export const dynamic = "force-dynamic";
@@ -69,6 +78,12 @@ export async function POST(request: Request) {
       kategori?: string;
       /** Nama DPD/DPC, mis. "Jawa Barat" */
       nama_daerah?: string;
+      /** Kategori sayap: nilai SUB_SAYAP (mis. "PATRIOT") */
+      sayap?: string;
+      /** Opsional untuk sayap: provinsi, kota/kabupaten, jabatan sayap */
+      provinsi?: string;
+      kota?: string;
+      jabatan_sayap?: string;
       nama_perangkat?: string;
     };
 
@@ -113,6 +128,10 @@ export async function POST(request: Request) {
         nomor,
         kategori: String(body.kategori ?? "").trim().toLowerCase(),
         namaDaerah: rapikanNamaDaerah(String(body.nama_daerah ?? "")),
+        sayap: String(body.sayap ?? "").trim(),
+        provinsi: String(body.provinsi ?? "").trim(),
+        kota: String(body.kota ?? "").trim(),
+        jabatanSayap: String(body.jabatan_sayap ?? "").trim(),
         namaPerangkat: body.nama_perangkat,
       });
     }
@@ -249,19 +268,44 @@ async function daftarTanpaEmail(isian: {
   nomor: string;
   kategori: string;
   namaDaerah: string;
+  sayap: string;
+  provinsi: string;
+  kota: string;
+  jabatanSayap: string;
   namaPerangkat?: string;
 }) {
   const { nama, username, password, nomor, namaPerangkat } = isian;
   if (!(KATEGORI_DAFTAR as readonly string[]).includes(isian.kategori)) {
-    throw Object.assign(new Error("Pilih dulu: SEKRETARIAT, DPD, atau DPC."), { status: 400 });
+    throw Object.assign(new Error("Pilih dulu: SEKRETARIAT, DPD, DPC, atau SAYAP PARTAI."), { status: 400 });
   }
   const kategori = isian.kategori as KategoriDaftar;
-  const daerah = kategori === "sekretariat" ? "" : isian.namaDaerah;
-  if (kategori !== "sekretariat" && daerah.length < NAMA_DAERAH_MIN) {
+  const daerah = kategori === "dpd" || kategori === "dpc" ? isian.namaDaerah : "";
+  if ((kategori === "dpd" || kategori === "dpc") && daerah.length < NAMA_DAERAH_MIN) {
     throw Object.assign(
       new Error(`Isi nama ${kategori.toUpperCase()}-nya (mis. ${kategori === "dpd" ? "Jawa Barat" : "Kota Bandung"}).`),
       { status: 400 },
     );
+  }
+  // SAYAP PARTAI (7 Okt 2026): sayap wajib dipilih dari daftar bawaan;
+  // provinsi, kota/kabupaten, dan jabatan sayap opsional — tapi bila
+  // diisi harus nilai yang sah (data Kepmendagri / JABATAN_SAYAP).
+  const sayap = kategori === "sayap" ? isian.sayap : "";
+  const provinsi = kategori === "sayap" ? isian.provinsi : "";
+  const kota = kategori === "sayap" && provinsi ? isian.kota : "";
+  const jabatanSayap = kategori === "sayap" ? isian.jabatanSayap : "";
+  if (kategori === "sayap") {
+    if (!SUB_SAYAP.some((s) => s.nilai === sayap)) {
+      throw Object.assign(new Error("Pilih sayap partai Anda."), { status: 400 });
+    }
+    if (provinsi && !provinsiSah(provinsi)) {
+      throw Object.assign(new Error("Provinsi tidak dikenal. Pilih dari daftar."), { status: 400 });
+    }
+    if (kota && !kotaSah(provinsi, kota)) {
+      throw Object.assign(new Error("Kota/kabupaten tidak ada di provinsi itu."), { status: 400 });
+    }
+    if (jabatanSayap && !jabatanSayapSah(jabatanSayap)) {
+      throw Object.assign(new Error("Jabatan sayap tidak dikenal. Pilih dari daftar."), { status: 400 });
+    }
   }
   if (password.length < 8) {
     throw Object.assign(new Error("Kata sandi minimal 8 karakter."), { status: 400 });
@@ -274,7 +318,9 @@ async function daftarTanpaEmail(isian: {
   }
 
   const db = supabase();
-  const autoAktif = await daftarAutoAktif(db);
+  // Jabatan sayap membuka modul Dashboard, jadi yang mengajukannya SELALU
+  // menunggu persetujuan HR — walau sakelar daftar-langsung-aktif menyala.
+  const autoAktif = (await daftarAutoAktif(db)) && !jabatanSayap;
 
   // Tanpa email tidak ada bukti kepemilikan, jadi pendaftaran yang
   // bentrok TIDAK boleh ditimpa (dulu boleh bila emailnya belum
@@ -318,9 +364,13 @@ async function daftarTanpaEmail(isian: {
       profil_lengkap: false,
       wa_terverifikasi: false,
       aktif: true,
-      // DPD/DPC langsung menjadi struktur akunnya.
-      divisi: kategori === "dpd" ? DIVISI_DPD : kategori === "dpc" ? DIVISI_DPC : "",
-      sub_divisi: daerah,
+      // DPD/DPC/Sayap langsung menjadi struktur akunnya.
+      divisi:
+        kategori === "dpd" ? DIVISI_DPD : kategori === "dpc" ? DIVISI_DPC : kategori === "sayap" ? DIVISI_SAYAP : "",
+      sub_divisi: kategori === "sayap" ? sayap : daerah,
+      // Hanya kategori sayap yang mengisi kolom ini (sql/61); pendaftar
+      // lain tidak menyentuhnya, jadi database lama tetap aman.
+      ...(kategori === "sayap" ? { jabatan_sayap: jabatanSayap, provinsi, kota } : {}),
     })
     .select(await kolomUser())
     .single();
@@ -337,7 +387,18 @@ async function daftarTanpaEmail(isian: {
 
   if (!autoAktif) {
     const label =
-      kategori === "sekretariat" ? "Sekretariat" : `${kategori.toUpperCase()} ${daerah}`;
+      kategori === "sekretariat"
+        ? "Sekretariat"
+        : kategori === "sayap"
+          ? [
+              `Sayap ${sayap}`,
+              // Jabatan sayap DIAJUKAN SENDIRI — HR memastikannya saat ACC.
+              jabatanSayap && `mengajukan jabatan ${jabatanSayap}`,
+              [kota, provinsi].filter(Boolean).join(", "),
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          : `${kategori.toUpperCase()} ${daerah}`;
     const penerima = await penerimaKabarHR();
     await kirimKabar({
       judul: "Pendaftar baru menunggu persetujuan",

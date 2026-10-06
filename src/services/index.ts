@@ -279,7 +279,7 @@ export async function keluar(semuaPerangkat = false): Promise<void> {
 
 /** Langkah 1 — kirim data diri, kode OTP dikirim ke EMAIL. Nomor WA opsional. */
 /** Kategori pendaftar (24 Sep 2026): pilihan pertama saat mendaftar. */
-export type KategoriDaftar = "sekretariat" | "dpd" | "dpc";
+export type KategoriDaftar = "sekretariat" | "dpd" | "dpc" | "sayap";
 
 export async function daftar(data: {
   username: string;
@@ -291,6 +291,12 @@ export async function daftar(data: {
   kategori?: KategoriDaftar;
   /** Nama DPD/DPC, mis. "Jawa Barat" */
   nama_daerah?: string;
+  /** Kategori "sayap" (7 Okt 2026): nilai SUB_SAYAP, mis. "PATRIOT". */
+  sayap?: string;
+  /** Opsional — provinsi, kota/kabupaten, jabatan sayap. */
+  provinsi?: string;
+  kota?: string;
+  jabatan_sayap?: string;
 }): Promise<{
   email: string;
   otp_terkirim: boolean;

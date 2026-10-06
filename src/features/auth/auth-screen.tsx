@@ -34,6 +34,9 @@ import {
   Store,
   User as IkonUser,
   Building2,
+  Check,
+  Flag,
+  MapPin,
   UserPlus,
   X,
 } from "lucide-react";
@@ -61,7 +64,18 @@ import {
   type KategoriDaftar,
   type UserLengkap,
 } from "@/services";
-import { adalahDaerah, butuhSubDivisi, NAMA_DAERAH_MAKS, rapikanNamaDaerah } from "@/lib/struktur";
+import {
+  adalahDaerah,
+  butuhSubDivisi,
+  DIVISI_SAYAP,
+  gelarSayap,
+  JABATAN_SAYAP,
+  LOGO_SAYAP,
+  NAMA_DAERAH_MAKS,
+  rapikanNamaDaerah,
+  SUB_SAYAP,
+} from "@/lib/struktur";
+import { WILAYAH } from "@/lib/wilayah";
 import { PilihStrukturBanyak, type NilaiStruktur } from "@/features/pengguna/pilih-struktur";
 import { cn } from "@/lib/utils";
 
@@ -190,7 +204,9 @@ export function AuthScreen({ onMasukBerhasil, awalMenunggu = null }: AuthScreenP
                     ? "Daftar — DPD"
                     : kategori === "dpc"
                       ? "Daftar — DPC"
-                      : "Daftar — Sekretariat"
+                      : kategori === "sayap"
+                        ? "Daftar — Sayap Partai"
+                        : "Daftar — Sekretariat"
                   : langkah === "otp"
                     ? "Verifikasi Email"
                     : langkah === "profil"
@@ -628,6 +644,7 @@ const PILIHAN_KATEGORI: {
   { kunci: "sekretariat", label: "SEKRETARIAT", keterangan: "Pengurus & staf pusat — pendaftaran biasa", Ikon: Building2 },
   { kunci: "dpd", label: "DPD", keterangan: "Dewan Pimpinan Daerah — isi nama DPD Anda", Ikon: Landmark },
   { kunci: "dpc", label: "DPC", keterangan: "Dewan Pimpinan Cabang — isi nama DPC Anda", Ikon: Store },
+  { kunci: "sayap", label: "SAYAP PARTAI", keterangan: "Organisasi sayap — pilih logo sayap Anda", Ikon: Flag },
 ];
 
 function PilihKategoriDaftar({
@@ -673,6 +690,158 @@ function PilihKategoriDaftar({
   );
 }
 
+// ------------------------------------------------------------
+// Isian SAYAP PARTAI (7 Okt 2026): pilih logo sayap (wajib), lalu
+// provinsi → kota/kabupaten → jabatan sayap (ketiganya opsional).
+// ------------------------------------------------------------
+
+const KELAS_PILIHAN =
+  "glass-soft h-12 w-full appearance-none rounded-xl pr-3.5 pl-11 text-[15px] text-teks-utama outline-none focus:ring-2 focus:ring-pri/50 disabled:opacity-60";
+
+function IsianSayap({
+  sayap,
+  onSayap,
+  provinsi,
+  onProvinsi,
+  kota,
+  onKota,
+  jabatan,
+  onJabatan,
+  disabled,
+}: {
+  sayap: string;
+  onSayap: (v: string) => void;
+  provinsi: string;
+  onProvinsi: (v: string) => void;
+  kota: string;
+  onKota: (v: string) => void;
+  jabatan: string;
+  onJabatan: (v: string) => void;
+  disabled?: boolean;
+}) {
+  const daftarKota = WILAYAH.find((p) => p.nama === provinsi)?.kota ?? [];
+  const gelar = gelarSayap(sayap, jabatan);
+
+  return (
+    <>
+      <div>
+        <p id="d-sayap-label" className="mb-1.5 text-[12.5px] font-semibold text-teks-sekunder">
+          Sayap Partai
+        </p>
+        <div role="radiogroup" aria-labelledby="d-sayap-label" className="grid grid-cols-5 gap-2">
+          {SUB_SAYAP.map((s) => {
+            const nama = s.nilai.replace(/ RI$/, "");
+            const terpilih = sayap === s.nilai;
+            return (
+              <button
+                key={s.nilai}
+                type="button"
+                role="radio"
+                aria-checked={terpilih}
+                aria-label={s.label}
+                title={s.label}
+                disabled={disabled}
+                onClick={() => onSayap(s.nilai)}
+                className={cn(
+                  "btn-tekan relative flex min-w-0 flex-col items-center gap-1 rounded-xl bg-white p-1.5 pb-1 shadow-sm ring-1 ring-black/5 transition-shadow",
+                  terpilih && "ring-2 ring-pri",
+                )}
+              >
+                <img src={LOGO_SAYAP[s.nilai]} alt="" className="aspect-square w-full object-contain" />
+                <span className="w-full truncate text-center text-[9px] font-extrabold tracking-tight text-[#1F2937]">
+                  {nama}
+                </span>
+                {terpilih && (
+                  <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-pri text-white shadow">
+                    <Check className="h-3 w-3" strokeWidth={3} aria-hidden="true" />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-1.5 text-[11px] text-teks-sekunder">
+          {sayap ? SUB_SAYAP.find((s) => s.nilai === sayap)?.label : "Ketuk logo sayap Anda."}
+        </p>
+      </div>
+
+      <div>
+        <label htmlFor="d-provinsi" className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
+          Provinsi <span className="font-normal text-teks-sekunder/70">(opsional)</span>
+        </label>
+        <div className="relative">
+          <MapPin className="pointer-events-none absolute top-1/2 left-3.5 h-4.5 w-4.5 -translate-y-1/2 text-teks-sekunder" />
+          <select
+            id="d-provinsi"
+            value={provinsi}
+            onChange={(e) => onProvinsi(e.target.value)}
+            disabled={disabled}
+            className={KELAS_PILIHAN}
+          >
+            <option value="">Pilih provinsi…</option>
+            {WILAYAH.map((p) => (
+              <option key={p.nama} value={p.nama}>
+                {p.nama}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="d-kota" className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
+          Kota / Kabupaten <span className="font-normal text-teks-sekunder/70">(opsional)</span>
+        </label>
+        <div className="relative">
+          <Building2 className="pointer-events-none absolute top-1/2 left-3.5 h-4.5 w-4.5 -translate-y-1/2 text-teks-sekunder" />
+          <select
+            id="d-kota"
+            value={kota}
+            onChange={(e) => onKota(e.target.value)}
+            disabled={disabled || !provinsi}
+            className={KELAS_PILIHAN}
+          >
+            <option value="">{provinsi ? "Pilih kota/kabupaten…" : "Pilih provinsi dulu"}</option>
+            {daftarKota.map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label htmlFor="d-jabatan-sayap" className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
+          Jabatan di Sayap <span className="font-normal text-teks-sekunder/70">(opsional)</span>
+        </label>
+        <div className="relative">
+          <ShieldCheck className="pointer-events-none absolute top-1/2 left-3.5 h-4.5 w-4.5 -translate-y-1/2 text-teks-sekunder" />
+          <select
+            id="d-jabatan-sayap"
+            value={jabatan}
+            onChange={(e) => onJabatan(e.target.value)}
+            disabled={disabled}
+            className={KELAS_PILIHAN}
+          >
+            <option value="">Anggota (tanpa jabatan)</option>
+            {JABATAN_SAYAP.map((j) => (
+              <option key={j} value={j}>
+                {j}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="mt-1 text-[11px] text-teks-sekunder">
+          {gelar
+            ? `Tercatat sebagai ${gelar} — dipastikan pengurus HR saat menyetujui akun Anda.`
+            : "Kosongkan bila Anda anggota biasa."}
+        </p>
+      </div>
+    </>
+  );
+}
+
 function FormDaftar({
   kategori,
   kembali,
@@ -691,6 +860,12 @@ function FormDaftar({
   const daerah = kategori === "dpd" || kategori === "dpc";
   const labelDaerah = kategori.toUpperCase();
   const [namaDaerah, setNamaDaerah] = useState("");
+  // SAYAP PARTAI (7 Okt 2026): sayap wajib; provinsi, kota, jabatan opsional.
+  const sayapKategori = kategori === "sayap";
+  const [sayap, setSayap] = useState("");
+  const [provinsi, setProvinsi] = useState("");
+  const [kota, setKota] = useState("");
+  const [jabatanSayap, setJabatanSayap] = useState("");
   const [nama, setNama] = useState("");
   const [username, setUsername] = useState("");
   // Ada spasi yang diketik di username → diberi tahu, bukan dibuang diam-diam.
@@ -703,11 +878,12 @@ function FormDaftar({
 
   const usernameSah = /^[a-z0-9._]{3,20}$/.test(username) && /[a-z]/.test(username);
   const daerahSah = !daerah || namaDaerah.trim().length >= 2;
+  const sayapSah = !sayapKategori || Boolean(sayap);
   // Nomor WA OPSIONAL: kosong = sah; kalau diisi harus berformat benar.
   const nomorBersih = nomor.replace(/[^0-9]/g, "");
   const nomorSah = nomorBersih === "" || /^0?8[0-9]{8,12}$/.test(nomorBersih);
   const sandiSah = sandi.length >= 8;
-  const sah = usernameSah && daerahSah && sandiSah && nama.trim().length >= 2 && nomorSah;
+  const sah = usernameSah && daerahSah && sayapSah && sandiSah && nama.trim().length >= 2 && nomorSah;
 
   async function kirim(e: React.FormEvent) {
     e.preventDefault();
@@ -722,6 +898,14 @@ function FormDaftar({
         nomor_wa: nomor.trim() || undefined,
         kategori,
         nama_daerah: daerah ? namaDaerah.trim() : undefined,
+        ...(sayapKategori
+          ? {
+              sayap,
+              provinsi: provinsi || undefined,
+              kota: kota || undefined,
+              jabatan_sayap: jabatanSayap || undefined,
+            }
+          : {}),
       });
       if (user) {
         toast(
@@ -751,6 +935,23 @@ function FormDaftar({
 
   return (
     <form onSubmit={kirim} className="flex flex-col gap-3" noValidate>
+      {sayapKategori && (
+        <IsianSayap
+          sayap={sayap}
+          onSayap={setSayap}
+          provinsi={provinsi}
+          onProvinsi={(p) => {
+            setProvinsi(p);
+            setKota("");
+          }}
+          kota={kota}
+          onKota={setKota}
+          jabatan={jabatanSayap}
+          onJabatan={setJabatanSayap}
+          disabled={memuat}
+        />
+      )}
+
       {daerah && (
         <div>
           <label htmlFor="d-daerah" className="mb-1.5 block text-[12.5px] font-semibold text-teks-sekunder">
@@ -882,7 +1083,7 @@ function FormDaftar({
         className="inline-flex items-center justify-center gap-1 text-[12.5px] font-semibold text-teks-sekunder"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Ganti pilihan (Sekretariat / DPD / DPC)
+        Ganti pilihan (Sekretariat / DPD / DPC / Sayap)
       </button>
 
       {/* Daftar lewat Google (fitur 1.19.1): tanpa isi formulir & OTP —
@@ -1023,7 +1224,9 @@ function FormProfil({
   const [strukturDaftar, setStrukturDaftar] = useState<NilaiStruktur[]>(() =>
     awal?.divisi ? [{ divisi: awal.divisi, sub_divisi: awal.sub_divisi ?? "" }] : [],
   );
-  const strukturTetap = adalahDaerah(awal?.divisi);
+  // Sayap (7 Okt 2026) juga dibawa dari langkah daftar beserta jabatannya;
+  // memilih ulang di sini bisa membuang jabatan sayap yang diajukan.
+  const strukturTetap = adalahDaerah(awal?.divisi) || (awal?.divisi === DIVISI_SAYAP && Boolean(awal?.sub_divisi));
   const [foto, setFoto] = useState<string>("");
   const [memuat, setMemuat] = useState(false);
   const [error, setError] = useState<string | null>(null);

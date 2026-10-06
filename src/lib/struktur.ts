@@ -121,6 +121,24 @@ export const SUB_SAYAP: { nilai: string; label: string }[] = [
   { nilai: "KESUMA RI", label: "KESUMA RI — Kesehatan Untuk Semua Rakyat Indonesia" },
 ];
 
+/**
+ * Logo resmi tiap sayap bawaan (7 Okt 2026, pendaftaran Sayap Partai) —
+ * berkas di public/sayap. Sayap tambahan dari tabel sayap_partai belum
+ * punya logo.
+ */
+export const LOGO_SAYAP: Record<string, string> = {
+  PATRIOT: "/sayap/patriot.webp",
+  PERI: "/sayap/peri.webp",
+  LBH: "/sayap/lbh.webp",
+  AMRI: "/sayap/amri.webp",
+  MURI: "/sayap/muri.webp",
+  PERISAI: "/sayap/perisai.webp",
+  SAMUDRA: "/sayap/samudra.webp",
+  PRORI: "/sayap/prori.webp",
+  JURI: "/sayap/juri.webp",
+  "KESUMA RI": "/sayap/kesuma.webp",
+};
+
 export const SUB_ZONA: { nilai: string; label: string }[] = [
   "Sumatera",
   "Papua, Maluku Utara, Maluku",
