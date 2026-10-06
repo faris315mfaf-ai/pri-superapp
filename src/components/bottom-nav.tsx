@@ -75,9 +75,11 @@ type BottomNavProps = {
   belumBaca?: number;
   /** Daftar tab eksplisit (mis. + "tv" untuk Pimred). Kosong = per peran. */
   tabs?: KunciTab[];
+  /** Desain Apple (6 Okt 2026): pil aktif bernada lembut, bukan gradien merah. */
+  apple?: boolean;
 };
 
-export function BottomNav({ role, tabAktif, onTab, belumBaca = 0, tabs: tabsProp }: BottomNavProps) {
+export function BottomNav({ role, tabAktif, onTab, belumBaca = 0, tabs: tabsProp, apple = false }: BottomNavProps) {
   const tabs = tabsProp ?? TAB_PER_ROLE[role];
 
   return (
@@ -119,18 +121,22 @@ export function BottomNav({ role, tabAktif, onTab, belumBaca = 0, tabs: tabsProp
               data-tur={`nav-${kunci}`}
               className={cn(
                 "btn-tekan relative flex min-h-[44px] grow shrink-0 basis-[58px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5",
-                aktif ? "text-white" : "text-teks-sekunder",
+                aktif ? (apple ? "text-pri" : "text-white") : "text-teks-sekunder",
               )}
             >
               {aktif && (
                 <motion.span
-                  layoutId="pill-tab-aktif"
-                  className="absolute inset-0 rounded-2xl"
-                  style={{
-                    background: "linear-gradient(135deg, #DC2626, #B91C1C)",
-                    boxShadow: "0 6px 18px rgba(220, 38, 38, 0.4)",
-                  }}
-                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                  layoutId={apple ? "pill-tab-aktif-apple" : "pill-tab-aktif"}
+                  className={cn("absolute inset-0 rounded-2xl", apple && "sidebar-apple-pil")}
+                  style={
+                    apple
+                      ? undefined
+                      : {
+                          background: "linear-gradient(135deg, #DC2626, #B91C1C)",
+                          boxShadow: "0 6px 18px rgba(220, 38, 38, 0.4)",
+                        }
+                  }
+                  transition={apple ? { type: "spring", bounce: 0, duration: 0.35 } : { type: "spring", stiffness: 420, damping: 34 }}
                 />
               )}
               <span className="relative">
@@ -147,7 +153,7 @@ export function BottomNav({ role, tabAktif, onTab, belumBaca = 0, tabs: tabsProp
               <span
                 className={cn(
                   "relative text-[10px] font-semibold leading-none",
-                  aktif ? "text-white" : "text-teks-sekunder",
+                  aktif ? (apple ? "text-pri" : "text-white") : "text-teks-sekunder",
                 )}
               >
                 {label}

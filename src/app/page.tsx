@@ -21,6 +21,9 @@ import { PushBannerStack } from "@/components/push-banner";
 import { BottomNav, type KunciTab } from "@/components/bottom-nav";
 import { PagarGalat } from "@/components/pagar-galat";
 import { SideNav } from "@/components/side-nav";
+import { Dock } from "@/components/dock";
+import { bolehDesainApple } from "@/lib/desain-apple";
+import { useModeNav } from "@/hooks/use-mode-nav";
 import { SplashScreen } from "@/features/auth/splash-screen";
 import { bolehPet } from "@/lib/pet-akses";
 import { MODUL_AKUN, bolehAudit, modulDibuka } from "@/lib/peran";
@@ -345,6 +348,19 @@ export default function Page() {
   useEffect(() => {
     document.documentElement.dataset.layar = subLayar?.nama ?? tab;
   }, [tab, subLayar]);
+  // Desain Apple (6 Okt 2026, uji coba akun Faris): tema lewat
+  // <html data-desain="apple"> (globals.css) + pilihan Sidebar ↔ Dock.
+  const desainApple = bolehDesainApple(user);
+  const [modeNav, aturModeNav] = useModeNav();
+  const pakaiDock = desainApple && modeNav === "dock";
+  useEffect(() => {
+    if (desainApple) document.documentElement.dataset.desain = "apple";
+    else delete document.documentElement.dataset.desain;
+  }, [desainApple]);
+  // Jarak konten dari navigasi kiri: Dock = tanpa rel; sidebar Apple
+  // mengambang (12 + 240 + 12 px); sidebar biasa menempel (240 px).
+  const kiriKonten = pakaiDock ? "" : desainApple ? "lg:pl-[264px]" : "lg:pl-60";
+  const kiriSubLayar = pakaiDock ? "lg:left-0" : desainApple ? "lg:left-[264px]" : "lg:left-60";
   // Kunci sub-dashboard yang boleh dibuka jabatan ini (fitur 1.19/3.3).
   // Diisi effect di bawah; dipakai tabBoleh, jadi dideklarasikan di sini.
   const [aksesDashboard, setAksesDashboard] = useState<string[]>([]);
@@ -1351,20 +1367,37 @@ export default function Page() {
       {/* Aplikasi utama */}
       {siap && user && !menyambut && (
         <div className="relative min-h-dvh">
-          {/* Navigasi samping — hanya tampil di layar lebar (PC) */}
-          <SideNav
-            role={user.role}
-            tabAktif={tabEfektif}
-            onTab={pilihTab}
-            belumBaca={belumBaca}
-            tabs={tabBoleh}
-          />
+          {/* Navigasi layar lebar (PC): rel kiri, atau Dock macOS (desain Apple) */}
+          <AnimatePresence>
+            {pakaiDock && (
+              <Dock
+                key="dock"
+                role={user.role}
+                tabAktif={tabEfektif}
+                onTab={pilihTab}
+                belumBaca={belumBaca}
+                tabs={tabBoleh}
+                onJadikanSidebar={() => aturModeNav("sidebar")}
+              />
+            )}
+          </AnimatePresence>
+          {!pakaiDock && (
+            <SideNav
+              role={user.role}
+              tabAktif={tabEfektif}
+              onTab={pilihTab}
+              belumBaca={belumBaca}
+              tabs={tabBoleh}
+              apple={desainApple}
+              onJadikanDock={() => aturModeNav("dock")}
+            />
+          )}
 
           {/* Tumpukan layar tab — yang sudah dibuka tetap terpasang
               (state terjaga), yang belum dibuka belum di-mount supaya
               API pengurus di tab Dashboard/QC tidak ikut terpanggil
               saat anggota biasa baru login. */}
-          <div className="relative lg:pl-60">
+          <div className={cn("relative transition-[padding] duration-500 ease-[var(--ease-laci)]", kiriKonten)}>
             {layarTab.map(({ kunci, isi }) => (
               <div
                 key={kunci}
@@ -1395,6 +1428,7 @@ export default function Page() {
               onTab={pilihTab}
               belumBaca={belumBaca}
               tabs={tabBoleh}
+              apple={desainApple}
             />
           )}
 
@@ -1407,7 +1441,7 @@ export default function Page() {
                 animate={{ x: 0 }}
                 exit={{ x: "100%" }}
                 transition={{ type: "spring", stiffness: 340, damping: 34 }}
-                className="fixed inset-0 z-40 overflow-y-auto overscroll-contain lg:left-60"
+                className={cn("fixed inset-0 z-40 overflow-y-auto overscroll-contain", kiriSubLayar)}
               >
                 <MeshBackground />
                 <PagarGalat nama={subLayar.nama}>
