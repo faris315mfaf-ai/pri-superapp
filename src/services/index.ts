@@ -5433,7 +5433,15 @@ export async function getEmbedTerbaru(): Promise<PostinganEmbed[]> {
 
 // ---- Dompet & Kelola Koin (5 Okt 2026) ----------------------------
 
-export type RiwayatKoin = { id: string; jumlah: number; label: string; catatan: string; tanggal: string };
+export type RiwayatKoin = {
+  id: string;
+  jumlah: number;
+  label: string;
+  catatan: string;
+  tanggal: string;
+  /** Pengirim transfer (7 Okt 2026); null = otomatis/sistem atau transaksi lama. */
+  pemberi?: { id: string; nama: string; jabatan: string; avatar_url: string | null } | null;
+};
 export type DompetKoin = { saldo: number; riwayat: RiwayatKoin[]; boleh_kelola: boolean };
 
 /** Dompet koin saya: saldo, riwayat terbaru, hak kelola. */

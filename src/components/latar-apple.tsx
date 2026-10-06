@@ -13,23 +13,33 @@
 
 import { useAppStore } from "@/hooks/use-app-store";
 import { latarEfektif, useLatarApple, type Latar } from "@/hooks/use-latar-apple";
+import { desainBaru } from "@/lib/desain-apple";
+import { svgLatarHidup, type TemaHidup } from "@/components/latar-hidup";
 
 export function LatarApple() {
   const [latar] = useLatarApple();
   const gelap = useAppStore((s) => s.tema === "dark");
   const aktif = latarEfektif(latar, gelap);
   const op = (l: Latar) => (aktif === l ? 1 : 0);
+  // Desain baru (7 Okt 2026): harimau & makhluk kecil yang hidup di tiap
+  // adegan. SVG statis buatan sendiri (bukan masukan pengguna).
+  const hidup = useAppStore((s) => desainBaru(s.user));
+  const lapisHidup = (t: TemaHidup) =>
+    hidup ? <div className="contents" dangerouslySetInnerHTML={{ __html: svgLatarHidup(t) }} /> : null;
 
   return (
     <div aria-hidden="true" className="latar-apple fixed inset-0 -z-10 overflow-hidden" style={{ background: "#0B1026" }}>
-      <div className="latar-lapis" style={{ opacity: op("pagi") }}>
+      <div className="latar-lapis" data-aktif={op("pagi")} style={{ opacity: op("pagi") }}>
         <AdeganPagi />
+        {lapisHidup("pagi")}
       </div>
-      <div className="latar-lapis" style={{ opacity: op("sore") }}>
+      <div className="latar-lapis" data-aktif={op("sore")} style={{ opacity: op("sore") }}>
         <AdeganSore />
+        {lapisHidup("sore")}
       </div>
-      <div className="latar-lapis" style={{ opacity: op("malam") }}>
+      <div className="latar-lapis" data-aktif={op("malam")} style={{ opacity: op("malam") }}>
         <AdeganMalam />
+        {lapisHidup("malam")}
       </div>
       <div className="latar-lapis" style={{ opacity: gelap && aktif !== "malam" ? 1 : 0, background: "rgba(0,0,0,0.45)" }} />
     </div>

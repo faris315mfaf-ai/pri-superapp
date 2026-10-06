@@ -63,18 +63,41 @@ const LABEL_AKTIVITAS: Record<string, string> = {
   ...Object.fromEntries(AKTIVITAS_KOIN.map((a) => [a.id, a.label])),
 };
 
-export type BarisRiwayatKoin = { id: string; jumlah: number; label: string; catatan: string; tanggal: string };
+export type PemberiKoin = { id: string; nama: string; jabatan: string; avatar_url: string | null };
+export type BarisRiwayatKoin = {
+  id: string;
+  jumlah: number;
+  label: string;
+  catatan: string;
+  tanggal: string;
+  /** Pengirim transfer (sql/62). Null = otomatis/sistem atau transaksi lama. */
+  pemberi: PemberiKoin | null;
+};
 
 /** Riwayat transaksi koin terbaru seseorang (terbaru dulu). */
 export async function riwayatKoin(userId: number, batas = 30): Promise<BarisRiwayatKoin[]> {
-  const { data, error } = await supabase()
-    .from("koin_transaksi")
-    .select("id, jumlah, aktivitas, referensi, dibuat_pada")
-    .eq("user_id", userId)
-    .order("dibuat_pada", { ascending: false })
-    .limit(batas);
+  const db = supabase();
+  const kueri = (kolom: string) =>
+    db.from("koin_transaksi").select(kolom).eq("user_id", userId).order("dibuat_pada", { ascending: false }).limit(batas);
+  let { data, error } = await kueri("id, jumlah, aktivitas, referensi, dibuat_pada, pemberi_id");
+  // Database belum dimigrasi (sql/62): baca tanpa kolom pengirim.
+  if (error?.code === "42703") ({ data, error } = await kueri("id, jumlah, aktivitas, referensi, dibuat_pada"));
   if (error) throw new Error("Riwayat koin gagal dimuat.");
-  return (data ?? []).map((b) => {
+  const baris = (data ?? []) as unknown as {
+    id: number; jumlah: number; aktivitas: string; referensi: string | null; dibuat_pada: string; pemberi_id?: number | null;
+  }[];
+
+  // Nama pengirim: satu kueri untuk semua id unik.
+  const idPemberi = [...new Set(baris.map((b) => b.pemberi_id).filter((x): x is number => x != null))];
+  const pemberi = new Map<string, PemberiKoin>();
+  if (idPemberi.length > 0) {
+    const { data: orang } = await db.from("app_user").select("id, nama, jabatan, avatar_url").in("id", idPemberi);
+    for (const o of orang ?? []) {
+      pemberi.set(String(o.id), { id: String(o.id), nama: String(o.nama ?? ""), jabatan: String(o.jabatan ?? ""), avatar_url: o.avatar_url ?? null });
+    }
+  }
+
+  return baris.map((b) => {
     const akt = String(b.aktivitas);
     const ref = String(b.referensi ?? "");
     // Hadiah video: referensi "<sumber>-<id>" — tampilkan asal videonya.
@@ -85,6 +108,7 @@ export async function riwayatKoin(userId: number, batas = 30): Promise<BarisRiwa
       label: LABEL_AKTIVITAS[akt] ?? akt.replace(/_/g, " "),
       catatan,
       tanggal: String(b.dibuat_pada),
+      pemberi: b.pemberi_id != null ? (pemberi.get(String(b.pemberi_id)) ?? null) : null,
     };
   });
 }
@@ -149,11 +173,13 @@ export async function catatKirimanMaster(
   penerimaId: number,
   jumlah: number,
   referensi: string,
+  /** Pengirim (sql/62) — tampil di riwayat dompet penerima. */
+  pemberiId?: number,
 ): Promise<{ baru: boolean }> {
   const { data, error } = await supabase()
     .from("koin_transaksi")
     .upsert(
-      { user_id: penerimaId, jumlah, aktivitas: AKTIVITAS_KIRIMAN_MASTER, referensi },
+      { user_id: penerimaId, jumlah, aktivitas: AKTIVITAS_KIRIMAN_MASTER, referensi, ...(pemberiId ? { pemberi_id: pemberiId } : {}) },
       { onConflict: "user_id,aktivitas,referensi", ignoreDuplicates: true },
     )
     .select("id");

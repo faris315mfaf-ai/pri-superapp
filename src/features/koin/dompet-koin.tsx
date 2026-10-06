@@ -9,7 +9,7 @@
 // video anggota dan me-reset koin (features/koin/kelola-koin).
 // ============================================================
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Eye, EyeOff, History, Loader2, Settings2, X } from "lucide-react";
 import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
@@ -45,6 +45,8 @@ export function DompetKoinBeranda() {
       })
       .catch(() => setGalat(true));
   }, []);
+  // Muat saat kartu pertama dibuka; penyegaran berkala baru berjalan kemudian.
+  useEffect(() => { muat(); }, [muat]);
   useSegarOtomatis(muat, 60);
 
   function aturSembunyi() {

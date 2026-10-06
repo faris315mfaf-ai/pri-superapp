@@ -100,6 +100,8 @@ import { StudioPalugodam } from "./studio-palugodam";
 import { InsightSayaPanel } from "./insight-saya-panel";
 import { cn } from "@/lib/utils";
 import { useTataLebar } from "@/hooks/use-tata-lebar";
+import { desainBaru } from "@/lib/desain-apple";
+import { motion as gerak } from "framer-motion";
 import { useModulAktif } from "@/hooks/use-modul";
 import { PanelVideoWajib } from "@/features/tv-rakyat/panel-video-wajib";
 
@@ -572,6 +574,41 @@ const TAMPIL_TVRKU: Record<"tugas" | "studio", boolean> = {
   studio: false,
 };
 
+// ------------------------------------------------------------
+// SEGMEN TVR SAYA (7 Okt 2026, desain baru): seksi dikelompokkan supaya
+// layar tidak menumpuk — Produksi · Unggah · Laporan & KPI. Tiap segmen
+// menyimpan tata letaknya sendiri (kunci layout:tvrku-<segmen>).
+// ------------------------------------------------------------
+type SegmenTvr = "produksi" | "unggah" | "laporan";
+const SEGMEN_TVR: Record<string, SegmenTvr> = {
+  "stok-video": "produksi",
+  "video-wajib": "produksi",
+  "kendali-akun": "produksi",
+  "rekap-palugodam": "produksi",
+  "auto-edit-master": "produksi",
+  "edit-otomatis": "produksi",
+  "kompres-video": "produksi",
+  "blur-watermark": "produksi",
+  "studio-palugodam": "produksi",
+  akun: "unggah",
+  "unggah-sosmed": "unggah",
+  "video-siap-unggah": "unggah",
+  "siaran-serentak": "unggah",
+  tugas: "unggah",
+  "acc-ajuan-komen": "unggah",
+  kpi: "laporan",
+  laporan: "laporan",
+  grafik: "laporan",
+  rangkuman: "laporan",
+  "insight-saya": "laporan",
+  "sosmed-terblokir": "laporan",
+};
+const DAFTAR_SEGMEN: { kunci: SegmenTvr; label: string }[] = [
+  { kunci: "produksi", label: "Produksi" },
+  { kunci: "unggah", label: "Unggah" },
+  { kunci: "laporan", label: "Laporan & KPI" },
+];
+
 export function TvrKuScreen({
   user: userAsli,
   onBukaNotifikasi,
@@ -597,6 +634,15 @@ export function TvrKuScreen({
   // hanya berlaku di modul ini. Lihat lib/kendali-klien.
   const bolehKendali = adalahAdminStudio(userAsli);
   const tataLebar = useTataLebar();
+  const pakaiSegmen = desainBaru(userAsli) && !hanyaSeksi;
+  const [segmenTvr, setSegmenTvr] = useState<SegmenTvr>("produksi");
+  // Dibuka dari beranda menuju seksi tertentu → pindah ke segmennya dulu
+  // (penyesuaian state saat render, bukan di effect).
+  const [tikGulir, setTikGulir] = useState(0);
+  if (pakaiSegmen && gulirKe && gulirKe.tik !== tikGulir) {
+    setTikGulir(gulirKe.tik);
+    setSegmenTvr(SEGMEN_TVR[gulirKe.seksi] ?? "produksi");
+  }
   const _user: User = userAsli;
   function pilihKendali(a: AnggotaKendali | null) {
     if (!a) return;
@@ -879,13 +925,41 @@ export function TvrKuScreen({
 
       {/* Atur Tata Letak (fitur 1.22.x): semua seksi bisa diseret/
           disembunyikan/dilipat — satu kolom. */}
+      {pakaiSegmen && (
+        <div role="tablist" aria-label="Kelompok TV Rakyat Saya" className="glass relative mt-4 grid grid-cols-3 rounded-2xl p-1">
+          {DAFTAR_SEGMEN.map(({ kunci, label }) => {
+            const aktif = segmenTvr === kunci;
+            return (
+              <button
+                key={kunci}
+                type="button"
+                role="tab"
+                aria-selected={aktif}
+                onClick={() => setSegmenTvr(kunci)}
+                className={cn("btn-tekan relative h-10 rounded-xl text-[13px] font-semibold transition-colors", aktif ? "text-white" : "text-teks-sekunder")}
+              >
+                {aktif && (
+                  <gerak.span
+                    layoutId="segmen-tvr-aktif"
+                    className="absolute inset-0 rounded-xl"
+                    style={{ background: "linear-gradient(180deg, #FF453A, #D70015)", boxShadow: "0 6px 16px rgba(215,0,21,0.3)" }}
+                    transition={{ type: "spring", bounce: 0, duration: 0.42 }}
+                  />
+                )}
+                <span className="relative">{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       <TataLetakModul
         // Ganti kunci saat beralih akun (kendali): semua seksi anak dimuat
         // ulang dari nol dengan identitas baru — bukan sisa data akun lama.
-        key="sendiri"
+        // Desain baru: tiap segmen punya tata letak sendiri.
+        key={pakaiSegmen ? `segmen-${segmenTvr}` : "sendiri"}
         // Mode Simpel memakai kunci preferensi sendiri: seksi yang
         // disembunyikan pengguna di mode lengkap tidak ikut hilang di sini.
-        modul={hanyaSeksi ? "tvrku-simpel" : "tvrku"}
+        modul={pakaiSegmen ? `tvrku-${segmenTvr}` : hanyaSeksi ? "tvrku-simpel" : "tvrku"}
         bungkusSeksi={false}
         // Tata letak lebar (7 Okt 2026, master): seksi dibagi 2–3 kolom.
         lebar={tataLebar}
@@ -1578,7 +1652,10 @@ export function TvrKuScreen({
       </FadeInUp>
         ) },
         ] as SeksiModul[]).filter(
-          (s) => (!ketum || !SEKSI_KPI_TVRKU.has(s.id)) && (!hanyaSeksi || hanyaSeksi.includes(s.id)),
+          (s) =>
+            (!ketum || !SEKSI_KPI_TVRKU.has(s.id)) &&
+            (!hanyaSeksi || hanyaSeksi.includes(s.id)) &&
+            (!pakaiSegmen || (SEGMEN_TVR[s.id] ?? "unggah") === segmenTvr),
         )}
       />
 

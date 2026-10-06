@@ -108,7 +108,7 @@ import { ModalChangelog } from "./modal-changelog";
 import { AntreanAccTim, KartuTim, MenuUpdateAplikasi } from "./keanggotaan-tim";
 import { BarisUkuranTeks, SeksiMasukan } from "./masukan-dan-font";
 import { useModulAktif } from "@/hooks/use-modul";
-import { bolehDesainApple } from "@/lib/desain-apple";
+import { bolehDesainApple, desainBaru } from "@/lib/desain-apple";
 import { PemilihLatar } from "./pemilih-latar";
 
 // ------------------------------------------------------------
@@ -437,6 +437,8 @@ export function ProfilScreen({
   // Tata letak lebar (7 Okt 2026, master): di bawah kartu profil, isi
   // dibagi dua kolom — menu & kinerja di kiri, Pengaturan di kanan.
   const lebar = useTataLebar();
+  // Desain baru (7 Okt 2026): Ludo Robot & Pet Robot disembunyikan.
+  const tanpaHiburan = desainBaru(user);
   const wadahRef = useRef<HTMLDivElement>(null);
   const lebarWadah = useLebarWadah(wadahRef) ?? 0;
   const [tabPengaturan, setTabPengaturan] = useState<"display" | "keamanan">(
@@ -775,7 +777,7 @@ export function ProfilScreen({
       )}
 
       {/* Pet Robot — terbuka untuk semua pengguna (3 Sep 2026) */}
-      {TAMPIL_PROFIL.petRobot && onBukaPet && (
+      {TAMPIL_PROFIL.petRobot && onBukaPet && !tanpaHiburan && (
         <FadeInUp delay={0.02}>
           <button
             type="button"
@@ -804,7 +806,7 @@ export function ProfilScreen({
       )}
 
       {/* Ludo Robot — terbuka untuk semua pengguna (3 Sep 2026) */}
-      {onBukaLudo && (
+      {onBukaLudo && !tanpaHiburan && (
         <FadeInUp delay={0.025}>
           <button
             type="button"

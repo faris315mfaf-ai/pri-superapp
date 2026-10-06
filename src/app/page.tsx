@@ -22,8 +22,9 @@ import { BottomNav, type KunciTab } from "@/components/bottom-nav";
 import { PagarGalat } from "@/components/pagar-galat";
 import { SideNav } from "@/components/side-nav";
 import { Dock } from "@/components/dock";
-import { bolehDesainApple, tataLebar } from "@/lib/desain-apple";
+import { bolehDesainApple, desainBaru, tataLebar } from "@/lib/desain-apple";
 import { useLayarLebar } from "@/hooks/use-layar-lebar";
+import { PEGAS_HALAMAN } from "@/lib/pegas";
 import { useModeNav } from "@/hooks/use-mode-nav";
 import { temaApple, useLatarApple } from "@/hooks/use-latar-apple";
 import { SplashScreen } from "@/features/auth/splash-screen";
@@ -99,6 +100,7 @@ const PanelMasterScreen = dynamic(() => import("@/features/profil/panel-master")
 const PengaturanFiturScreen = dynamic(() => import("@/features/profil/pengaturan-fitur").then((m) => m.PengaturanFiturScreen), { ssr: false, loading: MuatLayar });
 const BerandaScreen = dynamic(() => import("@/features/beranda/beranda-screen").then((m) => m.BerandaScreen), { ssr: false, loading: MuatLayar });
 const BerandaSimpelGlass = dynamic(() => import("@/features/beranda/beranda-simpel-glass").then((m) => m.BerandaSimpelGlass), { ssr: false, loading: MuatLayar });
+const BerandaFaris = dynamic(() => import("@/features/beranda/beranda-faris").then((m) => m.BerandaFaris), { ssr: false, loading: MuatLayar });
 const LeaderboardKomenScreen = dynamic(() => import("@/features/beranda/layar-anggota").then((m) => m.LeaderboardKomenScreen), { ssr: false, loading: MuatLayar });
 const PengumumanDaftarScreen = dynamic(() => import("@/features/beranda/layar-anggota").then((m) => m.PengumumanDaftarScreen), { ssr: false, loading: MuatLayar });
 const DatabaseScreen = dynamic(() => import("@/features/database/database-screen").then((m) => m.DatabaseScreen), { ssr: false, loading: MuatLayar });
@@ -361,6 +363,13 @@ export default function Page() {
     if (desainApple) document.documentElement.dataset.desain = "apple";
     else delete document.documentElement.dataset.desain;
   }, [desainApple]);
+  // Desain baru (7 Okt 2026): <html data-baru> mengaktifkan kurva pegas &
+  // gaya desain baru (globals.css); tab berpindah dengan geser searah.
+  const pakaiDesainBaru = desainBaru(user);
+  useEffect(() => {
+    if (pakaiDesainBaru) document.documentElement.dataset.baru = "1";
+    else delete document.documentElement.dataset.baru;
+  }, [pakaiDesainBaru]);
   // <html data-nav="dock">: layar setinggi layar (Chat terbagi) memberi
   // ruang bawah untuk Dock lewat kelas .ruang-dock (globals.css).
   useEffect(() => {
@@ -622,6 +631,28 @@ export default function Page() {
     if (!user) return tab;
     return tabBoleh.includes(tab) ? tab : TAB_AWAL[user.role];
   }, [user, tab, tabBoleh]);
+
+  // Desain baru: tab yang baru dibuka masuk bergeser searah urutan menu
+  // (PC: juga muncul dari blur) dengan kurva pegas. Tanpa fill — setelah
+  // selesai tidak ada transform tersisa yang mengurung elemen fixed.
+  const tabSebelumRef = useRef<KunciTab | null>(null);
+  useEffect(() => {
+    const sebelum = tabSebelumRef.current;
+    tabSebelumRef.current = tabEfektif;
+    if (!pakaiDesainBaru || !sebelum || sebelum === tabEfektif) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const el = document.querySelector<HTMLElement>(`[data-tab="${tabEfektif}"]`);
+    if (!el) return;
+    const arah = Math.sign(tabBoleh.indexOf(tabEfektif) - tabBoleh.indexOf(sebelum)) || 1;
+    const pc = window.matchMedia("(min-width: 1024px) and (pointer: fine)").matches;
+    el.animate(
+      [
+        { opacity: 0, transform: `translate3d(${arah * (pc ? 36 : 22)}px,0,0) scale(0.99)`, filter: pc ? "blur(8px)" : "none" },
+        { opacity: 1, transform: "none", filter: "none" },
+      ],
+      { duration: PEGAS_HALAMAN.durasi, easing: PEGAS_HALAMAN.easing },
+    );
+  }, [tabEfektif, pakaiDesainBaru, tabBoleh]);
 
   // ------------------------------------------------------------
   // Muat notifikasi saat aplikasi aktif
@@ -1095,7 +1126,22 @@ export default function Page() {
       const tanpaJabatan = !(user.jabatan ?? "").trim();
       layarTab.push({
         kunci: "beranda",
-        isi: tanpaJabatan ? (
+        // Desain baru (7 Okt 2026): beranda dari mockup lokal untuk akun uji coba.
+        isi: desainBaru(user) ? (
+          <BerandaFaris
+            user={user}
+            onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
+            onBukaAbsensi={() => setSubLayar({ nama: "absensi" })}
+            onBukaLaporanKerja={() => setSubLayar({ nama: "laporan-kerja" })}
+            onBukaTvrKu={tabBoleh.includes("tvrku") ? (seksi) => {
+              if (seksi) setFokusTvrku({ seksi, tik: Date.now() });
+              pilihTab("tvrku");
+            } : undefined}
+            onBukaKonten={tabBoleh.includes("konten") ? () => pilihTab("konten") : undefined}
+            onBukaProfil={() => pilihTab("profil")}
+            onBukaPengumuman={() => setSubLayar({ nama: "pengumuman-daftar" })}
+          />
+        ) : tanpaJabatan ? (
           <BerandaSimpelGlass
             user={user}
             onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
@@ -1139,6 +1185,13 @@ export default function Page() {
             onBukaTvAnalitik={() => setSubLayar({ nama: "dashboard-tv" })}
             onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
             jumlahBelumBaca={belumBaca}
+            // Desain baru (7 Okt 2026): Kehadiran + Dompet TMP + Ruang karya di atas dashboard.
+            desainBaru={desainBaru(user)}
+            onBukaAbsensiSaya={() => setSubLayar({ nama: "absensi" })}
+            onBukaTvrKu={tabBoleh.includes("tvrku") ? (seksi) => {
+              setFokusTvrku({ seksi, tik: Date.now() });
+              pilihTab("tvrku");
+            } : undefined}
           />
         ),
       });
@@ -1415,6 +1468,7 @@ export default function Page() {
             {layarTab.map(({ kunci, isi }) => (
               <div
                 key={kunci}
+                data-tab={kunci}
                 aria-hidden={kunci !== tabEfektif}
                 className={cn(
                   "transition-[opacity,visibility] duration-300",
@@ -1441,6 +1495,7 @@ export default function Page() {
               tabAktif={tabEfektif}
               onTab={pilihTab}
               belumBaca={belumBaca}
+              gayaDock={desainBaru(user)}
               tabs={tabBoleh}
               apple={desainApple}
             />
@@ -1641,14 +1696,15 @@ export default function Page() {
           suaranya sendiri sedang terbuka. */}
       {/* Pet Robot melayang (percobaan, khusus master; 3 Sep 2026) — hanya di
           tab Beranda (dashboard master), tanpa sub-layar terbuka. */}
-      {/* v5 (5 Sep 2026): pet dimatikan untuk pemegang jabatan (bolehPet). */}
-      {user && bolehPet(user) && tabEfektif === "beranda" && !subLayar && sakelar.fitur.pet_beranda !== false && (
+      {/* v5 (5 Sep 2026): pet dimatikan untuk pemegang jabatan (bolehPet).
+          Desain baru (7 Okt 2026): pet & hewan melayang disembunyikan. */}
+      {user && bolehPet(user) && !pakaiDesainBaru && tabEfektif === "beranda" && !subLayar && sakelar.fitur.pet_beranda !== false && (
         <PetMelayang
           onBuka={(tab) => setSubLayar({ nama: "pet", tab })}
           versi={versiPet}
         />
       )}
-      {user && bolehPet(user) && tabEfektif === "beranda" && !subLayar && sakelar.fitur.pet_beranda !== false && (
+      {user && bolehPet(user) && !pakaiDesainBaru && tabEfektif === "beranda" && !subLayar && sakelar.fitur.pet_beranda !== false && (
         <HewanMelayang
           onBuka={() => setSubLayar({ nama: "pet" })}
           versi={versiPet}

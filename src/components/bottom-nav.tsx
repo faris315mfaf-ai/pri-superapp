@@ -5,10 +5,12 @@
 // Tab aktif: pill merah primary dengan animasi slide (layoutId).
 // ============================================================
 
-import { motion } from "framer-motion";
+import { useRef, useState } from "react";
+import { motion, useAnimate } from "framer-motion";
 import { Home, Newspaper, Radio, ShieldCheck, Tv, Clapperboard, MessagesSquare, Bell, User, CalendarDays, LayoutDashboard, Bot } from "lucide-react";
 import type { KomponenIkon, Role } from "@/types";
 import { cn } from "@/lib/utils";
+import { WARNA_DOCK } from "@/components/warna-dock";
 
 export type KunciTab =
   | "beranda"
@@ -77,10 +79,13 @@ type BottomNavProps = {
   tabs?: KunciTab[];
   /** Desain Apple (6 Okt 2026): pil aktif bernada lembut, bukan gradien merah. */
   apple?: boolean;
+  /** Desain baru (7 Okt 2026): Dock bergaya macOS juga di HP & tablet. */
+  gayaDock?: boolean;
 };
 
-export function BottomNav({ role, tabAktif, onTab, belumBaca = 0, tabs: tabsProp, apple = false }: BottomNavProps) {
+export function BottomNav({ role, tabAktif, onTab, belumBaca = 0, tabs: tabsProp, apple = false, gayaDock = false }: BottomNavProps) {
   const tabs = tabsProp ?? TAB_PER_ROLE[role];
+  if (gayaDock) return <DockHp tabs={tabs} tabAktif={tabAktif} onTab={onTab} belumBaca={belumBaca} />;
 
   return (
     <nav
@@ -163,5 +168,102 @@ export function BottomNav({ role, tabAktif, onTab, belumBaca = 0, tabs: tabsProp
         })}
       </div>
     </nav>
+  );
+}
+
+// ------------------------------------------------------------
+// DOCK HP & TABLET (7 Okt 2026, desain baru): ikon aplikasi berwarna
+// seperti Dock macOS, titik di bawah ikon aktif, label muncul sesaat saat
+// diketuk, ikon memantul seperti aplikasi diluncurkan. Ukuran ikon
+// menyesuaikan jumlah tab supaya tetap muat di layar 360 px.
+// ------------------------------------------------------------
+function DockHp({ tabs, tabAktif, onTab, belumBaca }: { tabs: KunciTab[]; tabAktif: KunciTab; onTab: (t: KunciTab) => void; belumBaca: number }) {
+  const ukuran = tabs.length <= 5 ? 50 : tabs.length === 6 ? 45 : 41;
+  return (
+    <nav
+      className="dock-hp pointer-events-none fixed bottom-0 left-1/2 z-50 -translate-x-1/2 lg:hidden"
+      style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))", ["--ik" as string]: `${ukuran}px` }}
+      aria-label="Navigasi utama"
+    >
+      <div className="glass tanpa-scrollbar pointer-events-auto flex max-w-[calc(100vw-12px)] items-end gap-[clamp(6px,2.4vw,13px)] overflow-x-auto rounded-[26px] px-3 pt-2.5 pb-2">
+        {tabs.map((kunci) => (
+          <TombolDockHp
+            key={kunci}
+            kunci={kunci}
+            aktif={kunci === tabAktif}
+            lencana={kunci === "notifikasi" ? belumBaca : 0}
+            onTab={onTab}
+          />
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+function TombolDockHp({ kunci, aktif, lencana, onTab }: { kunci: KunciTab; aktif: boolean; lencana: number; onTab: (t: KunciTab) => void }) {
+  const { label, ikon: Ikon } = KONFIG_TAB[kunci];
+  const [a, b] = WARNA_DOCK[kunci];
+  const [lingkup, animasikan] = useAnimate<HTMLSpanElement>();
+  const [labelTampil, setLabelTampil] = useState(false);
+  const pewaktu = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function ketuk() {
+    if (lingkup.current) {
+      void animasikan(lingkup.current, { y: [0, -16, 0, -6, 0] }, { duration: 0.72, ease: "easeOut", times: [0, 0.22, 0.48, 0.68, 1] });
+    }
+    if (typeof navigator !== "undefined" && navigator.vibrate && matchMedia("(pointer: coarse)").matches) navigator.vibrate(8);
+    setLabelTampil(true);
+    if (pewaktu.current) clearTimeout(pewaktu.current);
+    pewaktu.current = setTimeout(() => setLabelTampil(false), 1100);
+    onTab(kunci);
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={ketuk}
+      aria-label={label}
+      aria-current={aktif ? "page" : undefined}
+      data-tur={`nav-${kunci}`}
+      className="group relative flex shrink-0 flex-col items-center [-webkit-tap-highlight-color:transparent]"
+    >
+      <motion.span
+        aria-hidden="true"
+        className="dock-hp-label pointer-events-none absolute bottom-[calc(100%+10px)] left-1/2 rounded-[9px] px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-teks-utama"
+        initial={false}
+        animate={{ opacity: labelTampil ? 1 : 0, y: labelTampil ? 0 : 6, scale: labelTampil ? 1 : 0.92, x: "-50%" }}
+        transition={{ type: "spring", bounce: 0, duration: 0.32 }}
+      >
+        {label}
+      </motion.span>
+      <span ref={lingkup} className="block">
+        <motion.span
+          className="flex items-center justify-center rounded-[26%] text-white"
+          style={{
+            width: "var(--ik)",
+            height: "var(--ik)",
+            background: `linear-gradient(180deg, ${a}, ${b})`,
+            boxShadow: "inset 0 0.5px 0 rgba(255,255,255,0.5), 0 1px 2px rgba(0,0,0,0.18), 0 5px 12px rgba(0,0,0,0.16)",
+          }}
+          animate={{ scale: aktif ? 1.06 : 1 }}
+          whileTap={{ scale: 0.88, filter: "brightness(0.92)" }}
+          transition={{ type: "spring", bounce: 0.25, duration: 0.38 }}
+        >
+          <Ikon className="h-[52%] w-[52%]" strokeWidth={2} />
+        </motion.span>
+      </span>
+      {lencana > 0 && (
+        <span className="absolute -top-1 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#FF3B30] px-1 text-[10px] font-bold text-white ring-2 ring-white/70 dark:ring-black/50">
+          {lencana > 99 ? "99+" : lencana}
+        </span>
+      )}
+      <motion.span
+        aria-hidden="true"
+        className="mt-[5px] h-1 w-1 rounded-full bg-teks-utama"
+        initial={false}
+        animate={{ opacity: aktif ? 0.75 : 0, scale: aktif ? 1 : 0 }}
+        transition={{ type: "spring", bounce: 0.3, duration: 0.38 }}
+      />
+    </button>
   );
 }

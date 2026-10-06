@@ -244,7 +244,7 @@ export async function POST(request: Request) {
       const { data, error } = await db
         .from("koin_transaksi")
         .upsert(
-          { user_id: uid, jumlah: cek.jumlah, aktivitas: AKTIVITAS_HADIAH_VIDEO, referensi: `${sumber}-${videoId}` },
+          { user_id: uid, jumlah: cek.jumlah, aktivitas: AKTIVITAS_HADIAH_VIDEO, referensi: `${sumber}-${videoId}`, pemberi_id: Number(user.id) },
           { onConflict: "user_id,aktivitas,referensi", ignoreDuplicates: true },
         )
         .select("id");

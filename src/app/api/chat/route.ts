@@ -741,7 +741,7 @@ export async function POST(request: Request) {
         throw Object.assign(new Error("Penerima tidak aktif — koin tidak dikirim."), { status: 404 });
       }
 
-      const { baru } = await catatKirimanMaster(penerimaId, cek.jumlah, `chat-${kontakId}-${kunci}`);
+      const { baru } = await catatKirimanMaster(penerimaId, cek.jumlah, `chat-${kontakId}-${kunci}`, Number(user.id));
       if (!baru) {
         // Kiriman dengan kunci ini sudah tercatat (ketukan ganda / ulang
         // kirim setelah sinyal putus): jangan bayar & jangan pasang kartu lagi.

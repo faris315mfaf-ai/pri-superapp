@@ -38,6 +38,8 @@ import {
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
+import { useAppStore } from "@/hooks/use-app-store";
+import { desainBaru } from "@/lib/desain-apple";
 import { toast } from "@/hooks/use-app-store";
 import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 import { cn } from "@/lib/utils";
@@ -78,6 +80,24 @@ export function StokVideoTvr({
   onKirimOfficial?: (item: StokTvr) => Promise<void>;
 } = {}) {
   const api = useApiAutoEdit();
+  // Desain baru (7 Okt 2026): daftar hanya memperlihatkan 3 judul, sisanya
+  // digulir di dalam kartu — tingginya mengikuti posisi item ke-4 (tetap
+  // pas walau ada item yang sedang dibuka).
+  const ringkas = useAppStore((st) => desainBaru(st.user));
+  const daftarRef = useRef<HTMLUListElement>(null);
+  const [tinggiDaftar, setTinggiDaftar] = useState<number | null>(null);
+  useEffect(() => {
+    const ul = daftarRef.current;
+    if (!ringkas || !ul) return;
+    const ukur = () => {
+      const ke4 = ul.children[3] as HTMLElement | undefined;
+      setTinggiDaftar(ke4 ? ke4.offsetTop - ul.offsetTop - 4 : null);
+    };
+    const ro = new ResizeObserver(ukur);
+    for (const el of Array.from(ul.children)) ro.observe(el);
+    ro.observe(ul);
+    return () => ro.disconnect();
+  });
   const [batas, setBatas] = useState<BatasTvr | null>(null);
   const [data, setData] = useState<KeadaanStok | null>(null);
   const [galatMuat, setGalatMuat] = useState("");
@@ -427,6 +447,9 @@ export function StokVideoTvr({
 
       <p className="mt-4 flex items-center gap-1.5 text-[11px] font-bold tracking-wide text-teks-sekunder uppercase">
         <Film className="h-3.5 w-3.5" /> Daftar stok ({stok.length})
+        {ringkas && stok.length > 3 && (
+          <span className="ml-auto font-medium tracking-normal normal-case">Gulir untuk {stok.length - 3} lainnya</span>
+        )}
       </p>
       {stok.length === 0 ? (
         <p className="mt-2 text-[11.5px] leading-relaxed text-teks-sekunder">
@@ -434,7 +457,11 @@ export function StokVideoTvr({
           Video disimpan {batas.umur_simpan_jam} jam ({umurHari} hari) lalu terhapus otomatis.
         </p>
       ) : (
-        <ul className="mt-2 space-y-2">
+        <ul
+          ref={daftarRef}
+          className={cn("mt-2 space-y-2", ringkas && tinggiDaftar !== null && "stok-gulir overflow-y-auto overscroll-contain pr-1")}
+          style={ringkas && tinggiDaftar !== null ? { maxHeight: tinggiDaftar } : undefined}
+        >
           {stok.map((it, i) => (
             <StokItem
               key={it.id}

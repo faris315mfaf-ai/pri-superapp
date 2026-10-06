@@ -24,6 +24,16 @@ export function bolehDesainApple(u: AkunDesain): boolean {
 }
 
 /**
+ * DESAIN BARU (7 Okt 2026, dari mockup lokal): latar hidup (harimau per
+ * tema), Dock di HP/tablet, animasi pegas, Beranda baru dengan dompet
+ * Token Merah Putih, TVR Saya bersegmen. Hanya tampilan — bukan pemberian
+ * izin. Akun uji coba Faris (#4, #176) + seluruh akun master.
+ */
+export function desainBaru(u: AkunDesain): boolean {
+  return akunUjiCoba(u) || u?.role === "master";
+}
+
+/**
  * Tema bila pengguna belum pernah memilih: akun uji coba langsung Pagi
  * (sudah terbiasa), master lain mulai dari Classic — tampilan yang mereka
  * kenal — dan memilih sendiri di Profil.
@@ -35,10 +45,10 @@ export function latarBawaan(u: AkunDesain): Latar {
 /**
  * Tata letak LEBAR (7 Okt 2026): modul tampil sebagai dasbor berkolom di
  * tablet & PC (TV Official, Beranda, TVR Saya, Konten, Chat terbagi,
- * Profil dua kolom, panel notifikasi). Khusus akun master.
+ * Profil dua kolom, panel notifikasi). Akun master + akun uji coba Faris.
  */
-export function tataLebar(u: { role?: string | null } | null | undefined): boolean {
-  return u?.role === "master";
+export function tataLebar(u: AkunDesain): boolean {
+  return u?.role === "master" || akunUjiCoba(u);
 }
 
 export type ModeNav = "sidebar" | "dock";

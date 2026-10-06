@@ -38,6 +38,7 @@ import { LencanaOnline } from "@/components/lencana-online";
 import { ModalStatus } from "@/components/modal-status";
 import { useModulAktif } from "@/hooks/use-modul";
 import { useTataLebar } from "@/hooks/use-tata-lebar";
+import { BarisAtasBeranda, RuangKarya, type TujuanTvr } from "@/features/beranda/beranda-faris";
 import { useLebarWadah } from "@/hooks/use-kolom-wadah";
 import { cn } from "@/lib/utils";
 type DashboardScreenProps = {
@@ -48,6 +49,11 @@ type DashboardScreenProps = {
   onBukaNotifikasi: () => void;
   /** Jumlah notifikasi yang belum dibaca (badge merah lonceng) */
   jumlahBelumBaca: number;
+  /** Desain baru (7 Okt 2026): Kehadiran + Dompet TMP + Ruang karya di atas. */
+  desainBaru?: boolean;
+  /** Absensi pribadi (bukan rekap hari ini) — kartu Kehadiran desain baru. */
+  onBukaAbsensiSaya?: () => void;
+  onBukaTvrKu?: (seksi: TujuanTvr) => void;
   /**
    * Buka panel kelola pengguna. Hanya diisi untuk super admin —
    * peran lain menerima undefined dan kartunya tidak dirender.
@@ -70,6 +76,9 @@ export function DashboardScreen({
   onBukaModulTv,
   onBukaNotifikasi,
   jumlahBelumBaca,
+  desainBaru = false,
+  onBukaAbsensiSaya,
+  onBukaTvrKu,
   onBukaAbsensi,
   onBukaKpiVideo,
   onBukaTvNasional,
@@ -226,9 +235,17 @@ export function DashboardScreen({
         </div>
       </header>
 
-      <div className={cn(lebar && lebarWadah >= 880 && "grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.6fr)] items-start gap-x-3")}>
-      {/* Dompet koin ala e-wallet (5 Okt 2026): tampil di semua beranda */}
-      <DompetKoinBeranda />
+      {desainBaru && (
+        <div className="mt-4 flex flex-col gap-3">
+          <BarisAtasBeranda user={user} onBukaAbsensi={onBukaAbsensiSaya ?? onBukaAbsensi ?? (() => undefined)} />
+          {onBukaTvrKu && <RuangKarya onBukaTvrKu={onBukaTvrKu} />}
+        </div>
+      )}
+
+      <div className={cn(lebar && !desainBaru && lebarWadah >= 880 && "grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.6fr)] items-start gap-x-3")}>
+      {/* Dompet koin ala e-wallet (5 Okt 2026): tampil di semua beranda.
+          Desain baru memakai Dompet TMP di baris atas. */}
+      {!desainBaru && <DompetKoinBeranda />}
 
       <div className="min-w-0">
       {/* Pengumuman terbaru — beranda tidak boleh ketinggalan info */}
