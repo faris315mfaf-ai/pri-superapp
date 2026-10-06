@@ -28,6 +28,7 @@ import {
   BarChart3,
   Clapperboard,
   Download,
+  ChevronDown,
   ExternalLink,
   FileText,
   Globe,
@@ -612,6 +613,8 @@ export function TvrKuScreen({
   // mana yang perlu disambung ulang. Juga syarat Edit Otomatis (≥5 akun).
   const [koneksi, setKoneksi] = useState<KoneksiSosmedTvr | null>(null);
   const [galatKoneksi, setGalatKoneksi] = useState("");
+  // Tombol "Hubungkan TV Rakyat Saya" (6 Okt 2026): isinya tertutup bawaan.
+  const [bukaHubungkan, setBukaHubungkan] = useState(false);
   // Edit Otomatis: master, dibuka master per akun, atau ≥5 akun terhubung.
   const bolehEditOtomatis = bolehEditOtomatisTvr(userAsli, koneksi?.jumlah_terhubung);
   // Auto Edit penuh GODAM (1 Okt 2026, dulu dari Profil): khusus master
@@ -883,6 +886,25 @@ export function TvrKuScreen({
         modul={hanyaSeksi ? "tvrku-simpel" : "tvrku"}
         bungkusSeksi={false}
         seksi={([
+        // Stok Video (5 Okt 2026): cara posting baru untuk semua akun — video
+        // jadi ditahan di stok dulu, lalu diunggah ke sosmed dari sana.
+        // 6 Okt 2026: PALING ATAS & di-pin — umur video di stok hanya 2 hari,
+        // jadi ia yang paling perlu dilihat begitu TVR Saya dibuka.
+        {
+          id: "stok-video",
+          pin: true,
+          segmen: "Stok Video",
+          judul: "Stok Video",
+          ikon: Video,
+          keterangan: "Video jadi ditahan di sini sebelum diposting (terhapus otomatis 2 hari)",
+          render: () => (
+            <FadeInUp>
+              <div className="mt-1">
+                <StokVideoTvr />
+              </div>
+            </FadeInUp>
+          ),
+        },
         ...(bolehKendali
           ? [
               {
@@ -923,17 +945,41 @@ export function TvrKuScreen({
         </div>
       </FadeInUp>
         ) },
-        { id: "akun", segmen: "Hubungkan", judul: "Hubungkan TV Rakyat Saya", ikon: Link2, render: () => (
+        { id: "akun", judul: "Hubungkan TV Rakyat Saya", ikon: Link2, render: () => (
       <FadeInUp delay={0.04}>
-        {/* 10 Sep 2026: "Akun TV Rakyat Saya" → "Hubungkan TV Rakyat Saya":
-            bisa diminimalkan, dan Website TV Rakyat ikut di segmen ini. */}
-        <SeksiLipat
-          id="tvrku-hubungkan"
-          judul="Hubungkan TV Rakyat Saya"
-          ikon={Link2}
-          bawaanTerbuka
-          keterangan="Sosmed & website TV Rakyat Anda"
+        {/* 6 Okt 2026: cukup SATU tombol ringkas (dulu kartu lipat bersegmen
+            "Hubungkan"). Isinya — status akun, tombol login, daftar akun &
+            website — terbuka di bawah tombol saat diketuk. data-tur sama
+            dengan kepala SeksiLipat lama supaya tutorial tetap menunjuknya. */}
+        <button
+          type="button"
+          onClick={() => setBukaHubungkan((v) => !v)}
+          aria-expanded={bukaHubungkan}
+          aria-controls="isi-tvrku-hubungkan"
+          data-tur="seksi-tvrku-hubungkan"
+          className="glass btn-tekan inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-[12px] font-bold text-teks-utama"
         >
+          <Link2 className="h-4 w-4 text-pri" aria-hidden="true" />
+          Hubungkan TV Rakyat Saya
+          {koneksi && (
+            <span
+              className={cn(
+                "angka-tab rounded-full px-1.5 py-0.5 text-[10px] font-extrabold",
+                koneksi.jumlah_terhubung >= koneksi.minimal
+                  ? "bg-sukses/15 text-sukses"
+                  : "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+              )}
+            >
+              {koneksi.jumlah_terhubung}/6
+            </span>
+          )}
+          <ChevronDown
+            className={cn("h-4 w-4 text-teks-sekunder transition-transform duration-300", bukaHubungkan && "rotate-180")}
+            aria-hidden="true"
+          />
+        </button>
+        {bukaHubungkan && (
+        <div id="isi-tvrku-hubungkan" className="mt-3">
         <StatusKoneksiAkun
           koneksi={koneksi}
           galat={galatKoneksi}
@@ -1106,7 +1152,8 @@ export function TvrKuScreen({
               ))}
           </div>
         )}
-        </SeksiLipat>
+        </div>
+        )}
       </FadeInUp>
         ) },
         ...(bolehAutoEditMaster
@@ -1159,12 +1206,13 @@ export function TvrKuScreen({
                 ) : (
                   <KartuEditTerkunci
                     koneksi={koneksi}
-                    onLihatStatus={() =>
+                    onLihatStatus={() => {
+                      setBukaHubungkan(true);
                       (document.getElementById("tvrku-akun") ?? document.getElementById("tvrku-simpel-akun"))?.scrollIntoView({
                         behavior: "smooth",
                         block: "start",
-                      })
-                    }
+                      });
+                    }}
                   />
                 )}
               </div>
@@ -1211,23 +1259,6 @@ export function TvrKuScreen({
               },
             ]
           : []),
-        // Stok Video (5 Okt 2026): cara posting baru untuk semua akun — video
-        // jadi ditahan di stok dulu, lalu diunggah ke sosmed dari sana.
-        {
-          id: "stok-video",
-          segmen: "Unggah & Jadwal",
-          judul: "Stok Video",
-          ikon: Video,
-          keterangan: "Video jadi ditahan di sini sebelum diposting (terhapus otomatis 2 hari)",
-          render: () => (
-            <FadeInUp delay={0.09}>
-              <SectionTitle judul="Stok Video" />
-              <div className="mt-2.5">
-                <StokVideoTvr />
-              </div>
-            </FadeInUp>
-          ),
-        },
         // Dulu "Unggah ke Sosmed Saya": unggah berkas langsung dipindah ke Stok
         // Video (5 Okt 2026). Tersisa antrean jadwal, riwayat, dan fitur
         // khusus PALUGODAM.
