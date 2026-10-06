@@ -49,10 +49,12 @@ type FaseTv = "form" | "proses" | "pratinjau";
 // 7 Okt 2026: Sumber Berita, Log, Status Pipeline, Riwayat Pemrosesan, dan
 // Konten Terbaru Sosmed DIHAPUS — jejak video kini di tombol "Riwayat"
 // (kepala modul) beserta lonceng video gagal posting.
+// Stok Video Tim (beserta tombol Riwayat) selalu PALING ATAS, selebar modul —
+// tidak ikut bento.
 const BENTO_MASTER: Record<JumlahKolom, string[][]> = {
-  3: [["edit-otomatis-tim"], ["stok-video-tim"], ["video-wajib"]],
-  2: [["edit-otomatis-tim", "video-wajib"], ["stok-video-tim"]],
-  1: [["video-wajib", "edit-otomatis-tim", "stok-video-tim"]],
+  3: [["edit-otomatis-tim"], ["video-wajib"]],
+  2: [["edit-otomatis-tim"], ["video-wajib"]],
+  1: [["video-wajib", "edit-otomatis-tim"]],
 };
 /** Seksi pendukung di bawah bento ("Akses cepat"), dua kolom di layar lebar. */
 const AKSES_MASTER = ["jadwal-tayang", "hasil-scraping", "bagi-tugas", "buat-video"];
@@ -198,7 +200,7 @@ export function TvScreen({
   }
 
   // Riwayat (7 Okt 2026): siapa mengedit/mengirim/memposting + lonceng
-  // video yang gagal diposting.
+  // video yang gagal diposting — di dalam seksi Stok Video Tim.
   const tombolRiwayat = (
     <TombolRiwayatTv onBukaVideo={bukaDariRiwayat} bolehTandai={bolehUpload} muatUlang={refreshKey} />
   );
@@ -229,7 +231,6 @@ export function TvScreen({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {tombolRiwayat}
           {/* Gerigi: pengaturan yang jarang disentuh, disimpan di balik
               satu tombol supaya alur produksi tetap lapang. */}
           {pimred && (
@@ -247,15 +248,14 @@ export function TvScreen({
         </div>
       </header>
       )}
-      {/* Tertanam tanpa kepala: tombol Riwayat tetap di paling atas. */}
-      {tanpaHeader && <div className="flex justify-end pt-3">{tombolRiwayat}</div>}
-      {/* Minta tim menautkan akun resmi ke upload-post (konten Official). */}
-      {bolehUpload && (
-        <div className="mt-4">
-          <KartuOfficialUp />
-        </div>
-      )}
     </>
+  );
+
+  // Minta tim menautkan akun resmi ke upload-post (konten Official).
+  const kartuOfficial = bolehUpload && (
+    <div className="mt-3">
+      <KartuOfficialUp />
+    </div>
   );
 
   const daftarSeksi = [
@@ -372,6 +372,10 @@ export function TvScreen({
         keterangan="Video jadi milik tim (maks 5 GB, terhapus otomatis 2 hari)"
         bawaanTerbuka
       >
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[12px] text-teks-sekunder">Jejak edit & posting ke akun Official</span>
+          {tombolRiwayat}
+        </div>
         <KonteksTimAutoEdit.Provider value="tv">
           <StokVideoTvr
             onKirimOfficial={
@@ -390,6 +394,14 @@ export function TvScreen({
       </SeksiLipat>
     ) },
   ].filter(Boolean) as SeksiModul[];
+  // Stok Video Tim dipasang terpisah di paling atas; sisanya mengikuti tata letak.
+  const seksiStok = daftarSeksi.find((s) => s.id === "stok-video-tim");
+  const seksiLain = daftarSeksi.filter((s) => s.id !== "stok-video-tim");
+  const stokAtas = seksiStok && (
+    <div id="tv-stok-video-tim" className="mt-5 min-w-0 scroll-mt-4">
+      {seksiStok.render()}
+    </div>
+  );
 
   const lapisan = (
     <>
@@ -431,6 +443,8 @@ export function TvScreen({
     return (
       <div className={tanpaHeader ? "" : "kolom-aplikasi kolom-lebar px-4 pb-32"}>
         {kepala}
+        {stokAtas}
+        {kartuOfficial}
         <div ref={wadahBentoRef} className="mt-5 flex flex-col gap-3">
           {bolehProses && (
             <FadeInUp delay={0.02}>
@@ -447,7 +461,7 @@ export function TvScreen({
           {kolomBento && (
             <div
               className="grid items-start gap-3"
-              style={{ gridTemplateColumns: `repeat(${kolomBento}, minmax(0, 1fr))` }}
+              style={{ gridTemplateColumns: `repeat(${BENTO_MASTER[kolomBento].length}, minmax(0, 1fr))` }}
             >
               {BENTO_MASTER[kolomBento].map((ids) => (
                 <div key={ids.join()} className="flex min-w-0 flex-col gap-3">
@@ -471,6 +485,8 @@ export function TvScreen({
   return (
     <div className={tanpaHeader ? "" : "kolom-aplikasi px-4 pb-32"}>
       {kepala}
+      {stokAtas}
+      {kartuOfficial}
 
       {/* Video wajib (12 Sep 2026): perintah video untuk seluruh anggota,
           DIKELOLA dari sini — di modul tempat tim TV Rakyat Official
@@ -495,7 +511,7 @@ export function TvScreen({
       <TataLetakModul
         modul="tv"
         bungkusSeksi={false}
-        seksi={daftarSeksi}
+        seksi={seksiLain}
       />
       </div>
 
