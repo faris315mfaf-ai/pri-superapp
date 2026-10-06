@@ -8,11 +8,11 @@
 // fase proses, hasil, refresh riwayat).
 // ============================================================
 
-import { useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Tv, Newspaper, Send, Clapperboard, Activity, History, ListChecks, Settings, Tag, CalendarClock, Film, Wand2 } from "lucide-react";
 import { TombolLonceng } from "@/components/tombol-lonceng";
-import { FadeInUp, ThemeToggle } from "@/components/pri-ui";
+import { FadeInUp, SegmenJudul, ThemeToggle } from "@/components/pri-ui";
 import { BeritaPanel } from "./berita-panel";
 import { KirimVideoManual } from "@/features/tvr-ku/kirim-video-manual";
 import { PanelTugasLink } from "./tugas-link-panel";
@@ -36,8 +36,33 @@ import { EditOtomatisTvr } from "@/features/tvr-ku/edit-otomatis-tvr";
 import { StokVideoTvr } from "@/features/tvr-ku/stok-video-tvr";
 import { KonteksTimAutoEdit } from "@/features/auto-edit/tim";
 import { kirimStokTimKeOfficial } from "@/services";
+import { useKolomWadah, type JumlahKolom } from "@/hooks/use-kolom-wadah";
+import { RingkasanTv } from "./ringkasan-tv";
+import { KartuKeywordWajib } from "./kartu-keyword-wajib";
 
 type FaseTv = "form" | "proses" | "pratinjau";
+
+// ------------------------------------------------------------
+// TATA LETAK MASTER (7 Okt 2026): akun ber-peran master melihat modul
+// ini sebagai dasbor yang memenuhi layar — strip ringkasan, Keyword
+// Wajib di puncak, lalu bento berkolom sesuai lebar wadah. Akun lain
+// tetap memakai susunan TataLetakModul satu kolom seperti sebelumnya.
+// "video-wajib" bukan seksi TataLetakModul (dulu selalu di atas).
+// ------------------------------------------------------------
+const BENTO_MASTER: Record<JumlahKolom, string[][]> = {
+  3: [
+    ["edit-otomatis-tim"],
+    ["stok-video-tim", "log"],
+    ["video-wajib", "status-pipeline", "riwayat-pemrosesan"],
+  ],
+  2: [
+    ["edit-otomatis-tim", "video-wajib", "status-pipeline"],
+    ["stok-video-tim", "riwayat-pemrosesan", "log"],
+  ],
+  1: [["video-wajib", "edit-otomatis-tim", "stok-video-tim", "log", "status-pipeline", "riwayat-pemrosesan"]],
+};
+/** Seksi pendukung di bawah bento ("Akses cepat"), dua kolom di layar lebar. */
+const AKSES_MASTER = ["sumber-berita", "jadwal-tayang", "hasil-scraping", "bagi-tugas", "buat-video"];
 
 type PayloadProses = {
   link: string;
@@ -87,6 +112,9 @@ export function TvScreen({
   // Gerbang /api/autoedit menegakkan aturan yang sama (identitasTim).
   const bolehAutoEditTim = bolehProses || user.role === "super_admin";
   const bolehAcc = pimred || wewenang.acc;
+  const tataMaster = user.role === "master";
+  const wadahBentoRef = useRef<HTMLDivElement>(null);
+  const kolomBento = useKolomWadah(wadahBentoRef);
 
   // Video sumber yang dipilih admin untuk direplikasi (dari panel Berita).
   // Link-nya TIDAK disalin ke form doksli — doksli tetap dicari & diisi
@@ -177,8 +205,8 @@ export function TvScreen({
     setRefreshKey((k) => k + 1);
   }
 
-  return (
-    <div className={tanpaHeader ? "" : "kolom-aplikasi px-4 pb-32"}>
+  const kepala = (
+    <>
       {/* Header modul */}
       {!tanpaHeader && (
       <header className="flex items-start justify-between gap-3 pt-5">
@@ -220,6 +248,270 @@ export function TvScreen({
         </div>
       </header>
       )}
+    </>
+  );
+
+  const daftarSeksi = [
+    { id: "sumber-berita", judul: "Sumber Berita", ikon: Newspaper, render: () => (
+      <SeksiLipat
+        id="sumber-berita"
+        judul="Sumber Berita"
+        ikon={Newspaper}
+        keterangan="Cek berita terbaru & pilih bahan video"
+      >
+        <BeritaPanel
+          onPilihVideo={setVideoSumber}
+          idTerpilih={videoSumber?.id ?? null}
+        />
+      </SeksiLipat>
+    ) },
+    bolehUpload && { id: "jadwal-tayang", judul: "Menunggu Jadwal Tayang", ikon: CalendarClock, render: () => (
+        <SeksiLipat
+          id="jadwal-tayang"
+          judul="Menunggu Jadwal Tayang"
+          ikon={CalendarClock}
+          keterangan="Video yang dijadwalkan tayang otomatis"
+        >
+          <PanelJadwalTayang />
+        </SeksiLipat>
+    ) },
+    pimred && { id: "kelola-keyword", judul: "Keyword Wajib Laporan", ikon: Tag, render: () => (
+        <SeksiLipat
+          id="kelola-keyword"
+          judul="Keyword Wajib Laporan"
+          ikon={Tag}
+          keterangan="Tema wajib video yang harus diangkat semua anggota"
+        >
+          <KelolaKeywordPanel />
+        </SeksiLipat>
+    ) },
+    pimred && TAMPIL.hasilScraping && { id: "hasil-scraping", judul: "Hasil Scraping Berita", ikon: ListChecks, render: () => (
+        <SeksiLipat
+          id="hasil-scraping"
+          judul="Hasil Scraping Berita"
+          ikon={ListChecks}
+          keterangan="Pantau status tiap video & penanggung jawabnya"
+        >
+          <HasilScrapingPanel
+            muatUlang={refreshKey}
+            onPakai={(item) => {
+              // "Pakai" → isi Bagi Tugas dengan link berita ini lalu
+              // buka seksinya supaya Pimred tinggal memilih anggota.
+              setLinkPakai(item.link ?? "");
+              setSinyalBukaTugas((n) => n + 1);
+            }}
+          />
+        </SeksiLipat>
+    ) },
+    pimred && TAMPIL.bagiTugas && { id: "bagi-tugas", judul: "Bagi Tugas ke Anggota", ikon: Send, render: () => (
+        <SeksiLipat
+          id="bagi-tugas"
+          judul="Bagi Tugas ke Anggota"
+          ikon={Send}
+          keterangan="Kirim link video ke anggota tim"
+          bukaSinyal={sinyalBukaTugas}
+        >
+          <PanelTugasLink linkAwal={linkPakai || videoSumber?.link_video} />
+        </SeksiLipat>
+    ) },
+    bolehProses && TAMPIL.buatVideo && { id: "buat-video", judul: "Buat Video", ikon: Clapperboard, render: () => (
+      <SeksiLipat
+        id="buat-video"
+        judul="Buat Video"
+        ikon={Clapperboard}
+        keterangan="Proses video dari sumber berita"
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          {fase === "proses" && payload ? (
+            <motion.div
+              key={`proses-${sesiProses}`}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -16 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            >
+              <ProgressPanel
+                payload={payload}
+                onSelesai={prosesSelesai}
+                onBatal={batalkanProses}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="form"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -16 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            >
+              <KirimVideoPanel
+                videoSumber={videoSumber}
+                onMulaiProses={mulaiProses}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </SeksiLipat>
+    ) },
+    // Edit Otomatis & Stok Video TIM (5 Okt 2026): satu template & satu
+    // stok (5 GB) bersama seluruh tim TV Rakyat Official. Komponennya
+    // sama dengan TVR Saya; penanda tim "tv" membuat gerbang memakai
+    // akun tim, bukan akun pribadi.
+    bolehAutoEditTim && { id: "edit-otomatis-tim", judul: "Edit Otomatis Tim", ikon: Wand2, render: () => (
+      <SeksiLipat
+        id="tv-edit-otomatis-tim"
+        judul="Edit Otomatis Tim"
+        ikon={Wand2}
+        keterangan="Template bersama tim + edit video otomatis"
+        bawaanTerbuka
+      >
+        <KonteksTimAutoEdit.Provider value="tv">
+          <EditOtomatisTvr />
+        </KonteksTimAutoEdit.Provider>
+      </SeksiLipat>
+    ) },
+    bolehAutoEditTim && { id: "stok-video-tim", judul: "Stok Video Tim", ikon: Film, render: () => (
+      <SeksiLipat
+        id="tv-stok-video-tim"
+        judul="Stok Video Tim"
+        ikon={Film}
+        keterangan="Video jadi milik tim (maks 5 GB, terhapus otomatis 2 hari)"
+        bawaanTerbuka
+      >
+        <KonteksTimAutoEdit.Provider value="tv">
+          <StokVideoTvr
+            onKirimOfficial={
+              bolehUpload
+                ? async (item) => {
+                    // Disalin ke antrean Official lalu langsung dibuka di
+                    // pratinjau unggah (platform, caption, jadwal).
+                    const v = await kirimStokTimKeOfficial(item.id, item.judul);
+                    bukaDariRiwayat(v);
+                    setRefreshKey((k) => k + 1);
+                  }
+                : undefined
+            }
+          />
+        </KonteksTimAutoEdit.Provider>
+      </SeksiLipat>
+    ) },
+    bolehUpload && { id: "log", judul: "Log", ikon: Clapperboard, render: () => (
+      <KirimVideoManual judulSeksi="Log" />
+    ) },
+    bolehProses && { id: "status-pipeline", judul: "Status Pipeline", ikon: Activity, render: () => (
+      <FadeInUp delay={0.08}>
+        <SeksiLipat
+          id="status-pipeline"
+          judul="Status Pipeline"
+          ikon={Activity}
+          keterangan="Ringkasan tahap semua video"
+          bawaanTerbuka
+        >
+          <PipelinePanel muatUlang={refreshKey} />
+        </SeksiLipat>
+      </FadeInUp>
+    ) },
+    { id: "riwayat-pemrosesan", judul: "Riwayat Pemrosesan", ikon: History, render: () => (
+      <FadeInUp delay={0.1}>
+        <SeksiLipat
+          id="riwayat-pemrosesan"
+          judul="Riwayat Pemrosesan"
+          ikon={History}
+          keterangan="Daftar video beserta statusnya"
+          bawaanTerbuka
+        >
+          <RiwayatVideo
+            polos
+            refreshKey={refreshKey}
+            onBukaVideo={bukaDariRiwayat}
+            onDataBerubah={() => setRefreshKey((k) => k + 1)}
+          />
+        </SeksiLipat>
+      </FadeInUp>
+    ) },
+  ].filter(Boolean) as SeksiModul[];
+
+  const lapisan = (
+    <>
+      {/* Pengaturan khusus TV Rakyat Official (tombol gerigi). */}
+      {pengaturanBuka && <ModalPengaturanTv onTutup={() => setPengaturanBuka(false)} />}
+
+      {/* Modal pratinjau (melayang di atas layar) */}
+      <AnimatePresence>
+        {fase === "pratinjau" && hasil && (
+          <PreviewModal
+            key="preview"
+            hasil={hasil}
+            // Kontrol aksi (setujui/unggah) muncul untuk yang ditunjuk acc
+            // ATAU upload; server menegakkan aksi spesifik per endpoint.
+            bolehSetujui={bolehAcc || bolehUpload}
+            modeTinjau={dariRiwayat}
+            sudahDiunggah={sudahDiunggah}
+            linkPostingan={linkPostingan}
+            onTutup={tutupPratinjau}
+            onSelesaiUnggah={selesaiUnggah}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  );
+
+  if (tataMaster) {
+    const perId = new Map(daftarSeksi.map((s) => [s.id, s]));
+    const tampilkan = (id: string): ReactNode => {
+      if (id === "video-wajib") return <PanelVideoWajib key={id} />;
+      const s = perId.get(id);
+      return s ? (
+        <div key={id} id={`tv-${id}`} className="min-w-0 scroll-mt-4">
+          {s.render()}
+        </div>
+      ) : null;
+    };
+    const akses = AKSES_MASTER.filter((id) => perId.has(id));
+    return (
+      <div className={tanpaHeader ? "" : "kolom-aplikasi kolom-lebar px-4 pb-32"}>
+        {kepala}
+        <div ref={wadahBentoRef} className="mt-5 flex flex-col gap-3">
+          {bolehProses && (
+            <FadeInUp delay={0.02}>
+              <RingkasanTv muatUlang={refreshKey} />
+            </FadeInUp>
+          )}
+          {pimred && (
+            <FadeInUp delay={0.04}>
+              <KartuKeywordWajib />
+            </FadeInUp>
+          )}
+          {/* Bento menunggu lebar wadah terukur supaya panel tidak
+              dipasang dua kali (satu kolom lalu pindah). */}
+          {kolomBento && (
+            <div
+              className="grid items-start gap-3"
+              style={{ gridTemplateColumns: `repeat(${kolomBento}, minmax(0, 1fr))` }}
+            >
+              {BENTO_MASTER[kolomBento].map((ids) => (
+                <div key={ids.join()} className="flex min-w-0 flex-col gap-3">
+                  {ids.map(tampilkan)}
+                </div>
+              ))}
+            </div>
+          )}
+          {kolomBento && akses.length > 0 && (
+            <>
+              <SegmenJudul label="Akses cepat" />
+              <div className="grid items-start gap-3 md:grid-cols-2">{akses.map(tampilkan)}</div>
+            </>
+          )}
+        </div>
+        <EmbedTerbaru />
+        {lapisan}
+      </div>
+    );
+  }
+
+  return (
+    <div className={tanpaHeader ? "" : "kolom-aplikasi px-4 pb-32"}>
+      {kepala}
 
       {/* Video wajib (12 Sep 2026): perintah video untuk seluruh anggota,
           DIKELOLA dari sini — di modul tempat tim TV Rakyat Official
@@ -244,211 +536,14 @@ export function TvScreen({
       <TataLetakModul
         modul="tv"
         bungkusSeksi={false}
-        seksi={[
-        { id: "sumber-berita", judul: "Sumber Berita", ikon: Newspaper, render: () => (
-          <SeksiLipat
-            id="sumber-berita"
-            judul="Sumber Berita"
-            ikon={Newspaper}
-            keterangan="Cek berita terbaru & pilih bahan video"
-          >
-            <BeritaPanel
-              onPilihVideo={setVideoSumber}
-              idTerpilih={videoSumber?.id ?? null}
-            />
-          </SeksiLipat>
-        ) },
-        bolehUpload && { id: "jadwal-tayang", judul: "Menunggu Jadwal Tayang", ikon: CalendarClock, render: () => (
-            <SeksiLipat
-              id="jadwal-tayang"
-              judul="Menunggu Jadwal Tayang"
-              ikon={CalendarClock}
-              keterangan="Video yang dijadwalkan tayang otomatis"
-            >
-              <PanelJadwalTayang />
-            </SeksiLipat>
-        ) },
-        pimred && { id: "kelola-keyword", judul: "Keyword Wajib Laporan", ikon: Tag, render: () => (
-            <SeksiLipat
-              id="kelola-keyword"
-              judul="Keyword Wajib Laporan"
-              ikon={Tag}
-              keterangan="Tema wajib video yang harus diangkat semua anggota"
-            >
-              <KelolaKeywordPanel />
-            </SeksiLipat>
-        ) },
-        pimred && TAMPIL.hasilScraping && { id: "hasil-scraping", judul: "Hasil Scraping Berita", ikon: ListChecks, render: () => (
-            <SeksiLipat
-              id="hasil-scraping"
-              judul="Hasil Scraping Berita"
-              ikon={ListChecks}
-              keterangan="Pantau status tiap video & penanggung jawabnya"
-            >
-              <HasilScrapingPanel
-                muatUlang={refreshKey}
-                onPakai={(item) => {
-                  // "Pakai" → isi Bagi Tugas dengan link berita ini lalu
-                  // buka seksinya supaya Pimred tinggal memilih anggota.
-                  setLinkPakai(item.link ?? "");
-                  setSinyalBukaTugas((n) => n + 1);
-                }}
-              />
-            </SeksiLipat>
-        ) },
-        pimred && TAMPIL.bagiTugas && { id: "bagi-tugas", judul: "Bagi Tugas ke Anggota", ikon: Send, render: () => (
-            <SeksiLipat
-              id="bagi-tugas"
-              judul="Bagi Tugas ke Anggota"
-              ikon={Send}
-              keterangan="Kirim link video ke anggota tim"
-              bukaSinyal={sinyalBukaTugas}
-            >
-              <PanelTugasLink linkAwal={linkPakai || videoSumber?.link_video} />
-            </SeksiLipat>
-        ) },
-        bolehProses && TAMPIL.buatVideo && { id: "buat-video", judul: "Buat Video", ikon: Clapperboard, render: () => (
-          <SeksiLipat
-            id="buat-video"
-            judul="Buat Video"
-            ikon={Clapperboard}
-            keterangan="Proses video dari sumber berita"
-          >
-            <AnimatePresence mode="wait" initial={false}>
-              {fase === "proses" && payload ? (
-                <motion.div
-                  key={`proses-${sesiProses}`}
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -16 }}
-                  transition={{ duration: 0.3, ease: "easeOut" }}
-                >
-                  <ProgressPanel
-                    payload={payload}
-                    onSelesai={prosesSelesai}
-                    onBatal={batalkanProses}
-                  />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="form"
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -16 }}
-                  transition={{ duration: 0.3, ease: "easeOut" }}
-                >
-                  <KirimVideoPanel
-                    videoSumber={videoSumber}
-                    onMulaiProses={mulaiProses}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </SeksiLipat>
-        ) },
-        // Edit Otomatis & Stok Video TIM (5 Okt 2026): satu template & satu
-        // stok (5 GB) bersama seluruh tim TV Rakyat Official. Komponennya
-        // sama dengan TVR Saya; penanda tim "tv" membuat gerbang memakai
-        // akun tim, bukan akun pribadi.
-        bolehAutoEditTim && { id: "edit-otomatis-tim", judul: "Edit Otomatis Tim", ikon: Wand2, render: () => (
-          <SeksiLipat
-            id="tv-edit-otomatis-tim"
-            judul="Edit Otomatis Tim"
-            ikon={Wand2}
-            keterangan="Template bersama tim + edit video otomatis"
-            bawaanTerbuka
-          >
-            <KonteksTimAutoEdit.Provider value="tv">
-              <EditOtomatisTvr />
-            </KonteksTimAutoEdit.Provider>
-          </SeksiLipat>
-        ) },
-        bolehAutoEditTim && { id: "stok-video-tim", judul: "Stok Video Tim", ikon: Film, render: () => (
-          <SeksiLipat
-            id="tv-stok-video-tim"
-            judul="Stok Video Tim"
-            ikon={Film}
-            keterangan="Video jadi milik tim (maks 5 GB, terhapus otomatis 2 hari)"
-            bawaanTerbuka
-          >
-            <KonteksTimAutoEdit.Provider value="tv">
-              <StokVideoTvr
-                onKirimOfficial={
-                  bolehUpload
-                    ? async (item) => {
-                        // Disalin ke antrean Official lalu langsung dibuka di
-                        // pratinjau unggah (platform, caption, jadwal).
-                        const v = await kirimStokTimKeOfficial(item.id, item.judul);
-                        bukaDariRiwayat(v);
-                        setRefreshKey((k) => k + 1);
-                      }
-                    : undefined
-                }
-              />
-            </KonteksTimAutoEdit.Provider>
-          </SeksiLipat>
-        ) },
-        bolehUpload && { id: "log", judul: "Log", ikon: Clapperboard, render: () => (
-          <KirimVideoManual judulSeksi="Log" />
-        ) },
-        bolehProses && { id: "status-pipeline", judul: "Status Pipeline", ikon: Activity, render: () => (
-          <FadeInUp delay={0.08}>
-            <SeksiLipat
-              id="status-pipeline"
-              judul="Status Pipeline"
-              ikon={Activity}
-              keterangan="Ringkasan tahap semua video"
-              bawaanTerbuka
-            >
-              <PipelinePanel muatUlang={refreshKey} />
-            </SeksiLipat>
-          </FadeInUp>
-        ) },
-        { id: "riwayat-pemrosesan", judul: "Riwayat Pemrosesan", ikon: History, render: () => (
-          <FadeInUp delay={0.1}>
-            <SeksiLipat
-              id="riwayat-pemrosesan"
-              judul="Riwayat Pemrosesan"
-              ikon={History}
-              keterangan="Daftar video beserta statusnya"
-              bawaanTerbuka
-            >
-              <RiwayatVideo
-                polos
-                refreshKey={refreshKey}
-                onBukaVideo={bukaDariRiwayat}
-                onDataBerubah={() => setRefreshKey((k) => k + 1)}
-              />
-            </SeksiLipat>
-          </FadeInUp>
-        ) },
-        ].filter(Boolean) as SeksiModul[]}
+        seksi={daftarSeksi}
       />
       </div>
 
       {/* Galeri 30 konten terbaru seluruh sosmed + metrik (spek 1.15) */}
       <EmbedTerbaru />
 
-      {/* Pengaturan khusus TV Rakyat Official (tombol gerigi). */}
-      {pengaturanBuka && <ModalPengaturanTv onTutup={() => setPengaturanBuka(false)} />}
-
-      {/* Modal pratinjau (melayang di atas layar) */}
-      <AnimatePresence>
-        {fase === "pratinjau" && hasil && (
-          <PreviewModal
-            key="preview"
-            hasil={hasil}
-            // Kontrol aksi (setujui/unggah) muncul untuk yang ditunjuk acc
-            // ATAU upload; server menegakkan aksi spesifik per endpoint.
-            bolehSetujui={bolehAcc || bolehUpload}
-            modeTinjau={dariRiwayat}
-            sudahDiunggah={sudahDiunggah}
-            linkPostingan={linkPostingan}
-            onTutup={tutupPratinjau}
-            onSelesaiUnggah={selesaiUnggah}
-          />
-        )}
-      </AnimatePresence>
+      {lapisan}
     </div>
   );
 }

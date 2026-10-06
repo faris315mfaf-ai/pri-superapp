@@ -512,6 +512,14 @@
   }
 }
 
+/* Modul berbentuk dasbor (TV Rakyat Official, tata letak master 7 Okt
+   2026): boleh memenuhi layar lebar — bento 3 kolom butuh ruang. */
+@media (min-width: 1024px) {
+  .kolom-aplikasi.kolom-lebar {
+    max-width: 1400px;
+  }
+}
+
 /* Hover kartu interaktif di perangkat berpointer (fix 1.19/4.1):
    naik halus + bayangan — tidak berlaku di layar sentuh. */
 @media (hover: hover) {

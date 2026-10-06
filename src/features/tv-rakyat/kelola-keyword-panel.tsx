@@ -32,7 +32,11 @@ function formatTanggalSelesai(iso: string): string {
   return t.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
 }
 
-export function KelolaKeywordPanel() {
+/**
+ * lebar (7 Okt 2026): dipakai KartuKeywordWajib di puncak modul (tata
+ * letak master) — daftar keyword jadi grid 2–3 kolom, bukan satu lajur.
+ */
+export function KelolaKeywordPanel({ lebar = false }: { lebar?: boolean } = {}) {
   const [data, setData] = useState<KeywordWajib[] | null>(null);
   // Pimpinan Redaksi / Superadmin / master: boleh memunculkan lagi.
   const [bolehMunculkan, setBolehMunculkan] = useState(false);
@@ -164,7 +168,12 @@ export function KelolaKeywordPanel() {
           Belum ada keyword. Tambahkan di atas.
         </p>
       ) : (
-        <div className="flex flex-col gap-1.5">
+        <div
+          className={cn(
+            "gap-1.5",
+            lebar ? "grid grid-cols-1 items-start sm:grid-cols-2 xl:grid-cols-3" : "flex flex-col",
+          )}
+        >
           {tampil.map((k) => (
             <div
               key={k.id}
