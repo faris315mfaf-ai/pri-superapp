@@ -3,10 +3,14 @@
 //
 // Tanpa parameter → daftar LINGKARAN: TV Rakyat Official + semua anggota
 //                   yang sudah menautkan minimal satu akun TV Rakyat.
-// ?siapa=official  → semua postingan akun resmi TV Rakyat dari `feed_konten`
-//                   (hasil sinkron Ayrshare/n8n, 5 platform).
-// ?siapa=<user_id> → postingan terbaru anggota itu dari upload-post
-//                   (maks 25 per platform tertaut) digabung laporan_video-nya.
+// ?siapa=official  → postingan akun resmi TV Rakyat dari UPLOAD-POST bila
+//                   profilnya sudah diatur (pengaturan_sistem
+//                   "upload_post_profil_official"); sebelum itu masih dari
+//                   `feed_konten` (Ayrshare/n8n) sebagai cadangan.
+// ?siapa=<user_id> → video anggota dari KATALOG upload-post
+//                   (tvr_video_metrik, 7 Okt 2026: lengkap dengan tayangan,
+//                   suka, komentar) digabung laporan_video-nya; tarikan
+//                   langsung upload-post hanya bila katalognya masih kosong.
 //
 // Cache mikro per instance: daftar 60 dtk, video per akun 10 mnt — supaya
 // 300 anggota yang mengetuk-ngetuk lingkaran tidak menghujani upload-post.
@@ -25,6 +29,8 @@ type Lingkaran = {
   nama: string;
   avatar_url: string;
   akun: Record<string, string>;
+  /** Jumlah video di katalog upload-post (null = belum tercatat). */
+  jumlah_video?: number | null;
 };
 
 type VideoGaleri = {
@@ -36,6 +42,7 @@ type VideoGaleri = {
   waktu: string | null;
   like: number | null;
   komentar: number | null;
+  tayangan?: number | null;
 };
 
 const TTL_DAFTAR_MS = 60_000;
@@ -76,7 +83,12 @@ function normalUrl(u: string): string {
 
 async function daftarLingkaran() {
   if (cacheDaftar && Date.now() - cacheDaftar.pada < TTL_DAFTAR_MS) return cacheDaftar.isi;
-  const [akunResmi, anggota] = await Promise.all([akunOfficial(), kumpulkanAnggotaTvr()]);
+  const [akunResmi, anggota, { data: jumlahBaris }] = await Promise.all([
+    akunOfficial(),
+    kumpulkanAnggotaTvr(),
+    supabase().from("v_tvr_jumlah_video").select("user_id, jumlah"),
+  ]);
+  const jumlahVideo = new Map((jumlahBaris ?? []).map((b) => [String(b.user_id), Number(b.jumlah) || 0]));
   const official: Lingkaran = {
     kunci: "official",
     nama: "TV Rakyat Official",
@@ -85,15 +97,46 @@ async function daftarLingkaran() {
   };
   const pengguna: Lingkaran[] = anggota
     .filter((a) => Object.keys(a.akun).length > 0)
-    .map((a) => ({ kunci: a.user_id, nama: a.nama, avatar_url: a.avatar_url, akun: a.akun }))
+    .map((a) => ({ kunci: a.user_id, nama: a.nama, avatar_url: a.avatar_url, akun: a.akun, jumlah_video: jumlahVideo.get(String(a.user_id)) ?? null }))
     .sort((x, y) => x.nama.localeCompare(y.nama));
   const isi = { official, pengguna };
   cacheDaftar = { isi, pada: Date.now() };
   return isi;
 }
 
+/** Profil upload-post akun resmi TV Rakyat (kosong = belum diatur). */
+async function profilOfficialUp(): Promise<string> {
+  const { data } = await supabase()
+    .from("pengaturan_sistem")
+    .select("nilai")
+    .eq("kunci", "upload_post_profil_official")
+    .maybeSingle();
+  return String(data?.nilai ?? "").trim();
+}
+
 async function videoOfficial(): Promise<VideoGaleri[]> {
   const akun = await akunOfficial();
+  // 1. UPLOAD-POST (7 Okt 2026): profil resmi yang menautkan akun sosmed
+  //    TV Rakyat Official. Hasilnya dipakai bila ada isinya.
+  const profil = await profilOfficialUp();
+  if (profil) {
+    const platform = Object.keys(akun).length > 0 ? Object.keys(akun) : ["instagram", "tiktok", "youtube", "facebook", "threads"];
+    const tarikan = await Promise.allSettled(platform.map((p) => postinganTerbaruUp(profil, p, 25)));
+    const hasilUp: VideoGaleri[] = [];
+    const sudah = new Set<string>();
+    tarikan.forEach((t, i) => {
+      if (t.status !== "fulfilled") return;
+      for (const p of t.value) {
+        if (!p.permalink) continue;
+        const kunci = normalUrl(p.permalink);
+        if (sudah.has(kunci)) continue;
+        sudah.add(kunci);
+        hasilUp.push({ id: `${platform[i]}-${p.id || kunci}`, platform: platform[i], url: p.permalink, thumbnail: p.thumbnail, caption: p.caption, waktu: p.waktu, like: null, komentar: null });
+      }
+    });
+    if (hasilUp.length > 0) return urutkanTerbaru(hasilUp);
+  }
+  // 2. Cadangan: feed_konten (Ayrshare/n8n) sampai profil upload-post resmi siap.
   const username = Object.values(akun)
     .map((u) => u.toLowerCase())
     .filter(Boolean);
@@ -156,11 +199,37 @@ async function videoAnggota(userId: number): Promise<VideoGaleri[]> {
   const hasil: VideoGaleri[] = [];
   const sudah = new Set<string>();
 
-  // 1. Postingan LANGSUNG dari platform (lewat upload-post) — mencakup
-  //    apa pun yang diunggah, lewat aplikasi maupun tidak.
+  // 1. KATALOG upload-post (tvr_video_metrik): seluruh video akun anggota
+  //    beserta tayangan/suka/komentar — tanpa memanggil upload-post.
+  const { data: katalog } = await db
+    .from("tvr_video_metrik")
+    .select("kode, platform, url, thumbnail_url, judul, waktu_posting, tayangan, suka, komentar")
+    .eq("user_id", userId)
+    .order("waktu_posting", { ascending: false, nullsFirst: false })
+    .limit(300);
+  for (const v of katalog ?? []) {
+    const url = String(v.url ?? "");
+    if (!url) continue;
+    const kunci = normalUrl(url);
+    if (sudah.has(kunci)) continue;
+    sudah.add(kunci);
+    hasil.push({
+      id: String(v.kode),
+      platform: String(v.platform ?? ""),
+      url,
+      thumbnail: String(v.thumbnail_url ?? ""),
+      caption: String(v.judul ?? "").trim().slice(0, 300),
+      waktu: v.waktu_posting ? String(v.waktu_posting) : null,
+      like: v.suka == null ? null : Number(v.suka),
+      komentar: v.komentar == null ? null : Number(v.komentar),
+      tayangan: v.tayangan == null ? null : Number(v.tayangan),
+    });
+  }
+
+  // 1b. Katalog belum ada (akun baru tertaut) → tarik langsung dari upload-post.
   const profilKey = profil?.profile_key ? String(profil.profile_key) : "";
   const platformTertaut = [...new Set((akunBaris ?? []).map((b) => String(b.platform)))];
-  if (profilKey && platformTertaut.length > 0) {
+  if (hasil.length === 0 && profilKey && platformTertaut.length > 0) {
     const tarikan = await Promise.allSettled(
       platformTertaut.map((p) => postinganTerbaruUp(profilKey, p, 25)),
     );
@@ -205,14 +274,17 @@ async function videoAnggota(userId: number): Promise<VideoGaleri[]> {
     });
   }
 
-  // Terbaru di atas; yang tanpa waktu di belakang.
-  hasil.sort((x, y) => {
+  return urutkanTerbaru(hasil);
+}
+
+/** Terbaru di atas; yang tanpa waktu di belakang. */
+function urutkanTerbaru(hasil: VideoGaleri[]): VideoGaleri[] {
+  return hasil.sort((x, y) => {
     if (!x.waktu && !y.waktu) return 0;
     if (!x.waktu) return 1;
     if (!y.waktu) return -1;
     return y.waktu.localeCompare(x.waktu);
   });
-  return hasil;
 }
 
 export async function GET(request: Request) {

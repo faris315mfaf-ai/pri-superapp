@@ -3,10 +3,11 @@
 // mengirim ke nomor TERDAFTAR (anti-bajak): endpoint ini menerima nomor
 // yang diketik pengguna, TAPI hanya bila akunnya memang belum punya nomor.
 //
-// PUT  { nomor }        → kirim OTP ke nomor yang diketik
+// PUT  { nomor }        → siapkan kode arah masuk ({wa}) / kirim OTP ke nomor itu
 // POST { nomor, kode }  → cocokkan; sukses = set nomor_wa + wa_terverifikasi
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import {
   hapusCacheUser,
   userDariToken,
@@ -15,7 +16,7 @@ import {
   type BarisUser,
 } from "@/lib/sesi";
 import { FonnteBelumDiaturError, normalkanNomorWa, nomorWaSah } from "@/lib/fonnte";
-import { kirimOtp, verifikasiOtp } from "@/lib/otp";
+import { kirimOtp, otpMasukSiap, siapkanOtpMasuk, verifikasiOtp } from "@/lib/otp";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,9 @@ async function pastikanNomorBelumDipakai(
 }
 
 export async function PUT(request: Request) {
+  // Batas kirim kode (7 Okt 2026, gateway WA sendiri): 3 / 15 mnt / IP.
+  const tolak = await pastikanTidakMelebihiBatas(request, "wa-nomor-kirim", 3, 15 * 60);
+  if (tolak) return tolak;
   return bungkus(async () => {
     const user = await pastikanBelumPunyaNomor(request);
     const body = (await request.json().catch(() => ({}))) as { nomor?: string };
@@ -68,6 +72,10 @@ export async function PUT(request: Request) {
       });
     }
     await pastikanNomorBelumDipakai(supabase(), nomor, Number(user.id));
+    // Arah masuk (sql/64): pengguna mengirim kode DARI nomor itu ke gateway.
+    if (otpMasukSiap()) {
+      return { sukses: true, wa: await siapkanOtpMasuk(nomor, "daftar") };
+    }
     try {
       await kirimOtp(nomor, "daftar");
     } catch (e) {
@@ -81,6 +89,8 @@ export async function PUT(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const tolak = await pastikanTidakMelebihiBatas(request, "wa-nomor-verifikasi", 8, 15 * 60);
+  if (tolak) return tolak;
   return bungkus(async () => {
     const user = await pastikanBelumPunyaNomor(request);
     const body = (await request.json().catch(() => ({}))) as { nomor?: string; kode?: string };

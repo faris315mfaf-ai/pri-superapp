@@ -25,6 +25,7 @@ import {
   type VideoGaleri,
 } from "@/services";
 import { cn } from "@/lib/utils";
+import { formatAngkaRingkas } from "@/lib/format";
 import { hrefAman } from "@/lib/href-aman";
 
 /** 6 kolom x 6 baris per halaman lingkaran. */
@@ -142,7 +143,9 @@ export function GaleriLingkaran() {
           <div className="grid grid-cols-6 gap-x-1.5 gap-y-3">
             {tampil.map((a) => {
               const official = a.kunci === "official";
-              const jumlah = Object.keys(a.akun).length;
+              // Jumlah video dari katalog upload-post (7 Okt 2026); cadangan:
+              // jumlah platform tertaut.
+              const jumlah = a.jumlah_video != null ? formatAngkaRingkas(a.jumlah_video) : String(Object.keys(a.akun).length);
               return (
                 <button
                   key={a.kunci}
@@ -192,6 +195,90 @@ export function GaleriLingkaran() {
         {dibuka && <PopupVideoAkun akun={dibuka} onTutup={() => setDibuka(null)} />}
       </AnimatePresence>
     </section>
+  );
+}
+
+// ------------------------------------------------------------
+// KontenOfficial (7 Okt 2026) — video terbaru akun resmi TV Rakyat langsung
+// di modul Konten (kolom utama layar lebar), bukan hanya di balik lingkaran
+// pertama. Sumber sama dengan lingkaran Official (upload-post bila profil
+// resmi diatur, cadangan feed_konten). "Lihat semua" = pop-up yang sama.
+// ------------------------------------------------------------
+
+const AKUN_OFFICIAL: LingkaranGaleri = {
+  kunci: "official",
+  nama: "TV Rakyat Official",
+  avatar_url: "/ikon/logo-app-256.png",
+  akun: {},
+};
+
+export function KontenOfficial({ maks = 12 }: { maks?: number }) {
+  const versiSegar = useVersiSegar();
+  const [video, setVideo] = useState<VideoGaleri[] | null>(null);
+  const [dibuka, setDibuka] = useState(false);
+
+  useEffect(() => {
+    let hidup = true;
+    getVideoGaleri("official")
+      .then((r) => {
+        if (hidup) setVideo(r);
+      })
+      .catch(() => {
+        if (hidup) setVideo([]);
+      });
+    return () => {
+      hidup = false;
+    };
+  }, [versiSegar]);
+
+  return (
+    <GlassCard className="rounded-[24px] p-4">
+      <div className="flex items-center gap-2.5">
+        <img src={AKUN_OFFICIAL.avatar_url} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover ring-2 ring-pri/30" />
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate font-heading text-[17px] font-bold tracking-tight text-teks-utama">Konten TV Rakyat Official</h2>
+          <p className="text-[11px] text-teks-sekunder">Video terbaru akun resmi partai</p>
+        </div>
+        {video && video.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setDibuka(true)}
+            className="btn-tekan shrink-0 rounded-full bg-pri/10 px-3 py-1.5 text-[12px] font-semibold text-pri"
+          >
+            Lihat semua ({video.length})
+          </button>
+        )}
+      </div>
+
+      {video === null ? (
+        <div className="mt-3 flex gap-2.5 overflow-hidden">
+          {Array.from({ length: 6 }, (_, i) => <GlassSkeleton key={i} className="aspect-[3/4] w-[158px] shrink-0 rounded-2xl" />)}
+        </div>
+      ) : video.length === 0 ? (
+        <p className="mt-3 rounded-2xl bg-teks-utama/[0.05] p-5 text-center text-sm text-teks-sekunder">
+          Belum ada konten resmi yang tercatat.
+        </p>
+      ) : (
+        // Satu baris geser (snap) — penuh di lebar berapa pun, tanpa baris
+        // kedua yang bolong.
+        <div className="-mx-1 mt-3 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 pb-1.5 [scrollbar-width:thin]">
+          {video.slice(0, maks).map((v) => (
+            <div key={v.id} className="w-[158px] shrink-0 snap-start">
+              <KartuVideo video={v} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {dibuka && (
+          <PopupVideoAkun
+            akun={{ ...AKUN_OFFICIAL, akun: Object.fromEntries((video ?? []).map((v) => [v.platform, ""])) }}
+            onTutup={() => setDibuka(false)}
+          />
+        )}
+      </AnimatePresence>
+    </GlassCard>
   );
 }
 

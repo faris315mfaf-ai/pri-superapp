@@ -62,6 +62,7 @@ import {
   verifikasiOtpEmail,
   wajahLoginTersedia,
   type KategoriDaftar,
+  type OtpWaMasuk,
   type UserLengkap,
 } from "@/services";
 import {
@@ -78,6 +79,8 @@ import {
 import { WILAYAH } from "@/lib/wilayah";
 import { PilihStrukturBanyak, type NilaiStruktur } from "@/features/pengguna/pilih-struktur";
 import { cn } from "@/lib/utils";
+import { TombolTempelKode, ambilKode6 } from "@/components/tombol-tempel-kode";
+import { PanelWaMasuk } from "@/components/verifikasi-wa-masuk";
 
 type Langkah = "tertutup" | "masuk" | "kategori" | "daftar" | "otp" | "profil" | "menunggu" | "lupa";
 
@@ -1163,7 +1166,7 @@ function FormOtp({
 
       <input
         value={kode}
-        onChange={(e) => setKode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+        onChange={(e) => setKode(ambilKode6(e.target.value))}
         inputMode="numeric"
         autoComplete="one-time-code"
         aria-label="Kode verifikasi 6 angka"
@@ -1171,6 +1174,8 @@ function FormOtp({
         disabled={memuat}
         className="glass-soft h-16 w-full rounded-2xl text-center font-mono text-[30px] tracking-[0.5em] text-teks-utama outline-none placeholder:text-teks-sekunder/40 focus:ring-2 focus:ring-pri/50 disabled:opacity-60"
       />
+
+      <TombolTempelKode onTempel={setKode} disabled={memuat} />
 
       <PesanError pesan={error} />
 
@@ -1457,14 +1462,20 @@ function FormLupaSandi({ kembali }: { kembali: () => void }) {
   const [lihat, setLihat] = useState(false);
   const [memuat, setMemuat] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Verifikasi arah masuk (lib/otp): ada = tombol "Verifikasi lewat WhatsApp".
+  const [wa, setWa] = useState<OtpWaMasuk | null>(null);
+  const [waOk, setWaOk] = useState(false);
 
-  async function minta(e: React.FormEvent) {
-    e.preventDefault();
+  async function minta(e?: React.FormEvent) {
+    e?.preventDefault();
     if (memuat) return;
     setError(null);
     setMemuat(true);
     try {
-      await lupaSandiKirim(identitas.trim());
+      const r = await lupaSandiKirim(identitas.trim());
+      setWa(r.wa);
+      setWaOk(false);
+      setKode("");
       setTahap("setel");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal mengirim kode.");
@@ -1519,20 +1530,49 @@ function FormLupaSandi({ kembali }: { kembali: () => void }) {
   if (tahap === "setel") {
     return (
       <form onSubmit={setel} className="flex flex-col gap-3" noValidate>
-        <p className="text-[13px] leading-relaxed text-teks-sekunder">
-          Kode 6 angka dikirim ke email yang TERDAFTAR pada akun itu.
-          Masukkan kodenya lalu buat sandi baru. Cek juga folder Spam.
-        </p>
-        <input
-          value={kode}
-          onChange={(e) => setKode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          aria-label="Kode verifikasi 6 angka"
-          placeholder="\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"
-          disabled={memuat}
-          className="glass-soft h-14 w-full rounded-2xl text-center font-mono text-[26px] tracking-[0.45em] text-teks-utama outline-none placeholder:text-teks-sekunder/40 focus:ring-2 focus:ring-pri/50 disabled:opacity-60"
-        />
+        {wa ? (
+          <>
+            <p className="text-[13px] leading-relaxed text-teks-sekunder">
+              Buktikan akun ini milik Anda lewat WhatsApp yang TERDAFTAR pada akun,
+              lalu buat sandi baru.
+            </p>
+            <PanelWaMasuk
+              key={wa.token}
+              wa={wa}
+              keterangan="Kirim dari WhatsApp nomor yang terdaftar pada akun."
+              onTerkonfirmasi={(k) => {
+                setKode(k);
+                setWaOk(true);
+              }}
+              onUlang={() => void minta()}
+            />
+            {!waOk && (
+              <p className="text-center text-[11.5px] text-teks-sekunder">
+                Akun Anda memakai email? Masukkan kode dari email di bawah.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="text-[13px] leading-relaxed text-teks-sekunder">
+            Kode 6 angka dikirim ke WhatsApp (atau email) yang TERDAFTAR pada
+            akun itu. Masukkan kodenya lalu buat sandi baru.
+          </p>
+        )}
+        {!waOk && (
+          <>
+            <input
+              value={kode}
+              onChange={(e) => setKode(ambilKode6(e.target.value))}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              aria-label="Kode verifikasi 6 angka"
+              placeholder="\u00b7\u00b7\u00b7\u00b7\u00b7\u00b7"
+              disabled={memuat}
+              className="glass-soft h-14 w-full rounded-2xl text-center font-mono text-[26px] tracking-[0.45em] text-teks-utama outline-none placeholder:text-teks-sekunder/40 focus:ring-2 focus:ring-pri/50 disabled:opacity-60"
+            />
+            <TombolTempelKode onTempel={setKode} disabled={memuat} />
+          </>
+        )}
         <div className="relative">
           <Kolom
             ikon={Lock}
@@ -1573,8 +1613,8 @@ function FormLupaSandi({ kembali }: { kembali: () => void }) {
   return (
     <form onSubmit={minta} className="flex flex-col gap-3" noValidate>
       <p className="text-[13px] leading-relaxed text-teks-sekunder">
-        Masukkan email, username, atau nomor WhatsApp akun Anda. Kode
-        pemulihan dikirim ke EMAIL yang terdaftar pada akun.
+        Masukkan username, nomor WhatsApp, atau email akun Anda. Kode
+        pemulihan dikirim ke WHATSAPP (atau email) yang terdaftar pada akun.
       </p>
       <Kolom
         ikon={AtSign}

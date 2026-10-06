@@ -100,6 +100,8 @@ export type StokTvr = {
   vmaf?: number | null;
   /** Waktu (detik epoch) video terkirim ke sosmed; null = belum pernah. */
   terunggah: number | null;
+  /** Akun tim: id anggota pembuat video (null = akun pribadi / data lama). */
+  anggota?: string | null;
 };
 
 export type RingkasTvr = {

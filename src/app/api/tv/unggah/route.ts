@@ -371,6 +371,12 @@ export async function POST(request: Request) {
     const perubahan: Record<string, unknown> = {
       ayrshare_hasil: hasilGabung,
       diunggah_pada: new Date().toISOString(),
+      // Riwayat (sql/65): yang terakhir memposting; percobaan baru membuka
+      // lagi penanda "sudah ditangani manual".
+      diposting_oleh: pengguna.nama,
+      diposting_oleh_id: Number(pengguna.id),
+      gagal_ditangani_pada: null,
+      gagal_ditangani_oleh: null,
       // Kunci proses dilepas bersama penyimpanan hasil (fitur 1.20/9).
       sedang_unggah_pada: null,
     };

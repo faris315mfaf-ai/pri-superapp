@@ -2,7 +2,8 @@
 // terdaftar sebelum verifikasi diwajibkan — mereka diverifikasi
 // belakangan lewat sini, tanpa perlu daftar ulang).
 //
-// PUT  /api/otp/ulang        → kirim kode ke nomor WA TERDAFTAR
+// PUT  /api/otp/ulang        → siapkan kode arah masuk (pengguna kirim ke
+//                               gateway; {wa}) atau kirim kode ke nomor TERDAFTAR
 // POST /api/otp/ulang {kode} → cocokkan kode; sukses = wa_terverifikasi
 //
 // Kode selalu ke nomor yang tercatat di akun — bukan nomor kiriman
@@ -10,6 +11,7 @@
 // nomor lain.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
+import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import {
   hapusCacheUser,
   userDariToken,
@@ -18,7 +20,7 @@ import {
   type BarisUser,
 } from "@/lib/sesi";
 import { FonnteBelumDiaturError } from "@/lib/fonnte";
-import { kirimOtp, verifikasiOtp } from "@/lib/otp";
+import { kirimOtp, otpMasukSiap, siapkanOtpMasuk, verifikasiOtp } from "@/lib/otp";
 
 export const dynamic = "force-dynamic";
 
@@ -40,8 +42,16 @@ async function pastikanMasuk(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  // Batas kirim kode (7 Okt 2026, gateway WA sendiri): 3 / 15 mnt / IP.
+  const tolak = await pastikanTidakMelebihiBatas(request, "otp-ulang-kirim", 3, 15 * 60);
+  if (tolak) return tolak;
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
+    // Arah masuk (sql/64): pengguna yang mengirim kode ke nomor gateway —
+    // gateway tak bisa memulai chat ke nomor asing (WhatsApp error 463).
+    if (otpMasukSiap()) {
+      return { sukses: true, wa: await siapkanOtpMasuk(user.nomor_wa!, "daftar") };
+    }
     try {
       await kirimOtp(user.nomor_wa!, "daftar");
     } catch (e) {
@@ -55,6 +65,8 @@ export async function PUT(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const tolak = await pastikanTidakMelebihiBatas(request, "otp-ulang-verifikasi", 8, 15 * 60);
+  if (tolak) return tolak;
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
     const body = (await request.json().catch(() => ({}))) as { kode?: string };

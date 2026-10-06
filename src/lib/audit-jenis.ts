@@ -20,6 +20,8 @@ export const JENIS_AUDIT = {
   unggah_official: { label: "Unggah TV Rakyat Official", kelompok: "unggah" },
   siaran: { label: "Siaran Serentak", kelompok: "unggah" },
   stok_tim: { label: "Kirim Stok Tim ke Official", kelompok: "unggah" },
+  tv_riwayat: { label: "Tandai posting manual Official", kelompok: "unggah" },
+  tv_official_up: { label: "Tautkan akun Official (upload-post)", kelompok: "unggah" },
 } as const;
 
 export type JenisAudit = keyof typeof JENIS_AUDIT;

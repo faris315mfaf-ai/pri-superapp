@@ -43,6 +43,7 @@ import {
   verifikasiWaSaya,
   ubahAkunSosmed,
   type AkunSosmed,
+  type OtpWaMasuk,
 } from "@/services";
 import {
   bacaBerkas,
@@ -52,6 +53,8 @@ import {
   type AreaPotong,
 } from "@/lib/gambar";
 import { cn } from "@/lib/utils";
+import { TombolTempelKode, ambilKode6 } from "@/components/tombol-tempel-kode";
+import { PanelWaMasuk } from "@/components/verifikasi-wa-masuk";
 
 // ------------------------------------------------------------
 // Akun media sosial — tombol pembuka + pop-up kelola
@@ -781,6 +784,8 @@ export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
   const [kode, setKode] = useState("");
   const [memuat, setMemuat] = useState(false);
   const [error, setError] = useState("");
+  // Verifikasi arah masuk (lib/otp): pengguna mengirim kode ke gateway.
+  const [wa, setWa] = useState<OtpWaMasuk | null>(null);
 
   const nomorSamar = (user?.nomor_wa ?? "").replace(/^(\d{4})\d+(\d{3})$/, "$1••••$2");
 
@@ -795,8 +800,8 @@ export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
     }
     setMemuat(true);
     try {
-      if (punyaNomor) await kirimKodeVerifikasiWa();
-      else await kirimKodeWaBaru(nomor.trim());
+      setWa(punyaNomor ? await kirimKodeVerifikasiWa() : await kirimKodeWaBaru(nomor.trim()));
+      setKode("");
       setTahap("kode");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal mengirim kode.");
@@ -805,14 +810,15 @@ export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
     }
   }
 
-  async function cocokkan() {
-    if (memuat || kode.length !== 6) return;
+  async function cocokkan(kodeMasuk?: string) {
+    const k = kodeMasuk ?? kode;
+    if (memuat || k.length !== 6) return;
     setError("");
     setMemuat(true);
     try {
       const segar = punyaNomor
-        ? await verifikasiWaSaya(kode)
-        : await verifikasiWaBaru(nomor.trim(), kode);
+        ? await verifikasiWaSaya(k)
+        : await verifikasiWaBaru(nomor.trim(), k);
       setUser(segar);
       toast("sukses", "WhatsApp terverifikasi \u2705", "Terima kasih!");
       onTutup();
@@ -830,8 +836,8 @@ export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
         <div className="flex flex-col gap-3">
           <p className="text-[13px] leading-relaxed text-teks-sekunder">
             Akun Anda belum punya nomor WhatsApp. Masukkan nomor Anda untuk
-            menerima kode verifikasi — nomor ini juga dipakai untuk notifikasi
-            & pemulihan sandi.
+            diverifikasi — nomor ini juga dipakai untuk notifikasi & pemulihan
+            sandi.
           </p>
           <input
             value={nomor}
@@ -852,7 +858,7 @@ export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
             style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
           >
             {memuat && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-            Kirim Kode
+            Lanjut
           </button>
         </div>
       ) : tahap === "minta" ? (
@@ -860,7 +866,6 @@ export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
           <p className="text-[13px] leading-relaxed text-teks-sekunder">
             Nomor WhatsApp akun Anda (<b>{nomorSamar}</b>) belum terverifikasi.
             Verifikasi memastikan notifikasi & pemulihan sandi sampai ke Anda.
-            Kode 6 angka akan dikirim ke nomor itu.
           </p>
           <PesanError pesan={error} />
           <button
@@ -871,8 +876,33 @@ export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
             style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
           >
             {memuat && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-            Kirim Kode ke WhatsApp Saya
+            Verifikasi WhatsApp Saya
           </button>
+        </div>
+      ) : wa ? (
+        <div className="flex flex-col gap-3">
+          <PanelWaMasuk
+            key={wa.token}
+            wa={wa}
+            keterangan={
+              <>
+                Kirim dari WhatsApp nomor <b>{punyaNomor ? nomorSamar : nomor.trim()}</b>.
+              </>
+            }
+            onTerkonfirmasi={(k) => void cocokkan(k)}
+            onUlang={() => void kirim()}
+          />
+          <PesanError pesan={error} />
+          {error && (
+            <button
+              type="button"
+              onClick={() => void cocokkan(wa.kode)}
+              disabled={memuat}
+              className="self-center text-[12px] font-semibold text-pri underline-offset-4 hover:underline disabled:opacity-50"
+            >
+              Coba simpan lagi
+            </button>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -882,7 +912,7 @@ export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
           </p>
           <input
             value={kode}
-            onChange={(e) => setKode(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))}
+            onChange={(e) => setKode(ambilKode6(e.target.value))}
             inputMode="numeric"
             autoComplete="one-time-code"
             aria-label="Kode verifikasi 6 angka"
@@ -890,6 +920,7 @@ export function ModalVerifikasiWa({ onTutup }: { onTutup: () => void }) {
             disabled={memuat}
             className="glass-soft h-14 w-full rounded-2xl text-center font-mono text-[26px] tracking-[0.45em] text-teks-utama outline-none placeholder:text-teks-sekunder/40 focus:ring-2 focus:ring-pri/50 disabled:opacity-60"
           />
+          <TombolTempelKode onTempel={setKode} disabled={memuat} />
           <PesanError pesan={error} />
           <button
             type="button"

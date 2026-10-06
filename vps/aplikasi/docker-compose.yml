@@ -102,6 +102,43 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
+  # Gateway WhatsApp untuk kode OTP (7 Okt 2026) — aldinokemal/
+  # go-whatsapp-web-multidevice (MIT). Aplikasi memanggil
+  # http://wa:3000/send/message lewat jaringan "pri" (lib/gowa.ts).
+  # Port 127.0.0.1:3010 hanya untuk memindai QR / admin lewat SSH tunnel:
+  #   ssh -L 3010:127.0.0.1:3010 pri-vps  →  buka http://localhost:3010
+  # Sesi WhatsApp tersimpan di volume wa-storages (aman saat restart).
+  wa:
+    image: aldinokemal2104/go-whatsapp-web-multidevice:v9.6.0
+    container_name: pri-wa
+    restart: unless-stopped
+    command:
+      - rest
+      - --port=3000
+      - --os=PRI SuperApp
+    environment:
+      # "pengguna:sandi" — sama dengan GOWA_BASIC_AUTH di env.txt aplikasi.
+      APP_BASIC_AUTH: ${GOWA_BASIC_AUTH:-}
+      WHATSAPP_AUTO_REJECT_CALL: "true"
+      WHATSAPP_AUTO_DOWNLOAD_MEDIA: "false"
+      # Verifikasi ARAH MASUK (sql/64): pesan masuk diteruskan ke aplikasi,
+      # ditandatangani HMAC dengan GOWA_WEBHOOK_SECRET (sama di env.txt).
+      WHATSAPP_WEBHOOK: http://aplikasi:3000/api/wa/masuk
+      WHATSAPP_WEBHOOK_SECRET: ${GOWA_WEBHOOK_SECRET:-}
+      WHATSAPP_WEBHOOK_EVENTS: message
+      WHATSAPP_WEBHOOK_IGNORE_JIDS: "@g.us,@newsletter,status@broadcast"
+      TZ: Asia/Jakarta
+    volumes:
+      - wa-storages:/app/storages
+      - wa-statics:/app/statics
+    ports:
+      - "127.0.0.1:3010:3000"
+    networks:
+      - pri
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
   jadwal:
     build:
       context: ./jadwal
@@ -323,6 +360,8 @@ services:
 volumes:
   redis-data:
   autoedit-redis-data:
+  wa-storages:
+  wa-statics:
 
 networks:
   pri:

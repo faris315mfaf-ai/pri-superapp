@@ -204,6 +204,9 @@ docker compose build jadwal
 
 echo "== 5/6 Mengganti yang sedang jalan =="
 docker compose up -d --force-recreate aplikasi jadwal
+# Gateway WhatsApp OTP (7 Okt 2026): dinyalakan bila belum jalan, TIDAK
+# dibuat ulang tiap deploy — sesi WhatsApp-nya tetap tersambung.
+docker compose up -d wa || echo "  (gateway WA tidak bisa dinyalakan — OTP memakai cadangan)"
 echo -n "  menunggu aplikasi menjawab"
 SIAP=0
 for i in $(seq 1 40); do

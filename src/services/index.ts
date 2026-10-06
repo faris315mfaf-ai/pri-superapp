@@ -1033,6 +1033,58 @@ export async function pantauAnalisisQc(
 // TV Rakyat — antrian video, proses video, berita
 // ------------------------------------------------------------
 
+// ---- Riwayat TV Rakyat Official (7 Okt 2026, /api/tv/riwayat) ----
+export type RiwayatTv = VideoAntrian & {
+  diedit_oleh: string | null;
+  diposting_oleh: string | null;
+  diunggah_pada: string | null;
+  hasil_akhir: "berhasil" | "sebagian" | "gagal" | "belum";
+  platform: { platform: string; berhasil: boolean; url: string; pesan: string }[];
+  /** Gagal tayang & belum ditangani → perlu diposting manual/ulang. */
+  perlu_manual: boolean;
+  ditangani_oleh: string | null;
+};
+
+export async function getRiwayatTv(
+  opsi: { halaman?: number; saring?: "gagal" } = {},
+): Promise<{ data: RiwayatTv[]; ada_lagi: boolean; perlu_manual: number }> {
+  const q = new URLSearchParams({ halaman: String(opsi.halaman ?? 1), ...(opsi.saring ? { saring: opsi.saring } : {}) });
+  const json = await fetchJson(`/api/tv/riwayat?${q}`);
+  return {
+    data: (json.data ?? []) as RiwayatTv[],
+    ada_lagi: Boolean(json.ada_lagi),
+    perlu_manual: Number(json.perlu_manual) || 0,
+  };
+}
+
+export async function tandaiGagalDitangani(kode: string): Promise<void> {
+  await fetchJson("/api/tv/riwayat", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kode }),
+  });
+}
+
+// ---- Akun TV Rakyat Official di upload-post (7 Okt 2026) ----
+export async function getOfficialUp(): Promise<{ profil: string; akun: Record<string, string>; perlu_ulang: string[] }> {
+  const json = await fetchJson("/api/tv/official-up");
+  return {
+    profil: String(json.profil ?? ""),
+    akun: (json.akun ?? {}) as Record<string, string>,
+    perlu_ulang: (json.perlu_ulang ?? []) as string[],
+  };
+}
+
+/** URL halaman penautan akun Official (berlaku 48 jam). */
+export async function tautkanOfficialUp(platform?: string): Promise<string> {
+  const json = await fetchJson("/api/tv/official-up", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(platform ? { platform } : {}),
+  });
+  return String(json.url ?? "");
+}
+
 /** Antrian & riwayat video + ringkasan jumlah per status */
 export async function getVideoAntrian(): Promise<{
   data: VideoAntrian[];
@@ -4399,14 +4451,26 @@ export async function getPeringkatDashboard(
 // profil lanjutan, mode perbaikan
 // ------------------------------------------------------------
 
-/** Minta kode OTP lupa sandi (tanpa sesi). */
-export async function lupaSandiKirim(identitas: string): Promise<string> {
+/**
+ * Verifikasi WhatsApp ARAH MASUK (7 Okt 2026, lib/otp): pengguna membuka
+ * `tautan` (wa.me ke nomor gateway, teks berisi `kode`) lalu menekan Kirim;
+ * klien mem-polling `token` sampai webhook mengonfirmasi.
+ */
+export type OtpWaMasuk = { kode: string; token: string; tautan: string; berlaku_detik: number };
+
+export async function cekOtpWaMasuk(token: string): Promise<{ terkonfirmasi: boolean; kedaluwarsa: boolean }> {
+  const json = await fetchJson(`/api/otp/wa-masuk?token=${encodeURIComponent(token)}`);
+  return { terkonfirmasi: Boolean(json.terkonfirmasi), kedaluwarsa: Boolean(json.kedaluwarsa) };
+}
+
+/** Minta kode OTP lupa sandi (tanpa sesi). `wa` ada bila verifikasi arah masuk aktif. */
+export async function lupaSandiKirim(identitas: string): Promise<{ pesan: string; wa: OtpWaMasuk | null }> {
   const json = await fetchJson("/api/sandi/lupa", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ identitas }),
   });
-  return (json.pesan as string) ?? "Kode dikirim.";
+  return { pesan: (json.pesan as string) ?? "Kode dikirim.", wa: (json.wa as OtpWaMasuk | undefined) ?? null };
 }
 
 export async function lupaSandiSetel(data: {
@@ -4647,8 +4711,10 @@ export async function getDatabaseDetail(id: string): Promise<DbDetailPengguna> {
 // Verifikasi WhatsApp untuk akun yang sudah masuk
 // ------------------------------------------------------------
 
-export async function kirimKodeVerifikasiWa(): Promise<void> {
-  await fetchJson("/api/otp/ulang", { method: "PUT", headers: headerToken() });
+/** `wa` terisi = verifikasi arah masuk; null = kode dikirim ke WhatsApp. */
+export async function kirimKodeVerifikasiWa(): Promise<OtpWaMasuk | null> {
+  const json = await fetchJson("/api/otp/ulang", { method: "PUT", headers: headerToken() });
+  return (json.wa as OtpWaMasuk | undefined) ?? null;
 }
 
 export async function verifikasiWaSaya(kode: string): Promise<UserLengkap> {
@@ -4662,12 +4728,13 @@ export async function verifikasiWaSaya(kode: string): Promise<UserLengkap> {
 
 // Set + verifikasi nomor WA BARU untuk akun yang belum punya nomor
 // (fitur 1.22.x/1).
-export async function kirimKodeWaBaru(nomor: string): Promise<void> {
-  await fetchJson("/api/verifikasi/wa-nomor", {
+export async function kirimKodeWaBaru(nomor: string): Promise<OtpWaMasuk | null> {
+  const json = await fetchJson("/api/verifikasi/wa-nomor", {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify({ nomor }),
   });
+  return (json.wa as OtpWaMasuk | undefined) ?? null;
 }
 
 export async function verifikasiWaBaru(
@@ -5895,6 +5962,8 @@ export type LingkaranGaleri = {
   avatar_url: string;
   /** platform → username yang tertaut */
   akun: Record<string, string>;
+  /** Jumlah video di katalog upload-post (7 Okt 2026). */
+  jumlah_video?: number | null;
 };
 
 export type VideoGaleri = {
@@ -5906,6 +5975,7 @@ export type VideoGaleri = {
   waktu: string | null;
   like: number | null;
   komentar: number | null;
+  tayangan?: number | null;
 };
 
 export async function getGaleriKonten(): Promise<{
@@ -5916,6 +5986,33 @@ export async function getGaleriKonten(): Promise<{
   return {
     official: (json?.official ?? null) as LingkaranGaleri | null,
     pengguna: (json?.pengguna ?? []) as LingkaranGaleri[],
+  };
+}
+
+/** Video terbaru seluruh akun TV Rakyat anggota (katalog upload-post, 7 Okt 2026). */
+export type VideoKontenTerbaru = {
+  id: string;
+  platform: string;
+  url: string;
+  thumbnail: string;
+  judul: string;
+  waktu: string | null;
+  tayangan: number;
+  suka: number;
+  komentar: number;
+  akun: { user_id: string; nama: string; avatar_url: string; username: string };
+};
+export type RingkasanKonten24j = { video: number; tayangan: number; suka: number; akun: number };
+
+export async function getKontenTerbaru(halaman = 1): Promise<{
+  data: VideoKontenTerbaru[];
+  ada_lagi: boolean;
+  ringkasan?: RingkasanKonten24j | null;
+}> {
+  return (await fetchJson(`/api/konten/terbaru?halaman=${halaman}`)) as unknown as {
+    data: VideoKontenTerbaru[];
+    ada_lagi: boolean;
+    ringkasan?: RingkasanKonten24j | null;
   };
 }
 

@@ -58,6 +58,43 @@ function bukaBerkasStok(stokId: string): Promise<IncomingMessage> {
   });
 }
 
+/**
+ * Anggota tim yang MEMBUAT video stok ini (job mesin mencatat `anggota`),
+ * untuk Riwayat "diedit oleh". Gagal/tidak ada = null — tidak menghalangi kiriman.
+ */
+function anggotaPembuatStok(stokId: string): Promise<string | null> {
+  return new Promise((ok) => {
+    const req = mintaHttp(
+      {
+        socketPath: socketAutoEdit(),
+        path: "/api/tvr/stok",
+        method: "GET",
+        headers: { "x-autoedit-pengguna": ID_TIM.tv },
+        timeout: 10_000,
+      },
+      (res) => {
+        let isi = "";
+        res.setEncoding("utf8");
+        res.on("data", (b: string) => {
+          if (isi.length < 2_000_000) isi += b;
+        });
+        res.on("end", () => {
+          try {
+            const j = JSON.parse(isi) as { stok?: { id?: string; anggota?: string | null }[] };
+            const a = j.stok?.find((s) => s.id === stokId)?.anggota;
+            ok(a && /^\d{1,12}$/.test(String(a)) ? String(a) : null);
+          } catch {
+            ok(null);
+          }
+        });
+      },
+    );
+    req.on("timeout", () => req.destroy());
+    req.on("error", () => ok(null));
+    req.end();
+  });
+}
+
 /** Bucket cadangan bila R2 belum diatur — sama dengan TVR Saya (privat). */
 const BUCKET = "tvrku";
 
@@ -160,6 +197,14 @@ export async function POST(request: Request) {
     if (!urlVideo) throw galat("Tautan video gagal dibuat. Coba lagi.", 502);
     const acc = await bolehAccVideo(user);
     const kini = new Date().toISOString();
+    // Riwayat (sql/65): pembuat video di Edit Otomatis; bila tak tercatat,
+    // pengirimnya sendiri.
+    const idEditor = await anggotaPembuatStok(stokId);
+    let editor = { id: Number(user.id), nama: user.nama };
+    if (idEditor && idEditor !== String(user.id)) {
+      const { data: org } = await supabase().from("app_user").select("id, nama").eq("id", Number(idEditor)).maybeSingle();
+      if (org) editor = { id: Number(org.id), nama: String(org.nama) };
+    }
     const judul = String(body.judul ?? "").trim().slice(0, 60) || `Video tim ${user.nama.split(" ")[0]}`;
     const baris = {
       kode,
@@ -178,6 +223,8 @@ export async function POST(request: Request) {
       persetujuan_pada: acc ? kini : null,
       diupload_oleh: user.nama,
       diupload_oleh_id: Number(user.id),
+      diedit_oleh: editor.nama,
+      diedit_oleh_id: editor.id,
       hasil_render_url: urlVideo,
       hapus_media_pada: new Date(Date.now() + UMUR_MEDIA_MS).toISOString(),
       tahap: 5,
