@@ -13,8 +13,11 @@
 
 import { peranTersembunyi } from "@/lib/peran";
 
-/** 7 Oktober 2026 pukul 15.00 WIB. */
-export const RILIS_21_PADA = Date.parse("2026-10-07T15:00:00+07:00");
+/**
+ * 7 Oktober 2026 pukul 12.30 WIB. Semula 15.00; dimajukan pemilik setelah
+ * uji akun faris (#176) lulus pukul 12.25 — berlaku begitu ter-deploy.
+ */
+export const RILIS_21_PADA = Date.parse("2026-10-07T12:30:00+07:00");
 
 /** #4 farismfaf dan #176 faris — mendapat 2.1 lebih dulu untuk uji coba. */
 const AKUN_UJI_COBA_21 = new Set(["4", "176"]);

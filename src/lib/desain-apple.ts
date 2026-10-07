@@ -1,7 +1,7 @@
 // ============================================================
 // DESAIN APPLE (6 Okt 2026) — uji coba tampilan khusus akun Faris,
 // diperluas ke seluruh akun MASTER (7 Okt 2026), lalu ke SEMUA akun sejak
-// rilis 2.1 (7 Okt 2026 15.00 WIB, lib/rilis).
+// rilis 2.1 (7 Okt 2026 12.30 WIB, lib/rilis).
 //
 // Akun ini boleh memilih tema Pagi/Sore/Malam ala Apple (material kaca,
 // tipografi sistem, warna & bayangan macOS — globals.css

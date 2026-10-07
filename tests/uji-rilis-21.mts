@@ -21,7 +21,7 @@ const anggota = { id: "500", role: "anggota" };
 const faris = { id: "176", role: "anggota" };
 const selesai = { ...anggota, verifikasi_21_pada: "2026-10-07T08:00:00Z", tutorial_21_pada: "2026-10-07T08:05:00Z" };
 
-cek("rilis jam 15.00 WIB", new Date(RILIS_21_PADA).toISOString() === "2026-10-07T08:00:00.000Z");
+cek("rilis jam 12.30 WIB", new Date(RILIS_21_PADA).toISOString() === "2026-10-07T05:30:00.000Z");
 cek("anggota belum dapat sebelum rilis", !rilis21Untuk(anggota, SEBELUM) && !wajibPembaruan21(anggota, SEBELUM));
 cek("faris (#176) dapat lebih dulu", rilis21Untuk(faris, SEBELUM) && wajibPembaruan21(faris, SEBELUM));
 cek("anggota wajib setelah rilis", wajibPembaruan21(anggota, SESUDAH));

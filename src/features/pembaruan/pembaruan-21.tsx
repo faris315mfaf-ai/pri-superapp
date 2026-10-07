@@ -17,7 +17,7 @@
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowRight, Check, CheckCircle2, Loader2, MessageCircle, Minimize2, Palette, Sparkles, Wand2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, CheckCircle2, Loader2, MessageCircle, Minimize2, Palette, Sparkles, Wand2 } from "lucide-react";
 import { PanelWaMasuk } from "@/components/verifikasi-wa-masuk";
 import { GambarMiniLatar } from "@/components/latar-apple";
 import { useAppStore } from "@/hooks/use-app-store";
@@ -155,6 +155,19 @@ function TombolUtama({
   );
 }
 
+/** Peringatan pemilik (7 Okt 2026): nomor harus WhatsApp di perangkat ini. */
+function PeringatanNomor() {
+  return (
+    <div className="mt-3 flex gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-2.5" role="note">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+      <p className="text-[12px] leading-snug text-teks-utama">
+        <b>Harap pastikan nomor WhatsApp yang Anda masukkan sama dengan yang terhubung dengan perangkat Anda.</b>{" "}
+        Kode verifikasi dikirim dari aplikasi WhatsApp di HP ini — nomor lain tidak akan cocok.
+      </p>
+    </div>
+  );
+}
+
 function Galat({ pesan }: { pesan: string }) {
   if (!pesan) return null;
   return (
@@ -245,6 +258,7 @@ function VerifikasiWa({ user, onSelesai }: { user: User; onSelesai: (u: User) =>
             placeholder="08123456789"
             className="glass mt-1.5 h-12 w-full rounded-xl px-3.5 text-[15px] font-semibold text-teks-utama outline-none"
           />
+          <PeringatanNomor />
           <Galat pesan={pesan} />
           <TombolUtama onClick={() => void minta()} disabled={nomor.replace(/\D/g, "").length < 9} memuat={memuat}>
             Lanjut verifikasi
@@ -252,6 +266,7 @@ function VerifikasiWa({ user, onSelesai }: { user: User; onSelesai: (u: User) =>
         </>
       ) : (
         <div className="mt-4 flex flex-col gap-3">
+          <PeringatanNomor />
           <PanelWaMasuk
             key={wa.token}
             wa={wa}
