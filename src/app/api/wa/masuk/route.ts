@@ -64,7 +64,12 @@ export async function POST(request: Request) {
   // Hanya pesan teks 1-on-1 dari orang lain; grup/status/pesan sendiri diabaikan.
   if (isi.event !== "message" || !p || p.is_from_me || !p.body) return NextResponse.json({ ok: true });
   const nomor = nomorDariJid(p.from);
-  if (!nomor || nomorDariJid(p.chat_id) !== nomor) return NextResponse.json({ ok: true });
+  if (!nomor || nomorDariJid(p.chat_id) !== nomor) {
+    // Gateway gagal memetakan LID → nomor HP: verifikasi tak bisa dicocokkan.
+    // Dicatat (tanpa nomor) supaya kasus seperti ini terlihat di log.
+    if (/@lid$/.test(p.from ?? "")) console.warn("[wa/masuk] pengirim @lid tanpa nomor HP — verifikasi tidak bisa dicocokkan");
+    return NextResponse.json({ ok: true });
+  }
 
   try {
     const hasil = await konfirmasiOtpMasuk(nomor, p.body);

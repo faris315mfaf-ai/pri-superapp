@@ -92,6 +92,9 @@ type BarisUser = {
   jabatan_tvr?: string | null;
   /** Struktur tambahan di luar yang utama (11 Sep 2026, sql/43). */
   struktur_lain?: unknown;
+  /** Pembaruan 2.1 (sql/66): verifikasi WA + data diri, dan tutorial. */
+  verifikasi_21_pada?: string | null;
+  tutorial_21_pada?: string | null;
 };
 
 export type UserPublik = User & {
@@ -137,11 +140,13 @@ export function keUserPublik(b: BarisUser): UserPublik {
     jabatan_sayap: b.jabatan_sayap ?? "",
     jabatan_tvr: b.jabatan_tvr ?? "",
     struktur_lain: bacaStrukturLain(b.struktur_lain),
+    verifikasi_21_pada: b.verifikasi_21_pada ?? null,
+    tutorial_21_pada: b.tutorial_21_pada ?? null,
   };
 }
 
 const KOLOM_USER_DASAR =
-  "id, email, nama, role, jabatan, avatar_url, status, profil_lengkap, aktif, username, nomor_wa, wa_terverifikasi, divisi, sub_divisi, posisi_divisi, nama_panggilan, tanggal_lahir, google_linked, google_avatar, sembunyi_kewajiban, modul_izin, jabatan_sayap";
+  "id, email, nama, role, jabatan, avatar_url, status, profil_lengkap, aktif, username, nomor_wa, wa_terverifikasi, divisi, sub_divisi, posisi_divisi, nama_panggilan, tanggal_lahir, google_linked, google_avatar, sembunyi_kewajiban, modul_izin, jabatan_sayap, verifikasi_21_pada, tutorial_21_pada";
 
 /** Daftar kolom akun yang aman dipakai pada keadaan database saat ini. */
 export async function kolomUser(): Promise<string> {

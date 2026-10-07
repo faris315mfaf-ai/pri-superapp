@@ -30,6 +30,7 @@ import { TvrKuScreen } from "@/features/tvr-ku/tvrku-screen";
 import { useAppStore } from "@/hooks/use-app-store";
 import { bebasKewajiban } from "@/lib/jabatan";
 import { matikanModeSimpel, tandaiModeSimpel } from "@/lib/mode-simpel";
+import { bebasPembaruan21, kiniServer, RILIS_21_PADA, rilis21Untuk, wajibPembaruan21 } from "@/lib/rilis";
 import { getKomentarSaya, getLaporanVideo, getNotifikasi, getSakelar, masukOtomatis } from "@/services";
 import { useModulAktif } from "@/hooks/use-modul";
 import type { User } from "@/types";
@@ -124,6 +125,17 @@ export function ModeSimpelApp() {
       if (u.status === "menunggu") {
         setKeadaan("menunggu");
         return;
+      }
+      // Pembaruan 2.1 (7 Okt 2026): verifikasi + tutorial wajib dijalani di
+      // tampilan baru — pindah ke aplikasi lengkap (Mode Simpel dimatikan).
+      if (wajibPembaruan21(u)) {
+        matikanModeSimpel();
+        return;
+      }
+      if (!rilis21Untuk(u) && !bebasPembaruan21(u)) {
+        // Saat jam rilis lewat, layar yang sedang terbuka ikut pindah sendiri.
+        const tunggu = RILIS_21_PADA - kiniServer() + Math.floor(Math.random() * 90_000);
+        if (tunggu < 2_000_000_000) window.setTimeout(() => matikanModeSimpel(), Math.max(0, tunggu));
       }
       setUser(u);
       setUserLokal(u);

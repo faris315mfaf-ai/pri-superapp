@@ -4780,6 +4780,58 @@ export async function verifikasiWaBaru(
   return json.user as UserLengkap;
 }
 
+// ------------------------------------------------------------
+// PEMBARUAN 2.1 (7 Okt 2026): verifikasi ulang akun + tutorial wajib.
+// ------------------------------------------------------------
+
+/** Siapkan verifikasi arah masuk untuk nomor ini (nomor lama boleh, atau nomor baru). */
+export async function siapkanWa21(nomor: string): Promise<OtpWaMasuk> {
+  const json = await fetchJson("/api/pembaruan-21", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ nomor }),
+  });
+  return json.wa as OtpWaMasuk;
+}
+
+async function aksiPembaruan21(isi: Record<string, unknown>): Promise<UserLengkap> {
+  const json = await fetchJson("/api/pembaruan-21", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(isi),
+  });
+  return json.user as UserLengkap;
+}
+
+export const verifikasiWa21 = (nomor: string, kode: string) => aksiPembaruan21({ aksi: "wa", nomor, kode });
+export const simpanProfil21 = (data: { nama: string; username: string; email: string }) =>
+  aksiPembaruan21({ aksi: "profil", ...data });
+export const selesaiTutorial21 = () => aksiPembaruan21({ aksi: "selesai" });
+
+export type LaporanPembaruan21 = {
+  rilis_pada: string;
+  total: number;
+  aktif: number;
+  tidak_aktif: number;
+  tutorial_selesai: number;
+  pengguna: {
+    id: string;
+    nama: string;
+    username: string;
+    jabatan: string;
+    divisi: string;
+    nomor: string;
+    aktif: boolean;
+    tutorial: boolean;
+    verifikasi_pada: string | null;
+    terakhir_masuk: string | null;
+  }[];
+};
+
+export async function getLaporanPembaruan21(): Promise<LaporanPembaruan21> {
+  return (await fetchJson("/api/master/pembaruan-21", { headers: headerToken() })) as unknown as LaporanPembaruan21;
+}
+
 /**
  * Rekap kepatuhan komentar satu periode. Dipakai kartu KPI beranda.
  * Lewat fetchJson supaya token perangkat ikut terkirim — endpoint

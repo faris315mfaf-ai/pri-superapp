@@ -51,6 +51,7 @@ import {
 } from "@/lib/audit-jenis";
 import { tanggalIndonesia, tanggalWibHariIni } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { KartuPembaruan21 } from "./kartu-pembaruan-21";
 
 // ------------------------------------------------------------
 // Pembantu tampilan
@@ -510,6 +511,7 @@ export function AuditScreen({ onKembali }: { onKembali: () => void }) {
           <RincianPengguna key={`${tanggal}-${dipilih}-${muatUlang}`} tanggal={tanggal} userId={dipilih} onKembali={() => setDipilih(null)} />
         ) : (
           <>
+            <KartuPembaruan21 />
             {data?.belum_siap && <BannerBelumSiap />}
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               <KartuAngka ikon={Users} label={`Pengguna aktif · ${data?.online ?? 0} online`} nilai={String(total.aktif)} />

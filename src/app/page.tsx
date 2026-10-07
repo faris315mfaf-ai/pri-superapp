@@ -14,7 +14,8 @@ import {
   useSyncExternalStore,
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { modeSimpelAktif } from "@/lib/mode-simpel";
+import { modeSimpelAktif, tandaiModeSimpel } from "@/lib/mode-simpel";
+import { catatJamServer, kiniServer, RILIS_21_PADA, rilis21Untuk, wajibPembaruan21 } from "@/lib/rilis";
 import { MeshBackground } from "@/components/mesh-background";
 import { ToastViewport } from "@/components/toast-viewport";
 import { PushBannerStack } from "@/components/push-banner";
@@ -117,6 +118,7 @@ const PilihUcapanUltah = dynamic(() => import("@/features/notifikasi/pilih-ucapa
 const ModalChangelog = dynamic(() => import("@/features/profil/modal-changelog").then((m) => m.ModalChangelog), { ssr: false, loading: () => null });
 const TurPemandu = dynamic(() => import("@/features/tur/tur-pemandu").then((m) => m.TurPemandu), { ssr: false, loading: () => null });
 const TurTvr = dynamic(() => import("@/features/tur/tur-tvr").then((m) => m.TurTvr), { ssr: false, loading: () => null });
+const Pembaruan21 = dynamic(() => import("@/features/pembaruan/pembaruan-21").then((m) => m.Pembaruan21), { ssr: false, loading: () => null });
 const ModalKembangApi = dynamic(() => import("@/features/beranda/modal-kembang-api").then((m) => m.ModalKembangApi), { ssr: false, loading: () => null });
 const PetMelayang = dynamic(() => import("@/features/pet/pet-melayang").then((m) => m.PetMelayang), { ssr: false, loading: () => null });
 const ModalHadiahHarian = dynamic(() => import("@/features/pet/modal-hadiah-harian").then((m) => m.ModalHadiahHarian), { ssr: false, loading: () => null });
@@ -494,6 +496,9 @@ export default function Page() {
           // pengurus menekan Setujui (fitur 1.19.1).
           setMenungguUser(tersimpan);
         } else if (tersimpan) {
+          // Pembaruan 2.1 wajib dijalani di tampilan baru: Mode Simpel
+          // dimatikan dulu (bisa dinyalakan lagi dari Profil sesudahnya).
+          if (modeSimpelAktif() && wajibPembaruan21(tersimpan)) tandaiModeSimpel(false);
           // Mode Simpel (4 Sep 2026): perangkat ini memilih versi ringan →
           // pindah sebelum satu pun modul berat dimuat.
           if (modeSimpelAktif()) {
@@ -658,6 +663,34 @@ export default function Page() {
   // Muat notifikasi saat aplikasi aktif
   // ------------------------------------------------------------
   const aplikasiAktif = siap && !!user && !menyambut;
+
+  // ------------------------------------------------------------
+  // PEMBARUAN 2.1 (7 Okt 2026, lib/rilis). Jam server dicatat sekali
+  // (jam HP bisa salah); aplikasi yang terbuka saat jam rilis lewat memuat
+  // ulang sendiri (disebar ±90 dtk supaya server tidak diserbu serentak).
+  // ------------------------------------------------------------
+  const [, setJamServerSiap] = useState(0);
+  useEffect(() => {
+    let hidup = true;
+    fetch("/api/ping", { cache: "no-store" })
+      .then((r) => {
+        catatJamServer(r.headers.get("date"));
+        if (hidup) setJamServerSiap((n) => n + 1);
+      })
+      .catch(() => undefined);
+    return () => {
+      hidup = false;
+    };
+  }, []);
+  const sudahRilis21 = rilis21Untuk(user);
+  useEffect(() => {
+    if (!user || sudahRilis21) return;
+    const tunggu = RILIS_21_PADA - kiniServer() + Math.floor(Math.random() * 90_000);
+    if (tunggu > 2_000_000_000) return; // di luar batas setTimeout; dibuka ulang nanti juga dapat
+    const t = window.setTimeout(() => window.location.reload(), Math.max(0, tunggu));
+    return () => window.clearTimeout(t);
+  }, [user, sudahRilis21]);
+  const pembaruanWajib = aplikasiAktif && wajibPembaruan21(user);
 
   // PENYEGARAN LATAR BELAKANG 10 DETIK (10 Sep 2026): satu detak ringan
   // menanyakan "ada yang baru?"; bila ada, seluruh layar yang terbuka
@@ -1403,7 +1436,9 @@ export default function Page() {
       )}
 
       {/* Changelog otomatis pasca-update (spek 1.4) */}
-      {aplikasiAktif && changelogBuka && (
+      {/* Pembaruan 2.1: verifikasi WA + data diri + tutorial wajib — di atas segalanya. */}
+      {pembaruanWajib && user && <Pembaruan21 user={user} />}
+      {aplikasiAktif && !pembaruanWajib && changelogBuka && (
         <ModalChangelog onTutup={tutupChangelog} />
       )}
 
@@ -1411,13 +1446,13 @@ export default function Page() {
           menunggu changelog ditutup dulu supaya tidak bertumpuk. */}
       {/* Perayaan reset periode + juara komentar (3 Sep 2026) */}
       {/* Juara komentar ikut sakelar modul kepatuhan_komen (24 Sep 2026). */}
-      {aplikasiAktif && !changelogBuka && komenAktif && sakelar.fitur.juara_efek !== false && <ModalKembangApi />}
+      {aplikasiAktif && !pembaruanWajib && !changelogBuka && komenAktif && sakelar.fitur.juara_efek !== false && <ModalKembangApi />}
       {/* Hadiah login harian (v5, 5 Sep 2026): sekali per hari, diperiksa sekali per sesi. */}
-      {aplikasiAktif && user && <ModalHadiahHarian tunda={changelogBuka} />}
+      {aplikasiAktif && user && !pembaruanWajib && <ModalHadiahHarian tunda={changelogBuka} />}
       {/* Tutorial ini menuntun ke Kepatuhan Komen — ikut sakelar modulnya. */}
-      {aplikasiAktif && !changelogBuka && komenAktif && <TurPemandu />}
+      {aplikasiAktif && !pembaruanWajib && !changelogBuka && komenAktif && <TurPemandu />}
       {/* Tutorial TVR Saya (5 Okt 2026): sambung ulang akun → Edit Otomatis → Stok Video. */}
-      {aplikasiAktif && !changelogBuka && tabBoleh.includes("tvrku") && <TurTvr />}
+      {aplikasiAktif && !pembaruanWajib && !changelogBuka && tabBoleh.includes("tvrku") && <TurTvr />}
 
       {/* Pemilih ucapan ulang tahun (dari notifikasi ultah yang diklik) */}
       {siap && user && !menyambut && ultahBuka && (

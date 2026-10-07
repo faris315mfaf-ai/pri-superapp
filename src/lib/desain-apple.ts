@@ -1,6 +1,7 @@
 // ============================================================
 // DESAIN APPLE (6 Okt 2026) — uji coba tampilan khusus akun Faris,
-// diperluas ke seluruh akun MASTER (7 Okt 2026).
+// diperluas ke seluruh akun MASTER (7 Okt 2026), lalu ke SEMUA akun sejak
+// rilis 2.1 (7 Okt 2026 15.00 WIB, lib/rilis).
 //
 // Akun ini boleh memilih tema Pagi/Sore/Malam ala Apple (material kaca,
 // tipografi sistem, warna & bayangan macOS — globals.css
@@ -9,6 +10,7 @@
 // ============================================================
 
 import type { Latar } from "@/hooks/use-latar-apple";
+import { rilis21Umum, rilis21Untuk } from "@/lib/rilis";
 
 type AkunDesain = { id?: string | number | null; role?: string | null } | null | undefined;
 
@@ -20,7 +22,7 @@ function akunUjiCoba(u: AkunDesain): boolean {
 }
 
 export function bolehDesainApple(u: AkunDesain): boolean {
-  return akunUjiCoba(u) || u?.role === "master";
+  return akunUjiCoba(u) || u?.role === "master" || rilis21Untuk(u);
 }
 
 /**
@@ -30,7 +32,7 @@ export function bolehDesainApple(u: AkunDesain): boolean {
  * izin. Akun uji coba Faris (#4, #176) + seluruh akun master.
  */
 export function desainBaru(u: AkunDesain): boolean {
-  return akunUjiCoba(u) || u?.role === "master";
+  return akunUjiCoba(u) || u?.role === "master" || rilis21Untuk(u);
 }
 
 /**
@@ -39,7 +41,9 @@ export function desainBaru(u: AkunDesain): boolean {
  * kenal — dan memilih sendiri di Profil.
  */
 export function latarBawaan(u: AkunDesain): Latar {
-  return akunUjiCoba(u) ? "pagi" : "classic";
+  // Sejak rilis 2.1 semua anggota mulai dari Pagi (tutorial memperkenalkan
+  // keempat tema); master tetap Classic sampai memilih sendiri.
+  return akunUjiCoba(u) || (rilis21Umum() && u?.role !== "master") ? "pagi" : "classic";
 }
 
 /**
@@ -48,7 +52,7 @@ export function latarBawaan(u: AkunDesain): Latar {
  * Profil dua kolom, panel notifikasi). Akun master + akun uji coba Faris.
  */
 export function tataLebar(u: AkunDesain): boolean {
-  return u?.role === "master" || akunUjiCoba(u);
+  return u?.role === "master" || akunUjiCoba(u) || rilis21Untuk(u);
 }
 
 export type ModeNav = "sidebar" | "dock";

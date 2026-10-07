@@ -18,6 +18,18 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "2.1.0",
+    tanggal: "7 Oktober 2026",
+    judul: "Tampilan baru untuk semua + verifikasi akun",
+    poin: [
+      "Tampilan baru: tema Pagi, Sore, Malam, dan Klasik — ganti kapan saja di Profil › Display",
+      "Verifikasi ulang akun lewat WhatsApp; masuk bisa memakai username, email, atau nomor WhatsApp",
+      "Video hasil Edit Otomatis kini dikompres otomatis (rata-rata 30–50% lebih kecil, kualitas terjaga)",
+      "TVR Saya: Kompres Video, Blur Watermark, dan Hapus latar Boom terbuka untuk semua",
+      "Dompet Koin di Beranda: koin diberikan Pimpinan Redaksi untuk video yang Anda unggah",
+    ],
+  },
+  {
     versi: "1.22.0",
     tanggal: "29 Agustus 2026",
     judul: "TV Rakyat lebih rapi, konten sosmed, & bahan belajar AI",

@@ -91,6 +91,10 @@ export type User = {
   google_avatar?: string;
   /** true = dibebaskan Panel Master dari KPI/absensi/kepatuhan komentar/kewajiban upload (3 Sep 2026) */
   sembunyi_kewajiban?: boolean;
+  /** Pembaruan 2.1 (sql/66): kapan WA + data diri dikonfirmasi; null = belum. */
+  verifikasi_21_pada?: string | null;
+  /** Pembaruan 2.1: kapan tutorial wajib selesai; null = belum. */
+  tutorial_21_pada?: string | null;
 };
 
 // Akun sosmed yang wajib dikomentari
