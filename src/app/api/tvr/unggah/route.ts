@@ -476,14 +476,19 @@ export async function POST(request: Request) {
         );
       }
 
-      // Jadwal (opsional). Batasnya BUKAN angka tetap: hanya jalur R2
-      // yang terkunci 7 hari, karena tautan bertanda tangannya memang
-      // tidak bisa dibuat berumur lebih dari itu (aturan SigV4). Jalur
-      // lain — bucket publik, Cloudinary, tautan milik sendiri — tidak
-      // punya batas itu, jadi di sana jadwalnya dibuka (15 Sep 2026).
+      // Jadwal (opsional). Batasnya BUKAN angka tetap: yang terkunci 7
+      // hari adalah jalur yang menyerahkan video lewat URL BERTANDA
+      // TANGAN — R2 maupun bucket Supabase, dua-duanya memakai umur
+      // maksimum MAKS_UMUR_URL_DETIK (aturan SigV4). Jadwal lebih jauh
+      // berarti tautannya sudah mati saat waktunya tiba: video gagal
+      // terbit tanpa ada yang salah ketik (9 Okt 2026: jalur bucket
+      // Supabase diikutkan — dulu hanya R2, padahal cadangannya sama
+      // berumur 7 hari). Jalur bertautan PERMANEN — Cloudinary, tautan
+      // milik sendiri (PALUGODAM) — tidak punya batas itu, jadi di sana
+      // jadwalnya dibuka (15 Sep 2026).
       let jadwal: string | undefined;
       if (body.jadwal) {
-        const p = periksaJadwal(body.jadwal, pakaiR2);
+        const p = periksaJadwal(body.jadwal, !pakaiLink && !pakaiCloudinary);
         if (!p.sah) throw Object.assign(new Error(p.pesan), { status: 400 });
         jadwal = p.iso;
       }

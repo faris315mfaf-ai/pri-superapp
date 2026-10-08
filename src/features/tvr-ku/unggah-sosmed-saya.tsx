@@ -18,7 +18,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CalendarClock, Check, ChevronDown, History, Link2, Loader2, RotateCcw, Send, Share2, UploadCloud, Wand2, X } from "lucide-react";
 import { BATAS_CAPTION_TVR, LABEL_SOSMED, solusiGagal } from "@/lib/batas-caption";
-import { periksaJadwal } from "@/lib/jadwal-unggah";
+import { JADWAL_MAKS_HARI, JADWAL_MAKS_HARI_TANDA_TANGAN, JADWAL_MIN_MENIT, periksaJadwal } from "@/lib/jadwal-unggah";
+import { waktuJadwal } from "@/lib/jadwal-tvrku";
 import { SeksiLipat } from "@/components/seksi-lipat";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
@@ -61,6 +62,33 @@ function jamWib(iso: string): string {
   const d = new Date(t + 7 * 3600_000);
   const dua = (n: number) => String(n).padStart(2, "0");
   return `${dua(d.getUTCDate())}/${dua(d.getUTCMonth() + 1)} ${dua(d.getUTCHours())}:${dua(d.getUTCMinutes())} WIB`;
+}
+
+/** Nilai atribut min/max input datetime-local (waktu LOKAL perangkat). */
+function nilaiDatetimeLocal(ms: number): string {
+  const d = new Date(ms);
+  const dua = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${dua(d.getMonth() + 1)}-${dua(d.getDate())}T${dua(d.getHours())}:${dua(d.getMinutes())}`;
+}
+
+/** "Rab, 14 Okt 09:30 WIB" — pratinjau jadwal masa depan (tanpa "… lalu"). */
+function jadwalWib(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const d = new Date(t + 7 * 3600_000);
+  const dua = (n: number) => String(n).padStart(2, "0");
+  const hari = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"][d.getUTCDay()];
+  const bulan = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"][d.getUTCMonth()];
+  return `${hari}, ${d.getUTCDate()} ${bulan} ${dua(d.getUTCHours())}:${dua(d.getUTCMinutes())} WIB`;
+}
+
+/** Hitungan mundur ringkas: "12 mnt lagi", "3 jam lagi", "2 hari lagi". */
+function lagiWib(ms: number): string {
+  const mnt = Math.round((ms - Date.now()) / 60_000);
+  if (mnt < 1) return "sebentar lagi";
+  if (mnt < 60) return `${mnt} mnt lagi`;
+  if (mnt < 48 * 60) return `${Math.floor(mnt / 60)} jam lagi`;
+  return `${Math.floor(mnt / 1440)} hari lagi`;
 }
 
 export function UnggahSosmedSaya({
@@ -256,6 +284,13 @@ export function UnggahSosmedSaya({
   const captionPerKirim = Object.fromEntries(
     Object.entries(captionPer).filter(([p, v]) => pilih.has(p) && v.trim() && v.trim() !== teksUtama),
   );
+  // Batas pemetik jadwal (waktu LOKAL perangkat): 5 menit – 7 hari ke
+  // depan (365 hari untuk kiriman tautan PALUGODAM). Dihitung tiap render
+  // supaya segar; dijaga ulang saat kirim (jadwalUntukKirim) dan server.
+  const maksHariJadwal = modeLink ? JADWAL_MAKS_HARI : JADWAL_MAKS_HARI_TANDA_TANGAN;
+  const minJadwal = nilaiDatetimeLocal(Date.now() + JADWAL_MIN_MENIT * 60_000);
+  const maksJadwal = nilaiDatetimeLocal(Date.now() + maksHariJadwal * 86_400_000);
+  const waktuJadwalPilih = jadwal ? Date.parse(jadwal) : NaN;
   // DAFTAR KEKURANGAN (10 Sep 2026): dulu tombol hanya mati diam-diam saat
   // ada yang belum lengkap — anggota tidak tahu apa yang kurang. Kini
   // tombol tetap bisa ditekan dan menyebutkan satu per satu yang kurang.
@@ -270,11 +305,15 @@ export function UnggahSosmedSaya({
   if (pakaiJadwal) {
     if (!jadwal) kekurangan.push("Waktu jadwal belum diisi");
     else {
-      // Aturan yang SAMA dengan server (lib/jadwal-unggah). Klien tidak
-      // tahu jalur penyimpanan mana yang akan dipakai sampai berkasnya
-      // disiapkan, jadi di sini dipakai batas yang longgar; server tetap
-      // penentunya dan pesannya menjelaskan bila jalurnya terbatas.
-      const p = periksaJadwal(jadwal, false);
+      // Aturan yang SAMA dengan server (lib/jadwal-unggah). Sejak 2 Okt
+      // 2026 seluruh unggahan berkas diserahkan ke upload-post lewat URL
+      // BERTANDA TANGAN (R2, cadangan bucket Supabase) yang umurnya
+      // terkunci 7 hari — jadi batas ketat dipakai di sini juga. Dulu
+      // batas longgar 365 hari: jadwal >7 hari lolos di layar, video
+      // selesai terunggah bermenit-menit, lalu DITOLAK server — inilah
+      // penyebab "tidak bisa menambah jadwal". Kiriman tautan
+      // (PALUGODAM) memakai batas longgar, sama seperti server.
+      const p = periksaJadwal(jadwal, !modeLink);
       if (!p.sah) kekurangan.push(p.pesan);
     }
   }
@@ -335,6 +374,32 @@ export function UnggahSosmedSaya({
     if (!h.terjadwal) setPantauSejak(Date.now());
   }
 
+  /**
+   * ISO jadwal yang benar-benar dikirim, dihitung TEPAT SEBELUM langkah
+   * post. Unggahan berkas bisa memakan waktu beberapa menit, sehingga
+   * waktu terpilih sering jatuh di bawah batas minimal 5 menit saat
+   * sampai di server — dulu itu membuang video yang sudah terunggah
+   * hanya karena selisih menit. Bila terlalu dekat, jadwal digeser
+   * sedikit ke depan dan pengguna dikabari; pelanggaran aturan lain
+   * (mis. lebih dari 7 hari) dilempar apa adanya.
+   */
+  function jadwalUntukKirim(): string | undefined {
+    if (!pakaiJadwal || !jadwal) return undefined;
+    const t = Date.parse(jadwal);
+    if (Number.isFinite(t) && t < Date.now() + JADWAL_MIN_MENIT * 60_000) {
+      const geser = new Date(Date.now() + (JADWAL_MIN_MENIT + 2) * 60_000);
+      toast(
+        "info",
+        "Waktu jadwal digeser",
+        `Waktu terpilih sudah terlalu dekat setelah unggahan — jadwal dipasang ${jadwalWib(geser.toISOString())}.`,
+      );
+      return geser.toISOString();
+    }
+    const p = periksaJadwal(jadwal, !modeLink);
+    if (!p.sah) throw new Error(p.pesan);
+    return p.iso;
+  }
+
   async function kirim() {
     if (!sah || tahap) return;
     try {
@@ -347,15 +412,15 @@ export function UnggahSosmedSaya({
           judul: judul.trim(),
           keyword: kategori,
           caption: caption.trim() || undefined,
-        caption_per: Object.keys(captionPerKirim).length > 0 ? captionPerKirim : undefined,
+          caption_per: Object.keys(captionPerKirim).length > 0 ? captionPerKirim : undefined,
           platforms: [...pilih],
-          jadwal: pakaiJadwal && jadwal ? new Date(jadwal).toISOString() : undefined,
+          jadwal: jadwalUntukKirim(),
         });
         setTautan("");
         setJudul("");
         setKategori("");
         setCaption("");
-      setCaptionPer({});
+        setCaptionPer({});
         setPilih(new Set());
         setPakaiJadwal(false);
         setJadwal("");
@@ -382,7 +447,7 @@ export function UnggahSosmedSaya({
         caption: caption.trim() || undefined,
         caption_per: Object.keys(captionPerKirim).length > 0 ? captionPerKirim : undefined,
         platforms: [...pilih],
-        jadwal: pakaiJadwal && jadwal ? new Date(jadwal).toISOString() : undefined,
+        jadwal: jadwalUntukKirim(),
       });
 
       setBerkas(null);
@@ -733,7 +798,8 @@ export function UnggahSosmedSaya({
         )}
 
         {/* Mode kirim: dua pilihan jelas (permintaan 1 Sep 2026) —
-            Upload Sekarang ATAU Jadwalkan Upload. */}
+            Upload Sekarang ATAU Jadwalkan Upload. Gaya segmen mengikuti
+            toggle Unggah Berkas/Kirim Tautan di atas (token pri). */}
         <p className="mt-3 text-[11.5px] font-semibold text-teks-sekunder">Waktu kirim:</p>
         <div className="mt-1.5 grid grid-cols-2 gap-2">
           <button
@@ -743,13 +809,8 @@ export function UnggahSosmedSaya({
             aria-pressed={!pakaiJadwal}
             className={cn(
               "btn-tekan flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[12px] font-bold",
-              !pakaiJadwal ? "text-white" : "glass text-teks-sekunder",
+              !pakaiJadwal ? "bg-pri/15 text-pri" : "glass text-teks-sekunder",
             )}
-            style={
-              !pakaiJadwal
-                ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" }
-                : undefined
-            }
           >
             <Send className="h-3.5 w-3.5" />
             Upload Sekarang
@@ -761,32 +822,45 @@ export function UnggahSosmedSaya({
             aria-pressed={pakaiJadwal}
             className={cn(
               "btn-tekan flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[12px] font-bold",
-              pakaiJadwal ? "text-white" : "glass text-teks-sekunder",
+              pakaiJadwal ? "bg-pri/15 text-pri" : "glass text-teks-sekunder",
             )}
-            style={
-              pakaiJadwal
-                ? { background: "linear-gradient(135deg, #7C3AED, #5B21B6)" }
-                : undefined
-            }
           >
             <CalendarClock className="h-3.5 w-3.5" />
             Jadwalkan Upload
           </button>
         </div>
         {pakaiJadwal && (
-          <div className="mt-2">
+          <div className="glass-soft mt-2 rounded-2xl p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-teks-sekunder">Waktu tayang</p>
+              <p className="text-[10px] text-teks-sekunder">jam perangkat Anda</p>
+            </div>
             <input
               type="datetime-local"
               value={jadwal}
+              min={minJadwal}
+              max={maksJadwal}
               onChange={(e) => setJadwal(e.target.value)}
               disabled={Boolean(tahap)}
               aria-label="Waktu jadwal upload"
-              className="glass-input h-10 w-full rounded-xl px-2.5 text-[12px] text-teks-utama"
+              className="glass-input mt-1.5 h-10 w-full rounded-xl px-2.5 text-[12px] text-teks-utama"
             />
-            <p className="mt-1 text-[10.5px] text-teks-sekunder">
-              Minimal 5 menit dari sekarang, maksimal 7 hari ke depan. Video
-              diposting otomatis pada waktunya.
-            </p>
+            {Number.isFinite(waktuJadwalPilih) ? (
+              <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11.5px] leading-snug">
+                <span className="flex items-center gap-1 font-bold text-teks-utama">
+                  <CalendarClock className="h-3.5 w-3.5 text-pri" aria-hidden="true" />
+                  Terjadwal {jadwalWib(jadwal)}
+                </span>
+                <span className="text-teks-sekunder">
+                  · {lagiWib(waktuJadwalPilih)} — diposting otomatis
+                </span>
+              </p>
+            ) : (
+              <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder">
+                Minimal {JADWAL_MIN_MENIT} menit dari sekarang, maksimal {maksHariJadwal} hari ke depan.
+                Pratinjau waktu memakai WIB.
+              </p>
+            )}
           </div>
         )}
         <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder">
@@ -841,7 +915,8 @@ export function UnggahSosmedSaya({
       </GlassCard>
       )}
 
-      {/* Antrean terjadwal (2 Sep 2026) — belum tayang, bisa dibatalkan */}
+      {/* Antrean terjadwal (2 Sep 2026) — belum tayang, bisa dibatalkan.
+          Urut menaik: yang paling dekat tayang paling atas. */}
       {!hanyaForm && jadwalAntre !== null && jadwalAntre.length > 0 && (
         <GlassCard className="p-4">
           <p className="flex items-center gap-1.5 text-[12.5px] font-bold text-teks-utama">
@@ -849,34 +924,43 @@ export function UnggahSosmedSaya({
             Menunggu Tayang ({jadwalAntre.length})
           </p>
           <div className="mt-2 flex flex-col gap-2">
-            {jadwalAntre.map((j) => (
-              <div key={j.job_id} className="glass-soft rounded-xl p-2.5">
-                <p className="line-clamp-2 text-[12px] font-semibold text-teks-utama">
-                  {j.judul || "(tanpa judul)"}
-                </p>
-                <div className="mt-1 flex items-center gap-2">
-                  <span className="angka-tab text-[10.5px] text-teks-sekunder">
-                    {jamWib(j.scheduled_date.endsWith("Z") ? j.scheduled_date : `${j.scheduled_date}Z`)}
-                  </span>
-                  {j.bisa_batal ? (
-                    <button
-                      type="button"
-                      onClick={() => void batalkanJadwal(j)}
-                      disabled={Boolean(sedangBatal)}
-                      className="btn-tekan ml-auto rounded-full bg-gagal/12 px-2.5 py-1 text-[10.5px] font-bold text-gagal disabled:opacity-50"
-                    >
-                      {sedangBatal === j.job_id ? "Membatalkan…" : "Batalkan"}
-                    </button>
-                  ) : (
-                    <span className="ml-auto text-[10px] text-teks-sekunder">
-                      kiriman tautan — cabut di sumbernya
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+            {[...jadwalAntre]
+              .sort((a, b) => waktuJadwal(a.scheduled_date) - waktuJadwal(b.scheduled_date))
+              .map((j) => {
+                const waktu = waktuJadwal(j.scheduled_date);
+                const teksWib = jamWib(j.scheduled_date.endsWith("Z") ? j.scheduled_date : `${j.scheduled_date}Z`);
+                return (
+                  <div key={j.job_id} className="glass-soft rounded-2xl p-3">
+                    <p className="line-clamp-2 text-[12.5px] font-semibold leading-snug text-teks-utama">
+                      {j.judul || "(tanpa judul)"}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="flex shrink-0 items-center gap-1 rounded-full bg-pri/15 px-2 py-0.5 text-[10.5px] font-bold text-pri">
+                        <CalendarClock className="h-3 w-3" aria-hidden="true" />
+                        {Number.isFinite(waktu) ? lagiWib(waktu) : "sebentar lagi"}
+                      </span>
+                      {teksWib && <span className="angka-tab text-[10.5px] text-teks-sekunder">{teksWib}</span>}
+                      {j.bisa_batal ? (
+                        <button
+                          type="button"
+                          onClick={() => void batalkanJadwal(j)}
+                          disabled={Boolean(sedangBatal)}
+                          className="btn-tekan ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-gagal/12 px-2.5 py-1 text-[10.5px] font-bold text-gagal disabled:opacity-50"
+                        >
+                          <X className="h-3 w-3" aria-hidden="true" />
+                          {sedangBatal === j.job_id ? "Membatalkan…" : "Batalkan"}
+                        </button>
+                      ) : (
+                        <span className="ml-auto text-[10px] text-teks-sekunder">
+                          kiriman tautan — cabut di sumbernya
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
           </div>
-          <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder">
+          <p className="mt-2.5 text-[10.5px] leading-relaxed text-teks-sekunder">
             Membatalkan bekerja dengan menghapus berkas videonya, sehingga saat
             waktunya tiba postingan itu tidak jadi terbit.
           </p>
