@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { PlatformIcon } from "@/components/platform-icon";
 import { toast } from "@/hooks/use-app-store";
+import { segarkanJadwalTayang } from "./panel-jadwal-tayang";
 import {
   jadwalkanPosting,
   putuskanVideo,
@@ -95,6 +96,31 @@ function jamVideo(detik: number): string {
   const m = Math.floor(detik / 60);
   const d = Math.floor(detik % 60);
   return `${m}:${String(d).padStart(2, "0")}`;
+}
+
+/** "YYYY-MM-DDTHH:mm" waktu LOKAL — format yang dimakan <input datetime-local>. */
+function formatDatetimeLokal(t: Date): string {
+  const dua = (n: number) => String(n).padStart(2, "0");
+  return `${t.getFullYear()}-${dua(t.getMonth() + 1)}-${dua(t.getDate())}T${dua(t.getHours())}:${dua(t.getMinutes())}`;
+}
+
+/**
+ * Waktu tayang dalam WIB: "Rab, 9 Okt 14:35 WIB" — khusus JADWAL (masa
+ * depan). Sengaja tidak memakai waktuJelasWIB() karena fungsi itu selalu
+ * menambah keterangan lampau ("12 menit lalu", "baru saja") yang justru
+ * keliru untuk waktu yang belum tiba.
+ */
+function waktuWibJadwal(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const d = new Date(t + 7 * 3600_000);
+  const dua = (n: number) => String(n).padStart(2, "0");
+  const hari = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"][d.getUTCDay()];
+  const bulan = [
+    "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+    "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
+  ][d.getUTCMonth()];
+  return `${hari}, ${d.getUTCDate()} ${bulan} ${dua(d.getUTCHours())}:${dua(d.getUTCMinutes())} WIB`;
 }
 
 /** Salin teks ke clipboard dengan fallback untuk konteks non-secure */
@@ -185,6 +211,27 @@ export function PreviewModal({
   const [jadwalMode, setJadwalMode] = useState(false);
   const [jadwalWaktu, setJadwalWaktu] = useState("");
   const [sedangJadwal, setSedangJadwal] = useState(false);
+  // Menit kini — denyut ±30 dtk selama mode jadwal aktif, supaya batas
+  // `min` input ("sekarang + 5 menit") tidak membeku saat modal lama
+  // terbuka dan pengguna tidak memilih masa lalu diam-diam.
+  const [tickMenit, setTickMenit] = useState(() => Math.floor(Date.now() / 60_000));
+  useEffect(() => {
+    if (!jadwalMode) return;
+    const id = setInterval(() => setTickMenit(Math.floor(Date.now() / 60_000)), 30_000);
+    return () => clearInterval(id);
+  }, [jadwalMode]);
+  // Batas bawah input jadwal: sekarang + 5 menit (syarat Ayrshare), bulat
+  // ke menit.
+  const minJadwal = formatDatetimeLokal(new Date(tickMenit * 60_000 + 5 * 60_000));
+  // Pratinjau "akan tayang …" dalam WIB untuk waktu yang dipilih.
+  const jadwalTerpilih = jadwalWaktu ? new Date(jadwalWaktu) : null;
+  const jadwalSah = jadwalTerpilih !== null && !Number.isNaN(jadwalTerpilih.getTime());
+  const jadwalTerlaluDini =
+    jadwalSah &&
+    jadwalTerpilih !== null &&
+    jadwalTerpilih.getTime() < tickMenit * 60_000 + 5 * 60_000;
+  const pratinjauWib =
+    jadwalSah && jadwalTerpilih !== null ? waktuWibJadwal(jadwalTerpilih.toISOString()) : "";
   // Sampul kustom (fitur 31 Agu 2026) — data URL jpg/png < 2 MB;
   // dipasang ke YouTube/Instagram/TikTok/Facebook saat posting.
   const [sampul, setSampul] = useState<string | null>(null);
@@ -513,16 +560,25 @@ export function PreviewModal({
 
   // Jadwalkan tayang lewat Ayrshare (fitur 1.22.x/3, kini bagian dari
   // komposer ini) — pakai video, caption, & platform yang sama, hanya
-  // ditambah waktu tayang. Gerbangnya sama dengan Unggah Sekarang.
+  // ditambah waktu tayang. Gerbangnya disamakan dengan server
+  // (/api/tv/jadwal): yang ditolak tidak boleh dijadwalkan siapa pun;
+  // yang belum disetujui hanya lewat yang berhak memutus (aksinya
+  // dicatat server sebagai persetujuan tersirat).
   function jadwalkanTayang() {
     if (sedangJadwal || modeUnggah) return;
-    if (!bolehSetujui && persetujuan !== "disetujui") {
+    if (persetujuan === "ditolak") {
+      toast(
+        "peringatan",
+        "Video ditolak Pimpinan Redaksi",
+        "Video yang ditolak tidak bisa diunggah atau dijadwalkan.",
+      );
+      return;
+    }
+    if (persetujuan !== "disetujui" && !bolehSetujui) {
       toast(
         "peringatan",
         "Belum disetujui Pimpinan Redaksi",
-        persetujuan === "ditolak"
-          ? "Video ini ditolak dan tidak boleh dijadwalkan."
-          : "Minta persetujuan Pimred dulu sebelum menjadwalkan.",
+        "Minta persetujuan Pimred dulu sebelum menjadwalkan.",
       );
       return;
     }
@@ -573,6 +629,9 @@ export function PreviewModal({
           "Posting dijadwalkan",
           "Catatan videonya ikut diperbarui otomatis saat waktunya tiba.",
         );
+        // Panel "Menunggu Jadwal Tayang" langsung menampilkan jadwal baru
+        // tanpa menunggu dimuat ulang manual.
+        segarkanJadwalTayang();
         onSelesaiUnggah(platformAktif.length);
       } catch (e) {
         toast("error", "Gagal menjadwalkan", e instanceof Error ? e.message : "Coba lagi.");
@@ -1142,8 +1201,9 @@ export function PreviewModal({
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {/* Sekarang atau jadwalkan (fitur 1.22.x/3, digabung) */}
-              <div className="glass-soft flex gap-1 rounded-xl p-1">
+              {/* Sekarang atau jadwalkan (fitur 1.22.x/3, digabung) —
+                  segmen gaya Apple: kontainer kaca, pilihan aktif merah pri. */}
+              <div className="glass-soft flex gap-1 rounded-xl p-1" role="group" aria-label="Waktu posting">
                 {(
                   [
                     [false, "Sekarang", Rocket] as const,
@@ -1156,8 +1216,10 @@ export function PreviewModal({
                     onClick={() => setJadwalMode(v)}
                     aria-pressed={jadwalMode === v}
                     className={cn(
-                      "btn-tekan flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-[12.5px] font-bold",
-                      jadwalMode === v ? "text-white" : "text-teks-sekunder",
+                      "btn-tekan flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-[12.5px] font-bold transition-colors",
+                      jadwalMode === v
+                        ? "text-white"
+                        : "text-teks-sekunder hover:text-teks-utama",
                     )}
                     style={
                       jadwalMode === v
@@ -1172,17 +1234,39 @@ export function PreviewModal({
               </div>
 
               {jadwalMode && (
-                <label className="flex flex-col gap-1">
-                  <span className="text-[11px] font-semibold text-teks-sekunder">
-                    Waktu tayang (waktu perangkat Anda)
-                  </span>
-                  <input
-                    type="datetime-local"
-                    value={jadwalWaktu}
-                    onChange={(e) => setJadwalWaktu(e.target.value)}
-                    className="glass-soft h-11 w-full rounded-xl px-3 text-[13px] text-teks-utama outline-none focus:ring-2 focus:ring-pri/50"
-                  />
-                </label>
+                <div className="glass-soft flex flex-col gap-2 rounded-xl p-3">
+                  <label className="flex flex-col gap-1" htmlFor="jadwal-waktu">
+                    <span className="text-[11px] font-semibold tracking-wide text-teks-sekunder uppercase">
+                      Waktu tayang (waktu perangkat Anda)
+                    </span>
+                    <input
+                      id="jadwal-waktu"
+                      type="datetime-local"
+                      value={jadwalWaktu}
+                      min={minJadwal}
+                      onChange={(e) => setJadwalWaktu(e.target.value)}
+                      className="h-11 w-full rounded-xl border border-black/10 bg-white/70 px-3 text-[13px] text-teks-utama outline-none focus:ring-2 focus:ring-pri/50 dark:border-white/15 dark:bg-white/10 dark:[color-scheme:dark]"
+                    />
+                  </label>
+                  {/* Ringkasan di dekat tombol: kapan video ini akan tayang. */}
+                  {jadwalSah && pratinjauWib ? (
+                    <p
+                      className={cn(
+                        "flex items-start gap-1.5 text-[11px] leading-snug font-semibold",
+                        jadwalTerlaluDini ? "text-amber-600 dark:text-amber-400" : "text-teks-utama/85",
+                      )}
+                    >
+                      <CalendarClock className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      {jadwalTerlaluDini
+                        ? "Pilih waktu minimal 5 menit dari sekarang."
+                        : `Akan tayang ${pratinjauWib}`}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-teks-sekunder">
+                      Minimal 5 menit dari sekarang — Ayrshare yang akan menerbitkannya tepat waktu.
+                    </p>
+                  )}
+                </div>
               )}
 
               {/* Sampul kustom (fitur 31 Agu 2026): dipasang ke YouTube,
@@ -1255,15 +1339,18 @@ export function PreviewModal({
                   onClick={jadwalMode ? jadwalkanTayang : mulaiUnggah}
                   disabled={
                     !adaVideo ||
-                    (!bolehSetujui && persetujuan !== "disetujui") ||
+                    persetujuan === "ditolak" ||
+                    (persetujuan !== "disetujui" && !bolehSetujui) ||
                     sedangJadwal
                   }
                   title={
                     !adaVideo
                       ? "Video belum selesai diproses"
-                      : !bolehSetujui && persetujuan !== "disetujui"
-                        ? "Menunggu persetujuan Pimpinan Redaksi"
-                        : undefined
+                      : persetujuan === "ditolak"
+                        ? "Video ditolak Pimpinan Redaksi — tidak bisa diunggah atau dijadwalkan"
+                        : persetujuan !== "disetujui" && !bolehSetujui
+                          ? "Menunggu persetujuan Pimpinan Redaksi"
+                          : undefined
                   }
                   className="btn-tekan flex h-12 items-center justify-center gap-2 rounded-xl px-2 text-sm leading-tight font-bold text-white disabled:cursor-not-allowed disabled:opacity-45"
                   style={{

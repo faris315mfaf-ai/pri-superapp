@@ -2,8 +2,10 @@
 //
 // POST   { caption, media_url, media_public_id?, is_video?, platforms[],
 //          judul_youtube?, jadwal_pada (ISO) } → jadwalkan posting lewat
-//          Ayrshare (scheduleDate) & simpan catatannya.
-// GET    → daftar jadwal (terbaru dulu) + nama pembuatnya.
+//          Ayrshare (scheduleDate) & simpan catatannya. Video yang DITOLAK
+//          ditolak mentah; yang belum disetujui hanya lolos lewat hak ACC
+//          (jadwalnya sekaligus dicatat sebagai persetujuan tersirat).
+// GET    → daftar jadwal (paling dekat tayang dulu) + nama pembuatnya.
 // DELETE { id } → batalkan jadwal yang BELUM tayang (hapus di Ayrshare).
 //
 // Ayrshare sendiri yang menerbitkan pada waktunya — TIDAK ada cron di
@@ -13,7 +15,8 @@ import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { ambilAkunTertaut, hapusPostingan, unggahVideo, ayrshareSiap } from "@/lib/ayrshare";
-import { bolehUploadVideo } from "@/lib/tv-tim";
+import { adalahPimred } from "@/lib/jabatan";
+import { bolehAccVideo, bolehUploadVideo } from "@/lib/tv-tim";
 import { simpanSampul } from "@/lib/sampul";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 
@@ -57,7 +60,9 @@ export async function GET(request: Request) {
       .select(
         "id, caption, media_url, is_video, platforms, judul_youtube, jadwal_pada, status, ayrshare_id, error, dibuat_pada, dibuat_oleh_id",
       )
-      .order("jadwal_pada", { ascending: false })
+      // Menaik: yang paling dekat tayang tampil paling atas — daftar ini
+      // dibaca sebagai "apa yang tayang berikutnya", bukan arsip.
+      .order("jadwal_pada", { ascending: true })
       .limit(100);
     if (error) {
       console.error("[tv/jadwal] baca:", error.message);
@@ -167,6 +172,53 @@ export async function POST(request: Request) {
     const scheduleDate = t.toISOString().replace(/\.\d{3}Z$/, "Z");
 
     const kodeVideo = (body.kode ?? "").trim().slice(0, 100);
+
+    // Hirarki TV Rakyat — DISAMAKAN dengan /api/tv/unggah: video yang
+    // DITOLAK tidak boleh dijadwalkan siapa pun, dan video yang belum
+    // disetujui hanya boleh dijadwalkan Pimred/pemegang hak ACC. Dulu
+    // rute ini tidak memeriksa persetujuan sama sekali, sehingga video
+    // yang sudah DITOLAK bisa lolos masuk jadwal lewat pintu samping ini.
+    if (kodeVideo) {
+      const { data: video, error: eVideo } = await supabase()
+        .from("video_antrian")
+        .select("kode, persetujuan")
+        .eq("kode", kodeVideo)
+        .maybeSingle();
+      if (eVideo) {
+        console.error("[tv/jadwal] baca video:", eVideo.message);
+        throw new Error("Gagal membaca data video.");
+      }
+      if (video && video.persetujuan !== "disetujui") {
+        if (video.persetujuan === "ditolak") {
+          throw Object.assign(
+            new Error("Video ini DITOLAK Pimpinan Redaksi dan tidak boleh dijadwalkan."),
+            { status: 403 },
+          );
+        }
+        const bolehMemutus = adalahPimred(pengguna) || (await bolehAccVideo(pengguna));
+        if (!bolehMemutus) {
+          throw Object.assign(
+            new Error(
+              "Video ini belum disetujui Pimpinan Redaksi. Minta persetujuan dulu sebelum menjadwalkan.",
+            ),
+            { status: 403 },
+          );
+        }
+        // Persetujuan tersirat: yang menjadwalkan berhak memutus, jadi
+        // keputusannya dicatat — pola yang sama dengan unggah langsung
+        // (lihat /api/tv/unggah). Tanpa ini Riwayat selamanya menampilkan
+        // "menunggu" untuk video yang jadwalnya sudah pasti.
+        const { error: eAcc } = await supabase()
+          .from("video_antrian")
+          .update({
+            persetujuan: "disetujui",
+            persetujuan_oleh: pengguna.nama,
+            persetujuan_pada: new Date().toISOString(),
+          })
+          .eq("kode", kodeVideo);
+        if (eAcc) console.error("[tv/jadwal] acc tersirat:", eAcc.message);
+      }
+    }
 
     // idempotencyKey mencegah dobel jadwal bila permintaan diulang.
     const idemp = `jadwal-${pengguna.id}-${t.getTime()}-${[...platforms].sort().join(",")}`;
