@@ -1416,7 +1416,7 @@ function FormProfil({
 // terlanjur kacau. Tanpa jalan ini, satu-satunya pilihan mereka adalah
 // menyerah — kode pemulihan dikirim ke email yang justru tidak bisa
 // mereka buka.
-const WA_DEVELOPER = "6287718123039";
+const WA_DEVELOPER = "6289518301256";
 
 /** Pesan dibuat siap-kirim supaya developer tidak perlu bertanya ulang. */
 export function tautanBantuanWa(identitas: string): string {

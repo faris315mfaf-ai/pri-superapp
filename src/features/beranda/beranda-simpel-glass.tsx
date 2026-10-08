@@ -54,7 +54,7 @@ import { useModulAktif } from "@/hooks/use-modul";
 import { LencanaOnline } from "@/components/lencana-online";
 import { ModalStatus } from "@/components/modal-status";
 /** Nomor WhatsApp admin (permintaan user 10 Sep 2026) — menggantikan Chat NAKA. */
-export const WA_ADMIN = "6287718123039";
+export const WA_ADMIN = "6289518301256";
 
 function tanggalWibPerangkat(): string {
   return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
