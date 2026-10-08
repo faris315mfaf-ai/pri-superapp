@@ -86,3 +86,6 @@ rahasia/
 # Backend Auto Edit (Python): sisa uji & cache interpreter.
 __pycache__/
 .pytest_cache/
+
+# Laporan pentest Strix (berisi detail kerentanan — jangan di-commit)
+strix_runs/
