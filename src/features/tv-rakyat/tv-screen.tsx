@@ -10,7 +10,7 @@
 
 import { useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Tv, Send, Clapperboard, ListChecks, Settings, Tag, CalendarClock, Film, Wand2 } from "lucide-react";
+import { Tv, Send, Clapperboard, ListChecks, Settings, Tag, CalendarClock, Film, Wand2, Minimize2, Droplets } from "lucide-react";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { FadeInUp, SegmenJudul, ThemeToggle } from "@/components/pri-ui";
 import { PanelTugasLink } from "./tugas-link-panel";
@@ -33,6 +33,9 @@ import { PanelVideoWajib } from "./panel-video-wajib";
 import { PanelJadwalTayang } from "./panel-jadwal-tayang";
 import { EditOtomatisTvr } from "@/features/tvr-ku/edit-otomatis-tvr";
 import { StokVideoTvr, segarkanStokTvr } from "@/features/tvr-ku/stok-video-tvr";
+import { KompresVideo } from "@/features/tvr-ku/kompres-video";
+import { BlurWatermark } from "@/features/tvr-ku/blur-watermark";
+import { bolehAlatVideo } from "@/lib/peran";
 import { KonteksTimAutoEdit } from "@/features/auto-edit/tim";
 import { kirimStokTimKeOfficial } from "@/services";
 import { useKolomWadah, type JumlahKolom } from "@/hooks/use-kolom-wadah";
@@ -54,9 +57,9 @@ type FaseTv = "form" | "proses" | "pratinjau";
 // Stok Video Tim (beserta tombol Riwayat) selalu PALING ATAS, selebar modul —
 // tidak ikut bento.
 const BENTO_MASTER: Record<JumlahKolom, string[][]> = {
-  3: [["edit-otomatis-tim"], ["video-wajib"], ["tim-langsung"]],
-  2: [["edit-otomatis-tim", "video-wajib"], ["tim-langsung"]],
-  1: [["tim-langsung", "video-wajib", "edit-otomatis-tim"]],
+  3: [["edit-otomatis-tim", "kompres-tim"], ["video-wajib", "blur-tim"], ["tim-langsung"]],
+  2: [["edit-otomatis-tim", "video-wajib", "kompres-tim"], ["tim-langsung", "blur-tim"]],
+  1: [["tim-langsung", "video-wajib", "edit-otomatis-tim", "blur-tim", "kompres-tim"]],
 };
 /** Seksi pendukung di bawah bento ("Akses cepat"), dua kolom di layar lebar. */
 const AKSES_MASTER = ["jadwal-tayang", "hasil-scraping", "bagi-tugas", "buat-video"];
@@ -381,6 +384,33 @@ export function TvScreen({
       >
         <KonteksTimAutoEdit.Provider value="tv">
           <EditOtomatisTvr />
+        </KonteksTimAutoEdit.Provider>
+      </SeksiLipat>
+    ) },
+    // Blur Watermark & Kompres Video TIM (7 Okt 2026): komponen yang sama
+    // dengan TVR Saya, memakai akun tim → hasilnya masuk Stok Video Tim dan
+    // tersiar ke anggota lain (gerbang /api/autoedit jalur tim).
+    bolehAutoEditTim && bolehAlatVideo(user, "blurwm") && { id: "blur-tim", judul: "Blur Watermark", ikon: Droplets, render: () => (
+      <SeksiLipat
+        id="tv-blur-tim"
+        judul="Blur Watermark"
+        ikon={Droplets}
+        keterangan="Samarkan watermark/logo video — hasil masuk Stok Video Tim"
+      >
+        <KonteksTimAutoEdit.Provider value="tv">
+          <BlurWatermark />
+        </KonteksTimAutoEdit.Provider>
+      </SeksiLipat>
+    ) },
+    bolehAutoEditTim && bolehAlatVideo(user, "kompres") && { id: "kompres-tim", judul: "Kompres Video", ikon: Minimize2, render: () => (
+      <SeksiLipat
+        id="tv-kompres-tim"
+        judul="Kompres Video"
+        ikon={Minimize2}
+        keterangan="Perkecil ukuran video tanpa turun kualitas — hasil masuk Stok Video Tim"
+      >
+        <KonteksTimAutoEdit.Provider value="tv">
+          <KompresVideo />
         </KonteksTimAutoEdit.Provider>
       </SeksiLipat>
     ) },
