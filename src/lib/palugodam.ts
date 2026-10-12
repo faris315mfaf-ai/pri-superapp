@@ -16,7 +16,9 @@
 // pola yang sama dengan penyapu media & rekonsiliasi KPI.
 // ============================================================
 import { supabase } from "@/lib/supabase";
-import { unggahVideoUp, uploadPostSiap } from "@/lib/upload-post";
+import { gagalDariBalasan, unggahVideoUp, uploadPostSiap } from "@/lib/upload-post";
+import { LABEL_SOSMED } from "@/lib/batas-caption";
+import { hasilDenganKegagalan, kabariGagalSebagian } from "@/lib/siaran";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 import { sisipkanLonggar } from "@/lib/kolom-struktur";
@@ -134,12 +136,47 @@ export async function prosesPesananPalugodam(userId?: number): Promise<void> {
           captionPer: p.caption_platform ?? undefined,
         });
 
+        // Balasan 200 bisa memuat platform yang langsung dinyatakan gagal —
+        // jangan dicatat "terkirim" mentah (pola sama dengan tvr/unggah).
+        const gagalAwal = gagalDariBalasan(hasil.mentah);
+        const hasilSimpan = hasilDenganKegagalan(hasil.mentah, gagalAwal);
+        const namaGagal = gagalAwal.map((g) => LABEL_SOSMED[g.platform] ?? g.platform).join(", ");
+        const judulPost = p.caption_umum.slice(0, 100) || "Video PALUGODAM";
+        const kabari = async () => {
+          if (gagalAwal.length === 0) return;
+          try {
+            await kabariGagalSebagian(Number(p.user_id), judulPost, gagalAwal);
+          } catch (e) {
+            console.error("[palugodam] kabar gagal:", e);
+          }
+        };
+
+        // Semua platform gagal → pesanan gagal, tanpa riwayat TVR Saya.
+        // (Tabel tidak punya kolom hasil; rincian ada di `pesan` + kabar ke anggota.)
+        if (gagalAwal.length > 0 && platforms.every((pf) => gagalAwal.some((g) => g.platform === pf))) {
+          await db
+            .from("palugodam_pesanan")
+            .update({
+              status: "gagal",
+              request_id: hasil.request_id,
+              pesan: `Gagal di semua sosmed: ${namaGagal}`.slice(0, 300),
+            })
+            .eq("id", p.id);
+          await kabari();
+          continue;
+        }
+
+        // Sebagian gagal tetap 'terkirim' (tidak ada status 'sebagian' di skema);
+        // rincian di `pesan` dan hasil.kpi_gagal pada riwayat TVR Saya.
         await db
           .from("palugodam_pesanan")
           .update({
             status: "terkirim",
             request_id: hasil.request_id,
-            pesan: jadwal ? "Terjadwal" : "Terkirim",
+            pesan: (gagalAwal.length > 0
+              ? `Terkirim sebagian — gagal di: ${namaGagal}`
+              : jadwal ? "Terjadwal" : "Terkirim"
+            ).slice(0, 300),
           })
           .eq("id", p.id);
 
@@ -147,17 +184,18 @@ export async function prosesPesananPalugodam(userId?: number): Promise<void> {
         // dan ikut terhitung KPI otomatis seperti unggahan biasa.
         const { error } = await sisipkanLonggar("tvrku_post", {
           user_id: Number(p.user_id),
-          judul: p.caption_umum.slice(0, 100) || "Video PALUGODAM",
+          judul: judulPost,
           caption: p.caption_umum.slice(0, 2200),
           platforms,
           video_path: "",
           video_url: info.url,
           jadwal: jadwal ?? null,
-          hasil: hasil.mentah,
+          hasil: hasilSimpan,
           request_id: hasil.request_id,
           hapus_media_pada: null,
         });
         if (error) console.error("[palugodam] simpan riwayat:", error.message);
+        await kabari();
       } catch (e) {
         await db
           .from("palugodam_pesanan")

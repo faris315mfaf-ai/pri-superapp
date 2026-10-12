@@ -93,7 +93,12 @@ async function panggil<T>(
     return json as T;
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
-      throw new Error("Ayrshare tidak menjawab tepat waktu. Coba lagi sebentar.");
+      // Penanda `timeout` membedakan "tak ada jawaban" dari galat biasa:
+      // posting MUNGKIN sudah terbentuk di sisi Ayrshare, jadi pemanggil
+      // unggahan boleh memilih tidak mengulang buta-buta.
+      throw Object.assign(new Error("Ayrshare tidak menjawab tepat waktu. Coba lagi sebentar."), {
+        timeout: true,
+      });
     }
     throw e;
   } finally {
@@ -309,6 +314,13 @@ export async function unggahVideo(opsi: {
    * Syarat terketat (YouTube): URL berakhiran .png/.jpg/.jpeg, < 2 MB.
    */
   thumbnailUrl?: string;
+  /**
+   * Batas tunggu jawaban Ayrshare (ms). Kosong = 230 dtk seperti dulu.
+   * Pemanggil yang punya anggaran waktu total (mis. tv/unggah dengan
+   * ulangan) mengecilkannya agar jumlah semua percobaan tak melewati
+   * maxDuration route.
+   */
+  timeoutMs?: number;
 }): Promise<{ idAyrshare: string; hasil: HasilUnggahPlatform[] }> {
   const badan: Record<string, unknown> = {
     post: opsi.caption,
@@ -359,7 +371,7 @@ export async function unggahVideo(opsi: {
   const d = await panggil<BalasanPost>("/post", {
     method: "POST",
     body: JSON.stringify(badan),
-    timeoutMs: 230000,
+    timeoutMs: opsi.timeoutMs ?? 230000,
   });
 
   const hasil: HasilUnggahPlatform[] = (d.postIds ?? []).map((p) => ({

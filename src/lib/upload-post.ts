@@ -33,6 +33,7 @@
 
 
 import { denganCache, hapusCacheBersama } from "@/lib/cache-bersama";
+import { klienCache } from "@/lib/redis";
 import { KonfigurasiError } from "@/lib/supabase";
 import { bacaBatasUp, potongAman, uraiJawabanLive, type BatasUp, type JawabanLive } from "@/lib/metrik-video-up";
 
@@ -73,52 +74,135 @@ function kunci(): string {
   return k;
 }
 
-/** Seperti panggil(), tetapi ikut mengembalikan sisa kuota dari header. */
+/** Tidur sejenak (dipakai backoff ulang permintaan GET). */
+function tidur(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Waktu tunggu habis / permintaan dibatalkan (AbortSignal.timeout → TimeoutError). */
+function adalahWaktuHabis(e: unknown): boolean {
+  const nama = (e as { name?: string } | null)?.name;
+  return nama === "TimeoutError" || nama === "AbortError";
+}
+
+/** Retry-After (detik ATAU tanggal HTTP) → detik, atau null bila tak terbaca. */
+function bacaRetryAfter(nilai: string | null): number | null {
+  if (!nilai) return null;
+  const n = Number(nilai);
+  if (Number.isFinite(n) && n >= 0) return Math.ceil(n);
+  const t = Date.parse(nilai);
+  return Number.isFinite(t) ? Math.max(0, Math.ceil((t - Date.now()) / 1000)) : null;
+}
+
+/** Maksimal ulang otomatis permintaan GET (5xx / jaringan / 429 singkat). */
+const MAKS_ULANG_GET = 2;
+
+/**
+ * Seperti panggil(), tetapi ikut mengembalikan sisa kuota dari header.
+ *
+ * Ketahanan (12 Okt 2026): waktu tunggu habis dan putus jaringan dijadikan
+ * galat berstatus + berpesan Indonesia (dulu TimeoutError mentah → 500 tanpa
+ * status). HANYA permintaan GET (idempoten) yang diulang otomatis — maks 2×
+ * pada 5xx/jaringan dengan jeda 1-3 dtk + jitter, dan pada 429 bila
+ * Retry-After <= 5 dtk. POST/DELETE TIDAK PERNAH diulang otomatis: unggahan
+ * yang timeout bisa saja sudah terkirim, mengulangnya memposting dobel.
+ */
 async function panggilDenganBatas<T>(
   jalur: string,
-  init: RequestInit & { timeoutMs?: number } = {},
+  init: RequestInit & { timeoutMs?: number; pesanWaktuHabis?: string } = {},
 ): Promise<{ json: T; batas: BatasUp }> {
-  const { timeoutMs = 30000, ...sisa } = init;
-  const res = await fetch(`${DASAR}${jalur}`, {
-    ...sisa,
-    headers: {
-      Authorization: `Apikey ${kunci()}`,
-      ...(sisa.headers ?? {}),
-    },
-    signal: AbortSignal.timeout(timeoutMs),
-    cache: "no-store",
-  });
-  const batas = bacaBatasUp((nama) => res.headers.get(nama));
-  const teks = await res.text();
-  let json: unknown = null;
-  try {
-    json = teks ? JSON.parse(teks) : null;
-  } catch {
-    json = null;
-  }
-  if (!res.ok) {
+  const { timeoutMs = 30000, pesanWaktuHabis, ...sisa } = init;
+  const idempoten = (sisa.method ?? "GET").toUpperCase() === "GET";
+  const maksUlang = idempoten ? MAKS_ULANG_GET : 0;
+  for (let percobaan = 0; ; percobaan++) {
+    const bisaUlang = percobaan < maksUlang;
+    const jedaUlang = () => 1000 + Math.random() * 2000;
+    let res: Response;
+    let teks: string;
+    try {
+      res = await fetch(`${DASAR}${jalur}`, {
+        ...sisa,
+        headers: {
+          Authorization: `Apikey ${kunci()}`,
+          ...(sisa.headers ?? {}),
+        },
+        signal: AbortSignal.timeout(timeoutMs),
+        cache: "no-store",
+      });
+      teks = await res.text();
+    } catch (e) {
+      // Kunci API kosong dan galat sejenis dilempar apa adanya.
+      if (e instanceof KonfigurasiError) throw e;
+      if (adalahWaktuHabis(e)) {
+        // Waktu habis TIDAK diulang otomatis (menjaga anggaran waktu pemanggil
+        // penyapu latar); pemanggil yang mau mengulang melakukannya sendiri.
+        throw Object.assign(
+          new Error(
+            pesanWaktuHabis ??
+              (idempoten
+                ? "Penyedia unggahan terlalu lama menjawab. Coba lagi sebentar lagi."
+                : "Waktu tunggu habis. Permintaan mungkin sudah diproses — cek dulu sebelum mengulang."),
+          ),
+          { status: 504, pesanAman: true },
+        );
+      }
+      // Jaringan putus / DNS / reset (TypeError "fetch failed").
+      if (bisaUlang) {
+        await tidur(jedaUlang());
+        continue;
+      }
+      throw Object.assign(
+        new Error(
+          idempoten
+            ? "Tidak bisa menghubungi penyedia unggahan. Coba lagi sebentar lagi."
+            : "Koneksi ke penyedia unggahan terputus. Permintaan mungkin sudah diproses — cek dulu sebelum mengulang.",
+        ),
+        { status: 502, pesanAman: true },
+      );
+    }
+    const batas = bacaBatasUp((nama) => res.headers.get(nama));
+    let json: unknown = null;
+    try {
+      json = teks ? JSON.parse(teks) : null;
+    } catch {
+      json = null;
+    }
+    if (res.ok) return { json: json as T, batas };
+
     // 429 = kuota laju API key bersama. Jangan teruskan kalimat Inggris
     // mentah: layar unggah mengulang permintaan, dan tiap ulang makin
     // memperparah penolakan.
     if (res.status === 429) {
+      const tungguDetik = bacaRetryAfter(res.headers.get("retry-after"));
+      // GET: tunggu bila Retry-After singkat (<= 5 dtk) lalu coba lagi.
+      if (bisaUlang && tungguDetik !== null && tungguDetik <= 5) {
+        await tidur(tungguDetik * 1000 + Math.random() * 300);
+        continue;
+      }
       throw Object.assign(
         new Error(
-          "Penyedia unggahan sedang membatasi permintaan. Tunggu sekitar satu menit, lalu coba sekali — jangan menekan berulang.",
+          tungguDetik !== null && tungguDetik > 0
+            ? `Penyedia unggahan sedang membatasi permintaan. Coba lagi sekitar ${tungguDetik} detik lagi — jangan menekan berulang.`
+            : "Penyedia unggahan sedang membatasi permintaan. Tunggu sekitar satu menit, lalu coba sekali — jangan menekan berulang.",
         ),
-        { status: 429, pesanAman: true, batas },
+        { status: 429, pesanAman: true, batas, retryAfterDetik: tungguDetik },
       );
+    }
+    // 5xx pada GET: ulang dengan backoff.
+    if (res.status >= 500 && bisaUlang) {
+      await tidur(jedaUlang());
+      continue;
     }
     const pesan =
       (json as { message?: string })?.message ??
       `upload-post menolak permintaan (${res.status})`;
     throw Object.assign(new Error(pesan), { status: res.status, batas });
   }
-  return { json: json as T, batas };
 }
 
 async function panggil<T>(
   jalur: string,
-  init: RequestInit & { timeoutMs?: number } = {},
+  init: RequestInit & { timeoutMs?: number; pesanWaktuHabis?: string } = {},
 ): Promise<T> {
   return (await panggilDenganBatas<T>(jalur, init)).json;
 }
@@ -271,6 +355,78 @@ export async function statusAkunUp(
 // Unggah
 // ------------------------------------------------------------
 
+// ------------------------------------------------------------
+// Kunci proses unggahan (12 Okt 2026) — anti posting dobel.
+//
+// Klik ganda / "Coba lagi" setelah timeout memposting video yang sama dua
+// kali ke sosmed anggota, dan postingan tak bisa ditarik. Repo belum punya
+// helper `SET NX`, jadi kuncinya berlapis: (1) peta di memori proses —
+// atomik dalam satu proses; (2) penanda Redis bersama (get lalu set, BUKAN
+// atomik, jadi hanya jaring tambahan lintas-proses); (3) pemanggil juga
+// memeriksa baris riwayat yang baru dibuat. Tanpa Redis tetap aman di satu
+// proses dan lewat pemeriksaan riwayat.
+// ------------------------------------------------------------
+
+const KUNCI_UNGGAH_MEMORI = new Map<string, number>();
+
+export type KunciUnggah = {
+  /** Lepas kunci; `tahanDetik` > 0 = tahan sebentar lagi (mis. galat ambigu / baru sukses). */
+  lepas: (tahanDetik?: number) => Promise<void>;
+};
+
+/**
+ * Ambil kunci unggahan. Mengembalikan null bila kunci yang sama masih
+ * dipegang (proses lain / klik sebelumnya) — pemanggil WAJIB menolak 409.
+ */
+export async function ambilKunciUnggah(
+  kunci: string,
+  ttlDetik: number,
+): Promise<KunciUnggah | null> {
+  const kini = Date.now();
+  for (const [k, habis] of KUNCI_UNGGAH_MEMORI) {
+    if (habis <= kini) KUNCI_UNGGAH_MEMORI.delete(k);
+  }
+  if (KUNCI_UNGGAH_MEMORI.has(kunci)) return null;
+  KUNCI_UNGGAH_MEMORI.set(kunci, kini + ttlDetik * 1000);
+
+  const kunciRedis = `unggah-kunci:${kunci}`;
+  const redis = klienCache();
+  if (redis) {
+    try {
+      if ((await redis.get(kunciRedis)) != null) {
+        KUNCI_UNGGAH_MEMORI.delete(kunci);
+        return null;
+      }
+      await redis.set(kunciRedis, "1", { ex: ttlDetik });
+    } catch {
+      // Redis tumbang bukan alasan menolak unggahan; kunci memori tetap berlaku.
+    }
+  }
+  return {
+    lepas: async (tahanDetik = 0) => {
+      if (tahanDetik > 0) {
+        KUNCI_UNGGAH_MEMORI.set(kunci, Date.now() + tahanDetik * 1000);
+        if (redis) {
+          try {
+            await redis.set(kunciRedis, "1", { ex: Math.ceil(tahanDetik) });
+          } catch {
+            /* abaikan */
+          }
+        }
+        return;
+      }
+      KUNCI_UNGGAH_MEMORI.delete(kunci);
+      if (redis) {
+        try {
+          await redis.del(kunciRedis);
+        } catch {
+          /* abaikan */
+        }
+      }
+    },
+  };
+}
+
 export type HasilUnggahUp = {
   sukses: boolean;
   /** Jawaban mentah per platform (disimpan apa adanya di tvrku_post.hasil) */
@@ -345,6 +501,9 @@ export async function unggahVideoUp(opsi: {
     body: form,
     // Posting multi-platform bisa lama (server mereka mengunduh video).
     timeoutMs: 180000,
+    // Timeout BUKAN bukti gagal: upload-post mungkin sudah menerima video.
+    pesanWaktuHabis:
+      "Waktu tunggu habis. Video mungkin sudah terkirim — cek Riwayat sebelum mengulang.",
   });
   return {
     sukses: (d as { success?: boolean }).success !== false,

@@ -21,7 +21,7 @@ import { userEfektifTvr } from "@/lib/sebagai";
 import { periksaJadwal } from "@/lib/jadwal-unggah";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { cekBatas } from "@/lib/rate-limit";
 import { userDariToken } from "@/lib/sesi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
@@ -49,6 +49,7 @@ import { PENYEDIA_ANGGOTA, unggahVideoAnggota, type IdPenyedia } from "@/lib/sos
 import { kolomTabelAda, sisipkanLonggar } from "@/lib/kolom-struktur";
 import { naikkanSinyal } from "@/lib/sinyal-pribadi";
 import { catatAudit } from "@/lib/audit";
+import { ambilKunciUnggah } from "@/lib/upload-post";
 
 /** Batas berkas penyimpanan video (bucket "tvrku" & FILE_SIZE_LIMIT Supabase sendiri). */
 const BATAS_PENYIMPANAN_MB = 100;
@@ -60,6 +61,12 @@ export const maxDuration = 300;
 
 /** Umur berkas video di penyimpanan setelah tayang: 2 jam (permintaan). */
 const UMUR_MEDIA_JAM = 2;
+
+/** Pesan tolak posting identik yang berdekatan (klik ganda / "Coba lagi"). */
+const PESAN_POSTING_DOBEL =
+  "Video ini sedang/baru saja diposting. Cek Riwayat sebelum mengulang.";
+/** Jendela pemeriksaan riwayat: posting identik dalam 3 menit terakhir ditolak. */
+const JENDELA_DOBEL_MS = 3 * 60_000;
 
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
@@ -511,15 +518,69 @@ export async function POST(request: Request) {
       // siap, galatnya menyebut penyedia itu dan TIDAK beralih diam-diam ke
       // penyedia lain (video yang terbit di akun tak terduga tidak bisa
       // ditarik kembali).
-      const hasil = await unggahVideoAnggota(profil.penyedia, {
-        profil: profil.kunci,
-        videoUrl,
-        judul,
-        caption: body.caption ?? "",
-        platforms,
-        scheduleDate: jadwal,
-        captionPer: Object.keys(captionPer).length > 0 ? captionPer : undefined,
-      });
+      // PAGAR POSTING DOBEL (12 Okt 2026): postingan sosmed tak bisa ditarik,
+      // sedangkan klik ganda atau "Coba lagi" sesudah timeout 180 dtk dulu
+      // lolos begitu saja (riwayat baru ditulis SETELAH unggah selesai).
+      // Posting dianggap identik bila video + platform + jadwalnya sama;
+      // jadwal berbeda atau platform berbeda tetap boleh.
+      const penunjukBerkas = pakaiLink ? videoLink : pakaiR2 ? r2Key : pakaiCloudinary ? publicId : path;
+      const platformUrut = [...platforms].sort().join(",");
+      const sidikJadwal = jadwal ? String(Date.parse(jadwal)) : "-";
+      const kunciDobel = createHash("sha1")
+        .update(`${user.id}|${penunjukBerkas}|${platformUrut}|${sidikJadwal}`)
+        .digest("hex");
+      // Lapis 1: kunci proses (TTL 6 menit > timeout unggah 180 dtk).
+      const kunciProses = await ambilKunciUnggah(`tvrku:${kunciDobel}`, 6 * 60);
+      if (!kunciProses) {
+        throw Object.assign(new Error(PESAN_POSTING_DOBEL), { status: 409 });
+      }
+      // Lapis 2: riwayat. Menangkap pengulangan SETELAH unggah selesai
+      // (kunci sudah dilepas / proses lain / Redis mati). Gagal baca = lanjut
+      // (kunci proses tetap melindungi).
+      try {
+        const sejak = new Date(Date.now() - JENDELA_DOBEL_MS).toISOString();
+        const { data: baru } = await db
+          .from("tvrku_post")
+          .select("platforms, jadwal")
+          .eq("user_id", Number(user.id))
+          .eq(pakaiLink ? "video_url" : "video_path", penunjukBerkas)
+          .gte("dibuat_pada", sejak)
+          .limit(10);
+        const kembar = (baru ?? []).some((b) => {
+          const pf = Array.isArray(b.platforms) ? (b.platforms as unknown[]).map(String).sort().join(",") : "";
+          const jd = b.jadwal ? String(Date.parse(String(b.jadwal))) : "-";
+          return pf === platformUrut && jd === sidikJadwal;
+        });
+        if (kembar) {
+          await kunciProses.lepas(JENDELA_DOBEL_MS / 1000);
+          throw Object.assign(new Error(PESAN_POSTING_DOBEL), { status: 409 });
+        }
+      } catch (e) {
+        if ((e as { status?: number })?.status === 409) throw e;
+      }
+      let hasil: Awaited<ReturnType<typeof unggahVideoAnggota>>;
+      try {
+        hasil = await unggahVideoAnggota(profil.penyedia, {
+          profil: profil.kunci,
+          videoUrl,
+          judul,
+          caption: body.caption ?? "",
+          platforms,
+          scheduleDate: jadwal,
+          captionPer: Object.keys(captionPer).length > 0 ? captionPer : undefined,
+        });
+      } catch (e) {
+        // Galat AMBIGU (timeout 504 / jaringan 502 / 5xx / tanpa status):
+        // video mungkin sudah terkirim — tahan kunci 3 menit supaya "Coba
+        // lagi" langsung tidak memposting dobel. Penolakan jelas (4xx) boleh
+        // langsung diulang setelah diperbaiki.
+        const st = Number((e as { status?: number })?.status);
+        const ambigu = !Number.isFinite(st) || st >= 500;
+        await kunciProses.lepas(ambigu ? JENDELA_DOBEL_MS / 1000 : 0);
+        throw e;
+      }
+      // Sukses: tahan 90 dtk lagi sampai baris riwayat pasti tertulis.
+      await kunciProses.lepas(90);
       // Platform yang langsung dinyatakan gagal oleh penyedia (balasan sinkron).
       const gagalAwal = hasil.gagalAwal;
       // Kategori ikut disimpan di `hasil` (25 Sep 2026): kolom tvrku_post.
@@ -616,10 +677,12 @@ export async function POST(request: Request) {
       // jadi KPI/rangkuman tetap 0 sampai cron 15 menit (atau tidak
       // pernah, bila layar tidak dimuat ulang).
       if (!jadwal) {
-        // Tautan sosmed sering belum siap di detik 0. Coba segera, +1 mnt,
-        // +5 mnt. Sisanya ditangani cron 15 menit (paksa=true).
+        // Tautan sosmed sering belum siap di detik 0. Coba segera lalu +1 mnt.
+        // JANGAN tidur lebih lama: after() berjalan di dalam fungsi serverless
+        // (maxDuration 300) — jeda 5 menit menahan invokasi ±6 menit dan
+        // percobaan ke-3 terpotong. Sisanya ditangani cron 15 menit (paksa=true).
         after(async () => {
-          const jeda = [0, 60_000, 5 * 60_000];
+          const jeda = [0, 60_000];
           for (const ms of jeda) {
             if (ms) await new Promise((r) => setTimeout(r, ms));
             await rekonsiliasiKpiOtomatis(Number(user.id), {

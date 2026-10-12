@@ -5,12 +5,14 @@
 //          Ayrshare (scheduleDate) & simpan catatannya. Video yang DITOLAK
 //          ditolak mentah; yang belum disetujui hanya lolos lewat hak ACC
 //          (jadwalnya sekaligus dicatat sebagai persetujuan tersirat).
-// GET    → daftar jadwal (paling dekat tayang dulu) + nama pembuatnya.
+// GET    → daftar jadwal AKTIF (status terjadwal, paling dekat tayang dulu)
+//          + nama pembuatnya. Riwayat (tayang/gagal/batal) ada di Riwayat Video.
 // DELETE { id } → batalkan jadwal yang BELUM tayang (hapus di Ayrshare).
 //
 // Ayrshare sendiri yang menerbitkan pada waktunya — TIDAK ada cron di
 // aplikasi. Memposting atas nama akun partai bersifat publik & tak bisa
 // ditarik: dijaga di server (bolehUploadVideo), bukan sekadar UI.
+import { createHash } from "node:crypto";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
@@ -60,10 +62,16 @@ export async function GET(request: Request) {
       .select(
         "id, caption, media_url, is_video, platforms, judul_youtube, jadwal_pada, status, ayrshare_id, error, dibuat_pada, dibuat_oleh_id",
       )
+      // Hanya yang AKTIF. Tanpa saringan ini, setelah 100 baris riwayat
+      // (tayang/gagal/dibatalkan) menumpuk di depan, jadwal BARU yang
+      // tanggalnya lebih jauh terpotong limit dan tak pernah tampil.
+      // Satu-satunya konsumen (panel-jadwal-tayang) memang hanya
+      // menampilkan status "terjadwal".
+      .eq("status", "terjadwal")
       // Menaik: yang paling dekat tayang tampil paling atas — daftar ini
       // dibaca sebagai "apa yang tayang berikutnya", bukan arsip.
       .order("jadwal_pada", { ascending: true })
-      .limit(100);
+      .limit(200);
     if (error) {
       console.error("[tv/jadwal] baca:", error.message);
       throw new Error("Gagal memuat jadwal.");
@@ -220,8 +228,12 @@ export async function POST(request: Request) {
       }
     }
 
-    // idempotencyKey mencegah dobel jadwal bila permintaan diulang.
-    const idemp = `jadwal-${pengguna.id}-${t.getTime()}-${[...platforms].sort().join(",")}`;
+    // idempotencyKey mencegah dobel jadwal bila permintaan diulang. Sidik
+    // media+kode WAJIB ikut: tanpanya dua video BERBEDA yang dijadwalkan
+    // pada menit & platform yang sama dianggap kembar oleh Ayrshare, dan
+    // video kedua diam-diam tak pernah terbit.
+    const sidikMedia = createHash("sha1").update(`${mediaUrl}|${kodeVideo}`).digest("hex").slice(0, 12);
+    const idemp = `jadwal-${pengguna.id}-${t.getTime()}-${[...platforms].sort().join(",")}-${sidikMedia}`;
     // Sampul kustom ikut dijadwalkan (fitur 31 Agu 2026).
     const sampulUrl = await simpanSampul(`jadwal-${pengguna.id}`, body.sampulDataUrl);
 
@@ -235,6 +247,30 @@ export async function POST(request: Request) {
       thumbnailUrl: sampulUrl ?? undefined,
       idempotencyKey: idemp,
     });
+
+    // Klik ganda / permintaan diulang: Ayrshare mengembalikan id yang SAMA
+    // untuk idempotencyKey yang sama. Jangan buat baris catatan kedua —
+    // membatalkan salah satunya akan membatalkan postingan yang dipakai
+    // keduanya. Pakai baris yang sudah ada. (Tanpa batasan unik di DB;
+    // dua permintaan yang benar-benar serentak tetap bisa lolos keduanya.)
+    if (hasil.idAyrshare) {
+      const { data: ada } = await supabase()
+        .from("jadwal_posting")
+        .select("id")
+        .eq("ayrshare_id", hasil.idAyrshare)
+        .order("id", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (ada) {
+        return {
+          sukses: true,
+          id: String(ada.id),
+          ayrshare_id: hasil.idAyrshare,
+          status: "terjadwal",
+          hasil: hasil.hasil,
+        };
+      }
+    }
 
     const galat = hasil.hasil.filter((h) => h.status === "error");
     const { data: baris, error } = await supabase()

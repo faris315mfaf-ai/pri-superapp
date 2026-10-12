@@ -142,10 +142,24 @@ export async function DELETE(request: Request) {
       );
     }
 
-    // Hapus berkasnya sesuai generasi penyimpanan.
-    if (dariR2(url)) await hapusVideoR2(jalur);
-    else if (url.includes("res.cloudinary.com")) await hapusVideoCloudinary(jalur);
-    else await db.storage.from("tvrku").remove([jalur]);
+    // Hapus berkasnya sesuai generasi penyimpanan. Hasilnya WAJIB dicek
+    // (12 Okt 2026): dulu kegagalan hapus diabaikan, baris tetap diberi
+    // video_path="" dan pengguna diberi tahu "tidak akan terbit" padahal
+    // berkasnya masih ada dan posting TETAP terbit.
+    let terhapus: boolean;
+    if (dariR2(url)) terhapus = await hapusVideoR2(jalur);
+    else if (url.includes("res.cloudinary.com")) terhapus = await hapusVideoCloudinary(jalur);
+    else {
+      const { error: eHapus } = await db.storage.from("tvrku").remove([jalur]);
+      if (eHapus) console.error("[tvr/jadwal-saya] hapus bucket:", eHapus.message);
+      terhapus = !eHapus;
+    }
+    if (!terhapus) {
+      throw Object.assign(
+        new Error("Video gagal dihapus dari penyimpanan, jadi jadwal belum dibatalkan. Coba lagi sebentar lagi."),
+        { status: 502 },
+      );
+    }
 
     await db
       .from("tvrku_post")

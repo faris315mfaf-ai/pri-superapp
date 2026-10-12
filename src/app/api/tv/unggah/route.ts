@@ -106,29 +106,63 @@ function tokenDari(request: Request): string {
   return h.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : "";
 }
 
+// Anggaran waktu TOTAL satu request (dtk) — sengaja di bawah maxDuration
+// (300) supaya kode penyimpan hasil masih sempat jalan sebelum fungsi mati.
+const ANGGARAN_TOTAL_MS = 285_000;
+/** Batas tunggu satu percobaan ke Ayrshare (sama dgn bawaan unggahVideo). */
+const TIMEOUT_PERCOBAAN_MS = 230_000;
+/** Sisa anggaran yang dicadangkan untuk menyimpan hasil setelah Ayrshare menjawab. */
+const CADANGAN_SIMPAN_MS = 15_000;
+/**
+ * Umur kunci proses `sedang_unggah_pada` sebelum dianggap basi: maxDuration
+ * (300 dtk) + margin. Harus > waktu hidup terlama satu request.
+ */
+const KUNCI_BASI_MS = 6 * 60_000;
+/** Mengulang hanya bila setelah jeda masih tersisa waktu segini. */
+const SISA_MIN_ULANG_MS = 60_000;
+
 /**
  * Unggah ke Ayrshare dengan SATU kali ulang untuk kegagalan sementara
- * (timeout / jaringan / 5xx). Ulangan aman dari dobel-posting karena
- * opsi memakai idempotencyKey yang sama — Ayrshare mengenali permintaan
- * kembar dan tidak memposting dua kali. Galat 4xx (permintaan salah,
- * mis. caption ditolak) TIDAK diulang: mengulang hanya membuang waktu
- * dan hasilnya pasti sama.
+ * (jaringan / 5xx) — HANYA bila anggaran waktu request masih cukup.
+ * Dulu tiap percobaan boleh 230 dtk + jeda, total ±462 dtk > maxDuration
+ * 300: fungsi mati di tengah ulangan sebelum status sempat disimpan.
+ * Kini timeout tiap percobaan = min(230 dtk, sisa anggaran − cadangan).
+ *
+ * Ulangan aman dari dobel-posting karena opsi memakai idempotencyKey yang
+ * sama. Yang TIDAK diulang: galat 4xx (permintaan salah — hasil pasti
+ * sama) dan TIMEOUT (Ayrshare mungkin sudah membuat postingan; kita tak
+ * punya id-nya untuk ditanyakan lewat statusPostingan, jadi mengulang
+ * buta bisa menggandakan). Setelah timeout penuh sisa anggaran memang
+ * tinggal ±55 dtk, jadi aturan sisa-minimal pun sudah menahannya.
  */
 async function unggahDenganUlang(
   opsi: Parameters<typeof unggahVideo>[0],
+  batasAkhir: number,
   maksUlang = 1,
 ): Promise<{ idAyrshare: string; hasil: HasilUnggahPlatform[] }> {
   let galatTerakhir: unknown;
   for (let coba = 0; coba <= maksUlang; coba++) {
+    const timeoutMs = Math.min(
+      TIMEOUT_PERCOBAAN_MS,
+      batasAkhir - Date.now() - CADANGAN_SIMPAN_MS,
+    );
+    if (timeoutMs < 10_000) {
+      // Anggaran habis sebelum sempat mencoba (langkah awal terlalu lama).
+      throw galatTerakhir ?? new Error("Waktu permintaan habis sebelum video sempat diunggah. Coba lagi.");
+    }
     try {
-      return await unggahVideo(opsi);
+      return await unggahVideo({ ...opsi, timeoutMs });
     } catch (e) {
       galatTerakhir = e;
       const status = (e as { status?: number })?.status;
       // 4xx = permintaan salah → berhenti, lempar apa adanya.
       if (typeof status === "number" && status >= 400 && status < 500) throw e;
-      // Masih ada jatah ulang → beri jeda singkat lalu coba lagi.
-      if (coba < maksUlang) await new Promise((r) => setTimeout(r, 2500));
+      // Timeout = nasib postingan tak diketahui → jangan diulang buta.
+      if ((e as { timeout?: boolean })?.timeout) throw e;
+      // Ulang hanya bila jatah ada DAN sisa waktu setelah jeda masih lega.
+      if (coba >= maksUlang) break;
+      if (batasAkhir - Date.now() - 2500 < SISA_MIN_ULANG_MS) break;
+      await new Promise((r) => setTimeout(r, 2500));
     }
   }
   throw galatTerakhir;
@@ -136,6 +170,8 @@ async function unggahDenganUlang(
 
 export async function POST(request: Request) {
   return bungkus(async () => {
+    // Patokan anggaran waktu total request (lihat unggahDenganUlang).
+    const mulai = Date.now();
     // Memposting atas nama akun partai adalah tindakan publik yang
     // tidak bisa ditarik kembali — dijaga di server, bukan sekadar
     // dengan menyembunyikan tombolnya.
@@ -258,11 +294,29 @@ export async function POST(request: Request) {
       );
     }
 
+    // Susun caption bentuk objek: "default" dipakai platform yang
+    // tidak punya caption khusus. Validasi murah ini SENGAJA di atas
+    // perebutan kunci: dilempar setelah kunci direbut, kunci bocor dan
+    // video terblokir sampai kunci basi.
+    const captionUtama = (video.caption_asli ?? "").trim();
+    const khusus = (video.caption_platform ?? {}) as Record<string, string>;
+    const caption: Record<string, string> = { default: captionUtama };
+    for (const p of siapKirim) {
+      const teks = (khusus?.[p] ?? "").trim();
+      if (teks) caption[p] = teks.slice(0, BATAS_CAPTION[p] ?? 2200);
+    }
+    if (!captionUtama && Object.keys(caption).length === 1) {
+      throw Object.assign(new Error("Caption masih kosong."), { status: 400 });
+    }
+
     // ---- PAGAR ANTI-DOBEL LAPIS 2: kunci proses (fitur 1.20/9) ----
     // Dua permintaan bersamaan (klik ganda, dua admin) memperebutkan
-    // satu kunci; yang kalah ditolak. Kunci basi (>2 menit — proses
-    // sebelumnya mati di tengah jalan) boleh direbut.
-    const batasBasi = new Date(Date.now() - 2 * 60_000).toISOString();
+    // satu kunci; yang kalah ditolak. Kunci basi (proses sebelumnya mati
+    // di tengah jalan) boleh direbut. Umur basi = maxDuration (300 dtk) +
+    // margin = 6 menit: satu unggahan bisa memakan 230 dtk, jadi batas
+    // lama 2 menit membolehkan request kedua merebut kunci SAAT yang
+    // pertama masih berjalan lalu memposting dobel.
+    const batasBasi = new Date(Date.now() - KUNCI_BASI_MS).toISOString();
     // Stempel percobaan ini. Dipakai DUA kali: sebagai kunci proses, dan
     // sebagai pembeda kunci anti-dobel di bawah — lihat alasannya di sana.
     const stempelCoba = new Date().toISOString();
@@ -277,19 +331,6 @@ export async function POST(request: Request) {
         new Error("Video ini sedang diunggah proses lain. Tunggu sebentar lalu periksa hasilnya."),
         { status: 409 },
       );
-    }
-
-    // Susun caption bentuk objek: "default" dipakai platform yang
-    // tidak punya caption khusus.
-    const captionUtama = (video.caption_asli ?? "").trim();
-    const khusus = (video.caption_platform ?? {}) as Record<string, string>;
-    const caption: Record<string, string> = { default: captionUtama };
-    for (const p of siapKirim) {
-      const teks = (khusus?.[p] ?? "").trim();
-      if (teks) caption[p] = teks.slice(0, BATAS_CAPTION[p] ?? 2200);
-    }
-    if (!captionUtama && Object.keys(caption).length === 1) {
-      throw Object.assign(new Error("Caption masih kosong."), { status: 400 });
     }
 
     let idAyrshare: string;
@@ -307,36 +348,47 @@ export async function POST(request: Request) {
     // permintaan baru yang sungguh dikirim; sementara perlindungan dari
     // dobel-posting tetap utuh lewat tiga lapis yang lain:
     //   1. platform yang SUDAH tayang dibuang dari daftar kirim (di atas),
-    //   2. kunci proses 2 menit menahan klik ganda / dua admin bersamaan,
+    //   2. kunci proses (basi 6 menit > maxDuration) menahan klik ganda /
+    //      dua admin bersamaan — karena kini cukup lama, request kedua tak
+    //      mungkin berjalan selagi yang pertama hidup, jadi kunci Ayrshare
+    //      yang berbeda per request tidak membuka celah dobel bersamaan,
     //   3. `unggahDenganUlang` mengulang sekali dengan kunci yang SAMA,
     //      sehingga gangguan jaringan di tengah tidak melahirkan dua post.
+    // Stempel TETAP dipertahankan: tanpanya "Ulangi" yang sah setelah
+    // gagal akan dikira kembar oleh Ayrshare dan tak pernah terkirim.
     const kunciDobel = `pri-${kode}-${siapKirim.slice().sort().join("_")}-${stempelCoba}`;
     try {
-      // Ulangi SEKALI bila gagal karena hal sementara (jaringan/timeout/
-      // 5xx). Karena idempotencyKey sama, ulangan ini AMAN — tidak akan
-      // membuat postingan ganda. Galat permintaan (4xx: caption salah,
-      // dsb.) tidak diulang karena mengulang tak akan menolong.
       // Sampul kustom (fitur 31 Agu 2026): dipasang ke YT/IG/TikTok/FB;
       // Threads & X tidak mendukung sampul. Tanpa sampul = perilaku lama.
       const sampulUrl = await simpanSampul(kode, body.sampulDataUrl);
 
-      ({ idAyrshare, hasil } = await unggahDenganUlang({
-        videoUrl,
-        caption,
-        platforms: siapKirim,
-        judulYoutube: video.judul_overlay || video.judul || "TV Rakyat",
-        thumbnailUrl: sampulUrl ?? undefined,
-        // Kunci memuat daftar platform supaya percobaan ULANG untuk
-        // subset yang gagal tetap dianggap permintaan baru.
-        idempotencyKey: kunciDobel,
-      }));
+      // Ulangi SEKALI bila gagal karena hal sementara (jaringan/5xx) dan
+      // anggaran waktu masih lega; kunci sama jadi tak membuat post ganda.
+      // Galat permintaan (4xx) dan timeout tidak diulang.
+      ({ idAyrshare, hasil } = await unggahDenganUlang(
+        {
+          videoUrl,
+          caption,
+          platforms: siapKirim,
+          judulYoutube: video.judul_overlay || video.judul || "TV Rakyat",
+          thumbnailUrl: sampulUrl ?? undefined,
+          // Kunci memuat daftar platform supaya percobaan ULANG untuk
+          // subset yang gagal tetap dianggap permintaan baru.
+          idempotencyKey: kunciDobel,
+        },
+        mulai + ANGGARAN_TOTAL_MS,
+      ));
     } catch (e) {
-      // Kunci proses dilepas supaya percobaan berikutnya tidak harus
-      // menunggu kunci basi 2 menit.
-      await db
-        .from("video_antrian")
-        .update({ sedang_unggah_pada: null })
-        .eq("kode", kode);
+      // Setelah TIMEOUT nasib postingan tak diketahui (mungkin masih
+      // diproses/sudah tayang di Ayrshare): kunci sengaja DIBIARKAN sampai
+      // basi supaya "Ulangi" langsung tidak memposting dobel. Galat lain
+      // = pasti tak ada post → kunci dilepas agar bisa dicoba lagi.
+      if (!(e as { timeout?: boolean })?.timeout) {
+        await db
+          .from("video_antrian")
+          .update({ sedang_unggah_pada: null })
+          .eq("kode", kode);
+      }
       throw e;
     }
 
@@ -388,8 +440,6 @@ export async function POST(request: Request) {
       perubahan.hapus_media_pada = new Date(
         Date.now() + (await retensiJamTv()) * 3600_000,
       ).toISOString();
-    }
-    if (berhasil.length > 0) {
       const sebelumnya = (video.platform_terunggah ?? []) as string[];
       perubahan.platform_terunggah = Array.from(
         new Set([...sebelumnya, ...berhasil.map((h) => h.platform)]),
@@ -405,94 +455,126 @@ export async function POST(request: Request) {
       }
     }
 
-    // ---- Pasca-posting (hanya bila ADA yang benar-benar tayang) ----
-    if (berhasil.length > 0) {
-      const judulTampil = video.judul_overlay || video.judul || kode;
-
-      // 0. Siaran ke ruang chat grup TV Rakyat (spek 1.18/1.3).
-      await siarkanKeRuangChat(
-        Number(pengguna.id),
-        judulTampil,
-        berhasil.map((h) => ({ platform: h.platform, url: h.postUrl })),
-      );
-
-      // 1. Kewajiban gugur: tugas link yang tertaut jadi SELESAI.
-      if (video.tugas_id) {
-        await db
-          .from("tugas_link")
-          .update({
-            status: "selesai",
-            video_kode: kode,
-            selesai_pada: new Date().toISOString(),
-          })
-          .eq("id", Number(video.tugas_id));
-        if (video.diupload_oleh_id) {
-          await kirimKabar({
-            judul: "Tugas video Anda selesai \u2705",
-            isi: `"${judulTampil}" sudah tayang di sosmed TV Rakyat. Kewajiban tugas link Anda gugur.`,
-            kategori: "sukses",
-            jenis_peristiwa: "tugas_link",
-            untukUserIds: [Number(video.diupload_oleh_id)],
-          });
-        }
-      }
-
-      // 2. (DIHAPUS 12 Sep 2026) Siaran "Video baru di TV Rakyat!" ke
-      //    seluruh anggota. Video tetap masuk kanal Konten & kewajiban
-      //    komen di bawah — hanya notifikasinya yang tidak lagi dikirim.
-
-      // 3. Daftarkan SEKETIKA ke kanal konten + wajib-komen (feed_konten +
-      // postingan), tanpa menunggu sinkron berkala. Di latar (after) agar
-      // tak menunda respons. Komentar diperiksa pada sinkron berkala.
-      after(() =>
-        daftarkanVideoUnggahan({
-          posting: berhasil
-            .filter((h) => h.postUrl)
-            .map((h) => ({ platform: h.platform, id: h.id, postUrl: h.postUrl })),
-          caption: video.caption_asli ?? "",
-          thumbnailUrl: video.thumbnail_url ?? "",
-        }),
-      );
+    // SIMPAN SEKARANG, tepat setelah hasil unggah didapat — sebelum efek
+    // samping apa pun. Dulu penyimpanan ini paling akhir, setelah banyak
+    // await (chat, tugas_link, kabar): bila salah satunya melempar atau
+    // fungsi mati, video sudah tayang tapi status/ayrshare_hasil tak
+    // tersimpan dan kunci proses tak terlepas.
+    let eSimpan: { message: string } | null = null;
+    try {
+      const { error } = await db.from("video_antrian").update(perubahan).eq("kode", kode);
+      eSimpan = error;
+    } catch (e) {
+      eSimpan = { message: e instanceof Error ? e.message : String(e) };
     }
-
-    // ---- Pemberitahuan kegagalan per platform (fitur 1.20/9) ----
-    // Wajib terlihat DI MANA video gagal: notifikasi menyebut platform
-    // dan alasannya, plus arahan ke tombol Ulangi di Riwayat Video.
-    const gagalDaftar = hasil.filter((h) => h.status === "error");
-    if (gagalDaftar.length > 0) {
-      // Notifikasi memakai keterangan Bahasa Indonesia, bukan kalimat
-      // mentah platform yang dipotong di tengah — yang dibaca orang di
-      // notifikasi HP tidak boleh berupa penggalan kalimat Inggris.
-      const rincian = gagalDaftar
-        .map((h) => `${h.platform} (${bacaGalat(h.platform, h.pesan ?? "").ringkas})`)
-        .join(", ");
-      const semuaPutusan = layakDiulang(gagalDaftar.map((h) => ({ platform: h.platform, pesan: h.pesan ?? "" })));
-      const ajakan = semuaPutusan.bolehUlang
-        ? "Buka TV Rakyat → Riwayat Video → tombol Ulangi untuk mencoba lagi."
-        : semuaPutusan.alasan;
-      const penerima = Array.from(
-        new Set(
-          [Number(pengguna.id), Number(video.diupload_oleh_id ?? 0)].filter(Boolean),
-        ),
-      );
-      await kirimKabar({
-        judul: `⚠ Video gagal tayang di ${gagalDaftar.length} platform`,
-        isi: `"${video.judul_overlay || video.judul || kode}" gagal di: ${rincian}. ${ajakan}`,
-        kategori: "peringatan",
-        jenis_peristiwa: "tv_gagal",
-        untukUserIds: penerima,
-      });
-    }
-
-    const { error: eSimpan } = await db
-      .from("video_antrian")
-      .update(perubahan)
-      .eq("kode", kode);
     if (eSimpan) {
       // Videonya SUDAH tayang; yang gagal cuma pencatatannya. Katakan
       // apa adanya alih-alih melaporkan unggahan gagal.
       console.error("[tv/unggah] simpan hasil:", eSimpan.message);
+      // Upaya terakhir melepas kunci proses supaya tak menggantung.
+      try {
+        await db.from("video_antrian").update({ sedang_unggah_pada: null }).eq("kode", kode);
+      } catch {
+        // kunci akan basi sendiri
+      }
     }
+
+    // ---- Efek samping sekunder: di latar (after), tiap langkah dibungkus
+    // try/catch sendiri — kegagalan satu langkah tak menggagalkan respons
+    // maupun langkah lain. Urutan logika bisnis dipertahankan.
+    const judulTampil = video.judul_overlay || video.judul || kode;
+    const gagalDaftar = hasil.filter((h) => h.status === "error");
+    after(async () => {
+      if (berhasil.length > 0) {
+        // 0. Siaran ke ruang chat grup TV Rakyat (spek 1.18/1.3).
+        // (siarkanKeRuangChat sudah menelan galatnya sendiri.)
+        await siarkanKeRuangChat(
+          Number(pengguna.id),
+          judulTampil,
+          berhasil.map((h) => ({ platform: h.platform, url: h.postUrl })),
+        );
+
+        // 1. Kewajiban gugur: tugas link yang tertaut jadi SELESAI.
+        if (video.tugas_id) {
+          try {
+            await db
+              .from("tugas_link")
+              .update({
+                status: "selesai",
+                video_kode: kode,
+                selesai_pada: new Date().toISOString(),
+              })
+              .eq("id", Number(video.tugas_id));
+          } catch (e) {
+            console.error("[tv/unggah] tugas_link:", e);
+          }
+          if (video.diupload_oleh_id) {
+            try {
+              await kirimKabar({
+                judul: "Tugas video Anda selesai \u2705",
+                isi: `"${judulTampil}" sudah tayang di sosmed TV Rakyat. Kewajiban tugas link Anda gugur.`,
+                kategori: "sukses",
+                jenis_peristiwa: "tugas_link",
+                untukUserIds: [Number(video.diupload_oleh_id)],
+              });
+            } catch (e) {
+              console.error("[tv/unggah] kabar tugas:", e);
+            }
+          }
+        }
+
+        // 2. (DIHAPUS 12 Sep 2026) Siaran "Video baru di TV Rakyat!" ke
+        //    seluruh anggota. Video tetap masuk kanal Konten & kewajiban
+        //    komen di bawah — hanya notifikasinya yang tidak lagi dikirim.
+
+        // 3. Daftarkan SEKETIKA ke kanal konten + wajib-komen (feed_konten
+        // + postingan), tanpa menunggu sinkron berkala. Komentar diperiksa
+        // pada sinkron berkala.
+        try {
+          await daftarkanVideoUnggahan({
+            posting: berhasil
+              .filter((h) => h.postUrl)
+              .map((h) => ({ platform: h.platform, id: h.id, postUrl: h.postUrl })),
+            caption: video.caption_asli ?? "",
+            thumbnailUrl: video.thumbnail_url ?? "",
+          });
+        } catch (e) {
+          console.error("[tv/unggah] daftarkan video:", e);
+        }
+      }
+
+      // ---- Pemberitahuan kegagalan per platform (fitur 1.20/9) ----
+      // Wajib terlihat DI MANA video gagal: notifikasi menyebut platform
+      // dan alasannya, plus arahan ke tombol Ulangi di Riwayat Video.
+      if (gagalDaftar.length > 0) {
+        try {
+          // Notifikasi memakai keterangan Bahasa Indonesia, bukan kalimat
+          // mentah platform yang dipotong di tengah — yang dibaca orang di
+          // notifikasi HP tidak boleh berupa penggalan kalimat Inggris.
+          const rincian = gagalDaftar
+            .map((h) => `${h.platform} (${bacaGalat(h.platform, h.pesan ?? "").ringkas})`)
+            .join(", ");
+          const semuaPutusan = layakDiulang(gagalDaftar.map((h) => ({ platform: h.platform, pesan: h.pesan ?? "" })));
+          const ajakan = semuaPutusan.bolehUlang
+            ? "Buka TV Rakyat → Riwayat Video → tombol Ulangi untuk mencoba lagi."
+            : semuaPutusan.alasan;
+          const penerima = Array.from(
+            new Set(
+              [Number(pengguna.id), Number(video.diupload_oleh_id ?? 0)].filter(Boolean),
+            ),
+          );
+          await kirimKabar({
+            judul: `⚠ Video gagal tayang di ${gagalDaftar.length} platform`,
+            isi: `"${judulTampil}" gagal di: ${rincian}. ${ajakan}`,
+            kategori: "peringatan",
+            jenis_peristiwa: "tv_gagal",
+            untukUserIds: penerima,
+          });
+        } catch (e) {
+          console.error("[tv/unggah] kabar gagal:", e);
+        }
+      }
+    });
 
     siarkanTv("posting");
     catatAudit(

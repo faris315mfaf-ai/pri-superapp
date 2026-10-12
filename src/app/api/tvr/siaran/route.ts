@@ -9,10 +9,11 @@
 //        pemanggilan juga melanjutkan pemrosesan item yang masih menunggu.
 // DELETE { id } → batalkan item yang belum terkirim.
 import { after } from "next/server";
+import { createHash } from "node:crypto";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
-import { daftarProfilUp, uploadPostSiap } from "@/lib/upload-post";
+import { ambilKunciUnggah, daftarProfilUp, uploadPostSiap } from "@/lib/upload-post";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { MAKS_UMUR_URL_DETIK, pastikanUkuranR2Wajar, presignR2, r2Siap } from "@/lib/r2";
 import { prosesSiaranSerentak } from "@/lib/siaran";
@@ -28,6 +29,11 @@ const UMUR_MEDIA_JAM = 2;
 const MAKS_PROFIL = 60;
 
 const PENGATUR = new Set(["master", "super_admin"]);
+
+/** Jendela tolak siaran identik yang berdekatan (klik ganda / ulang). */
+const JENDELA_DOBEL_MS = 60_000;
+const PESAN_SIARAN_DOBEL =
+  "Siaran dengan video ini baru saja dibuat. Cek daftar siaran sebelum mengulang.";
 
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
@@ -215,6 +221,60 @@ export async function POST(request: Request) {
     const dasarMs = jadwal ? Date.parse(jadwal) : Date.now();
     const hapusPada = new Date(dasarMs + UMUR_MEDIA_JAM * 3600_000).toISOString();
 
+    // PAGAR SIARAN DOBEL (12 Okt 2026): satu POST bisa menjangkau 60 profil
+    // dan postingan sosmed tak bisa ditarik, jadi klik ganda harus ditolak.
+    // Identik = berkas + platform + jadwal sama dan ada profil yang beririsan;
+    // jadwal atau kelompok profil lain tetap boleh.
+    const platformUrut = [...platforms].sort().join(",");
+    const sidikJadwal = jadwal ? String(Date.parse(jadwal)) : "-";
+    const profilUrut = [...profilDiminta].sort();
+    const kunciProses = await ambilKunciUnggah(
+      `siaran:${createHash("sha1")
+        .update(`${user.id}|${pakaiR2 ? r2Key : path}|${platformUrut}|${sidikJadwal}|${profilUrut.join(",")}`)
+        .digest("hex")}`,
+      120,
+    );
+    if (!kunciProses) throw Object.assign(new Error(PESAN_SIARAN_DOBEL), { status: 409 });
+    let berhasil = false;
+    try {
+      try {
+        const { data: baru } = await db
+          .from("tvr_siaran")
+          .select("id, platforms, jadwal")
+          .eq("dibuat_oleh", Number(user.id))
+          .eq("video_path", pakaiR2 ? r2Key : path)
+          .neq("status", "dibatalkan")
+          .gte("dibuat_pada", new Date(Date.now() - JENDELA_DOBEL_MS).toISOString())
+          .limit(10);
+        const sama = (baru ?? []).filter((b) => {
+          const pf = Array.isArray(b.platforms) ? (b.platforms as unknown[]).map(String).sort().join(",") : "";
+          const jd = b.jadwal ? String(Date.parse(String(b.jadwal))) : "-";
+          return pf === platformUrut && jd === sidikJadwal;
+        });
+        if (sama.length > 0) {
+          const { data: itemBaru } = await db
+            .from("tvr_siaran_item")
+            .select("profil")
+            .in("siaran_id", sama.map((b) => Number(b.id)))
+            .neq("status", "dibatalkan");
+          const dikirim = new Set((itemBaru ?? []).map((i) => String(i.profil)));
+          if (profilUrut.some((p) => dikirim.has(p))) {
+            throw Object.assign(new Error(PESAN_SIARAN_DOBEL), { status: 409 });
+          }
+        }
+      } catch (e) {
+        // Gagal membaca riwayat = lanjut (kunci proses tetap melindungi).
+        if ((e as { status?: number })?.status === 409) throw e;
+      }
+      const hasilSiaran = await buatSiaran();
+      berhasil = true;
+      return hasilSiaran;
+    } finally {
+      // Sukses: tahan 60 dtk sampai baris siaran pasti terbaca pemeriksaan di atas.
+      await kunciProses.lepas(berhasil ? 60 : 0);
+    }
+
+    async function buatSiaran() {
     const { data: induk, error } = await db
       .from("tvr_siaran")
       .insert({
@@ -271,6 +331,7 @@ export async function POST(request: Request) {
       langsung_gagal: item.filter((i) => i.status === "gagal").length,
       terjadwal: Boolean(jadwal),
     };
+    }
   });
 }
 

@@ -3,12 +3,44 @@
 // Sumber: Supabase (view v_app_notifikasi / tabel notifikasi).
 import { supabase } from "@/lib/supabase";
 import { bungkus, pastikanSukses } from "@/lib/api-helper";
-import { pastikanMasuk, userDariToken } from "@/lib/sesi";
+import { pastikanMasuk, userDariToken, type UserPublik } from "@/lib/sesi";
 import { adalahHR } from "@/lib/hr";
 
 import { catatHadir } from "@/lib/kehadiran";
 import { after } from "next/server";
 export const dynamic = "force-dynamic";
+
+/**
+ * Saringan PostgREST `or(...)` untuk notifikasi yang RELEVAN bagi satu
+ * pengguna. Dipakai bersama oleh GET (daftar) dan PATCH "tandai semua
+ * dibaca", supaya yang ditandai persis yang tampil di daftarnya.
+ *
+ * Prinsip relevansi: notifikasi hanya sampai ke yang berkepentingan.
+ * - Baris beralamat orang → hanya orang itu.
+ * - Baris beralamat peran → peran itu.
+ * - Baris TANPA alamat (warisan lama & tulisan n8n): dipetakan dari
+ *   kategorinya — VIDEO utk tim TV, QC utk pengurus QC, dan
+ *   pengumuman rilis utk semua. Interaksi dua akun tidak pernah
+ *   lewat sini karena selalu ditulis beralamat orang.
+ */
+function saringanRelevan(pengguna: UserPublik): string {
+  const r = pengguna.role;
+  // Ultah & video baru TV Rakyat memang untuk SEMUA orang.
+  const umumRelevan: string[] = [
+    "jenis_peristiwa.eq.rilis_aplikasi",
+    "jenis_peristiwa.eq.ultah",
+    "jenis_peristiwa.eq.tv_publik",
+  ];
+  if (r === "master" || r === "admin_tv") umumRelevan.push("kategori.eq.VIDEO");
+  if (r === "master" || r === "super_admin" || r === "admin_hr" || adalahHR(pengguna)) {
+    umumRelevan.push("kategori.eq.QC");
+  }
+  // Anggota Divisi HR (fitur 1.22.x/6) ikut menerima notifikasi yang
+  // bertarget peran admin_hr (mis. pendaftar baru) — kuasa HR kini dari
+  // divisi. `ov` = untuk_role tumpang-tindih dengan salah satu peran ini.
+  const peranCocok = adalahHR(pengguna) ? `{${r},admin_hr}` : `{${r}}`;
+  return `and(untuk_role.is.null,untuk_user.is.null,or(${umumRelevan.join(",")})),untuk_role.ov.${peranCocok},untuk_user.eq.${Number(pengguna.id)}`;
+}
 
 export async function GET(request: Request) {
   return bungkus(async () => {
@@ -32,31 +64,7 @@ export async function GET(request: Request) {
       .limit(100);
 
     if (pengguna) {
-      // Prinsip relevansi: notifikasi hanya sampai ke yang berkepentingan.
-      // - Baris beralamat orang → hanya orang itu.
-      // - Baris beralamat peran → peran itu.
-      // - Baris TANPA alamat (warisan lama & tulisan n8n): dipetakan dari
-      //   kategorinya — VIDEO utk tim TV, QC utk pengurus QC, dan
-      //   pengumuman rilis utk semua. Interaksi dua akun tidak pernah
-      //   lewat sini karena selalu ditulis beralamat orang.
-      const r = pengguna.role;
-      // Ultah & video baru TV Rakyat memang untuk SEMUA orang.
-      const umumRelevan: string[] = [
-        "jenis_peristiwa.eq.rilis_aplikasi",
-        "jenis_peristiwa.eq.ultah",
-        "jenis_peristiwa.eq.tv_publik",
-      ];
-      if (r === "master" || r === "admin_tv") umumRelevan.push("kategori.eq.VIDEO");
-      if (r === "master" || r === "super_admin" || r === "admin_hr" || adalahHR(pengguna)) {
-        umumRelevan.push("kategori.eq.QC");
-      }
-      // Anggota Divisi HR (fitur 1.22.x/6) ikut menerima notifikasi yang
-      // bertarget peran admin_hr (mis. pendaftar baru) — kuasa HR kini dari
-      // divisi. `ov` = untuk_role tumpang-tindih dengan salah satu peran ini.
-      const peranCocok = adalahHR(pengguna) ? `{${r},admin_hr}` : `{${r}}`;
-      kueri = kueri.or(
-        `and(untuk_role.is.null,untuk_user.is.null,or(${umumRelevan.join(",")})),untuk_role.ov.${peranCocok},untuk_user.eq.${Number(pengguna.id)}`,
-      );
+      kueri = kueri.or(saringanRelevan(pengguna));
     } else {
       kueri = kueri.is("untuk_user", null);
     }
@@ -76,7 +84,7 @@ export async function PATCH(request: Request) {
   return bungkus(async () => {
     // Tanpa penjaga ini, siapa pun bisa menandai SELURUH notifikasi
     // milik semua orang sebagai sudah dibaca.
-    await pastikanMasuk(request);
+    const saya = await pastikanMasuk(request);
     const body = (await request.json().catch(() => ({}))) as {
       id?: string;
       semua?: boolean;
@@ -84,10 +92,16 @@ export async function PATCH(request: Request) {
 
     const db = supabase();
     if (body.semua) {
+      // Hanya notifikasi yang relevan bagi PEMANGGIL (saringan yang sama
+      // dengan GET). Dulu semua baris belum-dibaca milik SEMUA orang ikut
+      // tertandai. Catatan: kolom `dibaca` tunggal per baris (belum ada
+      // tabel baca per-pengguna), jadi notifikasi bersama (peran/siaran)
+      // yang ditandai satu orang tetap terbaca bagi yang seperan.
       const { error } = await db
         .from("notifikasi")
         .update({ dibaca: true })
-        .eq("dibaca", false);
+        .eq("dibaca", false)
+        .or(saringanRelevan(saya));
       if (error) throw new Error("Gagal menandai semua notifikasi dibaca");
       return { sukses: true };
     }

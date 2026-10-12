@@ -64,6 +64,9 @@ export function segarkanStokTvr(): void {
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(PERISTIWA_STOK_SEGAR));
 }
 
+/** Tarik video stok: batal bila tidak ada data yang mengalir selama ini (bukan batas total). */
+const BATAS_DIAM_AMBIL_MS = 60_000;
+
 type KeadaanStok = {
   stok: StokTvr[];
   job: JobTvr | null;
@@ -110,6 +113,18 @@ export function StokVideoTvr({
   const [unggahItem, setUnggahItem] = useState<{ id: string; judul: string; file: File } | null>(null);
   // id item yang videonya sedang ditarik (untuk lihat/upload); menahan aksi ganda.
   const [menyiapkan, setMenyiapkan] = useState("");
+  // Kemajuan tarik video stok (persen null = ukuran total tidak diketahui).
+  const [ambil, setAmbil] = useState<{ id: string; persen: number | null } | null>(null);
+  // Penarikan yang sedang berjalan — dibatalkan saat komponen dilepas supaya
+  // video ratusan MB tidak terus ditarik ke memori tanpa ada yang menunggu.
+  const pembatalAmbilRef = useRef<Set<AbortController>>(new Set());
+  useEffect(() => {
+    const aktif = pembatalAmbilRef.current;
+    return () => {
+      for (const p of aktif) p.abort();
+      aktif.clear();
+    };
+  }, []);
   const [lihat, setLihat] = useState<{ item: StokTvr; url: string } | null>(null);
   const tabAktifRef = useRefTabAktif();
   const inputStokRef = useRef<HTMLInputElement>(null);
@@ -220,12 +235,64 @@ export function StokVideoTvr({
     }
   }
 
-  /** Tarik video penuh satu item (blob → File). */
+  /**
+   * Tarik video penuh satu item (blob → File), dengan kemajuan nyata (dibaca
+   * dari aliran), bisa dibatalkan, dan berhenti bila tidak ada data mengalir
+   * `BATAS_DIAM_AMBIL_MS`. CATATAN: pemakai "Upload" masih mengunggah ulang
+   * berkas ini dari peramban; salinan server-ke-server menunggu
+   * UnggahSosmedSaya menerima kunci penyimpanan siap pakai (lihat laporan A2).
+   */
   async function ambilBerkas(item: StokTvr): Promise<File> {
-    const res = await api.fetch(`/api/tvr/stok/${item.id}/berkas`, { cache: "no-store" });
-    if (!res.ok) throw new Error(pesanGalat(res.status, await bacaJson(res), "Video gagal diambil."));
-    const blob = await res.blob();
-    return new File([blob], `${item.judul || "video"}.mp4`, { type: "video/mp4" });
+    const pembatal = new AbortController();
+    pembatalAmbilRef.current.add(pembatal);
+    let waktuHabis = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const jagaDiam = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        waktuHabis = true;
+        pembatal.abort();
+      }, BATAS_DIAM_AMBIL_MS);
+    };
+    setAmbil({ id: item.id, persen: 0 });
+    try {
+      jagaDiam();
+      const res = await api.fetch(`/api/tvr/stok/${item.id}/berkas`, { cache: "no-store", signal: pembatal.signal });
+      if (!res.ok) throw new Error(pesanGalat(res.status, await bacaJson(res), "Video gagal diambil."));
+      const total = Number(res.headers.get("content-length")) || 0;
+      let blob: Blob;
+      if (res.body) {
+        const pembaca = res.body.getReader();
+        const potongan: Uint8Array[] = [];
+        let diterima = 0;
+        let terakhir = -1;
+        for (;;) {
+          const { done, value } = await pembaca.read();
+          if (done) break;
+          jagaDiam();
+          potongan.push(value);
+          diterima += value.byteLength;
+          const persen = total > 0 ? Math.min(99, Math.floor((100 * diterima) / total)) : null;
+          // Perbarui layar hanya saat angkanya berganti (hindari render per potongan).
+          if (persen !== terakhir) {
+            terakhir = persen ?? -1;
+            setAmbil({ id: item.id, persen });
+          }
+        }
+        blob = new Blob(potongan as BlobPart[], { type: "video/mp4" });
+      } else {
+        blob = await res.blob();
+      }
+      return new File([blob], `${item.judul || "video"}.mp4`, { type: "video/mp4" });
+    } catch (e) {
+      if (waktuHabis) throw new Error("Pengambilan video terlalu lama dan dihentikan. Periksa koneksi, lalu coba lagi.");
+      if (pembatal.signal.aborted) throw new Error("Pengambilan video dibatalkan.");
+      throw e;
+    } finally {
+      clearTimeout(timer);
+      pembatalAmbilRef.current.delete(pembatal);
+      setAmbil((a) => (a?.id === item.id ? null : a));
+    }
   }
 
   async function lihatPreview(item: StokTvr) {
@@ -470,6 +537,7 @@ export function StokVideoTvr({
               bolehUpload={!api.tim || Boolean(onKirimOfficial)}
               labelUpload={api.tim ? "Official" : "Upload"}
               menyiapkan={menyiapkan}
+              persenAmbil={ambil?.id === it.id ? ambil.persen : null}
               hapusId={hapusId}
               unduhId={unduhId}
               onLihat={(x) => void lihatPreview(x)}
@@ -555,6 +623,8 @@ type StokItemProps = {
   labelUpload: string;
   tandaTur?: string;
   menyiapkan: string;
+  /** Persen video yang sedang ditarik untuk item ini; null = tidak sedang / ukuran tak diketahui. */
+  persenAmbil: number | null;
   hapusId: string;
   unduhId: string;
   onLihat: (it: StokTvr) => void;
@@ -684,11 +754,11 @@ function StokItem(q: StokItemProps) {
                   className={cn("grid gap-1.5", q.bolehUpload ? "grid-cols-4" : "grid-cols-3")}
                   data-tur={q.tandaTur ? "tvr-stok-aksi" : undefined}
                 >
-                  <AksiStok ikon={<Eye className="h-4 w-4" />} label="Lihat" onClick={() => q.onLihat(item)} loading={sibuk} />
+                  <AksiStok ikon={<Eye className="h-4 w-4" />} label="Lihat" onClick={() => q.onLihat(item)} loading={sibuk} persen={sibuk ? q.persenAmbil : null} />
                   {q.bolehUpload && (
-                    <AksiStok ikon={<Send className="h-4 w-4" />} label={q.labelUpload} onClick={() => q.onUpload(item)} loading={sibuk} utama />
+                    <AksiStok ikon={<Send className="h-4 w-4" />} label={q.labelUpload} onClick={() => q.onUpload(item)} loading={sibuk} persen={sibuk ? q.persenAmbil : null} utama />
                   )}
-                  <AksiStok ikon={<Download className="h-4 w-4" />} label="Unduh" onClick={() => q.onUnduh(item)} loading={mengunduh} />
+                  <AksiStok ikon={<Download className="h-4 w-4" />} label="Unduh" onClick={() => q.onUnduh(item)} loading={mengunduh} persen={mengunduh ? q.persenAmbil : null} />
                   <AksiStok ikon={<Trash2 className="h-4 w-4" />} label="Hapus" onClick={() => setKonfirmHapus(true)} danger />
                 </div>
               )}
@@ -705,6 +775,7 @@ function AksiStok({
   label,
   onClick,
   loading,
+  persen,
   utama,
   danger,
 }: {
@@ -712,6 +783,8 @@ function AksiStok({
   label: string;
   onClick: () => void;
   loading?: boolean;
+  /** Kemajuan tarik video (0..99) bila diketahui; menggantikan label selama memuat. */
+  persen?: number | null;
   utama?: boolean;
   danger?: boolean;
 }) {
@@ -727,7 +800,7 @@ function AksiStok({
       style={utama ? { background: "linear-gradient(135deg, #DC2626, #B91C1C)" } : undefined}
     >
       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : ikon}
-      {label}
+      {loading && typeof persen === "number" ? `${persen}%` : label}
     </button>
   );
 }

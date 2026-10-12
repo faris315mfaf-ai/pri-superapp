@@ -40,7 +40,7 @@ import {
   type TvrkuPost,
 } from "@/services";
 import { PlatformIcon, labelPlatform } from "@/components/platform-icon";
-import { unggahVideoTvrku } from "@/lib/unggah-video-klien";
+import { adalahPembatalanUnggah, unggahVideoTvrku } from "@/lib/unggah-video-klien";
 import { cn } from "@/lib/utils";
 import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 
@@ -222,6 +222,29 @@ export function UnggahSosmedSaya({
   // PALUGODAM: pop-up gabungan edit otomatis + upload otomatis.
   const [bukaEditOtomatis, setBukaEditOtomatis] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Pembatal unggahan berjalan + penanda komponen masih terpasang: setelah
+  // unmount, unggahan dihentikan dan tidak ada setState/toast lagi.
+  const pembatalRef = useRef<AbortController | null>(null);
+  const hidupRef = useRef(true);
+  useEffect(() => {
+    hidupRef.current = true;
+    return () => {
+      hidupRef.current = false;
+      pembatalRef.current?.abort();
+    };
+  }, []);
+
+  // Peringatan tutup tab / muat ulang selama unggahan atau posting berjalan.
+  const sedangKirim = tahap !== "";
+  useEffect(() => {
+    if (!sedangKirim) return;
+    const peringatkan = (ev: BeforeUnloadEvent) => {
+      ev.preventDefault();
+      ev.returnValue = "";
+    };
+    window.addEventListener("beforeunload", peringatkan);
+    return () => window.removeEventListener("beforeunload", peringatkan);
+  }, [sedangKirim]);
 
   const versiSegar = useVersiSegar();
   useEffect(() => {
@@ -435,7 +458,19 @@ export function UnggahSosmedSaya({
       //    dihapus otomatis 2 jam setelah tayang.
       setTahap("unggah");
       setPersen(0);
-      const hasilUnggah = await unggahVideoTvrku(berkas, { onProgres: setPersen, onTahap: setTahap });
+      const pembatal = new AbortController();
+      pembatalRef.current = pembatal;
+      const hasilUnggah = await unggahVideoTvrku(berkas, {
+        onProgres: (p) => {
+          if (hidupRef.current) setPersen(p);
+        },
+        onTahap: (t) => {
+          if (hidupRef.current) setTahap(t);
+        },
+        signal: pembatal.signal,
+      });
+      pembatalRef.current = null;
+      if (!hidupRef.current) return;
 
       // 2. Server menyerahkan tautan videonya ke upload-post.
       setTahap("post");
@@ -450,6 +485,9 @@ export function UnggahSosmedSaya({
         jadwal: jadwalUntukKirim(),
       });
 
+      // Video sudah terkirim; bila panel keburu ditutup, tidak ada state
+      // yang perlu dirapikan.
+      if (!hidupRef.current) return;
       setBerkas(null);
       setJudul("");
       setKategori("");
@@ -462,9 +500,15 @@ export function UnggahSosmedSaya({
       await setelahPost(hasil);
       onTerkirim?.();
     } catch (e) {
-      toast("error", "Gagal", e instanceof Error ? e.message : "Coba lagi sebentar.");
+      if (!hidupRef.current) return;
+      if (adalahPembatalanUnggah(e)) {
+        toast("info", "Unggahan dibatalkan", "Video belum terkirim. Data isian Anda masih ada.");
+      } else {
+        toast("error", "Gagal", e instanceof Error ? e.message : "Coba lagi sebentar.");
+      }
     } finally {
-      setTahap("");
+      pembatalRef.current = null;
+      if (hidupRef.current) setTahap("");
     }
   }
 
@@ -912,6 +956,22 @@ export function UnggahSosmedSaya({
             </>
           )}
         </button>
+        {tahap === "unggah" && (
+          <button
+            type="button"
+            onClick={() => pembatalRef.current?.abort()}
+            className="btn-tekan glass mt-2 flex h-10 w-full items-center justify-center gap-1.5 rounded-xl text-[12.5px] font-bold text-gagal"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+            Batalkan unggahan
+          </button>
+        )}
+        {tahap === "post" && (
+          <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder" role="status">
+            Video sudah terunggah, kini antre di layanan posting (upload-post). Ini bisa memakan beberapa
+            menit — tetap buka halaman ini sampai selesai.
+          </p>
+        )}
       </GlassCard>
       )}
 
