@@ -179,7 +179,7 @@ function PanelPasar({ onBerubah }: { onBerubah: () => void }) {
         <div className="flex items-center justify-between">
           <p className="text-[12.5px] font-bold text-teks-utama">Tawarkan barang Anda</p>
           <span className="flex items-center gap-1 text-[11px] font-bold text-teks-utama">
-            <img src="/KMP.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5" /> {data.saldo}
+            <img src="/KMP-96-v1.webp" alt="" aria-hidden="true" className="h-3.5 w-3.5" /> {data.saldo}
           </span>
         </div>
         {!data.punya_robot ? (

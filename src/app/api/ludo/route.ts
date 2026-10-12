@@ -128,25 +128,49 @@ async function simpan(
   return data as Baris;
 }
 
+/**
+ * Id undangan yang belum menjadi pemain (dipakai keRuang & pemuat massal,
+ * supaya kedua jalur memakai aturan yang sama persis).
+ */
+function idUndanganTersisa(b: Baris): number[] {
+  const pemain = b.pemain ?? [];
+  return (b.undangan ?? []).filter(
+    (x) => !pemain.some((p) => Number(p.user_id) === Number(x)),
+  );
+}
+
+/** Satu query app_user untuk semua id (bukan satu query per ruang). */
+async function petaNamaUser(
+  db: ReturnType<typeof supabase>,
+  ids: number[],
+): Promise<Map<number, string>> {
+  const peta = new Map<number, string>();
+  const unik = [...new Set(ids.map(Number))].filter((x) => Number.isFinite(x));
+  if (unik.length === 0) return peta;
+  const { data } = await db.from("app_user").select("id, nama").in("id", unik);
+  for (const u of data ?? []) peta.set(Number(u.id), String(u.nama ?? ""));
+  return peta;
+}
+
 async function keRuang(
   db: ReturnType<typeof supabase>,
   b: Baris,
   uid: number,
+  // Peta nama yang sudah dimuat massal (daftar lobi); tanpa ini muat sendiri.
+  petaNama?: Map<number, string>,
 ): Promise<RuangLudo> {
   const pemain = b.pemain ?? [];
-  const undanganIds = (b.undangan ?? []).filter(
-    (x) => !pemain.some((p) => Number(p.user_id) === Number(x)),
-  );
+  const undanganIds = idUndanganTersisa(b);
   let undangan: { user_id: string; nama: string }[] = [];
   if (undanganIds.length > 0) {
-    const { data } = await db
-      .from("app_user")
-      .select("id, nama")
-      .in("id", undanganIds);
-    undangan = (data ?? []).map((u) => ({
-      user_id: String(u.id),
-      nama: String(u.nama ?? ""),
-    }));
+    const peta = petaNama ?? (await petaNamaUser(db, undanganIds));
+    // Pengguna yang sudah tidak ada di app_user dilewati (sama seperti dulu).
+    undangan = undanganIds
+      .filter((x) => peta.has(Number(x)))
+      .map((x) => ({
+        user_id: String(Number(x)),
+        nama: peta.get(Number(x)) ?? "",
+      }));
   }
   return {
     id: String(b.id),
@@ -268,8 +292,12 @@ export async function GET(request: Request) {
         (b.pemain ?? []).some((p) => Number(p.user_id) === uid) ||
         (b.undangan ?? []).some((x) => Number(x) === uid),
     );
-    const daftar: RuangLudo[] = [];
-    for (const b of milik.slice(0, 10)) daftar.push(await keRuang(db, b, uid));
+    // Satu query nama untuk semua undangan 10 ruang (dulu N+1 berurutan).
+    const tampil = milik.slice(0, 10);
+    const petaNama = await petaNamaUser(db, tampil.flatMap(idUndanganTersisa));
+    const daftar: RuangLudo[] = await Promise.all(
+      tampil.map((b) => keRuang(db, b, uid, petaNama)),
+    );
     return { boleh_buat: true, daftar };
   });
 }

@@ -116,6 +116,17 @@ const nextConfig: NextConfig = {
   // ------------------------------------------------------------
   async headers() {
     return [
+      // Ikon koin kecil. public/ secara bawaan disajikan max-age=0 (tiap
+      // sesi divalidasi ulang). Nama berkas BERVERSI (-v1) sehingga aman
+      // di-cache setahun penuh; kalau gambarnya diganti, naikkan versinya
+      // (KMP-96-v2.webp) dan ubah semua pemakai. Header ini hanya untuk
+      // aset itu, tidak menyentuh header keamanan di aturan bawah.
+      {
+        source: "/KMP-96-v1.webp",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
       {
         source: "/:path*",
         headers: [

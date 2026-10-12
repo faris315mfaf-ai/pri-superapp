@@ -14,6 +14,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import styles from "./edit-video.module.css";
+import { useIntervalAktif } from "@/hooks/use-tab-aktif";
 import { apiFetch, apiUnggah, bacaJson, bacaSimpanan, pesanGalat, simpanSimpanan } from "./api";
 import { useDialog } from "./dialog";
 import { PopupUnggahSosmed } from "./popup-unggah-sosmed";
@@ -1178,10 +1179,14 @@ export function EditVideo() {
     .filter((j) => !selesai(j.status))
     .map((j) => j.job_id)
     .join(",");
-  useEffect(() => {
+  // Berdetak hanya saat halaman terlihat & tab aktif (disusul sekali begitu
+  // terlihat lagi); guard in-flight mencegah putaran tumpang-tindih.
+  const segarkanJobJalanRef = useRef(false);
+  async function segarkanJobAktif() {
     const aktif = kunciAktif ? kunciAktif.split(",") : [];
-    if (aktif.length === 0) return;
-    const timer = window.setInterval(async () => {
+    if (aktif.length === 0 || segarkanJobJalanRef.current) return;
+    segarkanJobJalanRef.current = true;
+    try {
       const hasil = await Promise.all(
         aktif.map(async (id) => {
           try {
@@ -1193,9 +1198,11 @@ export function EditVideo() {
         }),
       );
       setJobs((lama) => lama.map((j) => hasil.find((h) => h && h.job_id === j.job_id) || j));
-    }, 2000);
-    return () => window.clearInterval(timer);
-  }, [kunciAktif]);
+    } finally {
+      segarkanJobJalanRef.current = false;
+    }
+  }
+  useIntervalAktif(() => void segarkanJobAktif(), 2000, kunciAktif !== "");
 
   // Dibaca animasi angka persen tanpa membuat effect-nya ikut berulang.
   const jobsRef = useRef<JobStatus[]>([]);

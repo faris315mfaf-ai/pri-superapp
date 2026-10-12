@@ -12,6 +12,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./outro.module.css";
+import { useIntervalAktif } from "@/hooks/use-tab-aktif";
 import { apiFetch, bacaJson, pesanGalat } from "./api";
 
 type Sosmed = { kunci: string; nama: string; ikon: string; contoh: string };
@@ -136,7 +137,11 @@ export function Outro() {
 
   const adaAktif = jobs.some(aktif);
 
+  // Guard in-flight: satu permintaan daftar dalam satu waktu.
+  const perbaruiJalanRef = useRef(false);
   async function perbarui() {
+    if (perbaruiJalanRef.current) return;
+    perbaruiJalanRef.current = true;
     try {
       const r = await apiFetch("/api/outro/jobs?batas=200", { cache: "no-store" });
       if (!r.ok) return;
@@ -145,15 +150,14 @@ export function Outro() {
       setJobs((lama) => lama.map((j) => terbaru.get(j.job_id) || j));
     } catch {
       // dicoba lagi pada putaran berikutnya
+    } finally {
+      perbaruiJalanRef.current = false;
     }
   }
 
-  // Pantau semua outro kiriman ini lewat SATU permintaan daftar.
-  useEffect(() => {
-    if (!adaAktif) return;
-    const timer = setInterval(perbarui, 2000);
-    return () => clearInterval(timer);
-  }, [adaAktif]);
+  // Pantau semua outro kiriman ini lewat SATU permintaan daftar — hanya saat
+  // halaman terlihat & tab aktif (disusul sekali begitu terlihat lagi).
+  useIntervalAktif(() => void perbarui(), 2000, adaAktif);
 
   // Chrome memperlambat pewaktu tab yang tidak terlihat sampai sekali per
   // MENIT, dan menunda memuat video di tab itu. Saat kembali, alat tampak

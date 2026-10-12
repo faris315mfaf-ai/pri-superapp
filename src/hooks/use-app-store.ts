@@ -199,7 +199,18 @@ export const useAppStore = create<AppState>()(
       setWewenangTv: (wewenangTv) => set({ wewenangTv }),
       toggleTema: () => set({ tema: get().tema === "light" ? "dark" : "light" }),
       hadir: [],
-      setHadir: (hadir) => set({ hadir }),
+      // Detak global memanggil ini dengan array BARU tiap ~10 dtk. Bila isinya
+      // (kumpulan id) sama, JANGAN set: referensi lama dipertahankan supaya
+      // ChatScreen & lencana online tidak render ulang tanpa perubahan.
+      // Elemennya hanya id (string) — tidak ada waktu "terakhir terlihat".
+      setHadir: (hadir) => {
+        const lama = get().hadir;
+        if (lama.length === hadir.length) {
+          const kumpulanLama = new Set(lama);
+          if (hadir.every((id) => kumpulanLama.has(id))) return;
+        }
+        set({ hadir });
+      },
       versiSegar: 0,
       segarkanData: () => {
         set({ versiSegar: get().versiSegar + 1 });

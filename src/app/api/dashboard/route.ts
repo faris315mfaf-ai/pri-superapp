@@ -40,7 +40,22 @@ type BarisRekap = {
 };
 
 type Notif = { judul: string; kategori: string; waktu_relatif: string };
-type Video = { status: string; jam_tanggal: string };
+
+/**
+ * Status video yang dikenal pipeline (lihat sql/06, api/tv/*). Dihitung satu
+ * per satu lewat count di database; status di luar daftar ini (kalau n8n
+ * suatu saat menulis status baru) ditangkap terpisah supaya tetap masuk
+ * ringkasan seperti perilaku lama.
+ */
+const STATUS_VIDEO_DIKENAL = [
+  "MENUNGGU DOKSLI",
+  "SEDANG DIPROSES",
+  "SUDAH DIPROSES",
+  "GAGAL",
+  "SIAP DITINJAU",
+  "MENUNGGU ACC",
+  "DITOLAK PIMRED",
+] as const;
 
 /** Nama hari Bahasa Indonesia untuk sumbu grafik tren */
 const NAMA_HARI = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
@@ -62,6 +77,52 @@ function delta(sekarang: number, sebelum: number) {
   };
 }
 
+/**
+ * Hitungan video per status + video "hari ini" (kalender WIB), DIHITUNG DI
+ * DATABASE (count head, tanpa menarik baris). Dulu seluruh baris
+ * v_app_video_antrian ditarik tanpa limit lalu dihitung di JS — PostgREST
+ * memotong di 1.000 baris sehingga hitungan bisa salah, dan tiap pemuatan
+ * dashboard menarik semua baris. Kini dicache bersama 30 dtk (sama untuk
+ * semua pengguna; kunci memuat tanggal WIB supaya ganti hari langsung benar).
+ */
+async function hitungVideo(
+  db: ReturnType<typeof supabase>,
+  hariIniWib: string,
+): Promise<{ ringkasanVideo: Record<string, number>; videoHariIni: number }> {
+  return denganCache(`dashboard-video:${hariIniWib}`, 30, async () => {
+    // Batas "hari ini WIB": [00:00 WIB, 00:00 WIB berikutnya) — sama persis
+    // dengan membandingkan tanggal WIB dari jam_tanggal (timestamptz) di JS.
+    const awal = new Date(`${hariIniWib}T00:00:00+07:00`);
+    const akhir = new Date(awal.getTime() + 24 * 3600 * 1000);
+    const hitung = () => db.from("v_app_video_antrian").select("*", { count: "exact", head: true });
+    const daftarDikenal = `(${STATUS_VIDEO_DIKENAL.map((s) => `"${s}"`).join(",")})`;
+
+    const [perStatus, hariIni, lain] = await Promise.all([
+      Promise.all(
+        STATUS_VIDEO_DIKENAL.map(async (status) => {
+          const hasil = await hitung().eq("status", status);
+          pastikanSukses(hasil, `hitungan video ${status}`);
+          return { status, jumlah: hasil.count ?? 0 };
+        }),
+      ),
+      hitung().gte("jam_tanggal", awal.toISOString()).lt("jam_tanggal", akhir.toISOString()),
+      // Status di luar daftar (seharusnya kosong/sedikit) — baris dihitung di JS.
+      db.from("v_app_video_antrian").select("status").not("status", "in", daftarDikenal),
+    ]);
+    pastikanSukses(hariIni, "video hari ini");
+    const barisLain = pastikanSukses(lain, "status video lain") as { status: string }[];
+
+    const ringkasanVideo: Record<string, number> = {};
+    for (const p of perStatus) {
+      if (p.jumlah > 0) ringkasanVideo[p.status] = p.jumlah;
+    }
+    for (const v of barisLain) {
+      ringkasanVideo[v.status] = (ringkasanVideo[v.status] ?? 0) + 1;
+    }
+    return { ringkasanVideo, videoHariIni: hariIni.count ?? 0 };
+  });
+}
+
 export async function GET(request: Request) {
   return bungkus(async () => {
     // Data internal partai — wajib login (dulu endpoint ini terbuka).
@@ -78,9 +139,14 @@ export async function GET(request: Request) {
     // permintaan HTTP baru dikirim ketika .then() dipanggil. Menyimpannya ke
     // variabel saja TIDAK memulai apa pun. Masuk ke Promise.all (yang memanggil
     // .then pada tiap anggota) itulah yang membuat keempatnya jalan berbarengan.
+    // Video "hari ini" menurut kalender WIB
+    const hariIniWib = new Date(Date.now() + 7 * 3600 * 1000)
+      .toISOString()
+      .slice(0, 10);
+
     const [hasilPeriode, hasilVideo, hasilAkun, hasilNotif] = await Promise.all([
       db.from("v_app_periode").select("periode").limit(7),
-      db.from("v_app_video_antrian").select("status, jam_tanggal"),
+      hitungVideo(db, hariIniWib),
       db
         .from("v_app_akun_wajib")
         .select("akun_wajib")
@@ -140,25 +206,8 @@ export async function GET(request: Request) {
     const aktif = perPeriode.get(periodeAktif) ?? kosong;
     const sebelum = perPeriode.get(periodeSebelum) ?? kosong;
 
-    // --- Video (untuk KPI & kartu pipeline) — diambil di Promise.all atas ---
-    const video = pastikanSukses(hasilVideo, "antrian video") as Video[];
-
-    const ringkasanVideo: Record<string, number> = {};
-    for (const v of video) {
-      ringkasanVideo[v.status] = (ringkasanVideo[v.status] ?? 0) + 1;
-    }
-
-    // Video "hari ini" menurut kalender WIB
-    const hariIniWib = new Date(Date.now() + 7 * 3600 * 1000)
-      .toISOString()
-      .slice(0, 10);
-    const videoHariIni = video.filter(
-      (v) =>
-        v.jam_tanggal &&
-        new Date(new Date(v.jam_tanggal).getTime() + 7 * 3600 * 1000)
-          .toISOString()
-          .slice(0, 10) === hariIniWib,
-    ).length;
+    // --- Video (untuk KPI & kartu pipeline) — hitungan DB di Promise.all atas ---
+    const { ringkasanVideo, videoHariIni } = hasilVideo;
 
     // --- KPI (seluruhnya dari agregat database) ---
     const persenAktif = Number(aktif.persen_patuh) || 0;

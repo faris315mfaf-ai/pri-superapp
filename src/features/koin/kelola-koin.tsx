@@ -136,7 +136,7 @@ function DaftarAnggota({ onPilih }: { onPilih: (a: AnggotaKoin) => void }) {
                   {a.jabatan && <p className="truncate text-[10.5px] text-teks-sekunder">{a.jabatan}</p>}
                 </div>
                 <span className="flex shrink-0 items-center gap-1 text-[12.5px] font-extrabold text-teks-utama">
-                  <img src="/KMP.svg" alt="" aria-hidden="true" className="h-4 w-4" />
+                  <img src="/KMP-96-v1.webp" alt="" aria-hidden="true" className="h-4 w-4" />
                   <span className="angka-tab">{teksAngkaKoin(a.saldo ?? 0)}</span>
                 </span>
               </button>
@@ -254,7 +254,7 @@ function DetailAnggota({ anggota }: { anggota: AnggotaKoin }) {
   return (
     <>
       <div className="glass-soft mt-1 flex items-center gap-3 rounded-2xl p-3">
-        <img src="/KMP.svg" alt="" aria-hidden="true" className="h-8 w-8" />
+        <img src="/KMP-96-v1.webp" alt="" aria-hidden="true" className="h-8 w-8" />
         <div className="min-w-0 flex-1">
           <p className="text-[10.5px] text-teks-sekunder">Saldo koin</p>
           <p className="angka-tab font-heading text-[20px] leading-tight font-extrabold text-teks-utama">
@@ -337,7 +337,7 @@ function DetailAnggota({ anggota }: { anggota: AnggotaKoin }) {
                     aria-expanded={buka === kunci(v)}
                     className="btn-tekan flex shrink-0 items-center gap-1 rounded-lg bg-sky-500/15 px-2.5 py-1.5 text-[11px] font-bold text-sky-600 dark:text-sky-300"
                   >
-                    <img src="/KMP.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5" />
+                    <img src="/KMP-96-v1.webp" alt="" aria-hidden="true" className="h-3.5 w-3.5" />
                     Beri koin
                   </button>
                 )}

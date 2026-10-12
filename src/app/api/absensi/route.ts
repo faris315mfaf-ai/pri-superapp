@@ -20,6 +20,7 @@
 import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { bolehSekarang } from "@/lib/jeda-instans";
+import { denganCache } from "@/lib/cache-bersama";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { bolehDashboard } from "@/lib/dashboard-akses";
@@ -173,27 +174,43 @@ export async function GET(request: Request) {
       if (!mauSemua) q = q.eq("user_id", Number(user.id));
       return q;
     };
-    let { data, error } = await susun(KOLOM);
-    // sql/53 belum dijalankan → bentuk lama, supaya layar tetap hidup.
-    if (error?.code === "42703") ({ data, error } = await susun(KOLOM_LAMA));
-    if (error) {
-      console.error("[absensi] baca:", error.message);
-      throw new Error("Gagal memuat riwayat absensi.");
-    }
 
-    const daftar = await rapikan((data ?? []) as unknown as BarisAbsensi[]);
+    /**
+     * Pembacaan database: riwayat (+ signed URL foto) dan kehadiran hari ini.
+     * Untuk cabang HR "semua" (sampai 3.000 + 3.000 baris + createSignedUrls)
+     * hasilnya dicache bersama 15 dtk — isinya sama untuk semua pembaca HR
+     * (gerbang peran sudah dilewati di atas). TTL 15 dtk jauh di bawah umur
+     * signed URL (3600 dtk) dan hanya menambah sedikit di atas kekangan
+     * sinkron SADAR (60 dtk), jadi absen baru tetap terlihat dalam hitungan
+     * detik. Sinkron SADAR & `tidak_cocok` tetap dihitung per permintaan.
+     */
+    const bacaDb = async () => {
+      let { data, error } = await susun(KOLOM);
+      // sql/53 belum dijalankan → bentuk lama, supaya layar tetap hidup.
+      if (error?.code === "42703") ({ data, error } = await susun(KOLOM_LAMA));
+      if (error) {
+        console.error("[absensi] baca:", error.message);
+        throw new Error("Gagal memuat riwayat absensi.");
+      }
+      const daftar = await rapikan((data ?? []) as unknown as BarisAbsensi[]);
 
-    // Kehadiran hari ini menurut SADAR — juga yang SAKIT/IZIN tanpa jam
-    // masuk (tidak punya baris di `absensi`, tapi bukan alfa).
+      // Kehadiran hari ini menurut SADAR — juga yang SAKIT/IZIN tanpa jam
+      // masuk (tidak punya baris di `absensi`, tapi bukan alfa).
+      if (!adaTabel) return { daftar, hariIniSadar: null };
+      let qSadar = db
+        .from("absensi_sadar")
+        .select("user_id, hadir, status, tipe, verifikasi, jam_masuk, jam_pulang")
+        .eq("tanggal", hariIni)
+        .not("user_id", "is", null)
+        .limit(3000);
+      if (!mauSemua) qSadar = qSadar.eq("user_id", Number(user.id));
+      const { data: hariIniSadar } = await qSadar;
+      return { daftar, hariIniSadar };
+    };
+    const { daftar, hariIniSadar } = mauSemua
+      ? await denganCache(`absensi:semua:${awal}:${hariIni}:${adaTabel ? 1 : 0}`, 15, bacaDb)
+      : await bacaDb();
     if (!adaTabel) return jalurLangsung(user.id, mauSemua, hariIni, daftar);
-    let qSadar = db
-      .from("absensi_sadar")
-      .select("user_id, hadir, status, tipe, verifikasi, jam_masuk, jam_pulang")
-      .eq("tanggal", hariIni)
-      .not("user_id", "is", null)
-      .limit(3000);
-    if (!mauSemua) qSadar = qSadar.eq("user_id", Number(user.id));
-    const { data: hariIniSadar } = await qSadar;
     const kehadiran = (hariIniSadar ?? []).map((r) => ({
       user_id: String(r.user_id),
       jenis: jenisKehadiran({

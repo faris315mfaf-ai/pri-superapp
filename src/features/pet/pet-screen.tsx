@@ -464,7 +464,7 @@ export function PetScreen({
           {a.langka ? " · LANGKA" : ""}
         </p>
         <p className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
-          <img src="/KMP.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5" /> {harga}
+          <img src="/KMP-96-v1.webp" alt="" aria-hidden="true" className="h-3.5 w-3.5" /> {harga}
           {harga !== a.harga ? <span className="text-[9px] font-semibold text-teks-sekunder line-through">{a.harga}</span> : null}
         </p>
         {punya ? (
@@ -957,7 +957,7 @@ export function PetScreen({
                       </p>
                       <p className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
                         <img
-                          src="/KMP.svg"
+                          src="/KMP-96-v1.webp"
                           alt=""
                           aria-hidden="true"
                           className="h-3.5 w-3.5"
@@ -1036,7 +1036,7 @@ export function PetScreen({
                       </p>
                       <p className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
                         <img
-                          src="/KMP.svg"
+                          src="/KMP-96-v1.webp"
                           alt=""
                           aria-hidden="true"
                           className="h-3.5 w-3.5"
@@ -1139,7 +1139,7 @@ export function PetScreen({
                         <div className="mt-1.5 flex items-center justify-between gap-2">
                           <p className="flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
                             <img
-                              src="/KMP.svg"
+                              src="/KMP-96-v1.webp"
                               alt=""
                               aria-hidden="true"
                               className="h-3.5 w-3.5"
@@ -1237,7 +1237,7 @@ export function PetScreen({
                   {!st.warna_terbuka ? (
                     <span className="ml-auto flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
                       <img
-                        src="/KMP.svg"
+                        src="/KMP-96-v1.webp"
                         alt=""
                         aria-hidden="true"
                         className="h-3.5 w-3.5"
@@ -1403,7 +1403,7 @@ export function PetScreen({
                       </p>
                       <p className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
                         <img
-                          src="/KMP.svg"
+                          src="/KMP-96-v1.webp"
                           alt=""
                           aria-hidden="true"
                           className="h-3.5 w-3.5"
@@ -1682,7 +1682,7 @@ export function PetScreen({
                               className="btn-tekan mt-1 flex h-7 w-full items-center justify-center gap-1 rounded-lg text-[10.5px] font-bold text-white disabled:opacity-40"
                               style={{ background: MERAH }}
                             >
-                              <img src="/KMP.svg" alt="" aria-hidden="true" className="h-3 w-3" /> {harga}
+                              <img src="/KMP-96-v1.webp" alt="" aria-hidden="true" className="h-3 w-3" /> {harga}
                             </button>
                           )}
                         </div>
@@ -1720,7 +1720,7 @@ export function PetScreen({
                         <div className="mt-1 flex items-center justify-between gap-2">
                           <p className="flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
                             <img
-                              src="/KMP.svg"
+                              src="/KMP-96-v1.webp"
                               alt=""
                               aria-hidden="true"
                               className="h-3.5 w-3.5"
@@ -1790,7 +1790,7 @@ export function PetScreen({
                       </p>
                       <p className="mt-0.5 flex items-center gap-1 text-[11px] font-extrabold text-teks-utama">
                         <img
-                          src="/KMP.svg"
+                          src="/KMP-96-v1.webp"
                           alt=""
                           aria-hidden="true"
                           className="h-3.5 w-3.5"

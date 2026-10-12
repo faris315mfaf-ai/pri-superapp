@@ -35,6 +35,7 @@ import {
 } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
 import { toast, useAppStore } from "@/hooks/use-app-store";
+import { useIntervalAktif, useRefTabAktif } from "@/hooks/use-tab-aktif";
 import {
   cariPemainLudo,
   getLudoDaftar,
@@ -50,7 +51,7 @@ import { Dadu, PapanLudo } from "./papan-ludo";
 
 const MERAH = "linear-gradient(135deg, #DC2626, #B91C1C)";
 const POLL_MAIN_MS = 1500;
-const POLL_LOBI_MS = 5000;
+const POLL_LOBI_MS = 12000;
 
 function KartuPemain({
   p,
@@ -142,34 +143,55 @@ export function LudoScreen({ onKembali }: { onKembali: () => void }) {
       });
   }, []);
 
-  // Lobi: muat + polling pelan (undangan baru masuk).
+  // Lobi: muat sekali saat masuk lobi; polling pelan (undangan baru masuk)
+  // dijalankan useIntervalAktif — diam saat tab/halaman tersembunyi.
   useEffect(() => {
     if (ruang) return;
     void muatLobi();
-    const t = setInterval(() => void muatLobi(), POLL_LOBI_MS);
-    return () => clearInterval(t);
   }, [ruang, muatLobi]);
+  useIntervalAktif(() => void muatLobi(), POLL_LOBI_MS, !ruang);
 
-  // Ruang: polling cepat, hanya set state bila versi berubah.
+  // Ruang: polling cepat, hanya set state bila versi berubah. Satu permintaan
+  // dalam satu waktu (guard in-flight) supaya jaringan lambat tak menumpuk.
+  const pollRuangJalan = useRef(false);
+  const segarkanRuang = useCallback(() => {
+    const sekarang = ruangRef.current;
+    if (!sekarang || sekarang.status === "selesai") return;
+    if (pollRuangJalan.current) return;
+    pollRuangJalan.current = true;
+    const id = sekarang.id;
+    getLudoRuang(id)
+      .then((r) => {
+        // Abaikan balasan ruang lama bila pemain sudah pindah/keluar ruang.
+        if (ruangRef.current?.id !== id) return;
+        if (r.versi !== ruangRef.current?.versi) setRuang(r);
+      })
+      .catch(() => {
+        // jaringan sesaat — coba lagi di tik berikutnya
+      })
+      .finally(() => {
+        pollRuangJalan.current = false;
+      });
+  }, []);
+  useIntervalAktif(
+    segarkanRuang,
+    POLL_MAIN_MS,
+    !!ruang && ruang.status !== "selesai",
+  );
+
+  // Halaman browser kembali terlihat (tab browser/aplikasi dibuka lagi):
+  // segarkan segera, tanpa menunggu detak berikutnya.
+  const tabAktifRef = useRefTabAktif();
   useEffect(() => {
-    if (!ruang || ruang.status === "selesai") return;
-    const id = ruang.id;
-    let hidup = true;
-    const t = setInterval(() => {
-      getLudoRuang(id)
-        .then((r) => {
-          if (!hidup) return;
-          if (r.versi !== ruangRef.current?.versi) setRuang(r);
-        })
-        .catch(() => {
-          // jaringan sesaat — coba lagi di tik berikutnya
-        });
-    }, POLL_MAIN_MS);
-    return () => {
-      hidup = false;
-      clearInterval(t);
+    const saatTampil = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!tabAktifRef.current) return; // tab app lain di depan — nanti disegarkan saat dibuka
+      if (ruangRef.current) segarkanRuang();
+      else void muatLobi();
     };
-  }, [ruang?.id, ruang?.status]);
+    document.addEventListener("visibilitychange", saatTampil);
+    return () => document.removeEventListener("visibilitychange", saatTampil);
+  }, [segarkanRuang, muatLobi, tabAktifRef]);
 
   // Hitung mundur giliran.
   useEffect(() => {

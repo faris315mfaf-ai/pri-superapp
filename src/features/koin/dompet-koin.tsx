@@ -72,7 +72,7 @@ export function DompetKoinBeranda() {
         <span className="pointer-events-none absolute -bottom-14 left-1/3 h-32 w-32 rounded-full bg-white/5" aria-hidden="true" />
 
         <div className="relative flex items-center gap-2">
-          <img src="/KMP.svg" alt="" aria-hidden="true" className="h-6 w-6 drop-shadow" />
+          <img src="/KMP-96-v1.webp" alt="" aria-hidden="true" className="h-6 w-6 drop-shadow" />
           <p className="text-[12.5px] font-bold tracking-wide text-white/90">Dompet Koin</p>
           <button
             type="button"

@@ -33,8 +33,8 @@ export function KoinChip({ saldo, className }: { saldo: number; className?: stri
       title={`${saldo} koin`}
       aria-label={`Saldo ${saldo} koin`}
     >
-      {/* Ikon koin resmi dari public/KMP.svg (permintaan user) */}
-      <img src="/KMP.svg" alt="" aria-hidden="true" className="h-5 w-5" />
+      {/* Ikon koin resmi dari public/KMP-96-v1.webp, turunan 96 px dari public/KMP.svg (permintaan user) */}
+      <img src="/KMP-96-v1.webp" alt="" aria-hidden="true" className="h-5 w-5" />
       <span className="angka-tab text-sm font-extrabold text-teks-utama">
         {formatAngkaRingkas(saldo)}
       </span>

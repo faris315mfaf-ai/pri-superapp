@@ -109,7 +109,7 @@ export function ModalHadiahHarian({ tunda = false }: { tunda?: boolean }) {
                 {h.diklaim && !h.hari_ini ? (
                   <Check className="h-4 w-4 text-emerald-600" aria-hidden="true" />
                 ) : (
-                  <img src="/KMP.svg" alt="" aria-hidden="true" className={cn("h-5 w-5", h.hari === 7 && "drop-shadow-[0_0_4px_rgba(245,158,11,0.9)]")} />
+                  <img src="/KMP-96-v1.webp" alt="" aria-hidden="true" className={cn("h-5 w-5", h.hari === 7 && "drop-shadow-[0_0_4px_rgba(245,158,11,0.9)]")} />
                 )}
               </span>
               <span className="text-[10px] font-extrabold text-teks-utama">{h.koin}</span>

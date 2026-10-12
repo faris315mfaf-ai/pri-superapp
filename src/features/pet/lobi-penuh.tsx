@@ -19,6 +19,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Gamepad2, MessageCircle, Users, Wifi, WifiOff } from "lucide-react";
 import { toast } from "@/hooks/use-app-store";
+import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 import { getLobiKonfig, keluarLobi, kirimPosisiLobi, masukOtomatis, type KonfigLobi, type RobotLobi } from "@/services";
 import { bolehPet } from "@/lib/pet-akses";
 import type { BagianSparepart, SlotAksesoris } from "@/lib/pet";
@@ -147,6 +148,10 @@ export function LobiPenuh() {
   const lastKirim = useRef(0);
   const sambungan = useRef<SambunganLobi | null>(null);
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Satu detak cadangan polling (diisi mulaiPolling) — dipanggil lagi begitu
+  // halaman terlihat kembali; ref tab aktif dibaca oleh interval.
+  const tikPollRef = useRef<(() => Promise<void>) | null>(null);
+  const tabAktifRef = useRefTabAktif();
   const pesanSaya = useRef("");
   const skalaRef = useRef(1);
   const duniaRef = useRef({ lebar: 3200, tinggi: 2000 });
@@ -244,13 +249,17 @@ export function LobiPenuh() {
       clearInterval(pollTimer.current);
       pollTimer.current = null;
     }
+    tikPollRef.current = null;
   }, []);
 
   // ---- cadangan polling (selama realtime terputus) ----
   const mulaiPolling = useCallback(() => {
     if (pollTimer.current) return;
     setStatus("polling");
+    let berjalan = false; // guard in-flight: tak menumpuk saat jaringan lambat
     const tik = async () => {
+      if (berjalan) return;
+      berjalan = true;
       try {
         const d = await kirimPosisiLobi(Math.round(pos.current.x), Math.round(pos.current.y), pos.current.arah, pesanSaya.current);
         const hadir: Record<string, MetaRobot> = {};
@@ -271,11 +280,28 @@ export function LobiPenuh() {
         }
       } catch {
         // coba lagi pada detak berikutnya
+      } finally {
+        berjalan = false;
       }
     };
+    tikPollRef.current = tik;
     void tik();
-    pollTimer.current = setInterval(() => void tik(), POLL_MS);
-  }, [terapkanHadir, terimaPesan]);
+    // Diam saat halaman/tab tersembunyi (tak ada yang melihat robot bergerak).
+    pollTimer.current = setInterval(() => {
+      if (document.visibilityState !== "visible" || !tabAktifRef.current) return;
+      void tik();
+    }, POLL_MS);
+  }, [terapkanHadir, terimaPesan, tabAktifRef]);
+
+  // Halaman terlihat lagi → langsung susul posisi pemain lain (bila sedang polling).
+  useEffect(() => {
+    const saatTampil = () => {
+      if (document.visibilityState !== "visible" || !tabAktifRef.current) return;
+      if (tikPollRef.current) void tikPollRef.current();
+    };
+    document.addEventListener("visibilitychange", saatTampil);
+    return () => document.removeEventListener("visibilitychange", saatTampil);
+  }, [tabAktifRef]);
 
   // ---- sesi + konfigurasi + sambungan ----
   useEffect(() => {
