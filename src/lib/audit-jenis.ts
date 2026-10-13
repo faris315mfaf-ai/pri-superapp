@@ -25,6 +25,7 @@ export const JENIS_AUDIT = {
   template: { label: "Ubah template", kelompok: "video" },
   stok_tambah: { label: "Tambah ke Stok", kelompok: "video" },
   stok_hapus: { label: "Hapus dari Stok", kelompok: "video" },
+  bot_acc: { label: "Keputusan ACC bot", kelompok: "unggah" },
   unggah_sosmed: { label: "Unggah ke sosmed", kelompok: "unggah" },
   unggah_official: { label: "Unggah TV Rakyat Official", kelompok: "unggah" },
   siaran: { label: "Siaran Serentak", kelompok: "unggah" },

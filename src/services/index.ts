@@ -7335,3 +7335,37 @@ export async function kirimAksiOtakBot(aksi: AksiOtakBot): Promise<{ sukses: boo
   });
   return json as { sukses: boolean; kode?: string; pesan?: string };
 }
+
+// ---- ANTREAN ACC & POSTING BOT (13 Okt 2026) — hanya master ----
+import type { AksiAcc, StatusAcc } from "@/lib/bot-posting-murni";
+
+export async function getStatusAcc(): Promise<StatusAcc> {
+  const json = await fetchJson("/api/bot/acc", { headers: headerToken() });
+  return json as StatusAcc;
+}
+
+/** setuju = langsung memposting (bisa puluhan detik); galat server dilempar sebagai Error berpesan. */
+export async function kirimAksiAcc(aksi: AksiAcc): Promise<{ sukses: boolean; pesan: string }> {
+  const json = await fetchJson("/api/bot/acc", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(aksi),
+  });
+  return json as { sukses: boolean; pesan: string };
+}
+
+/** Video pratinjau sebagai URL blob (pemanggil wajib URL.revokeObjectURL). */
+export async function ambilVideoAcc(tugasId: number): Promise<string> {
+  const res = await fetch(`/api/bot/acc/video?tugas=${encodeURIComponent(String(tugasId))}`, { headers: headerToken(), cache: "no-store" });
+  if (!res.ok) {
+    let pesan = "Video tidak bisa dimuat.";
+    try {
+      const j = await res.json();
+      if (j?.error) pesan = String(j.error);
+    } catch {
+      /* biarkan pesan bawaan */
+    }
+    throw new Error(pesan);
+  }
+  return URL.createObjectURL(await res.blob());
+}

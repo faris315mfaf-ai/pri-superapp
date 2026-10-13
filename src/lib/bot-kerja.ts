@@ -387,6 +387,16 @@ async function sumberTugas(db: Db, tugas: BarisTugas): Promise<{ url: string; la
   return { url: String(v.link_doksli).trim(), label: labelSumber("TV Rakyat", String(v.sumber_video ?? "")) };
 }
 
+/** Sumber (url + kredit) sebuah tugas; dipakai Antrean ACC. null bila tak ditemukan atau skema belum siap. */
+export async function sumberUntukTugas(tugasId: number, kandidatId: number | null): Promise<{ url: string; label: string } | null> {
+  try {
+    return await sumberTugas(supabase(), { id: tugasId, kandidat_id: kandidatId } as unknown as BarisTugas);
+  } catch (e) {
+    if (!(e instanceof SkemaBelumSiap)) console.error("[bot/kerja] sumber tugas:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 /** Tugas aktif tanpa job: beri perintah buat_video lagi (dibatasi percobaan + dikunci sebentar). */
 async function ulangBuatVideo(db: Db, bot: BarisBot, tugas: BarisTugas, sekarangMs: number): Promise<PerintahRunner> {
   const gagalMasalahData = async (alasan: string): Promise<PerintahRunner> => {

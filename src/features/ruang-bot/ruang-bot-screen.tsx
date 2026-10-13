@@ -25,6 +25,7 @@ import { EmptyState, GlassSkeleton, ScreenHeader } from "@/components/pri-ui";
 import { KUOTA_BOT_MAKS, KUOTA_BOT_MIN, type AksiKendaliBot, type AksiSumberBot, type StatusBot } from "@/lib/bot-tipe";
 import { cn } from "@/lib/utils";
 import { AntreanAccView } from "./antrean-acc-view";
+import { AntreanAccNyata } from "./antrean-acc-nyata";
 import { BOT_CONTOH, ACC_AWAL, BLOKIR_AWAL, HASIL_AWAL, KUOTA_AWAL, MAKS_KUOTA_AWAL, SUMBER_AWAL } from "./data-contoh";
 import { DetailBotView } from "./detail-bot-view";
 import { RuangView } from "./ruang-view";
@@ -494,8 +495,11 @@ function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber }: RuangBotIsiP
 
       {tampilan === "acc" && (
         <div id="rb-panel-acc" role="tabpanel" aria-labelledby="rb-tab-acc">
-          {nyata && <SpandukContoh>Antrean di bawah belum berasal dari bot sungguhan; keputusan tidak dikirim ke server.</SpandukContoh>}
-          <AntreanAccView antrean={antrean} riwayat={riwayat} bots={bots} onKeputusan={keputusan} />
+          {nyata ? (
+            <AntreanAccNyata />
+          ) : (
+            <AntreanAccView antrean={antrean} riwayat={riwayat} bots={bots} onKeputusan={keputusan} />
+          )}
         </div>
       )}
 
