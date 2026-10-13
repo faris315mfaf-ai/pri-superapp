@@ -321,6 +321,7 @@ export default function Page() {
   const sakelar = useAppStore((s) => s.sakelar);
   const setSakelar = useAppStore((s) => s.setSakelar);
   const komenAktif = useModulAktif("kepatuhan_komen");
+  const ruangBotAktif = useModulAktif("ruangbot");
   const tema = useAppStore((s) => s.tema);
   const skalaFont = useAppStore((s) => s.skalaFont);
   const tvAnggota = useAppStore((s) => s.tvAnggota);
@@ -632,8 +633,9 @@ export default function Page() {
       dasar.sort((a, b) => URUTAN_TAB.indexOf(a) - URUTAN_TAB.indexOf(b));
     }
     // Pertahanan berlapis: tab Ruang Bot HANYA untuk master, apa pun sumbernya.
-    return bolehRuangBot(user) ? dasar : dasar.filter((k) => k !== "ruangbot");
-  }, [user, tvAnggota, aksesDashboard, bolehAsisten]);
+    // Sakelar modul global (Panel Master) bisa mematikan tab tanpa deploy.
+    return bolehRuangBot(user) && ruangBotAktif ? dasar : dasar.filter((k) => k !== "ruangbot");
+  }, [user, tvAnggota, aksesDashboard, bolehAsisten, ruangBotAktif]);
 
   // Kustomisasi footer (fitur 1.20/4): modul yang disembunyikan
   // pengguna dibuang — kecuali KONTEN (wajib, fitur 1.20/5) dan

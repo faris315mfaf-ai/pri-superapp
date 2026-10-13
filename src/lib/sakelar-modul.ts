@@ -20,6 +20,13 @@ export const DAFTAR_MODUL = [
     bawaan: false,
   },
   {
+    kunci: "ruangbot",
+    label: "Ruang Bot",
+    keterangan:
+      "Tab Ruang Bot (khusus master): kantor pantau bot redaksi. Mematikannya menyembunyikan tab dan membuat /api/bot/* menolak permintaan, tanpa deploy. Bot yang sudah berjalan di mesin tidak ikut berhenti — pakai Jeda Darurat untuk itu.",
+    bawaan: true,
+  },
+  {
     kunci: "ganti_akun_profil",
     label: "Ganti username & kata sandi di Profil",
     keterangan:

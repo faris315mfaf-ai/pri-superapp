@@ -7247,3 +7247,21 @@ export async function getRincianAudit(tanggal: string, userId: string): Promise<
   const json = await fetchJson(`/api/audit?${q.toString()}`, { headers: headerToken() });
   return json as RincianAudit;
 }
+
+// ---- RUANG BOT (13 Okt 2026) — hanya master; server menolak selain itu ----
+import type { AksiKendaliBot, StatusBot } from "@/lib/bot-tipe";
+
+/** Keadaan bot redaksi: bot, runner, umpan aktivitas. tabel_ada=false bila migrasi belum jalan. */
+export async function getStatusBot(): Promise<StatusBot> {
+  const json = await fetchJson("/api/bot/status", { headers: headerToken() });
+  return json as StatusBot;
+}
+
+/** Jeda global/per bot, mode ACC/otomatis, kuota harian. */
+export async function kirimKendaliBot(aksi: AksiKendaliBot): Promise<void> {
+  await fetchJson("/api/bot/kendali", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(aksi),
+  });
+}

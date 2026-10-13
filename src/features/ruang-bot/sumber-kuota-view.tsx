@@ -7,11 +7,14 @@
 // dan jeda darurat dimiliki cangkang layar (masuk lewat props + callback).
 // Yang lokal di sini hanya isian form, pesan galat, serta jam aktif dan
 // saklar "berhenti otomatis" yang belum tersambung ke server.
+// Mode NYATA (prop `nyata`): saklar jeda darurat dan stepper kuota bekerja
+// lewat API server (stepper berlaku untuk SEMUA bot); selebihnya masih contoh.
 // Sumber visual: docs/mockups/pri-ruang-bot.html (renderSumber).
 // ============================================================
 
 import { useState, type FormEvent } from "react";
 import { GlassCard } from "@/components/glass-card";
+import { KUOTA_BOT_MAKS, KUOTA_BOT_MIN } from "@/lib/bot-tipe";
 import { cn } from "@/lib/utils";
 import type { BotContoh, SumberContoh } from "./tipe";
 
@@ -27,10 +30,14 @@ export type SumberKuotaViewProps = {
   onJedaGlobal: (v: boolean) => void;
   /** Jumlah render bot yang sedang berjalan (tahap Edit). */
   renderBerjalan: number;
+  /** Mode data nyata: jeda darurat & kuota diteruskan ke server (kuota berlaku untuk semua bot). */
+  nyata?: boolean;
+  /** Kunci kontrol yang sedang memproses aksi ke server (lihat kunciAksi). */
+  sibuk?: ReadonlySet<string>;
 };
 
-const KUOTA_MIN = 1;
-const KUOTA_MAKS = 6;
+const KUOTA_MIN = KUOTA_BOT_MIN;
+const KUOTA_MAKS = KUOTA_BOT_MAKS;
 /** Slot render serentak milik semua anggota. */
 const SLOT_RENDER_MAKS = 10;
 /** Perkiraan slot yang dipakai anggota (contoh) di luar render bot. */
@@ -57,7 +64,19 @@ function Judul({ children, className }: { children: React.ReactNode; className?:
 }
 
 /** Saklar dengan area sentuh 44px; trek visualnya tetap ramping. */
-function Saklar({ aktif, onUbah, label, id }: { aktif: boolean; onUbah: (v: boolean) => void; label: string; id?: string }) {
+function Saklar({
+  aktif,
+  onUbah,
+  label,
+  id,
+  disabled = false,
+}: {
+  aktif: boolean;
+  onUbah: (v: boolean) => void;
+  label: string;
+  id?: string;
+  disabled?: boolean;
+}) {
   return (
     <button
       id={id}
@@ -65,8 +84,10 @@ function Saklar({ aktif, onUbah, label, id }: { aktif: boolean; onUbah: (v: bool
       role="switch"
       aria-checked={aktif}
       aria-label={label}
+      aria-busy={disabled}
+      disabled={disabled}
       onClick={() => onUbah(!aktif)}
-      className="group flex h-11 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full focus-visible:ring-2 focus-visible:ring-pri"
+      className="group flex h-11 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full focus-visible:ring-2 focus-visible:ring-pri disabled:cursor-wait disabled:opacity-50"
     >
       <span
         aria-hidden="true"
@@ -128,7 +149,11 @@ type Pesan = { jenis: "galat" | "ok"; teks: string } | null;
 // ------------------------------------------------------------
 
 export function SumberKuotaView(p: SumberKuotaViewProps) {
-  const { bots, sumber, onSumber, blokir, onBlokir, maksKuota, onMaksKuota, jedaGlobal, onJedaGlobal, renderBerjalan } = p;
+  const { bots, sumber, onSumber, blokir, onBlokir, maksKuota, onMaksKuota, jedaGlobal, onJedaGlobal, renderBerjalan, nyata = false, sibuk } = p;
+  const sibukJeda = !!sibuk?.has("jeda_global");
+  const sibukKuota = !!sibuk?.has("kuota");
+  // Mode nyata: bot bisa punya kuota berbeda-beda; stepper menyamakan semuanya.
+  const kuotaBeragam = nyata && bots.some((b) => b.kuotaHarian !== bots[0]?.kuotaHarian);
 
   // Pengaturan yang belum tersambung ke server (lokal, hilang saat layar ditutup).
   const [jamMulai, setJamMulai] = useState("08:00");
@@ -197,16 +222,28 @@ export function SumberKuotaView(p: SumberKuotaViewProps) {
       <div className="grid gap-3.5 lg:grid-cols-2">
         <GlassCard className="p-3.5">
           <Judul>Saklar &amp; batas harian</Judul>
+          {nyata && (
+            <p className="m-0 mb-1 text-[11px] text-teks-sekunder">
+              Jeda darurat dan kuota harian di bawah sudah nyata (tersimpan di server).
+            </p>
+          )}
           <Baris judul="Jeda darurat semua bot" ket="Semua bot berhenti dan kembali ke sofa.">
-            <Saklar id="saklar-jeda-darurat" aktif={jedaGlobal} onUbah={onJedaGlobal} label="Jeda darurat semua bot" />
+            <Saklar id="saklar-jeda-darurat" aktif={jedaGlobal} onUbah={onJedaGlobal} label="Jeda darurat semua bot" disabled={sibukJeda} />
           </Baris>
-          <Baris judul="Kuota post per bot per hari" ket="Bot berhenti saat kuota habis.">
+          <Baris
+            judul="Kuota post per bot per hari"
+            ket={
+              nyata
+                ? `Berlaku untuk semua bot. Bot berhenti saat kuota habis.${kuotaBeragam ? " Kuota tiap bot kini berbeda; mengubahnya menyamakan semuanya." : ""}`
+                : "Bot berhenti saat kuota habis."
+            }
+          >
             <div role="group" aria-label="Kuota post per bot per hari" className="inline-flex items-center overflow-hidden rounded-xl border border-glass-border">
               <button
                 id="kuota-kurang"
                 type="button"
                 aria-label="Kurangi kuota"
-                disabled={maksKuota <= KUOTA_MIN}
+                disabled={sibukKuota || maksKuota <= KUOTA_MIN}
                 onClick={() => onMaksKuota(Math.max(KUOTA_MIN, maksKuota - 1))}
                 className="h-11 w-11 text-lg font-bold text-teks-utama hover:bg-black/5 disabled:opacity-40 sm:h-9 sm:w-9 dark:hover:bg-white/10"
               >
@@ -219,7 +256,7 @@ export function SumberKuotaView(p: SumberKuotaViewProps) {
                 id="kuota-tambah"
                 type="button"
                 aria-label="Tambah kuota"
-                disabled={maksKuota >= KUOTA_MAKS}
+                disabled={sibukKuota || maksKuota >= KUOTA_MAKS}
                 onClick={() => onMaksKuota(Math.min(KUOTA_MAKS, maksKuota + 1))}
                 className="h-11 w-11 text-lg font-bold text-teks-utama hover:bg-black/5 disabled:opacity-40 sm:h-9 sm:w-9 dark:hover:bg-white/10"
               >
@@ -255,7 +292,7 @@ export function SumberKuotaView(p: SumberKuotaViewProps) {
             <Saklar id="saklar-berhenti-otomatis" aktif={berhentiOtomatis} onUbah={setBerhentiOtomatis} label="Berhenti otomatis bila gagal 3 kali berturut" />
           </Baris>
           <p className="m-0 mt-2 text-[11px] text-teks-sekunder">
-            Jam aktif dan berhenti otomatis belum tersimpan ke server (data contoh).
+            Jam aktif, mode awal, dan berhenti otomatis belum tersimpan ke server (data contoh).
           </p>
         </GlassCard>
 

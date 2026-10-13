@@ -7,6 +7,25 @@ bisa dikirim, diuji, dan dibatalkan sendiri. Rancangan umum ada di
 tampilan acuan: [`mockups/pri-ruang-bot.html`](mockups/pri-ruang-bot.html).
 **Dokumen ini tidak memuat kata sandi apa pun.**
 
+## 0. Status pekerjaan (13 Okt 2026, malam)
+
+**Pekerjaan 1 "Rumah & Ruang": kode selesai dan lolos uji; belum aktif di produksi** karena
+menunggu persetujuan migrasi dan akun.
+
+| Bagian | Status |
+|---|---|
+| Tab RUANG BOT di dock (hanya master), 4 tampilan | Selesai, **sudah di produksi** (data contoh) |
+| `DIVISI_BOT`, gerbang login akun bot di `buatSesi`, Kendali Akun BOT di TVR Saya | Selesai, **sudah di produksi** |
+| `sql/67_bot_redaksi.sql` | Ditulis, **belum dijalankan** |
+| `GET /api/bot/status`, `POST /api/bot/kendali`, `POST /api/bot/internal` (aksi `denyut`, HMAC) | Selesai |
+| Realtime `bot-ruang`, saklar modul `ruangbot` (bawaan nyala), audit `bot_*` | Selesai |
+| Layar memakai data nyata bila tabel ada dan ada bot; selain itu data contoh | Selesai |
+| `scripts/buat-akun-bot.mjs` (latihan dulu, sandi dari env, tidak di repo) | Ditulis, **belum dijalankan** |
+| Uji: `uji-ruang-bot` (30), `uji-bot-hmac` (17), `uji-bot-data` (26) | Lulus |
+
+Urutan mengaktifkan (butuh persetujuan pemilik): jalankan `sql/67` → push kode → atur
+`BOT_RUNNER_SECRET` di aplikasi → skrip akun (`--jalankan`) → verifikasi.
+
 ## 1. Keputusan pemilik yang berlaku
 
 | # | Keputusan |

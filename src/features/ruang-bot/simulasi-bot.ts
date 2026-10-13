@@ -109,7 +109,21 @@ export type OpsiSimulasi = {
   onLog?: (item: LogItem) => void;
   onPosting?: (botId: string, judul: string) => void;
   onStatus?: (peta: Record<string, StatusHidup>) => void;
+  /**
+   * Mode DIAM (data nyata): tanpa siklus tahap, tanpa posting palsu. Bot duduk
+   * di sofa (yang tak kebagian kursi menunggu di tengah ruangan) dengan teks
+   * "Menunggu tugas", dan jam mengikuti jam WIB sebenarnya.
+   */
+  diam?: boolean;
 };
+
+/** Detik sejak tengah malam menurut WIB (UTC+7) — jam nyata, bukan jam simulasi. */
+function detikWibNyata(): number {
+  const d = new Date(Date.now() + 7 * 3600_000);
+  return d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds();
+}
+
+const TEKS_DIAM = "Menunggu tugas";
 
 /** "HH:MM" dari detik sejak tengah malam. */
 export function formatJam(detik: number): string {
@@ -129,6 +143,7 @@ export class SimulasiBot {
 
   private readonly dalam: BotSim[];
   private readonly acak: () => number;
+  private readonly diam: boolean;
   private ambilModeFn: (botId: string) => ModeBot;
   /** Penghuni tiap kursi: id bot atau null. */
   private readonly penghuni: Record<TahapBot, (string | null)[]>;
@@ -143,6 +158,7 @@ export class SimulasiBot {
 
   constructor(bots: BotContoh[], opsi: OpsiSimulasi) {
     this.acak = opsi.acak ?? Math.random;
+    this.diam = !!opsi.diam;
     this.maks = Math.max(0, Math.floor(opsi.maksKuota));
     this.onLog = opsi.onLog;
     this.onPosting = opsi.onPosting;
@@ -184,6 +200,10 @@ export class SimulasiBot {
       };
     });
     this.bots = this.dalam;
+    if (this.diam) {
+      this.detikJam = detikWibNyata();
+      this.dalam.forEach((b, i) => this.letakkanDiam(b, i));
+    }
   }
 
   // ---------- baca ----------
@@ -217,6 +237,9 @@ export class SimulasiBot {
 
   /** Teks bubble yang layak ditampilkan (istirahat saat jeda/kuota habis = tanpa bubble). */
   teksTampil(b: BotHidup): string {
+    // Mode data nyata: bubble hanya untuk keadaan penting (Dijeda). "Menunggu tugas"
+    // sudah tampil di kartu bot; tiga bubble sama di ruangan hanya menumpuk.
+    if (this.diam) return b.teks === TEKS_DIAM ? "" : b.teks;
     if (b.keadaan === "bekerja" && b.tahap === "istirahat" && (this.jeda || b.habisKuota)) return "";
     return b.teks;
   }
@@ -232,6 +255,18 @@ export class SimulasiBot {
     this.onLog = h.onLog;
     this.onPosting = h.onPosting;
     this.onStatus = h.onStatus;
+  }
+
+  /** Mode diam: ubah teks status per bot (mis. "Dijeda" / "Menunggu tugas"). */
+  setTeksDiam(peta: Record<string, string>): void {
+    if (!this.diam) return;
+    for (const b of this.dalam) {
+      const teks = peta[b.id] ?? TEKS_DIAM;
+      if (b.teks !== teks) {
+        b.teks = teks;
+        this.kotorStatus = true;
+      }
+    }
   }
 
   setJeda(nilai: boolean): void {
@@ -279,6 +314,17 @@ export class SimulasiBot {
    */
   maju(dtDetik: number, dtNyata: number = dtDetik): void {
     if (!(dtDetik > 0)) return;
+    if (this.diam) {
+      // Tidak ada gerak/siklus: hanya jam WIB nyata + laporan status berkala.
+      this.detikJam = detikWibNyata();
+      this.sejakStatus += Math.max(0, dtNyata);
+      if (this.kotorStatus && this.sejakStatus >= SELANG_STATUS) {
+        this.sejakStatus = 0;
+        this.kotorStatus = false;
+        this.onStatus?.(this.statusHidup());
+      }
+      return;
+    }
     let sisa = dtDetik;
     while (sisa > 0) {
       const dt = Math.min(LANGKAH_MAKS, sisa);
@@ -296,6 +342,27 @@ export class SimulasiBot {
   }
 
   // ---------- internal ----------
+
+  /** Mode diam: dudukkan bot ke kursi sofa; yang tak kebagian menunggu di tengah ruangan. */
+  private letakkanDiam(b: BotSim, i: number): void {
+    const kursi = STASIUN.istirahat.kursi;
+    b.teks = TEKS_DIAM;
+    b.terakhirPesan = TEKS_DIAM;
+    if (i < kursi.length) {
+      b.x = kursi[i][0];
+      b.y = kursi[i][1];
+      b.tahap = "istirahat";
+      b.kursi = { tahap: "istirahat", idx: i };
+      this.penghuni.istirahat[i] = b.id;
+      this.set(b, "kerja");
+    } else {
+      const t = this.tempatAntre(i - kursi.length);
+      b.x = t[0];
+      b.y = t[1];
+      b.tahap = "istirahat";
+      this.set(b, "antre");
+    }
+  }
 
   private tempatAntre(i: number): [number, number] {
     const dasar = TEMPAT_ANTRE[i % TEMPAT_ANTRE.length];

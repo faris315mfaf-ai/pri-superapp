@@ -6,24 +6,31 @@
 // sengaja dibuat sama dengan yang nanti dikirim /api/bot/status.
 // ============================================================
 
+import type { GayaRambutDb, RupaBotDb } from "@/lib/bot-tipe";
+
 export type ModeBot = "acc" | "otomatis";
 
 /** Tahap kerja bot; urutannya = alur tugas (Pencarian → Edit → Posting → Istirahat). */
 export type TahapBot = "cari" | "edit" | "posting" | "istirahat";
 
-export type GayaRambut = "pendek" | "panjang" | "topi";
+export type GayaRambut = GayaRambutDb;
 
 /** Rupa karakter pixel-art (kepala, badan, lengan, tangan, mata). */
-export type RupaBot = {
-  kaus: string;
-  bayangan: string;
-  celana: string;
-  kulit: string;
-  rambut: string;
-  gayaRambut: GayaRambut;
-  warnaTopi?: string;
-  kacamata?: boolean;
-  berhud?: boolean;
+export type RupaBot = RupaBotDb;
+
+/** Data tambahan bot dari server (hanya ada pada mode data nyata). */
+export type DataNyataBot = {
+  /** bot_redaksi.id (angka) — dipakai untuk memanggil /api/bot/kendali. */
+  id: number;
+  /** app_user.id akun bot = id pengguna di mesin Auto Edit. */
+  userId: number;
+  username: string;
+  jeda: boolean;
+  aktif: boolean;
+  jamMulai: string;
+  jamSelesai: string;
+  gagalBeruntun: number;
+  akunTertaut: number;
 };
 
 export type BotContoh = {
@@ -40,6 +47,10 @@ export type BotContoh = {
   riwayat6Hari: number[];
   jadwalHariIni: string[];
   rataTayangan: string;
+  /** Terisi bila bot berasal dari server (mode nyata); kosong = data contoh. */
+  nyata?: DataNyataBot;
+  /** Kuota harian milik bot ini (mode nyata); kosong = pakai kuota bersama. */
+  kuotaHarian?: number;
 };
 
 /** Keadaan hidup satu bot di ruangan (dilaporkan komponen Ruang ke layar lain). */

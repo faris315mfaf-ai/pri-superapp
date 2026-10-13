@@ -40,6 +40,13 @@ export type RuangViewProps = {
   onBotSelesaiPosting: (botId: string, judul: string) => void;
   onLog: (item: LogItem) => void;
   onStatus: (s: Record<string, StatusHidup>) => void;
+  /**
+   * Mode data nyata: simulasi DIAM (bot menunggu tugas di sofa, tanpa siklus tahap
+   * dan tanpa posting palsu), tanpa kecepatan/"Hari baru", kuota per bot dari server.
+   */
+  nyata?: boolean;
+  /** Kunci kontrol yang sedang memproses aksi ke server (lihat kunciAksi). */
+  sibuk?: ReadonlySet<string>;
 };
 
 const KECEPATAN = [1, 3, 8] as const;
@@ -137,6 +144,8 @@ function KartuBot({
   maksKuota,
   terpilih,
   jeda,
+  nyata,
+  sibukMode,
   onPilih,
   onUbahMode,
   onBukaDetail,
@@ -147,21 +156,30 @@ function KartuBot({
   maksKuota: number;
   terpilih: boolean;
   jeda: boolean;
+  /** Mode data nyata: status = "Menunggu tugas" / "Dijeda" (tanpa tahap simulasi). */
+  nyata: boolean;
+  /** Perubahan mode bot ini sedang diproses server. */
+  sibukMode: boolean;
   onPilih: () => void;
   onUbahMode: (mode: ModeBot) => void;
   onBukaDetail: () => void;
 }) {
-  const bekerja = potret?.keadaan === "bekerja";
+  const bekerja = !nyata && potret?.keadaan === "bekerja";
   const warnaTahap = bekerja && potret ? WARNA_TAHAP[potret.tahap] : WARNA_NETRAL;
-  const labelTahap = !potret
-    ? "Menunggu"
-    : bekerja
-      ? jeda && potret.tahap === "istirahat"
-        ? "Dijeda"
-        : NAMA_TAHAP[potret.tahap]
-      : potret.keadaan === "berjalan"
-        ? "Berjalan"
-        : "Menunggu";
+  const dijedaNyata = jeda || !!bot.nyata?.jeda;
+  const labelTahap = nyata
+    ? dijedaNyata
+      ? "Dijeda"
+      : "Menunggu tugas"
+    : !potret
+      ? "Menunggu"
+      : bekerja
+        ? jeda && potret.tahap === "istirahat"
+          ? "Dijeda"
+          : NAMA_TAHAP[potret.tahap]
+        : potret.keadaan === "berjalan"
+          ? "Berjalan"
+          : "Menunggu";
   const persen = maksKuota > 0 ? Math.min(100, (kuota / maksKuota) * 100) : 100;
   const otomatis = bot.mode === "otomatis";
 
@@ -231,9 +249,11 @@ function KartuBot({
               role="switch"
               aria-checked={otomatis}
               aria-label={`Mode otomatis untuk ${bot.nama}`}
+              disabled={sibukMode}
+              aria-busy={sibukMode}
               onClick={() => onUbahMode(otomatis ? "acc" : "otomatis")}
               className={cn(
-                "pointer-events-auto relative z-10 shrink-0 rounded-full border px-2.5 text-[10.5px] font-bold focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emas max-md:min-h-11 md:py-0.5",
+                "pointer-events-auto relative z-10 shrink-0 rounded-full border px-2.5 text-[10.5px] font-bold focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emas disabled:opacity-50 max-md:min-h-11 md:py-0.5",
                 otomatis
                   ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                   : "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300",
@@ -255,7 +275,9 @@ export function RuangView(p: RuangViewProps) {
   const lebarWadah = useLebarWadah(wadahRef) ?? 0;
   const duaKolom = lebarWadah >= BATAS_DUA_KOLOM;
 
-  const [sim] = useState(() => new SimulasiBot(p.bots, { kuotaAwal: p.kuota, maksKuota: p.maksKuota }));
+  const nyata = !!p.nyata;
+  const sibuk = p.sibuk;
+  const [sim] = useState(() => new SimulasiBot(p.bots, { kuotaAwal: p.kuota, maksKuota: p.maksKuota, diam: nyata }));
 
   // Pembaca mode & callback laporan selalu mengikuti props terbaru
   // (simulasi tidak dibuat ulang).
@@ -273,6 +295,10 @@ export function RuangView(p: RuangViewProps) {
   useEffect(() => {
     sim.setJeda(p.jedaGlobal);
   }, [sim, p.jedaGlobal]);
+  // Mode diam: teks bubble mengikuti jeda (global / per bot); abaikan di mode contoh.
+  useEffect(() => {
+    sim.setTeksDiam(Object.fromEntries(bots.map((b) => [b.id, p.jedaGlobal || b.nyata?.jeda ? "Dijeda" : "Menunggu tugas"])));
+  }, [sim, bots, p.jedaGlobal]);
   useEffect(() => {
     sim.setMaksKuota(p.maksKuota);
   }, [sim, p.maksKuota]);
@@ -295,6 +321,8 @@ export function RuangView(p: RuangViewProps) {
   }, 500);
 
   const totalPost = p.bots.reduce((s, b) => s + (p.kuota[b.id] ?? 0), 0);
+  const totalMaks = p.bots.reduce((s, b) => s + (b.kuotaHarian ?? p.maksKuota), 0);
+  const botAktif = p.bots.filter((b) => b.nyata?.aktif !== false && !b.nyata?.jeda).length;
   const namaBot = (id: string) => p.bots.find((b) => b.id === id)?.nama ?? id;
   const warnaBot = (id: string) => p.bots.find((b) => b.id === id)?.warna ?? WARNA_NETRAL;
 
@@ -308,21 +336,27 @@ export function RuangView(p: RuangViewProps) {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <Segmen label="Waktu ruangan" pilihan={["siang", "malam"] as const} nilai={malam ? "malam" : "siang"} onPilih={(v) => setMalam(v === "malam")} format={(v) => (v === "siang" ? "Siang" : "Malam")} />
-        <Segmen label="Kecepatan simulasi" pilihan={KECEPATAN} nilai={kecepatan as (typeof KECEPATAN)[number]} onPilih={setKecepatan} format={(v) => `${v}×`} />
-        <button
-          type="button"
-          onClick={hariBaru}
-          className="glass btn-tekan rounded-xl px-3 text-[12.5px] font-bold text-teks-utama focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-pri max-md:min-h-11 md:h-9"
-        >
-          Hari baru
-        </button>
+        {!nyata && (
+          <>
+            <Segmen label="Kecepatan simulasi" pilihan={KECEPATAN} nilai={kecepatan as (typeof KECEPATAN)[number]} onPilih={setKecepatan} format={(v) => `${v}×`} />
+            <button
+              type="button"
+              onClick={hariBaru}
+              className="glass btn-tekan rounded-xl px-3 text-[12.5px] font-bold text-teks-utama focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-pri max-md:min-h-11 md:h-9"
+            >
+              Hari baru
+            </button>
+          </>
+        )}
         <span className="flex-1" />
         <button
           type="button"
           aria-pressed={p.jedaGlobal}
+          disabled={!!sibuk?.has("jeda_global")}
+          aria-busy={!!sibuk?.has("jeda_global")}
           onClick={() => p.onJedaGlobal(!p.jedaGlobal)}
           className={cn(
-            "btn-tekan rounded-xl border px-3 text-[12.5px] font-bold focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-gagal max-md:min-h-11 md:h-9",
+            "btn-tekan rounded-xl border px-3 text-[12.5px] font-bold focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-gagal disabled:opacity-50 max-md:min-h-11 md:h-9",
             p.jedaGlobal ? "border-gagal bg-gagal/15 text-gagal" : "glass border-gagal/50 text-gagal",
           )}
         >
@@ -346,14 +380,16 @@ export function RuangView(p: RuangViewProps) {
           >
             <div className="pointer-events-none absolute left-2.5 top-2.5 flex flex-wrap gap-1.5 font-mono text-[11px] font-semibold text-[#f4efe8]">
               <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">
-                {p.jedaGlobal ? "Semua bot dijeda" : `${p.bots.length} bot aktif`}
+                {p.jedaGlobal ? "Semua bot dijeda" : `${nyata ? botAktif : p.bots.length} bot aktif`}
               </span>
               <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">
-                Post hari ini {totalPost}/{p.maksKuota * p.bots.length}
+                Post hari ini {totalPost}/{nyata ? totalMaks : p.maksKuota * p.bots.length}
               </span>
-              <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">
-                Render: {potret.render} berjalan · {potret.antre} antre
-              </span>
+              {!nyata && (
+                <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">
+                  Render: {potret.render} berjalan · {potret.antre} antre
+                </span>
+              )}
               <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">{potret.jam} WIB</span>
             </div>
             {p.jedaGlobal && (
@@ -394,9 +430,11 @@ export function RuangView(p: RuangViewProps) {
                   bot={b}
                   potret={potret.bots[b.id]}
                   kuota={p.kuota[b.id] ?? 0}
-                  maksKuota={p.maksKuota}
+                  maksKuota={b.kuotaHarian ?? p.maksKuota}
                   terpilih={p.terpilihId === b.id}
                   jeda={p.jedaGlobal}
+                  nyata={nyata}
+                  sibukMode={!!sibuk?.has(`mode:${b.nyata?.id ?? b.id}`)}
                   onPilih={() => p.onPilih(p.terpilihId === b.id ? null : b.id)}
                   onUbahMode={(mode) => p.onUbahMode(b.id, mode)}
                   onBukaDetail={() => p.onBukaDetail(b.id)}
@@ -408,7 +446,9 @@ export function RuangView(p: RuangViewProps) {
           <GlassCard className="p-3.5">
             <Judul>Umpan aktivitas langsung</Judul>
             {p.log.length === 0 ? (
-              <p className="text-[12px] text-teks-sekunder">Belum ada aktivitas.</p>
+              <p className="text-[12px] text-teks-sekunder">
+                {nyata ? "Belum ada aktivitas dari runner." : "Belum ada aktivitas."}
+              </p>
             ) : (
               <ol aria-live="off" className="max-h-[230px] overflow-auto font-mono text-[11.5px] leading-snug">
                 {p.log.slice(0, MAKS_BARIS_LOG).map((l, i) => (
@@ -436,7 +476,11 @@ export function RuangView(p: RuangViewProps) {
           <GlassCard className="p-3.5">
             <Judul>Hasil hari ini</Judul>
             {p.hasil.length === 0 ? (
-              <p className="text-[12px] text-teks-sekunder">Belum ada hasil hari ini.</p>
+              <p className="text-[12px] text-teks-sekunder">
+                {nyata
+                  ? "Belum ada hasil hari ini. Runner belum mengerjakan tugas pada tahap ini, jadi belum ada video yang diproses atau tayang."
+                  : "Belum ada hasil hari ini."}
+              </p>
             ) : (
               <ul>
                 {p.hasil.map((h, i) => {
@@ -481,9 +525,20 @@ export function RuangView(p: RuangViewProps) {
       </div>
 
       <GlassCard className="p-3.5 text-[12.5px] leading-relaxed text-teks-sekunder">
-        <b className="text-teks-utama">Cara membaca.</b> Pencarian → Edit → Posting → Istirahat. Klik bot atau kartunya untuk
-        memilih; tombol mode (Otomatis / Perlu ACC) bisa diklik. Bila meja terisi, bot lain antre di tengah ruangan seperti
-        antrean render. Bot bermode ACC mengirim hasilnya ke tab Antrean ACC.
+        {nyata ? (
+          <>
+            <b className="text-teks-utama">Cara membaca.</b> Daftar bot, mode, kuota, jeda, dan umpan aktivitas di sini
+            data nyata dari server. Pada tahap ini runner belum mengerjakan tugas apa pun, jadi bot ditampilkan diam di
+            sofa dengan status &quot;Menunggu tugas&quot;. Klik bot atau kartunya untuk memilih; tombol mode (Otomatis /
+            Perlu ACC) dan jeda darurat langsung berlaku di server.
+          </>
+        ) : (
+          <>
+            <b className="text-teks-utama">Cara membaca.</b> Pencarian → Edit → Posting → Istirahat. Klik bot atau
+            kartunya untuk memilih; tombol mode (Otomatis / Perlu ACC) bisa diklik. Bila meja terisi, bot lain antre di
+            tengah ruangan seperti antrean render. Bot bermode ACC mengirim hasilnya ke tab Antrean ACC.
+          </>
+        )}
       </GlassCard>
     </div>
   );

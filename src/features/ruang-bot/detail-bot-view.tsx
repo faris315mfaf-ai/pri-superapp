@@ -8,8 +8,11 @@
 // props; tampilan ini hanya menggambar dan memanggil callback.
 // Sumber visual: docs/mockups/pri-ruang-bot.html (renderDetail).
 //
-// Angka yang masih CONTOH (belum dari server): rata-rata tayangan,
-// persentase disetujui Pimred, ID mesin, status koneksi.
+// Mode contoh: angka yang masih CONTOH (belum dari server): rata-rata
+// tayangan, persentase disetujui Pimred, ID mesin, status koneksi.
+// Mode NYATA (prop `nyata`): identitas, mode, jeda, kuota, jam aktif, akun
+// tertaut, dan log dari server; riwayat 7 hari, jadwal, tayangan, dan sumber
+// belum tersedia sehingga ditandai "belum ada data" (bukan angka palsu).
 // ============================================================
 
 import { useMemo } from "react";
@@ -39,6 +42,10 @@ export type DetailBotViewProps = {
   jamSimulasi: number;
   onUbahMode: (id: string, mode: ModeBot) => void;
   onJedaBot: (id: string, v: boolean) => void;
+  /** Mode data nyata dari server (bagian yang belum tersedia ditandai "belum ada data"). */
+  nyata?: boolean;
+  /** Kunci kontrol yang sedang memproses aksi ke server (lihat kunciAksi). */
+  sibuk?: ReadonlySet<string>;
 };
 
 const NAMA_HARI = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
@@ -54,8 +61,8 @@ function labelTujuhHari(hariIni: string): string[] {
 
 const SATU_TAHAP: TahapBot[] = ["cari", "edit", "posting"];
 
-const ATURAN_KESELAMATAN = (maks: number) => [
-  `Kuota ${maks} post per hari, jam aktif 08:00–20:00 WIB.`,
+const ATURAN_KESELAMATAN = (maks: number, jam: string) => [
+  `Kuota ${maks} post per hari, jam aktif ${jam} WIB.`,
   "Hanya mengambil dari daftar sumber di atas.",
   "Caption selalu memuat kredit sumber.",
   "Pagar dobel: video yang sama tidak diposting dua kali.",
@@ -123,6 +130,7 @@ function KolomKanban({
 export function DetailBotView(p: DetailBotViewProps) {
   const {
     bots, terpilihId, onPilihId, status, kuota, maksKuota, hasil, log, sumber, jedaBot, jamSimulasi, onUbahMode, onJedaBot,
+    nyata = false, sibuk,
   } = p;
 
   // Tanggal WIB hanya dihitung sekali per pemasangan (cukup untuk label hari).
@@ -139,24 +147,36 @@ export function DetailBotView(p: DetailBotViewProps) {
   const st = status[bot.id];
   const dijeda = !!jedaBot[bot.id];
   const postHariIni = kuota[bot.id] ?? 0;
+  // Kuota milik bot ini (nyata) atau kuota bersama (contoh).
+  const kuotaBot = bot.kuotaHarian ?? maksKuota;
   const data7 = [...bot.riwayat6Hari, postHariIni];
   const total7 = data7.reduce((a, c) => a + c, 0);
   const sumberBot = sumber.filter((s) => s.botId === bot.id);
+  const jamAktif = bot.nyata ? `${bot.nyata.jamMulai}–${bot.nyata.jamSelesai}` : "08:00–20:00";
+  const jamAktifAngka = (hhmm: string, bawaan: number) => {
+    const j = Number.parseInt(hhmm.slice(0, 2), 10);
+    const m = Number.parseInt(hhmm.slice(3, 5), 10);
+    return Number.isFinite(j) && Number.isFinite(m) ? j + m / 60 : bawaan;
+  };
+  const sibukMode = !!sibuk?.has(`mode:${bot.nyata?.id ?? bot.id}`);
+  const sibukJeda = !!sibuk?.has(`jeda:${bot.nyata?.id ?? bot.id}`);
   const hasilBot = hasil.filter((h) => h.botId === bot.id).slice(0, 2);
   const logBot = log.filter((l) => l.botId === bot.id).slice(0, 14);
 
   const labelStatus = dijeda
     ? "Dijeda"
-    : !st
-      ? "Menunggu"
-      : st.keadaan === "bekerja"
-        ? (st.tahap ? NAMA_TAHAP[st.tahap] : "Bekerja")
-        : st.keadaan === "berjalan"
-          ? "Berjalan"
-          : "Menunggu";
+    : nyata
+      ? "Menunggu tugas"
+      : !st
+        ? "Menunggu"
+        : st.keadaan === "bekerja"
+          ? (st.tahap ? NAMA_TAHAP[st.tahap] : "Bekerja")
+          : st.keadaan === "berjalan"
+            ? "Berjalan"
+            : "Menunggu";
 
   // Kartu "live" kanban: hanya bila bot sedang bekerja/berjalan di salah satu tahap.
-  const sedangAktif = !dijeda && (st?.keadaan === "bekerja" || st?.keadaan === "berjalan");
+  const sedangAktif = !nyata && !dijeda && (st?.keadaan === "bekerja" || st?.keadaan === "berjalan");
   const kartuKolom = (tahap: TahapBot): { teks: string; hidup?: boolean }[] =>
     sedangAktif && st?.tahap === tahap && st.judul ? [{ teks: st.judul, hidup: true }] : [];
 
@@ -205,17 +225,28 @@ export function DetailBotView(p: DetailBotViewProps) {
             <dd className="m-0 break-words text-teks-utama">
               {bot.handle} · {bot.platform}
             </dd>
-            <dt className="text-teks-sekunder">Koneksi</dt>
-            <dd className="m-0 text-teks-utama">
-              <span className="mr-1.5 inline-block rounded-full bg-sukses/15 px-2 py-0.5 text-[10.5px] font-bold text-emerald-700 dark:text-emerald-400">
-                Terhubung
-              </span>
-              token sehat
-            </dd>
+            {bot.nyata ? (
+              <>
+                <dt className="text-teks-sekunder">Akun tertaut</dt>
+                <dd className="m-0 text-teks-utama">
+                  <span className="angka-tab">{bot.nyata.akunTertaut}</span> akun di TVR Saya
+                </dd>
+              </>
+            ) : (
+              <>
+                <dt className="text-teks-sekunder">Koneksi</dt>
+                <dd className="m-0 text-teks-utama">
+                  <span className="mr-1.5 inline-block rounded-full bg-sukses/15 px-2 py-0.5 text-[10.5px] font-bold text-emerald-700 dark:text-emerald-400">
+                    Terhubung
+                  </span>
+                  token sehat
+                </dd>
+              </>
+            )}
             <dt className="text-teks-sekunder">Status</dt>
             <dd className="m-0 break-words text-teks-utama" aria-live="polite">
               {labelStatus}
-              {!dijeda && st?.teks ? ` · ${st.teks}` : ""}
+              {!nyata && !dijeda && st?.teks ? ` · ${st.teks}` : ""}
             </dd>
             <dt className="text-teks-sekunder">Mode</dt>
             <dd className="m-0">
@@ -228,9 +259,10 @@ export function DetailBotView(p: DetailBotViewProps) {
                       id={`mode-${bot.id}-${m}`}
                       type="button"
                       aria-pressed={pilih}
+                      disabled={sibukMode}
                       onClick={() => !pilih && onUbahMode(bot.id, m)}
                       className={cn(
-                        "min-h-11 px-3 text-xs font-bold transition-colors sm:min-h-9",
+                        "min-h-11 px-3 text-xs font-bold transition-colors disabled:opacity-50 sm:min-h-9",
                         pilih
                           ? m === "acc"
                             ? "bg-emas/20 text-amber-700 dark:text-amber-300"
@@ -245,15 +277,28 @@ export function DetailBotView(p: DetailBotViewProps) {
               </div>
             </dd>
             <dt className="text-teks-sekunder">ID mesin</dt>
-            <dd className="m-0 text-teks-sekunder">90000000{indeks + 2} (contoh)</dd>
+            <dd className="m-0 text-teks-sekunder">
+              {bot.nyata ? <span className="angka-tab text-teks-utama">{bot.nyata.userId}</span> : `90000000${indeks + 2} (contoh)`}
+            </dd>
+            {bot.nyata && (
+              <>
+                <dt className="text-teks-sekunder">Gagal beruntun</dt>
+                <dd className="m-0 text-teks-utama">
+                  <span className="angka-tab">{bot.nyata.gagalBeruntun}</span>
+                  {bot.nyata.gagalBeruntun >= 3 && <span className="ml-1.5 font-semibold text-red-600 dark:text-red-400">(berhenti otomatis)</span>}
+                </dd>
+              </>
+            )}
           </dl>
 
           <button
             id={`jeda-${bot.id}`}
             type="button"
+            disabled={sibukJeda}
+            aria-busy={sibukJeda}
             onClick={() => onJedaBot(bot.id, !dijeda)}
             className={cn(
-              "btn-tekan min-h-11 w-full rounded-xl border px-3 text-[13px] font-bold sm:min-h-10",
+              "btn-tekan min-h-11 w-full rounded-xl border px-3 text-[13px] font-bold disabled:opacity-50 sm:min-h-10",
               dijeda
                 ? "border-sukses/50 bg-sukses/10 text-emerald-700 dark:text-emerald-300"
                 : "border-gagal/50 text-red-600 hover:bg-gagal/10 dark:text-red-400",
@@ -266,31 +311,66 @@ export function DetailBotView(p: DetailBotViewProps) {
         <div className="min-w-0 space-y-3.5">
           {/* Ubin metrik */}
           <div>
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-              <Ubin nilai={`${postHariIni}/${maksKuota}`} label="Post hari ini" />
-              <Ubin nilai={String(total7)} label="Post 7 hari" />
-              <Ubin nilai={bot.rataTayangan} label="Rata-rata tayangan (contoh)" />
-              <Ubin nilai={bot.mode === "otomatis" ? "—" : "92%"} label="Disetujui Pimred (contoh)" />
-            </div>
-            <p className="mt-1.5 text-[11px] text-teks-sekunder">Data contoh: tayangan dan persentase disetujui belum dari server.</p>
+            {nyata ? (
+              <>
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                  <Ubin nilai={`${postHariIni}/${kuotaBot}`} label="Post hari ini" />
+                  <Ubin nilai="—" label="Post 7 hari (belum ada data)" />
+                  <Ubin nilai="—" label="Rata-rata tayangan (belum ada data)" />
+                  <Ubin nilai="—" label="Disetujui Pimred (belum ada data)" />
+                </div>
+                <p className="mt-1.5 text-[11px] text-teks-sekunder">
+                  Yang bertanda &quot;belum ada data&quot; baru terisi setelah runner mulai bekerja dan mencatat hasilnya.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                  <Ubin nilai={`${postHariIni}/${kuotaBot}`} label="Post hari ini" />
+                  <Ubin nilai={String(total7)} label="Post 7 hari" />
+                  <Ubin nilai={bot.rataTayangan} label="Rata-rata tayangan (contoh)" />
+                  <Ubin nilai={bot.mode === "otomatis" ? "—" : "92%"} label="Disetujui Pimred (contoh)" />
+                </div>
+                <p className="mt-1.5 text-[11px] text-teks-sekunder">Data contoh: tayangan dan persentase disetujui belum dari server.</p>
+              </>
+            )}
           </div>
 
           <div className="grid gap-3.5 lg:grid-cols-2">
             <GlassCard className="p-3.5">
               <Judul>Post 7 hari terakhir</Judul>
-              <GrafikBatang7Hari data={data7} hari={labelHari} warna={bot.warna} kuota={maksKuota} nama={bot.nama} />
+              {nyata ? (
+                <p className="m-0 py-6 text-center text-xs text-teks-sekunder">
+                  Belum ada data. Riwayat post harian akan tampil setelah runner mulai memposting.
+                </p>
+              ) : (
+                <GrafikBatang7Hari data={data7} hari={labelHari} warna={bot.warna} kuota={kuotaBot} nama={bot.nama} />
+              )}
             </GlassCard>
             <GlassCard className="p-3.5">
               <Judul>Jadwal posting hari ini</Judul>
-              <LiniMasaJadwal jadwal={bot.jadwalHariIni} warna={bot.warna} jamSekarang={jamSimulasi} nama={bot.nama} />
+              <LiniMasaJadwal
+                jadwal={bot.jadwalHariIni}
+                warna={bot.warna}
+                jamSekarang={jamSimulasi}
+                jamAktifMulai={bot.nyata ? jamAktifAngka(bot.nyata.jamMulai, 8) : undefined}
+                jamAktifSelesai={bot.nyata ? jamAktifAngka(bot.nyata.jamSelesai, 20) : undefined}
+                nama={bot.nama}
+              />
               <p className="mt-2 text-[11.5px] text-teks-sekunder">
-                Pita kuning = jam aktif 08:00–20:00. Garis merah = sekarang.
+                {nyata ? "Belum ada jadwal posting. " : ""}
+                Pita kuning = jam aktif {jamAktif}. Garis merah = sekarang.
               </p>
             </GlassCard>
           </div>
 
           <GlassCard className="p-3.5">
             <Judul>Alur tugas</Judul>
+            {nyata && (
+              <p className="m-0 mb-2 text-[11.5px] text-teks-sekunder">
+                Runner belum mengerjakan tugas apa pun pada tahap ini, jadi semua kolom kosong.
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               {SATU_TAHAP.map((t) => (
                 <KolomKanban key={t} judul={NAMA_TAHAP[t]} warna={WARNA_TAHAP[t]} kartu={kartuKolom(t)} />
@@ -306,7 +386,11 @@ export function DetailBotView(p: DetailBotViewProps) {
           <div className="grid gap-3.5 lg:grid-cols-2">
             <GlassCard className="p-3.5">
               <Judul>Sumber yang dipakai</Judul>
-              {sumberBot.length === 0 ? (
+              {nyata ? (
+                <p className="m-0 text-xs text-teks-sekunder">
+                  Belum ada data. Daftar sumber per bot tersambung pada pekerjaan berikutnya (lihat tab Sumber &amp; Kuota).
+                </p>
+              ) : sumberBot.length === 0 ? (
                 <p className="m-0 text-xs text-teks-sekunder">Belum ada sumber. Tambah di tab Sumber &amp; Kuota.</p>
               ) : (
                 <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
@@ -327,7 +411,7 @@ export function DetailBotView(p: DetailBotViewProps) {
 
               <Judul className="mt-4">Batas keselamatan</Judul>
               <ul className="m-0 grid list-none gap-1.5 p-0 text-[12.5px] text-teks-utama">
-                {ATURAN_KESELAMATAN(maksKuota).map((a) => (
+                {ATURAN_KESELAMATAN(kuotaBot, jamAktif).map((a) => (
                   <li key={a} className="flex gap-2">
                     <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-sm bg-sukses" />
                     {a}
@@ -339,7 +423,9 @@ export function DetailBotView(p: DetailBotViewProps) {
             <GlassCard className="p-3.5">
               <Judul>Aktivitas terakhir</Judul>
               {logBot.length === 0 ? (
-                <p className="m-0 text-xs text-teks-sekunder">Belum ada aktivitas.</p>
+                <p className="m-0 text-xs text-teks-sekunder">
+                  {nyata ? "Belum ada aktivitas dari runner untuk bot ini." : "Belum ada aktivitas."}
+                </p>
               ) : (
                 <ol className="m-0 max-h-[340px] list-none overflow-y-auto p-0 text-[12px] leading-snug">
                   {logBot.map((l, i) => (
