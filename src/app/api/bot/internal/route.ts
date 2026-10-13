@@ -9,6 +9,7 @@
 //   lapor       hasil panen / job / log dari runner (JawabanLapor)
 // Bentuk badan divalidasi ketat (lib/bot-kerja-murni): bentuk salah → 400.
 // Pesan galat ke runner ringkas; detail hanya di console server.
+import { after } from "next/server";
 import { bungkus } from "@/lib/api-helper";
 import { supabase } from "@/lib/supabase";
 import { cekBatas, pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
@@ -16,6 +17,7 @@ import { HEADER_BOT_NONCE, HEADER_BOT_TANDA, HEADER_BOT_WAKTU, JENDELA_BOT_DETIK
 import { RUNNER_ONLINE_DETIK, bacaJedaGlobal } from "@/lib/bot-data";
 import { siarkanBot } from "@/lib/bot-realtime";
 import { ambilKerja, prosesLaporan } from "@/lib/bot-kerja";
+import { tulisCaptionOtak } from "@/lib/bot-caption";
 import { menitWibDari, validasiPermintaanRunner } from "@/lib/bot-kerja-murni";
 import type { JawabanAmbilKerja, JawabanDenyut, JawabanLapor } from "@/lib/bot-protokol";
 
@@ -74,6 +76,12 @@ export async function POST(request: Request) {
     }
     if (permintaan.aksi === "lapor") {
       await prosesLaporan(permintaan.bot_id, permintaan.laporan);
+      // Video selesai dirender → caption dari otak bot sendiri (bila punya API key), di belakang layar:
+      // runner tidak menunggu panggilan LLM, dan kegagalannya tidak memengaruhi laporan.
+      if (permintaan.laporan.jenis === "job_selesai") {
+        const { bot_id: botId, laporan } = permintaan;
+        after(() => tulisCaptionOtak(botId, laporan.tugas_id));
+      }
       const jawaban: JawabanLapor = { sukses: true };
       return jawaban;
     }
