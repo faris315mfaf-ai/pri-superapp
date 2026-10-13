@@ -16,6 +16,7 @@ import {
   postingAktif,
   postingMacet,
   tandaPemeriksaan,
+  tandaSidik,
   validasiAksiAcc,
 } from "@/lib/bot-posting-murni";
 import { periksaJadwal } from "@/lib/jadwal-unggah";
@@ -99,6 +100,13 @@ cek("durasi pendek bad, panjang warn, null tak ada tanda durasi", tp({ durasiDet
 cek("akun belum tertaut / login ulang / tak bisa diperiksa", tp({ akunTertaut: false }).some((x) => x.jenis === "bad") && tp({ perluLoginUlang: true }).some((x) => x.jenis === "bad" && /login/.test(x.teks)) && tp({ akunTertaut: null }).some((x) => x.jenis === "warn"));
 cek("posting mati → warn", tp({ postingAktif: false }).some((x) => x.jenis === "warn" && /belum diaktifkan/.test(x.teks)));
 cek("platform tak dikenal & caption kepanjangan", tp({ platform: null }).some((x) => x.jenis === "bad") && tp({ platform: "twitter", caption: "x".repeat(300) + "\nSumber: a" }).some((x) => x.jenis === "bad" && /terlalu panjang/.test(x.teks)));
+
+console.log("\n[I] Tanda sidik visual");
+cek("tanpa informasi / menunggu → null", tandaSidik(null) === null && tandaSidik({ status: "menunggu", kembaran: null }) === null);
+cek("ok tanpa kembaran → hijau", tandaSidik({ status: "ok", kembaran: null })?.jenis === "ok");
+cek("kembaran 'sama' → merah, memuat persen", tandaSidik({ status: "ok", kembaran: { id: 7, skor: 0.93, putusan: "sama" } })?.jenis === "bad" && /93%/.test(tandaSidik({ status: "ok", kembaran: { id: 7, skor: 0.93, putusan: "sama" } })?.teks ?? ""));
+cek("kembaran 'mungkin' → kuning", tandaSidik({ status: "ok", kembaran: { id: 7, skor: 0.6, putusan: "mungkin" } })?.jenis === "warn");
+cek("gagal & tak informatif → kuning", tandaSidik({ status: "gagal", kembaran: null })?.jenis === "warn" && tandaSidik({ status: "tak_informatif", kembaran: null })?.jenis === "warn");
 
 console.log(`\n${lulus} lulus, ${gagal} gagal`);
 process.exit(gagal ? 1 : 0);

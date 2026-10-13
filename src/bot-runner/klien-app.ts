@@ -60,6 +60,10 @@ export function validasiPerintah(x: unknown): PerintahRunner | null {
         ...(hook !== undefined ? { hook } : {}),
       };
     }
+    case "periksa_sidik": {
+      if (!bulatPositif(x.kandidat_id) || !teks(x.url) || x.url === "" || x.url.length > 2048) return null;
+      return { perintah: "periksa_sidik", kandidat_id: x.kandidat_id, url: x.url };
+    }
     case "pantau_job": {
       if (!bulatPositif(x.tugas_id) || !bulatPositif(x.id_pengguna_mesin)) return null;
       const idJob = x.id_job_mesin === null || x.id_job_mesin === undefined ? null : teks(x.id_job_mesin) ? x.id_job_mesin : undefined;

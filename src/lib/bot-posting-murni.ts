@@ -130,6 +130,16 @@ export function tandaPemeriksaan(p: {
   return t;
 }
 
+/** Tanda sidik visual (3F-B) untuk kartu ACC; null = tidak ada informasi (tabel belum ada / belum diperiksa). */
+export function tandaSidik(r: { status: string; kembaran: { id: number; skor: number; putusan: "sama" | "mungkin" } | null } | null): TandaPemeriksaan | null {
+  if (r === null || r.status === "menunggu") return null;
+  if (r.status === "gagal") return { jenis: "warn", teks: "Sidik visual gagal diperiksa (kembaran tidak diketahui)" };
+  if (r.status === "tak_informatif") return { jenis: "warn", teks: "Sidik visual tak informatif (layar hitam/diam)" };
+  if (r.kembaran?.putusan === "sama") return { jenis: "bad", teks: `Rekaman SAMA dengan video yang sudah dipakai (#${r.kembaran.id}, ${Math.round(r.kembaran.skor * 100)}%)` };
+  if (r.kembaran) return { jenis: "warn", teks: `Mirip rekaman yang pernah dipakai (#${r.kembaran.id}, ${Math.round(r.kembaran.skor * 100)}%)` };
+  return { jenis: "ok", teks: "Sidik visual: tidak ada kembaran" };
+}
+
 // ---- Tipe API ----
 
 export type ItemAccApi = {

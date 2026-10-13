@@ -13,6 +13,8 @@ export type KonfigRunner = {
   soketMesin: string;
   /** Biner yt-dlp. */
   ytdlpBin: string;
+  /** Biner ffmpeg (sidik visual). */
+  ffmpegBin: string;
   /** Berkas cookies Netscape untuk yt-dlp (opsional). */
   cookiesFile: string | null;
   /** Selang denyut (ms). */
@@ -45,6 +47,7 @@ export function bacaKonfig(env: Record<string, string | undefined>): KonfigRunne
     rahasia,
     soketMesin: String(env.AUTOEDIT_SOCKET ?? "").trim() || "/run/autoedit/api.sock",
     ytdlpBin: String(env.YTDLP_BIN ?? "").trim() || "/usr/local/bin/yt-dlp",
+    ffmpegBin: String(env.FFMPEG_BIN ?? "").trim() || "ffmpeg",
     cookiesFile: cookies || null,
     selangDenyutMs: angka(env.BOT_DENYUT_MS, 15_000, 5_000, 60_000),
     jedaDiamMs: angka(env.BOT_JEDA_DIAM_MS, 15_000, 3_000, 120_000),

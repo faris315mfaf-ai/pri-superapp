@@ -128,6 +128,16 @@ cek("job_gagal pesan dipotong 1000", (() => {
 })());
 cek("job_gagal pesan > 4000 ditolak", !sah(lapor({ jenis: "job_gagal", tugas_id: 9, kode: "lainnya", pesan: "p".repeat(4001) })));
 
+const HASH = "0123456789abcdef";
+const sidikOk = Array.from({ length: 8 }, () => HASH);
+cek("sidik ok sah", sah(lapor({ jenis: "sidik", kandidat_id: 3, status: "ok", sidik: sidikOk })));
+cek("sidik tak_informatif sah", sah(lapor({ jenis: "sidik", kandidat_id: 3, status: "tak_informatif", sidik: sidikOk })));
+cek("sidik gagal sah tanpa sidik, dengan galat", sah(lapor({ jenis: "sidik", kandidat_id: 3, status: "gagal", sidik: null, galat: "dibatasi" })));
+cek("sidik ok TANPA sidik ditolak", !sah(lapor({ jenis: "sidik", kandidat_id: 3, status: "ok", sidik: null })) && !sah(lapor({ jenis: "sidik", kandidat_id: 3, status: "ok" })));
+cek("sidik terlalu pendek / hash buruk / terlalu banyak ditolak", !sah(lapor({ jenis: "sidik", kandidat_id: 3, status: "ok", sidik: sidikOk.slice(0, 5) })) && !sah(lapor({ jenis: "sidik", kandidat_id: 3, status: "ok", sidik: [...sidikOk, "zz"] })) && !sah(lapor({ jenis: "sidik", kandidat_id: 3, status: "ok", sidik: Array.from({ length: 30 }, () => HASH) })));
+cek("sidik status asing / kandidat_id buruk / galat bukan teks ditolak", !sah(lapor({ jenis: "sidik", kandidat_id: 3, status: "menunggu", sidik: sidikOk })) && !sah(lapor({ jenis: "sidik", kandidat_id: "3", status: "ok", sidik: sidikOk })) && !sah(lapor({ jenis: "sidik", kandidat_id: 3, status: "gagal", sidik: null, galat: 5 })));
+cek("sidik galat dipotong 500", (() => { const h = validasiPermintaanRunner(lapor({ jenis: "sidik", kandidat_id: 3, status: "gagal", sidik: null, galat: "g".repeat(900) })); return h.ok && h.permintaan.aksi === "lapor" && h.permintaan.laporan.jenis === "sidik" && (h.permintaan.laporan.galat ?? "").length === 500; })());
+
 for (const t of ["cari", "edit", "posting", "istirahat"]) cek(`log tahap ${t} sah`, sah(lapor({ jenis: "log", tahap: t, teks: "halo" })));
 cek("log tahap tak dikenal (mis. 'gagal','unduh') ditolak", !sah(lapor({ jenis: "log", tahap: "gagal", teks: "x" })) && !sah(lapor({ jenis: "log", tahap: "unduh", teks: "x" })));
 cek("log teks kosong/spasi/bukan teks ditolak", !sah(lapor({ jenis: "log", tahap: "cari", teks: "" })) && !sah(lapor({ jenis: "log", tahap: "cari", teks: "   " })) && !sah(lapor({ jenis: "log", tahap: "cari", teks: 1 })));

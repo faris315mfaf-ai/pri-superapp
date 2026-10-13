@@ -11,7 +11,7 @@ unggahan memakai rekaman yang sama. Tidak memuat rahasia.
 |---|---|
 | A. Kredit dari takarir (aturan teks) | **Selesai, teruji (35 uji).** `src/lib/bot-asal.ts`, kolom `sql/71_bot_asal.sql`, dipakai saat panen, saat memilih kandidat, dan di Antrean ACC |
 | A+. Ekstraksi kredit dengan LLM untuk takarir tak berpola | Belum. Titik sambungnya `tanyaOtakBot` (otak bot) |
-| B. Sidik visual (bingkai, Hamming, cermin) | Belum. Butuh perintah runner `periksa_asal` + himpunan uji berlabel dari Anda |
+| B. Sidik visual (bingkai, Hamming, cermin) | **Kode selesai, teruji (28 + 44 uji sintetis); ambang BELUM dikalibrasi dengan video sungguhan.** Runner `src/bot-runner/sidik.ts` + `sidik-murni.ts`, perintah `periksa_sidik`, laporan `sidik`, tabel `sql/72_bot_sidik.sql` |
 | C. Akun → video, pencarian YouTube, pilih versi terbaik | Belum |
 | D. Pencarian balik berbayar | Belum (opsional) |
 
@@ -25,6 +25,20 @@ Yang dilakukan tahap A sekarang:
 - **Kredit masuk caption:** caption bawaan menulis "Sumber: @asal (TikTok) via NTV" bila asalnya diketahui.
 - **Antrean ACC** menampilkan tanda asal (hijau: tercatat; kuning: tanpa kredit, generik, milik penerbit).
   Tanda kuning tidak memblokir persetujuan; keputusan tetap di tangan master.
+
+**Tahap B — cara kerjanya.** Sebelum mengklaim kandidat, aplikasi menyuruh runner menghitung sidiknya: unduh
+pratinjau ≈22 detik pertama berkualitas terendah, ambil 1 bingkai/detik (70% tengah, diperkecil 9×8 abu-abu),
+hitung dHash 64-bit per bingkai, hapus pratinjau. Aplikasi membandingkan sidik itu dengan semua kandidat yang
+**sudah diklaim bot** (jarak Hamming ≤10 per bingkai, boleh bergeser ±8 detik, juga versi cermin). Skor ≥0,8 =
+"sama" → kandidat dilewati (`sidik_sama`); 0,5–0,8 = "mungkin" → hanya tanda kuning di Antrean ACC. Layar hitam/diam
+dinyatakan tak informatif dan tidak pernah dianggap sama. Jatah 12 pemeriksaan per bot per hari; satu pemeriksaan
+per kandidat (kunci utama tabel); perintah yang tak dilaporkan runner dalam 5 menit dianggap gagal dan bot
+melanjutkan tanpa sidik (gagal-terbuka: sidik pelengkap, bukan pagar utama).
+
+Yang BELUM diketahui: ambang 10/64 dan 0,8 adalah tebakan konservatif dari bingkai sintetis. Bingkai video nyata
+berkorelasi (studio berita dengan latar yang sama bisa tampak mirip), jadi kalibrasi dengan ±30 pasangan video
+berlabel (sama/beda) mutlak sebelum sidik dijadikan pagar yang dipercaya. Sampai itu, perlakukan tanda merah sebagai
+petunjuk dan periksa pratinjaunya.
 
 Batas yang jujur: ini petunjuk dari tulisan orang. Takarir tanpa kredit tidak berarti kontennya orisinal, dan kredit
 bisa salah. Video yang dipakai sebagai bahan tetap video yang ditemukan di akun sumber (bukan unggahan asli di

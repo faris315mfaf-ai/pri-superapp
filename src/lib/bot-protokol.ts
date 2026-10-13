@@ -44,7 +44,9 @@ export type LaporanRunner =
   | { jenis: "job_dibuat"; tugas_id: number; id_job_mesin: string; hook: string }
   | { jenis: "job_selesai"; tugas_id: number; id_stok_mesin: string; durasi_detik: number | null; ukuran_byte: number | null }
   | { jenis: "job_gagal"; tugas_id: number; kode: KodeGagal; pesan: string }
-  | { jenis: "log"; tahap: TahapBotDb; teks: string };
+  | { jenis: "log"; tahap: TahapBotDb; teks: string }
+  /** Hasil perintah `periksa_sidik` (3F-B): sidik visual (hash bingkai) video kandidat, atau galat. */
+  | { jenis: "sidik"; kandidat_id: number; status: "ok" | "tak_informatif" | "gagal"; sidik: string[] | null; galat?: string };
 
 export type PermintaanRunner =
   | { aksi: "denyut"; versi?: string }
@@ -75,6 +77,11 @@ export type PerintahRunner =
        */
       hook?: string;
     }
+  /**
+   * Hitung SIDIK VISUAL video kandidat (unduh pratinjau ringan + ffmpeg, 3F-B) lalu lapor `sidik`.
+   * Dikeluarkan sebelum kandidat diklaim; tidak membuat tugas.
+   */
+  | { perintah: "periksa_sidik"; kandidat_id: number; url: string }
   /** Pantau job sampai selesai/gagal; lapor `job_selesai` atau `job_gagal`. */
   | { perintah: "pantau_job"; tugas_id: number; id_job_mesin: string | null; hook: string | null; id_pengguna_mesin: number };
 

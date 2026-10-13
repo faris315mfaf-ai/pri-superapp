@@ -17,6 +17,7 @@ import { GalatApp, GalatMesin, kodeGagalDariHttp, pesanGalat } from "./galat";
 import type { KlienApp } from "./klien-app";
 import { deteksiJobBaru, nilaiJob, siapkanHook, type KeadaanMesin, type KlienMesin } from "./klien-mesin";
 import { bentukLaporanKandidat, type HasilPanen } from "./pemanen";
+import type { HasilSidik } from "./sidik";
 
 /** Batas yang sama dengan BATAS_PROTOKOL di lib/bot-protokol.ts (disalin: tanpa impor nilai). */
 const MAKS_SUMBER_PER_PANEN = 10;
@@ -48,6 +49,8 @@ export type DepGiliran = {
   app: KlienApp;
   mesin: KlienMesin;
   pemanen: { panen(s: SumberPanen): Promise<HasilPanen> };
+  /** Penyidik sidik visual (3F-B). Tanpa ini perintah periksa_sidik dilaporkan gagal (aplikasi lanjut tanpa sidik). */
+  penyidik?: { periksa(url: string): Promise<HasilSidik> };
   /** Tidur; boleh selesai lebih awal saat runner dihentikan. */
   tidur(ms: number): Promise<void>;
   sekarang(): number;
@@ -111,6 +114,30 @@ async function lakukanPanen(botId: number, sumber: SumberPanen[], dep: DepGilira
     // Jeda sopan antar-permintaan bila yt-dlp benar-benar dijalankan.
     if (menjalankan && i < daftar.length - 1) await dep.tidur(p.jedaAntarSumberMs);
   }
+}
+
+// ---- Perintah: periksa_sidik (3F-B) ----
+
+async function lakukanSidik(
+  botId: number,
+  perintah: Extract<PerintahRunner, { perintah: "periksa_sidik" }>,
+  dep: DepGiliran,
+): Promise<void> {
+  const { kandidat_id: kandidatId } = perintah;
+  let hasil: HasilSidik;
+  try {
+    hasil = dep.penyidik ? await dep.penyidik.periksa(perintah.url) : { jenis: "gagal", sidik: null, galat: "penyidik tidak tersedia di runner" };
+  } catch (e) {
+    hasil = { jenis: "gagal", sidik: null, galat: pesanGalat(e, 160) };
+  }
+  if ((hasil.jenis === "ok" || hasil.jenis === "tak_informatif") && hasil.sidik) {
+    dep.log(`bot ${botId}: sidik kandidat ${kandidatId} ${hasil.jenis}`);
+    await laporAman(dep, botId, { jenis: "sidik", kandidat_id: kandidatId, status: hasil.jenis, sidik: hasil.sidik });
+    return;
+  }
+  const alasan = `${hasil.jenis}${hasil.galat ? `: ${hasil.galat}` : ""}`.slice(0, 400);
+  dep.log(`bot ${botId}: sidik kandidat ${kandidatId} gagal (${alasan.slice(0, 100)})`);
+  await laporAman(dep, botId, { jenis: "sidik", kandidat_id: kandidatId, status: "gagal", sidik: null, galat: alasan });
 }
 
 // ---- Perintah: buat_video ----
@@ -272,6 +299,9 @@ export async function jalankanPerintah(botId: number, perintah: PerintahRunner, 
       return "diam";
     case "panen":
       await lakukanPanen(botId, perintah.sumber, dep, ker);
+      return "kerja";
+    case "periksa_sidik":
+      await lakukanSidik(botId, perintah, dep);
       return "kerja";
     case "buat_video":
       await lakukanBuatVideo(botId, perintah, dep);

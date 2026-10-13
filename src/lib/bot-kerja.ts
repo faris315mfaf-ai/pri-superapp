@@ -41,6 +41,7 @@ import type { PermintaanWajib } from "@/lib/bot-kerja-murni";
 import { siarkanBot } from "@/lib/bot-realtime";
 import { hookDariOtakBot } from "@/lib/bot-otak";
 import { analisaAsal, kolomAsal } from "@/lib/bot-asal";
+import { cariKembaran, putusanSidik, type KembaranTerbaik } from "@/bot-runner/sidik-murni";
 import type { TahapBotDb } from "@/lib/bot-tipe";
 
 type Db = SupabaseClient;
@@ -214,6 +215,82 @@ async function periksaTabrakanManusia(db: Db, kunci: KunciKanonik): Promise<Hasi
     }
   }
   return adaTabrakan(urls, kunci.kunci) ? "dipakai" : "bersih";
+}
+
+// ---- Sidik visual (3F-B) ----
+
+const SIDIK = {
+  /** Pemeriksaan sidik per bot per hari (menjaga beban unduh/ffmpeg di VPS mesin). */
+  MAKS_PER_HARI: 12,
+  /** Perintah yang tak dilaporkan runner dianggap gagal setelah sekian menit. */
+  MENUNGGU_BASI_MENIT: 5,
+  /** Kandidat terklaim yang dibandingkan per pemeriksaan. */
+  MAKS_PEMBANDING: 400,
+} as const;
+
+type BarisSidik = { kandidat_id: number; bot_id: number | null; status: string; sidik: string[] | null; dibuat_pada: string };
+
+/** null = belum ada baris; "skema" = tabel bot_sidik belum dimigrasi (pemeriksaan sidik dilewati). */
+async function bacaSidik(db: Db, kandidatId: number): Promise<BarisSidik | null | "skema"> {
+  const { data, error } = await db.from("bot_sidik").select("kandidat_id, bot_id, status, sidik, dibuat_pada").eq("kandidat_id", kandidatId).maybeSingle();
+  if (error) {
+    if (skemaBelumSiap(error)) return "skema";
+    console.error("[bot/kerja] baca sidik:", error.message);
+    return "skema";
+  }
+  return (data ?? null) as unknown as BarisSidik | null;
+}
+
+async function anggaranSidikAda(db: Db, botId: number, sekarangMs: number): Promise<boolean> {
+  const { count, error } = await db
+    .from("bot_sidik")
+    .select("kandidat_id", { count: "exact", head: true })
+    .eq("bot_id", botId)
+    .gte("dibuat_pada", awalHariWibIso(new Date(sekarangMs)));
+  if (error) return false;
+  return (count ?? 0) < SIDIK.MAKS_PER_HARI;
+}
+
+/** Kembaran visual terbaik di antara kandidat yang SUDAH DIKLAIM bot (selain dirinya); "gagal" bila basis data bermasalah. */
+async function kembaranDipakai(db: Db, kandidatId: number, sidik: string[]): Promise<KembaranTerbaik<number> | null | "gagal"> {
+  const { data: terklaim, error } = await db
+    .from("bot_kandidat")
+    .select("id")
+    .not("diklaim_oleh", "is", null)
+    .neq("id", kandidatId)
+    .order("diklaim_pada", { ascending: false })
+    .limit(SIDIK.MAKS_PEMBANDING);
+  if (error) {
+    console.error("[bot/kerja] cek kembaran:", error.message);
+    return "gagal";
+  }
+  const ids = ((terklaim ?? []) as { id: number }[]).map((r) => Number(r.id));
+  if (ids.length === 0) return null;
+  const { data: baris, error: e2 } = await db.from("bot_sidik").select("kandidat_id, sidik").in("kandidat_id", ids).eq("status", "ok");
+  if (e2) {
+    console.error("[bot/kerja] cek kembaran (sidik):", e2.message);
+    return "gagal";
+  }
+  const kumpulan = ((baris ?? []) as { kandidat_id: number; sidik: string[] | null }[])
+    .filter((r) => Array.isArray(r.sidik))
+    .map((r) => ({ id: Number(r.kandidat_id), sidik: r.sidik as string[] }));
+  return cariKembaran(sidik, kumpulan);
+}
+
+/** Ringkasan sidik sebuah kandidat untuk Antrean ACC: ada/tidak, dan kembaran terdekat (bila ≥ "mungkin"). */
+export async function ringkasSidikKandidat(kandidatId: number): Promise<{ status: string; kembaran: { id: number; skor: number; putusan: "sama" | "mungkin" } | null } | null> {
+  try {
+    const db = supabase();
+    const baris = await bacaSidik(db, kandidatId);
+    if (baris === "skema" || baris === null) return null;
+    if (baris.status !== "ok" || !baris.sidik) return { status: baris.status, kembaran: null };
+    const k = await kembaranDipakai(db, kandidatId, baris.sidik);
+    if (k === "gagal" || k === null || k.putusan === "beda") return { status: "ok", kembaran: null };
+    return { status: "ok", kembaran: { id: k.id, skor: k.hasil.skor, putusan: k.putusan } };
+  } catch (e) {
+    console.error("[bot/kerja] ringkas sidik:", e instanceof Error ? e.message : e);
+    return null;
+  }
 }
 
 /**
@@ -643,6 +720,36 @@ async function mulaiDariKandidat(db: Db, bot: BarisBot, sekarangMs: number): Pro
       await catatLog(db, bot.id, null, "cari", `Video dilewati: kreditnya menunjuk akun sumber sendiri (${potongTeks(asal.kutipan, 80)}).`);
       continue;
     }
+    // Sidik visual (3F-B): rekaman yang sama dengan video yang sudah dipakai dilewati walau URL/akunnya beda.
+    const sidik = await bacaSidik(db, k.id);
+    if (sidik !== "skema") {
+      if (sidik === null) {
+        if (await anggaranSidikAda(db, bot.id, sekarangMs)) {
+          // Pesan dulu (PK = satu pemeriksaan per kandidat); yang kalah balapan menunggu hasilnya.
+          const { data: dipesan, error: ePesan } = await db
+            .from("bot_sidik")
+            .upsert({ kandidat_id: k.id, bot_id: bot.id, status: "menunggu", dibuat_pada: iso(sekarangMs) }, { onConflict: "kandidat_id", ignoreDuplicates: true })
+            .select("kandidat_id");
+          periksa(ePesan, "memesan pemeriksaan sidik");
+          if ((dipesan ?? []).length === 0) return diam("sidik_berjalan");
+          return { perintah: "periksa_sidik", kandidat_id: Number(k.id), url: k.url };
+        }
+        // Jatah pemeriksaan hari ini habis: lanjut tanpa sidik (asal/kredit tetap dicek).
+      } else if (sidik.status === "menunggu") {
+        const dibuatMs = Date.parse(sidik.dibuat_pada);
+        if (Number.isFinite(dibuatMs) && sekarangMs - dibuatMs < SIDIK.MENUNGGU_BASI_MENIT * 60_000) return diam("sidik_berjalan");
+        // Runner tak pernah melapor: anggap gagal, jangan menahan bot selamanya.
+        await db.from("bot_sidik").update({ status: "gagal", galat: "tidak ada laporan dari runner", diperiksa_pada: iso(sekarangMs) }).eq("kandidat_id", k.id).eq("status", "menunggu");
+      } else if (sidik.status === "ok" && sidik.sidik) {
+        const kembaran = await kembaranDipakai(db, k.id, sidik.sidik);
+        if (kembaran === "gagal") return diam("cek_tabrakan_gagal");
+        if (kembaran && kembaran.putusan === "sama") {
+          await tandai("sidik_sama");
+          await catatLog(db, bot.id, null, "cari", `Video dilewati: rekamannya sama dengan video yang sudah dipakai (kandidat #${kembaran.id}, skor ${kembaran.hasil.skor.toFixed(2)}).`);
+          continue;
+        }
+      }
+    }
     if (asal.kunci) {
       const dipakai = await asalSudahDipakai(db, asal.kunci);
       if (dipakai === "gagal") return diam("cek_tabrakan_gagal");
@@ -801,6 +908,28 @@ async function prosesLaporanInti(botId: number, laporan: LaporanRunner, sekarang
         ? `Penghalang: ${teksPenghalang(laporan.kode)}.${ringkas !== "" ? ` (${ringkas})` : ""}`
         : `Video gagal diproses (${laporan.kode})${ringkas !== "" ? `: ${ringkas}` : "."}`;
       await catatLog(db, botId, tugas.id, "edit", teks);
+      return;
+    }
+
+    case "sidik": {
+      const { data: baris, error } = await db.from("bot_sidik").select("kandidat_id, status").eq("kandidat_id", laporan.kandidat_id).eq("bot_id", botId).maybeSingle();
+      periksa(error, "memuat pemeriksaan sidik");
+      if (!baris) throw new GalatLaporan("Pemeriksaan sidik tidak dikenal.", 404);
+      // Idempoten: laporan yang sama diulang runner tidak apa-apa.
+      if ((baris as { status: string }).status !== "menunggu") return;
+      const { error: eUbah } = await db
+        .from("bot_sidik")
+        .update({ status: laporan.status, sidik: laporan.sidik, galat: laporan.galat ?? "", diperiksa_pada: iso(sekarangMs) })
+        .eq("kandidat_id", laporan.kandidat_id)
+        .eq("status", "menunggu");
+      periksa(eUbah, "menyimpan sidik");
+      if (laporan.status === "ok" && laporan.sidik) {
+        const k = await kembaranDipakai(db, laporan.kandidat_id, laporan.sidik);
+        const ket = k === "gagal" || k === null ? "tidak ada kembaran" : `${putusanSidik(k.hasil.skor) === "sama" ? "KEMBARAN" : "mirip"} kandidat #${k.id} (skor ${k.hasil.skor.toFixed(2)})`;
+        await catatLog(db, botId, null, "cari", `Sidik visual video #${laporan.kandidat_id}: ${ket}.`);
+      } else if (laporan.status === "gagal") {
+        await catatLog(db, botId, null, "cari", `Sidik visual video #${laporan.kandidat_id} gagal: ${potongTeks(laporan.galat ?? "", 120)} (dilanjutkan tanpa sidik).`);
+      }
       return;
     }
 

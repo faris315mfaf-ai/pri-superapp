@@ -20,7 +20,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { tabelBelumAda } from "@/lib/api-helper";
 import { bacaJedaGlobal } from "@/lib/bot-data";
-import { sumberUntukTugas } from "@/lib/bot-kerja";
+import { ringkasSidikKandidat, sumberUntukTugas } from "@/lib/bot-kerja";
 import { siarkanBot } from "@/lib/bot-realtime";
 import { catatAudit } from "@/lib/audit";
 import { solusiGagal, LABEL_SOSMED } from "@/lib/batas-caption";
@@ -42,6 +42,7 @@ import {
   postingAktif,
   postingMacet,
   tandaPemeriksaan,
+  tandaSidik,
   type AksiAcc,
   type ItemAccApi,
   type RiwayatAccApi,
@@ -202,6 +203,7 @@ export async function bacaStatusAcc(sekarangMs: number = Date.now()): Promise<St
       stok_ada: Boolean(t.id_stok_mesin),
       tanda: [
         ...(asal ? [tandaAsal(asal)] : []),
+        ...(kand ? [tandaSidik(await ringkasSidikKandidat(Number(kand.id)))].filter((x): x is NonNullable<typeof x> => x !== null) : []),
         ...(t.tahap === "disetujui" && t.galat ? [{ jenis: "bad" as const, teks: `Posting terakhir gagal: ${String(t.galat).slice(0, 140)}` }] : []),
         ...tandaPemeriksaan({
           caption,

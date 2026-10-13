@@ -12,6 +12,7 @@ import { buatKlienMesin } from "./klien-mesin";
 import { bacaKonfig, type KonfigRunner } from "./konfig";
 import { Penjadwal, selangDenyutBerikut } from "./giliran";
 import { Pemanen } from "./pemanen";
+import { PenyidikVideo } from "./sidik";
 import { pesanGalat } from "./galat";
 
 /** Berkas penanda "proses masih berputar" untuk healthcheck kontainer. */
@@ -51,6 +52,7 @@ export async function mulai(env: Record<string, string | undefined> = process.en
     app: buatKlienApp(konfig),
     mesin: buatKlienMesin({ soket: konfig.soketMesin }),
     pemanen: new Pemanen({ ytdlpBin: konfig.ytdlpBin, cookiesFile: konfig.cookiesFile }),
+    penyidik: new PenyidikVideo({ ytdlpBin: konfig.ytdlpBin, ffmpegBin: konfig.ffmpegBin, cookiesFile: konfig.cookiesFile }),
     tidur,
     sekarang: Date.now,
     log: catat,

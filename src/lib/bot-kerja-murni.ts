@@ -13,6 +13,7 @@ import { kunciKanonik } from "@/lib/bot-kunci";
 import { klaimBasi } from "@/lib/bot-mesin";
 import { buatNaskah } from "@/lib/bot-pilih";
 import type { TahapBotDb } from "@/lib/bot-tipe";
+import { validasiSidik } from "@/bot-runner/sidik-murni";
 
 // ---- Konstanta ----
 
@@ -180,6 +181,22 @@ function validasiLaporan(v: unknown): { ok: true; laporan: LaporanRunner } | { o
       if (!adalahKodeGagal(kode)) return { ok: false, pesan: "kode tidak dikenal." };
       if (typeof pesan !== "string" || pesan.length > 4000) return { ok: false, pesan: "pesan tidak sah." };
       return { ok: true, laporan: { jenis: "job_gagal", tugas_id: tugasId, kode, pesan: pesan.slice(0, 1000) } };
+    }
+    case "sidik": {
+      const kandidatId = v.kandidat_id;
+      const status = v.status;
+      const galat = v.galat;
+      if (!idPositif(kandidatId)) return { ok: false, pesan: "kandidat_id tidak sah." };
+      if (status !== "ok" && status !== "tak_informatif" && status !== "gagal") return { ok: false, pesan: "status sidik tidak dikenal." };
+      if (galat !== undefined && typeof galat !== "string") return { ok: false, pesan: "galat harus teks." };
+      let sidik: string[] | null = null;
+      if (status !== "gagal") {
+        sidik = validasiSidik(v.sidik);
+        if (sidik === null) return { ok: false, pesan: "sidik tidak sah." };
+      }
+      const laporan: LaporanRunner = { jenis: "sidik", kandidat_id: kandidatId, status, sidik };
+      if (typeof galat === "string") laporan.galat = galat.slice(0, 500);
+      return { ok: true, laporan };
     }
     case "log": {
       const tahap = v.tahap;
