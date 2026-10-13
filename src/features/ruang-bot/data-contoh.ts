@@ -1,7 +1,7 @@
 // Data contoh Ruang Bot — dipakai selama bot belum tersambung ke server.
 // SEMUA angka dan judul di sini fiktif.
 
-import type { BotContoh, HasilHariIni, ItemAcc, SumberContoh, TahapBot } from "./tipe";
+import type { BotContoh, HasilHariIni, ItemAcc, SumberContoh, TahapBot, TempatBot } from "./tipe";
 
 export const MAKS_KUOTA_AWAL = 3;
 
@@ -20,6 +20,10 @@ export const WARNA_TAHAP: Record<TahapBot, string> = {
 };
 
 export const URUTAN_TAHAP: TahapBot[] = ["cari", "edit", "posting", "istirahat"];
+
+export const NAMA_TEMPAT: Record<TempatBot, string> = { ...NAMA_TAHAP, rapat: "Rapat", tidur: "Tidur" };
+export const WARNA_TEMPAT: Record<TempatBot, string> = { ...WARNA_TAHAP, rapat: "#fb7185", tidur: "#94a3b8" };
+export const URUTAN_TEMPAT: TempatBot[] = [...URUTAN_TAHAP, "rapat", "tidur"];
 
 export const BOT_CONTOH: BotContoh[] = [
   {
@@ -63,6 +67,8 @@ export const BOT_CONTOH: BotContoh[] = [
     riwayat6Hari: [3, 2, 2, 3, 3, 2],
     jadwalHariIni: ["08:12", "12:48", "16:20"],
     rataTayangan: "15,1 rb",
+    // Contoh: belum punya API key, jadi tidur di kamar tidur sampai key dipasang.
+    punyaOtak: false,
   },
 ];
 

@@ -7,7 +7,8 @@
 
 import { supabase } from "@/lib/supabase";
 import { tabelBelumAda } from "@/lib/api-helper";
-import type { BotRingkas, GayaRambutDb, LogBotDb, ModeBotDb, RunnerStatus, RupaBotDb, StatusBot, SumberBotDb, TahapBotDb } from "@/lib/bot-tipe";
+import type { BotRingkas, GayaRambutDb, LogBotDb, ModeBotDb, RunnerStatus, RupaBotDb, StatusBot, SumberBotDb, TahapBotDb, TugasAktifBot } from "@/lib/bot-tipe";
+import { muatDunia } from "@/lib/bot-dunia";
 import { normalkanKategori, normalkanPlatform } from "@/lib/bot-sumber";
 
 export const KUNCI_JEDA_GLOBAL = "bot_jeda_global";
@@ -82,7 +83,10 @@ export type BarisBot = {
   gagal_beruntun: number | null;
 };
 
-export function rakitBot(b: BarisBot, username: string, postHariIni: number, akunTertaut: number): BotRingkas {
+/** Data dunia Ruang Bot; pemanggil yang tidak memuatnya mendapat punya_otak=false / tugas_aktif=null (tidak dipakai di luar Ruang Bot). */
+export type EkstraBot = { punyaOtak?: boolean; tugasAktif?: TugasAktifBot | null };
+
+export function rakitBot(b: BarisBot, username: string, postHariIni: number, akunTertaut: number, ekstra: EkstraBot = {}): BotRingkas {
   const mode: ModeBotDb = b.mode === "otomatis" ? "otomatis" : "acc";
   return {
     id: Number(b.id),
@@ -104,6 +108,8 @@ export function rakitBot(b: BarisBot, username: string, postHariIni: number, aku
     gagal_beruntun: Math.max(0, Number(b.gagal_beruntun ?? 0)),
     post_hari_ini: Math.max(0, postHariIni),
     akun_tertaut: Math.max(0, akunTertaut),
+    punya_otak: ekstra.punyaOtak === true,
+    tugas_aktif: ekstra.tugasAktif ?? null,
   };
 }
 
@@ -239,7 +245,7 @@ export async function ambilStatusBot(): Promise<StatusBot> {
   const idBot = daftar.map((b) => Number(b.id));
   const awalHari = awalHariWibIso();
 
-  const [rUser, rRunner, rLog, rTugas, rAkun, jeda, daftarSumber] = await Promise.all([
+  const [rUser, rRunner, rLog, rTugas, rAkun, jeda, daftarSumber, dunia] = await Promise.all([
     idUser.length ? db.from("app_user").select("id, username").in("id", idUser) : Promise.resolve({ data: [], error: null }),
     db.from("bot_runner").select("terakhir_denyut, versi").eq("id", 1).maybeSingle(),
     db.from("bot_log").select("id, bot_id, tahap, teks, dibuat_pada").order("dibuat_pada", { ascending: false }).limit(BATAS_LOG),
@@ -249,6 +255,7 @@ export async function ambilStatusBot(): Promise<StatusBot> {
     idUser.length ? db.from("akun_tvr_user").select("user_id").eq("terhubung", true).in("user_id", idUser) : Promise.resolve({ data: [], error: null }),
     bacaJedaGlobal(),
     ambilSumberDanBlokir(),
+    muatDunia(),
   ]);
   if (rUser.error) galatDb("akun bot", rUser.error);
   if (rRunner.error && !tabelBelumAda(rRunner.error)) galatDb("status runner", rRunner.error);
@@ -276,9 +283,16 @@ export async function ambilStatusBot(): Promise<StatusBot> {
     tabel_ada: true,
     jeda_global: jeda,
     runner: hitungRunner(runnerBaris?.terakhir_denyut ?? null, runnerBaris?.versi ?? null),
-    bots: daftar.map((b) => rakitBot(b, namaUser.get(Number(b.user_id)) ?? "", selesai.get(Number(b.id)) ?? 0, tertaut.get(Number(b.user_id)) ?? 0)),
+    bots: daftar.map((b) =>
+      rakitBot(b, namaUser.get(Number(b.user_id)) ?? "", selesai.get(Number(b.id)) ?? 0, tertaut.get(Number(b.user_id)) ?? 0, {
+        punyaOtak: dunia.punyaOtak.has(Number(b.id)),
+        tugasAktif: dunia.tugas.get(Number(b.id)) ?? null,
+      }),
+    ),
     log,
     sumber: daftarSumber.sumber,
     blokir: daftarSumber.blokir,
+    koordinator: dunia.koordinator,
+    chat_terakhir: dunia.chatTerakhir,
   };
 }

@@ -3,9 +3,14 @@
 // ============================================================
 // RUANG VIEW — isi tab "Ruang" pada layar Ruang Bot.
 //
-// Toolbar (Siang/Malam, kecepatan, Hari baru, Jeda darurat), kartu kanvas
-// isometrik dengan HUD + spanduk jeda + legenda tahap, dan panel samping:
-// Tim bot, Umpan aktivitas langsung, Hasil hari ini.
+// Toolbar (Siang/Malam, kecepatan, Hari baru, Panggil rapat, Jeda darurat), kartu
+// kanvas gedung empat ruang (kerja, meeting, koordinator, kamar tidur) dengan HUD +
+// spanduk jeda + legenda tempat, dan panel samping: Koordinator (Nara), Tim bot,
+// Umpan aktivitas langsung, Hasil hari ini.
+//
+// Siapa berada di mana (mode nyata): tanpa API key -> kamar tidur; tugas berjalan ->
+// meja tahap itu; room Chat ramai (atau tombol Panggil rapat) -> ruang meeting; usulan
+// Nara yang disetujui -> Nara mengantar surat tugas.
 //
 // State kuota / hasil / log / mode / jeda dimiliki cangkang layar. Komponen
 // ini hanya MEMBACA lewat props dan MELAPOR lewat callback. Simulasi dibuat
@@ -13,16 +18,21 @@
 // saat props berubah.
 // ============================================================
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GlassCard } from "@/components/glass-card";
 import { useLebarWadah } from "@/hooks/use-kolom-wadah";
 import { useIntervalAktif } from "@/hooks/use-tab-aktif";
+import { rapatBerlangsung, sisaRapatMs } from "@/lib/bot-dunia-murni";
+import type { KoordinatorRingkas } from "@/lib/bot-tipe";
 import { cn } from "@/lib/utils";
-import { NAMA_TAHAP, URUTAN_TAHAP, WARNA_TAHAP } from "./data-contoh";
+import { NAMA_TAHAP, NAMA_TEMPAT, URUTAN_TEMPAT, WARNA_TAHAP, WARNA_TEMPAT } from "./data-contoh";
+import type { ZonaRuang } from "./denah";
+import { petaCatatan, petaSasaran, suratBaru } from "./peta-nyata";
 import { PotretBot } from "./potret-bot";
 import { RuangIsometrik } from "./ruang-isometrik";
 import { SimulasiBot, formatJam } from "./simulasi-bot";
-import type { BotContoh, HasilHariIni, LogItem, ModeBot, StatusHidup, TahapBot } from "./tipe";
+import { RUPA_NARA, WARNA_NARA, type KeadaanNara } from "./simulasi-nara";
+import type { BotContoh, HasilHariIni, LogItem, ModeBot, StatusHidup, TampilanBot, TempatBot } from "./tipe";
 
 export type RuangViewProps = {
   bots: BotContoh[];
@@ -47,6 +57,14 @@ export type RuangViewProps = {
   nyata?: boolean;
   /** Kunci kontrol yang sedang memproses aksi ke server (lihat kunciAksi). */
   sibuk?: ReadonlySet<string>;
+  /** Koordinator (Nara) dari server; null/absen = migrasi sql/74 belum jalan. */
+  koordinator?: KoordinatorRingkas | null;
+  /** ISO pesan room Chat terbaru: selama masih "hangat" bot berkumpul di ruang meeting. */
+  chatTerakhir?: string | null;
+  /** Pindah tab layar (klik ruang meeting -> Chat, ruang koordinator / Nara -> Koordinator). */
+  onBukaTab?: (tab: TampilanBot) => void;
+  /** Mode contoh saja: pasang/cabut API key bot (menunjukkan bot bangun / tidur). */
+  onUbahOtakContoh?: (id: string, ada: boolean) => void;
 };
 
 const KECEPATAN = [1, 3, 8] as const;
@@ -58,31 +76,46 @@ const WARNA_NETRAL = "#a79fb2";
 
 // ---------- potret ringan untuk UI (diperbarui 2x/detik, bukan tiap frame) ----------
 
-type PotretBotUI = { tahap: TahapBot; keadaan: StatusHidup["keadaan"]; teks: string };
+type PotretBotUI = { tempat: TempatBot; keadaan: StatusHidup["keadaan"]; teks: string };
+
+type PotretNara = { keadaan: KeadaanNara; teks: string; punyaOtak: boolean; usulan: number; nama: string };
 
 type Potret = {
   bots: Record<string, PotretBotUI>;
-  perTahap: Record<TahapBot, string[]>;
+  perTempat: Record<TempatBot, string[]>;
   render: number;
   antre: number;
+  tidur: number;
+  rapat: boolean;
+  nara: PotretNara;
   jam: string;
 };
 
 function buatPotret(sim: SimulasiBot): Potret {
   const bots: Record<string, PotretBotUI> = {};
-  const perTahap: Record<TahapBot, string[]> = { cari: [], edit: [], posting: [], istirahat: [] };
+  const perTempat: Record<TempatBot, string[]> = { cari: [], edit: [], posting: [], istirahat: [], rapat: [], tidur: [] };
   let render = 0;
   let antre = 0;
   for (const b of sim.bots) {
-    bots[b.id] = { tahap: b.tahap, keadaan: b.keadaan, teks: b.teks };
+    bots[b.id] = { tempat: b.tempat, keadaan: b.keadaan, teks: b.teks };
     if (b.keadaan === "bekerja") {
-      perTahap[b.tahap].push(b.id);
-      if (b.tahap === "edit") render++;
+      perTempat[b.tempat].push(b.id);
+      if (b.tempat === "edit") render++;
     } else if (b.keadaan === "menunggu") {
       antre++;
     }
   }
-  return { bots, perTahap, render, antre, jam: formatJam(sim.jamSimulasi) };
+  const n = sim.nara;
+  return {
+    bots,
+    perTempat,
+    render,
+    antre,
+    tidur: perTempat.tidur.length,
+    rapat: sim.rapat,
+    nara: { keadaan: n.keadaan, teks: n.teksTampil(), punyaOtak: n.punyaOtak, usulan: n.usulanTerbuka, nama: n.nama },
+    jam: formatJam(sim.jamSimulasi),
+  };
 }
 
 // ---------- potongan tampilan ----------
@@ -149,6 +182,7 @@ function KartuBot({
   onPilih,
   onUbahMode,
   onBukaDetail,
+  onUbahOtak,
 }: {
   bot: BotContoh;
   potret: PotretBotUI | undefined;
@@ -163,23 +197,37 @@ function KartuBot({
   onPilih: () => void;
   onUbahMode: (mode: ModeBot) => void;
   onBukaDetail: () => void;
+  /** Hanya mode contoh: pasang/cabut API key. */
+  onUbahOtak?: (ada: boolean) => void;
 }) {
-  const bekerja = !nyata && potret?.keadaan === "bekerja";
-  const warnaTahap = bekerja && potret ? WARNA_TAHAP[potret.tahap] : WARNA_NETRAL;
+  const tempat = potret?.tempat ?? "istirahat";
+  const bekerja = potret?.keadaan === "bekerja";
+  const tidur = tempat === "tidur";
+  const rapat = tempat === "rapat";
   const dijedaNyata = jeda || !!bot.nyata?.jeda;
-  const labelTahap = nyata
-    ? dijedaNyata
-      ? "Dijeda"
-      : "Menunggu tugas"
-    : !potret
-      ? "Menunggu"
-      : bekerja
-        ? jeda && potret.tahap === "istirahat"
-          ? "Dijeda"
-          : NAMA_TAHAP[potret.tahap]
-        : potret.keadaan === "berjalan"
-          ? "Berjalan"
-          : "Menunggu";
+  const berwarna = bekerja && (tidur || rapat || !nyata || tempat !== "istirahat");
+  const warnaTahap = berwarna ? WARNA_TEMPAT[tempat] : WARNA_NETRAL;
+  const labelTahap = !potret
+    ? nyata
+      ? "Menunggu tugas"
+      : "Menunggu"
+    : potret.keadaan === "berjalan"
+      ? "Berjalan"
+      : tidur
+        ? "Tidur"
+        : rapat
+          ? "Rapat"
+          : nyata
+            ? dijedaNyata
+              ? "Dijeda"
+              : bekerja && tempat !== "istirahat"
+                ? NAMA_TAHAP[tempat]
+                : "Menunggu tugas"
+            : bekerja
+              ? jeda && tempat === "istirahat"
+                ? "Dijeda"
+                : NAMA_TAHAP[tempat as keyof typeof NAMA_TAHAP]
+              : "Menunggu";
   const persen = maksKuota > 0 ? Math.min(100, (kuota / maksKuota) * 100) : 100;
   const otomatis = bot.mode === "otomatis";
 
@@ -213,6 +261,11 @@ function KartuBot({
             <ChipTahap warna={warnaTahap} label={labelTahap} />
           </div>
           <p className="mt-0.5 min-h-[1.2em] text-[12px] leading-snug text-teks-utama">{potret?.teks || "—"}</p>
+          {tidur && nyata && (
+            <p className="text-[11px] leading-snug text-amber-700 dark:text-amber-300">
+              Tidur karena belum punya API key. Pasang di TVR Saya → Otak Bot.
+            </p>
+          )}
           <p className="truncate text-[11.5px] text-teks-sekunder">
             {bot.handle} · {bot.platform}
           </p>
@@ -262,9 +315,80 @@ function KartuBot({
               {otomatis ? "Otomatis" : "Perlu ACC"}
             </button>
           </div>
+          {onUbahOtak && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={bot.punyaOtak !== false}
+              aria-label={`API key ${bot.nama} (contoh)`}
+              onClick={() => onUbahOtak(bot.punyaOtak === false)}
+              className="pointer-events-auto relative z-10 mt-1.5 rounded-full border border-black/15 px-2.5 text-[10.5px] font-bold text-teks-sekunder focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-emas dark:border-white/15 max-md:min-h-11 md:py-0.5"
+            >
+              {bot.punyaOtak === false ? "Pasang API key (contoh)" : "Cabut API key (contoh)"}
+            </button>
+          )}
         </div>
       </div>
     </li>
+  );
+}
+
+const LABEL_NARA: Record<KeadaanNara, string> = {
+  meja: "Di mejanya",
+  jalan: "Berjalan",
+  tempel: "Menempel tugas",
+  serah: "Mengantar tugas",
+  rapat: "Rapat",
+};
+
+function KartuNara({
+  nara,
+  peran,
+  nyata,
+  tersedia,
+  onBuka,
+}: {
+  nara: PotretNara;
+  peran: string;
+  nyata: boolean;
+  /** Mode nyata: koordinator sudah ada di server (migrasi sql/74 sudah jalan). */
+  tersedia: boolean;
+  onBuka?: () => void;
+}) {
+  const tanpaKunci = !nara.punyaOtak;
+  const label = nyata && !tersedia ? "Belum aktif" : tanpaKunci && nara.keadaan === "meja" ? "Tanpa API key" : LABEL_NARA[nara.keadaan];
+  const warna = tanpaKunci || (nyata && !tersedia) ? WARNA_NETRAL : WARNA_NARA;
+  return (
+    <div className="grid grid-cols-[84px_minmax(0,1fr)] gap-2.5">
+      <PotretBot rupa={RUPA_NARA} lencana={WARNA_NARA} skala={3} label={`Potret ${nara.nama}`} className="rounded-[10px] bg-black/5 dark:bg-white/10" />
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+          <span className="text-[14px] font-bold text-teks-utama">{nara.nama}</span>
+          <span className="text-[11px] font-semibold text-teks-sekunder">{peran}</span>
+          <ChipTahap warna={warna} label={label} />
+        </div>
+        <p className="mt-0.5 min-h-[1.2em] text-[12px] leading-snug text-teks-utama">{nara.teks || "—"}</p>
+        {nyata && !tersedia ? (
+          <p className="text-[11px] leading-snug text-amber-700 dark:text-amber-300">Jalankan migrasi sql/74 supaya koordinator aktif.</p>
+        ) : tanpaKunci && nyata ? (
+          <p className="text-[11px] leading-snug text-amber-700 dark:text-amber-300">
+            Belum bisa berpikir. Pasang API key di TVR Saya → Otak Bot → Koordinator.
+          </p>
+        ) : null}
+        <div className="mt-1.5 flex items-center justify-between gap-2 text-[11.5px] text-teks-sekunder">
+          <span className="angka-tab">{nyata ? `${nara.usulan} usulan menunggu` : "Contoh: tanpa usulan nyata"}</span>
+          {onBuka && (
+            <button
+              type="button"
+              onClick={onBuka}
+              className="btn-tekan rounded-full bg-pri/12 px-3 py-1 text-[11px] font-bold text-pri focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-pri max-md:min-h-11"
+            >
+              Buka Koordinator
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -277,7 +401,15 @@ export function RuangView(p: RuangViewProps) {
 
   const nyata = !!p.nyata;
   const sibuk = p.sibuk;
-  const [sim] = useState(() => new SimulasiBot(p.bots, { kuotaAwal: p.kuota, maksKuota: p.maksKuota, diam: nyata }));
+  const [sim] = useState(
+    () =>
+      new SimulasiBot(p.bots, {
+        kuotaAwal: p.kuota,
+        maksKuota: p.maksKuota,
+        diam: nyata,
+        sasaranAwal: nyata ? petaSasaran(p.bots, p.jedaGlobal) : undefined,
+      }),
+  );
 
   // Pembaca mode & callback laporan selalu mengikuti props terbaru
   // (simulasi tidak dibuat ulang).
@@ -295,10 +427,51 @@ export function RuangView(p: RuangViewProps) {
   useEffect(() => {
     sim.setJeda(p.jedaGlobal);
   }, [sim, p.jedaGlobal]);
-  // Mode diam: teks bubble mengikuti jeda (global / per bot); abaikan di mode contoh.
+  // Mode nyata: tempat & teks tiap bot mengikuti tugas berjalan (meja) atau sofa / "Dijeda".
   useEffect(() => {
-    sim.setTeksDiam(Object.fromEntries(bots.map((b) => [b.id, p.jedaGlobal || b.nyata?.jeda ? "Dijeda" : "Menunggu tugas"])));
-  }, [sim, bots, p.jedaGlobal]);
+    if (nyata) sim.setSasaran(petaSasaran(bots, p.jedaGlobal));
+  }, [sim, nyata, bots, p.jedaGlobal]);
+  // API key: tanpa key bot tidur di kamar tidur, dengan key bangun dan bekerja.
+  useEffect(() => {
+    for (const b of bots) sim.setPunyaOtak(b.id, b.punyaOtak !== false);
+  }, [sim, bots]);
+  // Koordinator (Nara): punya key atau belum, usulan menunggu, dan surat tugas yang baru disetujui.
+  const koordinator = p.koordinator ?? null;
+  const kPunyaOtak = koordinator?.punya_otak ?? false;
+  const kUsulan = koordinator?.usulan_terbuka ?? 0;
+  const kNama = koordinator?.nama;
+  const kDiputus = koordinator?.diputus;
+  useEffect(() => {
+    sim.nara.setKeadaan(nyata ? { punyaOtak: kPunyaOtak, usulanTerbuka: kUsulan, nama: kNama } : { punyaOtak: true, usulanTerbuka: 0 });
+  }, [sim, nyata, kPunyaOtak, kUsulan, kNama]);
+  useEffect(() => {
+    if (!nyata || !kDiputus) return;
+    const baru = suratBaru(kDiputus, new Set(bots.map((b) => b.id)), Date.now());
+    const idBaru = new Set(baru.map((x) => x.id));
+    // Yang lama hanya jadi catatan di papan; yang baru diantar sekali (Nara menyaring id yang sudah dikenal).
+    for (const d of kDiputus) if (!idBaru.has(d.id)) sim.nara.anggapSudahAda(d.id);
+    for (const surat of baru) sim.nara.antar(surat);
+    sim.nara.setCatatan(petaCatatan(kDiputus));
+  }, [sim, nyata, kDiputus, bots]);
+  // Rapat: tombol manual ATAU room Chat sedang ramai (pesan terakhir < 3 menit; mode nyata).
+  const [rapatManual, setRapatManual] = useState(false);
+  const chatTerakhir = p.chatTerakhir ?? null;
+  useEffect(() => {
+    const hitung = () => sim.setRapat(rapatManual || (nyata && rapatBerlangsung(chatTerakhir, Date.now())));
+    hitung();
+    const sisa = nyata ? sisaRapatMs(chatTerakhir, Date.now()) : 0;
+    if (sisa <= 0) return undefined;
+    const t = window.setTimeout(hitung, sisa + 300);
+    return () => window.clearTimeout(t);
+  }, [sim, nyata, rapatManual, chatTerakhir]);
+
+  // Klik pil ruang / Nara di kanvas -> tab terkait (hanya mode nyata).
+  const { onBukaTab } = p;
+  const bukaZona = useMemo<Partial<Record<ZonaRuang, () => void>> | undefined>(
+    () => (nyata && onBukaTab ? { meeting: () => onBukaTab("chat"), koordinator: () => onBukaTab("koordinator") } : undefined),
+    [nyata, onBukaTab],
+  );
+  const bukaKoordinator = useMemo(() => (nyata && onBukaTab ? () => onBukaTab("koordinator") : undefined), [nyata, onBukaTab]);
   useEffect(() => {
     sim.setMaksKuota(p.maksKuota);
   }, [sim, p.maksKuota]);
@@ -348,6 +521,18 @@ export function RuangView(p: RuangViewProps) {
             </button>
           </>
         )}
+        <button
+          type="button"
+          aria-pressed={rapatManual}
+          onClick={() => setRapatManual((v) => !v)}
+          title={nyata ? "Bot berkunci dan Nara berkumpul di ruang meeting. Rapat juga berjalan otomatis saat room Chat ramai." : undefined}
+          className={cn(
+            "btn-tekan rounded-xl border px-3 text-[12.5px] font-bold focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-pri max-md:min-h-11 md:h-9",
+            rapatManual ? "border-[#fb7185] bg-[#fb7185]/15 text-[#e11d48] dark:text-[#fda4af]" : "glass border-black/10 text-teks-utama dark:border-white/10",
+          )}
+        >
+          {rapatManual ? "Bubarkan rapat" : "Panggil rapat"}
+        </button>
         <span className="flex-1" />
         <button
           type="button"
@@ -377,6 +562,8 @@ export function RuangView(p: RuangViewProps) {
             kecepatan={kecepatan}
             terpilihId={p.terpilihId}
             onPilih={p.onPilih}
+            onPilihNara={bukaKoordinator}
+            onBukaZona={bukaZona}
           >
             <div className="pointer-events-none absolute left-2.5 top-2.5 flex flex-wrap gap-1.5 font-mono text-[11px] font-semibold text-[#f4efe8]">
               <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">
@@ -390,6 +577,12 @@ export function RuangView(p: RuangViewProps) {
                   Render: {potret.render} berjalan · {potret.antre} antre
                 </span>
               )}
+              {potret.tidur > 0 && (
+                <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">{potret.tidur} tidur (tanpa API key)</span>
+              )}
+              {potret.rapat && (
+                <span className="rounded-lg border border-[#fb7185]/60 bg-[rgba(60,16,32,.85)] px-2 py-0.5 text-[#fecdd3]">Rapat berlangsung</span>
+              )}
               <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">{potret.jam} WIB</span>
             </div>
             {p.jedaGlobal && (
@@ -402,16 +595,16 @@ export function RuangView(p: RuangViewProps) {
             )}
           </RuangIsometrik>
 
-          <ul className="mt-2.5 grid grid-cols-2 gap-2 xl:grid-cols-4">
-            {URUTAN_TAHAP.map((k) => {
-              const siapa = potret.perTahap[k].map(namaBot);
+          <ul className="mt-2.5 grid grid-cols-2 gap-2 xl:grid-cols-3">
+            {URUTAN_TEMPAT.map((k) => {
+              const siapa = potret.perTempat[k].map(namaBot);
               return (
                 <li
                   key={k}
                   className="rounded-xl border-l-[3px] bg-black/5 px-2.5 py-2 dark:bg-white/5"
-                  style={{ borderLeftColor: WARNA_TAHAP[k] }}
+                  style={{ borderLeftColor: WARNA_TEMPAT[k] }}
                 >
-                  <b className="block text-[12px] text-teks-utama">{NAMA_TAHAP[k]}</b>
+                  <b className="block text-[12px] text-teks-utama">{NAMA_TEMPAT[k]}</b>
                   <span className="text-[11.5px] text-teks-sekunder">{siapa.length ? siapa.join(", ") : "kosong"}</span>
                 </li>
               );
@@ -421,6 +614,17 @@ export function RuangView(p: RuangViewProps) {
 
         {/* Kolom kanan: panel samping */}
         <div className="flex min-w-0 flex-col gap-3">
+          <GlassCard className="p-3.5">
+            <Judul>Koordinator</Judul>
+            <KartuNara
+              nara={potret.nara}
+              peran={koordinator?.peran ?? "Koordinator Redaksi"}
+              nyata={nyata}
+              tersedia={!!koordinator}
+              onBuka={bukaKoordinator}
+            />
+          </GlassCard>
+
           <GlassCard className="p-3.5">
             <Judul>Tim bot</Judul>
             <ul className="flex flex-col gap-2">
@@ -438,6 +642,7 @@ export function RuangView(p: RuangViewProps) {
                   onPilih={() => p.onPilih(p.terpilihId === b.id ? null : b.id)}
                   onUbahMode={(mode) => p.onUbahMode(b.id, mode)}
                   onBukaDetail={() => p.onBukaDetail(b.id)}
+                  onUbahOtak={!nyata && p.onUbahOtakContoh ? (ada) => p.onUbahOtakContoh?.(b.id, ada) : undefined}
                 />
               ))}
             </ul>
@@ -527,16 +732,21 @@ export function RuangView(p: RuangViewProps) {
       <GlassCard className="p-3.5 text-[12.5px] leading-relaxed text-teks-sekunder">
         {nyata ? (
           <>
-            <b className="text-teks-utama">Cara membaca.</b> Daftar bot, mode, kuota, jeda, dan umpan aktivitas di sini
-            data nyata dari server. Pada tahap ini runner belum mengerjakan tugas apa pun, jadi bot ditampilkan diam di
-            sofa dengan status &quot;Menunggu tugas&quot;. Klik bot atau kartunya untuk memilih; tombol mode (Otomatis /
-            Perlu ACC) dan jeda darurat langsung berlaku di server.
+            <b className="text-teks-utama">Cara membaca.</b> Gedung ini punya empat ruang yang dipisah sekat kaca.{" "}
+            <b className="text-teks-utama">Ruang kerja</b>: bot duduk di meja tahap tugasnya (Pencarian / Edit / Posting) atau
+            menunggu di sofa. <b className="text-teks-utama">Kamar tidur</b>: bot yang belum punya API key tidur di sini sampai
+            key dipasang di TVR Saya → Otak Bot. <b className="text-teks-utama">Ruang meeting</b>: bot berkunci dan Nara
+            berkumpul saat room Chat ramai (atau tombol Panggil rapat); klik namanya untuk membuka Chat.{" "}
+            <b className="text-teks-utama">Ruang koordinator</b>: meja Nara dan papan penugasan; usulan yang Anda setujui
+            diantar Nara sebagai surat tugas ke bot yang bersangkutan. Klik bot atau kartunya untuk memilih; mode dan jeda
+            darurat langsung berlaku di server.
           </>
         ) : (
           <>
-            <b className="text-teks-utama">Cara membaca.</b> Pencarian → Edit → Posting → Istirahat. Klik bot atau
-            kartunya untuk memilih; tombol mode (Otomatis / Perlu ACC) bisa diklik. Bila meja terisi, bot lain antre di
-            tengah ruangan seperti antrean render. Bot bermode ACC mengirim hasilnya ke tab Antrean ACC.
+            <b className="text-teks-utama">Cara membaca.</b> Pencarian → Edit → Posting → Istirahat di ruang kerja. Bot tanpa
+            API key tidur di kamar tidur (coba tombol &quot;Pasang API key&quot; di kartu bot); tombol Panggil rapat
+            mengumpulkan bot berkunci dan Nara di ruang meeting. Bila meja terisi, bot lain antre di tengah ruangan seperti
+            antrean render. Bot bermode ACC mengirim hasilnya ke tab Antrean ACC.
           </>
         )}
       </GlassCard>

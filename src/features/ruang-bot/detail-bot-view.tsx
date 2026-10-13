@@ -17,6 +17,7 @@
 
 import { useMemo } from "react";
 import { GlassCard } from "@/components/glass-card";
+import { mejaDariTahapTugas } from "@/lib/bot-dunia-murni";
 import { tanggalWibHariIni } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { NAMA_TAHAP, WARNA_TAHAP } from "./data-contoh";
@@ -163,11 +164,16 @@ export function DetailBotView(p: DetailBotViewProps) {
   const hasilBot = hasil.filter((h) => h.botId === bot.id).slice(0, 2);
   const logBot = log.filter((l) => l.botId === bot.id).slice(0, 14);
 
+  const mejaTugas = bot.nyata?.tugasAktif ? mejaDariTahapTugas(bot.nyata.tugasAktif.tahap) : null;
   const labelStatus = dijeda
     ? "Dijeda"
-    : nyata
-      ? "Menunggu tugas"
-      : !st
+    : bot.punyaOtak === false
+      ? "Tidur (belum punya API key)"
+      : nyata
+        ? mejaTugas
+          ? NAMA_TAHAP[mejaTugas]
+          : "Menunggu tugas"
+        : !st
         ? "Menunggu"
         : st.keadaan === "bekerja"
           ? (st.tahap ? NAMA_TAHAP[st.tahap] : "Bekerja")

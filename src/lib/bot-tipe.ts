@@ -46,6 +46,26 @@ export type BotRingkas = {
   post_hari_ini: number;
   /** Jumlah akun sosmed tertaut di TVR Saya bot. */
   akun_tertaut: number;
+  /** Punya API key (otak). Tanpa key, bot "tidur" di kamar tidur Ruang Bot. */
+  punya_otak: boolean;
+  /** Tugas yang sedang dikerjakan (tahap kerja saja); menentukan meja tempat bot duduk di Ruang. */
+  tugas_aktif: TugasAktifBot | null;
+};
+
+/** Tugas berjalan milik satu bot: tahap mentah bot_tugas + judul. */
+export type TugasAktifBot = { tahap: string; judul: string };
+
+/** Satu usulan koordinator yang sudah disetujui master (papan penugasan & animasi pengantaran Nara). */
+export type DiputusKoordinator = { id: number; bot_id: number; judul: string; diputus_pada: string };
+
+/** Ringkasan koordinator (Nara) untuk dunia Ruang Bot. */
+export type KoordinatorRingkas = {
+  nama: string;
+  peran: string;
+  punya_otak: boolean;
+  usulan_terbuka: number;
+  /** Disetujui dalam 24 jam terakhir, terbaru dulu (maks 12). */
+  diputus: DiputusKoordinator[];
 };
 
 export type LogBotDb = {
@@ -90,6 +110,10 @@ export type StatusBot = {
   sumber?: SumberBotDb[];
   /** Kata/akun terblokir (bot_blokir), urutan tambah. */
   blokir?: string[];
+  /** Koordinator (Nara); null/absen = migrasi sql/74 belum jalan atau server lama. */
+  koordinator?: KoordinatorRingkas | null;
+  /** ISO pesan room Chat terbaru; dipakai Ruang untuk "rapat" otomatis. null = belum ada pesan. */
+  chat_terakhir?: string | null;
 };
 
 export type AksiKendaliBot =

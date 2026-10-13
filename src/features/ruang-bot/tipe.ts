@@ -13,6 +13,9 @@ export type ModeBot = "acc" | "otomatis";
 /** Tahap kerja bot; urutannya = alur tugas (Pencarian → Edit → Posting → Istirahat). */
 export type TahapBot = "cari" | "edit" | "posting" | "istirahat";
 
+/** Tempat bot berada di Ruang: meja tahap kerja, atau ruang meeting / kamar tidur. */
+export type TempatBot = TahapBot | "rapat" | "tidur";
+
 export type GayaRambut = GayaRambutDb;
 
 /** Rupa karakter pixel-art (kepala, badan, lengan, tangan, mata). */
@@ -31,6 +34,8 @@ export type DataNyataBot = {
   jamSelesai: string;
   gagalBeruntun: number;
   akunTertaut: number;
+  /** Tugas berjalan (tahap mentah bot_tugas + judul); null = tidak ada. */
+  tugasAktif: { tahap: string; judul: string } | null;
 };
 
 export type BotContoh = {
@@ -51,6 +56,8 @@ export type BotContoh = {
   nyata?: DataNyataBot;
   /** Kuota harian milik bot ini (mode nyata); kosong = pakai kuota bersama. */
   kuotaHarian?: number;
+  /** Punya API key. false = tidur di kamar tidur. Kosong = dianggap punya (data contoh lama). */
+  punyaOtak?: boolean;
 };
 
 /** Keadaan hidup satu bot di ruangan (dilaporkan komponen Ruang ke layar lain). */

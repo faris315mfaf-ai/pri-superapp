@@ -3,8 +3,8 @@
 // ============================================================
 // RUANG BOT — tab khusus MASTER (13 Okt 2026).
 //
-// Cangkang empat tampilan: Ruang (kantor pixel-art tempat bot bekerja),
-// Detail Bot, Antrean ACC, Sumber & Kuota. Cangkang ini PEMEGANG STATE;
+// Cangkang tampilan: Ruang (gedung pixel-art empat ruang tempat bot bekerja),
+// Detail Bot, Antrean ACC, Sumber & Kuota, serta Chat dan Koordinator (mode nyata). Cangkang ini PEMEGANG STATE;
 // tampilan hanya membaca lewat props dan melapor lewat callback.
 //
 // DUA MODE (ditentukan dari GET /api/bot/status, lihat use-status-bot.ts):
@@ -317,6 +317,11 @@ function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber }: RuangBotIsiP
     [nyata, petaId, kendali],
   );
 
+  // Hanya mode contoh: pasang/cabut API key menunjukkan bot bangun atau tidur.
+  const ubahOtakContoh = useCallback((id: string, ada: boolean) => {
+    setBotsContoh((b) => b.map((x) => (x.id === id ? { ...x, punyaOtak: ada } : x)));
+  }, []);
+
   const setJedaGlobal = useCallback(
     (v: boolean) => {
       if (nyata) void kendali([{ aksi: "jeda_global", nilai: v }]);
@@ -443,6 +448,9 @@ function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber }: RuangBotIsiP
               {t.kunci === "acc" && !nyata && antrean.length > 0 && (
                 <span className="angka-tab rounded-full bg-pri px-1.5 text-[10.5px] font-bold text-white">{antrean.length}</span>
               )}
+              {t.kunci === "koordinator" && nyata && (server.koordinator?.usulan_terbuka ?? 0) > 0 && (
+                <span className="angka-tab rounded-full bg-pri px-1.5 text-[10.5px] font-bold text-white">{server.koordinator?.usulan_terbuka}</span>
+              )}
             </button>
           );
         })}
@@ -472,6 +480,10 @@ function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber }: RuangBotIsiP
           onBotSelesaiPosting={botSelesaiPosting}
           onLog={catatLog}
           onStatus={setStatusHidup}
+          koordinator={nyata ? server.koordinator : null}
+          chatTerakhir={nyata ? server.chat_terakhir : null}
+          onBukaTab={setTampilan}
+          onUbahOtakContoh={ubahOtakContoh}
         />
       </div>
 

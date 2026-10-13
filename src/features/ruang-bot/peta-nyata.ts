@@ -9,6 +9,10 @@
 
 import type { AksiKendaliBot, AksiSumberBot, BotRingkas, LogBotDb, StatusBot, SumberBotDb } from "@/lib/bot-tipe";
 import { normalkanSumber, samaTanpaHuruf, tampilkanHandle } from "@/lib/bot-sumber";
+import { JENDELA_ANTAR_MS, mejaDariTahapTugas, perluDiantar } from "@/lib/bot-dunia-murni";
+import type { DiputusKoordinator } from "@/lib/bot-tipe";
+import type { Sasaran } from "./simulasi-bot";
+import type { CatatanPapan, TugasAntar } from "./simulasi-nara";
 import type { BotContoh, LogItem, SumberContoh } from "./tipe";
 
 /** Bot dari server -> bentuk tampilan. Data yang belum ada di server dikosongkan. */
@@ -28,6 +32,7 @@ export function petakanBot(b: BotRingkas): BotContoh {
     jadwalHariIni: [],
     rataTayangan: "—",
     kuotaHarian: b.kuota_harian,
+    punyaOtak: b.punya_otak,
     nyata: {
       id: b.id,
       userId: b.user_id,
@@ -38,8 +43,54 @@ export function petakanBot(b: BotRingkas): BotContoh {
       jamSelesai: b.jam_selesai,
       gagalBeruntun: b.gagal_beruntun,
       akunTertaut: b.akun_tertaut,
+      tugasAktif: b.tugas_aktif,
     },
   };
+}
+
+// ------------------------------------------------------------
+// Dunia: di ruang mana tiap bot berada (mode nyata)
+// ------------------------------------------------------------
+
+const KATA_KERJA = { cari: "Mencari", edit: "Mengedit", posting: "Memposting" } as const;
+
+/**
+ * Tempat & teks bot di ruang kerja (mode nyata): dijeda -> sofa "Dijeda"; tugas berjalan ->
+ * meja tahap itu dengan judulnya; selain itu sofa "Menunggu tugas". Tidur/rapat TIDAK diputuskan
+ * di sini (simulasi yang menentukan dari API key dan status rapat).
+ */
+export function sasaranBot(bot: BotContoh, jedaGlobal: boolean): Sasaran {
+  if (jedaGlobal || bot.nyata?.jeda) return { tempat: "istirahat", teks: "Dijeda" };
+  const t = bot.nyata?.tugasAktif;
+  const meja = t ? mejaDariTahapTugas(t.tahap) : null;
+  if (t && meja) {
+    const judul = t.judul.trim();
+    return { tempat: meja, teks: judul ? `${KATA_KERJA[meja]}: ${judul}` : `${KATA_KERJA[meja]}…` };
+  }
+  return { tempat: "istirahat", teks: "Menunggu tugas" };
+}
+
+/** Peta id-bot (tampilan) -> sasaran, untuk SimulasiBot.setSasaran / sasaranAwal. */
+export function petaSasaran(bots: readonly BotContoh[], jedaGlobal: boolean): Record<string, Sasaran> {
+  return Object.fromEntries(bots.map((b) => [b.id, sasaranBot(b, jedaGlobal)]));
+}
+
+/** Papan penugasan Nara: usulan disetujui 24 jam terakhir dikelompokkan per bot (id tampilan). */
+export function petaCatatan(diputus: readonly DiputusKoordinator[]): CatatanPapan {
+  const hasil: CatatanPapan = {};
+  for (const d of diputus) {
+    const kunci = String(d.bot_id);
+    (hasil[kunci] ??= []).push({ id: d.id, judul: d.judul });
+  }
+  return hasil;
+}
+
+/** Usulan disetujui yang masih baru -> surat tugas yang akan diantar Nara. Bot yang sudah tidak ada dilewati. */
+export function suratBaru(diputus: readonly DiputusKoordinator[], idBotAda: ReadonlySet<string>, sekarangMs: number): TugasAntar[] {
+  return diputus
+    .filter((d) => perluDiantar(d, sekarangMs, JENDELA_ANTAR_MS) && idBotAda.has(String(d.bot_id)))
+    .sort((p, q) => Date.parse(p.diputus_pada) - Date.parse(q.diputus_pada) || p.id - q.id)
+    .map((d) => ({ id: d.id, botId: String(d.bot_id), judul: d.judul }));
 }
 
 /** "HH:MM" WIB dari stempel waktu ISO (tak bergantung zona perangkat). */

@@ -50,6 +50,12 @@ cek("jam rusak → bawaan", rakitBot({ ...baris, jam_mulai: "pagi", jam_selesai:
 cek("aktif null dianggap aktif, jeda null dianggap tidak", (() => { const x = rakitBot({ ...baris, aktif: null, jeda: null }, "x", 0, 0); return x.aktif === true && x.jeda === false; })());
 cek("angka negatif dijepit 0", rakitBot({ ...baris, gagal_beruntun: -4 }, "x", -3, -2).gagal_beruntun === 0 && rakitBot(baris, "x", -3, -2).post_hari_ini === 0);
 
+console.log("\n[D2] rakitBot: API key & tugas berjalan (dunia Ruang Bot)");
+cek("tanpa ekstra: tidak punya otak, tanpa tugas", r.punya_otak === false && r.tugas_aktif === null);
+cek("punyaOtak true dibawa", rakitBot(baris, "x", 0, 0, { punyaOtak: true }).punya_otak === true);
+cek("punyaOtak selain true persis = tidur", rakitBot(baris, "x", 0, 0, { punyaOtak: undefined }).punya_otak === false);
+cek("tugas aktif dibawa", rakitBot(baris, "x", 0, 0, { tugasAktif: { tahap: "edit", judul: "J" } }).tugas_aktif?.tahap === "edit");
+
 console.log("\n[E] statusKosong");
 const k = statusKosong(false);
 cek("tabel_ada=false, tanpa bot, runner mati", k.tabel_ada === false && k.bots.length === 0 && k.runner.online === false);
