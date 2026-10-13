@@ -187,6 +187,61 @@ td{padding:8px;border-bottom:1px dashed var(--line);vertical-align:middle}
 .toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--surf2);border:1px solid var(--warn);color:var(--tx);padding:9px 16px;border-radius:12px;font-weight:600;font-size:13px;z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
 .toast.show{opacity:1}
 @media(prefers-reduced-motion:reduce){.q div,.sw::after,.toast{transition:none}}
+
+/* ---- Chat & Ruang Koordinator (tahap 3) ---- */
+:root{--koor:#fb7185}
+.chatg{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}
+@media(max-width:980px){.chatg{grid-template-columns:1fr}}
+.chatbox{display:flex;flex-direction:column;height:min(70vh,640px);min-height:380px}
+.msgs{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:min(92%,560px);align-self:flex-start;background:var(--surf2);border:1px solid var(--line);border-radius:14px 14px 14px 4px;padding:8px 11px;font-size:13px;line-height:1.45;border-left:3px solid var(--c,var(--line))}
+.msg.m{align-self:flex-end;background:#2a2110;border-radius:14px 14px 4px 14px;border-left-color:var(--acc)}
+.msg.s{align-self:center;background:transparent;border:1px dashed var(--line);color:var(--mut);font-size:12px;border-radius:10px;text-align:center}
+.msg .who{display:flex;gap:7px;align-items:baseline;font:700 11px var(--mono);color:var(--c,var(--mut));margin-bottom:3px}
+.msg .who time{color:var(--mut);font-weight:600}
+.msg .who .rl{font-weight:600;color:var(--mut)}
+.msg p{margin:0;white-space:pre-wrap;word-break:break-word}
+.typing{align-self:flex-start;color:var(--mut);font-size:12px;display:flex;gap:6px;align-items:center}
+.typing i{width:6px;height:6px;border-radius:50%;background:var(--mut);animation:kd 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes kd{0%,60%,100%{opacity:.25}30%{opacity:1}}
+.cform{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line);align-items:flex-end}
+.cform textarea{flex:1;min-height:42px;max-height:110px;resize:none;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:9px 11px;font-size:13px}
+.cform .btn{height:42px}
+.mnt{display:flex;flex-wrap:wrap;gap:6px;padding:0 10px 10px}
+.mnt button{background:var(--surf2);border:1px solid var(--line);border-radius:99px;padding:3px 10px;font-size:11.5px;font-weight:700;display:inline-flex;gap:6px;align-items:center}
+.mnt button i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.prop{margin-top:8px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:9px 10px;border-top:3px solid var(--koor)}
+.prop h4{margin:0 0 3px;font-size:13px;display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.prop .why{font-size:12px;color:var(--mut);margin:3px 0}
+.prop .flags{margin:6px 0}
+.prop .acts{margin-top:7px}
+.aksi{font:700 10px var(--mono);letter-spacing:.5px;text-transform:uppercase;border:1px solid var(--koor);color:var(--koor);border-radius:5px;padding:1px 6px;white-space:nowrap}
+.pst{font-size:10.5px;font-weight:700;padding:1px 8px;border-radius:99px}
+.pst.menunggu{background:var(--warnbg);color:var(--warn)}.pst.disetujui{background:var(--okbg);color:var(--ok)}.pst.ditolak{background:var(--badbg);color:var(--bad)}
+.rost{display:grid;gap:8px}
+.ros{display:grid;grid-template-columns:44px 1fr;gap:9px;align-items:center;padding:8px;border-radius:12px;background:var(--surf2);border:1px solid var(--line)}
+.ros canvas{width:44px;height:66px;image-rendering:pixelated;background:#251f33;border-radius:8px}
+.ros b{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.key{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px}
+.key.ada{background:var(--okbg);color:var(--ok)}.key.tak{background:var(--warnbg);color:var(--warn)}
+.kgrid{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:14px;align-items:start}
+@media(max-width:1060px){.kgrid{grid-template-columns:1fr}}
+.kstage{position:relative;width:100%;aspect-ratio:352/276;border-radius:12px;overflow:hidden;background:#0b0912}
+#kroom{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;display:block}
+#kov{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.kportrait{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:start}
+.kportrait canvas{width:96px;height:144px;image-rendering:pixelated;background:linear-gradient(#2b2440,#1d1830);border-radius:12px;border:1px solid var(--line)}
+.kportrait h2{margin:0;font:700 22px var(--display);color:var(--koor)}
+.dir{display:flex;gap:8px;margin-top:10px}
+.dir input{flex:1;min-width:0}
+.hint{font-size:11.5px;color:var(--mut);margin:6px 0 0}
+.chipq{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chipq button{background:var(--surf2);border:1px solid var(--line);border-radius:99px;padding:3px 10px;font-size:11.5px}
+.bm{margin:8px 0}.bm .t{display:flex;justify-content:space-between;font-size:12px}
+.bm .m{height:7px;border-radius:99px;background:var(--bg);overflow:hidden;margin-top:4px}.bm .m div{height:100%;border-radius:99px;background:var(--c)}
+.seg button[disabled]{opacity:.45;cursor:not-allowed}
+@media(prefers-reduced-motion:reduce){.typing i{animation:none}}
 </style>
 
 <div class="app">
@@ -197,6 +252,8 @@ td{padding:8px;border-bottom:1px dashed var(--line);vertical-align:middle}
       <button data-v="detail" type="button">Detail Bot</button>
       <button data-v="acc" type="button">Antrean ACC <span class="n" id="accN"></span></button>
       <button data-v="sumber" type="button">Sumber &amp; Kuota</button>
+      <button data-v="chat" type="button">Chat <span class="n" id="chatN"></span></button>
+      <button data-v="koordinator" type="button">Ruang Koordinator <span class="n" id="propN"></span></button>
     </nav>
     <span class="sp"></span>
     <span class="clock" id="clock">Hari ini · 09:05 WIB</span>
@@ -285,6 +342,61 @@ td{padding:8px;border-bottom:1px dashed var(--line);vertical-align:middle}
       <form class="frm" id="blkForm" autocomplete="off"><input class="in" id="blkI" placeholder="kata kunci atau akun yang tidak boleh diambil" aria-label="Tambah blokir" style="flex:1 1 260px"><button class="btn" type="submit">Blokir</button></form>
     </div>
     <div class="card note"><b>Tentang sumber.</b> Instagram dan TikTok diambil lewat TikHub (berbayar, berkuota). Feed YouTube/NTV belum ada di sistem dan dibangun pada tahap pencarian. Hak cipta konten sumber tetap tanggung jawab pemilik: caption selalu memuat kredit sumber.</div>
+  </section>
+
+  <!-- ===== CHAT (room bersama) ===== -->
+  <section id="v-chat" hidden aria-label="Room chat bot">
+    <div class="chatg">
+      <div class="card chatbox">
+        <div class="msgs" id="msgs" aria-live="polite" aria-label="Percakapan room bot"></div>
+        <div class="mnt" id="mnt" aria-label="Sebut agen"></div>
+        <form class="cform" id="cform" autocomplete="off">
+          <label for="cin" class="sr" style="position:absolute;left:-9999px">Pesan</label>
+          <textarea id="cin" rows="2" maxlength="1000" placeholder="Tulis pesan… sebut @Raka, @Sinta, @Dimas, @Nara atau @semua"></textarea>
+          <button class="btn ok" type="submit">Kirim</button>
+        </form>
+      </div>
+      <aside class="side">
+        <div class="card pad"><h3 class="h">Isi room</h3><div class="rost" id="rost"></div></div>
+        <div class="card pad"><h3 class="h">Aturan room</h3>
+          <ul class="rules"><li><span>Agen hanya <b>berbicara</b>. Tidak ada tugas yang dimulai dari ucapan di sini.</span></li><li><span>Pembagian tugas hanya lewat <b>usulan Nara</b>, yang harus Anda setujui.</span></li><li><span>Maksimal 3 agen menjawab per pesan; agen tidak membalas agen lain.</span></li><li><span>Jawaban berpijak pada keadaan nyata agen (tugas, kuota, jeda).</span></li></ul></div>
+      </aside>
+    </div>
+    <div class="card note"><b>Contoh yang bisa dicoba.</b> “@Raka sudah sampai mana?” · “@semua kuota hari ini berapa?” · “@Nara tolong kerjakan berita banjir dari youtu.be/dQw4w9WgXcQ” · “@Nara jeda Sinta 30 menit”. Jawaban di mockup ini skrip, bukan model sungguhan.</div>
+  </section>
+
+  <!-- ===== RUANG KOORDINATOR ===== -->
+  <section id="v-koordinator" hidden aria-label="Ruang koordinator">
+    <div class="bar">
+      <div class="seg" role="group" aria-label="Mode koordinator"><button class="on" type="button" data-km="usul">Usulan wajib disetujui</button><button type="button" disabled title="Dibuka pemilik nanti, setelah terbukti baik">Otonom terbatas (terkunci)</button></div>
+      <span class="sp"></span><span class="mut" id="kSum"></span>
+    </div>
+    <div class="kgrid">
+      <div class="card roomcard">
+        <div class="kstage" id="kstage">
+          <canvas id="kroom" aria-label="Ruang koordinator: Nara membagi tugas kepada Raka, Sinta, dan Dimas di meja rapat"></canvas>
+          <div id="kov"></div>
+          <div class="hud"><span id="kHudA">Nara: menimbang</span><span id="kHudB">Usulan menunggu 0</span><span id="kHudC">Tugas dibagi hari ini 0</span></div>
+        </div>
+        <div class="legend">
+          <div class="lg" style="--c:var(--koor)"><b>Meja Nara</b><span>membaca keadaan, menulis usulan</span></div>
+          <div class="lg" style="--c:var(--cari)"><b>Papan penugasan</b><span>tugas yang sudah Anda setujui</span></div>
+          <div class="lg" style="--c:var(--edit)"><b>Meja rapat</b><span>tiga agen duduk; tugas diantar Nara</span></div>
+          <div class="lg" style="--c:var(--posting)"><b>Layar dinding</b><span>kuota tiap agen hari ini</span></div>
+        </div>
+      </div>
+      <aside class="side">
+        <div class="card pad"><h3 class="h">Koordinator</h3><div id="kcard"></div></div>
+        <div class="card pad"><h3 class="h">Usulan menunggu Anda</h3><div id="kprops"></div></div>
+        <div class="card pad"><h3 class="h">Beban kerja agen</h3><div id="kload"></div></div>
+      </aside>
+    </div>
+    <div class="two">
+      <div class="card pad"><h3 class="h">Pagar koordinator</h3>
+        <ul class="rules"><li><span>Aksi hanya dari <b>daftar tertutup</b>: kerjakan tautan, cari sekarang, ubah kuota, jeda, lanjutkan. Teks bebas model tidak pernah jadi aksi.</span></li><li><span>Setiap usulan <b>menunggu persetujuan Anda</b>; Nara tidak bisa menyetujui usulannya sendiri.</span></li><li><span>Tidak bisa memposting: hasil tetap berhenti di <b>Antrean ACC</b>.</span></li><li><span>Tetap tunduk pada kuota, jam aktif, jeda, daftar blokir, dan anti-tabrakan video.</span></li><li><span>Maksimal 3 usulan terbuka sekaligus; usulan basi hangus setelah 2 jam.</span></li><li><span>Semua usulan dan keputusan tercatat di Audit.</span></li></ul></div>
+      <div class="card pad"><h3 class="h">Riwayat usulan</h3><div class="hist" id="khist"></div></div>
+    </div>
+    <div class="card note"><b>Cara membaca.</b> Nara duduk di mejanya, menimbang beban agen, lalu menempel tugas di papan dan <b>mengantar surat tugas</b> ke agen yang dituju begitu Anda menyetujui usulan. Setujui/tolak bisa dari sini atau langsung di Chat. Mockup ini data contoh; keputusan Nara berasal dari skrip, bukan model.</div>
   </section>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -917,6 +1029,8 @@ function loop(now){
   const dt=Math.min(.1,(now-last)/1000)*speed;last=now;
   rt+=dt;tick(dt);
   if(view==='ruang'){frame(now);placeOverlay();}
+  else if(view==='koordinator'){kframe(now);kOverlay();}
+  tickK(dt);
   cardT+=dt;if(cardT>.5){cardT=0;renderCards()}
   requestAnimationFrame(loop);
 }
@@ -933,7 +1047,7 @@ let toastT=0;
 function toast(m){const e=$('#toast');e.textContent=m;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('show'),2400)}
 
 /* ---------- navigasi ---------- */
-const VIEWS=['ruang','detail','acc','sumber'];
+const VIEWS=['ruang','detail','acc','sumber','chat','koordinator'];
 let view='ruang',detId='raka';
 function show(v){
   if(!VIEWS.includes(v))v='ruang';
@@ -944,6 +1058,8 @@ function show(v){
   if(v==='detail')renderDetail();
   if(v==='acc')renderAcc();
   if(v==='sumber')renderSumber();
+  if(v==='chat'){unread=0;chatBadge();renderChat();const m=$('#msgs');m.scrollTop=m.scrollHeight}
+  if(v==='koordinator')renderK();
 }
 $('#tabs').addEventListener('click',e=>{const b=e.target.closest('button');if(b)show(b.dataset.v)});
 addEventListener('hashchange',()=>show(location.hash.slice(1)));
@@ -1131,6 +1247,369 @@ $('#swStop').onclick=()=>{$('#pause').click();renderSumber()};
 $('#swAuto').onclick=function(){const on=this.getAttribute('aria-checked')!=='true';this.setAttribute('aria-checked',String(on));toast('Berhenti otomatis '+(on?'aktif':'mati'))};
 $('#qMin').onclick=()=>{MAXQ=Math.max(1,MAXQ-1);renderSumber();renderCards()};
 $('#qPlus').onclick=()=>{MAXQ=Math.min(6,MAXQ+1);renderSumber();renderCards()};
+
+/* ============================================================
+   TAHAP 3 — Room Chat & Ruang Koordinator (mockup)
+   Agen hanya BERBICARA; Nara hanya MENGUSULKAN; Anda yang menyetujui.
+   ============================================================ */
+const KO={id:'nara',nama:'Nara',peran:'Koordinator Redaksi',col:'#fb7185',
+  persona:'Tenang dan adil. Membagi tugas menurut beban dan keahlian, tidak pernah menjanjikan yang tidak bisa ditepati, dan selalu menyebut alasannya.',
+  look:{shirt:'#2f4b8a',shade:'#223a70',pants:'#23273d',skin:'#d8a47c',hairC:'#1d1a24',hair:'short',glass:true,badge:'#fb7185',cup:true}};
+const AKSI={kerjakan_url:'Kerjakan tautan',cari_sekarang:'Cari sekarang',ubah_kuota:'Ubah kuota',jeda:'Jeda bot',lanjut:'Lanjutkan bot'};
+const KEYS={raka:true,sinta:true,dimas:false};
+const botOf=id=>BOTS.find(b=>b.id===id);
+const nowS=()=>fmt(simT);
+
+/* ---------- usulan ---------- */
+let propSeq=11,koorDone=0;
+const PROP=[],KLOGS=[];
+function klog(t){KLOGS.unshift({w:nowS(),t});if(KLOGS.length>30)KLOGS.pop();if(view==='koordinator')renderK()}
+const TPL=[
+  b=>({bot:'raka',aksi:'kerjakan_url',judul:'Kerjakan video banjir Pantura',param:'youtu.be/dQw4w9WgXcQ · dari @ntv',alasan:'Raka belum punya tugas dan kuotanya tersisa '+(MAXQ-botOf('raka').quota)+'. Topik banjir sedang naik di 3 sumber.',
+    pagar:[['ok','Kuota tersisa'],['ok','Tautan belum pernah dipakai'],['ok','Sidik visual: tidak ada kembaran'],['warn','Hasil tetap menunggu ACC']]}),
+  b=>({bot:'sinta',aksi:'cari_sekarang',judul:'Cari video sekarang',param:'semua sumber aktif Sinta',alasan:'Kandidat Sinta tinggal 1 dan sumber terakhir dipanen 40 menit lalu.',
+    pagar:[['ok','Dalam jam aktif'],['ok','Tidak dijeda'],['warn','Memicu panen (beban yt-dlp)']]}),
+  b=>({bot:'dimas',aksi:'ubah_kuota',judul:'Turunkan kuota Dimas',param:'kuota '+MAXQ+' → '+Math.max(1,MAXQ-1)+' per hari',alasan:'Dua video Dimas ditolak di ACC hari ini; kurangi sementara sampai kualitasnya pulih.',
+    pagar:[['ok','Dalam batas 1–6'],['warn','Mengubah perilaku bot — wajib persetujuan']]}),
+  b=>({bot:'raka',aksi:'jeda',judul:'Jeda Raka 30 menit',param:'sampai '+fmt(simT+1800),alasan:'Slot render penuh (10/10); beri ruang untuk render anggota.',
+    pagar:[['ok','Jeda otomatis berakhir'],['warn','Bot berhenti mengambil tugas baru']]})
+];
+let tplI=0;
+function bukaUsulan(o){
+  const open=PROP.filter(p=>p.st==='menunggu').length;
+  if(open>=3)return null;
+  const p=Object.assign({id:++propSeq,st:'menunggu',w:nowS(),by:'koor'},o);
+  PROP.unshift(p);propBadge();
+  chatAdd({k:'koor',teks:'Saya mengusulkan pembagian tugas berikut. Menunggu persetujuan Anda.',prop:p.id});
+  klog('Mengusulkan #'+p.id+': '+AKSI[p.aksi]+' → '+botOf(p.bot).nama);
+  K.talk='Usulan #'+p.id+' menunggu Pimred';K.talkT=rt+5;
+  return p;
+}
+function propBadge(){const n=PROP.filter(p=>p.st==='menunggu').length;$('#propN').textContent=n?String(n):'';$('#kHudB').textContent='Usulan menunggu '+n}
+function putus(id,jenis){
+  const p=PROP.find(x=>x.id===id);if(!p||p.st!=='menunggu')return;
+  const b=botOf(p.bot);
+  if(jenis==='setuju'){
+    p.st='disetujui';koorDone++;
+    klog('Disetujui #'+p.id+' ('+AKSI[p.aksi]+' → '+b.nama+')');
+    chatAdd({k:'sis',teks:'Usulan #'+p.id+' disetujui Pimred. '+(p.aksi==='kerjakan_url'?'Nara mengantar surat tugas ke '+b.nama+'.':'Dijalankan lewat pagar yang berlaku.')});
+    K.queue.push(p);
+    toast('Disetujui · Nara mengantar tugas ke '+b.nama+' (contoh)');
+  }else{
+    p.st='ditolak';klog('Ditolak #'+p.id);
+    chatAdd({k:'sis',teks:'Usulan #'+p.id+' ditolak Pimred. Tidak ada yang dijalankan.'});
+    toast('Usulan ditolak (contoh)');
+  }
+  propBadge();renderK();renderChat();
+}
+
+/* ---------- chat ---------- */
+const CHAT=[];let chatSeq=0,pendingReply=0;
+function chatAdd(m){
+  m.id=++chatSeq;m.w=nowS();CHAT.push(m);if(CHAT.length>120)CHAT.shift();
+  if(view!=='chat'&&(m.k==='bot'||m.k==='koor'))unread++;
+  chatBadge();if(view==='chat')renderChat();
+}
+let unread=0;
+function chatBadge(){$('#chatN').textContent=unread?String(unread):''}
+function propCard(p){
+  const b=botOf(p.bot);
+  const fl=p.pagar.map(f=>`<span class="s ${f[0]}">${esc(f[1])}</span>`).join('');
+  const act=p.st==='menunggu'?`<div class="acts"><button class="btn ok sm" data-pa="setuju" data-pid="${p.id}" type="button">Setujui</button><button class="btn dan sm" data-pa="tolak" data-pid="${p.id}" type="button">Tolak</button></div>`:'';
+  return `<div class="prop"><h4><span class="aksi">${AKSI[p.aksi]}</span><span style="color:${b.col}">${b.nama}</span><span class="pst ${p.st}">${p.st==='menunggu'?'Menunggu Anda':p.st==='disetujui'?'Disetujui':'Ditolak'}</span></h4>
+    <div><b>${esc(p.judul)}</b> <span class="mut">· ${esc(p.param)}</span></div><div class="why">Alasan Nara: ${esc(p.alasan)}</div><div class="flags">${fl}</div>${act}</div>`;
+}
+function renderChat(){
+  const el=$('#msgs'),near=el.scrollHeight-el.scrollTop-el.clientHeight<80;
+  el.innerHTML=CHAT.map(m=>{
+    if(m.k==='sis')return `<div class="msg s">${esc(m.teks)}</div>`;
+    const who=m.k==='m'?{n:'Pimred',c:'var(--acc)',r:''}:m.k==='koor'?{n:KO.nama,c:KO.col,r:'Koordinator'}:(()=>{const b=botOf(m.bot);return{n:b.nama,c:b.col,r:b.peran}})();
+    const pr=m.prop?propCard(PROP.find(p=>p.id===m.prop)):'';
+    return `<div class="msg ${m.k==='m'?'m':''}" style="--c:${who.c}"><div class="who">${who.n}<span class="rl">${who.r}</span><time>${m.w}</time></div><p>${esc(m.teks)}</p>${pr}</div>`;
+  }).join('')+(pendingReply>0?'<div class="typing"><i></i><i></i><i></i> agen sedang menulis…</div>':'');
+  if(near||!el.dataset.init){el.scrollTop=el.scrollHeight;el.dataset.init='1'}
+  $('#mnt').innerHTML=[...BOTS.map(b=>({n:b.nama,c:b.col,k:KEYS[b.id]})),{n:KO.nama,c:KO.col,k:true},{n:'semua',c:'#a79fb2',k:true}].map(x=>`<button type="button" data-at="${x.n}" aria-label="Sebut ${x.n}"><i style="--c:${x.c}"></i>@${x.n}${x.k?'':' · tanpa key'}</button>`).join('');
+  const r=$('#rost');r.innerHTML='';
+  for(const o of [{...KO,koor:true},...BOTS]){
+    const d=document.createElement('div');d.className='ros';
+    const st=o.koor?'Menimbang usulan':o.state==='work'?STG[o.stage].lab:o.state==='walk'?'Berjalan':'Menunggu';
+    const key=o.koor||KEYS[o.id];
+    d.innerHTML=`<canvas width="24" height="36"></canvas><div><b style="color:${o.col}">${o.nama}<span class="key ${key?'ada':'tak'}">${key?'otak aktif':'tanpa API key'}</span></b><span class="mut">${o.peran} · ${st}</span></div>`;
+    r.appendChild(d);avatar(o,d.querySelector('canvas'));
+  }
+}
+$('#msgs').addEventListener('click',e=>{const b=e.target.closest('[data-pa]');if(b)putus(+b.dataset.pid,b.dataset.pa)});
+$('#mnt').addEventListener('click',e=>{const b=e.target.closest('[data-at]');if(!b)return;const t=$('#cin');t.value+=(t.value&&!t.value.endsWith(' ')?' ':'')+'@'+b.dataset.at+' ';t.focus()});
+const norm=x=>x.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]/g,'');
+function sebut(teks){
+  const ids=[];let nara=false;
+  for(const m of teks.matchAll(/(?:^|[\s(,.!?])@([A-Za-z0-9_.-]{2,40})/g)){
+    const k=norm(m[1]);
+    if(k==='semua'||k==='all'){BOTS.forEach(b=>{if(!ids.includes(b.id))ids.push(b.id)});continue}
+    if(k==='nara'||k==='koordinator'){nara=true;continue}
+    const b=BOTS.find(x=>norm(x.nama)===k||norm(x.id)===k);if(b&&!ids.includes(b.id))ids.push(b.id);
+  }
+  return{ids:ids.slice(0,3),nara};
+}
+function statusBot(b){
+  const lab=b.state==='work'?STG[b.stage].lab.toLowerCase():b.state==='walk'?'berjalan ke mejanya':'menunggu giliran';
+  return (b.state==='work'&&b.text?b.text.replace(/…$/,''):lab);
+}
+function jawabBot(b,teks){
+  const t=teks.toLowerCase(),q=b.quota+'/'+MAXQ;
+  const tugas=/kerjakan|tolong|tugas|segera|ambil|cari/.test(t);
+  let isi;
+  if(/kuota/.test(t))isi={raka:`Kuota saya hari ini ${q}. Siap menambah kalau diizinkan.`,sinta:`Kuota saya ${q}. Template saya jaga tetap rapi, jadi saya tidak tergesa.`,dimas:`Kuota ${q}. Saya tidak melewati batas; semua lewat pagar dulu.`}[b.id];
+  else if(/status|sampai mana|lagi apa|ngapain|sedang/.test(t))isi={raka:`Siap bos. Sekarang: ${statusBot(b)}. Kuota ${q}.`,sinta:`Baik. Posisi saya: ${statusBot(b)}. Kuota ${q}.`,dimas:`Dicatat. Status: ${statusBot(b)}; kuota ${q}; mode ${b.mode==='oto'?'otomatis':'perlu ACC'}.`}[b.id];
+  else isi={raka:'Halo! Saya standby, tinggal bilang apa yang perlu dicek.',sinta:'Halo. Ada yang perlu saya rapikan?',dimas:'Halo. Saya siap membantu memeriksa aturan dan kuota.'}[b.id];
+  if(tugas)isi+=' Soal tugas baru: saya tidak bisa memulainya dari chat; pembagian tugas lewat Nara.';
+  return isi;
+}
+function jawabNara(teks){
+  const t=teks.toLowerCase();
+  const url=(teks.match(/(?:https?:\/\/)?(?:youtu\.be|www\.youtube\.com|www\.tiktok\.com|www\.instagram\.com)\/[^\s]+/i)||[])[0];
+  const sebutBot=BOTS.find(b=>t.includes('@'+b.nama.toLowerCase())||new RegExp('\\b'+b.nama.toLowerCase()+'\\b').test(t));
+  const pilih=sebutBot||[...BOTS].sort((a,b)=>a.quota-b.quota)[0];
+  if(/jeda|istirahat/.test(t)){const b=sebutBot||BOTS[1];return{teks:'Baik, saya usulkan jeda untuk '+b.nama+'.',o:{bot:b.id,aksi:'jeda',judul:'Jeda '+b.nama+' 30 menit',param:'sampai '+fmt(simT+1800),alasan:'Atas permintaan Pimred.',pagar:[['ok','Jeda otomatis berakhir'],['warn','Bot berhenti mengambil tugas baru']]}}}
+  if(/lanjut|aktifkan/.test(t)){const b=sebutBot||BOTS[1];return{teks:'Saya usulkan '+b.nama+' dilanjutkan.',o:{bot:b.id,aksi:'lanjut',judul:'Lanjutkan '+b.nama,param:'cabut jeda',alasan:'Atas permintaan Pimred.',pagar:[['ok','Dalam jam aktif']]}}}
+  if(/kuota/.test(t)){const b=pilih;return{teks:'Saya usulkan perubahan kuota untuk '+b.nama+'.',o:{bot:b.id,aksi:'ubah_kuota',judul:'Ubah kuota '+b.nama,param:'kuota '+MAXQ+' → '+Math.min(6,MAXQ+1),alasan:'Atas permintaan Pimred; '+b.nama+' baru memakai '+b.quota+'/'+MAXQ+'.',pagar:[['ok','Dalam batas 1–6'],['warn','Mengubah perilaku bot — wajib persetujuan']]}}}
+  if(url||/kerjakan|berita|banjir|video|tautan|link/.test(t)){const b=pilih;return{teks:'Siap. Saya pilih '+b.nama+' (beban paling ringan: kuota '+b.quota+'/'+MAXQ+'). Usulannya:',o:{bot:b.id,aksi:'kerjakan_url',judul:url?'Kerjakan tautan dari Pimred':'Kerjakan topik dari Pimred',param:url?url.slice(0,60):(teks.replace(/@\w+/g,'').trim().slice(0,60)||'topik dari chat'),alasan:'Permintaan langsung Pimred; '+b.nama+' paling longgar saat ini.',pagar:[['ok','Kuota tersisa'],['ok','Anti-tabrakan akan diperiksa sebelum diklaim'],['warn','Hasil tetap menunggu ACC']]}}}
+  if(/cari|panen|sumber/.test(t)){const b=pilih;return{teks:'Saya usulkan '+b.nama+' mencari video sekarang.',o:{bot:b.id,aksi:'cari_sekarang',judul:'Cari video sekarang',param:'semua sumber aktif '+b.nama,alasan:'Atas permintaan Pimred.',pagar:[['ok','Dalam jam aktif'],['warn','Memicu panen']]}}}
+  return{teks:'Saya belum menangkap tugasnya. Coba: “@Nara kerjakan berita banjir dari youtu.be/…”, “@Nara jeda Sinta”, atau “@Nara naikkan kuota Raka”.'};
+}
+function kirimPesan(teks){
+  teks=teks.trim();if(!teks)return false;
+  chatAdd({k:'m',teks});
+  const {ids,nara}=sebut(teks);
+  if(!ids.length&&!nara){chatAdd({k:'sis',teks:'Tidak ada agen yang disebut. Tulis @Raka, @Sinta, @Dimas, @Nara, atau @semua agar ada yang menjawab.'});return true}
+  let d=700;
+  for(const id of ids){
+    const b=botOf(id);pendingReply++;renderChat();
+    setTimeout(()=>{pendingReply--;
+      if(!KEYS[b.id])chatAdd({k:'sis',teks:b.nama+' belum punya API key, jadi belum bisa menjawab. Pasang di TVR Saya → Otak Bot.'});
+      else chatAdd({k:'bot',bot:b.id,teks:jawabBot(b,teks)});
+      renderChat()},d);
+    d+=900;
+  }
+  if(nara){
+    pendingReply++;renderChat();
+    setTimeout(()=>{pendingReply--;const r=jawabNara(teks);K.talk='Menyusun usulan…';K.talkT=rt+3;
+      chatAdd({k:'koor',teks:r.teks});
+      if(r.o){const p=bukaUsulan(r.o);if(!p)chatAdd({k:'sis',teks:'Sudah ada 3 usulan terbuka. Putuskan salah satunya dulu.'})}
+      renderChat()},d);
+  }
+  return true;
+}
+$('#cform').addEventListener('submit',e=>{e.preventDefault();const t=$('#cin');if(kirimPesan(t.value))t.value=''});
+$('#cin').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('#cform').requestSubmit()}});
+
+/* ============================================================
+   Ruang Koordinator — kanvas isometrik
+   ============================================================ */
+const kcv=$('#kroom'),kmain=kcv.getContext('2d');kcv.width=W;kcv.height=H;
+const kbgc=document.createElement('canvas');kbgc.width=W;kbgc.height=H;const kbgx=kbgc.getContext('2d');
+const KC={floorA:'#b6c3dd',floorB:'#a2b2d2',wallL:'#1f3a5f',wallR:'#2a4a78',trim:'#d9a441'};
+const KDESK={d:[6.4,7.7,2.6,1],mon:[[7.05,8.0],[7.7,8.0]],seat:[6.9,7.15]};
+const KBOARD_SPOT=[1.9,5.6],KDESK_SEAT=[6.9,7.15];
+const KSEAT={raka:[4.1,3.7],sinta:[5.3,3.7],dimas:[6.5,3.7]};
+const KGIVE={raka:[4.1,6.5],sinta:[5.3,6.5],dimas:[6.5,6.5]};
+const KNOTES={raka:[],sinta:[],dimas:[]};
+const K={x:KDESK_SEAT[0],y:KDESK_SEAT[1],path:[],state:'desk',queue:[],t0:0,cur:null,talk:'',talkT:0,dirx:1,back:false,paper:null,idleT:0,msgI:0,genT:0};
+function buildBgK(){withCtx(kbgx,()=>{
+  ctx.clearRect(0,0,W,H);px(0,0,W,H,'#0b0912');
+  poly([P(0,N,0),P(N,N,0),P(N,N,-6),P(0,N,-6)],'#2b3a55');poly([P(N,0,0),P(N,N,0),P(N,N,-6),P(N,0,-6)],'#1e2a40');
+  for(let gx=0;gx<N;gx++)for(let gy=0;gy<N;gy++){
+    let c=((gx+gy)&1)?KC.floorA:KC.floorB;const r=hs(gx*11+gy*5);
+    if(r>.85)c=((gx+gy)&1)?'#c2cee6':'#adbbd8';else if(r<.1)c=((gx+gy)&1)?'#a8b6d3':'#97a8ca';
+    poly([P(gx,gy),P(gx+1,gy),P(gx+1,gy+1),P(gx,gy+1)],c);
+  }
+  // karpet biru bertepi emas
+  frect(2.2,7.8,2.6,7.2,'#1b2a52');frect(2.35,7.65,2.75,7.05,'#2a3f78');frect(2.55,7.45,2.95,6.85,'#d9a441');frect(2.62,7.38,3.02,6.78,'#2a3f78');
+  poly([P(0,0),P(N,0),P(N,.55),P(0,.55)],'rgba(10,20,40,.22)');poly([P(0,0),P(.55,0),P(.55,N),P(0,N)],'rgba(10,20,40,.22)');
+  poly([P(0,0,WALLH),P(0,N,WALLH),P(0,N,0),P(0,0,0)],KC.wallL);poly([P(0,0,WALLH),P(N,0,WALLH),P(N,0,0),P(0,0,0)],KC.wallR);
+  for(const s of['L','R']){
+    for(let u=1;u<N;u++)wq(s,u-.02,u+.02,18,WALLH-3,s==='L'?'#25456f':'#335a8d');
+    wq(s,0,N,0,16,s==='L'?'#3a4f73':'#44608c');
+    for(let u=0;u<N;u+=1)wq(s,u+.04,u+.5,3,15,s==='L'?'#46618a':'#52709c');
+    wq(s,0,N,16,18.5,KC.trim);wq(s,0,N,0,3,'#243553');wq(s,0,N,WALLH-2.5,WALLH,'#12203a');
+  }
+  poly([P(0,0,WALLH),P(0,0,0),[P(0,0,0)[0]+1,P(0,0,0)[1]],[P(0,0,WALLH)[0]+1,P(0,0,WALLH)[1]]],'#355583');
+  const night=tod==='night';
+  const win=(s,u0,u1)=>{
+    wq(s,u0-.14,u1+.14,21,57,KC.trim);wq(s,u0,u1,24,54,night?'#0d1130':'#bfe3ff');
+    if(!night){wq(s,u0,u1,24,33,'#fff0c8');wq(s,u0,u1,33,36,'#d9efff')}
+    wq(s,(u0+u1)/2-.04,(u0+u1)/2+.04,24,54,KC.trim);wq(s,u0-.22,u1+.22,19.5,21.5,'#e6b878');
+  };
+  win('R',.6,2.0);win('R',7.4,8.8);win('L',8.3,9.5);
+  // bingkai papan penugasan (dinding kiri)
+  wq('L',1.3,8.1,13,56,'#d9a441');wq('L',1.45,7.95,14.5,54.5,'#f2ece0');wq('L',1.45,7.95,48.5,54.5,'#2a3f78');
+  for(let i=0;i<3;i++){wq('L',1.55+i*2.2,3.55+i*2.2,49.2,53.8,['#f08a3c','#a56bd1','#4cae6b'][i]);if(i<2)wq('L',3.62+i*2.2,3.66+i*2.2,15.5,47.5,'#cfc6b2')}
+  // layar kuota (dinding kanan)
+  wq('R',3.1,6.5,18,50,'#0e1626');wq('R',3.18,6.42,19,49,'#08111f');
+});}
+function kdesk(t){
+  const [gx,gy,w,d]=KDESK.d;
+  const lg=(x,y)=>box(x,y,.14,.14,8,0,'#5b3419','#5b3419','#3f2411');
+  lg(gx+.05,gy+.05);lg(gx+w-.2,gy+.05);lg(gx+.05,gy+d-.2);lg(gx+w-.2,gy+d-.2);
+  box(gx,gy,w,d,3,8,C.dT,C.dL,C.dR);
+  const on=K.state==='desk';
+  for(let i=0;i<2;i++)monitor(KDESK.mon[i][0],KDESK.mon[i][1],11,i?'#fb7185':'#38bdf8',on,t,60+i*7);
+  poly([P(7.1,8.55,11.2),P(7.6,8.55,11.2),P(7.6,8.75,11.2),P(7.1,8.75,11.2)],'#2a2630');
+  lamp(8.6,8.0,11);
+}
+function ktable(){
+  const lg=(x,y)=>box(x,y,.14,.14,7,0,'#5b3419','#5b3419','#3f2411');
+  lg(3.1,4.3);lg(7.0,4.3);lg(3.1,5.55);lg(7.0,5.55);
+  box(3.0,4.2,4.2,1.5,2,7,'#e6b46a','#b9763a','#8e5528');
+  box(3.05,4.25,4.1,1.4,.6,9,'#f0c88a','#e6b46a','#e6b46a');
+  for(const id of ['raka','sinta','dimas']){const b=botOf(id);const q=KSEAT[id];const c=P(q[0]+0.1,5.0,9.8);px(c[0]-3,c[1]-1,6,2,'#f6f1e4');px(c[0]-3,c[1]-1,1,2,b.col)}
+}
+function kpaperSprite(x,y,z){const q=P(x,y,z);px(q[0]-3,q[1]-4,7,5,'#f8f3e4');px(q[0]-3,q[1]-4,7,1,'#fb7185');px(q[0]-2,q[1]-2,4,1,'#8a8070');px(q[0]-2,q[1],3,1,'#8a8070')}
+function kwallDynamic(t){
+  // catatan di papan penugasan (dinding kiri)
+  const note=['#fde68a','#fbcfe8','#bbf7d0','#bae6fd'];
+  ['raka','sinta','dimas'].forEach((id,i)=>{
+    const u0=1.6+i*2.2,list=KNOTES[id];
+    for(let k=0;k<Math.min(3,list.length);k++)wq('L',u0+.06,u0+1.9,40-k*8.6,46-k*8.6,note[(i+k)%4]);
+    // tugas hidup bot
+    const b=botOf(id);if(b.state==='work'&&b.stage==='edit'&&list.length<3)wq('L',u0+.06,u0+1.9,18,24,'rgba(167,139,250,.55)');
+  });
+  // layar kuota (dinding kanan): tiga batang + titik ACC
+  ['raka','sinta','dimas'].forEach((id,i)=>{
+    const b=botOf(id),h=Math.max(2,Math.round(26*b.quota/MAXQ));
+    wq('R',3.5+i*.95,4.25+i*.95,20,20+26,'#1a2540');wq('R',3.5+i*.95,4.25+i*.95,20,20+h,b.col);
+  });
+  for(let k=0;k<Math.min(8,ACCQ.length);k++){const q=WP('R',3.35+k*.36,52.3);px(q[0],q[1],2,2,'#f59e0b')}
+  // jam
+  const ck=WP('R',9.3,50);disc(ck[0],ck[1],6,'#7a4a24');disc(ck[0],ck[1],5,'#f6f1e4');
+  const mm=(simT/60)%60,hh=(simT/3600)%12;
+  const hand=(a,l,c)=>{for(let s=0;s<=l;s++)px(Math.round(ck[0]+Math.sin(a)*s),Math.round(ck[1]-Math.cos(a)*s),1,1,c)};
+  hand(mm/60*6.283,4,'#2a2118');hand(hh/12*6.283,2.5,'#c2413b');
+}
+function kdrawObjects(t){
+  LAMPS.length=0;
+  const O=[],add=(k,f)=>O.push({k,f});
+  add(.3+1.3,()=>shelf(0,.3,1.2));add(9.3+.35,()=>plant(9.3,.35));add(.3+9.3,()=>plant(.3,9.3));add(9.3+9.3,()=>plant(9.3,9.3));
+  add(3.0+4.2+4.2+1.5,ktable);
+  const [dg,dy,dw,dd]=KDESK.d;add(dg+dw+dy+dd,()=>kdesk(t));
+  add(KDESK_SEAT[0]+KDESK_SEAT[1]-.25,()=>chair(KDESK_SEAT[0],KDESK_SEAT[1],'y'));
+  for(const id of ['raka','sinta','dimas']){
+    const q=KSEAT[id];add(q[0]+q[1]-.25,()=>chair(q[0],q[1],'y'));
+    const b=botOf(id);
+    add(q[0]+q[1]+.3,()=>{
+      const [fx,fy]=P(q[0],q[1]+.15,0);
+      drawChar(fx,fy,Object.assign({t,pose:'sit',raise:3,dx:1,talk:b.kbub&&rt<b.kbub.until},b.look));
+      b.ksx=fx;b.ksy=fy-3;
+    });
+  }
+  add(K.x+K.y+.02,()=>{
+    const sit=K.state==='desk',walk=K.state==='walk',typing=sit;
+    const [fx,fy]=P(K.x,K.y,0);
+    drawChar(fx,fy,Object.assign({t,pose:sit?'type':walk?'walk':'idle',raise:sit?2:0,dx:K.dirx>0?1:-1,back:K.back&&walk,talk:K.talkT>rt},KO.look));
+    K.sx=fx;K.sy=fy-(sit?2:0);
+  });
+  O.sort((a,b)=>a.k-b.k);for(const o of O)o.f();
+  if(K.paper){const p=K.paper,u=Math.min(1,(rt-p.t0)/p.dur),e=u*u*(3-2*u),z=16+Math.sin(u*Math.PI)*14;
+    kpaperSprite(p.x0+(p.x1-p.x0)*e,p.y0+(p.y1-p.y0)*e,z)}
+}
+function kframe(t){
+  ctx=kmain;ctx.clearRect(0,0,W,H);ctx.drawImage(kbgc,0,0);kwallDynamic(t);kdrawObjects(t);
+  if(tod==='night'){ctx.fillStyle='rgba(10,12,46,.4)';ctx.fillRect(0,0,W,H)}
+  ctx=main;
+}
+const kov=$('#kov'),ktags={};
+[{id:'nara',nama:KO.nama,col:KO.col},...BOTS].forEach(b=>{
+  const d=document.createElement('div');d.className='tag';d.style.setProperty('--c',b.col);
+  d.innerHTML='<div class="bub hid"></div><div class="nm"><i></i>'+b.nama+'</div>';kov.appendChild(d);ktags[b.id]=d;
+});
+const kpills=[['MEJA RAPAT',[7.9,5.0],'#a78bfa'],['MEJA NARA',[8.3,9.6],'#fb7185'],['PAPAN TUGAS',[1.2,3.2],'#38bdf8']].map(([n,g,c])=>{
+  const p=document.createElement('div');p.className='pill';p.style.setProperty('--c',c);p.innerHTML='<i></i>'+n;kov.appendChild(p);return{p,g}});
+function kOverlay(){
+  const sc=kcv.clientWidth/W;
+  const put=(id,sx,sy,txt,col)=>{
+    const t=ktags[id];if(sx==null)return;
+    t.style.left=(sx*sc)+'px';t.style.top=((sy-29)*sc)+'px';
+    const bub=t.querySelector('.bub');
+    if(txt){bub.textContent=txt;bub.classList.remove('hid');bub.style.setProperty('--c',col);bub.style.fontSize=Math.max(9,Math.min(12,sc*3.3))+'px'}else bub.classList.add('hid');
+  };
+  put('nara',K.sx,K.sy,K.talkT>rt?K.talk:'',KO.col);
+  for(const b of BOTS){const q=b.kbub&&rt<b.kbub.until?b.kbub.txt:'';put(b.id,b.ksx,b.ksy,q,b.col)}
+  for(const k of kpills){const p=P(k.g[0],k.g[1],0);k.p.style.left=(p[0]*sc)+'px';k.p.style.top=(p[1]*sc)+'px';k.p.style.fontSize=Math.max(8,sc*2.9)+'px';k.p.classList.toggle('busy',true)}
+}
+/* ---------- simulasi Nara ---------- */
+const THINK=['Memeriksa Antrean ACC…','Menimbang beban Raka, Sinta, Dimas…','Memeriksa kuota harian…','Membaca umpan aktivitas…','Menunggu keputusan Pimred'];
+function kmove(dt){
+  let d=2.4*dt;
+  while(d>0&&K.path.length){
+    const [tx,ty]=K.path[0],dx=tx-K.x,dy=ty-K.y,L=Math.hypot(dx,dy);
+    if(L<=d){K.x=tx;K.y=ty;K.path.shift();d-=L}else{K.x+=dx/L*d;K.y+=dy/L*d;K.dirx=Math.sign(dx-dy)||K.dirx;K.back=(dx+dy)<0;d=0}
+  }
+  return !K.path.length;
+}
+function tickK(dt){
+  if(K.state==='desk'){
+    K.idleT+=dt;
+    if(K.queue.length){K.cur=K.queue.shift();K.path=[[2.6,7.0],KBOARD_SPOT];K.state='walk';K.next='board';K.talk='Menempel tugas di papan';K.talkT=rt+4}
+    else{
+      if(K.idleT>5){K.idleT=0;K.talk=PROP.some(p=>p.st==='menunggu')?'Ada '+PROP.filter(p=>p.st==='menunggu').length+' usulan menunggu Pimred':THINK[K.msgI++%THINK.length];K.talkT=rt+3.5}
+      K.genT+=dt;
+      if(K.genT>28&&PROP.filter(p=>p.st==='menunggu').length<2){K.genT=0;const o=TPL[tplI++%TPL.length]();bukaUsulan(o)}
+    }
+  }else if(K.state==='walk'){
+    if(kmove(dt)){
+      if(K.next==='board'){K.state='pin';K.t0=rt}
+      else if(K.next==='give'){K.state='give';K.t0=rt;const b=botOf(K.cur.bot),s=KSEAT[b.id];K.paper={t0:rt,dur:1.3,x0:K.x,y0:K.y,x1:s[0],y1:s[1]+.3}}
+      else{K.state='desk';K.idleT=0;K.back=false;K.path=[];K.x=KDESK_SEAT[0];K.y=KDESK_SEAT[1]}
+    }
+  }else if(K.state==='pin'){
+    if(rt-K.t0>1.6){
+      const p=K.cur,b=botOf(p.bot);KNOTES[b.id].unshift(p.judul);if(KNOTES[b.id].length>3)KNOTES[b.id].pop();
+      K.path=[[3.2,6.9],KGIVE[b.id]];K.state='walk';K.next='give';K.talk='Mengantar surat tugas ke '+b.nama;K.talkT=rt+4;
+    }
+  }else if(K.state==='give'){
+    const p=K.cur,b=botOf(p.bot);
+    if(K.paper&&rt-K.paper.t0>=K.paper.dur){
+      K.paper=null;b.kbub={txt:'Tugas baru dari Nara: '+p.judul,until:rt+5};
+      klog('Surat tugas diterima '+b.nama+': '+p.judul);K.t0=rt;K.paper=null;K.gave=true;
+    }
+    if(K.gave&&rt-K.t0>1.4){K.gave=false;K.path=[[5.0,6.9],[7.6,7.3],KDESK_SEAT];K.state='walk';K.next='home';K.talk='Kembali ke meja';K.talkT=rt+3;K.cur=null}
+  }
+  $('#kHudA').textContent='Nara: '+(K.state==='desk'?'menimbang':K.state==='walk'?'berjalan':K.state==='pin'?'menempel tugas':'mengantar tugas');
+  $('#kHudC').textContent='Tugas dibagi hari ini '+koorDone;
+}
+/* ---------- panel kanan ---------- */
+function renderK(){
+  const open=PROP.filter(p=>p.st==='menunggu');
+  $('#kSum').textContent=open.length?open.length+' usulan menunggu':'';
+  $('#kcard').innerHTML=`<div class="kportrait"><canvas id="kPort" width="28" height="40" aria-label="Potret ${KO.nama}"></canvas><div><h2>${KO.nama}</h2><span class="mut">${KO.peran}</span><p class="mut" style="margin:6px 0 0">${esc(KO.persona)}</p></div></div>
+    <dl class="kv" style="margin-top:10px"><dt>Otak</dt><dd><span class="key ada">aktif</span> DeepSeek ••••k7Qd · teruji</dd><dt>Token hari ini</dt><dd>12,4 rb (contoh)</dd><dt>Mode</dt><dd>Usulan wajib disetujui</dd></dl>
+    <form class="dir" id="kdir" autocomplete="off"><input class="in" id="kdirI" placeholder="Beri arahan ke Nara…" aria-label="Arahan untuk Nara"><button class="btn ok" type="submit">Kirim</button></form>
+    <div class="chipq"><button type="button" data-q="@Nara kerjakan berita banjir dari youtu.be/dQw4w9WgXcQ">Kerjakan berita banjir</button><button type="button" data-q="@Nara jeda Sinta 30 menit">Jeda Sinta</button><button type="button" data-q="@Nara naikkan kuota Raka">Naikkan kuota Raka</button></div>
+    <p class="hint">Arahan masuk ke room Chat; usulan Nara muncul di sini dan di sana.</p>`;
+  withCtx($('#kPort').getContext('2d'),()=>drawChar(14,36,Object.assign({t:0,pose:'idle',dx:1},KO.look)));
+  $('#kprops').innerHTML=open.length?open.map(propCard).join(''):'<span class="mut">Tidak ada usulan menunggu. Nara akan mengusulkan bila ada yang perlu dibagi.</span>';
+  $('#kload').innerHTML=BOTS.map(b=>{
+    const acc=ACCQ.filter(a=>a.bot===b.id).length,aktif=b.state==='work'?STG[b.stage].lab:'menunggu';
+    return `<div class="bm" style="--c:${b.col}"><div class="t"><span><b style="color:${b.col}">${b.nama}</b> <span class="mut">${aktif}</span></span><span>${b.quota}/${MAXQ} · ACC ${acc}${KNOTES[b.id].length?' · papan '+KNOTES[b.id].length:''}</span></div><div class="m"><div style="width:${Math.min(100,b.quota/MAXQ*100)}%"></div></div></div>`;
+  }).join('');
+  $('#khist').innerHTML=(PROP.filter(p=>p.st!=='menunggu').slice(0,8).map(p=>`<div><span>#${p.id} ${AKSI[p.aksi]} → ${botOf(p.bot).nama}</span><span class="pst ${p.st}">${p.st==='disetujui'?'Disetujui':'Ditolak'}</span></div>`).join('')||'<span class="mut">Belum ada keputusan.</span>')
+    +(KLOGS.length?'<h3 class="h" style="margin:12px 0 6px">Log Nara</h3>'+KLOGS.slice(0,6).map(l=>`<div><span><time class="mut">${l.w}</time> ${esc(l.t)}</span></div>`).join(''):'');
+  propBadge();
+}
+$('#kcard').addEventListener('submit',e=>{if(e.target.id!=='kdir')return;e.preventDefault();const i=$('#kdirI'),v=i.value.trim();if(!v)return;kirimPesan(/@nara|@koordinator/i.test(v)?v:'@Nara '+v);i.value='';toast('Arahan dikirim ke room Chat')});
+$('#kcard').addEventListener('click',e=>{const q=e.target.closest('[data-q]');if(q){kirimPesan(q.dataset.q);toast('Arahan dikirim ke room Chat')}});
+$('#kprops').addEventListener('click',e=>{const b=e.target.closest('[data-pa]');if(b)putus(+b.dataset.pid,b.dataset.pa)});
+buildBgK();$('#tod').addEventListener('click',()=>buildBgK());
+
+/* ---------- awal: percakapan contoh + usulan pertama ---------- */
+CHAT.push({id:++chatSeq,k:'sis',w:'08:58',teks:'Room dibuka. Agen yang disebut menjawab dengan otak dan kepribadiannya sendiri.'});
+CHAT.push({id:++chatSeq,k:'m',w:'09:00',teks:'@semua selamat pagi, kuota hari ini berapa?'});
+CHAT.push({id:++chatSeq,k:'bot',bot:'raka',w:'09:00',teks:'Kuota saya hari ini 1/3. Siap menambah kalau diizinkan.'});
+CHAT.push({id:++chatSeq,k:'bot',bot:'sinta',w:'09:01',teks:'Kuota saya 0/3. Template saya jaga tetap rapi, jadi saya tidak tergesa.'});
+CHAT.push({id:++chatSeq,k:'sis',w:'09:01',teks:'Dimas belum punya API key, jadi belum bisa menjawab. Pasang di TVR Saya → Otak Bot.'});
+{const p=Object.assign({id:++propSeq,st:'menunggu',w:'09:02',by:'koor'},TPL[0]());PROP.push(p);tplI=1;
+ CHAT.push({id:++chatSeq,k:'koor',w:'09:02',teks:'Saya mengusulkan pembagian tugas berikut. Menunggu persetujuan Anda.',prop:p.id});klog('Mengusulkan #'+p.id+': '+AKSI[p.aksi]+' → '+botOf(p.bot).nama)}
+unread=0;propBadge();
 
 accBadge();
 {const h=location.hash.slice(1);if(VIEWS.includes(h))show(h)}
