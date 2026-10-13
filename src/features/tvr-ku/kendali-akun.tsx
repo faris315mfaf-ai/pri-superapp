@@ -27,31 +27,35 @@ function Avatar({ a, ukuran }: { a: AnggotaKendali; ukuran: number }) {
 export function KendaliAkun({
   aktif,
   onPilih,
+  kelompok = "palugodam",
 }: {
   /** Anggota yang sedang dikendalikan (null = akun admin sendiri). */
   aktif: AnggotaKendali | null;
   onPilih: (a: AnggotaKendali | null) => void;
+  /** "bot" (13 Okt 2026): akun Divisi BOT, khusus master. */
+  kelompok?: "palugodam" | "bot";
 }) {
+  const untukBot = kelompok === "bot";
   const versiSegar = useVersiSegar();
   const [daftar, setDaftar] = useState<AnggotaKendali[] | null>(null);
 
   useEffect(() => {
     let hidup = true;
-    getKendaliAkun()
+    getKendaliAkun(kelompok)
       .then((d) => hidup && setDaftar(d))
       .catch((e) => {
         if (!hidup) return;
         setDaftar([]);
-        toast("error", "Daftar akun PALUGODAM gagal dimuat", e instanceof Error ? e.message : "");
+        toast("error", untukBot ? "Daftar akun bot gagal dimuat" : "Daftar akun PALUGODAM gagal dimuat", e instanceof Error ? e.message : "");
       });
     return () => {
       hidup = false;
     };
-  }, [versiSegar]);
+  }, [versiSegar, kelompok, untukBot]);
 
   return (
     <section>
-      <SectionTitle judul="Kendali Akun PALUGODAM" />
+      <SectionTitle judul={untukBot ? "Kendali Akun BOT" : "Kendali Akun PALUGODAM"} />
       <GlassCard className="mt-2.5 p-4">
         <div className="flex items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
@@ -60,7 +64,7 @@ export function KendaliAkun({
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-teks-utama">Masuk sebagai akun anggota</p>
             <p className="mt-0.5 text-[11px] leading-relaxed text-teks-sekunder">
-              Tekan satu bulatan → aplikasi berganti menjadi akun anggota itu SEPENUHNYA (semua modul: TVR Saya, unggah, laporan, chat, profil) tanpa kata sandi. Pita di atas layar menunjukkan akun siapa yang sedang dipakai; tekan &quot;Kembali ke akun saya&quot; untuk pulang.
+              {untukBot ? "Khusus master. Masuk sebagai akun bot untuk menghubungkan akun sosmed lewat upload-post dan membuat template. " : ""}Tekan satu bulatan → aplikasi berganti menjadi akun itu {untukBot ? "(akun bot: hanya modul TVR Saya)" : "SEPENUHNYA (semua modul: TVR Saya, unggah, laporan, chat, profil)"} tanpa kata sandi. Pita di atas layar menunjukkan akun siapa yang sedang dipakai; tekan &quot;Kembali ke akun saya&quot; untuk pulang.
             </p>
           </div>
         </div>
@@ -68,7 +72,7 @@ export function KendaliAkun({
         {daftar === null ? (
           <GlassSkeleton className="mt-3 h-24 rounded-2xl" />
         ) : daftar.length === 0 ? (
-          <p className="mt-3 text-center text-[11.5px] text-teks-sekunder">Belum ada anggota aktif di Divisi PALUGODAM.</p>
+          <p className="mt-3 text-center text-[11.5px] text-teks-sekunder">{untukBot ? "Belum ada akun bot. Akun bot dibuat lewat skrip master." : "Belum ada anggota aktif di Divisi PALUGODAM."}</p>
         ) : (
           <div className="mt-3 grid grid-cols-6 gap-x-1.5 gap-y-3">
             {daftar.map((a) => {

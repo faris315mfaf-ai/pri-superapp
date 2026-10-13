@@ -30,7 +30,8 @@ import { useModeNav } from "@/hooks/use-mode-nav";
 import { temaApple, useLatarApple } from "@/hooks/use-latar-apple";
 import { SplashScreen } from "@/features/auth/splash-screen";
 import { bolehPet } from "@/lib/pet-akses";
-import { MODUL_AKUN, bolehAudit, modulDibuka } from "@/lib/peran";
+import { MODUL_AKUN, bolehAudit, bolehRuangBot, modulDibuka } from "@/lib/peran";
+import { adalahBot } from "@/lib/struktur";
 import { useDetakGlobal } from "@/hooks/use-detak-global";
 import { KonteksTabAktif } from "@/hooks/use-tab-aktif";
 import dynamic from "next/dynamic";
@@ -89,6 +90,7 @@ const TvNasionalScreen = dynamic(() => import("@/features/tv-rakyat/tv-nasional-
 const PengumumanScreen = dynamic(() => import("@/features/pengguna/pengumuman-screen").then((m) => m.PengumumanScreen), { ssr: false, loading: MuatLayar });
 const PersetujuanKpiScreen = dynamic(() => import("@/features/pengguna/persetujuan-kpi-screen").then((m) => m.PersetujuanKpiScreen), { ssr: false, loading: MuatLayar });
 const KontenScreen = dynamic(() => import("@/features/konten/konten-screen").then((m) => m.KontenScreen), { ssr: false, loading: MuatLayar });
+const RuangBotScreen = dynamic(() => import("@/features/ruang-bot/ruang-bot-screen").then((m) => m.RuangBotScreen), { ssr: false, loading: MuatLayar });
 const TvrKuScreen = dynamic(() => import("@/features/tvr-ku/tvrku-screen").then((m) => m.TvrKuScreen), { ssr: false, loading: MuatLayar });
 const ChatScreen = dynamic(() => import("@/features/chat/chat-screen").then((m) => m.ChatScreen), { ssr: false, loading: MuatLayar });
 const NotifikasiScreen = dynamic(() => import("@/features/notifikasi/notifikasi-screen").then((m) => m.NotifikasiScreen), { ssr: false, loading: MuatLayar });
@@ -268,6 +270,15 @@ function bacaNavTersimpan(
   }
 }
 
+/**
+ * Tab awal sebuah akun. Akun bot (Divisi BOT, 13 Okt 2026) hanya punya modul
+ * TV Rakyat Saya, jadi tab awalnya bukan Beranda.
+ */
+function awalUntuk(u: { role: Role; divisi?: string | null } | null | undefined): KunciTab {
+  if (!u) return "beranda";
+  return adalahBot(u) ? "tvrku" : TAB_AWAL[u.role];
+}
+
 /** Tab tersimpan hanya dipakai bila masih sah untuk peran ini. */
 function tabAwalDenganRestor(
   role: Role,
@@ -280,12 +291,13 @@ function tabAwalDenganRestor(
 }
 
 /** Urutan baku tab bila susunannya perlu dibakukan ulang (modul per akun). */
-const URUTAN_TAB: KunciTab[] = ["beranda", "konten", "qc", "tv", "tvnas", "tvrku", "dashboard", "asisten", "acara", "chat", "notifikasi", "profil"];
+const URUTAN_TAB: KunciTab[] = ["beranda", "konten", "qc", "tv", "tvnas", "tvrku", "ruangbot", "dashboard", "asisten", "acara", "chat", "notifikasi", "profil"];
 
 const TAB_ROLE: Record<Role, KunciTab[]> = {
   // Modul KONTEN kembali & WAJIB untuk semua peran (fitur 1.20/5):
   // menampilkan tarikan konten sosmed TV Rakyat dari Ayrshare.
-  master: ["beranda", "konten", "qc", "tv", "tvrku", "chat", "profil"],
+  // ruangbot (13 Okt 2026): HANYA master — superadmin yang berperan master ikut.
+  master: ["beranda", "konten", "qc", "tv", "tvrku", "ruangbot", "chat", "profil"],
   // Super admin TIDAK punya tab TV Rakyat: otomatisasi video adalah
   // tanggung jawab tim TV Rakyat (lihat bolehProsesVideo di types).
   // HR Center (qc) hanya untuk Divisi HR (10 Sep 2026) — ditambahkan
@@ -536,6 +548,9 @@ export default function Page() {
   // tabBoleh = tabPenuh dikurangi yang disembunyikan pengguna.
   const tabPenuh = useMemo<KunciTab[]>(() => {
     if (!user) return [];
+    // Akun bot (Divisi BOT, 13 Okt 2026): HANYA modul TV Rakyat Saya (+ Konten
+    // dan Profil yang memang wajib untuk semua akun).
+    if (adalahBot(user)) return ["konten", "tvrku", "profil"];
     const dasar = [...TAB_ROLE[user.role]];
     // Modul TV terbuka untuk Pimred (jabatan) ATAU anggota tim TV yang
     // ditunjuk Pimred (tvAnggota dari server).
@@ -616,7 +631,8 @@ export default function Page() {
       dasar.push("qc");
       dasar.sort((a, b) => URUTAN_TAB.indexOf(a) - URUTAN_TAB.indexOf(b));
     }
-    return dasar;
+    // Pertahanan berlapis: tab Ruang Bot HANYA untuk master, apa pun sumbernya.
+    return bolehRuangBot(user) ? dasar : dasar.filter((k) => k !== "ruangbot");
   }, [user, tvAnggota, aksesDashboard, bolehAsisten]);
 
   // Kustomisasi footer (fitur 1.20/4): modul yang disembunyikan
@@ -634,7 +650,9 @@ export default function Page() {
   // Pengaman tanpa effect: tab efektif selalu valid untuk role aktif
   const tabEfektif = useMemo(() => {
     if (!user) return tab;
-    return tabBoleh.includes(tab) ? tab : TAB_AWAL[user.role];
+    if (tabBoleh.includes(tab)) return tab;
+    const awal = awalUntuk(user);
+    return tabBoleh.includes(awal) ? awal : tabBoleh[0];
   }, [user, tab, tabBoleh]);
 
   // Desain baru: tab yang baru dibuka masuk bergeser searah urutan menu
@@ -893,7 +911,7 @@ export default function Page() {
     // Bila datang dari halaman tunggu (baru disetujui), tandanya dibuang.
     setMenungguUser(null);
     setUser(userBaru);
-    const awal = TAB_AWAL[userBaru.role];
+    const awal = awalUntuk(userBaru);
     setTab(awal);
     setTabPernahDibuka(new Set([awal]));
     setSubLayar(null);
@@ -1067,8 +1085,7 @@ export default function Page() {
       }
       // 2. Riwayat kosong tapi sub-layar terbuka (mis. habis refresh
       //    langsung di sub-layar) → tutup sub-layarnya dulu.
-      const tabAwal =
-        TAB_AWAL[useAppStore.getState().user?.role ?? "anggota"] ?? "beranda";
+      const tabAwal = awalUntuk(useAppStore.getState().user);
       if (subLayarRef.current) {
         setSubLayar(null);
         history.pushState({ pri: true }, "");
@@ -1318,6 +1335,9 @@ export default function Page() {
           />
         ),
       });
+    }
+    if (tabBoleh.includes("ruangbot") && bolehRuangBot(user)) {
+      layarTab.push({ kunci: "ruangbot", isi: <RuangBotScreen /> });
     }
     if (tabBoleh.includes("tvrku")) {
       layarTab.push({

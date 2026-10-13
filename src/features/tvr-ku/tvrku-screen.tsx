@@ -984,6 +984,25 @@ export function TvrKuScreen({
             </FadeInUp>
           ),
         },
+        // Kendali akun BOT (13 Okt 2026): hanya master — masuk sebagai bot1..bot3
+        // untuk menghubungkan akun sosmed (upload-post) dan membuat template.
+        ...(userAsli.role === "master"
+          ? [
+              {
+                id: "kendali-bot",
+                pin: true,
+                segmen: "Admin PALUGODAM",
+                judul: "Kendali Akun BOT",
+                ikon: ShieldCheck,
+                keterangan: "Masuk sebagai akun bot untuk menambah akun sosmed lewat upload-post",
+                render: () => (
+                  <FadeInUp>
+                    <KendaliAkun aktif={null} onPilih={pilihKendali} kelompok="bot" />
+                  </FadeInUp>
+                ),
+              },
+            ]
+          : []),
         ...(bolehKendali
           ? [
               {

@@ -6902,8 +6902,9 @@ export type AnggotaKendali = {
   profil: string;
   tertaut: number;
 };
-export async function getKendaliAkun(): Promise<AnggotaKendali[]> {
-  const json = await fetchJson("/api/tvr/kendali");
+/** kelompok "bot" (13 Okt 2026): akun Divisi BOT — hanya dijawab server untuk master. */
+export async function getKendaliAkun(kelompok: "palugodam" | "bot" = "palugodam"): Promise<AnggotaKendali[]> {
+  const json = await fetchJson(kelompok === "bot" ? "/api/tvr/kendali?kelompok=bot" : "/api/tvr/kendali");
   return (json.anggota ?? []) as AnggotaKendali[];
 }
 

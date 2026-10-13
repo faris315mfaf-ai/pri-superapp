@@ -23,16 +23,38 @@ import {
 } from "@/lib/cache-sesi";
 
 import { kolomJabatanTvrAda, kolomStrukturLainAda } from "@/lib/kolom-struktur";
-import { bacaStrukturLain } from "@/lib/struktur";
+import { adalahBot, bacaStrukturLain } from "@/lib/struktur";
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-/** Buat sesi baru untuk sebuah akun; mengembalikan token mentahnya. */
+/**
+ * Buat sesi baru untuk sebuah akun; mengembalikan token mentahnya.
+ *
+ * GERBANG AKUN BOT (13 Okt 2026): akun Divisi BOT TIDAK BOLEH punya sesi lewat
+ * jalur masuk apa pun (sandi, OTP WA/email, sidik jari, wajah, Google,
+ * pendaftaran). Semua jalur itu berakhir di fungsi ini, jadi gerbangnya
+ * dipasang di sini — satu titik, tanpa celah per-jalur. Satu-satunya
+ * pengecualian: master yang beralih akun (`kendaliMaster`, route kendali).
+ * Pesan galat sengaja sama dengan "sandi salah" agar tidak membocorkan
+ * bahwa akun itu ada atau berupa bot. Gagal membaca = ditolak (gagal tertutup).
+ */
 export async function buatSesi(
   userId: number | string,
   namaPerangkat?: string,
+  opsi: { kendaliMaster?: boolean } = {},
 ): Promise<string> {
+  if (!opsi.kendaliMaster) {
+    const { data, error: eDivisi } = await supabase()
+      .from("app_user")
+      .select("divisi")
+      .eq("id", Number(userId))
+      .maybeSingle();
+    if (eDivisi) throw new Error("Gagal membuat sesi perangkat.");
+    if (adalahBot(data as { divisi?: string | null } | null)) {
+      throw Object.assign(new Error("Nomor/username atau kata sandi salah"), { status: 401 });
+    }
+  }
   const token = randomBytes(32).toString("base64url");
   const { error } = await supabase().from("sesi_perangkat").insert({
     user_id: Number(userId),

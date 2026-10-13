@@ -50,6 +50,7 @@ export const LABEL_LAYAR_AUDIT: Record<string, string> = {
   tv: "TV Rakyat Official",
   tvnas: "TV Rakyat Nasional",
   tvrku: "TVR Saya",
+  ruangbot: "Ruang Bot",
   dashboard: "Dashboard",
   asisten: "Asisten AI",
   chat: "Chat",

@@ -51,9 +51,9 @@ rahasia (password, kunci API, isi env) di berkas ini atau di repo.**
 - R2 (Cloudflare) BELUM diatur; penyimpanan video memakai bucket privat Supabase `tvrku`.
 
 ## Fitur penting & letak kode
-- **Edit Otomatis TVR Saya**: terbuka bila ≥5 akun sosmed sehat (upload-post
-  `reauth_required`=false) — `src/lib/peran.ts`, `src/lib/koneksi-tvr.ts`; master bisa buka/tutup
-  paksa per akun (`modul_izin.autoedit`). Gerbang server: `src/lib/autoedit.ts`,
+- **Edit Otomatis TVR Saya**: terbuka untuk SEMUA akun sejak 6 Okt 2026 (syarat ≥5 akun sosmed
+  sudah dicabut) — `bolehEditOtomatisTvr` di `src/lib/peran.ts`; master bisa menutupnya per akun
+  (`modul_izin.autoedit = false`). Gerbang server: `src/lib/autoedit.ts`,
   `src/app/api/autoedit/[...jalur]/route.ts`.
 - **Stok Video** (`src/features/tvr-ku/stok-video-tvr.tsx`) untuk semua akun TVR Saya;
   video terhapus otomatis 48 jam; kuota pribadi 2 GB (`KUOTA_AKUN_MB` di VPS mesin).

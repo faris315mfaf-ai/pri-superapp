@@ -5,8 +5,8 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { buatSesi, keUserPublik, kolomUser, pastikanMasuk, type BarisUser } from "@/lib/sesi";
-import { adalahPengurusPusat } from "@/lib/peran";
-import { adalahAdminStudio, DIVISI_PALUGODAM } from "@/lib/struktur";
+import { adalahPengurusPusat, bolehRuangBot } from "@/lib/peran";
+import { adalahAdminStudio, DIVISI_BOT, DIVISI_PALUGODAM } from "@/lib/struktur";
 import { PENYEDIA_ANGGOTA } from "@/lib/sosmed-penyedia";
 import { catatAudit } from "@/lib/audit";
 
@@ -15,7 +15,13 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await pastikanMasuk(request);
-    if (!adalahAdminStudio(user)) {
+    // ?kelompok=bot (13 Okt 2026): daftar akun Divisi BOT — HANYA master.
+    const untukBot = new URL(request.url).searchParams.get("kelompok") === "bot";
+    if (untukBot) {
+      if (!bolehRuangBot(user)) {
+        throw Object.assign(new Error("Akun bot hanya bisa dikendalikan master."), { status: 403 });
+      }
+    } else if (!adalahAdminStudio(user)) {
       throw Object.assign(new Error("Kendali akun hanya untuk Admin PALUGODAM / pengurus."), { status: 403 });
     }
     const db = supabase();
@@ -23,7 +29,7 @@ export async function GET(request: Request) {
       db
         .from("app_user")
         .select("id, nama, username, avatar_url, posisi_divisi")
-        .eq("divisi", DIVISI_PALUGODAM)
+        .eq("divisi", untukBot ? DIVISI_BOT : DIVISI_PALUGODAM)
         .eq("aktif", true)
         .eq("status", "aktif")
         .order("nama", { ascending: true }),
@@ -76,7 +82,14 @@ export async function POST(request: Request) {
     if (!data) throw Object.assign(new Error("Akun tujuan tidak ditemukan."), { status: 404 });
     const b = data as unknown as BarisUser;
     if (b.aktif !== true || String(b.status) !== "aktif") throw Object.assign(new Error("Akun itu tidak aktif."), { status: 403 });
-    if (String(b.divisi ?? "").trim() !== DIVISI_PALUGODAM) throw Object.assign(new Error("Hanya akun anggota Divisi PALUGODAM yang bisa dimasuki."), { status: 403 });
+    const divisiTarget = String(b.divisi ?? "").trim();
+    const targetBot = divisiTarget === DIVISI_BOT;
+    if (targetBot) {
+      // Akun bot (13 Okt 2026): hanya master, bukan kepala PALUGODAM.
+      if (!bolehRuangBot(admin)) throw Object.assign(new Error("Akun bot hanya bisa dimasuki master."), { status: 403 });
+    } else if (divisiTarget !== DIVISI_PALUGODAM) {
+      throw Object.assign(new Error("Hanya akun anggota Divisi PALUGODAM atau Divisi BOT yang bisa dimasuki."), { status: 403 });
+    }
     // Exclusion pakai peran EFEKTIF, bukan kolom role mentah: superadmin
     // dipetakan ke master di keUserPublik, dan Ketua Umum = super_admin
     // efektif walau role DB-nya 'anggota'. Tanpa ini, seorang Ketum/
@@ -90,8 +103,9 @@ export async function POST(request: Request) {
     ) {
       throw Object.assign(new Error("Akun pengurus tertinggi tidak bisa dimasuki."), { status: 403 });
     }
-    const token = await buatSesi(targetId, `Kendali PALUGODAM oleh ${admin.nama}`.slice(0, 120));
-    catatAudit(targetId, "kendali", `Akun dimasuki ${admin.nama} (Kendali PALUGODAM)`, {
+    const namaKendali = targetBot ? "Kendali BOT" : "Kendali PALUGODAM";
+    const token = await buatSesi(targetId, `${namaKendali} oleh ${admin.nama}`.slice(0, 120), { kendaliMaster: targetBot });
+    catatAudit(targetId, "kendali", `Akun dimasuki ${admin.nama} (${namaKendali})`, {
       request,
       detail: { oleh_id: Number(admin.id), oleh_nama: admin.nama },
     });

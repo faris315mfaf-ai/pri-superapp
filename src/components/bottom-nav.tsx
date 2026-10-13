@@ -5,9 +5,9 @@
 // Tab aktif: pill merah primary dengan animasi slide (layoutId).
 // ============================================================
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useAnimate } from "framer-motion";
-import { Home, Newspaper, Radio, ShieldCheck, Tv, Clapperboard, MessagesSquare, Bell, User, CalendarDays, LayoutDashboard, Bot } from "lucide-react";
+import { Home, Newspaper, Radio, ShieldCheck, Tv, Clapperboard, MessagesSquare, Bell, User, CalendarDays, LayoutDashboard, Bot, Cpu } from "lucide-react";
 import type { KomponenIkon, Role } from "@/types";
 import { cn } from "@/lib/utils";
 import { WARNA_DOCK } from "@/components/warna-dock";
@@ -20,6 +20,7 @@ export type KunciTab =
   | "tv"
   | "tvnas"
   | "tvrku"
+  | "ruangbot"
   | "dashboard"
   | "asisten"
   | "chat"
@@ -39,6 +40,9 @@ export const KONFIG_TAB: Record<
   tvnas: { label: "TV Nasional", ikon: Radio },
   acara: { label: "Acara", ikon: CalendarDays },
   tvrku: { label: "TVR Saya", ikon: Clapperboard },
+  // Ruang Bot (13 Okt 2026): ruang pantau bot redaksi — HANYA master
+  // (TAB_ROLE.master di page.tsx; gerbang server bolehRuangBot di peran.ts).
+  ruangbot: { label: "Ruang Bot", ikon: Cpu },
   // Modul Dashboard (fitur 1.19/3.3): tampil hanya bila jabatannya
   // diberi akses master — daftar tab dinamis dihitung di page.tsx.
   dashboard: { label: "Dashboard", ikon: LayoutDashboard },
@@ -55,7 +59,7 @@ export const TAB_PER_ROLE: Record<Role, KunciTab[]> = {
   // TIDAK boleh diakses super admin.
   // Modul KONTEN wajib hadir untuk SEMUA peran (fitur 1.20/5): isinya
   // tarikan konten sosmed TV Rakyat hasil Ayrshare/upload-post.
-  master: ["beranda", "konten", "qc", "tv", "tvrku", "chat", "profil"],
+  master: ["beranda", "konten", "qc", "tv", "tvrku", "ruangbot", "chat", "profil"],
   // HR Center (qc) hanya untuk Divisi HR (10 Sep 2026) — Ketua Umum tidak
   // lagi membawanya di tab bawaan; page.tsx menambahkannya bila adalahHR().
   super_admin: ["beranda", "konten", "chat", "profil"],
@@ -178,14 +182,21 @@ export function BottomNav({ role, tabAktif, onTab, belumBaca = 0, tabs: tabsProp
 // menyesuaikan jumlah tab supaya tetap muat di layar 360 px.
 // ------------------------------------------------------------
 function DockHp({ tabs, tabAktif, onTab, belumBaca }: { tabs: KunciTab[]; tabAktif: KunciTab; onTab: (t: KunciTab) => void; belumBaca: number }) {
-  const ukuran = tabs.length <= 5 ? 50 : tabs.length === 6 ? 45 : 41;
+  // Master punya 8+ tab sejak Ruang Bot (13 Okt 2026): ikon dan jarak
+  // mengecil bertahap supaya 8 tab masih muat di ponsel 375px tanpa
+  // menggulir; 9+ tab menggulir mendatar dan tab aktif digulirkan ke tengah.
+  const ukuran = tabs.length <= 5 ? 50 : tabs.length === 6 ? 45 : tabs.length === 7 ? 41 : tabs.length === 8 ? 36 : 34;
+  const rapat = tabs.length >= 8;
   return (
     <nav
       className="dock-hp pointer-events-none fixed bottom-0 left-1/2 z-50 -translate-x-1/2 lg:hidden"
       style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))", ["--ik" as string]: `${ukuran}px` }}
       aria-label="Navigasi utama"
     >
-      <div className="glass tanpa-scrollbar pointer-events-auto flex max-w-[calc(100vw-12px)] items-end gap-[clamp(6px,2.4vw,13px)] overflow-x-auto rounded-[26px] px-3 pt-2.5 pb-2">
+      <div className={cn(
+          "glass tanpa-scrollbar pointer-events-auto flex max-w-[calc(100vw-12px)] items-end overflow-x-auto rounded-[26px] pt-2.5 pb-2",
+          rapat ? "gap-[clamp(3px,1.2vw,8px)] px-2.5" : "gap-[clamp(6px,2.4vw,13px)] px-3",
+        )}>
         {tabs.map((kunci) => (
           <TombolDockHp
             key={kunci}
@@ -206,6 +217,14 @@ function TombolDockHp({ kunci, aktif, lencana, onTab }: { kunci: KunciTab; aktif
   const [lingkup, animasikan] = useAnimate<HTMLSpanElement>();
   const [labelTampil, setLabelTampil] = useState(false);
   const pewaktu = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tombol = useRef<HTMLButtonElement>(null);
+
+  // Saat bar menggulir (banyak tab), tab aktif selalu terlihat di tengah.
+  useEffect(() => {
+    if (!aktif) return;
+    const kurangGerak = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    tombol.current?.scrollIntoView({ inline: "center", block: "nearest", behavior: kurangGerak ? "auto" : "smooth" });
+  }, [aktif]);
 
   function ketuk() {
     if (lingkup.current) {
@@ -220,6 +239,7 @@ function TombolDockHp({ kunci, aktif, lencana, onTab }: { kunci: KunciTab; aktif
 
   return (
     <button
+      ref={tombol}
       type="button"
       onClick={ketuk}
       aria-label={label}

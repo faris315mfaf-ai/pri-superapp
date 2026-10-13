@@ -9,6 +9,7 @@ export const WARNA_DOCK: Record<KunciTab, [string, string]> = {
   tv: ["#FF6259", "#D7261D"],
   tvnas: ["#7D7AFF", "#4542D6"],
   tvrku: ["#FF4F6D", "#C8102E"],
+  ruangbot: ["#FFD25A", "#E09A00"],
   dashboard: ["#6BD3FF", "#1A8CFF"],
   asisten: ["#C77DFF", "#7B2CF0"],
   chat: ["#5BE07A", "#24A148"],

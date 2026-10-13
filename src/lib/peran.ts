@@ -39,6 +39,15 @@ export function adalahMasterAsli(u: { role?: string | null; superadmin?: boolean
 }
 
 /**
+ * RUANG BOT (13 Okt 2026): ruang pantau bot redaksi — HANYA master. Superadmin
+ * yang masuk dengan peran master ikut lolos karena sesinya berperan "master".
+ * Dipakai tab Ruang Bot (page.tsx) dan, kelak, semua /api/bot/*.
+ */
+export function bolehRuangBot(u: { role?: string | null } | null | undefined): boolean {
+  return u?.role === "master";
+}
+
+/**
  * Modul AUDIT (6 Okt 2026): jejak aktivitas seluruh pengguna — superadmin
  * dan master saja (superadmin di sesi berperan "master" + penanda).
  */

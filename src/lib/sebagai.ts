@@ -11,7 +11,8 @@
 // ============================================================
 import { supabase } from "@/lib/supabase";
 import { keUserPublik, pastikanMasuk, type UserPublik } from "@/lib/sesi";
-import { adalahAdminStudio, DIVISI_PALUGODAM } from "@/lib/struktur";
+import { adalahAdminStudio, DIVISI_BOT, DIVISI_PALUGODAM } from "@/lib/struktur";
+import { bolehRuangBot } from "@/lib/peran";
 
 export const HEADER_SEBAGAI = "x-sebagai";
 
@@ -53,6 +54,13 @@ export async function targetKendali(asli: UserPublik, targetId: number): Promise
   if (!data) galat("Akun yang dikendalikan tidak ditemukan.", 404);
   const b = data as unknown as Parameters<typeof keUserPublik>[0];
   if (b.aktif !== true || String(b.status) !== "aktif") galat("Akun itu tidak aktif.", 403);
-  if (String(b.divisi ?? "").trim() !== DIVISI_PALUGODAM) galat("Hanya akun anggota Divisi PALUGODAM yang bisa dikendalikan.", 403);
+  const divisiTarget = String(b.divisi ?? "").trim();
+  if (divisiTarget === DIVISI_BOT) {
+    // Akun bot (13 Okt 2026): hanya MASTER yang boleh mengendalikannya,
+    // bukan kepala PALUGODAM.
+    if (!bolehRuangBot(asli)) galat("Akun bot hanya bisa dikendalikan master.", 403);
+  } else if (divisiTarget !== DIVISI_PALUGODAM) {
+    galat("Hanya akun anggota Divisi PALUGODAM atau Divisi BOT yang bisa dikendalikan.", 403);
+  }
   return { ...keUserPublik(b), dikendalikan: { oleh_id: String(asli.id), oleh_nama: asli.nama } };
 }

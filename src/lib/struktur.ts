@@ -67,6 +67,21 @@ export function rapikanNamaDaerah(nama: string): string {
 /** Divisi produksi konten mandiri (fitur khusus di TV Rakyat Saya). */
 export const DIVISI_PALUGODAM = "Divisi PALUGODAM";
 
+/**
+ * Divisi BOT (13 Okt 2026): akun bot redaksi (username bot1, bot2, bot3) yang
+ * hanya memakai modul TV Rakyat Saya dan dikendalikan master.
+ * SENGAJA tidak dimasukkan ke daftar `DIVISI`: dengan begitu pengguna biasa
+ * tidak bisa memilihnya di dropdown, saat mendaftar, atau lewat Kelola
+ * Pengguna (`pastikanStrukturSah` menolak "Divisi tidak dikenal"). Akun bot
+ * dibuat lewat skrip master, bukan lewat formulir.
+ */
+export const DIVISI_BOT = "Divisi BOT";
+
+/** true bila akun ini bot redaksi (anggota Divisi BOT). */
+export function adalahBot(u: { divisi?: string | null } | null | undefined): boolean {
+  return (u?.divisi ?? "").trim() === DIVISI_BOT;
+}
+
 // KATEGORI STRUKTUR (10 Sep 2026): di layar, orang memilih dulu salah satu
 // dari Zona / Sayap / Divisi, baru isinya. Di database bentuknya tetap
 // `divisi` + `sub_divisi` (Zona & Sayap adalah "divisi" dengan sub), jadi
