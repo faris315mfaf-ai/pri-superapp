@@ -7276,3 +7276,19 @@ export async function kirimSumberBot(aksi: AksiSumberBot): Promise<void> {
     body: JSON.stringify(aksi),
   });
 }
+
+// ---- TUGAS BOT di TVR Saya akun bot (2F, 13 Okt 2026) — hanya sesi akun Divisi BOT ----
+import type { AksiTugasBot, TugasBotSaya } from "@/lib/bot-tipe";
+
+export async function getTugasBotSaya(): Promise<TugasBotSaya> {
+  const json = await fetchJson("/api/bot/tugas-saya", { headers: headerToken() });
+  return json as TugasBotSaya;
+}
+
+export async function kirimAksiTugasBot(aksi: AksiTugasBot): Promise<void> {
+  await fetchJson("/api/bot/tugas-saya", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(aksi),
+  });
+}

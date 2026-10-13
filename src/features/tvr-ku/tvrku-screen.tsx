@@ -1,8 +1,9 @@
 "use client";
 import { bebasKewajiban } from "@/lib/jabatan";
-import { adalahAdminStudio, adalahPalugodam } from "@/lib/struktur";
+import { adalahAdminStudio, adalahBot, adalahPalugodam } from "@/lib/struktur";
 import { masukSebagai } from "@/lib/kendali-klien";
 import { KendaliAkun } from "./kendali-akun";
+import { TugasBotTvr } from "./tugas-bot";
 import { AccAjuanKomen } from "./acc-ajuan-komen";
 import { RangkumanLink } from "./rangkuman-link";
 
@@ -26,6 +27,7 @@ import {
   AlertTriangle,
   Ban,
   BarChart3,
+  Bot,
   Clapperboard,
   Download,
   ChevronDown,
@@ -581,6 +583,7 @@ const TAMPIL_TVRKU: Record<"tugas" | "studio", boolean> = {
 // ------------------------------------------------------------
 type SegmenTvr = "produksi" | "unggah" | "laporan";
 const SEGMEN_TVR: Record<string, SegmenTvr> = {
+  "tugas-bot": "produksi",
   "stok-video": "produksi",
   "video-wajib": "produksi",
   "kendali-akun": "produksi",
@@ -964,6 +967,25 @@ export function TvrKuScreen({
         // Tata letak lebar (7 Okt 2026, master): seksi dibagi 2–3 kolom.
         lebar={tataLebar}
         seksi={([
+        // Tugas Bot (13 Okt 2026): hanya untuk akun Divisi BOT (master masuk lewat
+        // Kendali Akun BOT) — di paling atas supaya permintaan Pimred langsung terlihat.
+        ...(adalahBot(userAsli)
+          ? [
+              {
+                id: "tugas-bot",
+                pin: true,
+                segmen: "Tugas Bot",
+                judul: "Tugas Bot",
+                ikon: Bot,
+                keterangan: "Permintaan Pimred, kandidat video, dan tugas bot ini",
+                render: () => (
+                  <FadeInUp>
+                    <TugasBotTvr />
+                  </FadeInUp>
+                ),
+              },
+            ]
+          : []),
         // Stok Video (5 Okt 2026): cara posting baru untuk semua akun — video
         // jadi ditahan di stok dulu, lalu diunggah ke sosmed dari sana.
         // 6 Okt 2026: PALING ATAS & di-pin — umur video di stok hanya 2 hari,

@@ -1,6 +1,6 @@
 # Bot Redaksi — Pekerjaan 2 "Otak di mesin" (rencana terkoreksi)
 
-Status: **kode 2A–2E selesai dan lolos uji; belum aktif** (13 Okt 2026). 2F (Tugas Bot di TVR Saya) belum dikerjakan. Menggantikan bagian Pekerjaan 2 di
+Status: **kode 2A–2E selesai dan lolos uji; belum aktif** (13 Okt 2026). 2F (Tugas Bot di TVR Saya) selesai. Menggantikan bagian Pekerjaan 2 di
 [`BOT-REDAKSI-RENCANA-UJICOBA.md`](BOT-REDAKSI-RENCANA-UJICOBA.md) bila berbeda. Tidak memuat rahasia.
 
 ## 1. Temuan pemetaan mesin yang mengubah rancangan
@@ -47,7 +47,7 @@ Kunci anti-tabrakan: `src/lib/bot-kunci.ts`.
 | 2C | **Selesai** (88 uji). CRUD Sumber & Blokir (API + layar nyata) | `api/bot/sumber`, `bot-data`, tampilan Sumber & Kuota | Master bisa menambah/mematikan sumber; validasi dan audit |
 | 2D | **Selesai** (241 uji, bundel esbuild terverifikasi). Runner di mesin: klien aplikasi, klien mesin lewat soket, pemanen yt-dlp, mesin giliran | `src/bot-runner/*`, Dockerfile, compose (profile), `bot.env.example` | Bundel esbuild sukses lokal; uji murni lulus |
 | 2E | **Selesai** (belum dijalankan di VPS). Skrip ujian pemanen (spike) untuk dijalankan di VPS mesin | `scripts/spike-pemanen.sh` | Menghasilkan laporan keberhasilan per akun |
-| 2F | Bagian "Tugas Bot" di TVR Saya akun bot | `features/tvr-ku/*` | Tampil hanya untuk akun Divisi BOT |
+| 2F | **Selesai** (31 + 204 uji). Bagian "Tugas Bot" di TVR Saya akun bot | `features/tvr-ku/*` | Tampil hanya untuk akun Divisi BOT |
 
 ## 4. Risiko dan mitigasi (tambahan dari temuan mesin)
 

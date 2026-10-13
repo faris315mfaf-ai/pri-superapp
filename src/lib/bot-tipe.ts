@@ -109,3 +109,67 @@ export type AksiSumberBot =
 /** Batas kuota harian per bot yang diterima server. */
 export const KUOTA_BOT_MIN = 1;
 export const KUOTA_BOT_MAKS = 6;
+
+// ---- "Tugas Bot" di TVR Saya akun bot (2F, 13 Okt 2026) ----
+
+export type StatusKandidatBot = "bebas" | "diklaim_saya" | "diklaim_lain" | "bentrok";
+
+export type TugasBotRingkas = {
+  id: number;
+  /** TahapTugas (lib/bot-mesin): cari|pilih|unduh|edit|siap_ditinjau|menunggu_acc|disetujui|posting|selesai|gagal. */
+  tahap: string;
+  judul: string;
+  kategori: string;
+  galat: string;
+  dibuat_pada: string;
+  selesai_pada: string | null;
+  /** Tugas ini berasal dari permintaan Video Wajib Pimred. */
+  dari_video_wajib: boolean;
+};
+
+export type PermintaanWajibRingkas = {
+  id: number;
+  judul: string;
+  keterangan: string;
+  kategori: string;
+  /** "YYYY-MM-DD" atau null. */
+  batas_waktu: string | null;
+  /** terbuka = belum diambil bot mana pun; diambil_saya = sudah diambil bot ini. */
+  status: "terbuka" | "diambil_saya";
+};
+
+export type KandidatBotRingkas = {
+  id: number;
+  url: string;
+  judul: string;
+  platform: string;
+  durasi_detik: number | null;
+  tayangan: number | null;
+  waktu_terbit: string | null;
+  status: StatusKandidatBot;
+  dibuat_pada: string;
+};
+
+/** GET /api/bot/tugas-saya — hanya untuk sesi akun Divisi BOT. */
+export type TugasBotSaya = {
+  tabel_ada: boolean;
+  /** null bila akun ini belum punya baris bot_redaksi. */
+  bot: BotRingkas | null;
+  runner: RunnerStatus;
+  jeda_global: boolean;
+  /** Boleh memulai tugas BARU sekarang (jeda, jam aktif, kuota, tugas aktif)? */
+  bisa_mulai: boolean;
+  /** Kode alasan bila bisa_mulai=false (AlasanDiam lib/bot-mesin), selain itu null. */
+  alasan_tutup: string | null;
+  tugas: TugasBotRingkas[];
+  permintaan_wajib: PermintaanWajibRingkas[];
+  kandidat: KandidatBotRingkas[];
+  sumber: SumberBotDb[];
+};
+
+/** POST /api/bot/tugas-saya. */
+export type AksiTugasBot =
+  /** Tandai semua sumber aktif bot ini agar dipanen pada siklus berikutnya. */
+  | { aksi: "cari_sekarang" }
+  /** Ambil satu permintaan Video Wajib untuk bot ini SEKARANG (tetap lewat semua pagar). */
+  | { aksi: "ambil_permintaan"; id: number };

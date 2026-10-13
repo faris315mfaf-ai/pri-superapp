@@ -20,7 +20,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { tabelBelumAda } from "@/lib/api-helper";
 import { awalHariWibIso, bacaJedaGlobal } from "@/lib/bot-data";
-import { KEBIJAKAN, putuskan, TAHAP_AKTIF_OTOMATIS, type KeadaanBot, type TugasAktif } from "@/lib/bot-mesin";
+import { KEBIJAKAN, putuskan, TAHAP_AKTIF_OTOMATIS, type KeadaanBot, type Putusan, type TugasAktif } from "@/lib/bot-mesin";
 import { BATAS_PROTOKOL, type KandidatMasuk, type LaporanRunner, type PerintahRunner } from "@/lib/bot-protokol";
 import { kunciKanonik, type KunciKanonik } from "@/lib/bot-kunci";
 import { buatNaskah, labelSumber, peringkatKandidat, type KandidatNilai } from "@/lib/bot-pilih";
@@ -37,6 +37,7 @@ import {
   teksPenghalang,
 } from "@/lib/bot-kerja-murni";
 import { bacaPermintaanWajib, klaimVideoWajib } from "@/lib/bot-video-wajib";
+import type { PermintaanWajib } from "@/lib/bot-kerja-murni";
 import { siarkanBot } from "@/lib/bot-realtime";
 import type { TahapBotDb } from "@/lib/bot-tipe";
 
@@ -281,11 +282,9 @@ export async function ambilKerja(botId: number, sekarangMs: number = Date.now())
   }
 }
 
-async function ambilKerjaInti(botId: number, sekarangMs: number): Promise<PerintahRunner> {
-  const db = supabase();
-  const bot = await muatBot(db, botId);
-  if (!bot) return diam("bot_tidak_ada");
-
+/** Putusan mesin keputusan untuk satu bot + tugas aktifnya (dipakai ambil_kerja dan pengambilan manual). */
+async function hitungPutusan(db: Db, bot: BarisBot, sekarangMs: number): Promise<{ putusan: Putusan; tugas: BarisTugas | null }> {
+  const botId = bot.id;
   const [jedaGlobal, dibuatHariIni, tugas] = await Promise.all([bacaJedaGlobal(), hitungDibuatHariIni(db, botId, sekarangMs), tugasAktifBot(db, botId)]);
 
   const keadaan: KeadaanBot = {
@@ -311,6 +310,15 @@ async function ambilKerjaInti(botId: number, sekarangMs: number): Promise<Perint
     : null;
 
   const putusan = putuskan(keadaan, { jedaGlobal, menitWib: menitWibDari(sekarangMs) }, tugasAktif, sekarangMs);
+  return { putusan, tugas };
+}
+
+async function ambilKerjaInti(botId: number, sekarangMs: number): Promise<PerintahRunner> {
+  const db = supabase();
+  const bot = await muatBot(db, botId);
+  if (!bot) return diam("bot_tidak_ada");
+
+  const { putusan, tugas } = await hitungPutusan(db, bot, sekarangMs);
 
   switch (putusan.aksi) {
     case "diam":
@@ -414,6 +422,49 @@ async function batalkanTugasBaru(db: Db, tugasId: number, botId: number, kandida
   if (kandidatId !== null) await lepasKlaimKandidat(db, kandidatId, botId);
 }
 
+type HasilBuatTugasWajib = { jenis: "ok"; tugasId: number } | { jenis: "kalah_klaim" } | { jenis: "gagal"; alasan: string };
+
+/**
+ * Klaim atomik satu permintaan Video Wajib lalu buat tugasnya (tahap 'edit').
+ * DIPAKAI BERSAMA oleh ambil_kerja (otomatis) dan pengambilan manual dari TVR Saya
+ * akun bot, supaya keduanya melewati jalur dan pagar yang persis sama.
+ */
+async function buatTugasDariPermintaan(db: Db, bot: BarisBot, p: PermintaanWajib, sekarangMs: number): Promise<HasilBuatTugasWajib> {
+  if (!(await klaimVideoWajib(bot.id, p.id))) return { jenis: "kalah_klaim" }; // sudah diambil bot lain
+
+  const judul = potongTeks(p.judul !== "" ? p.judul : p.naskah, 500);
+  const { data, error } = await db
+    .from("bot_tugas")
+    .insert({
+      bot_id: bot.id,
+      tahap: "edit",
+      judul,
+      caption: potongTeks(p.keterangan, 5000),
+      kategori: p.kategori,
+      percobaan: 1,
+      dikunci_sampai: iso(sekarangMs + KERJA.KUNCI_DETIK * 1000),
+      diubah_pada: iso(sekarangMs),
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    // Gulung balik klaim supaya permintaan tidak hilang percuma.
+    await db.from("bot_video_wajib").delete().eq("video_wajib_id", p.id).eq("bot_id", bot.id);
+    periksa(error, "membuat tugas Video Wajib");
+    return { jenis: "gagal", alasan: "gagal_membuat_tugas" };
+  }
+  const tugasId = Number((data as { id: number }).id);
+  await db.from("bot_video_wajib").update({ tugas_id: tugasId }).eq("video_wajib_id", p.id).eq("bot_id", bot.id);
+
+  if (!(await tugasBerhak(db, bot.id, tugasId))) {
+    await batalkanTugasBaru(db, tugasId, bot.id, null);
+    return { jenis: "gagal", alasan: "terkunci" };
+  }
+  siarkanBot("tugas");
+  await catatLog(db, bot.id, tugasId, "cari", `Mengambil Video Wajib Pimred: ${potongTeks(judul, 100)}`);
+  return { jenis: "ok", tugasId };
+}
+
 /** Video Wajib Pimred didahulukan atas hasil panen. null bila tak ada yang bisa diambil. */
 async function mulaiDariVideoWajib(db: Db, bot: BarisBot, sekarangMs: number): Promise<PerintahRunner | null> {
   const permintaan = await bacaPermintaanWajib(sekarangMs);
@@ -421,41 +472,12 @@ async function mulaiDariVideoWajib(db: Db, bot: BarisBot, sekarangMs: number): P
   for (const p of permintaan) {
     if (percobaan >= KERJA.MAKS_PERCOBAAN_PILIH) break;
     percobaan++;
-    if (!(await klaimVideoWajib(bot.id, p.id))) continue; // sudah diambil bot lain
-
-    const judul = potongTeks(p.judul !== "" ? p.judul : p.naskah, 500);
-    const { data, error } = await db
-      .from("bot_tugas")
-      .insert({
-        bot_id: bot.id,
-        tahap: "edit",
-        judul,
-        caption: potongTeks(p.keterangan, 5000),
-        kategori: p.kategori,
-        percobaan: 1,
-        dikunci_sampai: iso(sekarangMs + KERJA.KUNCI_DETIK * 1000),
-        diubah_pada: iso(sekarangMs),
-      })
-      .select("id")
-      .single();
-    if (error || !data) {
-      // Gulung balik klaim supaya permintaan tidak hilang percuma.
-      await db.from("bot_video_wajib").delete().eq("video_wajib_id", p.id).eq("bot_id", bot.id);
-      periksa(error, "membuat tugas Video Wajib");
-      return diam("gagal_membuat_tugas");
-    }
-    const tugasId = Number((data as { id: number }).id);
-    await db.from("bot_video_wajib").update({ tugas_id: tugasId }).eq("video_wajib_id", p.id).eq("bot_id", bot.id);
-
-    if (!(await tugasBerhak(db, bot.id, tugasId))) {
-      await batalkanTugasBaru(db, tugasId, bot.id, null);
-      return diam("terkunci");
-    }
-    siarkanBot("tugas");
-    await catatLog(db, bot.id, tugasId, "cari", `Mengambil Video Wajib Pimred: ${potongTeks(judul, 100)}`);
+    const h = await buatTugasDariPermintaan(db, bot, p, sekarangMs);
+    if (h.jenis === "kalah_klaim") continue;
+    if (h.jenis === "gagal") return diam(h.alasan);
     return {
       perintah: "buat_video",
-      tugas_id: tugasId,
+      tugas_id: h.tugasId,
       url: p.link_doksli,
       naskah: p.naskah,
       kategori: p.kategori,
@@ -464,6 +486,55 @@ async function mulaiDariVideoWajib(db: Db, bot: BarisBot, sekarangMs: number): P
     };
   }
   return null;
+}
+
+// ---- Pengambilan MANUAL dari TVR Saya akun bot (2F) ----
+
+export type HasilAmbilManual =
+  | { ok: true; tugas_id: number }
+  | { ok: false; kode: "bot_tidak_ada" | "ditutup" | "sudah_diambil" | "tidak_layak" | "tabel_belum_ada"; alasan: string | null };
+
+/**
+ * Master menyuruh bot mengambil SATU permintaan Video Wajib sekarang. Semua pagar
+ * tetap berlaku: bila mesin keputusan tidak menyatakan `mulai_tugas` (jeda, jam aktif,
+ * kuota, tugas masih berjalan, dst.) permintaan DITOLAK dengan alasannya. Tugas yang
+ * dibuat dikerjakan runner pada ambil_kerja berikutnya (tahap edit tanpa job → buat_video).
+ */
+export async function ambilPermintaanManual(botId: number, videoWajibId: number, sekarangMs: number = Date.now()): Promise<HasilAmbilManual> {
+  try {
+    const db = supabase();
+    const bot = await muatBot(db, botId);
+    if (!bot) return { ok: false, kode: "bot_tidak_ada", alasan: null };
+    const { putusan } = await hitungPutusan(db, bot, sekarangMs);
+    if (putusan.aksi !== "mulai_tugas") {
+      return { ok: false, kode: "ditutup", alasan: putusan.aksi === "diam" ? putusan.alasan : "tugas_berjalan" };
+    }
+    const terbuka = await bacaPermintaanWajib(sekarangMs);
+    const p = terbuka.find((x) => x.id === videoWajibId);
+    if (!p) return { ok: false, kode: "tidak_layak", alasan: null };
+    const h = await buatTugasDariPermintaan(db, bot, p, sekarangMs);
+    if (h.jenis === "kalah_klaim") return { ok: false, kode: "sudah_diambil", alasan: null };
+    if (h.jenis === "gagal") return { ok: false, kode: "ditutup", alasan: h.alasan };
+    return { ok: true, tugas_id: h.tugasId };
+  } catch (e) {
+    if (e instanceof SkemaBelumSiap) return { ok: false, kode: "tabel_belum_ada", alasan: null };
+    throw e;
+  }
+}
+
+/** Boleh memulai tugas BARU sekarang? (untuk panel Tugas Bot). alasan = kode AlasanDiam atau 'tugas_berjalan'. */
+export async function bisaMulaiSekarang(botId: number, sekarangMs: number = Date.now()): Promise<{ bisaMulai: boolean; alasan: string | null }> {
+  try {
+    const db = supabase();
+    const bot = await muatBot(db, botId);
+    if (!bot) return { bisaMulai: false, alasan: "bot_tidak_ada" };
+    const { putusan } = await hitungPutusan(db, bot, sekarangMs);
+    if (putusan.aksi === "mulai_tugas") return { bisaMulai: true, alasan: null };
+    return { bisaMulai: false, alasan: putusan.aksi === "diam" ? putusan.alasan : "tugas_berjalan" };
+  } catch (e) {
+    if (e instanceof SkemaBelumSiap) return { bisaMulai: false, alasan: "tabel_belum_ada" };
+    throw e;
+  }
 }
 
 /** Pilih kandidat panen terbaik milik sumber bot ini, klaim atomik, buat tugas. Tak ada → panen/diam. */
