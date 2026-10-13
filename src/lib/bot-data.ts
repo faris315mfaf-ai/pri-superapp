@@ -7,12 +7,18 @@
 
 import { supabase } from "@/lib/supabase";
 import { tabelBelumAda } from "@/lib/api-helper";
-import type { BotRingkas, GayaRambutDb, LogBotDb, ModeBotDb, RunnerStatus, RupaBotDb, StatusBot, TahapBotDb } from "@/lib/bot-tipe";
+import type { BotRingkas, GayaRambutDb, LogBotDb, ModeBotDb, RunnerStatus, RupaBotDb, StatusBot, SumberBotDb, TahapBotDb } from "@/lib/bot-tipe";
+import { normalkanKategori, normalkanPlatform } from "@/lib/bot-sumber";
 
 export const KUNCI_JEDA_GLOBAL = "bot_jeda_global";
 /** Runner dianggap online bila detaknya masuk dalam rentang ini. */
 export const RUNNER_ONLINE_DETIK = 180;
 const BATAS_LOG = 40;
+/** Halaman baca bot_kandidat 24 jam (PostgREST membatasi baris per permintaan). */
+const UKURAN_HALAMAN_KANDIDAT = 1000;
+const MAKS_HALAMAN_KANDIDAT = 5;
+const BATAS_SUMBER_STATUS = 500;
+const BATAS_BLOKIR_STATUS = 500;
 const GAYA_SAH: readonly GayaRambutDb[] = ["pendek", "panjang", "topi"];
 const TAHAP_SAH: readonly TahapBotDb[] = ["cari", "edit", "posting", "istirahat"];
 
@@ -101,6 +107,48 @@ export function rakitBot(b: BarisBot, username: string, postHariIni: number, aku
   };
 }
 
+/** Awal jendela "24 jam terakhir" sebagai ISO UTC. */
+export function awal24JamIso(sekarang: Date = new Date()): string {
+  return new Date(sekarang.getTime() - 24 * 3600_000).toISOString();
+}
+
+/** Hitung kandidat per sumber_id; baris tanpa sumber (sumber terhapus) diabaikan. */
+export function hitungKandidatPerSumber(baris: readonly { sumber_id: number | null }[]): Map<number, number> {
+  const hasil = new Map<number, number>();
+  for (const b of baris) {
+    if (b.sumber_id === null || b.sumber_id === undefined) continue;
+    const id = Number(b.sumber_id);
+    if (!Number.isFinite(id)) continue;
+    hasil.set(id, (hasil.get(id) ?? 0) + 1);
+  }
+  return hasil;
+}
+
+export type BarisSumber = {
+  id: number;
+  bot_id: number;
+  platform: string | null;
+  handle: string | null;
+  kategori: string | null;
+  aktif: boolean | null;
+  terakhir_ambil: string | null;
+};
+
+/** Baris bot_sumber -> bentuk status. Nilai tak dikenal dirapikan, tidak melempar. */
+export function rakitSumber(b: BarisSumber, kandidat24Jam: number): SumberBotDb {
+  const platform = normalkanPlatform(b.platform) ?? String(b.platform ?? "");
+  return {
+    id: Number(b.id),
+    bot_id: Number(b.bot_id),
+    platform,
+    handle: String(b.handle ?? ""),
+    kategori: normalkanKategori(b.kategori) ?? "NEWS",
+    aktif: b.aktif !== false,
+    terakhir_ambil: b.terakhir_ambil ?? null,
+    kandidat_24_jam: Math.max(0, Math.floor(Number(kandidat24Jam) || 0)),
+  };
+}
+
 export function statusKosong(tabelAda: boolean, runner?: RunnerStatus, jedaGlobal = false): StatusBot {
   return {
     tabel_ada: tabelAda,
@@ -132,6 +180,49 @@ export async function simpanJedaGlobal(nilai: boolean): Promise<void> {
   }
 }
 
+/** Sumber + blokir untuk status. Tabel belum ada = daftar kosong (tidak melempar). */
+async function ambilSumberDanBlokir(): Promise<{ sumber: SumberBotDb[]; blokir: string[] }> {
+  const db = supabase();
+  const [rSumber, rBlokir] = await Promise.all([
+    db
+      .from("bot_sumber")
+      .select("id, bot_id, platform, handle, kategori, aktif, terakhir_ambil")
+      .order("id", { ascending: true })
+      .limit(BATAS_SUMBER_STATUS),
+    db.from("bot_blokir").select("kata").order("id", { ascending: true }).limit(BATAS_BLOKIR_STATUS),
+  ]);
+  if (rSumber.error && !tabelBelumAda(rSumber.error)) galatDb("sumber bot", rSumber.error);
+  if (rBlokir.error && !tabelBelumAda(rBlokir.error)) galatDb("daftar blokir", rBlokir.error);
+  const barisSumber = (rSumber.error ? [] : (rSumber.data ?? [])) as unknown as BarisSumber[];
+  const blokir = (rBlokir.error ? [] : (rBlokir.data ?? [])).map((r) => String((r as { kata: unknown }).kata ?? "")).filter(Boolean);
+  if (barisSumber.length === 0) return { sumber: [], blokir };
+
+  // Kandidat 24 jam: baca sumber_id halaman demi halaman lalu hitung di sini.
+  const awal = awal24JamIso();
+  const idSumber = barisSumber.map((b) => Number(b.id));
+  const kandidat: { sumber_id: number | null }[] = [];
+  for (let h = 0; h < MAKS_HALAMAN_KANDIDAT; h++) {
+    const dari = h * UKURAN_HALAMAN_KANDIDAT;
+    const { data, error } = await db
+      .from("bot_kandidat")
+      .select("sumber_id")
+      .in("sumber_id", idSumber)
+      .gte("dibuat_pada", awal)
+      .order("id", { ascending: true })
+      .range(dari, dari + UKURAN_HALAMAN_KANDIDAT - 1);
+    if (error) {
+      // Hitungan hanya hiasan: gagal membaca tidak boleh menjatuhkan seluruh layar.
+      if (!tabelBelumAda(error)) console.error("[bot] hitung kandidat 24 jam:", error.message);
+      break;
+    }
+    const halaman = (data ?? []) as { sumber_id: number | null }[];
+    kandidat.push(...halaman);
+    if (halaman.length < UKURAN_HALAMAN_KANDIDAT) break;
+  }
+  const hitung = hitungKandidatPerSumber(kandidat);
+  return { sumber: barisSumber.map((b) => rakitSumber(b, hitung.get(Number(b.id)) ?? 0)), blokir };
+}
+
 /** Keadaan lengkap untuk Ruang Bot. tabel_ada=false bila migrasi sql/67 belum jalan. */
 export async function ambilStatusBot(): Promise<StatusBot> {
   const db = supabase();
@@ -148,7 +239,7 @@ export async function ambilStatusBot(): Promise<StatusBot> {
   const idBot = daftar.map((b) => Number(b.id));
   const awalHari = awalHariWibIso();
 
-  const [rUser, rRunner, rLog, rTugas, rAkun, jeda] = await Promise.all([
+  const [rUser, rRunner, rLog, rTugas, rAkun, jeda, daftarSumber] = await Promise.all([
     idUser.length ? db.from("app_user").select("id, username").in("id", idUser) : Promise.resolve({ data: [], error: null }),
     db.from("bot_runner").select("terakhir_denyut, versi").eq("id", 1).maybeSingle(),
     db.from("bot_log").select("id, bot_id, tahap, teks, dibuat_pada").order("dibuat_pada", { ascending: false }).limit(BATAS_LOG),
@@ -157,6 +248,7 @@ export async function ambilStatusBot(): Promise<StatusBot> {
       : Promise.resolve({ data: [], error: null }),
     idUser.length ? db.from("akun_tvr_user").select("user_id").eq("terhubung", true).in("user_id", idUser) : Promise.resolve({ data: [], error: null }),
     bacaJedaGlobal(),
+    ambilSumberDanBlokir(),
   ]);
   if (rUser.error) galatDb("akun bot", rUser.error);
   if (rRunner.error && !tabelBelumAda(rRunner.error)) galatDb("status runner", rRunner.error);
@@ -186,5 +278,7 @@ export async function ambilStatusBot(): Promise<StatusBot> {
     runner: hitungRunner(runnerBaris?.terakhir_denyut ?? null, runnerBaris?.versi ?? null),
     bots: daftar.map((b) => rakitBot(b, namaUser.get(Number(b.user_id)) ?? "", selesai.get(Number(b.id)) ?? 0, tertaut.get(Number(b.user_id)) ?? 0)),
     log,
+    sumber: daftarSumber.sumber,
+    blokir: daftarSumber.blokir,
   };
 }

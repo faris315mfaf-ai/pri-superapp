@@ -7265,3 +7265,14 @@ export async function kirimKendaliBot(aksi: AksiKendaliBot): Promise<void> {
     body: JSON.stringify(aksi),
   });
 }
+
+import type { AksiSumberBot } from "@/lib/bot-tipe";
+
+/** Kelola sumber video & daftar blokir bot (tambah/aktif/hapus/blokir). Galat server dilempar sebagai Error berpesan. */
+export async function kirimSumberBot(aksi: AksiSumberBot): Promise<void> {
+  await fetchJson("/api/bot/sumber", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(aksi),
+  });
+}

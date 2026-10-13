@@ -87,6 +87,8 @@ export type KeputusanAcc = {
 };
 
 export type SumberContoh = {
+  /** bot_sumber.id (hanya mode nyata); negatif = baris sementara yang belum dikonfirmasi server. */
+  id?: number;
   akun: string;
   platform: string;
   kategori: "NEWS" | "HIBURAN" | "SHOWBIZ";
@@ -94,6 +96,21 @@ export type SumberContoh = {
   kandidat24Jam: number;
   terakhirAmbil: string;
   aktif: boolean;
+};
+
+/** Hasil satu aksi sumber/blokir ke server (pesan dipakai form untuk galat satu baris). */
+export type HasilAksiSumber = { ok: true } | { ok: false; pesan: string };
+
+/**
+ * Kendali sumber & blokir ke server (mode nyata). Semua aksi memakai pembaruan
+ * optimis di hook; mengembalikan hasil supaya form tahu kapan boleh dikosongkan.
+ */
+export type KendaliSumberNyata = {
+  tambah: (a: { botId: number; platform: string; handle: string; kategori: SumberContoh["kategori"] }) => Promise<HasilAksiSumber>;
+  aktif: (id: number, nilai: boolean) => Promise<HasilAksiSumber>;
+  hapus: (id: number) => Promise<HasilAksiSumber>;
+  tambahBlokir: (kata: string) => Promise<HasilAksiSumber>;
+  hapusBlokir: (kata: string) => Promise<HasilAksiSumber>;
 };
 
 export type HasilHariIni = {

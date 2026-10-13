@@ -25,8 +25,15 @@ WORKDIR /app
 COPY --from=paket /app/node_modules ./node_modules
 COPY package.json package-lock.json tsconfig.json ./
 COPY src/mesin-video ./src/mesin-video
+# Rumah Bot (13 Okt 2026): runner Bot Redaksi ikut dibundel di image yang SAMA
+# (tanpa image baru -> rilis mesin tidak bertambah risikonya). Hanya modul
+# bawaan Node; satu-satunya rujukan ke src/lib adalah `import type` yang
+# dihapus esbuild, jadi src/lib tidak perlu disalin.
+COPY src/bot-runner ./src/bot-runner
 COPY vps/autoedit-ts/paket-jalan.mjs ./
-RUN npx esbuild src/mesin-video/server/utama.ts src/mesin-video/pekerja.ts \
+# Entri ketiga = src/bot-runner/runner.ts (BUKAN utama.ts: --entry-names=[name]
+# akan menamai keduanya utama.mjs dan saling menimpa) -> runner.mjs.
+RUN npx esbuild src/mesin-video/server/utama.ts src/mesin-video/pekerja.ts src/bot-runner/runner.ts \
       --bundle --platform=node --target=node22 --format=esm \
       --outdir=dist --entry-names=[name] --out-extension:.js=.mjs \
       --external:sharp --external:@napi-rs/canvas --external:bullmq --external:ioredis \

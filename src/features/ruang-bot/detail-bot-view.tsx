@@ -386,11 +386,7 @@ export function DetailBotView(p: DetailBotViewProps) {
           <div className="grid gap-3.5 lg:grid-cols-2">
             <GlassCard className="p-3.5">
               <Judul>Sumber yang dipakai</Judul>
-              {nyata ? (
-                <p className="m-0 text-xs text-teks-sekunder">
-                  Belum ada data. Daftar sumber per bot tersambung pada pekerjaan berikutnya (lihat tab Sumber &amp; Kuota).
-                </p>
-              ) : sumberBot.length === 0 ? (
+              {sumberBot.length === 0 ? (
                 <p className="m-0 text-xs text-teks-sekunder">Belum ada sumber. Tambah di tab Sumber &amp; Kuota.</p>
               ) : (
                 <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">

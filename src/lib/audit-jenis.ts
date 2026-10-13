@@ -12,6 +12,7 @@ export const JENIS_AUDIT = {
   bot_jeda: { label: "Jeda bot", kelompok: "akses" },
   bot_mode: { label: "Mode bot", kelompok: "akses" },
   bot_kuota: { label: "Kuota bot", kelompok: "akses" },
+  bot_sumber: { label: "Sumber bot", kelompok: "akses" },
   edit_otomatis: { label: "Edit Otomatis", kelompok: "video" },
   auto_edit: { label: "Auto Edit (master)", kelompok: "video" },
   kompres: { label: "Kompres Video", kelompok: "video" },

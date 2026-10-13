@@ -89,6 +89,8 @@ create table if not exists public.bot_kandidat (
   durasi_detik     integer,
   tayangan         bigint,
   waktu_terbit     timestamptz,
+  -- alasan kandidat dilewati pemilih (mis. 'dipakai_manusia' = sudah dipakai di sistem lain); null = bersih
+  bentrok          text,
   -- klaim atomik: UPDATE ... WHERE diklaim_oleh IS NULL RETURNING id
   diklaim_oleh     bigint      references public.bot_redaksi(id) on delete set null,
   diklaim_pada     timestamptz,
@@ -107,6 +109,10 @@ create table if not exists public.bot_tugas (
   kategori         text        not null default 'NEWS',
   id_job_mesin     text,
   id_stok_mesin    text,
+  -- penanda hook dari runner (untuk memantau job di mesin; Pekerjaan 2)
+  hook             text,
+  -- berapa kali perintah buat_video diberikan untuk tugas ini (batas MAKS_PERCOBAAN)
+  percobaan        integer     not null default 0,
   video_path       text,
   caption          text        not null default '',
   jadwal           timestamptz,
@@ -144,3 +150,8 @@ create table if not exists public.bot_log (
 create index if not exists idx_bot_log_waktu on public.bot_log (dibuat_pada desc);
 create index if not exists idx_bot_log_bot on public.bot_log (bot_id, dibuat_pada desc);
 alter table public.bot_log enable row level security;
+
+-- Untuk basis data yang sudah menjalankan versi awal berkas ini (kolom Pekerjaan 2).
+alter table public.bot_kandidat add column if not exists bentrok text;
+alter table public.bot_tugas add column if not exists hook text;
+alter table public.bot_tugas add column if not exists percobaan integer not null default 0;

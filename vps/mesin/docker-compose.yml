@@ -169,6 +169,58 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
+  # RUMAH BOT — runner Bot Redaksi (13 Okt 2026). Melakukan bagian BOT yang
+  # menyangkut mesin (daftar video akun sumber lewat yt-dlp, hook, job render,
+  # memantau stok) lalu melapor ke aplikasi lewat HTTPS publik; semua keadaan
+  # dan kunci layanan luar ada di aplikasi. Kode: src/bot-runner (dibundel jadi
+  # runner.mjs di image yang SAMA, vps/autoedit-ts/Dockerfile).
+  #
+  # `profiles: ["bot"]` -> TIDAK menyala pada `docker compose up -d` biasa,
+  # termasuk saat pipeline rilis mesin mengirim compose ini tiap deploy aplikasi.
+  # Dinyalakan MANUAL: docker compose --profile bot up -d autoedit-bot
+  # (langkah lengkap: docs/BOT-REDAKSI-RUNNER.md). Rahasia hanya di ./bot.env
+  # (dibuat manual, izin 0600, di luar repo).
+  autoedit-bot:
+    image: pri-autoedit-ts:terbaru
+    container_name: pri-autoedit-bot
+    profiles: ["bot"]
+    restart: unless-stopped
+    init: true
+    command: ["node", "--enable-source-maps", "runner.mjs"]
+    env_file:
+      - path: ./bot.env
+        required: false
+    environment:
+      AUTOEDIT_SOCKET: /run/autoedit/api.sock
+      YTDLP_BIN: /usr/local/bin/yt-dlp
+      TZ: Asia/Jakarta
+    volumes:
+      # Soket API mesin (sama dengan yang dipasang jembatan). Runner hanya
+      # memakai soket ini untuk berbicara dengan mesin.
+      - /srv/godam/sock:/run/autoedit
+      # Cookies yt-dlp akun tumbal (opsional): letakkan di /srv/godam/bot-cookies
+      # (izin 0600, pemilik uid 10001), isi BOT_COOKIES_FILE di bot.env, lalu
+      # buka baris ini. yt-dlp menulis ulang berkas cookies, jadi JANGAN :ro.
+      # - /srv/godam/bot-cookies:/run/bot-cookies
+    networks: [autoedit]
+    # SIGTERM: runner menyelesaikan langkah yang berjalan lalu keluar bersih.
+    stop_grace_period: 30s
+    healthcheck:
+      # Runner menulis penanda waktu tiap putaran denyut (berhasil atau tidak);
+      # sehat = penanda lebih baru dari 2 menit. Ini hanya "proses masih
+      # berputar", bukan "aplikasi terjangkau" (itu terlihat di Ruang Bot).
+      test: ["CMD", "node", "-e", "const s=require('fs').statSync('/tmp/runner-hidup');process.exit(Date.now()-s.mtimeMs<120000?0:1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 512M, pids: 128 }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
   # Jembatan TCP (jalur privat) -> socket API. Hanya mendengar di 10.77.0.2.
   autoedit-jembatan:
     image: alpine/socat:latest

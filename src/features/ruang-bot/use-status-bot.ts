@@ -13,15 +13,28 @@
 // • Anti-balapan: tiap permintaan bernomor; hasil lama atau hasil yang tiba
 //   saat ada aksi kendali berjalan DIBUANG supaya tidak menimpa perubahan
 //   optimis. Selesai aksi → status dimuat ulang dari server.
+// • Sumber & blokir (POST /api/bot/sumber) memakai pola yang sama (ubahSumber):
+//   sumber baru tampil sebagai baris sementara (id negatif) sampai server menjawab.
 // ============================================================
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "@/hooks/use-app-store";
 import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
-import type { AksiKendaliBot, StatusBot } from "@/lib/bot-tipe";
+import type { AksiKendaliBot, AksiSumberBot, StatusBot } from "@/lib/bot-tipe";
 import { kanalLangsung } from "@/lib/realtime-klien";
-import { getStatusBot, kirimKendaliBot } from "@/services";
-import { aksiBalik, galatDilarang, kunciAksi, labelSukses, terapkanAksi } from "./peta-nyata";
+import { getStatusBot, kirimKendaliBot, kirimSumberBot } from "@/services";
+import {
+  aksiBalik,
+  batalkanAksiSumber,
+  galatDilarang,
+  kunciAksi,
+  kunciAksiSumber,
+  labelSukses,
+  labelSuksesSumber,
+  terapkanAksi,
+  terapkanAksiSumber,
+} from "./peta-nyata";
+import type { HasilAksiSumber } from "./tipe";
 
 /** Topik & event siaran Realtime — harus sama dengan string yang dipakai server. */
 export const TOPIK_BOT = "bot-ruang";
@@ -47,6 +60,11 @@ export type StatusBotKlien = {
    * Mengembalikan true bila SEMUA sukses.
    */
   kendali: (aksi: AksiKendaliBot[]) => Promise<boolean>;
+  /**
+   * Satu aksi sumber/blokir dengan pembaruan optimis + rollback + toast.
+   * Hasilnya memuat pesan galat server supaya form bisa menampilkannya.
+   */
+  ubahSumber: (aksi: AksiSumberBot) => Promise<HasilAksiSumber>;
 };
 
 const KOSONG: ReadonlySet<string> = new Set();
@@ -64,6 +82,8 @@ export function useStatusBot(): StatusBotKlien {
   const nomorRef = useRef(0);
   const aksiRef = useRef(0);
   const sibukRef = useRef<Set<string>>(new Set());
+  /** Penghitung id sementara (negatif) untuk sumber yang baru ditambah. */
+  const sementaraRef = useRef(0);
   /** Muatan yang sedang terbang (digabung bila nomornya masih yang terbaru). */
   const terbangRef = useRef<{ nomor: number; janji: Promise<void> } | null>(null);
   /** Pesan galat yang sudah ditoastkan, supaya polling gagal tidak membanjiri toast. */
@@ -219,6 +239,52 @@ export function useStatusBot(): StatusBotKlien {
     [muat],
   );
 
+  const ubahSumber = useCallback(
+    async (aksi: AksiSumberBot): Promise<HasilAksiSumber> => {
+      const awal = dataRef.current;
+      if (!awal) return { ok: false, pesan: "Status bot belum dimuat." };
+      const kunci = kunciAksiSumber(aksi);
+      if (sibukRef.current.has(kunci)) return { ok: false, pesan: "Masih diproses, tunggu sebentar." }; // cegah klik ganda
+      // Sumber/blokir yang dituju sudah hilang (mis. dihapus dari tab lain): jangan kirim.
+      if ((aksi.aksi === "aktif" || aksi.aksi === "hapus") && !(awal.sumber ?? []).some((x) => x.id === aksi.id)) {
+        return { ok: false, pesan: "Sumber tidak ditemukan. Muat ulang halaman." };
+      }
+      let idSementara = 0;
+      if (aksi.aksi === "tambah") {
+        sementaraRef.current += 1;
+        idSementara = -sementaraRef.current;
+      }
+
+      aksiRef.current += 1;
+      nomorRef.current += 1;
+      sibukRef.current = new Set(sibukRef.current).add(kunci);
+      setSibuk(sibukRef.current);
+      setData((prev) => (prev ? terapkanAksiSumber(prev, aksi, idSementara) : prev));
+
+      let hasil: HasilAksiSumber;
+      try {
+        await kirimSumberBot(aksi);
+        hasil = { ok: true };
+        toast("sukses", labelSuksesSumber(awal, aksi));
+      } catch (e) {
+        const pesan = e instanceof Error && e.message ? e.message : "Server menolak perubahan sumber.";
+        hasil = { ok: false, pesan };
+        if (hidupRef.current) setData((prev) => (prev ? batalkanAksiSumber(prev, aksi, awal, idSementara) : prev));
+        toast("error", "Perubahan dibatalkan", pesan);
+      } finally {
+        aksiRef.current -= 1;
+        const baru = new Set(sibukRef.current);
+        baru.delete(kunci);
+        sibukRef.current = baru;
+        if (hidupRef.current) setSibuk(baru);
+        // Aksi terakhir selesai → samakan dengan server (id asli sumber baru, hitungan, dll.).
+        if (aksiRef.current === 0) void muat();
+      }
+      return hasil;
+    },
+    [muat],
+  );
+
   return {
     data,
     memuat: data === null && galat === "" && !dilarang,
@@ -228,5 +294,6 @@ export function useStatusBot(): StatusBotKlien {
     langsung,
     muatUlang: muat,
     kendali,
+    ubahSumber,
   };
 }

@@ -7,16 +7,21 @@
 // dan jeda darurat dimiliki cangkang layar (masuk lewat props + callback).
 // Yang lokal di sini hanya isian form, pesan galat, serta jam aktif dan
 // saklar "berhenti otomatis" yang belum tersambung ke server.
-// Mode NYATA (prop `nyata`): saklar jeda darurat dan stepper kuota bekerja
-// lewat API server (stepper berlaku untuk SEMUA bot); selebihnya masih contoh.
+// Mode NYATA (prop `nyata`): saklar jeda darurat, stepper kuota (berlaku untuk
+// SEMUA bot), daftar sumber, dan daftar blokir bekerja lewat API server
+// (prop `kendaliSumber`; daftar datang dari server, bukan dari state lokal).
+// Yang masih contoh: jam aktif, mode awal, berhenti otomatis, kapasitas layanan.
+// Validasi form memakai fungsi murni lib/bot-sumber (sama dengan server).
 // Sumber visual: docs/mockups/pri-ruang-bot.html (renderSumber).
 // ============================================================
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { GlassCard } from "@/components/glass-card";
+import { cocokBlokir, normalkanBlokir, normalkanSumber, pesanGalatSumber, PLATFORM_SUMBER, samaTanpaHuruf, tampilkanHandle } from "@/lib/bot-sumber";
 import { KUOTA_BOT_MAKS, KUOTA_BOT_MIN } from "@/lib/bot-tipe";
 import { cn } from "@/lib/utils";
-import type { BotContoh, SumberContoh } from "./tipe";
+import { kunciAksiSumber } from "./peta-nyata";
+import type { BotContoh, KendaliSumberNyata, SumberContoh } from "./tipe";
 
 export type SumberKuotaViewProps = {
   bots: BotContoh[];
@@ -32,8 +37,13 @@ export type SumberKuotaViewProps = {
   renderBerjalan: number;
   /** Mode data nyata: jeda darurat & kuota diteruskan ke server (kuota berlaku untuk semua bot). */
   nyata?: boolean;
-  /** Kunci kontrol yang sedang memproses aksi ke server (lihat kunciAksi). */
+  /** Kunci kontrol yang sedang memproses aksi ke server (lihat kunciAksi / kunciAksiSumber). */
   sibuk?: ReadonlySet<string>;
+  /**
+   * Mode nyata: aksi sumber & blokir ke server. Bila ada, `sumber`/`blokir` adalah daftar
+   * dari server dan `onSumber`/`onBlokir` tidak dipakai.
+   */
+  kendaliSumber?: KendaliSumberNyata;
 };
 
 const KUOTA_MIN = KUOTA_BOT_MIN;
@@ -43,7 +53,9 @@ const SLOT_RENDER_MAKS = 10;
 /** Perkiraan slot yang dipakai anggota (contoh) di luar render bot. */
 const SLOT_ANGGOTA_CONTOH = 2;
 
-const PILIHAN_PLATFORM = ["Instagram", "TikTok", "YouTube (feed RSS)"];
+/** Pilihan platform mode contoh (lama) dan mode nyata (nilai kanonik server). */
+const PILIHAN_PLATFORM_CONTOH = ["Instagram", "TikTok", "YouTube (feed RSS)"];
+const PILIHAN_PLATFORM_NYATA: readonly string[] = PLATFORM_SUMBER;
 const PILIHAN_KATEGORI: SumberContoh["kategori"][] = ["NEWS", "HIBURAN", "SHOWBIZ"];
 
 // ------------------------------------------------------------
@@ -53,7 +65,7 @@ const PILIHAN_KATEGORI: SumberContoh["kategori"][] = ["NEWS", "HIBURAN", "SHOWBI
 const KELAS_ISIAN =
   "glass-input min-h-11 min-w-0 rounded-xl px-3 text-base text-teks-utama sm:min-h-10 sm:text-[13px]";
 const KELAS_TOMBOL =
-  "btn-tekan min-h-11 rounded-xl border border-glass-border px-3.5 text-[13px] font-bold text-teks-utama hover:bg-black/5 sm:min-h-10 dark:hover:bg-white/10";
+  "btn-tekan min-h-11 rounded-xl border border-glass-border px-3.5 text-[13px] font-bold text-teks-utama hover:bg-black/5 disabled:cursor-wait disabled:opacity-50 sm:min-h-10 dark:hover:bg-white/10";
 
 function Judul({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
@@ -149,7 +161,21 @@ type Pesan = { jenis: "galat" | "ok"; teks: string } | null;
 // ------------------------------------------------------------
 
 export function SumberKuotaView(p: SumberKuotaViewProps) {
-  const { bots, sumber, onSumber, blokir, onBlokir, maksKuota, onMaksKuota, jedaGlobal, onJedaGlobal, renderBerjalan, nyata = false, sibuk } = p;
+  const { bots, sumber, onSumber, blokir, onBlokir, maksKuota, onMaksKuota, jedaGlobal, onJedaGlobal, renderBerjalan, nyata = false, sibuk, kendaliSumber } = p;
+  /** Daftar sumber/blokir benar-benar dari server (CRUD lewat kendaliSumber). */
+  const daftarNyata = nyata && !!kendaliSumber;
+  const pilihanPlatform = daftarNyata ? PILIHAN_PLATFORM_NYATA : PILIHAN_PLATFORM_CONTOH;
+  const sibukTambahSumber = !!sibuk?.has("sumber:tambah");
+  const sibukTambahBlokir = !!sibuk?.has("blokir:tambah");
+
+  // Penjaga setState setelah unmount (tab ditutup saat permintaan masih terbang).
+  const hidupRef = useRef(true);
+  useEffect(() => {
+    hidupRef.current = true;
+    return () => {
+      hidupRef.current = false;
+    };
+  }, []);
   const sibukJeda = !!sibuk?.has("jeda_global");
   const sibukKuota = !!sibuk?.has("kuota");
   // Mode nyata: bot bisa punya kuota berbeda-beda; stepper menyamakan semuanya.
@@ -162,7 +188,7 @@ export function SumberKuotaView(p: SumberKuotaViewProps) {
 
   // Form tambah sumber.
   const [akun, setAkun] = useState("");
-  const [platform, setPlatform] = useState(PILIHAN_PLATFORM[0]);
+  const [platform, setPlatform] = useState(pilihanPlatform[0]);
   const [kategori, setKategori] = useState<SumberContoh["kategori"]>("NEWS");
   const [botPilihan, setBotPilihan] = useState("");
   const [pesanSumber, setPesanSumber] = useState<Pesan>(null);
@@ -174,8 +200,45 @@ export function SumberKuotaView(p: SumberKuotaViewProps) {
   const botId = botPilihan || bots[0]?.id || "";
   const slotTerpakai = renderBerjalan + SLOT_ANGGOTA_CONTOH;
 
+  /** Tambah sumber mode nyata: validasi murni di klien, lalu server (yang memvalidasi ulang). */
+  const tambahSumberNyata = async (k: KendaliSumberNyata) => {
+    if (sibukTambahSumber) return;
+    const sah = normalkanSumber({ platform, handle: akun });
+    if (!sah.ok) {
+      setPesanSumber({ jenis: "galat", teks: pesanGalatSumber(sah.kode) });
+      return;
+    }
+    const cocok = cocokBlokir(sah.handle, blokir);
+    if (cocok) {
+      setPesanSumber({ jenis: "galat", teks: `Akun ini cocok dengan daftar blokir (“${cocok}”).` });
+      return;
+    }
+    const idBot = Number(botId);
+    if (!Number.isInteger(idBot) || idBot <= 0) {
+      setPesanSumber({ jenis: "galat", teks: "Belum ada bot yang bisa memakai sumber ini." });
+      return;
+    }
+    const tampil = tampilkanHandle(sah.platform, sah.handle);
+    if (sumber.some((s) => s.botId === String(idBot) && s.platform === sah.platform && s.akun === tampil)) {
+      setPesanSumber({ jenis: "galat", teks: "Sumber ini sudah ada untuk bot dan platform yang sama." });
+      return;
+    }
+    const hasil = await k.tambah({ botId: idBot, platform: sah.platform, handle: sah.handle, kategori });
+    if (!hidupRef.current) return;
+    if (hasil.ok) {
+      setAkun("");
+      setPesanSumber({ jenis: "ok", teks: `Sumber ditambahkan: ${tampil}` });
+    } else {
+      setPesanSumber({ jenis: "galat", teks: hasil.pesan });
+    }
+  };
+
   const tambahSumber = (e: FormEvent) => {
     e.preventDefault();
+    if (kendaliSumber && nyata) {
+      void tambahSumberNyata(kendaliSumber);
+      return;
+    }
     const nama = akun.trim();
     if (nama.length < 3) {
       setPesanSumber({ jenis: "galat", teks: "Isi nama akun atau tautan kanal minimal 3 karakter." });
@@ -198,8 +261,34 @@ export function SumberKuotaView(p: SumberKuotaViewProps) {
     setPesanSumber({ jenis: "ok", teks: `Sumber ditambahkan: ${nama}` });
   };
 
+  /** Tambah blokir mode nyata. */
+  const tambahBlokirNyata = async (k: KendaliSumberNyata) => {
+    if (sibukTambahBlokir) return;
+    const sah = normalkanBlokir(isianBlokir);
+    if (!sah.ok) {
+      setPesanBlokir({ jenis: "galat", teks: pesanGalatSumber(sah.kode) });
+      return;
+    }
+    if (blokir.some((t) => samaTanpaHuruf(t, sah.kata))) {
+      setPesanBlokir({ jenis: "galat", teks: "Sudah ada di daftar blokir." });
+      return;
+    }
+    const hasil = await k.tambahBlokir(sah.kata);
+    if (!hidupRef.current) return;
+    if (hasil.ok) {
+      setIsianBlokir("");
+      setPesanBlokir({ jenis: "ok", teks: `Ditambahkan ke daftar blokir: ${sah.kata}` });
+    } else {
+      setPesanBlokir({ jenis: "galat", teks: hasil.pesan });
+    }
+  };
+
   const tambahBlokir = (e: FormEvent) => {
     e.preventDefault();
+    if (kendaliSumber && nyata) {
+      void tambahBlokirNyata(kendaliSumber);
+      return;
+    }
     const kata = isianBlokir.trim();
     if (kata.length < 2) {
       setPesanBlokir({ jenis: "galat", teks: "Isi minimal 2 karakter." });
@@ -318,6 +407,7 @@ export function SumberKuotaView(p: SumberKuotaViewProps) {
         <Judul>Sumber video yang diizinkan</Judul>
         <div className="relative overflow-x-auto">
           <table className="w-full min-w-[640px] border-collapse text-[12.5px]">
+            <caption className="sr-only">Sumber video yang diizinkan untuk tiap bot</caption>
             <thead>
               <tr>
                 {["Akun sumber", "Platform", "Kategori", "Dipakai bot", "Kandidat 24 jam", "Terakhir ambil", "Aktif", ""].map((h, i) => (
@@ -342,8 +432,11 @@ export function SumberKuotaView(p: SumberKuotaViewProps) {
               {sumber.map((s, i) => {
                 const b = bots.find((x) => x.id === s.botId);
                 const nama = `${s.akun} (${s.platform})`;
+                // Mode nyata: baris sementara (id negatif) atau yang sedang diproses tidak bisa diubah.
+                const idNyata = daftarNyata && s.id !== undefined ? s.id : null;
+                const terkunci = daftarNyata && (idNyata === null || idNyata < 0 || !!sibuk?.has(kunciAksiSumber({ aksi: "hapus", id: idNyata })));
                 return (
-                  <tr key={`${s.akun}-${s.platform}-${i}`} className={cn(!s.aktif && "text-teks-sekunder")}>
+                  <tr key={idNyata ?? `${s.akun}-${s.platform}-${i}`} className={cn(!s.aktif && "text-teks-sekunder")}>
                     <td className="border-b border-dashed border-glass-border px-2 py-1 font-bold text-teks-utama">{s.akun}</td>
                     <td className="border-b border-dashed border-glass-border px-2 py-1 text-teks-utama">{s.platform}</td>
                     <td className="border-b border-dashed border-glass-border px-2 py-1 text-teks-utama">{s.kategori}</td>
@@ -359,14 +452,28 @@ export function SumberKuotaView(p: SumberKuotaViewProps) {
                       <Saklar
                         aktif={s.aktif}
                         label={`Aktifkan ${nama}`}
-                        onUbah={(v) => onSumber(sumber.map((x, j) => (j === i ? { ...x, aktif: v } : x)))}
+                        disabled={terkunci}
+                        onUbah={(v) => {
+                          if (kendaliSumber && daftarNyata) {
+                            if (idNyata !== null) void kendaliSumber.aktif(idNyata, v);
+                            return;
+                          }
+                          onSumber(sumber.map((x, j) => (j === i ? { ...x, aktif: v } : x)));
+                        }}
                       />
                     </td>
                     <td className="border-b border-dashed border-glass-border px-2 py-1">
                       <button
                         type="button"
                         aria-label={`Hapus ${nama}`}
-                        onClick={() => onSumber(sumber.filter((_, j) => j !== i))}
+                        disabled={terkunci}
+                        onClick={() => {
+                          if (kendaliSumber && daftarNyata) {
+                            if (idNyata !== null) void kendaliSumber.hapus(idNyata);
+                            return;
+                          }
+                          onSumber(sumber.filter((_, j) => j !== i));
+                        }}
                         className={cn(KELAS_TOMBOL, "px-3 text-xs")}
                       >
                         Hapus
@@ -378,21 +485,26 @@ export function SumberKuotaView(p: SumberKuotaViewProps) {
             </tbody>
           </table>
         </div>
-        <p className="m-0 mt-1.5 text-[11px] text-teks-sekunder">Data contoh: kandidat 24 jam dan waktu ambil terakhir belum dari server.</p>
+        <p className="m-0 mt-1.5 text-[11px] text-teks-sekunder">
+          {daftarNyata
+            ? "Kandidat 24 jam = video sumber ini yang ditemukan pemanen dalam 24 jam terakhir; tetap 0 dan “belum pernah” sampai runner mulai memanen."
+            : "Data contoh: kandidat 24 jam dan waktu ambil terakhir belum dari server."}
+        </p>
 
         <form onSubmit={tambahSumber} autoComplete="off" noValidate className="mt-3 flex flex-wrap gap-2">
           <input
             id="sumber-akun"
             value={akun}
             onChange={(e) => setAkun(e.target.value)}
-            placeholder="@akun atau tautan kanal"
+            placeholder={daftarNyata ? "@handle akun (bukan tautan)" : "@akun atau tautan kanal"}
+            maxLength={daftarNyata ? 80 : undefined}
             aria-label="Akun sumber"
             aria-invalid={pesanSumber?.jenis === "galat"}
             aria-describedby="sumber-pesan"
             className={cn(KELAS_ISIAN, "flex-[1_1_200px]")}
           />
           <select id="sumber-platform" value={platform} onChange={(e) => setPlatform(e.target.value)} aria-label="Platform" className={KELAS_ISIAN}>
-            {PILIHAN_PLATFORM.map((x) => (
+            {pilihanPlatform.map((x) => (
               <option key={x} value={x}>
                 {x}
               </option>
@@ -420,9 +532,11 @@ export function SumberKuotaView(p: SumberKuotaViewProps) {
           </select>
           <button
             type="submit"
+            disabled={sibukTambahSumber}
+            aria-busy={sibukTambahSumber}
             className={cn(KELAS_TOMBOL, "border-sukses/50 bg-sukses/10 text-emerald-700 dark:text-emerald-300")}
           >
-            Tambah sumber
+            {sibukTambahSumber ? "Menyimpan…" : "Tambah sumber"}
           </button>
         </form>
         <p id="sumber-pesan" aria-live="polite" className={kelasPesan(pesanSumber)}>
@@ -438,15 +552,22 @@ export function SumberKuotaView(p: SumberKuotaViewProps) {
           <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
             {blokir.map((t, i) => (
               <li
-                key={`${t}-${i}`}
+                key={daftarNyata ? t.toLowerCase() : `${t}-${i}`}
                 className="flex items-center rounded-full border border-glass-border bg-black/[0.04] pl-3 text-xs text-teks-utama dark:bg-white/[0.06]"
               >
                 <span className="break-all">{t}</span>
                 <button
                   type="button"
                   aria-label={`Hapus ${t} dari daftar blokir`}
-                  onClick={() => onBlokir(blokir.filter((_, j) => j !== i))}
-                  className="-my-2 flex h-11 w-10 items-center justify-center rounded-full text-base text-teks-sekunder hover:text-teks-utama"
+                  disabled={daftarNyata && !!sibuk?.has(kunciAksiSumber({ aksi: "blokir_hapus", kata: t }))}
+                  onClick={() => {
+                    if (kendaliSumber && daftarNyata) {
+                      void kendaliSumber.hapusBlokir(t);
+                      return;
+                    }
+                    onBlokir(blokir.filter((_, j) => j !== i));
+                  }}
+                  className="-my-2 flex h-11 w-10 items-center justify-center rounded-full text-base text-teks-sekunder hover:text-teks-utama disabled:cursor-wait disabled:opacity-50"
                 >
                   <span aria-hidden="true">×</span>
                 </button>
@@ -461,12 +582,13 @@ export function SumberKuotaView(p: SumberKuotaViewProps) {
             onChange={(e) => setIsianBlokir(e.target.value)}
             placeholder="kata kunci atau akun yang tidak boleh diambil"
             aria-label="Tambah blokir"
+            maxLength={daftarNyata ? 120 : undefined}
             aria-invalid={pesanBlokir?.jenis === "galat"}
             aria-describedby="blokir-pesan"
             className={cn(KELAS_ISIAN, "flex-[1_1_260px]")}
           />
-          <button type="submit" className={KELAS_TOMBOL}>
-            Blokir
+          <button type="submit" disabled={sibukTambahBlokir} aria-busy={sibukTambahBlokir} className={KELAS_TOMBOL}>
+            {sibukTambahBlokir ? "Menyimpan…" : "Blokir"}
           </button>
         </form>
         <p id="blokir-pesan" aria-live="polite" className={kelasPesan(pesanBlokir)}>
@@ -475,8 +597,19 @@ export function SumberKuotaView(p: SumberKuotaViewProps) {
       </GlassCard>
 
       <GlassCard className="p-3.5 text-[12.5px] leading-relaxed text-teks-sekunder">
-        <b className="text-teks-utama">Tentang sumber.</b> Instagram dan TikTok diambil lewat TikHub (berbayar, berkuota). Feed YouTube/NTV belum ada di
-        sistem dan dibangun pada tahap pencarian. Hak cipta konten sumber tetap tanggung jawab pemilik: caption selalu memuat kredit sumber.
+        <b className="text-teks-utama">Tentang sumber.</b>{" "}
+        {daftarNyata ? (
+          <>
+            Daftar ini tersimpan di server dan akan dipakai pemanen di mesin; sampai runner terpasang, daftar hanya tersimpan. Akun yang cocok dengan
+            daftar blokir ditolak saat ditambahkan, tetapi blokir yang ditambahkan belakangan tidak menghapus sumber yang sudah ada. Menghapus sumber
+            tidak menghapus kandidat videonya. Hak cipta konten sumber tetap tanggung jawab pemilik: caption selalu memuat kredit sumber.
+          </>
+        ) : (
+          <>
+            Instagram dan TikTok diambil lewat TikHub (berbayar, berkuota). Feed YouTube/NTV belum ada di sistem dan dibangun pada tahap pencarian. Hak
+            cipta konten sumber tetap tanggung jawab pemilik: caption selalu memuat kredit sumber.
+          </>
+        )}
       </GlassCard>
     </div>
   );

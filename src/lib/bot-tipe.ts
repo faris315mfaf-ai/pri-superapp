@@ -63,6 +63,22 @@ export type RunnerStatus = {
   versi: string | null;
 };
 
+/** Satu akun sumber milik bot (bot_sumber) + hitungan kandidat 24 jam terakhir. */
+export type SumberBotDb = {
+  id: number;
+  bot_id: number;
+  /** Bentuk kanonik: "Instagram" | "TikTok" | "YouTube" (lihat lib/bot-sumber). */
+  platform: string;
+  /** Bentuk simpan kanonik (IG/TikTok tanpa "@"; YouTube "@nama" atau ID kanal "UC…"). */
+  handle: string;
+  kategori: "NEWS" | "HIBURAN" | "SHOWBIZ";
+  aktif: boolean;
+  /** ISO; null = belum pernah dipanen. */
+  terakhir_ambil: string | null;
+  /** Jumlah bot_kandidat sumber ini yang dibuat dalam 24 jam terakhir. */
+  kandidat_24_jam: number;
+};
+
 export type StatusBot = {
   /** false bila migrasi sql/67 belum dijalankan. */
   tabel_ada: boolean;
@@ -70,6 +86,10 @@ export type StatusBot = {
   runner: RunnerStatus;
   bots: BotRingkas[];
   log: LogBotDb[];
+  /** Daftar sumber (bot_sumber). Kosong/absen = belum ada atau server lama. */
+  sumber?: SumberBotDb[];
+  /** Kata/akun terblokir (bot_blokir), urutan tambah. */
+  blokir?: string[];
 };
 
 export type AksiKendaliBot =
@@ -77,6 +97,14 @@ export type AksiKendaliBot =
   | { aksi: "jeda_bot"; bot_id: number; nilai: boolean }
   | { aksi: "mode"; bot_id: number; nilai: ModeBotDb }
   | { aksi: "kuota"; bot_id: number; nilai: number };
+
+/** Aksi POST /api/bot/sumber (master saja). Nilai platform/handle divalidasi ulang di server. */
+export type AksiSumberBot =
+  | { aksi: "tambah"; bot_id: number; platform: string; handle: string; kategori: "NEWS" | "HIBURAN" | "SHOWBIZ" }
+  | { aksi: "aktif"; id: number; nilai: boolean }
+  | { aksi: "hapus"; id: number }
+  | { aksi: "blokir_tambah"; kata: string }
+  | { aksi: "blokir_hapus"; kata: string };
 
 /** Batas kuota harian per bot yang diterima server. */
 export const KUOTA_BOT_MIN = 1;

@@ -7,8 +7,9 @@
 // merumuskan waktu relatif untuk denyut runner.
 // ============================================================
 
-import type { AksiKendaliBot, BotRingkas, LogBotDb, StatusBot } from "@/lib/bot-tipe";
-import type { BotContoh, LogItem } from "./tipe";
+import type { AksiKendaliBot, AksiSumberBot, BotRingkas, LogBotDb, StatusBot, SumberBotDb } from "@/lib/bot-tipe";
+import { normalkanSumber, samaTanpaHuruf, tampilkanHandle } from "@/lib/bot-sumber";
+import type { BotContoh, LogItem, SumberContoh } from "./tipe";
 
 /** Bot dari server -> bentuk tampilan. Data yang belum ada di server dikosongkan. */
 export function petakanBot(b: BotRingkas): BotContoh {
@@ -134,4 +135,129 @@ export function labelSukses(s: StatusBot, a: AksiKendaliBot): string {
 /** Galat server yang menandakan akun bukan master (fetchJson hanya meneruskan pesannya). */
 export function galatDilarang(pesan: string): boolean {
   return /\b403\b|forbidden|hanya (untuk )?master|bukan master|tidak (punya|memiliki) (izin|akses|hak)|tidak berhak/i.test(pesan);
+}
+
+// ------------------------------------------------------------
+// Sumber & daftar blokir (mode nyata)
+// ------------------------------------------------------------
+
+/** Sumber dari server -> baris tampilan (waktu relatif dihitung saat dipanggil). */
+export function petakanSumber(s: SumberBotDb): SumberContoh {
+  return {
+    id: s.id,
+    akun: tampilkanHandle(s.platform, s.handle),
+    platform: s.platform,
+    kategori: s.kategori,
+    botId: String(s.bot_id),
+    kandidat24Jam: s.kandidat_24_jam,
+    terakhirAmbil: waktuRelatif(s.terakhir_ambil),
+    aktif: s.aktif,
+  };
+}
+
+/**
+ * Kunci "sedang diproses" aksi sumber/blokir. Aktif & hapus pada sumber yang sama
+ * berbagi kunci, jadi keduanya saling mengunci (tak ada hapus saat sakelar berjalan).
+ */
+export function kunciAksiSumber(a: AksiSumberBot): string {
+  switch (a.aksi) {
+    case "tambah":
+      return "sumber:tambah";
+    case "aktif":
+    case "hapus":
+      return `sumber:${a.id}`;
+    case "blokir_tambah":
+      return "blokir:tambah";
+    case "blokir_hapus":
+      return `blokir:${a.kata.trim().toLowerCase()}`;
+  }
+}
+
+/** Salinan status dengan aksi sumber/blokir diterapkan (pembaruan optimis). */
+export function terapkanAksiSumber(s: StatusBot, a: AksiSumberBot, idSementara: number): StatusBot {
+  const sumber = s.sumber ?? [];
+  const blokir = s.blokir ?? [];
+  switch (a.aksi) {
+    case "tambah": {
+      const sah = normalkanSumber({ platform: a.platform, handle: a.handle });
+      if (!sah.ok) return s;
+      const baris: SumberBotDb = {
+        id: idSementara,
+        bot_id: a.bot_id,
+        platform: sah.platform,
+        handle: sah.handle,
+        kategori: a.kategori,
+        aktif: true,
+        terakhir_ambil: null,
+        kandidat_24_jam: 0,
+      };
+      return { ...s, sumber: [...sumber, baris] };
+    }
+    case "aktif":
+      return { ...s, sumber: sumber.map((x) => (x.id === a.id ? { ...x, aktif: a.nilai } : x)) };
+    case "hapus":
+      return { ...s, sumber: sumber.filter((x) => x.id !== a.id) };
+    case "blokir_tambah":
+      return blokir.some((k) => samaTanpaHuruf(k, a.kata)) ? s : { ...s, blokir: [...blokir, a.kata] };
+    case "blokir_hapus":
+      return { ...s, blokir: blokir.filter((k) => !samaTanpaHuruf(k, a.kata)) };
+  }
+}
+
+/**
+ * Kebalikan terapkanAksiSumber untuk rollback bila server menolak. `awal` = status
+ * SEBELUM aksi (sumber nilai lama). Hanya menyentuh bagian yang diubah aksi itu,
+ * jadi aksi lain yang berjalan bersamaan tidak ikut terbatalkan.
+ */
+export function batalkanAksiSumber(s: StatusBot, a: AksiSumberBot, awal: StatusBot, idSementara: number): StatusBot {
+  const sumber = s.sumber ?? [];
+  const blokir = s.blokir ?? [];
+  switch (a.aksi) {
+    case "tambah":
+      return { ...s, sumber: sumber.filter((x) => x.id !== idSementara) };
+    case "aktif": {
+      const lama = (awal.sumber ?? []).find((x) => x.id === a.id);
+      return lama ? { ...s, sumber: sumber.map((x) => (x.id === a.id ? { ...x, aktif: lama.aktif } : x)) } : s;
+    }
+    case "hapus": {
+      const lama = (awal.sumber ?? []).find((x) => x.id === a.id);
+      if (!lama || sumber.some((x) => x.id === a.id)) return s;
+      return { ...s, sumber: [...sumber, lama].sort((p, q) => p.id - q.id) };
+    }
+    case "blokir_tambah":
+      return { ...s, blokir: blokir.filter((k) => !samaTanpaHuruf(k, a.kata)) };
+    case "blokir_hapus": {
+      if (blokir.some((k) => samaTanpaHuruf(k, a.kata))) return s;
+      const awalBlokir = awal.blokir ?? [];
+      const indeks = awalBlokir.findIndex((k) => samaTanpaHuruf(k, a.kata));
+      if (indeks < 0) return s;
+      const baru = [...blokir];
+      baru.splice(Math.min(indeks, baru.length), 0, awalBlokir[indeks]);
+      return { ...s, blokir: baru };
+    }
+  }
+}
+
+/** Nama sumber untuk kalimat toast ("@ntv (Instagram)"). */
+function namaSumber(s: StatusBot, id: number): string {
+  const x = (s.sumber ?? []).find((y) => y.id === id);
+  return x ? `${tampilkanHandle(x.platform, x.handle)} (${x.platform})` : "Sumber";
+}
+
+/** Kalimat sukses singkat untuk toast; `awal` = status sebelum aksi. */
+export function labelSuksesSumber(awal: StatusBot, a: AksiSumberBot): string {
+  switch (a.aksi) {
+    case "tambah": {
+      const sah = normalkanSumber({ platform: a.platform, handle: a.handle });
+      return sah.ok ? `Sumber ditambahkan: ${tampilkanHandle(sah.platform, sah.handle)} (${sah.platform})` : "Sumber ditambahkan";
+    }
+    case "aktif":
+      return `${namaSumber(awal, a.id)} ${a.nilai ? "diaktifkan" : "dinonaktifkan"}`;
+    case "hapus":
+      return `${namaSumber(awal, a.id)} dihapus`;
+    case "blokir_tambah":
+      return `Diblokir: ${a.kata}`;
+    case "blokir_hapus":
+      return `Blokir dicabut: ${a.kata}`;
+  }
 }

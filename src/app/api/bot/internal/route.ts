@@ -3,19 +3,27 @@
 // BOT_RUNNER_SECRET; ada jendela waktu dan nonce sekali pakai. Gagal tertutup:
 // tanpa rahasia terkonfigurasi, semua permintaan ditolak.
 //
-// Pekerjaan 1 hanya mengenal aksi "denyut" (detak + keadaan global). Aksi lain
-// (ambil_kerja, lapor) menyusul di Pekerjaan 2.
+// Aksi (lihat lib/bot-protokol.ts):
+//   denyut      detak runner + keadaan global/daftar bot (JawabanDenyut)
+//   ambil_kerja perintah berikutnya untuk satu bot (JawabanAmbilKerja)
+//   lapor       hasil panen / job / log dari runner (JawabanLapor)
+// Bentuk badan divalidasi ketat (lib/bot-kerja-murni): bentuk salah → 400.
+// Pesan galat ke runner ringkas; detail hanya di console server.
 import { bungkus } from "@/lib/api-helper";
 import { supabase } from "@/lib/supabase";
 import { cekBatas, pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import { HEADER_BOT_NONCE, HEADER_BOT_TANDA, HEADER_BOT_WAKTU, JENDELA_BOT_DETIK, verifikasiTandaBot } from "@/lib/bot-hmac";
 import { RUNNER_ONLINE_DETIK, bacaJedaGlobal } from "@/lib/bot-data";
 import { siarkanBot } from "@/lib/bot-realtime";
+import { ambilKerja, prosesLaporan } from "@/lib/bot-kerja";
+import { menitWibDari, validasiPermintaanRunner } from "@/lib/bot-kerja-murni";
+import type { JawabanAmbilKerja, JawabanDenyut, JawabanLapor } from "@/lib/bot-protokol";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-const BATAS_BADAN = 8 * 1024;
+// Laporan kandidat (maks 40 video, caption panjang) bisa ratusan KB; tetap dibatasi.
+const BATAS_BADAN = 400 * 1024;
 
 function tolak(pesan: string, status: number): never {
   throw Object.assign(new Error(pesan), { status });
@@ -50,13 +58,25 @@ export async function POST(request: Request) {
       tolak("Tanda tangan tidak sah.", 401);
     }
 
-    let isi: { aksi?: unknown; versi?: unknown };
+    let mentah: unknown;
     try {
-      isi = JSON.parse(badan) as { aksi?: unknown; versi?: unknown };
+      mentah = JSON.parse(badan);
     } catch {
       tolak("Badan bukan JSON.", 400);
     }
-    if (isi.aksi !== "denyut") tolak("aksi tidak dikenal.", 400);
+    const sah = validasiPermintaanRunner(mentah);
+    if (!sah.ok) tolak(sah.pesan, 400);
+    const permintaan = sah.permintaan;
+
+    if (permintaan.aksi === "ambil_kerja") {
+      const jawaban: JawabanAmbilKerja = { sukses: true, perintah: await ambilKerja(permintaan.bot_id) };
+      return jawaban;
+    }
+    if (permintaan.aksi === "lapor") {
+      await prosesLaporan(permintaan.bot_id, permintaan.laporan);
+      const jawaban: JawabanLapor = { sukses: true };
+      return jawaban;
+    }
 
     const db = supabase();
     const { data: lama } = await db.from("bot_runner").select("terakhir_denyut").eq("id", 1).maybeSingle();
@@ -64,7 +84,7 @@ export async function POST(request: Request) {
     const sekarang = new Date();
     const { error } = await db
       .from("bot_runner")
-      .upsert({ id: 1, terakhir_denyut: sekarang.toISOString(), versi: typeof isi.versi === "string" ? isi.versi.slice(0, 40) : null }, { onConflict: "id" });
+      .upsert({ id: 1, terakhir_denyut: sekarang.toISOString(), versi: permintaan.versi ?? null }, { onConflict: "id" });
     if (error) {
       console.error("[bot/internal] simpan denyut:", error.message);
       tolak("Gagal menyimpan denyut.", 500);
@@ -73,7 +93,19 @@ export async function POST(request: Request) {
     const basi = !sebelum || sekarang.getTime() - Date.parse(sebelum) > RUNNER_ONLINE_DETIK * 1000;
     if (basi) siarkanBot("denyut");
 
-    const { data: bots } = await db.from("bot_redaksi").select("user_id, aktif, jeda, mode");
-    return { sukses: true, jeda_global: await bacaJedaGlobal(), bots: bots ?? [] };
+    const { data: bots } = await db.from("bot_redaksi").select("id, user_id, aktif, jeda, mode").order("id", { ascending: true });
+    const jawaban: JawabanDenyut = {
+      sukses: true,
+      jeda_global: await bacaJedaGlobal(),
+      menit_wib: menitWibDari(sekarang.getTime()),
+      bots: ((bots ?? []) as { id: number; user_id: number; aktif: boolean | null; jeda: boolean | null; mode: string | null }[]).map((b) => ({
+        bot_id: Number(b.id),
+        user_id: Number(b.user_id),
+        aktif: b.aktif !== false,
+        jeda: b.jeda === true,
+        mode: b.mode === "otomatis" ? ("otomatis" as const) : ("acc" as const),
+      })),
+    };
+    return jawaban;
   });
 }

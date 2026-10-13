@@ -11,9 +11,9 @@
 //  • nyata  — tabel_ada && ada bot: bot, mode, kuota, jeda, post hari ini,
 //             runner, dan log dari server; kendali (jeda darurat, jeda per
 //             bot, mode, kuota) lewat POST /api/bot/kendali dengan
-//             pembaruan optimis. Simulasi DIAM (runner belum mengerjakan apa
-//             pun). Antrean ACC + daftar sumber/blokir masih CONTOH
-//             (bertanda spanduk) sampai Pekerjaan 2/3.
+//             pembaruan optimis; daftar sumber & blokir juga nyata (CRUD lewat
+//             POST /api/bot/sumber). Simulasi DIAM (runner belum mengerjakan apa
+//             pun). Antrean ACC masih CONTOH (bertanda spanduk) sampai Pekerjaan 3.
 //  • contoh — migrasi belum dijalankan atau belum ada bot: simulasi penuh di
 //             peramban dengan data contoh, berlabel "Data contoh".
 // Gerbang server (bolehRuangBot) dipasang pada setiap endpoint /api/bot/*.
@@ -22,19 +22,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Info, Lock } from "lucide-react";
 import { EmptyState, GlassSkeleton, ScreenHeader } from "@/components/pri-ui";
-import { KUOTA_BOT_MAKS, KUOTA_BOT_MIN, type AksiKendaliBot, type StatusBot } from "@/lib/bot-tipe";
+import { KUOTA_BOT_MAKS, KUOTA_BOT_MIN, type AksiKendaliBot, type AksiSumberBot, type StatusBot } from "@/lib/bot-tipe";
 import { cn } from "@/lib/utils";
 import { AntreanAccView } from "./antrean-acc-view";
 import { BOT_CONTOH, ACC_AWAL, BLOKIR_AWAL, HASIL_AWAL, KUOTA_AWAL, MAKS_KUOTA_AWAL, SUMBER_AWAL } from "./data-contoh";
 import { DetailBotView } from "./detail-bot-view";
 import { RuangView } from "./ruang-view";
-import { petakanBot, petakanLog, waktuRelatif } from "./peta-nyata";
+import { petakanBot, petakanLog, petakanSumber, waktuRelatif } from "./peta-nyata";
 import { SumberKuotaView } from "./sumber-kuota-view";
 import { useStatusBot } from "./use-status-bot";
 import type {
   BotContoh,
   HasilHariIni,
   ItemAcc,
+  HasilAksiSumber,
+  KendaliSumberNyata,
   KeputusanAcc,
   LogItem,
   ModeBot,
@@ -77,6 +79,7 @@ function adaDataNyata(s: StatusBot | null): boolean {
 
 /** Peta kosong/daftar kosong tetap (identitas stabil, tidak memicu render ulang). */
 const HASIL_KOSONG: HasilHariIni[] = [];
+const BLOKIR_KOSONG: string[] = [];
 const ID_ANGKA = /\D/g;
 
 /**
@@ -101,7 +104,7 @@ function SpandukContoh({ children }: { children?: React.ReactNode }) {
     >
       <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
       <p className="m-0">
-        <b>Contoh — tersambung pada pekerjaan berikutnya (Pekerjaan 2/3).</b>
+        <b>Contoh — tersambung pada pekerjaan berikutnya (Pekerjaan 3).</b>
         {children ? <> {children}</> : null}
       </p>
     </div>
@@ -177,7 +180,16 @@ export function RuangBotScreen() {
     );
   } else {
     // key = mode: pindah contoh <-> nyata memasang ulang isi dengan state awal yang tepat.
-    isi = <RuangBotIsi key={nyata ? "nyata" : "contoh"} server={data} nyata={nyata} sibuk={s.sibuk} kendali={s.kendali} />;
+    isi = (
+      <RuangBotIsi
+        key={nyata ? "nyata" : "contoh"}
+        server={data}
+        nyata={nyata}
+        sibuk={s.sibuk}
+        kendali={s.kendali}
+        ubahSumber={s.ubahSumber}
+      />
+    );
   }
 
   return (
@@ -202,9 +214,10 @@ type RuangBotIsiProps = {
   nyata: boolean;
   sibuk: ReadonlySet<string>;
   kendali: (aksi: AksiKendaliBot[]) => Promise<boolean>;
+  ubahSumber: (aksi: AksiSumberBot) => Promise<HasilAksiSumber>;
 };
 
-function RuangBotIsi({ server, nyata, sibuk, kendali }: RuangBotIsiProps) {
+function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber }: RuangBotIsiProps) {
   const [tampilan, setTampilan] = useState<TampilanBot>("ruang");
   // State mode CONTOH (simulasi di peramban). Pada mode nyata sebagian besar tidak dipakai.
   const [botsContoh, setBotsContoh] = useState<BotContoh[]>(BOT_CONTOH);
@@ -214,7 +227,10 @@ function RuangBotIsi({ server, nyata, sibuk, kendali }: RuangBotIsiProps) {
   const [logContoh, setLogContoh] = useState<LogItem[]>([]);
   const [jedaGlobalContoh, setJedaGlobalContoh] = useState(false);
   const [jedaBotContoh, setJedaBotContoh] = useState<Record<string, boolean>>({});
-  // State yang dipakai kedua mode (Antrean ACC & sumber tetap contoh pada mode nyata).
+  // Sumber & blokir CONTOH (mode nyata memakai daftar dari server, lihat di bawah).
+  const [sumberContoh, setSumberContoh] = useState<SumberContoh[]>(SUMBER_AWAL);
+  const [blokirContoh, setBlokirContoh] = useState<string[]>(BLOKIR_AWAL);
+  // State yang dipakai kedua mode (Antrean ACC tetap contoh pada mode nyata).
   const [statusHidup, setStatusHidup] = useState<Record<string, StatusHidup>>({});
   const [terpilihId, setTerpilihId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string>(() => (nyata ? String(server.bots[0]?.id ?? "") : BOT_CONTOH[0].id));
@@ -222,10 +238,6 @@ function RuangBotIsi({ server, nyata, sibuk, kendali }: RuangBotIsiProps) {
     nyata ? arahkanKeBotNyata(ACC_AWAL, server.bots.map((b) => String(b.id))) : ACC_AWAL,
   );
   const [riwayat, setRiwayat] = useState<KeputusanAcc[]>([]);
-  const [sumber, setSumber] = useState<SumberContoh[]>(() =>
-    nyata ? arahkanKeBotNyata(SUMBER_AWAL, server.bots.map((b) => String(b.id))) : SUMBER_AWAL,
-  );
-  const [blokir, setBlokir] = useState<string[]>(BLOKIR_AWAL);
   const [jam, setJam] = useState(detikWibSekarang);
 
   // ---- nilai turunan dari server (mode nyata) ----
@@ -242,9 +254,27 @@ function RuangBotIsi({ server, nyata, sibuk, kendali }: RuangBotIsiProps) {
     () => server.bots.reduce((m, b) => Math.max(m, b.kuota_harian), KUOTA_BOT_MIN),
     [server.bots],
   );
+  // Sumber & blokir dari server. `jam` ikut sebagai pemicu agar "terakhir ambil" (waktu relatif) ikut menyegar.
+  const sumberNyata = useMemo(() => {
+    void jam;
+    return (server.sumber ?? []).map(petakanSumber);
+  }, [server.sumber, jam]);
+  const blokirNyata = server.blokir ?? BLOKIR_KOSONG;
+  const kendaliSumber = useMemo<KendaliSumberNyata>(
+    () => ({
+      tambah: (a) => ubahSumber({ aksi: "tambah", bot_id: a.botId, platform: a.platform, handle: a.handle, kategori: a.kategori }),
+      aktif: (id, nilai) => ubahSumber({ aksi: "aktif", id, nilai }),
+      hapus: (id) => ubahSumber({ aksi: "hapus", id }),
+      tambahBlokir: (kata) => ubahSumber({ aksi: "blokir_tambah", kata }),
+      hapusBlokir: (kata) => ubahSumber({ aksi: "blokir_hapus", kata }),
+    }),
+    [ubahSumber],
+  );
   /** Tanda daftar bot: bila berubah, Ruang dipasang ulang agar simulasi memuat bot yang baru. */
   const tandaBot = useMemo(() => server.bots.map((b) => b.id).join(","), [server.bots]);
 
+  const sumber = nyata ? sumberNyata : sumberContoh;
+  const blokir = nyata ? blokirNyata : blokirContoh;
   const bots = nyata ? botsNyata : botsContoh;
   const kuota = nyata ? kuotaNyata : kuotaContoh;
   const maksKuota = nyata ? maksKuotaNyata : maksKuotaContoh;
@@ -471,18 +501,13 @@ function RuangBotIsi({ server, nyata, sibuk, kendali }: RuangBotIsiProps) {
 
       {tampilan === "sumber" && (
         <div id="rb-panel-sumber" role="tabpanel" aria-labelledby="rb-tab-sumber">
-          {nyata && (
-            <SpandukContoh>
-              Yang sudah nyata di tab ini hanya jeda darurat dan kuota harian; jam aktif, kapasitas layanan, daftar sumber, dan
-              daftar blokir masih data contoh.
-            </SpandukContoh>
-          )}
           <SumberKuotaView
             bots={bots}
             sumber={sumber}
-            onSumber={setSumber}
+            onSumber={setSumberContoh}
             blokir={blokir}
-            onBlokir={setBlokir}
+            onBlokir={setBlokirContoh}
+            kendaliSumber={nyata ? kendaliSumber : undefined}
             maksKuota={maksKuota}
             onMaksKuota={setMaksKuota}
             jedaGlobal={jedaGlobal}
