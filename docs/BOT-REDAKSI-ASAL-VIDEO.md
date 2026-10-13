@@ -5,6 +5,31 @@ mengunggah video A yang ternyata diambil dari video orang lain, bagaimana bot (1
 asalnya, (2) mencari sumber lain yang videonya **sama persis**, dan (3) tahu bahwa dua
 unggahan memakai rekaman yang sama. Tidak memuat rahasia.
 
+## Status implementasi (13 Okt 2026)
+
+| Tahap | Keadaan |
+|---|---|
+| A. Kredit dari takarir (aturan teks) | **Selesai, teruji (35 uji).** `src/lib/bot-asal.ts`, kolom `sql/71_bot_asal.sql`, dipakai saat panen, saat memilih kandidat, dan di Antrean ACC |
+| A+. Ekstraksi kredit dengan LLM untuk takarir tak berpola | Belum. Titik sambungnya `tanyaOtakBot` (otak bot) |
+| B. Sidik visual (bingkai, Hamming, cermin) | Belum. Butuh perintah runner `periksa_asal` + himpunan uji berlabel dari Anda |
+| C. Akun → video, pencarian YouTube, pilih versi terbaik | Belum |
+| D. Pencarian balik berbayar | Belum (opsional) |
+
+Yang dilakukan tahap A sekarang:
+- **Milik penerbit dilewati:** kredit yang menunjuk akun sumber sendiri ("Sumber: NTV" di akun NTV, atau tautan ke
+  akun yang sama) → kandidat ditandai `milik_penerbit` dan tidak dipilih.
+- **Satu video asal, satu bot:** bila kredit memuat tautan video yang dikenal, kunci kanonik tautan itu disimpan
+  (`asal_kunci`). Kandidat dilewati (`asal_dipakai`) bila video asal itu sudah diklaim bot (sebagai kandidat atau
+  sebagai kutipan kandidat lain) atau sudah dipakai di sistem manusia. Inilah jawaban "NTV dan akun lain memakai
+  sumber yang sama".
+- **Kredit masuk caption:** caption bawaan menulis "Sumber: @asal (TikTok) via NTV" bila asalnya diketahui.
+- **Antrean ACC** menampilkan tanda asal (hijau: tercatat; kuning: tanpa kredit, generik, milik penerbit).
+  Tanda kuning tidak memblokir persetujuan; keputusan tetap di tangan master.
+
+Batas yang jujur: ini petunjuk dari tulisan orang. Takarir tanpa kredit tidak berarti kontennya orisinal, dan kredit
+bisa salah. Video yang dipakai sebagai bahan tetap video yang ditemukan di akun sumber (bukan unggahan asli di
+tautan kredit), karena tautan asli belum diverifikasi.
+
 ## 1. Masalahnya, dengan tepat
 
 Bot membutuhkan **rekaman mentah (doksli)** untuk diedit. Video NTV yang sudah tayang adalah

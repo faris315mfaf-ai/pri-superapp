@@ -40,6 +40,7 @@ import { bacaPermintaanWajib, klaimVideoWajib } from "@/lib/bot-video-wajib";
 import type { PermintaanWajib } from "@/lib/bot-kerja-murni";
 import { siarkanBot } from "@/lib/bot-realtime";
 import { hookDariOtakBot } from "@/lib/bot-otak";
+import { analisaAsal, kolomAsal } from "@/lib/bot-asal";
 import type { TahapBotDb } from "@/lib/bot-tipe";
 
 type Db = SupabaseClient;
@@ -213,6 +214,27 @@ async function periksaTabrakanManusia(db: Db, kunci: KunciKanonik): Promise<Hasi
     }
   }
   return adaTabrakan(urls, kunci.kunci) ? "dipakai" : "bersih";
+}
+
+/**
+ * Video asal yang dikutip kandidat ini sudah dipakai bot lain? Ya bila ada kandidat TERKLAIM yang
+ * IS video asal itu (kunci_kanonik) atau mengutip video asal yang sama (asal_kunci).
+ * Tanpa kolom asal_* (sql/71 belum jalan) hanya cek kunci_kanonik.
+ */
+async function asalSudahDipakai(db: Db, kunciAsal: string): Promise<HasilTabrakan> {
+  const langsung = await db.from("bot_kandidat").select("id").eq("kunci_kanonik", kunciAsal).not("diklaim_oleh", "is", null).limit(1);
+  if (langsung.error) {
+    console.error("[bot/kerja] cek asal (langsung):", langsung.error.message);
+    return "gagal";
+  }
+  if ((langsung.data ?? []).length > 0) return "dipakai";
+  const kutipan = await db.from("bot_kandidat").select("id").eq("asal_kunci", kunciAsal).not("diklaim_oleh", "is", null).limit(1);
+  if (kutipan.error) {
+    if (skemaBelumSiap(kutipan.error)) return "bersih";
+    console.error("[bot/kerja] cek asal (kutipan):", kutipan.error.message);
+    return "gagal";
+  }
+  return (kutipan.data ?? []).length > 0 ? "dipakai" : "bersih";
 }
 
 // ---- Klaim basi ----
@@ -612,6 +634,28 @@ async function mulaiDariKandidat(db: Db, bot: BarisBot, sekarangMs: number): Pro
       continue;
     }
 
+    // Asal video (3F-A): konten milik penerbit tidak diedit ulang; dua unggahan yang mengutip SATU video asal
+    // yang sama tidak boleh dipakai dua kali (antar-bot maupun dengan sistem manusia).
+    const sumberK = k.sumber_id !== null ? petaSumber.get(Number(k.sumber_id)) : undefined;
+    const asal = analisaAsal({ judul: k.judul, caption: k.caption, sumberHandle: sumberK?.handle, sumberPlatform: sumberK?.platform, urlSendiri: k.url });
+    if (asal.status === "milik_penerbit") {
+      await tandai("milik_penerbit");
+      await catatLog(db, bot.id, null, "cari", `Video dilewati: kreditnya menunjuk akun sumber sendiri (${potongTeks(asal.kutipan, 80)}).`);
+      continue;
+    }
+    if (asal.kunci) {
+      const dipakai = await asalSudahDipakai(db, asal.kunci);
+      if (dipakai === "gagal") return diam("cek_tabrakan_gagal");
+      const kunciAsal = kunciKanonik(asal.url);
+      const manusia = dipakai === "bersih" && kunciAsal ? await periksaTabrakanManusia(db, kunciAsal) : "bersih";
+      if (manusia === "gagal") return diam("cek_tabrakan_gagal");
+      if (dipakai === "dipakai" || manusia === "dipakai") {
+        await tandai("asal_dipakai");
+        await catatLog(db, bot.id, null, "cari", `Video dilewati: video asalnya (${asal.kunci}) sudah dipakai.`);
+        continue;
+      }
+    }
+
     // KLAIM ATOMIK: hanya satu pemanggil yang mendapat baris kembali.
     const { data: menang, error: eKlaim } = await db
       .from("bot_kandidat")
@@ -778,9 +822,16 @@ async function laporKandidat(db: Db, bot: BarisBot, sumberId: number, masuk: Kan
   let baru = 0;
   if (baris.length > 0) {
     // ignoreDuplicates = ON CONFLICT DO NOTHING: kandidat yang sudah ada (apalagi sudah diklaim) tidak ditimpa.
-    const { data, error: eUp } = await db.from("bot_kandidat").upsert(baris, { onConflict: "kunci_kanonik", ignoreDuplicates: true }).select("id");
-    periksa(eUp, "menyimpan kandidat");
-    baru = (data ?? []).length;
+    // Asal video dari kredit takarir (3F-A, sql/71) ikut disimpan; bila kolomnya belum ada, simpan tanpa itu.
+    const denganAsal = baris.map((b) =>
+      Object.assign({}, b, kolomAsal(analisaAsal({ judul: b.judul, caption: b.caption, sumberHandle: sumber.handle, sumberPlatform: sumber.platform, urlSendiri: b.url }))),
+    );
+    let hasil = await db.from("bot_kandidat").upsert(denganAsal, { onConflict: "kunci_kanonik", ignoreDuplicates: true }).select("id");
+    if (hasil.error && skemaBelumSiap(hasil.error)) {
+      hasil = await db.from("bot_kandidat").upsert(baris, { onConflict: "kunci_kanonik", ignoreDuplicates: true }).select("id");
+    }
+    periksa(hasil.error, "menyimpan kandidat");
+    baru = (hasil.data ?? []).length;
   }
   // terakhir_ambil diperbarui juga saat panen bermasalah: mencegah panen berulang tiap giliran.
   const { error: eTs } = await db.from("bot_sumber").update({ terakhir_ambil: iso(sekarangMs) }).eq("id", sumber.id);

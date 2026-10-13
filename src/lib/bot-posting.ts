@@ -28,6 +28,7 @@ import { PENYEDIA_ANGGOTA, unggahVideoAnggota, type IdPenyedia } from "@/lib/sos
 import { ambilKunciUnggah, statusAkunUp, uploadPostSiap } from "@/lib/upload-post";
 import { kolomTabelAda, sisipkanLonggar } from "@/lib/kolom-struktur";
 import { dariR2 } from "@/lib/r2";
+import { analisaAsal, labelKreditTakarir, tandaAsal, type AsalVideo } from "@/lib/bot-asal";
 import { GalatSalin, hapusBerkasPenyimpanan, kunciPenyimpanan, salinStokKePenyimpanan } from "@/lib/bot-stok-salin";
 import {
   KATEGORI_POSTING_BOT,
@@ -155,8 +156,14 @@ export async function bacaStatusAcc(sekarangMs: number = Date.now()): Promise<St
   const botPer = new Map(((botRows ?? []) as unknown as BarisBotAcc[]).map((b) => [Number(b.id), b]));
 
   const idKandidat = antre.map((t) => t.kandidat_id).filter((x): x is number => x != null);
-  const { data: kandRows } = idKandidat.length ? await db.from("bot_kandidat").select("id, durasi_detik").in("id", idKandidat) : { data: [] as unknown[] };
-  const durasiPer = new Map(((kandRows ?? []) as unknown as { id: number; durasi_detik: number | null }[]).map((k) => [Number(k.id), k.durasi_detik]));
+  const { data: kandRows } = idKandidat.length
+    ? await db.from("bot_kandidat").select("id, durasi_detik, url, judul, caption, sumber_id").in("id", idKandidat)
+    : { data: [] as unknown[] };
+  type BarisKand = { id: number; durasi_detik: number | null; url: string | null; judul: string | null; caption: string | null; sumber_id: number | null };
+  const kandPer = new Map(((kandRows ?? []) as unknown as BarisKand[]).map((k) => [Number(k.id), k]));
+  const idSumber = [...new Set([...kandPer.values()].map((k) => k.sumber_id).filter((x): x is number => x != null))];
+  const { data: sumberRows } = idSumber.length ? await db.from("bot_sumber").select("id, platform, handle").in("id", idSumber) : { data: [] as unknown[] };
+  const sumberPer = new Map(((sumberRows ?? []) as unknown as { id: number; platform: string; handle: string }[]).map((x) => [Number(x.id), x]));
 
   const akunPer = new Map<number, KeadaanAkun>();
   const antrean: ItemAccApi[] = [];
@@ -168,8 +175,15 @@ export async function bacaStatusAcc(sekarangMs: number = Date.now()): Promise<St
     const akun = akunPer.get(bot.id)!;
     const sumber = await sumberUntukTugas(Number(t.id), t.kandidat_id);
     const judul = String(t.judul ?? "").trim();
-    const caption = String(t.caption_post ?? "").trim() || captionBawaan({ judul, sumberLabel: sumber?.label ?? "", platform: platform ?? "instagram" });
-    const durasi = t.kandidat_id != null ? (durasiPer.get(Number(t.kandidat_id)) ?? null) : null;
+    const kand = t.kandidat_id != null ? kandPer.get(Number(t.kandidat_id)) : undefined;
+    // Asal video dari kredit takarir sumber (3F-A). Tugas Video Wajib tidak punya takarir sumber → tanpa analisis.
+    const sumberKand = kand?.sumber_id != null ? sumberPer.get(Number(kand.sumber_id)) : undefined;
+    const asal: AsalVideo | null = kand
+      ? analisaAsal({ judul: kand.judul, caption: kand.caption, sumberHandle: sumberKand?.handle, sumberPlatform: sumberKand?.platform, urlSendiri: kand.url })
+      : null;
+    const labelKredit = asal ? labelKreditTakarir(asal, sumber?.label ?? "") : (sumber?.label ?? "");
+    const caption = String(t.caption_post ?? "").trim() || captionBawaan({ judul, sumberLabel: labelKredit, platform: platform ?? "instagram" });
+    const durasi = kand?.durasi_detik ?? null;
     antrean.push({
       id: Number(t.id),
       bot_id: Number(bot.id),
@@ -187,6 +201,7 @@ export async function bacaStatusAcc(sekarangMs: number = Date.now()): Promise<St
       tahap: t.tahap,
       stok_ada: Boolean(t.id_stok_mesin),
       tanda: [
+        ...(asal ? [tandaAsal(asal)] : []),
         ...(t.tahap === "disetujui" && t.galat ? [{ jenis: "bad" as const, teks: `Posting terakhir gagal: ${String(t.galat).slice(0, 140)}` }] : []),
         ...tandaPemeriksaan({
           caption,
