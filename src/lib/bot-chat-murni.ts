@@ -1,6 +1,7 @@
 // Room chat bot (13 Okt 2026) — bagian MURNI: sebutan @nama, perapian pesan, prompt jawaban agen.
 // Tanpa jaringan/basis data; teruji. Dipakai server dan layar.
 import { KEBIJAKAN_CHAT } from "@/lib/bot-chat-konstan";
+import type { UsulanApi } from "@/lib/bot-koordinator-murni";
 
 export type BotChatRingkas = { id: number; nama: string; username: string };
 
@@ -13,12 +14,16 @@ export type PesanChat = {
   warna: string;
   teks: string;
   menyebut: number[];
+  /** Pesan koordinator yang membawa kartu usulan (id ke StatusChat.usulan). */
+  usulan_id: number | null;
   dibuat_pada: string;
 };
 
 export type StatusChat = {
   tabel_ada: boolean;
   pesan: PesanChat[];
+  /** Usulan yang dirujuk pesan di atas (kartu Setujui/Tolak). */
+  usulan: UsulanApi[];
   bots: { id: number; nama: string; warna: string; punya_otak: boolean; aktif: boolean }[];
 };
 
@@ -53,6 +58,18 @@ export function cariSebutan(teks: string, bots: readonly BotChatRingkas[]): numb
     if (cocok) tambah(cocok.id);
   }
   return hasil.slice(0, KEBIJAKAN_CHAT.JAWABAN_MAKS);
+}
+
+/** Id khusus koordinator di `menyebut` (bukan id bot_redaksi, yang selalu > 0). */
+export const ID_KOORDINATOR_CHAT = 0;
+
+/** "@Nara" atau "@koordinator" di awal kata. */
+export function menyebutKoordinator(teks: string): boolean {
+  for (const m of teks.matchAll(/(?:^|[\s(,.!?])@([A-Za-z0-9_.-]{2,40})/g)) {
+    const k = normal(m[1]);
+    if (k === "nara" || k === "koordinator") return true;
+  }
+  return false;
 }
 
 export type KeadaanBotChat = {

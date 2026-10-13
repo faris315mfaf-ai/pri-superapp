@@ -1,6 +1,6 @@
 # Bot Redaksi — otak berkepribadian, room chat, dan agen koordinator
 
-Status: **rancangan + tahap 1–2 dibangun** (13 Okt 2026). Tidak memuat rahasia.
+Status: **tahap 1–3 dibangun di kode** (13 Okt 2026); belum aktif di produksi sebelum SQL 73–74 dan API key dipasang. Tidak memuat rahasia.
 
 ## Tujuan (dari pemilik)
 Tiap agen punya otak dan cara berpikir sendiri. Ada satu **room chat** bersama tempat pemilik bercakap dengan
@@ -24,13 +24,31 @@ agen, dan satu **agen koordinator** (admin) yang bertugas membagi tugas ke agen 
 |---|---|---|
 | 1 | **Kepribadian masuk prompt**: `peran` + `persona` tiap bot dipakai di hook, caption, dan chat; master menyuntingnya di seksi Otak Bot | dibangun |
 | 2 | **Room chat**: tabel `bot_chat`, API, tab Chat di Ruang Bot; agen yang disebut (@Raka) menjawab sesuai kepribadian dan keadaannya | dibangun |
-| 3 | **Koordinator + penugasan**: agen koordinator membaca permintaan, mengusulkan pembagian tugas (kosakata tetap), usulan muncul sebagai kartu yang disetujui master; tugas manual per-URL | berikutnya |
+| 3 | **Koordinator + penugasan**: Nara membaca permintaan, mengusulkan pembagian tugas (kosakata tetap), usulan muncul sebagai kartu yang disetujui master; tugas manual per-URL | **dibangun** (tab Koordinator + kartu di Chat; API key Nara di TVR Saya → Otak Bot) |
 
-## Tahap 3 (rencana, belum dibangun)
-- Koordinator bukan baris `bot_redaksi` (supaya runner tidak menganggapnya pekerja): tabel `bot_koordinator` satu baris,
-  kunci API sendiri (enkripsi sama, AAD `bot:0`).
-- Keluaran koordinator: JSON `{ balasan, usulan: [{ bot, aksi, ... }] }`. `aksi` ∈ {`kerjakan_url`, `cari_sekarang`,
-  `ubah_kuota`, `jeda`, `lanjut`} dengan parameter divalidasi ketat. Aksi lain diabaikan.
-- `kerjakan_url`: kandidat dibuat dari URL (kunci kanonik, cek tabrakan manusia/asal/sidik) lalu diklaim atomik untuk
-  bot itu; tetap berhenti di Antrean ACC.
-- Tiap usulan tersimpan di `bot_chat` bertanda `usulan` + status (menunggu/disetujui/ditolak/kedaluwarsa) dan masuk Audit.
+## Tahap 3 — cara kerja (dibangun)
+
+- **Di mana API key Nara dipasang:** TVR Saya (akun master) → seksi **Otak Bot (API key)** → kartu **Nara · Koordinator Redaksi**
+  (paling atas, bertepi merah muda). Pilih penyedia (DeepSeek/Gemini), tempel key, **Simpan**, lalu **Uji**. Key tersimpan terenkripsi
+  (AES-GCM, AAD `bot:0`, kunci induk `BOT_KUNCI_INDUK`), tulis-saja, tidak pernah dikembalikan ke layar. Peran dan watak Nara
+  disunting di kartu yang sama. API: `/api/bot/koordinator`.
+- **Memberi arahan:** tab **Koordinator** di Ruang Bot (atau tulis `@Nara …` di tab **Chat**). Nara memakai key-nya untuk membaca
+  permintaan dan keadaan NYATA tiap agen (tugas, kuota, jeda, tidur/bangun), lalu menjawab JSON.
+- **Kosakata tertutup:** `kerjakan_url` (wajib tautan yang ditulis pemilik persis di pesannya; tautan karangan model dibuang),
+  `cari_sekarang`, `ubah_kuota` (1–6), `jeda`, `lanjut`. Selain itu dibuang. Judul usulan disusun kode, bukan model.
+- **Pagar saat usulan dibuat dan diperiksa ULANG saat disetujui:** agen tidur (tanpa API key) tidak bisa ditugasi; bot dijeda,
+  nonaktif, punya tugas berjalan, atau kuota habis ditolak; maksimal 3 usulan terbuka; usulan basi hangus 2 jam.
+- **Eksekusi:** hanya setelah master menekan **Setujui & jalankan** (`/api/bot/usulan`). `kerjakan_url` memakai gerbang yang sama
+  dengan pengambilan Video Wajib (`hitungPutusan`), memeriksa tabrakan dengan sistem manusia dan bot lain, lalu mengklaim tautan
+  secara atomik. Hasil video tetap berhenti di Antrean ACC. Nara tidak bisa memposting maupun menyetujui usulannya sendiri.
+- **Jeda:** `jeda` menjeda bot sampai `lanjut` (tanpa penghitung waktu).
+- **Yang belum:** denah isometrik empat ruang (kerja, meeting, koordinator, kamar tidur) seperti di mockup belum dipindah ke
+  aplikasi; fungsinya sudah ada di tab Koordinator dan Chat. Tautan `kerjakan_url` belum diperiksa sidik visual (tidak ada pratinjau),
+  dan bahan hook hanya topik dari pesan Anda.
+
+## Mengaktifkan tahap 3
+
+1. Berurutan: `sql/73_bot_chat.sql` lalu `sql/74_bot_koordinator.sql` (prasyarat 67), dan `NOTIFY pgrst, 'reload schema';`.
+2. `BOT_KUNCI_INDUK` sudah terpasang di server (lihat `BOT-REDAKSI-OTAK.md`).
+3. TVR Saya → Otak Bot → kartu Nara: pasang API key, Simpan, Uji.
+4. Ruang Bot → Koordinator: beri arahan, mis. “kerjakan berita banjir dari https://youtu.be/… untuk @Raka”.

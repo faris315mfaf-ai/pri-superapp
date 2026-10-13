@@ -28,6 +28,7 @@ import {
 } from "@/lib/bot-otak-murni";
 import { waktuRelatif } from "@/features/ruang-bot/peta-nyata";
 import { cn } from "@/lib/utils";
+import { KartuKoordinator } from "./kartu-koordinator";
 
 const NADA = {
   ok: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
@@ -93,6 +94,8 @@ export function OtakBot() {
             lagi setelah disimpan, dan tidak pernah dikirim ke Rumah Bot.
           </p>
         </div>
+
+        <KartuKoordinator />
 
         {status === null ? (
           <GlassSkeleton className="mt-3 h-28 rounded-2xl" />

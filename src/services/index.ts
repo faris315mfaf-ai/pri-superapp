@@ -7387,3 +7387,31 @@ export async function kirimChatBot(teks: string): Promise<{ id: number; menyebut
   });
   return { id: Number(json?.id ?? 0), menyebut: (json?.menyebut ?? []) as number[] };
 }
+
+// ---- KOORDINATOR BOT "NARA" & USULAN (tahap 3, 13 Okt 2026) — hanya master; kunci tidak pernah dikembalikan ----
+import type { StatusKoordinator, UsulanApi } from "@/lib/bot-koordinator-murni";
+
+export async function getKoordinator(): Promise<StatusKoordinator> {
+  return (await fetchJson("/api/bot/koordinator", { headers: headerToken() })) as StatusKoordinator;
+}
+
+export async function kirimAksiKoordinator(
+  aksi:
+    | { aksi: "simpan"; penyedia: "deepseek" | "gemini"; kunci: string }
+    | { aksi: "hapus" }
+    | { aksi: "uji" }
+    | { aksi: "kepribadian"; peran: string; persona: string },
+): Promise<{ sukses: boolean; kode?: string; pesan?: string }> {
+  const json = await fetchJson("/api/bot/koordinator", { method: "POST", headers: { "Content-Type": "application/json", ...headerToken() }, body: JSON.stringify(aksi) });
+  return json as { sukses: boolean; kode?: string; pesan?: string };
+}
+
+export async function getUsulanBot(): Promise<{ terbuka: UsulanApi[]; riwayat: UsulanApi[] }> {
+  return (await fetchJson("/api/bot/usulan", { headers: headerToken() })) as { terbuka: UsulanApi[]; riwayat: UsulanApi[] };
+}
+
+/** setuju = langsung menjalankan aksinya (lewat pagar yang berlaku); galat server dilempar sebagai Error berpesan. */
+export async function kirimKeputusanUsulan(aksi: "setuju" | "tolak", id: number): Promise<{ sukses: boolean; pesan: string }> {
+  const json = await fetchJson("/api/bot/usulan", { method: "POST", headers: { "Content-Type": "application/json", ...headerToken() }, body: JSON.stringify({ aksi, id }) });
+  return json as { sukses: boolean; pesan: string };
+}

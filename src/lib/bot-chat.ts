@@ -10,10 +10,13 @@ import { awalHariWibIso, bacaJedaGlobal } from "@/lib/bot-data";
 import { siarkanBot } from "@/lib/bot-realtime";
 import { GalatOtak, botPunyaOtak, tanyaOtakBot } from "@/lib/bot-otak";
 import { KEBIJAKAN_CHAT } from "@/lib/bot-chat-konstan";
+import { koordinatorPunyaOtak, tanggapiPesan, usulanMenurutId } from "@/lib/bot-koordinator";
 import {
+  ID_KOORDINATOR_CHAT,
   SISTEM_CHAT,
   bangunPromptChat,
   cariSebutan,
+  menyebutKoordinator,
   pesanTakBisaMenjawab,
   rapikanBalasan,
   ringkasKeadaan,
@@ -24,9 +27,10 @@ import {
 
 const skemaBelumSiap = (e: { code?: string } | null | undefined) => tabelBelumAda(e) || e?.code === "42703" || e?.code === "PGRST204";
 
-type BarisChat = { id: number; pengirim: PesanChat["pengirim"]; user_id: number | null; bot_id: number | null; teks: string; menyebut: number[] | null; dibuat_pada: string };
+type BarisChat = { id: number; pengirim: PesanChat["pengirim"]; user_id: number | null; bot_id: number | null; teks: string; menyebut: number[] | null; usulan_id?: number | null; dibuat_pada: string };
 type BarisBot = { id: number; user_id: number; nama: string; warna: string; aktif: boolean | null; jeda: boolean | null; mode: string | null; kuota_harian: number | null };
 const KOLOM_CHAT = "id, pengirim, user_id, bot_id, teks, menyebut, dibuat_pada";
+const KOLOM_CHAT_USULAN = `${KOLOM_CHAT}, usulan_id`;
 
 export class GalatChat extends Error {
   constructor(
@@ -40,9 +44,14 @@ export class GalatChat extends Error {
 /** Pesan terbaru (urut lama→baru). `sejakId` = hanya yang lebih baru dari id itu. */
 export async function muatStatusChat(sejakId = 0): Promise<StatusChat> {
   const db = supabase();
-  const kosong: StatusChat = { tabel_ada: false, pesan: [], bots: [] };
-  const q = db.from("bot_chat").select(KOLOM_CHAT);
-  const r = sejakId > 0 ? await q.gt("id", sejakId).order("id", { ascending: true }).limit(KEBIJAKAN_CHAT.MUAT_PESAN) : await q.order("id", { ascending: false }).limit(KEBIJAKAN_CHAT.MUAT_PESAN);
+  const kosong: StatusChat = { tabel_ada: false, pesan: [], usulan: [], bots: [] };
+  const ambil = (kolom: string) => {
+    const q = db.from("bot_chat").select(kolom);
+    return sejakId > 0 ? q.gt("id", sejakId).order("id", { ascending: true }).limit(KEBIJAKAN_CHAT.MUAT_PESAN) : q.order("id", { ascending: false }).limit(KEBIJAKAN_CHAT.MUAT_PESAN);
+  };
+  // Kolom usulan_id (sql/74) mungkin belum ada: ulangi tanpa itu.
+  let r = await ambil(KOLOM_CHAT_USULAN);
+  if (r.error && skemaBelumSiap(r.error)) r = await ambil(KOLOM_CHAT);
   if (r.error) {
     if (skemaBelumSiap(r.error)) return kosong;
     console.error("[bot-chat] muat:", r.error.message);
@@ -67,18 +76,24 @@ export async function muatStatusChat(sejakId = 0): Promise<StatusChat> {
     return {
       id: Number(b.id),
       pengirim: b.pengirim,
-      nama: b.pengirim === "master" ? (namaMaster.get(Number(b.user_id)) ?? "Master") : b.pengirim === "sistem" ? "Sistem" : b.pengirim === "koordinator" ? "Koordinator" : String(bot?.nama ?? "Bot"),
+      nama: b.pengirim === "master" ? (namaMaster.get(Number(b.user_id)) ?? "Master") : b.pengirim === "sistem" ? "Sistem" : b.pengirim === "koordinator" ? "Nara" : String(bot?.nama ?? "Bot"),
       bot_id: b.bot_id != null ? Number(b.bot_id) : null,
-      warna: String(bot?.warna ?? ""),
+      warna: b.pengirim === "koordinator" ? "#fb7185" : String(bot?.warna ?? ""),
       teks: String(b.teks ?? ""),
       menyebut: (b.menyebut ?? []).map(Number),
+      usulan_id: b.usulan_id != null ? Number(b.usulan_id) : null,
       dibuat_pada: String(b.dibuat_pada ?? ""),
     };
   });
+  const usulan = await usulanMenurutId([...new Set(pesan.map((p) => p.usulan_id).filter((x): x is number => x != null))]);
   return {
     tabel_ada: true,
     pesan,
-    bots: bots.map((b) => ({ id: Number(b.id), nama: String(b.nama ?? ""), warna: String(b.warna ?? ""), punya_otak: punya.has(Number(b.id)), aktif: b.aktif !== false })),
+    usulan,
+    bots: [
+      { id: ID_KOORDINATOR_CHAT, nama: "Nara", warna: "#fb7185", punya_otak: await koordinatorPunyaOtak(), aktif: true },
+      ...bots.map((b) => ({ id: Number(b.id), nama: String(b.nama ?? ""), warna: String(b.warna ?? ""), punya_otak: punya.has(Number(b.id)), aktif: b.aktif !== false })),
+    ],
   };
 }
 
@@ -96,7 +111,8 @@ export async function kirimPesanMaster(userId: number, teks: string): Promise<{ 
       return { id: Number(b.id), nama: String(b.nama ?? ""), username: String(u?.username ?? "") };
     }),
   );
-  const menyebut = cariSebutan(teks, ids);
+  // Koordinator (id 0) didahulukan; total tetap dibatasi JAWABAN_MAKS.
+  const menyebut = [...(menyebutKoordinator(teks) ? [ID_KOORDINATOR_CHAT] : []), ...cariSebutan(teks, ids)].slice(0, KEBIJAKAN_CHAT.JAWABAN_MAKS);
   const { data, error } = await db.from("bot_chat").insert({ pengirim: "master", user_id: userId, teks, menyebut }).select("id").single();
   if (error || !data) {
     if (skemaBelumSiap(error)) throw new GalatChat("Migrasi 73 (room chat bot) belum dijalankan.", 503);
@@ -128,9 +144,12 @@ export async function jawabPesan(pesanId: number): Promise<void> {
 
     const { data: master } = p.user_id != null ? await db.from("app_user").select("nama").eq("id", p.user_id).maybeSingle() : { data: null };
     const namaMaster = String(master?.nama ?? "Master");
+    // Koordinator berpikir sendiri (usulan, bukan sekadar jawaban); id 0 tidak dilayani sebagai bot biasa.
+    if (sebut.includes(ID_KOORDINATOR_CHAT)) await tanggapiPesan(pesanId);
     const jedaGlobal = await bacaJedaGlobal();
 
     for (const botId of sebut) {
+      if (botId === ID_KOORDINATOR_CHAT) continue;
       const { data: b } = await db.from("bot_redaksi").select("id, user_id, nama, warna, aktif, jeda, mode, kuota_harian").eq("id", botId).maybeSingle();
       const bot = b as unknown as BarisBot | null;
       if (!bot) continue;

@@ -1,7 +1,7 @@
 // Uji room chat bot — bagian murni (13 Okt 2026).
 // Jalankan: npx tsx tests/uji-bot-chat.mts
 import { KEBIJAKAN_CHAT } from "@/lib/bot-chat-konstan";
-import { bangunPromptChat, cariSebutan, normalkanPesan, pesanTakBisaMenjawab, rapikanBalasan, ringkasKeadaan, SISTEM_CHAT, type BotChatRingkas } from "@/lib/bot-chat-murni";
+import { ID_KOORDINATOR_CHAT, bangunPromptChat, cariSebutan, menyebutKoordinator, normalkanPesan, pesanTakBisaMenjawab, rapikanBalasan, ringkasKeadaan, SISTEM_CHAT, type BotChatRingkas } from "@/lib/bot-chat-murni";
 
 let lulus = 0;
 let gagal = 0;
@@ -55,6 +55,12 @@ cek("nama bot dengan karakter regex tidak merusak", rapikanBalasan("A+B: halo se
 
 console.log("\n[E] Pesan tak bisa menjawab");
 cek("tiap kode punya pesan jelas, tanpa detail teknis", ["tanpa_kunci", "kunci_ditolak", "kuota", "waktu_habis", "kunci_rusak", "gagal"].every((c) => pesanTakBisaMenjawab("Raka", c).startsWith("Raka") && !/stack|undefined|Error/.test(pesanTakBisaMenjawab("Raka", c))));
+
+console.log("\n[F] Sebutan koordinator");
+cek("@Nara / @koordinator terdeteksi (huruf besar & diakritik tak berpengaruh)", menyebutKoordinator("tolong @Nara kerjakan") && menyebutKoordinator("@KOORDINATOR halo") && menyebutKoordinator("(@nara)") && menyebutKoordinator("ok, @Nara."));
+cek("bukan sebutan: tanpa @, e-mail, nama lain", !menyebutKoordinator("Nara kerjakan") && !menyebutKoordinator("kirim ke x@nara.com") && !menyebutKoordinator("@Raka halo") && !menyebutKoordinator(""));
+cek("id koordinator di menyebut = 0 (tak bentrok dengan id bot yang selalu > 0)", ID_KOORDINATOR_CHAT === 0);
+cek("cariSebutan tidak pernah mengembalikan @Nara sebagai bot", cariSebutan("@Nara @Raka", BOTS).join() === "1");
 
 console.log(`\n${lulus} lulus, ${gagal} gagal`);
 process.exit(gagal ? 1 : 0);

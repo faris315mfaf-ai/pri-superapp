@@ -16,6 +16,7 @@ export const JENIS_AUDIT = {
   bot_tugas: { label: "Tugas bot", kelompok: "akses" },
   bot_sumber: { label: "Sumber bot", kelompok: "akses" },
   bot_otak: { label: "API key bot", kelompok: "akses" },
+  bot_koordinator: { label: "Koordinator bot (usulan tugas)", kelompok: "akses" },
   bot_template: { label: "Template bot", kelompok: "video" },
   edit_otomatis: { label: "Edit Otomatis", kelompok: "video" },
   auto_edit: { label: "Auto Edit (master)", kelompok: "video" },

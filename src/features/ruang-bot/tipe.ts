@@ -129,4 +129,4 @@ export type LogItem = {
   teks: string;
 };
 
-export type TampilanBot = "ruang" | "detail" | "acc" | "sumber" | "chat";
+export type TampilanBot = "ruang" | "detail" | "acc" | "sumber" | "chat" | "koordinator";

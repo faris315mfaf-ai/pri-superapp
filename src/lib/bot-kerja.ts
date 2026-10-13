@@ -654,6 +654,118 @@ export async function bisaMulaiSekarang(botId: number, sekarangMs: number = Date
   }
 }
 
+// ---- Penugasan dari koordinator: "kerjakan tautan ini" (tahap 3) ----
+
+export type HasilTugasUrl =
+  | { ok: true; tugas_id: number }
+  | { ok: false; kode: "bot_tidak_ada" | "ditutup" | "url_tak_sah" | "dipakai" | "tabel_belum_ada" | "gagal"; alasan: string | null };
+
+/**
+ * Bot mengerjakan SATU tautan yang diberikan (usulan koordinator yang sudah disetujui master).
+ * Jalur & pagarnya sama dengan pengambilan otomatis/manual: mesin keputusan harus menyatakan
+ * `mulai_tugas` (jeda, jam aktif, kuota, tugas berjalan), tautan harus punya kunci kanonik, tidak
+ * boleh sudah dipakai manusia/bot lain, dan klaim kandidat atomik. Hasil tetap berhenti di Antrean ACC.
+ * `topik` (dari permintaan pemilik) menjadi bahan hook; tanpa itu hook memakai penanda platform.
+ */
+export async function buatTugasDariUrl(botId: number, url: string, topik: string, sekarangMs: number = Date.now()): Promise<HasilTugasUrl> {
+  try {
+    const db = supabase();
+    const bot = await muatBot(db, botId);
+    if (!bot) return { ok: false, kode: "bot_tidak_ada", alasan: null };
+    const { putusan } = await hitungPutusan(db, bot, sekarangMs);
+    if (putusan.aksi !== "mulai_tugas") return { ok: false, kode: "ditutup", alasan: putusan.aksi === "diam" ? putusan.alasan : "tugas_berjalan" };
+
+    const kunci = kunciKanonik(url);
+    if (!kunci) return { ok: false, kode: "url_tak_sah", alasan: null };
+    const tabrakan = await periksaTabrakanManusia(db, kunci);
+    if (tabrakan === "gagal") return { ok: false, kode: "gagal", alasan: "cek_tabrakan_gagal" };
+    if (tabrakan === "dipakai") return { ok: false, kode: "dipakai", alasan: "sudah dipakai di sistem lain" };
+
+    const bahan = potongTeks(topik.trim(), 500);
+    const judul = bahan !== "" ? bahan : `Video ${kunci.platform} dari koordinator`;
+    if (buatNaskah(judul, bahan) === null) return { ok: false, kode: "gagal", alasan: "tanpa_teks" };
+
+    // Kandidat: buat baru sudah TERKLAIM bot ini; bila tautan sudah ada, klaim atomik hanya bila masih bebas & bersih.
+    let kandidatId: number | null = null;
+    let kandidatBaru = false;
+    const ins = await db
+      .from("bot_kandidat")
+      .insert({ kunci_kanonik: kunci.kunci, sumber_id: null, url, judul, caption: bahan, diklaim_oleh: bot.id, diklaim_pada: iso(sekarangMs) })
+      .select("id")
+      .single();
+    if (!ins.error && ins.data) {
+      kandidatId = Number((ins.data as { id: number }).id);
+      kandidatBaru = true;
+    } else if (ins.error?.code === "23505") {
+      const { data: ada } = await db.from("bot_kandidat").select("id").eq("kunci_kanonik", kunci.kunci).maybeSingle();
+      if (!ada) return { ok: false, kode: "gagal", alasan: "kandidat_hilang" };
+      const { data: menang, error: eKlaim } = await db
+        .from("bot_kandidat")
+        .update({ diklaim_oleh: bot.id, diklaim_pada: iso(sekarangMs) })
+        .eq("id", (ada as { id: number }).id)
+        .is("diklaim_oleh", null)
+        .is("bentrok", null)
+        .select("id");
+      periksa(eKlaim, "mengklaim kandidat tautan");
+      if ((menang ?? []).length === 0) return { ok: false, kode: "dipakai", alasan: "sudah diklaim bot lain atau ditandai bentrok" };
+      kandidatId = Number((ada as { id: number }).id);
+    } else {
+      periksa(ins.error, "menyimpan kandidat tautan");
+      return { ok: false, kode: "gagal", alasan: "simpan_kandidat" };
+    }
+
+    const { data: tugasBaru, error: eTugas } = await db
+      .from("bot_tugas")
+      .insert({
+        bot_id: bot.id,
+        kandidat_id: kandidatId,
+        tahap: "edit",
+        judul,
+        caption: bahan,
+        kategori: "NEWS",
+        percobaan: 1,
+        dikunci_sampai: iso(sekarangMs + KERJA.KUNCI_DETIK * 1000),
+        diubah_pada: iso(sekarangMs),
+      })
+      .select("id")
+      .single();
+    // Gagal membuat tugas: kandidat yang BARU kita buat dihapus (tidak menyisakan baris yatim yang memblokir tautan);
+    // kandidat lama hanya dilepas klaimnya.
+    const urungKandidat = async () => {
+      if (kandidatBaru) {
+        const { error } = await db.from("bot_kandidat").delete().eq("id", kandidatId).eq("diklaim_oleh", bot.id);
+        if (error) console.error("[bot/kerja] hapus kandidat yatim:", error.message);
+      } else await lepasKlaimKandidat(db, kandidatId, bot.id);
+    };
+    if (eTugas || !tugasBaru) {
+      await urungKandidat();
+      periksa(eTugas, "membuat tugas dari tautan");
+      return { ok: false, kode: "gagal", alasan: "gagal_membuat_tugas" };
+    }
+    const tugasId = Number((tugasBaru as { id: number }).id);
+    let berhak = false;
+    try {
+      berhak = await tugasBerhak(db, bot.id, tugasId);
+    } catch (e) {
+      // Galat DB saat memastikan hak: gulung balik supaya tidak ada tugas yatim yang tetap dikerjakan runner.
+      await batalkanTugasBaru(db, tugasId, bot.id, kandidatId);
+      if (kandidatBaru) await urungKandidat();
+      throw e;
+    }
+    if (!berhak) {
+      await batalkanTugasBaru(db, tugasId, bot.id, kandidatId);
+      if (kandidatBaru) await urungKandidat();
+      return { ok: false, kode: "ditutup", alasan: "terkunci" };
+    }
+    siarkanBot("tugas");
+    await catatLog(db, bot.id, tugasId, "cari", `Tugas dari koordinator: ${potongTeks(judul, 100)}`);
+    return { ok: true, tugas_id: tugasId };
+  } catch (e) {
+    if (e instanceof SkemaBelumSiap) return { ok: false, kode: "tabel_belum_ada", alasan: null };
+    throw e;
+  }
+}
+
 /** Pilih kandidat panen terbaik milik sumber bot ini, klaim atomik, buat tugas. Tak ada → panen/diam. */
 async function mulaiDariKandidat(db: Db, bot: BarisBot, sekarangMs: number): Promise<PerintahRunner> {
   await lepasKlaimBasi(db, sekarangMs);

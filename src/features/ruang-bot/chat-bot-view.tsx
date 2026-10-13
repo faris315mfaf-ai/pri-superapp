@@ -16,7 +16,9 @@ import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
 import { toast } from "@/hooks/use-app-store";
 import { useSegarOtomatis } from "@/hooks/use-segar-otomatis";
-import { getChatBot, kirimChatBot } from "@/services";
+import { getChatBot, kirimChatBot, kirimKeputusanUsulan } from "@/services";
+import type { UsulanApi } from "@/lib/bot-koordinator-murni";
+import { KartuUsulan } from "./kartu-usulan";
 import { PESAN_MAKS, normalkanPesan, type PesanChat, type StatusChat } from "@/lib/bot-chat-murni";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +29,7 @@ const jam = (iso: string): string => {
   return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
 };
 
-function Gelembung({ p }: { p: PesanChat }) {
+function Gelembung({ p, usulan, sibuk, onKeputusan }: { p: PesanChat; usulan?: UsulanApi; sibuk: string | null; onKeputusan: (aksi: "setuju" | "tolak", id: number) => void }) {
   const saya = p.pengirim === "master";
   const sistem = p.pengirim === "sistem";
   return (
@@ -44,6 +46,11 @@ function Gelembung({ p }: { p: PesanChat }) {
           <span className="font-normal">{jam(p.dibuat_pada)}</span>
         </span>
         <span className="block whitespace-pre-wrap break-words">{p.teks}</span>
+        {usulan && (
+          <div className="mt-2">
+            <KartuUsulan u={usulan} sibuk={sibuk} onKeputusan={onKeputusan} />
+          </div>
+        )}
       </div>
     </li>
   );
@@ -55,6 +62,8 @@ export function ChatBotView() {
   const [teks, setTeks] = useState("");
   const [kirim, setKirim] = useState(false);
   const [menunggu, setMenunggu] = useState(false);
+  const [sibuk, setSibuk] = useState<string | null>(null);
+  const sibukRef = useRef<string | null>(null);
   const nomor = useRef(0);
   const hidup = useRef(true);
   const daftar = useRef<HTMLUListElement | null>(null);
@@ -119,6 +128,25 @@ export function ChatBotView() {
   }, [jumlah]);
 
 
+  const putuskan = useCallback(
+    async (aksi: "setuju" | "tolak", id: number) => {
+      if (sibukRef.current) return;
+      sibukRef.current = `${aksi}:${id}`;
+      setSibuk(`${aksi}:${id}`);
+      try {
+        const r = await kirimKeputusanUsulan(aksi, id);
+        toast(r.sukses ? "sukses" : "peringatan", aksi === "setuju" ? "Usulan disetujui" : "Usulan ditolak", r.pesan);
+      } catch (e) {
+        toast("error", "Keputusan gagal", e instanceof Error ? e.message : "");
+      } finally {
+        sibukRef.current = null;
+        if (hidup.current) setSibuk(null);
+        void muat();
+      }
+    },
+    [muat],
+  );
+
   const sah = normalkanPesan(teks);
   const kirimPesan = async () => {
     if (!sah.ok || kirim) return;
@@ -151,7 +179,7 @@ export function ChatBotView() {
       <GlassCard className="p-3.5">
         <p className="m-0 text-[11.5px] leading-relaxed text-teks-sekunder">
           Sebut agen dengan <b className="text-teks-utama">@nama</b> (atau <b className="text-teks-utama">@semua</b>) supaya ia menjawab dengan otak dan
-          kepribadiannya sendiri. Agen hanya berbicara; membagi tugas lewat chat menyusul bersama koordinator.
+          kepribadiannya sendiri. Agen hanya berbicara; untuk membagi tugas, sebut <b className="text-teks-utama">@Nara</b> (koordinator): ia mengusulkan, Anda menyetujui.
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {status.bots.map((b) => (
@@ -179,7 +207,7 @@ export function ChatBotView() {
           {status.pesan.length === 0 ? (
             <li className="m-auto py-8 text-center text-[12.5px] text-teks-sekunder">Belum ada percakapan. Mulai dengan menyapa, mis. “@Raka sudah sampai mana?”.</li>
           ) : (
-            status.pesan.map((p) => <Gelembung key={p.id} p={p} />)
+            status.pesan.map((p) => <Gelembung key={p.id} p={p} usulan={p.usulan_id != null ? status.usulan.find((u) => u.id === p.usulan_id) : undefined} sibuk={sibuk} onKeputusan={(a, id) => void putuskan(a, id)} />)
           )}
           {tampilMenunggu && (
             <li className="flex items-center gap-1.5 text-[11.5px] text-teks-sekunder">
