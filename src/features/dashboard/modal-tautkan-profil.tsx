@@ -8,18 +8,15 @@
 // unggah, insight, KPI otomatis, leaderboard — semua ikut.
 // ============================================================
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Check, Copy, Link2, Loader2, Search, X } from "lucide-react";
+import { Check, Copy, Link2, Loader2, X } from "lucide-react";
 import { AvatarInisial, GlassSkeleton } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
 import { toast } from "@/hooks/use-app-store";
-import {
-  getDatabasePengguna,
-  tautanProfilTv,
-  tautkanProfilTv,
-  type DbRingkasPengguna,
-} from "@/services";
+import { getAnggotaTautan, tautanProfilTv, tautkanProfilTv } from "@/services";
+import type { AnggotaTautan } from "@/lib/tautan-profil";
+import { PemilihAnggota } from "./pemilih-anggota";
 import { cn } from "@/lib/utils";
 
 export type PermintaanTautkan = { mode: "tautkan"; profil: string } | { mode: "buat" };
@@ -28,19 +25,15 @@ const POLA_USERNAME = /^[a-z0-9][a-z0-9-]{2,39}$/;
 
 export function ModalTautkanProfil({
   permintaan,
-  sudahPunya,
   onTutup,
   onSelesai,
 }: {
   permintaan: PermintaanTautkan;
-  /** user_id → profil yang sudah dimiliki (untuk peringatan "ganti"). */
-  sudahPunya: Map<string, string>;
   onTutup: () => void;
   onSelesai: () => void;
 }) {
-  const [roster, setRoster] = useState<DbRingkasPengguna[] | null>(null);
-  const [cari, setCari] = useState("");
-  const [pilih, setPilih] = useState<DbRingkasPengguna | null>(null);
+  const [roster, setRoster] = useState<AnggotaTautan[] | null>(null);
+  const [pilih, setPilih] = useState<AnggotaTautan | null>(null);
   const [username, setUsername] = useState("");
   const [sibuk, setSibuk] = useState(false);
   const [konfirmasiGanti, setKonfirmasiGanti] = useState(false);
@@ -51,24 +44,21 @@ export function ModalTautkanProfil({
 
   useEffect(() => {
     let hidup = true;
-    getDatabasePengguna()
+    getAnggotaTautan()
       .then((r) => hidup && setRoster(r))
-      .catch(() => hidup && setRoster([]));
+      .catch((e) => {
+        if (!hidup) return;
+        setRoster([]);
+        toast("error", "Daftar akun gagal dimuat", e instanceof Error ? e.message : "");
+      });
     return () => {
       hidup = false;
     };
   }, []);
 
-  const kandidat = useMemo(() => {
-    if (!roster) return [];
-    const q = cari.trim().toLowerCase();
-    const d = q ? roster.filter((r) => r.nama.toLowerCase().includes(q)) : roster;
-    return d.slice(0, 8);
-  }, [roster, cari]);
-
   const usernameSah = POLA_USERNAME.test(username);
   const profilTarget = permintaan.mode === "tautkan" ? permintaan.profil : username;
-  const profilLama = pilih ? sudahPunya.get(pilih.id) : undefined;
+  const profilLama = pilih?.profil || undefined;
 
   async function kirim(ganti: boolean) {
     if (!pilih || sibuk) return;
@@ -222,7 +212,7 @@ export function ModalTautkanProfil({
                   )}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[12.5px] font-bold text-teks-utama">{pilih.nama}</span>
-                    <span className="block truncate text-[10px] text-teks-sekunder">{pilih.struktur || "-"}</span>
+                    <span className="block truncate text-[10px] text-teks-sekunder">{pilih.divisi || "tanpa divisi"}{pilih.username ? ` · @${pilih.username}` : ""}</span>
                   </span>
                   <button
                     type="button"
@@ -237,47 +227,11 @@ export function ModalTautkanProfil({
                   </button>
                 </div>
               ) : (
-                <>
-                  <div className="glass-input mt-1.5 flex h-11 items-center gap-2 rounded-xl px-3">
-                    <Search className="h-4 w-4 text-teks-sekunder" aria-hidden="true" />
-                    <input
-                      value={cari}
-                      onChange={(e) => setCari(e.target.value)}
-                      placeholder="Cari nama anggota…"
-                      autoFocus
-                      className="h-full w-full bg-transparent text-sm text-teks-utama outline-none"
-                    />
-                  </div>
-                  {roster === null ? (
-                    <GlassSkeleton className="mt-2 h-24 rounded-xl" />
-                  ) : (
-                    <div className="mt-2 flex flex-col gap-1">
-                      {kandidat.map((r) => (
-                        <button
-                          key={r.id}
-                          type="button"
-                          onClick={() => setPilih(r)}
-                          className="btn-tekan flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-left hover:bg-black/[0.03] dark:hover:bg-white/[0.05]"
-                        >
-                          {r.avatar_url ? (
-                            <FotoBulat src={r.avatar_url} ukuran={28} />
-                          ) : (
-                            <AvatarInisial nama={r.nama} ukuran={28} />
-                          )}
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[12px] font-semibold text-teks-utama">{r.nama}</span>
-                            <span className="block truncate text-[10px] text-teks-sekunder">
-                              {sudahPunya.has(r.id) ? `sudah punya profil ${sudahPunya.get(r.id)}` : r.struktur || "-"}
-                            </span>
-                          </span>
-                        </button>
-                      ))}
-                      {kandidat.length === 0 && (
-                        <p className="px-2 py-3 text-center text-[11px] text-teks-sekunder">Tidak ada anggota cocok.</p>
-                      )}
-                    </div>
-                  )}
-                </>
+                roster === null ? (
+                  <GlassSkeleton className="mt-2 h-32 rounded-xl" />
+                ) : (
+                  <PemilihAnggota daftar={roster} onPilih={setPilih} />
+                )
               )}
 
               {pilih && profilLama && profilLama !== profilTarget && (
@@ -285,6 +239,14 @@ export function ModalTautkanProfil({
                   {pilih.nama} sudah punya profil <b>{profilLama}</b>. Menautkan berarti mengalihkan
                   TV Rakyat Saya-nya ke <b>{profilTarget || "profil baru"}</b>; profil lama tetap ada di
                   upload-post.
+                </p>
+              )}
+
+              {pilih && (permintaan.mode === "tautkan" || usernameSah) && !konfirmasiGanti && (
+                <p className="mt-3 rounded-xl bg-black/5 px-3 py-2 text-[11.5px] leading-relaxed text-teks-utama dark:bg-white/10">
+                  Profil <b>{profilTarget}</b> akan menjadi profil TV Rakyat Saya milik <b>{pilih.nama}</b>
+                  {pilih.username ? ` (@${pilih.username})` : ""}. Unggahan, KPI, dan insight akun itu
+                  mengikuti profil ini.
                 </p>
               )}
 

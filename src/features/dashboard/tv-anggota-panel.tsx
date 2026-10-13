@@ -333,7 +333,6 @@ export function TvAnggotaPanel() {
       {tautkan && (
         <ModalTautkanProfil
           permintaan={tautkan}
-          sudahPunya={new Map(data.profil.map((p) => [p.user_id, p.profil]))}
           onTutup={() => setTautkan(null)}
           onSelesai={() => {
             setTautkan(null);

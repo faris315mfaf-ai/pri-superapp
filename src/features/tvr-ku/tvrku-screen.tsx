@@ -3,6 +3,7 @@ import { bebasKewajiban } from "@/lib/jabatan";
 import { adalahAdminStudio, adalahBot, adalahPalugodam } from "@/lib/struktur";
 import { masukSebagai } from "@/lib/kendali-klien";
 import { KendaliAkun } from "./kendali-akun";
+import { TautanProfilMaster } from "./tautan-profil-master";
 import { TugasBotTvr } from "./tugas-bot";
 import { AccAjuanKomen } from "./acc-ajuan-komen";
 import { RangkumanLink } from "./rangkuman-link";
@@ -1020,6 +1021,19 @@ export function TvrKuScreen({
                 render: () => (
                   <FadeInUp>
                     <KendaliAkun aktif={null} onPilih={pilihKendali} kelompok="bot" />
+                  </FadeInUp>
+                ),
+              },
+              {
+                id: "tautan-profil",
+                pin: true,
+                segmen: "Admin PALUGODAM",
+                judul: "Tautkan Profil Upload-Post",
+                ikon: Link2,
+                keterangan: "Tautkan profil upload-post ke akun superapp mana pun (cari + filter divisi)",
+                render: () => (
+                  <FadeInUp>
+                    <TautanProfilMaster />
                   </FadeInUp>
                 ),
               },

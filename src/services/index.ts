@@ -22,6 +22,7 @@ import type {
 } from "@/types";
 import { PERIODE_AKTIF } from "@/types";
 import { buatPenggabungGet } from "@/lib/gabung-get";
+import type { AnggotaTautan } from "@/lib/tautan-profil";
 
 // ------------------------------------------------------------
 // Tipe tambahan lapisan services
@@ -3899,6 +3900,12 @@ export async function tautkanProfilTv(data: {
     konflik: (json?.konflik ?? []) as string[],
     dibuat: json?.dibuat === true,
   };
+}
+
+/** Semua akun aktif (termasuk Divisi BOT) untuk pemilih tautan profil — master saja. */
+export async function getAnggotaTautan(): Promise<AnggotaTautan[]> {
+  const json = await fetchJson("/api/dashboard/tv-anggota?anggota=1", { headers: headerToken() });
+  return (json?.anggota ?? []) as AnggotaTautan[];
 }
 
 /** Tautan login 48 jam untuk menyambungkan akun sosmed ke sebuah profil. */

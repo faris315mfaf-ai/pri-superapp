@@ -8,6 +8,7 @@ export const JENIS_AUDIT = {
   login: { label: "Masuk aplikasi", kelompok: "akses" },
   daftar: { label: "Mendaftar akun", kelompok: "akses" },
   kendali: { label: "Dikendalikan admin", kelompok: "akses" },
+  profil_tertaut: { label: "Tautan profil upload-post", kelompok: "akses" },
   // Ruang Bot (13 Okt 2026): kendali master atas bot redaksi.
   bot_jeda: { label: "Jeda bot", kelompok: "akses" },
   bot_mode: { label: "Mode bot", kelompok: "akses" },
