@@ -54,7 +54,7 @@ button{cursor:pointer}
 .h{margin:0 0 10px;font:700 12px var(--mono);letter-spacing:1px;text-transform:uppercase;color:var(--mut)}
 .mut{color:var(--mut);font-size:12px}
 .roomcard{padding:10px}
-.stage{position:relative;width:100%;aspect-ratio:352/276;border-radius:12px;overflow:hidden;background:#0b0912}
+.stage{position:relative;width:100%;aspect-ratio:524/344;border-radius:12px;overflow:hidden;background:#0b0912}
 #room{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;cursor:pointer;display:block}
 #ov{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .tag{position:absolute;transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;gap:3px}
@@ -187,7 +187,6 @@ td{padding:8px;border-bottom:1px dashed var(--line);vertical-align:middle}
 .toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--surf2);border:1px solid var(--warn);color:var(--tx);padding:9px 16px;border-radius:12px;font-weight:600;font-size:13px;z-index:50;opacity:0;pointer-events:none;transition:opacity .2s}
 .toast.show{opacity:1}
 @media(prefers-reduced-motion:reduce){.q div,.sw::after,.toast{transition:none}}
-
 /* ---- Chat & Ruang Koordinator (tahap 3) ---- */
 :root{--koor:#fb7185}
 .chatg{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:start}
@@ -225,11 +224,6 @@ td{padding:8px;border-bottom:1px dashed var(--line);vertical-align:middle}
 .ros b{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .key{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px}
 .key.ada{background:var(--okbg);color:var(--ok)}.key.tak{background:var(--warnbg);color:var(--warn)}
-.kgrid{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:14px;align-items:start}
-@media(max-width:1060px){.kgrid{grid-template-columns:1fr}}
-.kstage{position:relative;width:100%;aspect-ratio:352/276;border-radius:12px;overflow:hidden;background:#0b0912}
-#kroom{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;display:block}
-#kov{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .kportrait{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:start}
 .kportrait canvas{width:96px;height:144px;image-rendering:pixelated;background:linear-gradient(#2b2440,#1d1830);border-radius:12px;border:1px solid var(--line)}
 .kportrait h2{margin:0;font:700 22px var(--display);color:var(--koor)}
@@ -242,6 +236,10 @@ td{padding:8px;border-bottom:1px dashed var(--line);vertical-align:middle}
 .bm .m{height:7px;border-radius:99px;background:var(--bg);overflow:hidden;margin-top:4px}.bm .m div{height:100%;border-radius:99px;background:var(--c)}
 .seg button[disabled]{opacity:.45;cursor:not-allowed}
 @media(prefers-reduced-motion:reduce){.typing i{animation:none}}
+
+.zl{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.zl span{font:700 10.5px var(--mono);border:1px solid var(--c);color:var(--c);border-radius:6px;padding:2px 7px}
+.rapatb.on{background:#4a1f2c;border-color:#fb7185;color:#fecdd3}
 </style>
 
 <div class="app">
@@ -253,7 +251,6 @@ td{padding:8px;border-bottom:1px dashed var(--line);vertical-align:middle}
       <button data-v="acc" type="button">Antrean ACC <span class="n" id="accN"></span></button>
       <button data-v="sumber" type="button">Sumber &amp; Kuota</button>
       <button data-v="chat" type="button">Chat <span class="n" id="chatN"></span></button>
-      <button data-v="koordinator" type="button">Ruang Koordinator <span class="n" id="propN"></span></button>
     </nav>
     <span class="sp"></span>
     <span class="clock" id="clock">Hari ini · 09:05 WIB</span>
@@ -264,6 +261,7 @@ td{padding:8px;border-bottom:1px dashed var(--line);vertical-align:middle}
     <div class="bar">
       <div class="seg" id="tod" role="group" aria-label="Waktu ruangan"><button data-v="day" class="on" type="button">Siang</button><button data-v="night" type="button">Malam</button></div>
       <div class="seg" id="spd" role="group" aria-label="Kecepatan simulasi"><button data-v="1" class="on" type="button">1×</button><button data-v="3" type="button">3×</button><button data-v="8" type="button">8×</button></div>
+      <button class="btn rapatb" id="rapatBtn" type="button">Panggil rapat</button>
       <button class="btn" id="newday" type="button">Hari baru</button>
       <span class="sp"></span>
       <button class="btn dan" id="pause" type="button">Jeda darurat semua bot</button>
@@ -277,13 +275,23 @@ td{padding:8px;border-bottom:1px dashed var(--line);vertical-align:middle}
           <div class="banner" id="banner">Semua bot dijeda, kembali ke sofa</div>
         </div>
         <div class="legend" id="legend"></div>
+        <div class="zl" aria-label="Zona ruangan"><span style="--c:#f59e0b">RUANG KERJA</span><span style="--c:#fb7185">RUANG MEETING · klik untuk membuka Chat</span><span style="--c:#38bdf8">RUANG KOORDINATOR</span><span style="--c:#94a3b8">KAMAR TIDUR · agen tanpa API key</span></div>
       </div>
       <aside class="side">
         <div class="card pad"><h3 class="h">Tim bot</h3><div id="cards"></div></div>
+        <div class="card pad"><h3 class="h">Koordinator</h3><div id="kcard"></div></div>
+        <div class="card pad"><h3 class="h">Usulan menunggu Anda</h3><div id="kprops"></div></div>
         <div class="card pad"><h3 class="h">Umpan aktivitas langsung</h3><div class="log" id="log"></div></div>
         <div class="card pad"><h3 class="h">Hasil hari ini</h3><div id="res"></div></div>
       </aside>
     </div>
+    <div class="two">
+      <div class="card pad"><h3 class="h">Beban kerja agen</h3><div id="kload"></div></div>
+      <div class="card pad"><h3 class="h">Pagar koordinator</h3>
+        <ul class="rules"><li><span>Aksi hanya dari <b>daftar tertutup</b>: kerjakan tautan, cari sekarang, ubah kuota, jeda, lanjutkan.</span></li><li><span>Setiap usulan <b>menunggu persetujuan Anda</b>; Nara tidak bisa menyetujui usulannya sendiri.</span></li><li><span>Tidak bisa memposting: hasil tetap berhenti di <b>Antrean ACC</b>.</span></li><li><span>Agen yang <b>tidur (tanpa API key)</b> tidak bisa diberi tugas.</span></li><li><span>Maksimal 3 usulan terbuka; basi hangus setelah 2 jam; semua tercatat di Audit.</span></li></ul></div>
+      <div class="card pad"><h3 class="h">Riwayat usulan &amp; log Nara</h3><div class="hist" id="khist"></div></div>
+    </div>
+    <div class="card note"><b>Satu gedung, empat ruang.</b> <b>Ruang kerja</b> (meja pencarian, edit, posting, sofa), <b>ruang meeting</b> (Pimred, Nara, dan agen berkumpul; ini wujud room Chat), <b>ruang koordinator</b> (meja dan papan penugasan Nara), dan <b>kamar tidur</b>: agen yang belum punya API key tidur di sini dan bangun begitu key terpasang. Sekat kaca memisahkan ruangan; pintu ada di celahnya.</div>
     <div class="card note"><b>Cara membaca.</b> Pencarian → Edit → Posting → Istirahat, sesuai rancangan di <code>docs/BOT-REDAKSI.md</code>.
       Klik bot atau kartunya untuk memilih; chip mode (Otomatis / Perlu ACC) bisa diklik. Bila meja terisi, bot lain antre di tengah ruangan seperti antrean render.
       Bot bermode ACC mengirim hasilnya ke tab Antrean ACC.</div>
@@ -343,7 +351,6 @@ td{padding:8px;border-bottom:1px dashed var(--line);vertical-align:middle}
     </div>
     <div class="card note"><b>Tentang sumber.</b> Instagram dan TikTok diambil lewat TikHub (berbayar, berkuota). Feed YouTube/NTV belum ada di sistem dan dibangun pada tahap pencarian. Hak cipta konten sumber tetap tanggung jawab pemilik: caption selalu memuat kredit sumber.</div>
   </section>
-
   <!-- ===== CHAT (room bersama) ===== -->
   <section id="v-chat" hidden aria-label="Room chat bot">
     <div class="chatg">
@@ -365,39 +372,6 @@ td{padding:8px;border-bottom:1px dashed var(--line);vertical-align:middle}
     <div class="card note"><b>Contoh yang bisa dicoba.</b> “@Raka sudah sampai mana?” · “@semua kuota hari ini berapa?” · “@Nara tolong kerjakan berita banjir dari youtu.be/dQw4w9WgXcQ” · “@Nara jeda Sinta 30 menit”. Jawaban di mockup ini skrip, bukan model sungguhan.</div>
   </section>
 
-  <!-- ===== RUANG KOORDINATOR ===== -->
-  <section id="v-koordinator" hidden aria-label="Ruang koordinator">
-    <div class="bar">
-      <div class="seg" role="group" aria-label="Mode koordinator"><button class="on" type="button" data-km="usul">Usulan wajib disetujui</button><button type="button" disabled title="Dibuka pemilik nanti, setelah terbukti baik">Otonom terbatas (terkunci)</button></div>
-      <span class="sp"></span><span class="mut" id="kSum"></span>
-    </div>
-    <div class="kgrid">
-      <div class="card roomcard">
-        <div class="kstage" id="kstage">
-          <canvas id="kroom" aria-label="Ruang koordinator: Nara membagi tugas kepada Raka, Sinta, dan Dimas di meja rapat"></canvas>
-          <div id="kov"></div>
-          <div class="hud"><span id="kHudA">Nara: menimbang</span><span id="kHudB">Usulan menunggu 0</span><span id="kHudC">Tugas dibagi hari ini 0</span></div>
-        </div>
-        <div class="legend">
-          <div class="lg" style="--c:var(--koor)"><b>Meja Nara</b><span>membaca keadaan, menulis usulan</span></div>
-          <div class="lg" style="--c:var(--cari)"><b>Papan penugasan</b><span>tugas yang sudah Anda setujui</span></div>
-          <div class="lg" style="--c:var(--edit)"><b>Meja rapat</b><span>tiga agen duduk; tugas diantar Nara</span></div>
-          <div class="lg" style="--c:var(--posting)"><b>Layar dinding</b><span>kuota tiap agen hari ini</span></div>
-        </div>
-      </div>
-      <aside class="side">
-        <div class="card pad"><h3 class="h">Koordinator</h3><div id="kcard"></div></div>
-        <div class="card pad"><h3 class="h">Usulan menunggu Anda</h3><div id="kprops"></div></div>
-        <div class="card pad"><h3 class="h">Beban kerja agen</h3><div id="kload"></div></div>
-      </aside>
-    </div>
-    <div class="two">
-      <div class="card pad"><h3 class="h">Pagar koordinator</h3>
-        <ul class="rules"><li><span>Aksi hanya dari <b>daftar tertutup</b>: kerjakan tautan, cari sekarang, ubah kuota, jeda, lanjutkan. Teks bebas model tidak pernah jadi aksi.</span></li><li><span>Setiap usulan <b>menunggu persetujuan Anda</b>; Nara tidak bisa menyetujui usulannya sendiri.</span></li><li><span>Tidak bisa memposting: hasil tetap berhenti di <b>Antrean ACC</b>.</span></li><li><span>Tetap tunduk pada kuota, jam aktif, jeda, daftar blokir, dan anti-tabrakan video.</span></li><li><span>Maksimal 3 usulan terbuka sekaligus; usulan basi hangus setelah 2 jam.</span></li><li><span>Semua usulan dan keputusan tercatat di Audit.</span></li></ul></div>
-      <div class="card pad"><h3 class="h">Riwayat usulan</h3><div class="hist" id="khist"></div></div>
-    </div>
-    <div class="card note"><b>Cara membaca.</b> Nara duduk di mejanya, menimbang beban agen, lalu menempel tugas di papan dan <b>mengantar surat tugas</b> ke agen yang dituju begitu Anda menyetujui usulan. Setujui/tolak bisa dari sini atau langsung di Chat. Mockup ini data contoh; keputusan Nara berasal dari skrip, bukan model.</div>
-  </section>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -408,7 +382,7 @@ td{padding:8px;border-bottom:1px dashed var(--line);vertical-align:middle}
    Ruang Bot — mockup isometrik pixel-art (canvas procedural)
    ============================================================ */
 const $=s=>document.querySelector(s);
-const W=352,H=276,OX=176,OY=96,WALLH=64,N=10;
+const W=524,H=344,OX=262,OY=70,WALLH=64,N=10,NX=16;
 const cv=$('#room'),main=cv.getContext('2d');
 cv.width=W;cv.height=H;
 let ctx=main;
@@ -460,7 +434,12 @@ const STG={
   posting:{lab:'Posting',col:'#34d399',dur:7},
   istirahat:{lab:'Istirahat',col:'#fbbf24',dur:6}
 };
+STG.rapat={lab:'Rapat',col:'#fb7185',dur:1e9};
+STG.tidur={lab:'Tidur',col:'#94a3b8',dur:1e9};
 const ORDER=['cari','edit','posting','istirahat'];
+/* API key tiap agen (mockup). Tanpa key = TIDUR di kamar tidur; cara berpikirnya baru ada setelah key terpasang. */
+const KEYS={raka:true,sinta:true,dimas:false};
+let rapat=false;
 const ST={
   cari:{name:'MEJA PENCARIAN',desk:[1,2,2.6,1],seats:[[3.0,1.5]],exit:[4.4,1.5],mon:[[1.2,2.3],[1.85,2.3]],lamp:[2.5,2.2],lab:[2.3,3.7],occ:[null]},
   edit:{name:'MEJA EDIT',desk:[6,2,2.6,1],seats:[[6.6,1.5]],exit:[5.4,1.5],mon:[[7.3,2.3],[7.95,2.3]],lamp:[8.25,2.2],lab:[7.3,3.7],occ:[null]},
@@ -468,40 +447,65 @@ const ST={
   istirahat:{name:'SOFA ISTIRAHAT',seats:[[7.9,8.2],[8.9,8.2]],exit:[6.0,8.1],lab:[8.2,9.55],occ:[null,null]}
 };
 const HUB=[5,5],SPOTS=[[4.3,4.7],[5.7,4.7],[5.0,6.1]];
+/* Zona lain. 'via' = titik jalan dari ruang kerja (HUB) ke kursi; 'keluar' = jalan pulang ke ruang kerja. */
+const PINTU_KM=[[9.2,5.1],[10.8,5.1]];
+const SEAT_RAPAT=[[12.0,2.9],[13.3,2.9],[14.6,2.9]];
+const BED=[[10.7,11.6],[12.4,11.6],[14.1,11.6]];
+ST.rapat={name:'RUANG MEETING',seats:SEAT_RAPAT,tetap:true,occ:[null,null,null],lab:[13.0,1.4],
+  via:i=>[...PINTU_KM,[10.8,2.0],[SEAT_RAPAT[i][0],2.0],SEAT_RAPAT[i]],
+  keluar:i=>[[SEAT_RAPAT[i][0],2.0],[10.8,2.0],[10.8,5.1],[9.2,5.1]]};
+ST.tidur={name:'KAMAR TIDUR',seats:BED.map(b=>[b[0]+.65,10.9]),tetap:true,occ:[null,null,null],lab:[13.0,15.3],
+  via:i=>[...PINTU_KM,[10.8,8.6],[11.1,9.4],[11.1,10.7],[BED[i][0]+.65,10.9]],
+  keluar:i=>[[BED[i][0]+.65,10.9],[11.1,10.7],[11.1,9.4],[10.8,8.6],[10.8,5.1],[9.2,5.1]]};
 const LAMPS=[];
 
 /* ---------- latar statis ---------- */
 let tod='day';
-function buildBg(){withCtx(bgx,()=>{
-  ctx.clearRect(0,0,W,H);px(0,0,W,H,'#0b0912');
-  // lempeng lantai
-  poly([P(0,N,0),P(N,N,0),P(N,N,-6),P(0,N,-6)],C.slabL);
-  poly([P(N,0,0),P(N,N,0),P(N,N,-6),P(N,0,-6)],C.slabR);
-  // ubin
-  for(let gx=0;gx<N;gx++)for(let gy=0;gy<N;gy++){
-    let c=((gx+gy)&1)?C.floorA:C.floorB;
-    const r=hs(gx*13+gy*7);
-    if(r>.82)c=((gx+gy)&1)?'#e8be82':'#d8a468';else if(r<.12)c=((gx+gy)&1)?'#d8a96a':'#c78f50';
+const lite=(c,k)=>{const n=parseInt(c.slice(1),16);const f=v=>Math.max(0,Math.min(255,Math.round(v*k)));return '#'+((1<<24)|(f((n>>16)&255)<<16)|(f((n>>8)&255)<<8)|f(n&255)).toString(16).slice(1)};
+function lantai(gx0,gx1,gy0,gy1,A,B,seed){
+  for(let gx=gx0;gx<gx1;gx++)for(let gy=gy0;gy<gy1;gy++){
+    let c=((gx+gy)&1)?A:B;const r=hs(gx*13+gy*7+seed);
+    if(r>.82)c=lite(c,1.05);else if(r<.12)c=lite(c,.94);
     poly([P(gx,gy),P(gx+1,gy),P(gx+1,gy+1),P(gx,gy+1)],c);
   }
-  // karpet tengah
+}
+/* Warna dinding per zona */
+const ZW={kerjaL:'#2b2a58',kerjaR:'#37376c',meetR:'#24505c',koorL:'#1f3a5f'};
+function dindingBand(s,u0,u1,warna,warnaLis,alas,papan){
+  wq(s,u0,u1,0,WALLH,warna);
+  for(let u=Math.ceil(u0);u<u1;u++)wq(s,u-.02,u+.02,18,WALLH-3,lite(warna,1.18));
+  wq(s,u0,u1,0,16,alas);
+  for(let u=u0;u<u1;u+=1)wq(s,u+.04,Math.min(u1,u+.5),3,15,papan);
+  wq(s,u0,u1,16,18.5,warnaLis);wq(s,u0,u1,0,3,C.woodD);wq(s,u0,u1,WALLH-2.5,WALLH,'#1a1736');
+}
+function buildBg(){withCtx(bgx,()=>{
+  ctx.clearRect(0,0,W,H);px(0,0,W,H,'#0b0912');
+  poly([P(0,NX,0),P(NX,NX,0),P(NX,NX,-6),P(0,NX,-6)],C.slabL);
+  poly([P(NX,0,0),P(NX,NX,0),P(NX,NX,-6),P(NX,0,-6)],C.slabR);
+  // lantai per zona
+  lantai(0,10,0,10,C.floorA,C.floorB,0);            // ruang kerja (kayu hangat)
+  lantai(10,16,0,10,'#9db0c4','#8da1b8',31);        // ruang meeting (karpet biru-abu)
+  lantai(0,10,10,16,'#b6c3dd','#a2b2d2',57);        // ruang koordinator (biru pucat)
+  lantai(10,16,10,16,'#cdbbdc','#bba7ce',83);       // kamar tidur (lavender)
+  // karpet ruang kerja (asli)
   frect(3.3,6.7,3.5,6.5,'#6d2a38');frect(3.45,6.55,3.65,6.35,'#9c3d4c');
   frect(3.7,6.3,3.9,6.1,'#d9a441');frect(3.78,6.22,3.98,6.02,'#9c3d4c');
   for(let i=0;i<7;i++){const t=3.9+i*.4;frect(t,t+.18,4.3,4.48,'#d9a441',0)}
+  // karpet meeting (hijau-tua) & koordinator (biru bertepi emas) & kamar tidur (bulan)
+  frect(11.0,15.0,3.2,7.0,'#1d3b3f');frect(11.12,14.88,3.32,6.88,'#2a5a5e');
+  frect(1.8,8.6,11.4,15.2,'#1b2a52');frect(1.95,8.45,11.55,15.05,'#2a3f78');frect(2.15,8.25,11.75,14.85,'#d9a441');frect(2.22,8.18,11.82,14.78,'#2a3f78');
+  frect(10.5,15.5,14.4,15.7,'#8f78ad');frect(10.62,15.38,14.5,15.6,'#b3a0cb');
   // bayangan dinding di lantai
-  ctx.fillStyle='rgba(20,10,30,.22)';
-  poly([P(0,0),P(N,0),P(N,.55),P(0,.55)],'rgba(30,14,10,.2)');
-  poly([P(0,0),P(.55,0),P(.55,N),P(0,N)],'rgba(30,14,10,.2)');
-  // dinding
-  poly([P(0,0,WALLH),P(0,N,WALLH),P(0,N,0),P(0,0,0)],C.wallL);
-  poly([P(0,0,WALLH),P(N,0,WALLH),P(N,0,0),P(0,0,0)],C.wallR);
-  for(const s of['L','R']){
-    for(let u=1;u<N;u++)wq(s,u-.02,u+.02,18,WALLH-3,s==='L'?'#323165':'#41417a');
-    wq(s,0,N,0,16,s==='L'?'#5d3b20':'#6b4426');
-    for(let u=0;u<N;u+=1)wq(s,u+.04,u+.5,3,15,s==='L'?'#6b4426':'#7a5030');
-    wq(s,0,N,16,18.5,C.trim);wq(s,0,N,0,3,C.woodD);
-    wq(s,0,N,WALLH-2.5,WALLH,'#1a1736');
-  }
+  poly([P(0,0),P(NX,0),P(NX,.55),P(0,.55)],'rgba(30,14,10,.2)');
+  poly([P(0,0),P(.55,0),P(.55,NX),P(0,NX)],'rgba(30,14,10,.2)');
+  // dinding belakang (gy=0): kerja 0..10, meeting 10..16
+  poly([P(0,0,WALLH),P(0,NX,WALLH),P(0,NX,0),P(0,0,0)],'#2b2a58');
+  poly([P(0,0,WALLH),P(NX,0,WALLH),P(NX,0,0),P(0,0,0)],'#37376c');
+  dindingBand('R',0,10,ZW.kerjaR,C.trim,'#6b4426','#7a5030');
+  dindingBand('R',10,16,ZW.meetR,'#d9a441','#2a3f45','#34525a');
+  // dinding kiri (gx=0): kerja 0..10, koordinator 10..16
+  dindingBand('L',0,10,ZW.kerjaL,C.trim,'#5d3b20','#6b4426');
+  dindingBand('L',10,16,ZW.koorL,'#d9a441','#3a4f73','#46618a');
   poly([P(0,0,WALLH),P(0,0,0),[P(0,0,0)[0]+1,P(0,0,0)[1]],[P(0,0,WALLH)[0]+1,P(0,0,WALLH)[1]]],'#4a4a85');
   // jendela
   const night=tod==='night';
@@ -516,9 +520,15 @@ function buildBg(){withCtx(bgx,()=>{
     wq(s,u0-.22,u1+.22,19.5,21.5,'#e6b878');
   };
   win('L',2.4,3.8);win('L',4.3,5.7);win('R',.7,2.1);win('R',7.1,8.5);
-  // papan kanban (dinding kiri)
+  win('R',10.8,12.0);win('R',14.4,15.6);win('L',14.6,15.7);
+  // papan kanban kerja (dinding kiri)
   wq('L',6.1,8.0,20,50,C.trim);wq('L',6.2,7.9,21,49,'#ebe3d1');
   wq('L',6.2,7.9,45.5,49,'#d8cdb4');
+  // papan penugasan ruang koordinator (dinding kiri, gy 10.9..14.3)
+  wq('L',10.9,14.3,13,56,'#d9a441');wq('L',11.0,14.2,14.5,54.5,'#f2ece0');wq('L',11.0,14.2,48.5,54.5,'#2a3f78');
+  for(let i=0;i<3;i++){wq('L',11.1+i*1.0,11.95+i*1.0,49.2,53.8,['#f08a3c','#a56bd1','#4cae6b'][i]);if(i<2)wq('L',12.0+i*1.0,12.05+i*1.0,15.5,47.5,'#cfc6b2')}
+  // layar meeting (dinding belakang gx 12.0..14.2)
+  wq('R',11.9,14.3,18,52,'#0e1626');wq('R',12.0,14.2,19,51,'#08111f');
 });}
 
 /* ---------- objek: perabot ---------- */
@@ -609,6 +619,24 @@ function coffee(t){
 
 /* ---------- dinding dinamis ---------- */
 const stats={bars:[1,0,1],tot:2};
+function zoneWallDynamic(t){
+  // layar meeting: kotak per agen (hidup bila rapat/ada key) + titik LIVE
+  const ag=['#f08a3c','#a56bd1','#4cae6b'];
+  for(let i=0;i<3;i++){
+    const u0=12.12+i*.68,aktif=BOTS[i].stage==='rapat'&&BOTS[i].state==='work',tdr=BOTS[i].stage==='tidur'&&BOTS[i].state==='work';
+    wq('R',u0,u0+.58,34,48,tdr?'#1c2230':aktif?lite(ag[i],.75):'#222b3f');
+    if(aktif){const h=4+Math.floor(5*hs(i*7+Math.floor(t/260)));wq('R',u0+.1,u0+.2,35,35+h,'#ffffff');wq('R',u0+.28,u0+.38,35,35+Math.max(2,9-h),'#ffffff')}
+  }
+  wq('R',12.12,14.1,22,32,'#101a2e');
+  for(let k=0;k<Math.min(4,Math.floor(CHAT.length/2));k++)wq('R',12.2,12.2+.5+hs(k+CHAT.length)*1.1,23+k*2.2,24.6+k*2.2,'#4b6aa8');
+  const lv=WP('R',13.95,49);disc(lv[0],lv[1],2,rapat?'#ef4444':'#4b2a2a');
+  // papan penugasan koordinator: catatan per agen
+  const note=['#fde68a','#fbcfe8','#bbf7d0','#bae6fd'];
+  ['raka','sinta','dimas'].forEach((id,i)=>{
+    const u0=11.1+i*1.0,list=KNOTES[id];
+    for(let k=0;k<Math.min(3,list.length);k++)wq('L',u0+.04,u0+.82,40-k*8.6,46-k*8.6,note[(i+k)%4]);
+  });
+}
 function wallDynamic(t,botsNow){
   // papan statistik (dinding kanan)
   wq('R',3.2,6.0,14.5,49,'#9b6a3a');wq('R',3.3,5.9,16.5,47.5,'#f5f1e8');wq('R',3.3,5.9,14.5,16.5,'#7a5230');
@@ -760,24 +788,27 @@ function stepMove(b,dt){
   return !b.path.length;
 }
 function release(b){if(b.seat){ST[b.seat.st].occ[b.seat.idx]=null;b.seat=null}}
-function acquire(stage){const o=ST[stage].occ;for(let i=0;i<o.length;i++)if(!o[i])return i;return -1}
+function acquire(stage,b){const o=ST[stage].occ;if(ST[stage].tetap){const i=b.i;return (!o[i]||o[i]===b.id)?i:-1}for(let i=0;i<o.length;i++)if(!o[i])return i;return -1}
+function jalanKeluar(b){const o=ST[b.seat.st];return o.keluar?o.keluar(b.seat.idx):[o.exit]}
 function goSeat(b,stage,idx){
   const S=ST[stage],wp=[];
-  if(b.seat)wp.push(ST[b.seat.st].exit);
+  if(b.seat)wp.push(...jalanKeluar(b));
   const from=b.seat;release(b);
-  wp.push(HUB,S.exit,S.seats[idx]);
+  if(S.via)wp.push(HUB,...S.via(idx));else wp.push(HUB,S.exit,S.seats[idx]);
   S.occ[idx]=b.id;b.dest={st:stage,idx};b.path=wp;b.state='walk';b.stage=stage;
   b.text='';b.last='';
 }
 function goWait(b,why){
-  const wp=[];if(b.seat)wp.push(ST[b.seat.st].exit);
+  const wp=[];if(b.seat)wp.push(...jalanKeluar(b));
   release(b);wp.push(HUB,SPOTS[b.i]);
   b.path=wp;b.dest=null;b.state='walk';b.waitWhy=why;b.text='Antre: '+why;b.last=b.text;
 }
 function tryNext(b){
   let s=paused?'istirahat':b.next;
   if(s==='cari'&&b.quota>=MAXQ){s='istirahat';b.rest=true}
-  const idx=acquire(s);
+  if(!KEYS[b.id])s='tidur';            // tanpa API key: tidur di kamar tidur
+  else if(rapat)s='rapat';
+  const idx=acquire(s,b);
   if(idx<0){
     if(b.state==='walk'&&!b.dest)return;
     if(b.state==='wait'&&!b.seat){b.text='Antre '+ST[s].name.toLowerCase();return}
@@ -788,6 +819,8 @@ function tryNext(b){
 }
 function msg(b,p){
   const s=b.stage;
+  if(s==='tidur')return['Zzz… belum punya API key',0];
+  if(s==='rapat')return[b.i===0?'Rapat bersama Pimred & Nara':'',0];
   if(s==='cari'){
     if(p<.25)return['Membuka @ntv & akun sumber…',1];
     if(p<.55)return['Memindai 14 postingan terbaru',0];
@@ -834,6 +867,13 @@ function tick(dt){
       }
     }else if(b.state==='work'){
       const S=STG[b.stage];
+      if(b.stage==='tidur'||b.stage==='rapat'){
+        const m=msg(b,0);
+        if(m[0]!==b.last){b.last=m[0];b.text=m[0];log(b,b.stage,b.stage==='tidur'?'Tidur: belum punya API key':'Masuk ruang meeting')}
+        const tetap=b.stage==='tidur'?!KEYS[b.id]:(rapat&&KEYS[b.id]);
+        if(!tetap){b.next='cari';b.rest=false;log(b,b.stage,b.stage==='tidur'?'Bangun: API key terpasang':'Rapat selesai');tryNext(b)}
+        continue;
+      }
       if(paused&&b.stage!=='istirahat'){log(b,b.stage,'Dijeda — kembali ke sofa');b.next='istirahat';tryNext(b);continue}
       const p=(rt-b.t0)/S.dur;
       const m=msg(b,Math.min(p,.999));
@@ -847,10 +887,75 @@ function tick(dt){
 }
 
 /* ---------- gambar ---------- */
+/* ---------- perabot zona baru ---------- */
+function sekat(gx,gy,w,d,frosted){
+  // tiang kayu bawah + kaca (setengah tembus) di atasnya; gx/gy..w/d = lempeng tipis
+  box(gx,gy,w,d,10,0,'#8a5a30','#6b4426','#5a381c');
+  const z0=10,z1=38,ga=frosted?'rgba(205,190,235,.46)':'rgba(170,210,255,.15)';
+  if(w<d){ // bidang sepanjang gy (muka +x terlihat)
+    const x=gx+w;poly([P(x,gy,z1),P(x,gy+d,z1),P(x,gy+d,z0),P(x,gy,z0)],ga);
+    for(let g=gy;g<=gy+d+.01;g+=1.7){const a=Math.min(g,gy+d-.05);poly([P(x,a,z1),P(x,a+.07,z1),P(x,a+.07,z0),P(x,a,z0)],'rgba(240,220,170,.55)')}
+    poly([P(gx,gy,z1+1.4),P(gx+w,gy,z1+1.4),P(gx+w,gy+d,z1+1.4),P(gx,gy+d,z1+1.4)],'#caa05a');
+  }else{ // bidang sepanjang gx (muka +y terlihat)
+    const y=gy+d;poly([P(gx,y,z1),P(gx+w,y,z1),P(gx+w,y,z0),P(gx,y,z0)],ga);
+    for(let g=gx;g<=gx+w+.01;g+=1.7){const a=Math.min(g,gx+w-.05);poly([P(a,y,z1),P(a+.07,y,z1),P(a+.07,y,z0),P(a,y,z0)],'rgba(240,220,170,.55)')}
+    poly([P(gx,gy,z1+1.4),P(gx+w,gy,z1+1.4),P(gx+w,gy+d,z1+1.4),P(gx,gy+d,z1+1.4)],'#caa05a');
+  }
+}
+function tiangPintu(gx,gy){box(gx-.07,gy-.07,.14,.14,40,0,'#c89458','#9a6c38','#7a5230')}
+function chairF(gx,gy){ // kursi menghadap -y (sandaran di sisi +y)
+  box(gx-.35,gy+.3,.7,.12,13,9,'#3a3f66','#2c3050','#23263f');
+  box(gx-.06,gy-.06,.12,.12,6,0,'#2a2a30','#2a2a30','#1b1b20');
+  box(gx-.38,gy-.38,.76,.76,2.6,6.4,'#4a5088','#363b69','#2c3050');
+}
+function meja(gx,gy,w,d,cT,cL,cR){
+  const lg=(x,y)=>box(x,y,.14,.14,7,0,'#5b3419','#5b3419','#3f2411');
+  lg(gx+.1,gy+.1);lg(gx+w-.24,gy+.1);lg(gx+.1,gy+d-.24);lg(gx+w-.24,gy+d-.24);
+  box(gx,gy,w,d,2,7,cT,cL,cR);
+}
+function mejaRapat(t){
+  meja(11.4,3.6,3.5,3.0,'#e6b46a','#b9763a','#8e5528');
+  box(11.5,3.7,3.3,2.8,.6,9,'#f0c88a','#e6b46a','#e6b46a');
+  for(let i=0;i<3;i++){const c=P(SEAT_RAPAT[i][0]+.1,4.4,9.8);px(c[0]-3,c[1]-1,6,2,'#f6f1e4');px(c[0]-3,c[1]-1,1,2,BOTS[i].col)}
+  const c2=P(13.1,5.3,9.8);px(c2[0]-2,c2[1]-3,4,3,'#f4f0e6');px(c2[0]-1,c2[1]-4,2,1,'#6a3b1b');
+}
+function kasur(i,t){
+  const [bx,by]=BED[i];
+  box(bx,by-.05,1.3,.12,7,0,'#6b4426','#4b2f18','#3f2411');                 // papan kepala
+  box(bx,by,1.3,2.4,2.5,0,'#a8642f','#7a4420','#6e3b1c');                    // rangka
+  box(bx+.06,by+.06,1.18,2.28,2.2,2.5,'#ece8f4','#cfc9de','#bdb6cf');       // kasur
+  box(bx+.18,by+.12,.94,.5,1.2,4.7,'#ffffff','#e0dce9','#cfc9de');          // bantal
+  const b=BOTS[i],tidur=b.state==='work'&&b.stage==='tidur';
+  box(bx+.06,by+(tidur?.78:1.7),1.18,tidur?1.5:.6,1.4,4.7,tidur?b.col:'#9aa6c4',tidur?lite(b.col,.8):'#7f8bab',tidur?lite(b.col,.65):'#6b7796');  // selimut
+  if(tidur){
+    const [hx,hy]=P(bx+.72,by+.42,6.4);
+    const L=b.look,sk=L.skin,rr=[[hx-4,hy-6,8,6,sk],[hx-4,hy-7,8,2,L.hairC],[hx-5,hy-5,1,3,L.hairC],[hx+4,hy-5,1,3,L.hairC]];
+    ctx.fillStyle=OUT;for(const r of rr)ctx.fillRect(r[0]-1,r[1]-1,r[2]+2,r[3]+2);
+    for(const r of rr){ctx.fillStyle=r[4];ctx.fillRect(r[0],r[1],r[2],r[3])}
+    px(hx-3,hy-3,2,1,'#2a1a1a');px(hx+1,hy-3,2,1,'#2a1a1a');px(hx-1,hy-1,2,1,'#a8553f');
+    b.sx=hx;b.sy=hy-4;
+    for(let k=0;k<3;k++){ // huruf z naik
+      const f=((t/900)+k*.33)%1,zx=hx+5+k*3+Math.round(f*3),zy=hy-9-Math.round(f*12);
+      ctx.fillStyle='rgba(226,232,240,'+(1-f)+')';ctx.fillRect(zx,zy,3,1);ctx.fillRect(zx+2,zy+1,1,1);ctx.fillRect(zx+1,zy+2,1,1);ctx.fillRect(zx,zy+3,3,1);
+    }
+  }
+}
+function nakas(gx,gy,t){box(gx,gy,.55,.55,5,0,'#a8642f','#7a4420','#6e3b1c');lamp(gx+.1,gy+.1,5)}
+function kdesk(t){
+  const [gx,gy,w,d]=KDESK.d;
+  const lg=(x,y)=>box(x,y,.14,.14,8,0,'#5b3419','#5b3419','#3f2411');
+  lg(gx+.05,gy+.05);lg(gx+w-.2,gy+.05);lg(gx+.05,gy+d-.2);lg(gx+w-.2,gy+d-.2);
+  box(gx,gy,w,d,3,8,C.dT,C.dL,C.dR);
+  const on=NARA.state==='desk';
+  for(let i=0;i<2;i++)monitor(KDESK.mon[i][0],KDESK.mon[i][1],11,i?'#fb7185':'#38bdf8',on,t,60+i*7);
+  lamp(8.6,gy+.3,11);
+}
+
 function drawObjects(t){
   LAMPS.length=0;
   const O=[],add=(k,f)=>O.push({k,f});
-  add(1.3+8.2,()=>shelf(0,.3,1.4));       // rak atas
+  /* ruang kerja (asli) */
+  add(1.3+8.2,()=>shelf(0,.3,1.4));
   add(1+10.3,()=>shelf(0,8.2,1.4));
   add(9.2+.2,()=>plant(9.3,.35));
   add(.35+9.3,()=>plant(.3,9.3));
@@ -861,19 +966,48 @@ function drawObjects(t){
     add(s[0]+s[1]-.25,()=>chair(s[0],s[1],k==='posting'?'x':'y'));
   }
   add(14,sofaBack);add(18.4,sofaFront);add(7.9+7.0,table);add(9.75+5.5,()=>coffee(t));
+  /* ruang meeting */
+  add(11.4+3.5+3.6+3.0,()=>mejaRapat(t));
+  for(let i=0;i<3;i++)add(SEAT_RAPAT[i][0]+SEAT_RAPAT[i][1]-.25,()=>chair(SEAT_RAPAT[i][0],SEAT_RAPAT[i][1],'y'));
+  add(12.6+7.2+.5,()=>chairF(12.6,7.2));add(13.9+7.2+.5,()=>chairF(13.9,7.2));
+  add(15.3+.4+.3,()=>plant(15.3,.45));add(15.4+8.9,()=>plant(15.4,8.9));
+  /* ruang koordinator */
+  const [dg,dy,dw,dd]=KDESK.d;add(dg+dw+dy+dd,()=>kdesk(t));
+  add(KDESK.seat[0]+KDESK.seat[1]-.25,()=>chair(KDESK.seat[0],KDESK.seat[1],'y'));
+  add(9.3+15.3,()=>plant(9.3,15.3));add(.35+15.3,()=>plant(.4,15.3));add(9.2+10.6,()=>plant(9.3,10.7));
+  /* kamar tidur */
+  for(let i=0;i<3;i++)add(BED[i][0]+1.3+BED[i][1]+2.4,()=>kasur(i,t));
+  add(15.1+11.6+.55,()=>nakas(15.1,11.6,t));add(15.4+15.4,()=>plant(15.4,15.4));
+  /* sekat kaca (pintu: celah) */
+  const sk=(a,b,c,d,fr)=>add(a+c+b+d+.2,()=>sekat(a,b,c,d,fr));
+  sk(9.94,0,.12,4.3,false);sk(9.94,5.9,.12,4.1,false);                     // kerja | meeting
+  sk(9.94,10,.12,6,true);                                                    // koordinator | tidur
+  sk(0,9.94,2.2,.12,false);sk(3.6,9.94,6.4,.12,false);                      // kerja | koordinator
+  sk(10,9.94,.4,.12,true);sk(11.8,9.94,4.2,.12,true);                        // meeting | tidur
+  [[9.94+.06,4.3],[9.94+.06,5.9],[2.2,9.94+.06],[3.6,9.94+.06],[10.4,9.94+.06],[11.8,9.94+.06]].forEach(p=>add(p[0]+p[1]+.3,()=>tiangPintu(p[0],p[1])));
+  /* orang */
   for(const b of BOTS){
+    if(b.state==='work'&&b.stage==='tidur')continue;       // yang tidur digambar bersama kasurnya
     add(b.x+b.y+.01,()=>{
       const sitting=b.state==='work';
-      const raise=sitting?(b.stage==='istirahat'?3:2):0;
-      const pose=sitting?(b.stage==='istirahat'?'sit':'type'):b.state==='walk'?'walk':'idle';
+      const raise=sitting?(b.stage==='istirahat'||b.stage==='rapat'?3:2):0;
+      const pose=sitting?(b.stage==='istirahat'||b.stage==='rapat'?'sit':'type'):b.state==='walk'?'walk':'idle';
       const [fx,fy]=P(b.x,b.y,0);
       if(selected===b.id){ctx.fillStyle='rgba(253,230,138,.75)';ctx.fillRect(fx-9,fy,18,1);ctx.fillRect(fx-7,fy+1,14,1);ctx.fillRect(fx-9,fy-1,1,1);ctx.fillRect(fx+8,fy-1,1,1)}
-      drawChar(fx,fy,Object.assign({t,pose,raise,dx:b.dirx>0?1:-1,back:b.back&&pose==='walk',talk:!!b.text&&b.state==='work'},b.look));
+      drawChar(fx,fy,Object.assign({t,pose,raise,dx:b.dirx>0?1:-1,back:b.back&&pose==='walk',talk:(!!b.text&&b.state==='work')||(b.kbub&&rt<b.kbub.until)},b.look));
       b.sx=fx;b.sy=fy-raise;
     });
   }
+  add(NARA.x+NARA.y+.02,()=>{
+    const sit=NARA.state==='desk',walk=NARA.state==='walk',rap=NARA.state==='rapat';
+    const [fx,fy]=P(NARA.x,NARA.y,0);
+    drawChar(fx,fy,Object.assign({t,pose:sit?'type':rap?'sit':walk?'walk':'idle',raise:sit?2:rap?3:0,dx:NARA.dirx>0?1:-1,back:(NARA.back&&walk)||rap,talk:NARA.talkT>rt},KO.look));
+    NARA.sx=fx;NARA.sy=fy-(sit?2:rap?3:0);
+  });
   O.sort((a,b)=>a.k-b.k);
   for(const o of O)o.f();
+  if(NARA.paper){const p=NARA.paper,u=Math.min(1,(rt-p.t0)/p.dur),e=u*u*(3-2*u),z=16+Math.sin(u*Math.PI)*14;
+    const q=P(p.x0+(p.x1-p.x0)*e,p.y0+(p.y1-p.y0)*e,z);px(q[0]-3,q[1]-4,7,5,'#f8f3e4');px(q[0]-3,q[1]-4,7,1,'#fb7185');px(q[0]-2,q[1]-2,4,1,'#8a8070');px(q[0]-2,q[1],3,1,'#8a8070')}
 }
 function drawBeams(t){
   if(tod!=='day')return;
@@ -914,6 +1048,7 @@ function frame(t){
   ctx.clearRect(0,0,W,H);
   ctx.drawImage(bgc,0,0);
   wallDynamic(t,BOTS);
+  zoneWallDynamic(t);
   drawBeams(t);
   drawObjects(t);
   drawNight();
@@ -930,8 +1065,12 @@ ORDER.forEach(k=>{
   const S=ST[k],p=document.createElement('div');p.className='pill';p.style.setProperty('--c',STG[k].col);
   p.innerHTML='<i></i>'+S.name;ov.appendChild(p);pills[k]=p;
 });
+const narTag=document.createElement('div');narTag.className='tag';narTag.style.setProperty('--c','#fb7185');
+narTag.innerHTML='<div class="bub hid"></div><div class="nm"><i></i>Nara</div>';ov.appendChild(narTag);
+const zpills=[['RUANG KERJA',[5.0,9.55],'#f59e0b'],['RUANG MEETING',[15.45,7.6],'#fb7185'],['RUANG KOORDINATOR',[2.2,15.5],'#38bdf8'],['KAMAR TIDUR',[14.2,15.6],'#94a3b8']].map(([n,g,c])=>{
+  const p=document.createElement('div');p.className='pill busy';p.style.setProperty('--c',c);p.innerHTML='<i></i>'+n;ov.appendChild(p);return{p,g}});
 const legend=$('#legend');
-ORDER.forEach(k=>{
+[...ORDER,'rapat','tidur'].forEach(k=>{
   const d=document.createElement('div');d.className='lg';d.style.setProperty('--c',STG[k].col);
   d.innerHTML='<b>'+STG[k].lab+'</b><span id="lg_'+k+'">—</span>';legend.appendChild(d);
 });
@@ -942,7 +1081,7 @@ function placeOverlay(){
     if(b.sx==null)continue;
     t.style.left=(b.sx*sc)+'px';t.style.top=((b.sy-29)*sc)+'px';
     const bub=t.querySelector('.bub');
-    const txt=(b.state==='work'&&b.stage==='istirahat'&&(paused||b.rest))?'':b.text;
+    const txt=(b.kbub&&rt<b.kbub.until)?b.kbub.txt:((b.state==='work'&&b.stage==='istirahat'&&(paused||b.rest))?'':b.text);
     if(txt){bub.textContent=txt;bub.classList.remove('hid');bub.style.setProperty('--c',STG[b.stage].col);bub.style.fontSize=Math.max(9,Math.min(12,sc*3.3))+'px'}
     else bub.classList.add('hid');
     t.querySelector('.nm').classList.toggle('sel',selected===b.id);
@@ -955,6 +1094,12 @@ function placeOverlay(){
     pills[k].style.fontSize=Math.max(8,sc*2.9)+'px';
     pills[k].classList.toggle('busy',S.occ.some(Boolean));
   }
+  // Nara + nama zona
+  if(NARA.sx!=null){narTag.style.left=(NARA.sx*sc)+'px';narTag.style.top=((NARA.sy-29)*sc)+'px';
+    const bub=narTag.querySelector('.bub'),tx=NARA.talkT>rt?NARA.talk:'';
+    if(tx){bub.textContent=tx;bub.classList.remove('hid');bub.style.setProperty('--c','#fb7185');bub.style.fontSize=Math.max(9,Math.min(12,sc*3.3))+'px'}else bub.classList.add('hid');
+    narTag.style.zIndex=Math.round(NARA.y*10+NARA.x*10)+10}
+  for(const z of zpills){const p=P(z.g[0],z.g[1],0);z.p.style.left=(p[0]*sc)+'px';z.p.style.top=(p[1]*sc)+'px';z.p.style.fontSize=Math.max(8,sc*2.9)+'px'}
 }
 function avatar(b,c){
   const x=c.getContext('2d');x.setTransform(1,0,0,1,0,0);x.clearRect(0,0,c.width,c.height);
@@ -972,11 +1117,13 @@ function renderCards(){
       <div class="n">${b.nama}<small>${b.peran}</small><span class="chip" style="--c:${col}">${paused&&b.stage==='istirahat'?'Dijeda':lab}</span></div>
       <div class="st">${b.text||'—'}</div>
       <div class="mut">${b.handle} · ${b.plat}</div>
+      <div class="mut"><span class="key ${KEYS[b.id]?'ada':'tak'}">${KEYS[b.id]?'otak aktif':'tanpa API key'}</span> <span class="lnk" data-k="${b.id}">${KEYS[b.id]?'Cabut key':'Pasang key'} (contoh)</span></div>
       <div class="q"><div style="width:${Math.min(100,b.quota/MAXQ*100)}%"></div></div>
       <div class="mut" style="display:flex;justify-content:space-between;align-items:center"><span>Post hari ini ${b.quota}/${MAXQ} · <span class="lnk" data-d="${b.id}">Detail</span></span><span class="mode ${b.mode}" data-m="${b.id}">${b.mode==='oto'?'Otomatis':'Perlu ACC'}</span></div>
     </div>`;
     el.onclick=e=>{
       if(e.target.dataset.d){openDetail(e.target.dataset.d);return}
+      if(e.target.dataset.k){setKey(e.target.dataset.k,!KEYS[e.target.dataset.k]);return}
       if(e.target.dataset.m){b.mode=b.mode==='oto'?'acc':'oto';renderCards();return}
       selected=selected===b.id?null:b.id;renderCards();
     };
@@ -985,9 +1132,10 @@ function renderCards(){
   }
   const tot=BOTS.reduce((s,b)=>s+b.quota,0);
   $('#hudB').textContent='Post hari ini '+tot+'/'+(MAXQ*BOTS.length);
-  $('#hudA').textContent=paused?'Semua bot dijeda':BOTS.length+' bot aktif';
+  const tdr=BOTS.filter(b=>!KEYS[b.id]).length;
+  $('#hudA').textContent=paused?'Semua bot dijeda':(BOTS.length-tdr)+' bot aktif'+(tdr?' · '+tdr+' tidur':'')+(rapat?' · rapat':'');
   $('#hudC').textContent='Render: '+BOTS.filter(b=>b.state==='work'&&b.stage==='edit').length+' berjalan · '+BOTS.filter(b=>b.state==='wait').length+' antre';
-  for(const k of ORDER){
+  for(const k of [...ORDER,'rapat','tidur']){
     const who=BOTS.filter(b=>b.state==='work'&&b.stage===k).map(b=>b.nama);
     $('#lg_'+k).textContent=who.length?who.join(', '):'kosong';
   }
@@ -1019,6 +1167,12 @@ cv.addEventListener('click',e=>{
   const r=cv.getBoundingClientRect(),sc=r.width/W,x=(e.clientX-r.left)/sc,y=(e.clientY-r.top)/sc;
   let hit=null;
   for(const b of BOTS){if(b.sx!=null&&Math.abs(x-b.sx)<9&&y<b.sy+3&&y>b.sy-27)hit=b}
+  if(!hit){
+    const a=(x-OX)/16,bb=(y-OY)/8,gx=(a+bb)/2,gy=(bb-a)/2;
+    if(gx>10&&gx<16&&gy>0&&gy<10){show('chat');return}
+    if(gx>0&&gx<10&&gy>10&&gy<16){const k=$('#kcard');k.scrollIntoView({behavior:'smooth',block:'center'});k.parentElement.style.outline='2px solid #fb7185';setTimeout(()=>k.parentElement.style.outline='',1400);return}
+    if(gx>10&&gx<16&&gy>10&&gy<16){toast('Kamar tidur: agen tanpa API key beristirahat di sini. Pasang key lewat kartu agen.');return}
+  }
   selected=hit?(selected===hit.id?null:hit.id):null;renderCards();
 });
 
@@ -1028,9 +1182,8 @@ let last=performance.now(),cardT=0;
 function loop(now){
   const dt=Math.min(.1,(now-last)/1000)*speed;last=now;
   rt+=dt;tick(dt);
-  if(view==='ruang'){frame(now);placeOverlay();}
-  else if(view==='koordinator'){kframe(now);kOverlay();}
   tickK(dt);
+  if(view==='ruang'){frame(now);placeOverlay();}
   cardT+=dt;if(cardT>.5){cardT=0;renderCards()}
   requestAnimationFrame(loop);
 }
@@ -1047,7 +1200,7 @@ let toastT=0;
 function toast(m){const e=$('#toast');e.textContent=m;e.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>e.classList.remove('show'),2400)}
 
 /* ---------- navigasi ---------- */
-const VIEWS=['ruang','detail','acc','sumber','chat','koordinator'];
+const VIEWS=['ruang','detail','acc','sumber','chat'];
 let view='ruang',detId='raka';
 function show(v){
   if(!VIEWS.includes(v))v='ruang';
@@ -1059,7 +1212,7 @@ function show(v){
   if(v==='acc')renderAcc();
   if(v==='sumber')renderSumber();
   if(v==='chat'){unread=0;chatBadge();renderChat();const m=$('#msgs');m.scrollTop=m.scrollHeight}
-  if(v==='koordinator')renderK();
+  if(v==='ruang')renderK();
 }
 $('#tabs').addEventListener('click',e=>{const b=e.target.closest('button');if(b)show(b.dataset.v)});
 addEventListener('hashchange',()=>show(location.hash.slice(1)));
@@ -1127,6 +1280,7 @@ function renderDetail(){
         <dt>Koneksi</dt><dd><span class="s ok">Terhubung</span> token sehat</dd>
         <dt>Status</dt><dd>${stLab}${b.text?' · '+esc(b.text):''}</dd>
         <dt>Mode</dt><dd><button class="mode ${b.mode}" id="dMode" type="button">${b.mode==='oto'?'Otomatis':'Perlu ACC'}</button></dd>
+        <dt>Otak</dt><dd><span class="key ${KEYS[b.id]?'ada':'tak'}">${KEYS[b.id]?'API key terpasang':'tanpa API key · tidur'}</span> <button class="btn sm" id="dKey" type="button">${KEYS[b.id]?'Cabut key':'Pasang key'} (contoh)</button></dd>
         <dt>ID mesin</dt><dd class="mut">90000000${b.i+2} (contoh)</dd>
       </dl>
       <button class="btn dan sm" id="dJeda" type="button">${b.jeda?'Lanjutkan bot ini':'Jeda bot ini'}</button>
@@ -1153,6 +1307,7 @@ function renderDetail(){
   </div>`;
   const pc=$('#dPort'),px2=pc.getContext('2d');
   withCtx(px2,()=>drawChar(14,36,Object.assign({t:0,pose:'idle',dx:1},b.look)));
+  $('#dKey').onclick=()=>{setKey(b.id,!KEYS[b.id]);renderDetail()};
   $('#dMode').onclick=()=>{b.mode=b.mode==='oto'?'acc':'oto';toast(b.nama+': mode '+(b.mode==='oto'?'Otomatis':'Perlu ACC'));renderDetail();renderCards()};
   $('#dJeda').onclick=()=>{b.jeda=!b.jeda;toast(b.nama+(b.jeda?' dijeda':' dilanjutkan')+' (contoh)');renderDetail()};
 }
@@ -1249,73 +1404,85 @@ $('#qMin').onclick=()=>{MAXQ=Math.max(1,MAXQ-1);renderSumber();renderCards()};
 $('#qPlus').onclick=()=>{MAXQ=Math.min(6,MAXQ+1);renderSumber();renderCards()};
 
 /* ============================================================
-   TAHAP 3 — Room Chat & Ruang Koordinator (mockup)
+   TAHAP 3 — Chat (ruang meeting) & Koordinator Nara di dunia yang sama
    Agen hanya BERBICARA; Nara hanya MENGUSULKAN; Anda yang menyetujui.
+   Agen tanpa API key TIDUR di kamar tidur dan tidak bisa diberi tugas.
    ============================================================ */
 const KO={id:'nara',nama:'Nara',peran:'Koordinator Redaksi',col:'#fb7185',
   persona:'Tenang dan adil. Membagi tugas menurut beban dan keahlian, tidak pernah menjanjikan yang tidak bisa ditepati, dan selalu menyebut alasannya.',
   look:{shirt:'#2f4b8a',shade:'#223a70',pants:'#23273d',skin:'#d8a47c',hairC:'#1d1a24',hair:'short',glass:true,badge:'#fb7185',cup:true}};
 const AKSI={kerjakan_url:'Kerjakan tautan',cari_sekarang:'Cari sekarang',ubah_kuota:'Ubah kuota',jeda:'Jeda bot',lanjut:'Lanjutkan bot'};
-const KEYS={raka:true,sinta:true,dimas:false};
 const botOf=id=>BOTS.find(b=>b.id===id);
 const nowS=()=>fmt(simT);
+const KDESK={d:[6.2,12.0,2.6,1],mon:[[6.85,12.3],[7.5,12.3]],seat:[6.7,11.45]};
+const KNOTES={raka:[],sinta:[],dimas:[]};
+const BOARD=[1.9,12.6];
+const NARA={x:KDESK.seat[0],y:KDESK.seat[1],path:[],state:'desk',queue:[],t0:0,cur:null,talk:'',talkT:0,dirx:1,back:false,paper:null,idleT:0,msgI:0,genT:0,next:''};
+function setKey(id,on){
+  KEYS[id]=on;const b=botOf(id);
+  toast(b.nama+(on?': API key terpasang, bangun dan mulai bekerja':': API key dicabut, kembali tidur')+' (contoh)');
+  klog(b.nama+(on?' bangun (key terpasang)':' tidur (key dicabut)'));
+  renderCards();if(view==='chat')renderChat();renderK();
+}
+$('#rapatBtn').onclick=function(){
+  rapat=!rapat;this.classList.toggle('on',rapat);this.textContent=rapat?'Bubarkan rapat':'Panggil rapat';
+  toast(rapat?'Rapat dimulai: agen yang punya API key menuju ruang meeting (contoh)':'Rapat selesai: agen kembali bekerja');
+  renderCards();
+};
 
 /* ---------- usulan ---------- */
-let propSeq=11,koorDone=0;
+let propSeq=11,koorDone=0,tplI=0;
 const PROP=[],KLOGS=[];
-function klog(t){KLOGS.unshift({w:nowS(),t});if(KLOGS.length>30)KLOGS.pop();if(view==='koordinator')renderK()}
+function klog(t){KLOGS.unshift({w:nowS(),t});if(KLOGS.length>30)KLOGS.pop();renderKHist()}
 const TPL=[
-  b=>({bot:'raka',aksi:'kerjakan_url',judul:'Kerjakan video banjir Pantura',param:'youtu.be/dQw4w9WgXcQ · dari @ntv',alasan:'Raka belum punya tugas dan kuotanya tersisa '+(MAXQ-botOf('raka').quota)+'. Topik banjir sedang naik di 3 sumber.',
+  ()=>({bot:'raka',aksi:'kerjakan_url',judul:'Kerjakan video banjir Pantura',param:'youtu.be/dQw4w9WgXcQ · dari @ntv',alasan:'Raka belum punya tugas dan kuotanya tersisa '+(MAXQ-botOf('raka').quota)+'. Topik banjir sedang naik di 3 sumber.',
     pagar:[['ok','Kuota tersisa'],['ok','Tautan belum pernah dipakai'],['ok','Sidik visual: tidak ada kembaran'],['warn','Hasil tetap menunggu ACC']]}),
-  b=>({bot:'sinta',aksi:'cari_sekarang',judul:'Cari video sekarang',param:'semua sumber aktif Sinta',alasan:'Kandidat Sinta tinggal 1 dan sumber terakhir dipanen 40 menit lalu.',
+  ()=>({bot:'sinta',aksi:'cari_sekarang',judul:'Cari video sekarang',param:'semua sumber aktif Sinta',alasan:'Kandidat Sinta tinggal 1 dan sumber terakhir dipanen 40 menit lalu.',
     pagar:[['ok','Dalam jam aktif'],['ok','Tidak dijeda'],['warn','Memicu panen (beban yt-dlp)']]}),
-  b=>({bot:'dimas',aksi:'ubah_kuota',judul:'Turunkan kuota Dimas',param:'kuota '+MAXQ+' → '+Math.max(1,MAXQ-1)+' per hari',alasan:'Dua video Dimas ditolak di ACC hari ini; kurangi sementara sampai kualitasnya pulih.',
+  ()=>({bot:'sinta',aksi:'ubah_kuota',judul:'Turunkan kuota Sinta',param:'kuota '+MAXQ+' → '+Math.max(1,MAXQ-1)+' per hari',alasan:'Dua video Sinta ditolak di ACC hari ini; kurangi sementara sampai kualitasnya pulih.',
     pagar:[['ok','Dalam batas 1–6'],['warn','Mengubah perilaku bot — wajib persetujuan']]}),
-  b=>({bot:'raka',aksi:'jeda',judul:'Jeda Raka 30 menit',param:'sampai '+fmt(simT+1800),alasan:'Slot render penuh (10/10); beri ruang untuk render anggota.',
+  ()=>({bot:'raka',aksi:'jeda',judul:'Jeda Raka 30 menit',param:'sampai '+fmt(simT+1800),alasan:'Slot render penuh (10/10); beri ruang untuk render anggota.',
     pagar:[['ok','Jeda otomatis berakhir'],['warn','Bot berhenti mengambil tugas baru']]})
 ];
-let tplI=0;
 function bukaUsulan(o){
-  const open=PROP.filter(p=>p.st==='menunggu').length;
-  if(open>=3)return null;
+  if(PROP.filter(p=>p.st==='menunggu').length>=3)return null;
   const p=Object.assign({id:++propSeq,st:'menunggu',w:nowS(),by:'koor'},o);
   PROP.unshift(p);propBadge();
   chatAdd({k:'koor',teks:'Saya mengusulkan pembagian tugas berikut. Menunggu persetujuan Anda.',prop:p.id});
   klog('Mengusulkan #'+p.id+': '+AKSI[p.aksi]+' → '+botOf(p.bot).nama);
-  K.talk='Usulan #'+p.id+' menunggu Pimred';K.talkT=rt+5;
+  NARA.talk='Usulan #'+p.id+' menunggu Pimred';NARA.talkT=rt+5;renderK();
   return p;
 }
-function propBadge(){const n=PROP.filter(p=>p.st==='menunggu').length;$('#propN').textContent=n?String(n):'';$('#kHudB').textContent='Usulan menunggu '+n}
+function propBadge(){const n=PROP.filter(p=>p.st==='menunggu').length;$('#kHudB')&&0;return n}
 function putus(id,jenis){
   const p=PROP.find(x=>x.id===id);if(!p||p.st!=='menunggu')return;
   const b=botOf(p.bot);
   if(jenis==='setuju'){
+    if(!KEYS[p.bot]){toast(b.nama+' sedang tidur (belum punya API key): tidak bisa diberi tugas');return}
     p.st='disetujui';koorDone++;
     klog('Disetujui #'+p.id+' ('+AKSI[p.aksi]+' → '+b.nama+')');
-    chatAdd({k:'sis',teks:'Usulan #'+p.id+' disetujui Pimred. '+(p.aksi==='kerjakan_url'?'Nara mengantar surat tugas ke '+b.nama+'.':'Dijalankan lewat pagar yang berlaku.')});
-    K.queue.push(p);
-    toast('Disetujui · Nara mengantar tugas ke '+b.nama+' (contoh)');
+    chatAdd({k:'sis',teks:'Usulan #'+p.id+' disetujui Pimred. Nara mengantar surat tugas ke '+b.nama+'.'});
+    NARA.queue.push(p);toast('Disetujui · Nara mengantar tugas ke '+b.nama+' (contoh)');
   }else{
     p.st='ditolak';klog('Ditolak #'+p.id);
-    chatAdd({k:'sis',teks:'Usulan #'+p.id+' ditolak Pimred. Tidak ada yang dijalankan.'});
-    toast('Usulan ditolak (contoh)');
+    chatAdd({k:'sis',teks:'Usulan #'+p.id+' ditolak Pimred. Tidak ada yang dijalankan.'});toast('Usulan ditolak (contoh)');
   }
-  propBadge();renderK();renderChat();
+  renderK();renderChat();
 }
 
-/* ---------- chat ---------- */
-const CHAT=[];let chatSeq=0,pendingReply=0;
+/* ---------- chat (wujud ruang meeting) ---------- */
+const CHAT=[];let chatSeq=0,pendingReply=0,unread=0;
+function chatBadge(){$('#chatN').textContent=unread?String(unread):''}
 function chatAdd(m){
   m.id=++chatSeq;m.w=nowS();CHAT.push(m);if(CHAT.length>120)CHAT.shift();
   if(view!=='chat'&&(m.k==='bot'||m.k==='koor'))unread++;
   chatBadge();if(view==='chat')renderChat();
 }
-let unread=0;
-function chatBadge(){$('#chatN').textContent=unread?String(unread):''}
 function propCard(p){
-  const b=botOf(p.bot);
-  const fl=p.pagar.map(f=>`<span class="s ${f[0]}">${esc(f[1])}</span>`).join('');
-  const act=p.st==='menunggu'?`<div class="acts"><button class="btn ok sm" data-pa="setuju" data-pid="${p.id}" type="button">Setujui</button><button class="btn dan sm" data-pa="tolak" data-pid="${p.id}" type="button">Tolak</button></div>`:'';
+  const b=botOf(p.bot),tdr=!KEYS[p.bot];
+  const pagar=(tdr&&p.st==='menunggu'?[['bad','Bot tertidur: belum punya API key'],...p.pagar]:p.pagar);
+  const fl=pagar.map(f=>`<span class="s ${f[0]}">${esc(f[1])}</span>`).join('');
+  const act=p.st==='menunggu'?`<div class="acts"><button class="btn ok sm" data-pa="setuju" data-pid="${p.id}" type="button" ${tdr?'disabled title="Bot tertidur: pasang API key dulu"':''}>Setujui</button><button class="btn dan sm" data-pa="tolak" data-pid="${p.id}" type="button">Tolak</button></div>`:'';
   return `<div class="prop"><h4><span class="aksi">${AKSI[p.aksi]}</span><span style="color:${b.col}">${b.nama}</span><span class="pst ${p.st}">${p.st==='menunggu'?'Menunggu Anda':p.st==='disetujui'?'Disetujui':'Ditolak'}</span></h4>
     <div><b>${esc(p.judul)}</b> <span class="mut">· ${esc(p.param)}</span></div><div class="why">Alasan Nara: ${esc(p.alasan)}</div><div class="flags">${fl}</div>${act}</div>`;
 }
@@ -1328,11 +1495,11 @@ function renderChat(){
     return `<div class="msg ${m.k==='m'?'m':''}" style="--c:${who.c}"><div class="who">${who.n}<span class="rl">${who.r}</span><time>${m.w}</time></div><p>${esc(m.teks)}</p>${pr}</div>`;
   }).join('')+(pendingReply>0?'<div class="typing"><i></i><i></i><i></i> agen sedang menulis…</div>':'');
   if(near||!el.dataset.init){el.scrollTop=el.scrollHeight;el.dataset.init='1'}
-  $('#mnt').innerHTML=[...BOTS.map(b=>({n:b.nama,c:b.col,k:KEYS[b.id]})),{n:KO.nama,c:KO.col,k:true},{n:'semua',c:'#a79fb2',k:true}].map(x=>`<button type="button" data-at="${x.n}" aria-label="Sebut ${x.n}"><i style="--c:${x.c}"></i>@${x.n}${x.k?'':' · tanpa key'}</button>`).join('');
+  $('#mnt').innerHTML=[...BOTS.map(b=>({n:b.nama,c:b.col,k:KEYS[b.id]})),{n:KO.nama,c:KO.col,k:true},{n:'semua',c:'#a79fb2',k:true}].map(x=>`<button type="button" data-at="${x.n}" aria-label="Sebut ${x.n}"><i style="--c:${x.c}"></i>@${x.n}${x.k?'':' · tidur'}</button>`).join('');
   const r=$('#rost');r.innerHTML='';
   for(const o of [{...KO,koor:true},...BOTS]){
     const d=document.createElement('div');d.className='ros';
-    const st=o.koor?'Menimbang usulan':o.state==='work'?STG[o.stage].lab:o.state==='walk'?'Berjalan':'Menunggu';
+    const st=o.koor?'Di ruang koordinator':!KEYS[o.id]?'Tidur di kamar tidur':o.state==='work'?STG[o.stage].lab:o.state==='walk'?'Berjalan':'Menunggu';
     const key=o.koor||KEYS[o.id];
     d.innerHTML=`<canvas width="24" height="36"></canvas><div><b style="color:${o.col}">${o.nama}<span class="key ${key?'ada':'tak'}">${key?'otak aktif':'tanpa API key'}</span></b><span class="mut">${o.peran} · ${st}</span></div>`;
     r.appendChild(d);avatar(o,d.querySelector('canvas'));
@@ -1369,12 +1536,17 @@ function jawabNara(teks){
   const t=teks.toLowerCase();
   const url=(teks.match(/(?:https?:\/\/)?(?:youtu\.be|www\.youtube\.com|www\.tiktok\.com|www\.instagram\.com)\/[^\s]+/i)||[])[0];
   const sebutBot=BOTS.find(b=>t.includes('@'+b.nama.toLowerCase())||new RegExp('\\b'+b.nama.toLowerCase()+'\\b').test(t));
-  const pilih=sebutBot||[...BOTS].sort((a,b)=>a.quota-b.quota)[0];
-  if(/jeda|istirahat/.test(t)){const b=sebutBot||BOTS[1];return{teks:'Baik, saya usulkan jeda untuk '+b.nama+'.',o:{bot:b.id,aksi:'jeda',judul:'Jeda '+b.nama+' 30 menit',param:'sampai '+fmt(simT+1800),alasan:'Atas permintaan Pimred.',pagar:[['ok','Jeda otomatis berakhir'],['warn','Bot berhenti mengambil tugas baru']]}}}
-  if(/lanjut|aktifkan/.test(t)){const b=sebutBot||BOTS[1];return{teks:'Saya usulkan '+b.nama+' dilanjutkan.',o:{bot:b.id,aksi:'lanjut',judul:'Lanjutkan '+b.nama,param:'cabut jeda',alasan:'Atas permintaan Pimred.',pagar:[['ok','Dalam jam aktif']]}}}
-  if(/kuota/.test(t)){const b=pilih;return{teks:'Saya usulkan perubahan kuota untuk '+b.nama+'.',o:{bot:b.id,aksi:'ubah_kuota',judul:'Ubah kuota '+b.nama,param:'kuota '+MAXQ+' → '+Math.min(6,MAXQ+1),alasan:'Atas permintaan Pimred; '+b.nama+' baru memakai '+b.quota+'/'+MAXQ+'.',pagar:[['ok','Dalam batas 1–6'],['warn','Mengubah perilaku bot — wajib persetujuan']]}}}
-  if(url||/kerjakan|berita|banjir|video|tautan|link/.test(t)){const b=pilih;return{teks:'Siap. Saya pilih '+b.nama+' (beban paling ringan: kuota '+b.quota+'/'+MAXQ+'). Usulannya:',o:{bot:b.id,aksi:'kerjakan_url',judul:url?'Kerjakan tautan dari Pimred':'Kerjakan topik dari Pimred',param:url?url.slice(0,60):(teks.replace(/@\w+/g,'').trim().slice(0,60)||'topik dari chat'),alasan:'Permintaan langsung Pimred; '+b.nama+' paling longgar saat ini.',pagar:[['ok','Kuota tersisa'],['ok','Anti-tabrakan akan diperiksa sebelum diklaim'],['warn','Hasil tetap menunggu ACC']]}}}
-  if(/cari|panen|sumber/.test(t)){const b=pilih;return{teks:'Saya usulkan '+b.nama+' mencari video sekarang.',o:{bot:b.id,aksi:'cari_sekarang',judul:'Cari video sekarang',param:'semua sumber aktif '+b.nama,alasan:'Atas permintaan Pimred.',pagar:[['ok','Dalam jam aktif'],['warn','Memicu panen']]}}}
+  const bangun=BOTS.filter(b=>KEYS[b.id]);
+  const ringan=[...bangun].sort((a,b)=>a.quota-b.quota)[0];
+  let pre='';
+  if(sebutBot&&!KEYS[sebutBot.id]){pre=sebutBot.nama+' sedang tidur karena belum punya API key, jadi tidak bisa saya beri tugas. ';}
+  const pilih=(sebutBot&&KEYS[sebutBot.id])?sebutBot:ringan;
+  if(!pilih)return{teks:'Semua agen sedang tidur (belum punya API key). Pasang key dulu supaya ada yang bisa diberi tugas.'};
+  if(/jeda|istirahat/.test(t)){const b=pilih;return{teks:pre+'Baik, saya usulkan jeda untuk '+b.nama+'.',o:{bot:b.id,aksi:'jeda',judul:'Jeda '+b.nama+' 30 menit',param:'sampai '+fmt(simT+1800),alasan:'Atas permintaan Pimred.',pagar:[['ok','Jeda otomatis berakhir'],['warn','Bot berhenti mengambil tugas baru']]}}}
+  if(/lanjut|aktifkan/.test(t)){const b=pilih;return{teks:pre+'Saya usulkan '+b.nama+' dilanjutkan.',o:{bot:b.id,aksi:'lanjut',judul:'Lanjutkan '+b.nama,param:'cabut jeda',alasan:'Atas permintaan Pimred.',pagar:[['ok','Dalam jam aktif']]}}}
+  if(/kuota/.test(t)){const b=pilih;return{teks:pre+'Saya usulkan perubahan kuota untuk '+b.nama+'.',o:{bot:b.id,aksi:'ubah_kuota',judul:'Ubah kuota '+b.nama,param:'kuota '+MAXQ+' → '+Math.min(6,MAXQ+1),alasan:'Atas permintaan Pimred; '+b.nama+' baru memakai '+b.quota+'/'+MAXQ+'.',pagar:[['ok','Dalam batas 1–6'],['warn','Mengubah perilaku bot — wajib persetujuan']]}}}
+  if(url||/kerjakan|berita|banjir|video|tautan|link/.test(t)){const b=pilih;return{teks:pre+'Siap. Saya pilih '+b.nama+' (beban paling ringan di antara yang bangun: kuota '+b.quota+'/'+MAXQ+'). Usulannya:',o:{bot:b.id,aksi:'kerjakan_url',judul:url?'Kerjakan tautan dari Pimred':'Kerjakan topik dari Pimred',param:url?url.slice(0,60):(teks.replace(/@\w+/g,'').trim().slice(0,60)||'topik dari chat'),alasan:'Permintaan langsung Pimred; '+b.nama+' paling longgar saat ini.',pagar:[['ok','Kuota tersisa'],['ok','Anti-tabrakan akan diperiksa sebelum diklaim'],['warn','Hasil tetap menunggu ACC']]}}}
+  if(/cari|panen|sumber/.test(t)){const b=pilih;return{teks:pre+'Saya usulkan '+b.nama+' mencari video sekarang.',o:{bot:b.id,aksi:'cari_sekarang',judul:'Cari video sekarang',param:'semua sumber aktif '+b.nama,alasan:'Atas permintaan Pimred.',pagar:[['ok','Dalam jam aktif'],['warn','Memicu panen']]}}}
   return{teks:'Saya belum menangkap tugasnya. Coba: “@Nara kerjakan berita banjir dari youtu.be/…”, “@Nara jeda Sinta”, atau “@Nara naikkan kuota Raka”.'};
 }
 function kirimPesan(teks){
@@ -1386,14 +1558,14 @@ function kirimPesan(teks){
   for(const id of ids){
     const b=botOf(id);pendingReply++;renderChat();
     setTimeout(()=>{pendingReply--;
-      if(!KEYS[b.id])chatAdd({k:'sis',teks:b.nama+' belum punya API key, jadi belum bisa menjawab. Pasang di TVR Saya → Otak Bot.'});
+      if(!KEYS[b.id])chatAdd({k:'sis',teks:b.nama+' sedang tidur: belum punya API key, jadi belum bisa menjawab. Pasang di TVR Saya → Otak Bot.'});
       else chatAdd({k:'bot',bot:b.id,teks:jawabBot(b,teks)});
       renderChat()},d);
     d+=900;
   }
   if(nara){
     pendingReply++;renderChat();
-    setTimeout(()=>{pendingReply--;const r=jawabNara(teks);K.talk='Menyusun usulan…';K.talkT=rt+3;
+    setTimeout(()=>{pendingReply--;const r=jawabNara(teks);NARA.talk='Menyusun usulan…';NARA.talkT=rt+3;
       chatAdd({k:'koor',teks:r.teks});
       if(r.o){const p=bukaUsulan(r.o);if(!p)chatAdd({k:'sis',teks:'Sudah ada 3 usulan terbuka. Putuskan salah satunya dulu.'})}
       renderChat()},d);
@@ -1403,213 +1575,89 @@ function kirimPesan(teks){
 $('#cform').addEventListener('submit',e=>{e.preventDefault();const t=$('#cin');if(kirimPesan(t.value))t.value=''});
 $('#cin').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('#cform').requestSubmit()}});
 
-/* ============================================================
-   Ruang Koordinator — kanvas isometrik
-   ============================================================ */
-const kcv=$('#kroom'),kmain=kcv.getContext('2d');kcv.width=W;kcv.height=H;
-const kbgc=document.createElement('canvas');kbgc.width=W;kbgc.height=H;const kbgx=kbgc.getContext('2d');
-const KC={floorA:'#b6c3dd',floorB:'#a2b2d2',wallL:'#1f3a5f',wallR:'#2a4a78',trim:'#d9a441'};
-const KDESK={d:[6.4,7.7,2.6,1],mon:[[7.05,8.0],[7.7,8.0]],seat:[6.9,7.15]};
-const KBOARD_SPOT=[1.9,5.6],KDESK_SEAT=[6.9,7.15];
-const KSEAT={raka:[4.1,3.7],sinta:[5.3,3.7],dimas:[6.5,3.7]};
-const KGIVE={raka:[4.1,6.5],sinta:[5.3,6.5],dimas:[6.5,6.5]};
-const KNOTES={raka:[],sinta:[],dimas:[]};
-const K={x:KDESK_SEAT[0],y:KDESK_SEAT[1],path:[],state:'desk',queue:[],t0:0,cur:null,talk:'',talkT:0,dirx:1,back:false,paper:null,idleT:0,msgI:0,genT:0};
-function buildBgK(){withCtx(kbgx,()=>{
-  ctx.clearRect(0,0,W,H);px(0,0,W,H,'#0b0912');
-  poly([P(0,N,0),P(N,N,0),P(N,N,-6),P(0,N,-6)],'#2b3a55');poly([P(N,0,0),P(N,N,0),P(N,N,-6),P(N,0,-6)],'#1e2a40');
-  for(let gx=0;gx<N;gx++)for(let gy=0;gy<N;gy++){
-    let c=((gx+gy)&1)?KC.floorA:KC.floorB;const r=hs(gx*11+gy*5);
-    if(r>.85)c=((gx+gy)&1)?'#c2cee6':'#adbbd8';else if(r<.1)c=((gx+gy)&1)?'#a8b6d3':'#97a8ca';
-    poly([P(gx,gy),P(gx+1,gy),P(gx+1,gy+1),P(gx,gy+1)],c);
-  }
-  // karpet biru bertepi emas
-  frect(2.2,7.8,2.6,7.2,'#1b2a52');frect(2.35,7.65,2.75,7.05,'#2a3f78');frect(2.55,7.45,2.95,6.85,'#d9a441');frect(2.62,7.38,3.02,6.78,'#2a3f78');
-  poly([P(0,0),P(N,0),P(N,.55),P(0,.55)],'rgba(10,20,40,.22)');poly([P(0,0),P(.55,0),P(.55,N),P(0,N)],'rgba(10,20,40,.22)');
-  poly([P(0,0,WALLH),P(0,N,WALLH),P(0,N,0),P(0,0,0)],KC.wallL);poly([P(0,0,WALLH),P(N,0,WALLH),P(N,0,0),P(0,0,0)],KC.wallR);
-  for(const s of['L','R']){
-    for(let u=1;u<N;u++)wq(s,u-.02,u+.02,18,WALLH-3,s==='L'?'#25456f':'#335a8d');
-    wq(s,0,N,0,16,s==='L'?'#3a4f73':'#44608c');
-    for(let u=0;u<N;u+=1)wq(s,u+.04,u+.5,3,15,s==='L'?'#46618a':'#52709c');
-    wq(s,0,N,16,18.5,KC.trim);wq(s,0,N,0,3,'#243553');wq(s,0,N,WALLH-2.5,WALLH,'#12203a');
-  }
-  poly([P(0,0,WALLH),P(0,0,0),[P(0,0,0)[0]+1,P(0,0,0)[1]],[P(0,0,WALLH)[0]+1,P(0,0,WALLH)[1]]],'#355583');
-  const night=tod==='night';
-  const win=(s,u0,u1)=>{
-    wq(s,u0-.14,u1+.14,21,57,KC.trim);wq(s,u0,u1,24,54,night?'#0d1130':'#bfe3ff');
-    if(!night){wq(s,u0,u1,24,33,'#fff0c8');wq(s,u0,u1,33,36,'#d9efff')}
-    wq(s,(u0+u1)/2-.04,(u0+u1)/2+.04,24,54,KC.trim);wq(s,u0-.22,u1+.22,19.5,21.5,'#e6b878');
-  };
-  win('R',.6,2.0);win('R',7.4,8.8);win('L',8.3,9.5);
-  // bingkai papan penugasan (dinding kiri)
-  wq('L',1.3,8.1,13,56,'#d9a441');wq('L',1.45,7.95,14.5,54.5,'#f2ece0');wq('L',1.45,7.95,48.5,54.5,'#2a3f78');
-  for(let i=0;i<3;i++){wq('L',1.55+i*2.2,3.55+i*2.2,49.2,53.8,['#f08a3c','#a56bd1','#4cae6b'][i]);if(i<2)wq('L',3.62+i*2.2,3.66+i*2.2,15.5,47.5,'#cfc6b2')}
-  // layar kuota (dinding kanan)
-  wq('R',3.1,6.5,18,50,'#0e1626');wq('R',3.18,6.42,19,49,'#08111f');
-});}
-function kdesk(t){
-  const [gx,gy,w,d]=KDESK.d;
-  const lg=(x,y)=>box(x,y,.14,.14,8,0,'#5b3419','#5b3419','#3f2411');
-  lg(gx+.05,gy+.05);lg(gx+w-.2,gy+.05);lg(gx+.05,gy+d-.2);lg(gx+w-.2,gy+d-.2);
-  box(gx,gy,w,d,3,8,C.dT,C.dL,C.dR);
-  const on=K.state==='desk';
-  for(let i=0;i<2;i++)monitor(KDESK.mon[i][0],KDESK.mon[i][1],11,i?'#fb7185':'#38bdf8',on,t,60+i*7);
-  poly([P(7.1,8.55,11.2),P(7.6,8.55,11.2),P(7.6,8.75,11.2),P(7.1,8.75,11.2)],'#2a2630');
-  lamp(8.6,8.0,11);
-}
-function ktable(){
-  const lg=(x,y)=>box(x,y,.14,.14,7,0,'#5b3419','#5b3419','#3f2411');
-  lg(3.1,4.3);lg(7.0,4.3);lg(3.1,5.55);lg(7.0,5.55);
-  box(3.0,4.2,4.2,1.5,2,7,'#e6b46a','#b9763a','#8e5528');
-  box(3.05,4.25,4.1,1.4,.6,9,'#f0c88a','#e6b46a','#e6b46a');
-  for(const id of ['raka','sinta','dimas']){const b=botOf(id);const q=KSEAT[id];const c=P(q[0]+0.1,5.0,9.8);px(c[0]-3,c[1]-1,6,2,'#f6f1e4');px(c[0]-3,c[1]-1,1,2,b.col)}
-}
-function kpaperSprite(x,y,z){const q=P(x,y,z);px(q[0]-3,q[1]-4,7,5,'#f8f3e4');px(q[0]-3,q[1]-4,7,1,'#fb7185');px(q[0]-2,q[1]-2,4,1,'#8a8070');px(q[0]-2,q[1],3,1,'#8a8070')}
-function kwallDynamic(t){
-  // catatan di papan penugasan (dinding kiri)
-  const note=['#fde68a','#fbcfe8','#bbf7d0','#bae6fd'];
-  ['raka','sinta','dimas'].forEach((id,i)=>{
-    const u0=1.6+i*2.2,list=KNOTES[id];
-    for(let k=0;k<Math.min(3,list.length);k++)wq('L',u0+.06,u0+1.9,40-k*8.6,46-k*8.6,note[(i+k)%4]);
-    // tugas hidup bot
-    const b=botOf(id);if(b.state==='work'&&b.stage==='edit'&&list.length<3)wq('L',u0+.06,u0+1.9,18,24,'rgba(167,139,250,.55)');
-  });
-  // layar kuota (dinding kanan): tiga batang + titik ACC
-  ['raka','sinta','dimas'].forEach((id,i)=>{
-    const b=botOf(id),h=Math.max(2,Math.round(26*b.quota/MAXQ));
-    wq('R',3.5+i*.95,4.25+i*.95,20,20+26,'#1a2540');wq('R',3.5+i*.95,4.25+i*.95,20,20+h,b.col);
-  });
-  for(let k=0;k<Math.min(8,ACCQ.length);k++){const q=WP('R',3.35+k*.36,52.3);px(q[0],q[1],2,2,'#f59e0b')}
-  // jam
-  const ck=WP('R',9.3,50);disc(ck[0],ck[1],6,'#7a4a24');disc(ck[0],ck[1],5,'#f6f1e4');
-  const mm=(simT/60)%60,hh=(simT/3600)%12;
-  const hand=(a,l,c)=>{for(let s=0;s<=l;s++)px(Math.round(ck[0]+Math.sin(a)*s),Math.round(ck[1]-Math.cos(a)*s),1,1,c)};
-  hand(mm/60*6.283,4,'#2a2118');hand(hh/12*6.283,2.5,'#c2413b');
-}
-function kdrawObjects(t){
-  LAMPS.length=0;
-  const O=[],add=(k,f)=>O.push({k,f});
-  add(.3+1.3,()=>shelf(0,.3,1.2));add(9.3+.35,()=>plant(9.3,.35));add(.3+9.3,()=>plant(.3,9.3));add(9.3+9.3,()=>plant(9.3,9.3));
-  add(3.0+4.2+4.2+1.5,ktable);
-  const [dg,dy,dw,dd]=KDESK.d;add(dg+dw+dy+dd,()=>kdesk(t));
-  add(KDESK_SEAT[0]+KDESK_SEAT[1]-.25,()=>chair(KDESK_SEAT[0],KDESK_SEAT[1],'y'));
-  for(const id of ['raka','sinta','dimas']){
-    const q=KSEAT[id];add(q[0]+q[1]-.25,()=>chair(q[0],q[1],'y'));
-    const b=botOf(id);
-    add(q[0]+q[1]+.3,()=>{
-      const [fx,fy]=P(q[0],q[1]+.15,0);
-      drawChar(fx,fy,Object.assign({t,pose:'sit',raise:3,dx:1,talk:b.kbub&&rt<b.kbub.until},b.look));
-      b.ksx=fx;b.ksy=fy-3;
-    });
-  }
-  add(K.x+K.y+.02,()=>{
-    const sit=K.state==='desk',walk=K.state==='walk',typing=sit;
-    const [fx,fy]=P(K.x,K.y,0);
-    drawChar(fx,fy,Object.assign({t,pose:sit?'type':walk?'walk':'idle',raise:sit?2:0,dx:K.dirx>0?1:-1,back:K.back&&walk,talk:K.talkT>rt},KO.look));
-    K.sx=fx;K.sy=fy-(sit?2:0);
-  });
-  O.sort((a,b)=>a.k-b.k);for(const o of O)o.f();
-  if(K.paper){const p=K.paper,u=Math.min(1,(rt-p.t0)/p.dur),e=u*u*(3-2*u),z=16+Math.sin(u*Math.PI)*14;
-    kpaperSprite(p.x0+(p.x1-p.x0)*e,p.y0+(p.y1-p.y0)*e,z)}
-}
-function kframe(t){
-  ctx=kmain;ctx.clearRect(0,0,W,H);ctx.drawImage(kbgc,0,0);kwallDynamic(t);kdrawObjects(t);
-  if(tod==='night'){ctx.fillStyle='rgba(10,12,46,.4)';ctx.fillRect(0,0,W,H)}
-  ctx=main;
-}
-const kov=$('#kov'),ktags={};
-[{id:'nara',nama:KO.nama,col:KO.col},...BOTS].forEach(b=>{
-  const d=document.createElement('div');d.className='tag';d.style.setProperty('--c',b.col);
-  d.innerHTML='<div class="bub hid"></div><div class="nm"><i></i>'+b.nama+'</div>';kov.appendChild(d);ktags[b.id]=d;
-});
-const kpills=[['MEJA RAPAT',[7.9,5.0],'#a78bfa'],['MEJA NARA',[8.3,9.6],'#fb7185'],['PAPAN TUGAS',[1.2,3.2],'#38bdf8']].map(([n,g,c])=>{
-  const p=document.createElement('div');p.className='pill';p.style.setProperty('--c',c);p.innerHTML='<i></i>'+n;kov.appendChild(p);return{p,g}});
-function kOverlay(){
-  const sc=kcv.clientWidth/W;
-  const put=(id,sx,sy,txt,col)=>{
-    const t=ktags[id];if(sx==null)return;
-    t.style.left=(sx*sc)+'px';t.style.top=((sy-29)*sc)+'px';
-    const bub=t.querySelector('.bub');
-    if(txt){bub.textContent=txt;bub.classList.remove('hid');bub.style.setProperty('--c',col);bub.style.fontSize=Math.max(9,Math.min(12,sc*3.3))+'px'}else bub.classList.add('hid');
-  };
-  put('nara',K.sx,K.sy,K.talkT>rt?K.talk:'',KO.col);
-  for(const b of BOTS){const q=b.kbub&&rt<b.kbub.until?b.kbub.txt:'';put(b.id,b.ksx,b.ksy,q,b.col)}
-  for(const k of kpills){const p=P(k.g[0],k.g[1],0);k.p.style.left=(p[0]*sc)+'px';k.p.style.top=(p[1]*sc)+'px';k.p.style.fontSize=Math.max(8,sc*2.9)+'px';k.p.classList.toggle('busy',true)}
-}
-/* ---------- simulasi Nara ---------- */
+/* ---------- simulasi Nara di dunia ---------- */
 const THINK=['Memeriksa Antrean ACC…','Menimbang beban Raka, Sinta, Dimas…','Memeriksa kuota harian…','Membaca umpan aktivitas…','Menunggu keputusan Pimred'];
-function kmove(dt){
-  let d=2.4*dt;
-  while(d>0&&K.path.length){
-    const [tx,ty]=K.path[0],dx=tx-K.x,dy=ty-K.y,L=Math.hypot(dx,dy);
-    if(L<=d){K.x=tx;K.y=ty;K.path.shift();d-=L}else{K.x+=dx/L*d;K.y+=dy/L*d;K.dirx=Math.sign(dx-dy)||K.dirx;K.back=(dx+dy)<0;d=0}
-  }
-  return !K.path.length;
-}
+const JALAN_KE_KERJA=[[6.7,10.9],[2.9,10.9],[2.9,9.3],HUB];
+const JALAN_PULANG=[[2.9,9.3],[2.9,10.9],[6.7,10.9],[6.7,11.45]];
 function tickK(dt){
-  if(K.state==='desk'){
-    K.idleT+=dt;
-    if(K.queue.length){K.cur=K.queue.shift();K.path=[[2.6,7.0],KBOARD_SPOT];K.state='walk';K.next='board';K.talk='Menempel tugas di papan';K.talkT=rt+4}
+  const N_=NARA,buka=PROP.filter(p=>p.st==='menunggu').length;
+  if(N_.state==='desk'){
+    N_.idleT+=dt;
+    if(rapat){N_.path=[...JALAN_KE_KERJA,...PINTU_KM,[10.8,7.6],[12.6,7.6],[12.6,7.2]];N_.state='walk';N_.next='rapat';N_.talk='Menuju ruang meeting';N_.talkT=rt+3}
+    else if(N_.queue.length){N_.cur=N_.queue.shift();N_.path=[[6.7,10.9],[2.6,11.4],BOARD];N_.state='walk';N_.next='board';N_.talk='Menempel tugas di papan';N_.talkT=rt+4}
     else{
-      if(K.idleT>5){K.idleT=0;K.talk=PROP.some(p=>p.st==='menunggu')?'Ada '+PROP.filter(p=>p.st==='menunggu').length+' usulan menunggu Pimred':THINK[K.msgI++%THINK.length];K.talkT=rt+3.5}
-      K.genT+=dt;
-      if(K.genT>28&&PROP.filter(p=>p.st==='menunggu').length<2){K.genT=0;const o=TPL[tplI++%TPL.length]();bukaUsulan(o)}
+      if(N_.idleT>5){N_.idleT=0;N_.talk=buka?'Ada '+buka+' usulan menunggu Pimred':THINK[N_.msgI++%THINK.length];N_.talkT=rt+3.5}
+      N_.genT+=dt;
+      if(N_.genT>28&&buka<2){N_.genT=0;bukaUsulan(TPL[tplI++%TPL.length]())}
     }
-  }else if(K.state==='walk'){
-    if(kmove(dt)){
-      if(K.next==='board'){K.state='pin';K.t0=rt}
-      else if(K.next==='give'){K.state='give';K.t0=rt;const b=botOf(K.cur.bot),s=KSEAT[b.id];K.paper={t0:rt,dur:1.3,x0:K.x,y0:K.y,x1:s[0],y1:s[1]+.3}}
-      else{K.state='desk';K.idleT=0;K.back=false;K.path=[];K.x=KDESK_SEAT[0];K.y=KDESK_SEAT[1]}
+  }else if(N_.state==='walk'){
+    if(stepMove(N_,dt)){
+      if(N_.next==='board'){N_.state='pin';N_.t0=rt}
+      else if(N_.next==='give'){N_.state='give';N_.t0=rt;const b=botOf(N_.cur.bot);N_.paper={t0:rt,dur:1.3,x0:N_.x,y0:N_.y,x1:b.x,y1:b.y}}
+      else if(N_.next==='rapat'){N_.state='rapat';N_.back=true}
+      else{N_.state='desk';N_.idleT=0;N_.back=false;N_.path=[];N_.x=KDESK.seat[0];N_.y=KDESK.seat[1]}
     }
-  }else if(K.state==='pin'){
-    if(rt-K.t0>1.6){
-      const p=K.cur,b=botOf(p.bot);KNOTES[b.id].unshift(p.judul);if(KNOTES[b.id].length>3)KNOTES[b.id].pop();
-      K.path=[[3.2,6.9],KGIVE[b.id]];K.state='walk';K.next='give';K.talk='Mengantar surat tugas ke '+b.nama;K.talkT=rt+4;
+  }else if(N_.state==='pin'){
+    if(rt-N_.t0>1.6){
+      const p=N_.cur,b=botOf(p.bot);KNOTES[b.id].unshift(p.judul);if(KNOTES[b.id].length>3)KNOTES[b.id].pop();
+      N_.path=[[2.6,11.4],[2.9,10.9],[2.9,9.3],HUB,[b.x+.6,b.y+.7]];N_.state='walk';N_.next='give';N_.talk='Mengantar surat tugas ke '+b.nama;N_.talkT=rt+4;
     }
-  }else if(K.state==='give'){
-    const p=K.cur,b=botOf(p.bot);
-    if(K.paper&&rt-K.paper.t0>=K.paper.dur){
-      K.paper=null;b.kbub={txt:'Tugas baru dari Nara: '+p.judul,until:rt+5};
-      klog('Surat tugas diterima '+b.nama+': '+p.judul);K.t0=rt;K.paper=null;K.gave=true;
+  }else if(N_.state==='give'){
+    const p=N_.cur,b=botOf(p.bot);
+    if(N_.paper&&rt-N_.paper.t0>=N_.paper.dur){
+      N_.paper=null;b.kbub={txt:'Tugas baru dari Nara: '+p.judul,until:rt+5};klog('Surat tugas diterima '+b.nama+': '+p.judul);N_.t0=rt;N_.gave=true;
     }
-    if(K.gave&&rt-K.t0>1.4){K.gave=false;K.path=[[5.0,6.9],[7.6,7.3],KDESK_SEAT];K.state='walk';K.next='home';K.talk='Kembali ke meja';K.talkT=rt+3;K.cur=null}
+    if(N_.gave&&rt-N_.t0>1.4){N_.gave=false;N_.path=[HUB,...JALAN_PULANG];N_.state='walk';N_.next='home';N_.talk='Kembali ke meja';N_.talkT=rt+3;N_.cur=null}
+  }else if(N_.state==='rapat'){
+    if(!rapat){N_.back=false;N_.path=[[12.6,7.6],[10.8,7.6],[10.8,5.1],[9.2,5.1],HUB,...JALAN_PULANG];N_.state='walk';N_.next='home';N_.talk='Rapat selesai';N_.talkT=rt+3}
   }
-  $('#kHudA').textContent='Nara: '+(K.state==='desk'?'menimbang':K.state==='walk'?'berjalan':K.state==='pin'?'menempel tugas':'mengantar tugas');
-  $('#kHudC').textContent='Tugas dibagi hari ini '+koorDone;
+  if(view==='ruang'&&(tickK.t=(tickK.t||0)+dt)>.6){tickK.t=0;renderK()}
 }
-/* ---------- panel kanan ---------- */
+/* ---------- panel Ruang: koordinator, usulan, beban, riwayat ---------- */
+let kcardSig='';
+function renderKHist(){
+  const h=$('#khist');if(!h)return;
+  h.innerHTML=(PROP.filter(p=>p.st!=='menunggu').slice(0,6).map(p=>`<div><span>#${p.id} ${AKSI[p.aksi]} → ${botOf(p.bot).nama}</span><span class="pst ${p.st}">${p.st==='disetujui'?'Disetujui':'Ditolak'}</span></div>`).join('')||'<span class="mut">Belum ada keputusan.</span>')
+    +(KLOGS.length?'<h3 class="h" style="margin:12px 0 6px">Log Nara</h3>'+KLOGS.slice(0,6).map(l=>`<div><span><time class="mut">${l.w}</time> ${esc(l.t)}</span></div>`).join(''):'');
+}
 function renderK(){
   const open=PROP.filter(p=>p.st==='menunggu');
-  $('#kSum').textContent=open.length?open.length+' usulan menunggu':'';
-  $('#kcard').innerHTML=`<div class="kportrait"><canvas id="kPort" width="28" height="40" aria-label="Potret ${KO.nama}"></canvas><div><h2>${KO.nama}</h2><span class="mut">${KO.peran}</span><p class="mut" style="margin:6px 0 0">${esc(KO.persona)}</p></div></div>
-    <dl class="kv" style="margin-top:10px"><dt>Otak</dt><dd><span class="key ada">aktif</span> DeepSeek ••••k7Qd · teruji</dd><dt>Token hari ini</dt><dd>12,4 rb (contoh)</dd><dt>Mode</dt><dd>Usulan wajib disetujui</dd></dl>
+  const st=NARA.state==='desk'?'menimbang':NARA.state==='walk'?'berjalan':NARA.state==='pin'?'menempel tugas':NARA.state==='rapat'?'rapat':'mengantar tugas';
+  const sig=st+'|'+open.length;
+  if(!$('#kcard').firstChild){
+    $('#kcard').innerHTML=`<div class="kportrait"><canvas id="kPort" width="28" height="40" aria-label="Potret ${KO.nama}"></canvas><div><h2>${KO.nama}</h2><span class="mut">${KO.peran}</span><p class="mut" style="margin:6px 0 0">${esc(KO.persona)}</p></div></div>
+    <dl class="kv" style="margin-top:10px"><dt>Otak</dt><dd><span class="key ada">aktif</span> DeepSeek ••••k7Qd · teruji</dd><dt>Token hari ini</dt><dd>12,4 rb (contoh)</dd><dt>Mode</dt><dd>Usulan wajib disetujui <span class="mut">(otonom: terkunci)</span></dd><dt>Sekarang</dt><dd id="kSt"></dd></dl>
     <form class="dir" id="kdir" autocomplete="off"><input class="in" id="kdirI" placeholder="Beri arahan ke Nara…" aria-label="Arahan untuk Nara"><button class="btn ok" type="submit">Kirim</button></form>
-    <div class="chipq"><button type="button" data-q="@Nara kerjakan berita banjir dari youtu.be/dQw4w9WgXcQ">Kerjakan berita banjir</button><button type="button" data-q="@Nara jeda Sinta 30 menit">Jeda Sinta</button><button type="button" data-q="@Nara naikkan kuota Raka">Naikkan kuota Raka</button></div>
-    <p class="hint">Arahan masuk ke room Chat; usulan Nara muncul di sini dan di sana.</p>`;
-  withCtx($('#kPort').getContext('2d'),()=>drawChar(14,36,Object.assign({t:0,pose:'idle',dx:1},KO.look)));
-  $('#kprops').innerHTML=open.length?open.map(propCard).join(''):'<span class="mut">Tidak ada usulan menunggu. Nara akan mengusulkan bila ada yang perlu dibagi.</span>';
+    <div class="chipq"><button type="button" data-q="@Nara kerjakan berita banjir dari youtu.be/dQw4w9WgXcQ">Kerjakan berita banjir</button><button type="button" data-q="@Nara jeda Sinta 30 menit">Jeda Sinta</button><button type="button" data-q="@Nara kerjakan berita banjir untuk @Dimas">Beri tugas ke Dimas (tidur)</button></div>
+    <p class="hint">Arahan masuk ke room Chat (ruang meeting); usulan Nara muncul di sini dan di sana.</p>`;
+    withCtx($('#kPort').getContext('2d'),()=>drawChar(14,36,Object.assign({t:0,pose:'idle',dx:1},KO.look)));
+  }
+  $('#kSt').textContent=st+(NARA.talkT>rt?' · “'+NARA.talk+'”':'');
+  if(sig!==kcardSig||true){
+    kcardSig=sig;
+    $('#kprops').innerHTML=open.length?open.map(propCard).join(''):'<span class="mut">Tidak ada usulan menunggu. Nara akan mengusulkan bila ada yang perlu dibagi.</span>';
+  }
   $('#kload').innerHTML=BOTS.map(b=>{
-    const acc=ACCQ.filter(a=>a.bot===b.id).length,aktif=b.state==='work'?STG[b.stage].lab:'menunggu';
+    const acc=ACCQ.filter(a=>a.bot===b.id).length,aktif=!KEYS[b.id]?'tidur (tanpa key)':b.state==='work'?STG[b.stage].lab:'menunggu';
     return `<div class="bm" style="--c:${b.col}"><div class="t"><span><b style="color:${b.col}">${b.nama}</b> <span class="mut">${aktif}</span></span><span>${b.quota}/${MAXQ} · ACC ${acc}${KNOTES[b.id].length?' · papan '+KNOTES[b.id].length:''}</span></div><div class="m"><div style="width:${Math.min(100,b.quota/MAXQ*100)}%"></div></div></div>`;
   }).join('');
-  $('#khist').innerHTML=(PROP.filter(p=>p.st!=='menunggu').slice(0,8).map(p=>`<div><span>#${p.id} ${AKSI[p.aksi]} → ${botOf(p.bot).nama}</span><span class="pst ${p.st}">${p.st==='disetujui'?'Disetujui':'Ditolak'}</span></div>`).join('')||'<span class="mut">Belum ada keputusan.</span>')
-    +(KLOGS.length?'<h3 class="h" style="margin:12px 0 6px">Log Nara</h3>'+KLOGS.slice(0,6).map(l=>`<div><span><time class="mut">${l.w}</time> ${esc(l.t)}</span></div>`).join(''):'');
-  propBadge();
+  renderKHist();
+  $('#kHudB')&&0;
 }
 $('#kcard').addEventListener('submit',e=>{if(e.target.id!=='kdir')return;e.preventDefault();const i=$('#kdirI'),v=i.value.trim();if(!v)return;kirimPesan(/@nara|@koordinator/i.test(v)?v:'@Nara '+v);i.value='';toast('Arahan dikirim ke room Chat')});
 $('#kcard').addEventListener('click',e=>{const q=e.target.closest('[data-q]');if(q){kirimPesan(q.dataset.q);toast('Arahan dikirim ke room Chat')}});
-$('#kprops').addEventListener('click',e=>{const b=e.target.closest('[data-pa]');if(b)putus(+b.dataset.pid,b.dataset.pa)});
-buildBgK();$('#tod').addEventListener('click',()=>buildBgK());
+$('#kprops').addEventListener('click',e=>{const b=e.target.closest('[data-pa]');if(b&&!b.disabled)putus(+b.dataset.pid,b.dataset.pa)});
 
-/* ---------- awal: percakapan contoh + usulan pertama ---------- */
+/* ---------- awal ---------- */
 CHAT.push({id:++chatSeq,k:'sis',w:'08:58',teks:'Room dibuka. Agen yang disebut menjawab dengan otak dan kepribadiannya sendiri.'});
 CHAT.push({id:++chatSeq,k:'m',w:'09:00',teks:'@semua selamat pagi, kuota hari ini berapa?'});
 CHAT.push({id:++chatSeq,k:'bot',bot:'raka',w:'09:00',teks:'Kuota saya hari ini 1/3. Siap menambah kalau diizinkan.'});
 CHAT.push({id:++chatSeq,k:'bot',bot:'sinta',w:'09:01',teks:'Kuota saya 0/3. Template saya jaga tetap rapi, jadi saya tidak tergesa.'});
-CHAT.push({id:++chatSeq,k:'sis',w:'09:01',teks:'Dimas belum punya API key, jadi belum bisa menjawab. Pasang di TVR Saya → Otak Bot.'});
+CHAT.push({id:++chatSeq,k:'sis',w:'09:01',teks:'Dimas sedang tidur: belum punya API key, jadi belum bisa menjawab. Pasang di TVR Saya → Otak Bot.'});
 {const p=Object.assign({id:++propSeq,st:'menunggu',w:'09:02',by:'koor'},TPL[0]());PROP.push(p);tplI=1;
- CHAT.push({id:++chatSeq,k:'koor',w:'09:02',teks:'Saya mengusulkan pembagian tugas berikut. Menunggu persetujuan Anda.',prop:p.id});klog('Mengusulkan #'+p.id+': '+AKSI[p.aksi]+' → '+botOf(p.bot).nama)}
-unread=0;propBadge();
+ CHAT.push({id:++chatSeq,k:'koor',w:'09:02',teks:'Saya mengusulkan pembagian tugas berikut. Menunggu persetujuan Anda.',prop:p.id});KLOGS.unshift({w:'09:02',t:'Mengusulkan #'+p.id+': '+AKSI[p.aksi]+' → '+botOf(p.bot).nama})}
+unread=0;
+renderK();
 
 accBadge();
 {const h=location.hash.slice(1);if(VIEWS.includes(h))show(h)}
