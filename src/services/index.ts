@@ -7317,3 +7317,21 @@ export async function kirimAksiTemplateBot(aksi: AksiTemplateBot): Promise<{ suk
   });
   return json as { sukses: boolean; id?: number; hasil?: HasilPasang[] };
 }
+
+// ---- OTAK (API key LLM) PER BOT (13 Okt 2026) — hanya master; kunci tidak pernah dikembalikan ----
+import type { AksiOtakBot, StatusOtakBot } from "@/lib/bot-otak-murni";
+
+export async function getOtakBot(): Promise<StatusOtakBot> {
+  const json = await fetchJson("/api/bot/otak", { headers: headerToken() });
+  return json as StatusOtakBot;
+}
+
+/** `uji` mengembalikan {sukses,kode,pesan}; galat server dilempar sebagai Error berpesan. */
+export async function kirimAksiOtakBot(aksi: AksiOtakBot): Promise<{ sukses: boolean; kode?: string; pesan?: string }> {
+  const json = await fetchJson("/api/bot/otak", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(aksi),
+  });
+  return json as { sukses: boolean; kode?: string; pesan?: string };
+}

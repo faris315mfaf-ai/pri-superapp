@@ -47,6 +47,8 @@ export function validasiPerintah(x: unknown): PerintahRunner | null {
     case "buat_video": {
       if (!bulatPositif(x.tugas_id) || !bulatPositif(x.id_pengguna_mesin)) return null;
       if (!teks(x.url) || !teks(x.naskah) || !teks(x.kategori) || !teks(x.sumber_label)) return null;
+      // hook opsional: tulisan otak bot; bentuk salah/kosong diabaikan (jalur mesin yang dipakai).
+      const hook = teks(x.hook) && x.hook.trim() !== "" ? x.hook : undefined;
       return {
         perintah: "buat_video",
         tugas_id: x.tugas_id,
@@ -55,6 +57,7 @@ export function validasiPerintah(x: unknown): PerintahRunner | null {
         kategori: x.kategori,
         sumber_label: x.sumber_label,
         id_pengguna_mesin: x.id_pengguna_mesin,
+        ...(hook !== undefined ? { hook } : {}),
       };
     }
     case "pantau_job": {

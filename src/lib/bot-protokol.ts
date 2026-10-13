@@ -69,6 +69,11 @@ export type PerintahRunner =
       sumber_label: string;
       /** app_user.id bot = id pengguna di mesin (header x-autoedit-pengguna). */
       id_pengguna_mesin: number;
+      /**
+       * Hook yang SUDAH ditulis otak bot sendiri (API key milik bot, lib/bot-otak). Ada =
+       * runner melewati POST /api/tvr/hook; tidak ada = runner minta hook ke mesin seperti biasa.
+       */
+      hook?: string;
     }
   /** Pantau job sampai selesai/gagal; lapor `job_selesai` atau `job_gagal`. */
   | { perintah: "pantau_job"; tugas_id: number; id_job_mesin: string | null; hook: string | null; id_pengguna_mesin: number };

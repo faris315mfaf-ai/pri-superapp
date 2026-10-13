@@ -124,14 +124,18 @@ async function lakukanBuatVideo(
   const gagal = (kode: ReturnType<typeof kodeGagalDariHttp>, pesan: string) =>
     laporAman(dep, botId, { jenis: "job_gagal", tugas_id: tugasId, kode, pesan });
 
-  // 1. Hook dari naskah.
+  // 1. Hook: yang sudah ditulis otak bot sendiri (dari aplikasi), kalau tidak dari mesin.
   let hook: string;
-  try {
-    hook = await dep.mesin.buatHook(idPengguna, perintah.naskah.slice(0, MAKS_NASKAH));
-  } catch (e) {
-    const g = kodeDanPesan(e, "hook");
-    await gagal(g.kode === "sumber_ditolak" ? "lainnya" : g.kode, g.pesan);
-    return;
+  if (perintah.hook !== undefined && perintah.hook.trim() !== "") {
+    hook = perintah.hook;
+  } else {
+    try {
+      hook = await dep.mesin.buatHook(idPengguna, perintah.naskah.slice(0, MAKS_NASKAH));
+    } catch (e) {
+      const g = kodeDanPesan(e, "hook");
+      await gagal(g.kode === "sumber_ditolak" ? "lainnya" : g.kode, g.pesan);
+      return;
+    }
   }
   hook = siapkanHook(hook);
 

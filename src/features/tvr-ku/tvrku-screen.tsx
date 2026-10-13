@@ -5,6 +5,7 @@ import { masukSebagai } from "@/lib/kendali-klien";
 import { KendaliAkun } from "./kendali-akun";
 import { TautanProfilMaster } from "./tautan-profil-master";
 import { TemplateBot } from "./template-bot";
+import { OtakBot } from "./otak-bot";
 import { TugasBotTvr } from "./tugas-bot";
 import { AccAjuanKomen } from "./acc-ajuan-komen";
 import { RangkumanLink } from "./rangkuman-link";
@@ -40,6 +41,7 @@ import {
   Minimize2,
   EyeOff,
   Hourglass,
+  BrainCircuit,
   Layers,
   Link2,
   Loader2,
@@ -1049,6 +1051,19 @@ export function TvrKuScreen({
                 render: () => (
                   <FadeInUp>
                     <TemplateBot />
+                  </FadeInUp>
+                ),
+              },
+              {
+                id: "otak-bot",
+                pin: true,
+                segmen: "Admin PALUGODAM",
+                judul: "Otak Bot (API key)",
+                ikon: BrainCircuit,
+                keterangan: "API key LLM milik tiap bot (terenkripsi, tulis-saja)",
+                render: () => (
+                  <FadeInUp>
+                    <OtakBot />
                   </FadeInUp>
                 ),
               },

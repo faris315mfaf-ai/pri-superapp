@@ -39,6 +39,7 @@ import {
 import { bacaPermintaanWajib, klaimVideoWajib } from "@/lib/bot-video-wajib";
 import type { PermintaanWajib } from "@/lib/bot-kerja-murni";
 import { siarkanBot } from "@/lib/bot-realtime";
+import { hookDariOtakBot } from "@/lib/bot-otak";
 import type { TahapBotDb } from "@/lib/bot-tipe";
 
 type Db = SupabaseClient;
@@ -275,7 +276,14 @@ async function hitungDibuatHariIni(db: Db, botId: number, sekarangMs: number): P
  */
 export async function ambilKerja(botId: number, sekarangMs: number = Date.now()): Promise<PerintahRunner> {
   try {
-    return await ambilKerjaInti(botId, sekarangMs);
+    const perintah = await ambilKerjaInti(botId, sekarangMs);
+    // Otak bot sendiri (13 Okt 2026): bila bot punya API key, hook ditulis di sini dengan kunci
+    // itu (kunci tidak pernah keluar dari aplikasi). Gagal/tanpa kunci = runner memakai jalur mesin.
+    if (perintah.perintah === "buat_video") {
+      const hook = await hookDariOtakBot(botId, perintah.id_pengguna_mesin, perintah.naskah);
+      if (hook) return { ...perintah, hook };
+    }
+    return perintah;
   } catch (e) {
     if (e instanceof SkemaBelumSiap) return diam("tabel_belum_ada");
     throw e;

@@ -9,7 +9,7 @@ export const MAX_KARAKTER_ISI = Number.isFinite(angka) ? angka : 100;
 export const MAX_KARAKTER_KICKER = 12;
 export const KICKER_BAWAAN = "VIRAL";
 
-const PROMPT =
+export const PROMPT_HOOK =
   "Anda adalah redaktur grafis berita televisi Indonesia. " +
   "Baca caption video berikut, lalu tulis teks lower-third berita seperti " +
   "kanal berita televisi: singkat, tegas, informatif, mudah dipindai. " +
@@ -116,7 +116,7 @@ export async function buatHookDeepseek(naskah: string, apiKey?: string): Promise
             role: "system",
             content: "Kamu redaktur grafis berita televisi Indonesia. Balas hanya JSON valid, tanpa penjelasan tambahan.",
           },
-          { role: "user", content: PROMPT + teks },
+          { role: "user", content: PROMPT_HOOK + teks },
         ],
         temperature: 0.7,
         max_tokens: 300,

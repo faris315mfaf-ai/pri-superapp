@@ -227,6 +227,40 @@ console.log("\n[D] Perintah buat_video");
   const l = p.laporan[0].laporan;
   cek("hook gagal -> job_gagal lainnya (bukan sumber_ditolak)", l.jenis === "job_gagal" && l.kode === "lainnya" && /hook/.test(l.pesan), l);
 }
+{
+  // Hook dari otak bot sendiri: mesin TIDAK diminta menulis hook.
+  const p = buatPalsu();
+  let hookDiminta = 0;
+  let badanJob: { hook: string } | null = null;
+  p.mesinAtur.hook = async () => {
+    hookDiminta++;
+    return "Hook mesin";
+  };
+  p.mesinAtur.job = async (b) => {
+    badanJob = b as { hook: string };
+    return { jobs: [j("OTAK-1", (b as { hook: string }).hook)], stok: [] };
+  };
+  await jalankanPerintah(1, { ...BUAT, hook: "HEBOH! Hook dari otak bot" }, p.dep, ker());
+  const l = p.laporan[0]?.laporan;
+  cek("hook otak bot: mesin tidak menulis hook", hookDiminta === 0, hookDiminta);
+  cek("hook otak bot: dipakai di job dan dilaporkan", badanJob?.hook === "HEBOH! Hook dari otak bot" && l?.jenis === "job_dibuat" && l.hook === "HEBOH! Hook dari otak bot", { badanJob, l });
+}
+{
+  // Hook kosong/spasi dari aplikasi = jalur mesin seperti biasa.
+  const p = buatPalsu();
+  let hookDiminta = 0;
+  p.mesinAtur.hook = async () => {
+    hookDiminta++;
+    return "Hook mesin";
+  };
+  p.mesinAtur.job = async (b) => ({ jobs: [j("MESIN-1", (b as { hook: string }).hook)], stok: [] });
+  await jalankanPerintah(1, { ...BUAT, hook: "   " }, p.dep, ker());
+  cek("hook spasi saja: kembali ke jalur mesin", hookDiminta === 1 && p.laporan[0]?.laporan.jenis === "job_dibuat");
+}
+cek("validasi: hook opsional diteruskan", (validasiPerintah({ ...BUAT, hook: "A! b" }) as { hook?: string } | null)?.hook === "A! b");
+cek("validasi: tanpa hook tetap sah, tanpa kunci hook", !("hook" in (validasiPerintah(BUAT) ?? {})));
+cek("validasi: hook bukan string diabaikan (perintah tetap sah)", validasiPerintah({ ...BUAT, hook: 5 })?.perintah === "buat_video" && !("hook" in (validasiPerintah({ ...BUAT, hook: 5 }) ?? {})));
+cek("validasi: hook kosong diabaikan", !("hook" in (validasiPerintah({ ...BUAT, hook: "  " }) ?? {})));
 const kasusJob: [number, string, string][] = [
   [409, "Buat dan tetapkan template dulu.", "template_belum_ada"],
   [413, "Penyimpanan penuh", "kuota_penuh"],
