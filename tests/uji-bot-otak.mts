@@ -6,8 +6,10 @@ import {
   akhirKunci,
   kodeDariStatusHttp,
   labelHasilUji,
+  normalkanKepribadian,
   normalkanKunciApi,
   samarkanKunci,
+  sistemDenganKepribadian,
 } from "@/lib/bot-otak-murni";
 
 let lulus = 0;
@@ -63,6 +65,16 @@ console.log("\n[C] Penyedia, kode galat, label");
 cek("penyedia dikenal", adalahPenyedia("deepseek") && adalahPenyedia("gemini") && !adalahPenyedia("openai") && !adalahPenyedia(null));
 cek("status HTTP → kode", kodeDariStatusHttp(401) === "kunci_ditolak" && kodeDariStatusHttp(403) === "kunci_ditolak" && kodeDariStatusHttp(429) === "kuota" && kodeDariStatusHttp(402) === "kuota" && kodeDariStatusHttp(500) === "gagal");
 cek("label hasil uji", labelHasilUji(null).nada === "tak_tahu" && labelHasilUji("ok").nada === "ok" && labelHasilUji("kuota").nada === "kurang" && labelHasilUji("aneh").teks === "uji gagal");
+
+console.log("\n[D] Kepribadian");
+cek("normalkanKepribadian merapikan & membatasi", (() => { const h = normalkanKepribadian("  Redaktur   Pencari ", "Teliti.\n\n\n\nCepat\u0000"); return h.ok && h.peran === "Redaktur Pencari" && !/\n\n\n/.test(h.persona) && !/\u0000/.test(h.persona); })());
+cek("terlalu panjang ditolak, bukan teks ditolak", !normalkanKepribadian("x".repeat(61), "ok").ok && !normalkanKepribadian("ok", "x".repeat(601)).ok && !normalkanKepribadian(5, "ok").ok && !normalkanKepribadian("ok", null).ok && normalkanKepribadian("x".repeat(60), "x".repeat(600)).ok);
+cek("kosong boleh (menghapus kepribadian)", normalkanKepribadian("", "").ok);
+const dasarSistem = "ATURAN: jangan menambah fakta.";
+const sk = sistemDenganKepribadian(dasarSistem, { nama: "Raka", peran: "Redaktur Pencari", persona: "Teliti dan cepat." });
+cek("kepribadian ditambahkan SETELAH aturan asli (aturan tetap di depan)", sk.startsWith(dasarSistem) && /KEPRIBADIANMU: kamu Raka, Redaktur Pencari/.test(sk) && /Teliti dan cepat/.test(sk));
+cek("memuat penegasan bahwa aturan/fakta tidak boleh dilanggar", /TIDAK boleh dilanggar/.test(sk));
+cek("tanpa kepribadian / kosong → prompt tidak berubah", sistemDenganKepribadian(dasarSistem, null) === dasarSistem && sistemDenganKepribadian(dasarSistem, { nama: "R", peran: "", persona: "  " }) === dasarSistem);
 
 console.log(`\n${lulus} lulus, ${gagal} gagal`);
 process.exit(gagal ? 1 : 0);

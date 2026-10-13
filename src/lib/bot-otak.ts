@@ -17,6 +17,8 @@ import {
   PESAN_GALAT_OTAK,
   adalahPenyedia,
   kodeDariStatusHttp,
+  sistemDenganKepribadian,
+  type KepribadianBot,
   type KodeGalatOtak,
   type PenyediaOtak,
 } from "@/lib/bot-otak-murni";
@@ -30,6 +32,13 @@ export class GalatOtak extends Error {
 const MODEL_DEEPSEEK = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 const MODEL_GEMINI = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 const BASE_DEEPSEEK = (process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1").replace(/\/+$/, "");
+
+/** Peran + watak bot dari bot_redaksi; null bila tak terbaca (jawaban tetap jalan tanpa kepribadian). */
+export async function muatKepribadian(botId: number): Promise<KepribadianBot | null> {
+  const { data, error } = await supabase().from("bot_redaksi").select("nama, peran, persona").eq("id", botId).maybeSingle();
+  if (error || !data) return null;
+  return { nama: String(data.nama ?? ""), peran: String(data.peran ?? ""), persona: String(data.persona ?? "") };
+}
 
 export type PermintaanOtak = {
   sistem: string;
@@ -137,7 +146,9 @@ export async function tanyaOtakBot(botId: number, userIdBot: number, p: Perminta
   if (!baris) throw new GalatOtak("tanpa_kunci");
   const kunci = dekripsiKunci(baris.kunci_sandi, botId);
   if (!kunci) throw new GalatOtak("kunci_rusak");
-  const r = await panggilPenyedia(baris.penyedia, kunci, p);
+  // Kepribadian bot (peran + watak) ikut memengaruhi GAYA jawaban; aturan di prompt aslinya tetap menang.
+  const sistem = sistemDenganKepribadian(p.sistem, await muatKepribadian(botId));
+  const r = await panggilPenyedia(baris.penyedia, kunci, { ...p, sistem });
   catatPemakaianAi({
     penyedia: baris.penyedia,
     model: r.model,

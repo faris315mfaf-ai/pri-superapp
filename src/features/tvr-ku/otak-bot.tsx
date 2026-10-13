@@ -18,7 +18,10 @@ import { getOtakBot, kirimAksiOtakBot } from "@/services";
 import {
   LABEL_PENYEDIA,
   PENYEDIA_OTAK,
+  PERAN_MAKS,
+  PERSONA_MAKS,
   labelHasilUji,
+  normalkanKepribadian,
   normalkanKunciApi,
   type PenyediaOtak,
   type StatusOtakBot,
@@ -41,6 +44,8 @@ export function OtakBot() {
   const [isian, setIsian] = useState<Record<number, Isian>>({});
   const [sibuk, setSibuk] = useState<string | null>(null);
   const [hapusId, setHapusId] = useState<number | null>(null);
+  /** Suntingan kepribadian per bot (belum disimpan). */
+  const [kepr, setKepr] = useState<Record<number, { peran: string; persona: string }>>({});
   const nomor = useRef(0);
 
   useEffect(() => {
@@ -124,6 +129,63 @@ export function OtakBot() {
                         </span>
                         {punya && <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-bold", NADA[uji.nada])}>{uji.teks}</span>}
                       </div>
+
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-[11px] font-bold text-pri">Peran &amp; cara berpikir (watak)</summary>
+                        {(() => {
+                          const k = kepr[b.bot_id] ?? { peran: b.peran, persona: b.persona };
+                          const sahK = normalkanKepribadian(k.peran, k.persona);
+                          const berubah = k.peran !== b.peran || k.persona !== b.persona;
+                          return (
+                            <div className="mt-2 flex flex-col gap-2">
+                              <input
+                                value={k.peran}
+                                onChange={(e) => setKepr((s) => ({ ...s, [b.bot_id]: { ...k, peran: e.target.value } }))}
+                                maxLength={PERAN_MAKS}
+                                placeholder="Peran, mis. Redaktur Pencari"
+                                aria-label={`Peran ${b.nama}`}
+                                disabled={!!sibuk}
+                                className="glass-input h-10 w-full rounded-xl px-3 text-[12.5px] text-teks-utama"
+                              />
+                              <textarea
+                                value={k.persona}
+                                onChange={(e) => setKepr((s) => ({ ...s, [b.bot_id]: { ...k, persona: e.target.value } }))}
+                                maxLength={PERSONA_MAKS}
+                                rows={3}
+                                placeholder="Watak dan cara berpikir: apa yang ia utamakan, gaya bahasanya, kebiasaannya."
+                                aria-label={`Watak ${b.nama}`}
+                                disabled={!!sibuk}
+                                className="glass-input w-full resize-y rounded-xl px-3 py-2 text-[12.5px] text-teks-utama"
+                              />
+                              <p className="m-0 text-[10.5px] text-teks-sekunder">Memengaruhi gaya hook, caption, dan jawaban chat bot ini. Aturan keselamatan dan fakta tidak berubah.</p>
+                              {!sahK.ok && <p className="m-0 text-[10.5px] text-amber-600 dark:text-amber-400">{sahK.pesan}</p>}
+                              <button
+                                type="button"
+                                disabled={!berubah || !sahK.ok || !!sibuk}
+                                onClick={() =>
+                                  void jalankan(`kepr:${b.bot_id}`, async () => {
+                                    if (!sahK.ok) return;
+                                    try {
+                                      await kirimAksiOtakBot({ aksi: "kepribadian", bot_id: b.bot_id, peran: sahK.peran, persona: sahK.persona });
+                                      toast("sukses", "Kepribadian tersimpan", b.nama);
+                                      setKepr((s) => {
+                                        const { [b.bot_id]: _hapus, ...sisa } = s;
+                                        void _hapus;
+                                        return sisa;
+                                      });
+                                    } catch (e) {
+                                      toast("error", "Gagal menyimpan kepribadian", e instanceof Error ? e.message : "");
+                                    }
+                                  })
+                                }
+                                className="btn-tekan self-start rounded-full bg-pri px-3 py-1.5 text-[11px] font-bold text-white disabled:opacity-50"
+                              >
+                                {sibuk === `kepr:${b.bot_id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Simpan kepribadian"}
+                              </button>
+                            </div>
+                          );
+                        })()}
+                      </details>
 
                       <div className="mt-2 flex gap-2">
                         <select

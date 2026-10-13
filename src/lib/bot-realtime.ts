@@ -5,7 +5,7 @@ import { siarkanRealtime } from "@/lib/realtime-server";
 export const TOPIK_BOT = "bot-ruang";
 export const EVENT_BOT = "berubah";
 
-export type JenisPerubahanBot = "denyut" | "kendali" | "log" | "tugas";
+export type JenisPerubahanBot = "denyut" | "kendali" | "log" | "tugas" | "chat";
 
 /** Siarkan perubahan; tidak pernah melempar & tidak ditunggu lama. */
 export function siarkanBot(jenis: JenisPerubahanBot): void {

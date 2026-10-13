@@ -22,6 +22,7 @@ import {
   PESAN_GALAT_OTAK,
   adalahPenyedia,
   akhirKunci,
+  normalkanKepribadian,
   normalkanKunciApi,
   samarkanKunci,
   type OtakBotRingkas,
@@ -50,7 +51,7 @@ const idPositif = (v: unknown, nama: string): number => {
 async function bacaStatus(): Promise<StatusOtakBot> {
   const db = supabase();
   const [rBot, rOtak] = await Promise.all([
-    db.from("bot_redaksi").select("id, user_id, nama").order("id"),
+    db.from("bot_redaksi").select("id, user_id, nama, peran, persona").order("id"),
     // Sengaja TIDAK memilih kunci_sandi.
     db.from("bot_otak").select("bot_id, penyedia, akhir, diubah_pada, teruji_pada, hasil_uji"),
   ]);
@@ -72,6 +73,8 @@ async function bacaStatus(): Promise<StatusOtakBot> {
       bot_id: Number(b.id),
       nama: String(b.nama ?? ""),
       username: usernamePer.get(Number(b.user_id)) ?? "",
+      peran: String(b.peran ?? ""),
+      persona: String(b.persona ?? ""),
       penyedia: o && adalahPenyedia(o.penyedia) ? o.penyedia : null,
       kunci_samar: o ? samarkanKunci(String(o.akhir ?? "")) : "",
       diubah_pada: (o?.diubah_pada as string | null | undefined) ?? null,
@@ -140,6 +143,16 @@ export async function POST(request: Request) {
         request,
         detail: { bot_id: botId, penyedia: b.penyedia, akhir: akhirKunci(sah.kunci) },
       });
+      siarkanBot("kendali");
+      return { sukses: true };
+    }
+
+    if (b.aksi === "kepribadian") {
+      const k = normalkanKepribadian(b.peran, b.persona);
+      if (!k.ok) tolak(k.pesan);
+      const { error } = await db.from("bot_redaksi").update({ peran: k.peran, persona: k.persona }).eq("id", botId);
+      if (error) galatTulis(error, "Gagal menyimpan kepribadian.");
+      catatAudit(user.id, "bot_otak", `Mengubah peran/watak bot ${namaBot}`, { request, detail: { bot_id: botId, peran: k.peran } });
       siarkanBot("kendali");
       return { sukses: true };
     }

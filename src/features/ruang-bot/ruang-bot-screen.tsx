@@ -26,6 +26,7 @@ import { KUOTA_BOT_MAKS, KUOTA_BOT_MIN, type AksiKendaliBot, type AksiSumberBot,
 import { cn } from "@/lib/utils";
 import { AntreanAccView } from "./antrean-acc-view";
 import { AntreanAccNyata } from "./antrean-acc-nyata";
+import { ChatBotView } from "./chat-bot-view";
 import { BOT_CONTOH, ACC_AWAL, BLOKIR_AWAL, HASIL_AWAL, KUOTA_AWAL, MAKS_KUOTA_AWAL, SUMBER_AWAL } from "./data-contoh";
 import { DetailBotView } from "./detail-bot-view";
 import { RuangView } from "./ruang-view";
@@ -51,6 +52,7 @@ const TAB: { kunci: TampilanBot; label: string }[] = [
   { kunci: "detail", label: "Detail Bot" },
   { kunci: "acc", label: "Antrean ACC" },
   { kunci: "sumber", label: "Sumber & Kuota" },
+  { kunci: "chat", label: "Chat" },
 ];
 
 const GRADASI_BARU: [string, string][] = [
@@ -419,7 +421,7 @@ function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber }: RuangBotIsiP
         aria-label="Tampilan Ruang Bot"
         className="tanpa-scrollbar glass mb-4 flex gap-1 overflow-x-auto rounded-2xl p-1"
       >
-        {TAB.map((t) => {
+        {TAB.filter((t) => t.kunci !== "chat" || nyata).map((t) => {
           const aktif = tampilan === t.kunci;
           return (
             <button
@@ -500,6 +502,12 @@ function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber }: RuangBotIsiP
           ) : (
             <AntreanAccView antrean={antrean} riwayat={riwayat} bots={bots} onKeputusan={keputusan} />
           )}
+        </div>
+      )}
+
+      {tampilan === "chat" && nyata && (
+        <div id="rb-panel-chat" role="tabpanel" aria-labelledby="rb-tab-chat">
+          <ChatBotView />
         </div>
       )}
 

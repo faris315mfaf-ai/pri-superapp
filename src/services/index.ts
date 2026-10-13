@@ -7369,3 +7369,21 @@ export async function ambilVideoAcc(tugasId: number): Promise<string> {
   }
   return URL.createObjectURL(await res.blob());
 }
+
+// ---- ROOM CHAT BOT (13 Okt 2026) — hanya master ----
+import type { StatusChat } from "@/lib/bot-chat-murni";
+
+export async function getChatBot(sejak = 0): Promise<StatusChat> {
+  const json = await fetchJson(sejak > 0 ? `/api/bot/chat?sejak=${encodeURIComponent(String(sejak))}` : "/api/bot/chat", { headers: headerToken() });
+  return json as StatusChat;
+}
+
+/** Kirim pesan ke room; agen yang disebut menjawab belakangan (muat ulang untuk melihatnya). */
+export async function kirimChatBot(teks: string): Promise<{ id: number; menyebut: number[] }> {
+  const json = await fetchJson("/api/bot/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ teks }),
+  });
+  return { id: Number(json?.id ?? 0), menyebut: (json?.menyebut ?? []) as number[] };
+}
