@@ -97,6 +97,9 @@ async function tangani(
   }
   const { jalur } = await params;
   const j = jalur ?? [];
+  // Pustaka template Bot Redaksi (13 Okt 2026): hanya server SuperApp yang boleh
+  // memanggilnya (lib/bot-template); lewat proxy ini selalu tidak ada.
+  if (j[0] === "tvr" && j[1] === "pustaka") return galatAutoEdit(404, "Tidak ditemukan");
   // Alat video (Kompres Video, Hapus Latar Boom, Blur Watermark): terbuka
   // untuk semua kecuali ditutup master per akun — juga lewat jalur tim. Tanpa izin: 404.
   const fiturUji =

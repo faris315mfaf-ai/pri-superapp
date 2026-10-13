@@ -11,6 +11,7 @@ import { pasangRedisBatas } from "../unduh";
 import { jagaVolume } from "../volume";
 import { GalatHttp, kirimJson, Router, SUDAH_DIKIRIM, type Permintaan } from "./dasar";
 import { pasangRuteOutro } from "./outro";
+import { pasangRutePustaka } from "./pustaka";
 import { pasangRuteTvr } from "./tvr";
 import { pasangRuteVideo } from "./video";
 
@@ -20,6 +21,7 @@ export function buatRouter(): Router {
   pasangRuteVideo(r);
   pasangRuteOutro(r);
   pasangRuteTvr(r);
+  pasangRutePustaka(r);
   return r;
 }
 

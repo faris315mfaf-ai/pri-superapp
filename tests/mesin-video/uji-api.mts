@@ -115,11 +115,12 @@ type Jawaban = { status: number; json: () => any; teks: string; isi: Buffer; tip
 async function minta(
   method: string,
   url: string,
-  opsi: { id?: string | null; anggota?: string; json?: unknown; berkas?: { nama: string; isi: Buffer; tipe?: string } } = {},
+  opsi: { id?: string | null; anggota?: string; header?: Record<string, string>; json?: unknown; berkas?: { nama: string; isi: Buffer; tipe?: string } } = {},
 ): Promise<Jawaban> {
   const headers: Record<string, string> = {};
   if (opsi.id !== undefined && opsi.id !== null) headers["X-Autoedit-Pengguna"] = opsi.id;
   if (opsi.anggota) headers["X-Autoedit-Anggota"] = opsi.anggota;
+  Object.assign(headers, opsi.header ?? {});
   let body: BodyInit | undefined;
   if (opsi.json !== undefined) {
     headers["content-type"] = "application/json";
@@ -993,6 +994,74 @@ await uji("tvr hapus template: ditolak selama ada antrean, lalu bersih", async (
   // Tanpa template, Edit Otomatis kembali minta template dibuat dulu.
   r = await minta("POST", "/api/tvr/jobs", { id: a, json: { url: "https://www.instagram.com/reel/HAPUS2/", hook: "UJI" } });
   pastikan(r.status === 409, `${r.status}`);
+});
+
+await uji("pustaka template bot: simpan, pasang, hapus, dan penjagaan", async () => {
+  const sumber = "8801";
+  const bot = "8802";
+  const dalam = { "X-Autoedit-Pustaka": "1" };
+  const kode = "uji8801abc";
+  await templateSiap(sumber);
+  // Tanpa header internal: rute tidak ada (anggota biasa tak bisa memakainya).
+  pastikan((await minta("POST", "/api/tvr/pustaka/simpan", { id: sumber, json: { kode } })).status === 404);
+  pastikan((await minta("POST", "/api/tvr/pustaka/pasang", { id: bot, json: { kode } })).status === 404);
+  pastikan((await minta("DELETE", `/api/tvr/pustaka/${kode}`, { id: sumber })).status === 404);
+  // Dengan header tapi tanpa identitas: 401.
+  pastikan((await minta("POST", "/api/tvr/pustaka/simpan", { json: { kode }, header: dalam })).status === 401);
+  // Kode tak sah: 422.
+  pastikan((await minta("POST", "/api/tvr/pustaka/simpan", { id: sumber, json: { kode: "../x" }, header: dalam })).status === 422);
+  // Sumber belum punya template siap: 404.
+  pastikan((await minta("POST", "/api/tvr/pustaka/simpan", { id: "8899", json: { kode: "uji8899xyz" }, header: dalam })).status === 404);
+
+  let r = await minta("POST", "/api/tvr/pustaka/simpan", { id: sumber, json: { kode }, header: dalam });
+  pastikan(r.status === 200 && r.json().byte > 0, r.teks);
+  const folder = jalur.templatePath(`pustaka-${kode}`);
+  pastikan(fs.existsSync(path.join(folder, "template.json")));
+  const isi = JSON.parse(fs.readFileSync(path.join(folder, "template.json"), "utf8"));
+  pastikan(isi.owner === "pustaka" && isi.id === `pustaka-${kode}` && isi.siap === true, JSON.stringify(isi));
+  // Kode sama dua kali: 409.
+  pastikan((await minta("POST", "/api/tvr/pustaka/simpan", { id: sumber, json: { kode }, header: dalam })).status === 409);
+  // Template pustaka tidak terlihat sebagai template akun mana pun.
+  pastikan(!JSON.stringify((await minta("GET", "/api/video/templates", { id: sumber })).json()).includes("pustaka-"));
+
+  // Pasang ke akun bot.
+  pastikan((await minta("POST", "/api/tvr/pustaka/pasang", { id: bot, json: { kode: "tidakada01" }, header: dalam })).status === 404);
+  r = await minta("POST", "/api/tvr/pustaka/pasang", { id: bot, json: { kode }, header: dalam });
+  pastikan(r.status === 200, r.teks);
+  const t = (await minta("GET", "/api/tvr/ringkas", { id: bot })).json().template;
+  pastikan(t.ada === true && t.siap === true, JSON.stringify(t));
+  const milikBot = JSON.parse(fs.readFileSync(path.join(jalur.templatePath(`tvr-${bot}`), "template.json"), "utf8"));
+  pastikan(milikBot.owner === `pri-${bot}` && milikBot.id === `tvr-${bot}`, JSON.stringify(milikBot));
+  pastikan(sama(asetTvr(bot), asetTvr(sumber)), `${asetTvr(bot)} vs ${asetTvr(sumber)}`);
+  // Salinan, bukan tautan: berkas bot terpisah dari sumber.
+  for (const n of asetTvr(sumber)) {
+    pastikan(md5(fs.readFileSync(path.join(jalur.templatePath(`tvr-${bot}`), "assets", n))) === md5(fs.readFileSync(path.join(jalur.templatePath(`tvr-${sumber}`), "assets", n))));
+  }
+  pastikan(!fs.existsSync(path.join(jalur.templatePath(`tvr-${bot}`), "assets", ".draf")));
+  // Memasang ulang menggantikan (idempoten), tidak menumpuk.
+  r = await minta("POST", "/api/tvr/pustaka/pasang", { id: bot, json: { kode }, header: dalam });
+  pastikan(r.status === 200, r.teks);
+  pastikan(sama(asetTvr(bot), asetTvr(sumber)));
+  // Bot bisa dipakai: template-nya siap (render menuntut ini).
+  const render = await minta("POST", "/api/tvr/jobs", { id: bot, json: { url: "https://www.instagram.com/reel/PUSTAKA1/", hook: "UJI PUSTAKA" } });
+  pastikan(render.status === 200, render.teks);
+  // Selama ada video aktif, pasang ditolak (template tak boleh berganti di tengah jalan).
+  r = await minta("POST", "/api/tvr/pustaka/pasang", { id: bot, json: { kode }, header: dalam });
+  pastikan(r.status === 409 && r.json().detail.includes("antrean"), r.teks);
+  pastikan((await minta("DELETE", `/api/tvr/jobs/${render.json().job.job_id}`, { id: bot })).status === 200);
+
+  // Menyimpan ulang dari sumber tidak mengubah salinan yang sudah di pustaka.
+  const sebelum = md5(fs.readFileSync(path.join(folder, "template.json")));
+  pastikan((await tetapkan(sumber, { kategori: "BERUBAH" })).status === 200);
+  pastikan(md5(fs.readFileSync(path.join(folder, "template.json"))) === sebelum);
+
+  // Hapus dari pustaka; template bot tetap ada.
+  r = await minta("DELETE", `/api/tvr/pustaka/${kode}`, { id: sumber, header: dalam });
+  pastikan(r.status === 200 && !fs.existsSync(folder), r.teks);
+  pastikan((await minta("GET", "/api/tvr/ringkas", { id: bot })).json().template.siap === true);
+  pastikan((await minta("DELETE", "/api/tvr/pustaka/..%2Fx", { id: sumber, header: dalam })).status !== 200);
+  // Sisa folder sementara tidak tertinggal.
+  pastikan(!fs.readdirSync(path.join(MEDIA, "templates")).some((n) => n.includes(".salin-")));
 });
 
 // ---------------------------------------------------------------- selesai

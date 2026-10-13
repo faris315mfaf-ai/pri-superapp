@@ -126,6 +126,47 @@ export function mintaJsonMesin<T = Record<string, unknown>>(jalur: string, idAku
   });
 }
 
+/**
+ * Panggilan INTERNAL ke mesin (POST/DELETE JSON) sebagai akun `idAkun`, dengan
+ * header X-Autoedit-Pustaka yang mengaktifkan rute pustaka template (Bot Redaksi).
+ * Header ini tidak ada di daftar HEADER_MASUK, jadi anggota tidak bisa
+ * menyetelnya lewat proxy; hanya kode server di sini yang bisa. Pemanggil
+ * WAJIB sudah memeriksa bahwa penggunanya master.
+ */
+export function panggilMesinPustaka(
+  metode: "POST" | "DELETE",
+  jalur: string,
+  idAkun: string,
+  badan?: unknown,
+  batasMs = 120_000,
+): Promise<{ status: number; json: unknown }> {
+  return new Promise((ok, gagal) => {
+    const isi = badan === undefined ? null : Buffer.from(JSON.stringify(badan), "utf8");
+    const header: Record<string, string | number> = { "x-autoedit-pengguna": idAkun, "x-autoedit-pustaka": "1" };
+    if (isi) {
+      header["content-type"] = "application/json";
+      header["content-length"] = isi.length;
+    }
+    const req = mintaHttp({ socketPath: socketAutoEdit(), path: jalur, method: metode, headers: header, timeout: batasMs, agent: false }, (res) => {
+      const potongan: Buffer[] = [];
+      res.on("data", (b: Buffer) => potongan.push(b));
+      res.on("end", () => {
+        let json: unknown = null;
+        try {
+          json = JSON.parse(Buffer.concat(potongan).toString("utf8"));
+        } catch {
+          json = null;
+        }
+        ok({ status: res.statusCode ?? 502, json });
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error("Mesin Auto Edit tidak menjawab.")));
+    req.on("error", gagal);
+    if (isi) req.write(isi);
+    req.end();
+  });
+}
+
 /** Teruskan permintaan ke layanan Auto Edit sebagai akun `idAkun`. */
 export function teruskanAutoEdit(
   request: Request,

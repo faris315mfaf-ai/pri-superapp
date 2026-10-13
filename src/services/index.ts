@@ -7299,3 +7299,21 @@ export async function kirimAksiTugasBot(aksi: AksiTugasBot): Promise<void> {
     body: JSON.stringify(aksi),
   });
 }
+
+// ---- PUSTAKA TEMPLATE BOT (13 Okt 2026) — hanya master ----
+import type { AksiTemplateBot, HasilPasang, StatusTemplateBot } from "@/lib/bot-template-murni";
+
+export async function getTemplateBot(): Promise<StatusTemplateBot> {
+  const json = await fetchJson("/api/bot/template", { headers: headerToken() });
+  return json as StatusTemplateBot;
+}
+
+/** Simpan/pasang/hapus template bot. `pasang` mengembalikan hasil per bot (sebagian bisa gagal). */
+export async function kirimAksiTemplateBot(aksi: AksiTemplateBot): Promise<{ sukses: boolean; id?: number; hasil?: HasilPasang[] }> {
+  const json = await fetchJson("/api/bot/template", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(aksi),
+  });
+  return json as { sukses: boolean; id?: number; hasil?: HasilPasang[] };
+}

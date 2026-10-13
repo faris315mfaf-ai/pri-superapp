@@ -4,6 +4,7 @@ import { adalahAdminStudio, adalahBot, adalahPalugodam } from "@/lib/struktur";
 import { masukSebagai } from "@/lib/kendali-klien";
 import { KendaliAkun } from "./kendali-akun";
 import { TautanProfilMaster } from "./tautan-profil-master";
+import { TemplateBot } from "./template-bot";
 import { TugasBotTvr } from "./tugas-bot";
 import { AccAjuanKomen } from "./acc-ajuan-komen";
 import { RangkumanLink } from "./rangkuman-link";
@@ -39,6 +40,7 @@ import {
   Minimize2,
   EyeOff,
   Hourglass,
+  Layers,
   Link2,
   Loader2,
   Pencil,
@@ -1034,6 +1036,19 @@ export function TvrKuScreen({
                 render: () => (
                   <FadeInUp>
                     <TautanProfilMaster />
+                  </FadeInUp>
+                ),
+              },
+              {
+                id: "template-bot",
+                pin: true,
+                segmen: "Admin PALUGODAM",
+                judul: "Template Bot",
+                ikon: Layers,
+                keterangan: "Simpan template ber-nama ke pustaka lalu pasang ke bot",
+                render: () => (
+                  <FadeInUp>
+                    <TemplateBot />
                   </FadeInUp>
                 ),
               },
