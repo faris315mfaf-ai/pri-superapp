@@ -56,6 +56,8 @@ import {
   JENIS_VIDEO,
   jobTerjangkau,
   kirimJob,
+  bidangPotong,
+  opsiPotongDari,
   MAX_ASSET_MB,
   MAX_BATCH,
   pastikanAntreanMuat,
@@ -228,11 +230,13 @@ const BatchBody = z.object({
     .nullable()
     .default(null)
     .transform((v) => (v === "black" || v === "white" ? v : "")),
+  ...bidangPotong,
 });
 const JobBody = z.object({
   url: z.string().min(5).max(2000),
   template_id: z.string().min(1).max(80),
   texts: teksBody,
+  ...bidangPotong,
 });
 const PreviewBody = z.object({ url: z.string().min(5).max(2000) });
 const HookBody = z.object({ naskah: z.string().min(3).max(5000) });
@@ -572,12 +576,13 @@ export function pasangRuteVideo(r: Router): void {
   r.post(`${A}/jobs`, async (pm) => {
     const p = penggunaWajib(pm);
     const body = await bacaJson(pm, JobBody);
+    const opsi = opsiPotongDari(body);
     templateTerlihat(body.template_id, p);
     pastikanHook(body.texts);
     const url = await sumberSah(body.url, p);
     await pastikanKuota(p);
     await pastikanAntreanMuat(1, p);
-    return { job_id: await kirimJob(url, body.template_id, body.texts, p), status: "queued" };
+    return { job_id: await kirimJob(url, body.template_id, body.texts, p, "", opsi), status: "queued" };
   });
 
   r.post(`${A}/jobs/batch`, async (pm) => {
@@ -585,6 +590,7 @@ export function pasangRuteVideo(r: Router): void {
     // lalu dipakai ulang dari cache.
     const p = penggunaWajib(pm);
     const body = await bacaJson(pm, BatchBody);
+    const opsi = opsiPotongDari(body);
     const ids: string[] = [];
     for (const mentah of body.template_ids) {
       const tid = mentah.trim();
@@ -598,7 +604,7 @@ export function pasangRuteVideo(r: Router): void {
     await pastikanAntreanMuat(ids.length, p);
     const jobs: { job_id: string; template_id: string; status: string }[] = [];
     for (const tid of ids) {
-      jobs.push({ job_id: await kirimJob(url, tid, body.texts, p, body.teks_warna), template_id: tid, status: "queued" });
+      jobs.push({ job_id: await kirimJob(url, tid, body.texts, p, body.teks_warna, opsi), template_id: tid, status: "queued" });
     }
     return { jobs };
   });

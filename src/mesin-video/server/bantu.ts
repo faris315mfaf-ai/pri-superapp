@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import { kirimRender } from "../antrean";
+import { kirimRender, type MuatanRender } from "../antrean";
 import { GalatVideo, type Job, type Template } from "../jenis";
 import { folderUnggahan, pemilikUnggahan } from "../jalur";
 import { bacaStatus, buatJob, daftarJob, jumlahMenunggu, mintaBatal, STATUS_AKTIF_JOB, tulisStatus } from "../job";
@@ -210,15 +210,40 @@ export async function cabutTugas(status: Job): Promise<void> {
   else await tulisStatus(id, { log: "Diminta berhenti; menunggu proses berhenti." });
 }
 
+/**
+ * Field opsional "pilih bagian video" + bingkai landscape (14 Okt 2026), dipakai body job master & TVR.
+ * mulai/akhir dalam detik dari awal sumber; bingkai "hitam" = video lebar utuh dengan atas-bawah hitam.
+ */
+export const bidangPotong = {
+  mulai: z.number().min(0).max(36_000).optional(),
+  akhir: z.number().min(0).max(36_000).optional(),
+  bingkai: z.enum(["penuh", "hitam"]).optional(),
+};
+
+export type OpsiPotong = Pick<MuatanRender, "potong" | "bingkai">;
+
+/** Body -> opsi render. Rentang yang tidak lengkap/terbalik ditolak 400 (bukan diam-diam diabaikan). */
+export function opsiPotongDari(b: { mulai?: number; akhir?: number; bingkai?: "penuh" | "hitam" }): OpsiPotong {
+  const opsi: OpsiPotong = {};
+  if (b.mulai !== undefined || b.akhir !== undefined) {
+    if (b.mulai === undefined || b.akhir === undefined) throw new GalatHttp(400, "Bagian video harus punya titik mulai dan akhir.");
+    if (!(b.akhir - b.mulai >= 1)) throw new GalatHttp(400, "Bagian video yang dipilih minimal 1 detik.");
+    opsi.potong = { mulai: Math.round(b.mulai * 10) / 10, akhir: Math.round(b.akhir * 10) / 10 };
+  }
+  if (b.bingkai === "hitam") opsi.bingkai = "hitam";
+  return opsi;
+}
+
 export async function kirimJob(
   url: string,
   templateId: string,
   texts: Record<string, string>,
   p: Pengguna,
   teksWarna = "",
+  opsi: OpsiPotong = {},
 ): Promise<string> {
   const jobId = await buatJob(url, templateId, texts, akunDari(p));
-  await kirimRender({ job_id: jobId, url, template_id: templateId, texts, ...(teksWarna ? { teks_warna: teksWarna } : {}) });
+  await kirimRender({ job_id: jobId, url, template_id: templateId, texts, ...(teksWarna ? { teks_warna: teksWarna } : {}), ...opsi });
   return jobId;
 }
 

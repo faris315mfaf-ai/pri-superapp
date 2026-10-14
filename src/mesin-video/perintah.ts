@@ -26,6 +26,7 @@ import {
   pyStrip,
   pyTruthy,
   teksBulat,
+  ukuranTampil,
 } from "./media";
 
 /** Tanda tangan perender teks (teks.ts); bisa diganti untuk uji. */
@@ -92,6 +93,44 @@ export function klip(
 
 type Lapisan = Record<string, unknown> & { path: string };
 
+/** Durasi potongan terpendek yang diterima (detik). */
+export const POTONG_MIN_DETIK = 1;
+
+/**
+ * Rentang sumber yang dirender (14 Okt 2026). Tanpa `potong`: dari 0 sampai batas (perilaku lama).
+ * Dengan `potong`: mulai di `mulai`, panjang `akhir - mulai`, tetap dipangkas ke batas durasi template
+ * dan ke sisa durasi sumber. Mulai di luar video = galat yang bisa dibaca pengguna.
+ */
+export function rentangPotong(
+  durasiSumber: number,
+  batas: number,
+  potong?: { mulai: number; akhir: number } | null,
+): { mulai: number; durasi: number } {
+  if (!potong) {
+    const durasi = durasiSumber ? Math.min(durasiSumber, batas) : batas;
+    return { mulai: 0, durasi };
+  }
+  const mulai = Math.max(0, Number(potong.mulai) || 0);
+  const akhir = Number(potong.akhir) || 0;
+  if (durasiSumber && mulai >= durasiSumber - POTONG_MIN_DETIK / 2) {
+    throw new GalatVideo("Bagian yang dipilih berada di luar durasi video. Pilih ulang bagian videonya.");
+  }
+  let durasi = Math.min(akhir - mulai, batas);
+  if (durasiSumber) durasi = Math.min(durasi, durasiSumber - mulai);
+  if (!(durasi >= POTONG_MIN_DETIK / 2)) {
+    throw new GalatVideo("Bagian video yang dipilih terlalu pendek. Pilih minimal 1 detik.");
+  }
+  return { mulai, durasi };
+}
+
+/** Video sumber -> kanvas: penuh (diperbesar lalu dipotong tengah) atau utuh dengan bingkai hitam. */
+export function filterBadan(lebar: number, tinggi: number, fps: number, bingkaiHitam: boolean): string {
+  const ukur = bingkaiHitam
+    ? `scale=${lebar}:${tinggi}:force_original_aspect_ratio=decrease,pad=${lebar}:${tinggi}:(ow-iw)/2:(oh-ih)/2:color=black`
+    : `scale=${lebar}:${tinggi}:force_original_aspect_ratio=increase,crop=${lebar}:${tinggi}`;
+  return `[0:v]${ukur},fps=${fps},setsar=1,format=yuv420p[b0]`;
+}
+
 export type HasilPerintah = { args: string[]; total: number };
 
 /**
@@ -105,7 +144,13 @@ export async function bangunPerintah(
   keluaran: string,
   texts: Record<string, string>,
   kerja: string,
-  opsi: { gambarTeks?: PenggambarTeks } = {},
+  opsi: {
+    gambarTeks?: PenggambarTeks;
+    /** Bagian sumber yang dipakai (detik). */
+    potong?: { mulai: number; akhir: number } | null;
+    /** Video lebar (lebar >= tinggi saat ditampilkan) tidak dipotong: utuh di tengah, atas-bawah hitam. */
+    bingkaiHitam?: boolean;
+  } = {},
 ): Promise<HasilPerintah> {
   const penggambar = opsi.gambarTeks ?? gambarTeks;
   const lebar = pyInt(pyOr(template.width, 1080));
@@ -122,18 +167,24 @@ export async function bangunPerintah(
   }
   let batas = MAX_SOURCE_SECONDS;
   if (pyTruthy(ambil(template, "max_duration"))) batas = Math.min(batas, pyFloat(template.max_duration));
-  const durasiBadan = infoSumber.duration ? Math.min(infoSumber.duration, batas) : batas;
+  const { mulai: mulaiBadan, durasi: durasiBadan } = rentangPotong(infoSumber.duration, batas, opsi.potong);
   if (durasiBadan <= 0) throw new GalatVideo("Durasi video sumber terbaca 0 detik");
 
-  const inputs: string[] = ["-t", formatF(durasiBadan, 3), "-i", source];
+  // -ss sebelum -i = lompat cepat ke titik mulai (akurat karena videonya di-encode ulang).
+  const inputs: string[] = [
+    ...(mulaiBadan > 0 ? ["-ss", formatF(mulaiBadan, 3)] : []),
+    "-t", formatF(durasiBadan, 3), "-i", source,
+  ];
   const filters: string[] = [];
   let idx = 1; // indeks input berikutnya
 
   // ---------- BADAN: video sumber dipasang ke kanvas ----------
-  filters.push(
-    `[0:v]scale=${lebar}:${tinggi}:force_original_aspect_ratio=increase,` +
-      `crop=${lebar}:${tinggi},fps=${fps},setsar=1,format=yuv420p[b0]`,
-  );
+  let bingkaiHitam = false;
+  if (opsi.bingkaiHitam) {
+    const tampil = await ukuranTampil(source).catch(() => ({ width: 0, height: 0 }));
+    bingkaiHitam = tampil.width > 0 && tampil.height > 0 && tampil.width >= tampil.height;
+  }
+  filters.push(filterBadan(lebar, tinggi, fps, bingkaiHitam));
   let sekarang = "b0";
 
   // ---------- LAPISAN: overlay PNG template + teks yang digambar sendiri ----------

@@ -164,6 +164,8 @@ export async function renderVideo(m: MuatanRender): Promise<{ job_id: string; st
       log: catat,
       progress: (p: number) => tulisStatus(jobId, { progress: p }).then(() => undefined),
       batal: () => dimintaBatal(jobId),
+      potong: m.potong ?? null,
+      bingkaiHitam: m.bingkai === "hitam",
     });
     // Sumber tidak dipakai lagi; hapus supaya disk hemat.
     hapusDiam(sumber);

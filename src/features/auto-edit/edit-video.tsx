@@ -18,6 +18,9 @@ import { useIntervalAktif } from "@/hooks/use-tab-aktif";
 import { apiFetch, apiUnggah, bacaJson, bacaSimpanan, pesanGalat, simpanSimpanan } from "./api";
 import { useDialog } from "./dialog";
 import { PopupUnggahSosmed } from "./popup-unggah-sosmed";
+import { PilihBagianVideo } from "./pilih-bagian-video";
+import { useAppStore } from "@/hooks/use-app-store";
+import { bidangJob, bolehPotongVideo, nilaiRentang, rentangAwal, type RentangVideo } from "@/lib/potong-video";
 
 // Template pertama. Id "utama" dipertahankan dari versi GODAM sebelumnya
 // supaya berkas yang sudah diunggah tidak perlu diunggah ulang. Set
@@ -485,6 +488,15 @@ export function EditVideo() {
   const [pratinjau, setPratinjau] = useState<Pratinjau | null>(null);
   const [memuatPratinjau, setMemuatPratinjau] = useState(false);
   const [galatPratinjau, setGalatPratinjau] = useState("");
+  // Pilih bagian video + bingkai landscape (14 Okt 2026) — uji coba akun Faris.
+  const bolehPotong = useAppStore((s) => bolehPotongVideo(s.user));
+  const [videoLokal, setVideoLokal] = useState<string | null>(null);
+  const [rentangLink, setRentangLink] = useState<RentangVideo | null>(null);
+  const [rentangBerkas, setRentangBerkas] = useState<RentangVideo | null>(null);
+  useEffect(() => {
+    if (!videoLokal) return undefined;
+    return () => URL.revokeObjectURL(videoLokal);
+  }, [videoLokal]);
 
   // "ai"     = disusun dari caption video sumber
   // "manual" = diketik sendiri
@@ -1102,7 +1114,29 @@ export function EditVideo() {
   }
 
   /** Baca isi link tanpa mengunduh videonya, lalu langsung buatkan teks berita. */
+  // Batas durasi hasil = max_duration set layer (bila diisi), selain itu batas sumber server.
+  const maksPotong = susunan?.max_duration || pratinjau?.max_seconds || 600;
+  const durasiPotong = modeSumber === "file" ? (berkasSumber?.duration ?? null) : (pratinjau?.duration ?? null);
+  const rentangPotong = modeSumber === "file" ? rentangBerkas : rentangLink;
+  const ubahRentang = modeSumber === "file" ? setRentangBerkas : setRentangLink;
+  const keadaanPotong = rentangPotong && durasiPotong ? nilaiRentang(rentangPotong, durasiPotong, maksPotong) : null;
+  const editorPotong =
+    bolehPotong && rentangPotong && durasiPotong ? (
+      <PilihBagianVideo
+        className="mt-2"
+        durasi={durasiPotong}
+        maks={maksPotong}
+        nilai={rentangPotong}
+        onUbah={ubahRentang}
+        srcVideo={modeSumber === "file" ? videoLokal : null}
+        gambar={modeSumber === "link" ? pratinjau?.thumbnail || null : null}
+        lebarSumber={modeSumber === "link" ? Number(pratinjau?.width) || 0 : undefined}
+        tinggiSumber={modeSumber === "link" ? Number(pratinjau?.height) || 0 : undefined}
+      />
+    ) : null;
+
   async function bacaLink(tautan: string) {
+    setRentangLink(null);
     if (!tautan.toLowerCase().startsWith("http")) {
       setPratinjau(null);
       setGalatPratinjau("");
@@ -1122,6 +1156,8 @@ export function EditVideo() {
       const data = await bacaJson(res);
       if (!res.ok) throw new Error(pesanGalat(res.status, data, "Tidak bisa membaca link."));
       setPratinjau(data as Pratinjau);
+      const pv = data as Pratinjau;
+      if (pv.duration && pv.duration > 0 && !pv.too_long) setRentangLink(rentangAwal(pv.duration, maksPotong));
       await buatHook(naskahDariPratinjau(data as Pratinjau));
     } catch (err) {
       setPratinjau(null);
@@ -1152,6 +1188,8 @@ export function EditVideo() {
     }
     setMengunggahSumber(true);
     setGalatPratinjau("");
+    setRentangBerkas(null);
+    setVideoLokal(null);
     setUnggahan({ slot: "sumber", nama: file.name, persen: 0, diproses: false });
     try {
       const { ok, status, data } = await apiUnggah("/api/video/sources", file, (persen) =>
@@ -1164,6 +1202,11 @@ export function EditVideo() {
         size: data.size as number,
         duration: (data.duration as number) ?? null,
       });
+      const durasi = Number(data.duration) > 0 ? Number(data.duration) : 0;
+      if (bolehPotong && durasi) {
+        setVideoLokal(URL.createObjectURL(file));
+        setRentangBerkas(rentangAwal(durasi, maksPotong));
+      }
     } catch (err) {
       setBerkasSumber(null);
       setGalatPratinjau(err instanceof Error ? err.message : "Gagal mengunggah video.");
@@ -1400,10 +1443,16 @@ export function EditVideo() {
         );
       }
       const sasaran = pilihanSet.length ? pilihanSet : [idSet];
+      if (bolehPotong && keadaanPotong && !keadaanPotong.sah) throw new Error(keadaanPotong.pesan);
       const res = await apiFetch("/api/video/jobs/batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: sumberUrl, template_ids: sasaran, texts }),
+        body: JSON.stringify({
+          url: sumberUrl,
+          template_ids: sasaran,
+          texts,
+          ...(bolehPotong ? bidangJob(rentangPotong, durasiPotong) : {}),
+        }),
       });
       const data = await bacaJson(res);
       if (!res.ok) throw new Error(pesanGalat(res.status, data, "Gagal memulai."));
@@ -1872,6 +1921,7 @@ export function EditVideo() {
                           </div>
                         </div>
                         {pratinjau.description && <p className={styles.caption}>{pratinjau.description}</p>}
+                        {editorPotong}
                       </>
                     )}
                   </div>
@@ -1901,6 +1951,7 @@ export function EditVideo() {
                     {berkasSumber.duration ? `, ${formatDurasi(berkasSumber.duration)}` : ""})
                   </p>
                 )}
+                {editorPotong}
                 <label>
                   <span>
                     Pemilik video

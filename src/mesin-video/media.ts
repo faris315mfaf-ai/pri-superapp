@@ -395,6 +395,44 @@ export async function probe(berkas: string): Promise<InfoMedia> {
   };
 }
 
+/**
+ * Ukuran video SEPERTI DITAMPILKAN (14 Okt 2026): rekaman HP potret sering disimpan 1920x1080 dengan
+ * metadata rotasi 90°, jadi lebar/tinggi mentah dari probe() bisa terbalik. Rotasi dibaca dari tag
+ * `rotate` (ffmpeg lama) atau side data `rotation` (display matrix). Gagal dibaca = {0, 0}.
+ */
+export async function ukuranTampil(berkas: string): Promise<{ width: number; height: number }> {
+  const hasil = await jalankanProses(
+    [
+      FFPROBE_BIN, "-v", "error", "-select_streams", "v:0",
+      "-show_entries", "stream=width,height:stream_tags=rotate:stream_side_data=rotation",
+      "-of", "json", berkas,
+    ],
+    60,
+  );
+  if (hasil.returncode !== 0) return { width: 0, height: 0 };
+  let data: unknown;
+  try {
+    data = JSON.parse(hasil.stdout || "{}");
+  } catch {
+    return { width: 0, height: 0 };
+  }
+  const streams = ambil(data, "streams");
+  const v = Array.isArray(streams) ? (streams[0] as Record<string, unknown> | undefined) : undefined;
+  if (!v) return { width: 0, height: 0 };
+  const lebar = Number(ambil(v, "width")) || 0;
+  const tinggi = Number(ambil(v, "height")) || 0;
+  let rotasi = Number(ambil(ambil(v, "tags") ?? {}, "rotate")) || 0;
+  const sisi = ambil(v, "side_data_list");
+  if (Array.isArray(sisi)) {
+    for (const d of sisi) {
+      const r = Number(ambil(d, "rotation"));
+      if (Number.isFinite(r) && r !== 0) rotasi = r;
+    }
+  }
+  const tegak = Math.abs(Math.round(rotasi)) % 180 === 90;
+  return tegak ? { width: tinggi, height: lebar } : { width: lebar, height: tinggi };
+}
+
 /** True kalau berkas videonya menyimpan lapisan transparan. */
 export async function punyaAlpha(berkas: string): Promise<boolean> {
   const hasil = await jalankanProses([

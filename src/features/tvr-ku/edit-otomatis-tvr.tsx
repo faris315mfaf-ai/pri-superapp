@@ -36,6 +36,8 @@ import { cn } from "@/lib/utils";
 import { bacaJson, pesanGalat } from "@/features/auto-edit/api";
 import { adalahKonteksBot, useApiAutoEdit } from "@/features/auto-edit/tim";
 import { bolehAlatVideo } from "@/lib/peran";
+import { bidangJob, bolehPotongVideo, nilaiRentang, rentangAwal, type RentangVideo } from "@/lib/potong-video";
+import { PilihBagianVideo } from "@/features/auto-edit/pilih-bagian-video";
 import { TemplateTvrModal } from "./template-tvr-modal";
 import { segarkanStokTvr } from "./stok-video-tvr";
 import {
@@ -53,6 +55,8 @@ import {
 export const PERISTIWA_AUTOEDIT_SEGAR = "pri:autoedit-segar";
 
 type Unggahan = { url: string; name: string; size?: number; duration?: number | null };
+/** Hasil pratinjau link (durasi & ukuran) untuk langkah pilih bagian video. */
+type InfoLink = { url: string; durasi: number | null; lebar: number; tinggi: number; gambar: string; terlaluPanjang: boolean };
 
 export function EditOtomatisTvr() {
   const api = useApiAutoEdit();
@@ -75,9 +79,21 @@ export function EditOtomatisTvr() {
   const [membuatHook, setMembuatHook] = useState(false);
   const [mengirim, setMengirim] = useState(false);
   const [pesan, setPesan] = useState("");
+  // Pilih bagian video + bingkai landscape (14 Okt 2026) — uji coba akun Faris.
+  const bolehPotong = useAppStore((s) => bolehPotongVideo(s.user));
+  const [videoLokal, setVideoLokal] = useState<string | null>(null);
+  const [infoLink, setInfoLink] = useState<InfoLink | null>(null);
+  const [memeriksaLink, setMemeriksaLink] = useState(false);
+  const [rentang, setRentang] = useState<RentangVideo | null>(null);
 
   const [membatalkan, setMembatalkan] = useState(false);
   const tabAktifRef = useRefTabAktif();
+
+  // URL blob pratinjau dilepas saat diganti / komponen ditutup.
+  useEffect(() => {
+    if (!videoLokal) return undefined;
+    return () => URL.revokeObjectURL(videoLokal);
+  }, [videoLokal]);
 
   // Modul bersama TV Official (7 Okt 2026): aksi anggota tim lain → muat ulang.
   useEffect(() => {
@@ -178,6 +194,50 @@ export function EditOtomatisTvr() {
     }
   }, [modeTim, idSayaAktif]);
 
+  // Pratinjau link (akun uji coba): durasi + ukuran untuk garis waktu. Ditunda 900 ms setelah berhenti mengetik.
+  const linkBersih = link.trim();
+  const linkSah = /^https:\/\/\S+$/i.test(linkBersih);
+  const maksDurasi = data?.batas.maks_durasi_detik ?? 180;
+  useEffect(() => {
+    if (!bolehPotong || modeSumber !== "link" || !linkSah || infoLink?.url === linkBersih) return undefined;
+    let hidup = true;
+    const t = window.setTimeout(() => {
+      setMemeriksaLink(true);
+      setRentang(null);
+      void (async () => {
+        try {
+          const res = await api.fetch("/api/tvr/preview", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: linkBersih }),
+          });
+          const d = await bacaJson(res);
+          if (!hidup) return;
+          if (!res.ok) throw new Error(pesanGalat(res.status, d, "Link belum bisa dibaca."));
+          const durasi = Number(d.duration) > 0 ? Number(d.duration) : null;
+          setInfoLink({
+            url: linkBersih,
+            durasi,
+            lebar: Number(d.width) || 0,
+            tinggi: Number(d.height) || 0,
+            gambar: typeof d.thumbnail === "string" ? d.thumbnail : "",
+            terlaluPanjang: Boolean(d.too_long),
+          });
+          setRentang(durasi && !d.too_long ? rentangAwal(durasi, maksDurasi) : null);
+        } catch (e) {
+          if (hidup) setInfoLink({ url: linkBersih, durasi: null, lebar: 0, tinggi: 0, gambar: "", terlaluPanjang: false });
+          if (hidup) setPesan(e instanceof Error ? e.message : "Link belum bisa dibaca.");
+        } finally {
+          if (hidup) setMemeriksaLink(false);
+        }
+      })();
+    }, 900);
+    return () => {
+      hidup = false;
+      window.clearTimeout(t);
+    };
+  }, [bolehPotong, modeSumber, linkSah, linkBersih, infoLink?.url, api, maksDurasi]);
+
   if (galatMuat && !data) {
     return (
       <GlassCard className="p-4">
@@ -214,16 +274,26 @@ export function EditOtomatisTvr() {
     }
     setPesan("");
     setPersenSumber(0);
+    setRentang(null);
+    setVideoLokal(null);
     try {
       const { ok, status, data: d } = await api.unggah("/api/tvr/sumber", file, setPersenSumber);
       if (!ok) throw new Error(pesanGalat(status, d, "Video sumber gagal diunggah."));
-      setUnggahan({ url: String(d.url), name: file.name, size: Number(d.size) || file.size, duration: d.duration ?? null });
+      const durasi = Number(d.duration) > 0 ? Number(d.duration) : null;
+      setUnggahan({ url: String(d.url), name: file.name, size: Number(d.size) || file.size, duration: durasi });
+      if (bolehPotong && durasi) {
+        setVideoLokal(URL.createObjectURL(file));
+        setRentang(rentangAwal(durasi, batas.maks_durasi_detik));
+      }
     } catch (e) {
       setPesan(e instanceof Error ? e.message : "Video sumber gagal diunggah.");
     } finally {
       setPersenSumber(null);
     }
   }
+
+  const durasiSumber = modeSumber === "unggah" ? (unggahan?.duration ?? null) : infoLink?.url === linkBersih ? infoLink.durasi : null;
+  const keadaanRentang = rentang && durasiSumber ? nilaiRentang(rentang, durasiSumber, batas.maks_durasi_detik) : null;
 
   async function buatHook() {
     if (!naskah.trim() || membuatHook) return;
@@ -251,6 +321,8 @@ export function EditOtomatisTvr() {
   if (modeSumber === "unggah" && !unggahan) kurang.push("video sumber");
   if (modeSumber === "link" && !/^https:\/\/\S+$/i.test(link.trim())) kurang.push("link video (diawali https://)");
   if (!hook.trim()) kurang.push("tulisan berita");
+  if (bolehPotong && keadaanRentang && !keadaanRentang.sah) kurang.push(`bagian video maks ${Math.round(batas.maks_durasi_detik / 60)} menit`);
+  if (bolehPotong && modeSumber === "link" && memeriksaLink) kurang.push("tunggu pemeriksaan link");
 
   async function kirim() {
     if (kurang.length > 0 || mengirim || persenSumber !== null) return;
@@ -260,7 +332,13 @@ export function EditOtomatisTvr() {
       const res = await api.fetch("/api/tvr/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: alamatSumber, hook: hook.trim(), sumber: teksSumber.trim(), kategori: kategori.trim() }),
+        body: JSON.stringify({
+          url: alamatSumber,
+          hook: hook.trim(),
+          sumber: teksSumber.trim(),
+          kategori: kategori.trim(),
+          ...(bolehPotong ? bidangJob(rentang, durasiSumber) : {}),
+        }),
       });
       const d = await bacaJson(res);
       if (!res.ok) {
@@ -282,6 +360,9 @@ export function EditOtomatisTvr() {
       // Bahan sumber dilepas; tulisan/kategori dibiarkan supaya mudah bikin lagi.
       setUnggahan(null);
       setLink("");
+      setVideoLokal(null);
+      setInfoLink(null);
+      setRentang(null);
       segarkanStokTvr(); // Stok Video menampilkan "sedang diedit"
     } catch (e) {
       setPesan(e instanceof Error ? e.message : "Video gagal dikirim ke antrean.");
@@ -434,7 +515,12 @@ export function EditOtomatisTvr() {
           <FormBuatVideo
             batas={batas}
             modeSumber={modeSumber}
-            setModeSumber={setModeSumber}
+            setModeSumber={(m) => {
+              // Rentang milik sumber mode lain tidak dibawa: mulai ulang dari sumber mode ini.
+              setModeSumber(m);
+              const d = m === "unggah" ? (unggahan?.duration ?? null) : infoLink?.url === linkBersih ? infoLink.durasi : null;
+              setRentang(d ? rentangAwal(d, batas.maks_durasi_detik) : null);
+            }}
             link={link}
             setLink={setLink}
             unggahan={unggahan}
@@ -455,6 +541,35 @@ export function EditOtomatisTvr() {
             mengirim={mengirim}
             kurang={kurang}
             kirim={() => void kirim()}
+            potong={
+              bolehPotong && rentang && durasiSumber
+                ? {
+                    durasi: durasiSumber,
+                    maks: batas.maks_durasi_detik,
+                    nilai: rentang,
+                    onUbah: setRentang,
+                    srcVideo: modeSumber === "unggah" ? videoLokal : null,
+                    gambar: modeSumber === "link" ? (infoLink?.gambar ?? null) : null,
+                    lebar: modeSumber === "link" ? infoLink?.lebar : undefined,
+                    tinggi: modeSumber === "link" ? infoLink?.tinggi : undefined,
+                  }
+                : null
+            }
+            catatanPotong={
+              !bolehPotong
+                ? ""
+                : modeSumber === "link"
+                  ? memeriksaLink
+                    ? "Memeriksa link…"
+                    : infoLink?.url === linkBersih && infoLink.terlaluPanjang
+                      ? "Video di link ini terlalu panjang untuk diproses."
+                      : infoLink?.url === linkBersih && !infoLink.durasi
+                        ? "Durasi video di link ini tidak terbaca; video dipakai dari awal."
+                        : ""
+                  : unggahan && !unggahan.duration
+                    ? "Durasi video tidak terbaca; video dipakai dari awal."
+                    : ""
+            }
           />
         </>
       )}
@@ -580,6 +695,18 @@ type FormProps = {
   mengirim: boolean;
   kurang: string[];
   kirim: () => void;
+  /** Uji coba akun Faris: editor pilih bagian video (null = tidak tampil). */
+  potong?: {
+    durasi: number;
+    maks: number;
+    nilai: RentangVideo;
+    onUbah: (r: RentangVideo) => void;
+    srcVideo: string | null;
+    gambar: string | null;
+    lebar?: number;
+    tinggi?: number;
+  } | null;
+  catatanPotong?: string;
 };
 
 function FormBuatVideo(p: FormProps) {
@@ -650,6 +777,20 @@ function FormBuatVideo(p: FormProps) {
           className="glass-input mt-2 h-11 w-full rounded-xl px-3 text-sm text-teks-utama"
         />
       )}
+      {p.potong && (
+        <PilihBagianVideo
+          className="mt-2"
+          durasi={p.potong.durasi}
+          maks={p.potong.maks}
+          nilai={p.potong.nilai}
+          onUbah={p.potong.onUbah}
+          srcVideo={p.potong.srcVideo}
+          gambar={p.potong.gambar}
+          lebarSumber={p.potong.lebar}
+          tinggiSumber={p.potong.tinggi}
+        />
+      )}
+      {p.catatanPotong && <p className="mt-1.5 text-[11px] text-teks-sekunder" role="status">{p.catatanPotong}</p>}
       <p className="mt-1.5 text-[10.5px] leading-relaxed text-teks-sekunder">
         Maksimal {batas.maks_sumber_mb} MB; video di atas {Math.round(batas.maks_durasi_detik / 60)} menit dipotong.
         {p.modeSumber === "link" && " Link YouTube belum bisa dipakai dari server."}

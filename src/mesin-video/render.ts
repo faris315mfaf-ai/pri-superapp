@@ -19,6 +19,10 @@ export type OpsiRender = {
   gambarTeks?: PenggambarTeks;
   /** Pengganti RENDER_TIMEOUT_SECONDS, khusus uji batas waktu. */
   batasWaktuDetik?: number;
+  /** Bagian sumber yang dipakai (detik). */
+  potong?: { mulai: number; akhir: number } | null;
+  /** Video lebar tidak dipotong: utuh di tengah, atas-bawah hitam. */
+  bingkaiHitam?: boolean;
 };
 
 /** Detik monotonik (time.monotonic()). */
@@ -44,6 +48,8 @@ export async function render(
   const keluaran = path.join(outDir, "output.mp4");
   const { args: perintah, total } = await bangunPerintah(template, source, keluaran, opsi.texts ?? {}, outDir, {
     gambarTeks: opsi.gambarTeks,
+    potong: opsi.potong,
+    bingkaiHitam: opsi.bingkaiHitam,
   });
   fs.writeFileSync(path.join(outDir, "ffmpeg-command.txt"), perintah.join(" "), "utf8");
   if (log) {

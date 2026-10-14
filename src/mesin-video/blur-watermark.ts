@@ -21,6 +21,7 @@ import path from "node:path";
 import { FFMPEG_BIN, FFPROBE_BIN } from "./konfig";
 import { GalatVideo } from "./jenis";
 import { jalankan, kodekAudio } from "./kompres";
+import { ukuranTampil as ukuranTampilMedia } from "./media";
 
 export const EFEK_BLUR = ["blur", "mosaik", "halus"] as const;
 export type EfekBlur = (typeof EFEK_BLUR)[number];
@@ -39,25 +40,11 @@ type Opsi = {
 
 const tanpaBatal = async () => false;
 
-/** Lebar & tinggi TAMPIL video (rotasi 90/270 menukar keduanya). */
+/** Lebar & tinggi TAMPIL video (rotasi 90/270 menukar keduanya). Pembaca bersama: media.ukuranTampil. */
 export async function ukuranTampil(berkas: string): Promise<{ lebar: number; tinggi: number }> {
-  const h = await jalankan(
-    FFPROBE_BIN,
-    ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height:stream_side_data=rotation", "-of", "json", berkas],
-    { batal: tanpaBatal },
-  );
-  let data: { streams?: { width?: number; height?: number; side_data_list?: { rotation?: number }[] }[] } = {};
-  try {
-    data = JSON.parse(h.keluaran);
-  } catch {
-    // ditangani di bawah
-  }
-  const s = data.streams?.[0];
-  const lebar = Number(s?.width ?? 0);
-  const tinggi = Number(s?.height ?? 0);
-  if (!lebar || !tinggi) throw new GalatVideo("Ukuran video tidak terbaca.");
-  const rotasi = Math.abs(Number(s?.side_data_list?.find((d) => d.rotation !== undefined)?.rotation ?? 0)) % 180;
-  return rotasi === 90 ? { lebar: tinggi, tinggi: lebar } : { lebar, tinggi };
+  const u = await ukuranTampilMedia(berkas);
+  if (!u.width || !u.height) throw new GalatVideo("Ukuran video tidak terbaca.");
+  return { lebar: u.width, tinggi: u.height };
 }
 
 /** Gambar pratinjau (JPEG, lebar ≤ 540) dari frame di tengah awal video. */

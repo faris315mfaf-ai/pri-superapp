@@ -20,6 +20,10 @@ export type MuatanRender = {
   /** Jenis tugas (5 Okt 2026): kosong = render template; "kompres" = Kompres Video; "hapuslatar" = Hapus Latar Boom. */
   jenis?: "kompres" | "hapuslatar" | "blur";
   mutu?: string;
+  /** Bagian sumber yang dipakai (detik, 14 Okt 2026). Kosong = dari awal sampai batas durasi. */
+  potong?: { mulai: number; akhir: number };
+  /** "hitam" = video lebar ditaruh utuh di tengah kanvas, atas-bawah hitam. Kosong = penuh (dipotong tengah). */
+  bingkai?: "hitam";
 };
 
 /** Koneksi untuk BullMQ: wajib maxRetriesPerRequest null (perintah blok). */

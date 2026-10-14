@@ -41,14 +41,17 @@ import {
   tulisStatus,
 } from "../job";
 import { kirimRender } from "../antrean";
+import { previewSource } from "../unduh";
 import { buangAsetTakTerpakai, loadTemplate, namaSetUnik, saveTemplate } from "../template";
 import { kotakKategoriBawaan } from "../teks";
 import {
   akhiran,
+  bidangPotong,
   f0,
   cabutTugas,
   JENIS_VIDEO as JENIS_VIDEO_API,
   MAX_ASSET_MB,
+  opsiPotongDari,
   pastikanAntreanMuat,
   pastikanKuota,
   sediakanRuangUnggah,
@@ -122,6 +125,7 @@ const folderDraf = (p: Pengguna) => path.join(folderAset(p), ".draf");
 
 /** Identitas TVR: sama dengan penggunaWajib tanpa membuatkan template awal. */
 const penggunaTvr = (pm: Permintaan): Pengguna => identitas(pm);
+const pratinjauTerakhir = new Map<string, number>();
 
 function berkasDi(folder: string, awalan: string): string[] {
   try {
@@ -449,6 +453,7 @@ const JobBody = z.object({
   // Video, bukan lagi disimpan di template. Engine memakai texts["kategori"]
   // lebih dulu, baru template.kategori; jadi nilai ini yang tampil.
   kategori: z.string().max(MAKS_KATEGORI).default(""),
+  ...bidangPotong,
 });
 
 // ============================================================
@@ -872,6 +877,23 @@ export function pasangRuteTvr(r: Router): void {
     return hasil;
   });
 
+  // Pratinjau link (14 Okt 2026): durasi + ukuran untuk langkah "pilih bagian video". Berat (yt-dlp),
+  // jadi dibatasi sekali per 3 dtk per akun.
+  r.post(`${A}/preview`, async (pm) => {
+    const p = penggunaTvr(pm);
+    const body = await bacaJson(pm, z.object({ url: z.string().min(5).max(2000) }));
+    const a = akun(p);
+    const kini = Date.now();
+    if (kini - (pratinjauTerakhir.get(a) ?? 0) < 3000) throw new GalatHttp(429, "Tunggu sebentar sebelum memeriksa link lagi.");
+    pratinjauTerakhir.set(a, kini);
+    if (pratinjauTerakhir.size > 5000) pratinjauTerakhir.clear();
+    try {
+      return await previewSource(body.url);
+    } catch (e) {
+      return tangani(e);
+    }
+  });
+
   r.post(`${A}/hook`, async (pm) => {
     penggunaTvr(pm);
     const body = await bacaJson(pm, HookBody);
@@ -883,6 +905,7 @@ export function pasangRuteTvr(r: Router): void {
   r.post(`${A}/jobs`, async (pm) => {
     const p = penggunaTvr(pm);
     const body = await bacaJson(pm, JobBody);
+    const opsi = opsiPotongDari(body);
     const a = akun(p);
     const tid = idTemplate(p);
     await denganKunci(a, async () => {
@@ -907,7 +930,7 @@ export function pasangRuteTvr(r: Router): void {
       const jobId = await buatJob(url, tid, texts, a);
       // Akun tim: catat anggota pembuatnya (antrean tim & hak membatalkan).
       if (p.anggota) await tulisStatus(jobId, { anggota: p.anggota });
-      await kirimRender({ job_id: jobId, url, template_id: tid, texts });
+      await kirimRender({ job_id: jobId, url, template_id: tid, texts, ...opsi });
     });
     return stokDanAntrean(p);
   });
