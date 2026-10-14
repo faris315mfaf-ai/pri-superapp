@@ -1,4 +1,4 @@
-# Visi: Ruang Bot jadi ruang komunal pengguna (rencana, belum dibangun)
+# Ruang Bot jadi ruang komunal pengguna (tahap 1 KHUSUS MASTER sudah dibangun 14 Okt 2026)
 
 Dicatat 14 Okt 2026 dari arahan pemilik. Ini RENCANA; yang sudah ada hari ini: gedung empat ruang
 untuk bot Redaksi (lihat `BOT-REDAKSI-DUNIA.md`). Satu ruang, banyak orang: Ruang Bot berubah dari
@@ -32,3 +32,14 @@ untuk bot Redaksi (lihat `BOT-REDAKSI-DUNIA.md`). Satu ruang, banyak orang: Ruan
 - Pemetaan pengguna -> karakter (tetap per akun, dihasilkan dari id, tanpa kembar; >100 rupa).
 - Beban realtime bila banyak pengguna online sekaligus (batasi jumlah karakter di kanvas, dst).
 - Peristiwa dipancarkan dari server (tidak percaya klien) dengan payload minimal.
+
+## Keputusan pemilik (14 Okt 2026) & yang sudah dibangun
+- **Khusus master**, informasi **lengkap**: nama, divisi, aksi, judul video, akun sosmed.
+- **Presence = yang sedang online/membuka aplikasi** (kehadiran detak `lib/kehadiran`, ±60 dtk), bukan yang sekadar login.
+- Dibangun: sayap penghuni (aula + ruang database/rak + ruang alat + ruang pos/kotak post), 288 rupa karakter unik,
+  aksi nyata dari server (`lib/dunia*.ts`, `GET /api/bot/dunia`, `POST /api/aktivitas`), animasi realtime
+  (topik `dunia-ruang`), panel "Sedang online". Penjelasan teknis: bagian "Penghuni (pengguna online)" di
+  `BOT-REDAKSI-DUNIA.md`.
+- Belum: tampilan untuk non-master (menunggu keputusan audiens & privasi), animasi untuk aksi di luar daftar
+  `JENIS_AUDIT` (mis. membuka layar tertentu hanya tampil sebagai teks), hitungan "waktu" di atas nama sudah
+  memakai: lama aksi (m:ss) bila berjalan, jam selesai (WIB) bila baru selesai, jam WIB sekarang bila tidak ada aksi.

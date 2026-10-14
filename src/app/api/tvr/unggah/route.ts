@@ -49,6 +49,7 @@ import { PENYEDIA_ANGGOTA, unggahVideoAnggota, type IdPenyedia } from "@/lib/sos
 import { kolomTabelAda, sisipkanLonggar } from "@/lib/kolom-struktur";
 import { naikkanSinyal } from "@/lib/sinyal-pribadi";
 import { catatAudit } from "@/lib/audit";
+import { akhiriAktivitas, mulaiAktivitas } from "@/lib/dunia";
 import { ambilKunciUnggah } from "@/lib/upload-post";
 
 /** Batas berkas penyimpanan video (bucket "tvrku" & FILE_SIZE_LIMIT Supabase sendiri). */
@@ -248,6 +249,17 @@ export async function POST(request: Request) {
       jadwal?: string;
     };
     const db = supabase();
+
+    // Ruang Bot (master): selama video dikirim ke sosmed, karakternya memasukkan surat ke kotak post.
+    if (body.aksi === "post") {
+      const judulAkt = String(body.judul ?? "").trim().slice(0, 160);
+      const tokenAkt = await mulaiAktivitas(user.id, {
+        jenis: "unggah_sosmed",
+        ringkasan: judulAkt ? `Mengunggah "${judulAkt}"` : "Mengunggah video ke sosmed",
+        detail: { judul: judulAkt, platforms: body.platforms },
+      });
+      after(() => akhiriAktivitas(user.id, tokenAkt));
+    }
 
     // ---- Langkah 1: siapkan URL unggah tertandatangan ----
     if (body.aksi === "siapkan") {

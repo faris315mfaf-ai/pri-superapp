@@ -9,7 +9,7 @@
 // lagi menjawab cara "cloudinary"; cabangnya di bawah tinggal untuk
 // jawaban lama yang mungkin masih tersimpan di peramban.
 // ============================================================
-import { kompresUnggahTvrku, siapkanUnggahTvrku } from "@/services";
+import { kompresUnggahTvrku, laporAktivitas, siapkanUnggahTvrku } from "@/services";
 
 /** Di atas ini dikompres otomatis (harus sama dengan BATAS_KOMPRES_MB server). */
 export const KOMPRES_MB = 50;
@@ -232,15 +232,32 @@ export async function unggahKeUrlTanda(
   );
 }
 
-export async function unggahVideoTvrku(
-  berkas: File,
-  opsi: {
-    onProgres?: (p: number) => void;
-    onTahap?: (t: TahapUnggahVideo) => void;
-    /** Batalkan unggahan (galat GalatUnggah jenis "batal"). */
-    signal?: AbortSignal;
-  } = {},
-): Promise<HasilUnggahVideo> {
+type OpsiUnggahVideo = {
+  onProgres?: (p: number) => void;
+  onTahap?: (t: TahapUnggahVideo) => void;
+  /** Batalkan unggahan (galat GalatUnggah jenis "batal"). */
+  signal?: AbortSignal;
+};
+
+/**
+ * Unggah video ke penyimpanan. Selama berlangsung, karakter pengguna di Ruang Bot (master) beranimasi
+ * mengisi rak database: mulai/selesai dilaporkan ke /api/aktivitas (tidak pernah mengganggu unggahan).
+ */
+export async function unggahVideoTvrku(berkas: File, opsi: OpsiUnggahVideo = {}): Promise<HasilUnggahVideo> {
+  const tokenJanji = laporAktivitas({ aksi: "mulai", jenis: "upload_video", judul: berkas.name });
+  // Sewa: server menganggap aksi usai bila denyut berhenti (tab ditutup / jaringan putus).
+  const denyut = window.setInterval(() => {
+    void tokenJanji.then((token) => (token ? laporAktivitas({ aksi: "denyut", token }) : null));
+  }, 30_000);
+  try {
+    return await unggahVideoTvrkuInti(berkas, opsi);
+  } finally {
+    window.clearInterval(denyut);
+    void tokenJanji.then((token) => (token ? laporAktivitas({ aksi: "selesai", token }) : null));
+  }
+}
+
+async function unggahVideoTvrkuInti(berkas: File, opsi: OpsiUnggahVideo): Promise<HasilUnggahVideo> {
   if (opsi.signal?.aborted) throw new GalatUnggah("batal", PESAN_BATAL);
   let siap = await siapkanUnggahTvrku(berkas.name, berkas.size);
   // Pengguna bisa membatalkan selagi menunggu server menyiapkan URL.

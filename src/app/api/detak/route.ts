@@ -30,6 +30,7 @@ import { bacaSakelar } from "@/lib/sakelar";
 import { jedaDetak, ratakan } from "@/lib/rem-detak";
 import { kondisiDb } from "@/lib/penjaga-supabase";
 import { bacaSinyal } from "@/lib/sinyal-pribadi";
+import { catatLayar } from "@/lib/dunia";
 export const dynamic = "force-dynamic";
 
 /** Tabel yang perubahannya harus terasa di layar dalam hitungan detik. */
@@ -99,6 +100,8 @@ export async function GET(request: Request) {
     if (!user.ujiBeban) {
       const layar = new URL(request.url).searchParams.get("layar");
       after(() => catatWaktuAktif(user.id, layar));
+      // Ruang Bot (master): layar yang sedang dibuka tampil di atas karakter orang itu.
+      after(() => catatLayar(user.id, layar));
     }
     const [tanda, hadir, sakelar, tandaSaya] = await Promise.all([
       denganCache("detak:global", TTL_DETIK, hitungTanda),

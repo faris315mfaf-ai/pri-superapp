@@ -22,6 +22,7 @@ import { supabase } from "@/lib/supabase";
 import { tabelBelumAda } from "@/lib/api-helper";
 import { ipDari } from "@/lib/rate-limit";
 import type { JenisAudit } from "@/lib/audit-jenis";
+import { denyutAktivitas } from "@/lib/dunia";
 
 /** Jeda antar-detak terpanjang yang masih dihitung "aplikasi menyala". */
 export const BATAS_JEDA_DETIK = 180;
@@ -93,6 +94,8 @@ export function catatAudit(
   opsi: { detail?: Record<string, unknown>; request?: Request | null } = {},
 ): void {
   const id = Number(userId);
+  // Animasi Ruang Bot (master): aksi yang layak tampil ikut dipancarkan. Tidak bergantung pada tabel audit.
+  if (Number.isFinite(id) && id > 0) void denyutAktivitas(id, { jenis, ringkasan, detail: opsi.detail });
   if (!Number.isFinite(id) || id <= 0 || !tabelSiap()) return;
   const baris = {
     user_id: id,

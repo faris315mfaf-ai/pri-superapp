@@ -31,6 +31,7 @@ import { simpanSampul } from "@/lib/sampul";
 import { daftarkanVideoUnggahan } from "@/lib/sinkron-konten-tv";
 import { after } from "next/server";
 import { catatAudit } from "@/lib/audit";
+import { akhiriAktivitas, mulaiAktivitas } from "@/lib/dunia";
 import { siarkanTv } from "@/lib/tv-langsung";
 
 export const dynamic = "force-dynamic";
@@ -210,6 +211,14 @@ export async function POST(request: Request) {
     if (diminta.length === 0) {
       throw Object.assign(new Error("Pilih minimal satu platform tujuan."), { status: 400 });
     }
+
+    // Ruang Bot (master): selama diposting ke akun Official, karakternya memasukkan surat ke kotak post.
+    const tokenAkt = await mulaiAktivitas(pengguna.id, {
+      jenis: "unggah_official",
+      ringkasan: "Mengunggah ke akun TV Rakyat Official",
+      detail: { akun: "TV Rakyat Official", platforms: diminta },
+    });
+    after(() => akhiriAktivitas(pengguna.id, tokenAkt));
 
     const db = supabase();
     const { data: video, error: eBaca } = await db
@@ -586,6 +595,8 @@ export async function POST(request: Request) {
         detail: {
           kode,
           judul: video.judul_overlay || video.judul || "",
+          akun: "TV Rakyat Official",
+          platforms: diminta,
           berhasil: berhasil.map((h) => ({ platform: h.platform, url: h.postUrl ?? null })),
           gagal: hasil.filter((h) => h.status === "error").map((h) => h.platform),
         },

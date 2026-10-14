@@ -46,3 +46,32 @@ Tanpa data server, Ruang tetap berjalan sebagai simulasi: Dimas contoh tidur (ta
 ## Belum
 - Bot lebih dari 3 (kasur/kursi rapat hanya 3; sisanya menunggu di tengah ruangan).
 - Animasi tidak mereplay usulan yang disetujui lebih dari 3 menit lalu (hanya catatan di papan).
+
+
+## Penghuni (pengguna online) — 14 Okt 2026, khusus master
+Denah kini 28x16: gedung bot (x 0..16) + **sayap penghuni** (x 16..28): **Aula** (semua yang online berdiri di slotnya;
+pintu depan di pojok kanan, orang baru muncul/pergi di sana), **Ruang Database** (6 rak), **Ruang Alat** (Auto Edit,
+Kompres, Blur Watermark; 2 operator per mesin), **Ruang Pos** (kotak post, 3 tempat berdiri). Pintu ke tiga ruang di
+garis y=6; semua jalan lewat pintu (diuji `segmenMenembus`).
+
+| Aksi pengguna (jenis audit) | Animasi |
+|---|---|
+| `stok_tambah`, `stok_hapus`, `stok_tim`, `upload_video` (klien) | ke Ruang Database, mengisi berkas ke rak (sel rak bertambah) |
+| `edit_otomatis`, `auto_edit`, `hapus_latar`, `template` | mesin Auto Edit (film bergulir + bilah render) |
+| `kompres` | mesin Kompres (pelat menekan, ukuran menyusut) |
+| `blur_watermark` | mesin Blur (mosaik bergerak menutup watermark) |
+| `unggah_sosmed`, `unggah_official`, `siaran`, `tv_riwayat` | Ruang Pos: surat dimasukkan ke kotak post, bendera naik |
+
+**Alur data (semua dari server, tidak ada yang dikarang):**
+- Presence: `daftarHadir()` (detak 10 dtk). Layar yang dibuka: `catatLayar` (menumpang detak).
+- Aksi: `catatAudit` -> `denyutAktivitas` (aksi tercatat setelah selesai, animasi berekor 12-25 dtk);
+  proxy `/api/autoedit` dan rute unggah sosmed memakai `mulaiAktivitas`/`akhiriAktivitas` (animasi hidup selama
+  permintaan berlangsung, mis. unggah stok ratusan MB); unggah klien langsung ke penyimpanan lapor lewat `POST /api/aktivitas`.
+- Penyimpanan Redis `dunia:akt:<id>` / `dunia:layar:<id>` (TTL pendek; memori proses bila tanpa Redis).
+- Siaran Realtime `dunia-ruang` (payload `{t}`) -> klien muat ulang `GET /api/bot/dunia` (hanya master; memuat nama,
+  judul, akun). Polling cadangan 8 dtk. Akun sosmed diperkaya dari `akun_tvr_user` (platform @username).
+- Karakter: `karakterDariId` (permutasi, 288 rupa = 24 kaus x 12 wajah); bentrokan diselesaikan `tetapkanKarakter`.
+- Di atas nama: waktu (lama aksi m:ss / jam selesai WIB / jam WIB sekarang). Gelembung: aksi + judul + akun.
+
+Berkas: `src/lib/dunia-murni.ts`, `dunia.ts`; `src/features/ruang-bot/{karakter-pengguna,simulasi-penghuni,dunia-sayap,dunia-primitif,use-dunia,panel-online}.ts(x)`;
+uji: `tests/uji-dunia.mts`. Batas: aula menampung ~60 karakter (lebihnya tercantum di daftar saja).

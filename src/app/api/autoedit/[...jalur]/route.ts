@@ -16,6 +16,7 @@ import { pastikanMasuk } from "@/lib/sesi";
 import { catatAudit } from "@/lib/audit";
 import type { JenisAudit } from "@/lib/audit-jenis";
 import { siarkanTv } from "@/lib/tv-langsung";
+import { akhiriAktivitas, mulaiAktivitas } from "@/lib/dunia";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,7 +78,16 @@ async function teruskanDanCatat(
   // TIDAK — menyalin aliran ratusan MB hanya untuk audit itu pemborosan.
   const json = (request.headers.get("content-type") ?? "").includes("application/json");
   const salinan = json ? request.clone() : null;
-  const jawaban = await jalankan(request);
+  // Ruang Bot (master): animasi jalan selama permintaan hidup (unggah stok ratusan MB, kompres, blur, render).
+  // `mulai` tidak ditunggu (tidak menunda unggahan); `akhiri` ditunggu dan antriannya berurutan per pengguna,
+  // jadi catatan audit di bawah ini tidak bisa menimpanya dengan salinan lama.
+  const tokenJanji = mulaiAktivitas(userId, { jenis: aksi.jenis, ringkasan: aksi.ringkasan });
+  let jawaban: Response;
+  try {
+    jawaban = await jalankan(request);
+  } finally {
+    await akhiriAktivitas(userId, await tokenJanji);
+  }
   if (jawaban.status < 400) {
     const detail = { ...(await detailJson(salinan)), ...(tim ? { tim: true } : {}), jalur: j.join("/") };
     catatAudit(userId, aksi.jenis, aksi.ringkasan, { request, detail });

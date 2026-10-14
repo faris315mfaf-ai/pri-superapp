@@ -28,9 +28,12 @@ import { cn } from "@/lib/utils";
 import { NAMA_TAHAP, NAMA_TEMPAT, URUTAN_TEMPAT, WARNA_TAHAP, WARNA_TEMPAT } from "./data-contoh";
 import type { ZonaRuang } from "./denah";
 import { petaCatatan, petaSasaran, suratBaru } from "./peta-nyata";
+import { PanelOnline } from "./panel-online";
 import { PotretBot } from "./potret-bot";
 import { RuangIsometrik } from "./ruang-isometrik";
 import { SimulasiBot, formatJam } from "./simulasi-bot";
+import { SimulasiPenghuni } from "./simulasi-penghuni";
+import { useDunia } from "./use-dunia";
 import { RUPA_NARA, WARNA_NARA, type KeadaanNara } from "./simulasi-nara";
 import type { BotContoh, HasilHariIni, LogItem, ModeBot, StatusHidup, TampilanBot, TempatBot } from "./tipe";
 
@@ -411,6 +414,20 @@ export function RuangView(p: RuangViewProps) {
       }),
   );
 
+  // Pengguna online (karakter di aula) — khusus master; data dari /api/bot/dunia, bukan dari tabel bot.
+  const [penghuni] = useState(() => {
+    // Satu MediaQueryList dipakai ulang (jarak() dipanggil per orang tiap langkah simulasi).
+    const gerak = typeof window !== "undefined" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+    return new SimulasiPenghuni({ gerakKurang: () => gerak?.matches === true });
+  });
+  const dunia = useDunia();
+  const statusDunia = dunia.status;
+  useEffect(() => {
+    if (statusDunia) penghuni.setDaftar(statusDunia.online, statusDunia.waktu);
+  }, [penghuni, statusDunia]);
+  const [terpilihPenghuniId, setTerpilihPenghuniId] = useState<number | null>(null);
+  const daftarOnline = statusDunia?.online ?? [];
+
   // Pembaca mode & callback laporan selalu mengikuti props terbaru
   // (simulasi tidak dibuat ulang).
   const { bots, onLog, onBotSelesaiPosting, onStatus } = p;
@@ -561,8 +578,18 @@ export function RuangView(p: RuangViewProps) {
             malam={malam}
             kecepatan={kecepatan}
             terpilihId={p.terpilihId}
-            onPilih={p.onPilih}
+            onPilih={(id) => {
+              p.onPilih(id);
+              if (id) setTerpilihPenghuniId(null);
+            }}
             onPilihNara={bukaKoordinator}
+            penghuni={penghuni}
+            daftarPenghuni={daftarOnline}
+            terpilihPenghuniId={terpilihPenghuniId}
+            onPilihPenghuni={(id) => {
+              setTerpilihPenghuniId(id);
+              if (id !== null) p.onPilih(null);
+            }}
             onBukaZona={bukaZona}
           >
             <div className="pointer-events-none absolute left-2.5 top-2.5 flex flex-wrap gap-1.5 font-mono text-[11px] font-semibold text-[#f4efe8]">
@@ -583,6 +610,9 @@ export function RuangView(p: RuangViewProps) {
               {potret.rapat && (
                 <span className="rounded-lg border border-[#fb7185]/60 bg-[rgba(60,16,32,.85)] px-2 py-0.5 text-[#fecdd3]">Rapat berlangsung</span>
               )}
+              <span className="rounded-lg border border-emerald-400/40 bg-[rgba(8,40,28,.85)] px-2 py-0.5 text-[#bbf7d0]">
+                {statusDunia ? statusDunia.jumlah : "…"} online
+              </span>
               <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">{potret.jam} WIB</span>
             </div>
             {p.jedaGlobal && (
@@ -614,6 +644,20 @@ export function RuangView(p: RuangViewProps) {
 
         {/* Kolom kanan: panel samping */}
         <div className="flex min-w-0 flex-col gap-3">
+          <PanelOnline
+            daftar={daftarOnline}
+            jumlah={statusDunia?.jumlah ?? 0}
+            diluar={penghuni.diluar}
+            terpotong={statusDunia?.terpotong ?? false}
+            galat={dunia.galat}
+            sekarangMs={() => penghuni.sekarangMs()}
+            terpilihId={terpilihPenghuniId}
+            onPilih={(id) => {
+              setTerpilihPenghuniId(id);
+              if (id !== null) p.onPilih(null);
+            }}
+          />
+
           <GlassCard className="p-3.5">
             <Judul>Koordinator</Judul>
             <KartuNara

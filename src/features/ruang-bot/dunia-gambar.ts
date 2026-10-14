@@ -10,102 +10,18 @@
 // ============================================================
 
 import { WARNA_TAHAP } from "./data-contoh";
-import { KASUR, KURSI_RAPAT, KURSI_TAMU_RAPAT, MEJA_KOORDINATOR, SEKAT, STASIUN, TIANG_PINTU, UKURAN_DENAH as NX, type Titik } from "./denah";
+import { KASUR, KURSI_RAPAT, KURSI_TAMU_RAPAT, MEJA_KOORDINATOR, SEKAT, STASIUN, TIANG_PINTU, UKURAN_DENAH as NX, PANJANG_X, PANJANG_Y, type Titik } from "./denah";
 import type { BotHidup, SimulasiBot } from "./simulasi-bot";
 import { RUPA_NARA, WARNA_NARA } from "./simulasi-nara";
+import { AdeganSayap, daftarkanObjekSayap, dindingSayap, latarSayap } from "./dunia-sayap";
 import { gambarKarakter, type PoseBot } from "./sprite-bot";
 import type { RupaBot, TahapBot } from "./tipe";
 
-// ---------- konstanta kanvas ----------
+import {
+  H, P, TINGGI_DINDING, W, WP, box, dindingBand, disc, frect, hs, jendela, lantai, poly, px, terang, wq, type Ctx, type PosisiLayar,
+} from "./dunia-primitif";
 
-export const W = 524;
-export const H = 344;
-const OX = 262;
-const OY = 70;
-const TINGGI_DINDING = 64;
-/** Sisi ruang kerja (grid 0..10); sisanya ruang meeting / koordinator / kamar tidur. */
-const N = 10;
-
-type Ctx = CanvasRenderingContext2D;
-
-// ---------- primitif ----------
-
-export const P = (gx: number, gy: number, z = 0): Titik => [Math.round(OX + (gx - gy) * 16), Math.round(OY + (gx + gy) * 8 - z)];
-
-function px(c: Ctx, x: number, y: number, w: number, h: number, warna: string) {
-  c.fillStyle = warna;
-  c.fillRect(x, y, w, h);
-}
-
-function poly(c: Ctx, pts: Titik[], warna: string) {
-  let a = 1e9;
-  let b = -1e9;
-  for (const p of pts) {
-    if (p[0] < a) a = p[0];
-    if (p[0] > b) b = p[0];
-  }
-  c.fillStyle = warna;
-  const n = pts.length;
-  for (let x = a; x < b; x++) {
-    const xc = x + 0.5;
-    let lo = 1e9;
-    let hi = -1e9;
-    for (let i = 0; i < n; i++) {
-      const p = pts[i];
-      const q = pts[(i + 1) % n];
-      if ((p[0] <= xc && q[0] > xc) || (q[0] <= xc && p[0] > xc)) {
-        const y = p[1] + ((xc - p[0]) / (q[0] - p[0])) * (q[1] - p[1]);
-        if (y < lo) lo = y;
-        if (y > hi) hi = y;
-      }
-    }
-    if (hi > lo) {
-      const l = Math.round(lo);
-      const h = Math.round(hi);
-      if (h > l) c.fillRect(x, l, 1, h - l);
-    }
-  }
-}
-
-/** Acak semu stabil dari angka (dipakai untuk ubin, buku, bintang). */
-const hs = (n0: number) => {
-  const n = Math.sin(n0 * 127.1 + 311.7) * 43758.5453;
-  return n - Math.floor(n);
-};
-
-/** Terangkan/gelapkan warna "#rrggbb" dengan faktor k (dijepit 0..255). */
-function terang(warna: string, k: number): string {
-  const n = parseInt(warna.slice(1), 16);
-  const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * k)));
-  return "#" + ((1 << 24) | (f((n >> 16) & 255) << 16) | (f((n >> 8) & 255) << 8) | f(n & 255)).toString(16).slice(1);
-}
-
-function disc(c: Ctx, cx: number, cy: number, r: number, warna: string) {
-  c.fillStyle = warna;
-  for (let dy = -r; dy <= r; dy++) {
-    const w = Math.floor(Math.sqrt(r * r - dy * dy));
-    c.fillRect(cx - w, cy + dy, w * 2 + 1, 1);
-  }
-}
-
-function box(c: Ctx, gx: number, gy: number, w: number, d: number, h: number, z0: number, cT: string, cL: string, cR: string) {
-  const z1 = z0 + h;
-  poly(c, [P(gx, gy, z1), P(gx + w, gy, z1), P(gx + w, gy + d, z1), P(gx, gy + d, z1)], cT);
-  poly(c, [P(gx, gy + d, z1), P(gx + w, gy + d, z1), P(gx + w, gy + d, z0), P(gx, gy + d, z0)], cL);
-  poly(c, [P(gx + w, gy, z1), P(gx + w, gy + d, z1), P(gx + w, gy + d, z0), P(gx + w, gy, z0)], cR);
-}
-
-/** Titik pada dinding: sisi kiri (x=0) atau kanan (y=0). */
-const WP = (sisi: "L" | "R", u: number, v: number): Titik => (sisi === "L" ? P(0, u, v) : P(u, 0, v));
-
-function wq(c: Ctx, sisi: "L" | "R", u0: number, u1: number, v0: number, v1: number, warna: string) {
-  poly(c, [WP(sisi, u0, v0), WP(sisi, u1, v0), WP(sisi, u1, v1), WP(sisi, u0, v1)], warna);
-}
-
-function frect(c: Ctx, g0: number, g1: number, h0: number, h1: number, warna: string, z = 0) {
-  poly(c, [P(g0, h0, z), P(g1, h0, z), P(g1, h1, z), P(g0, h1, z)], warna);
-}
-
+export { H, P, W };
 // ---------- warna ruangan (dunia gambar: tetap di terang maupun gelap) ----------
 
 const C = {
@@ -125,35 +41,12 @@ const ZW = { kerjaL: "#2b2a58", kerjaR: "#37376c", meetR: "#24505c", koorL: "#1f
 
 // ---------- latar statis ----------
 
-function lantai(c: Ctx, gx0: number, gx1: number, gy0: number, gy1: number, A: string, B: string, benih: number) {
-  for (let gx = gx0; gx < gx1; gx++) {
-    for (let gy = gy0; gy < gy1; gy++) {
-      let warna = (gx + gy) & 1 ? A : B;
-      const r = hs(gx * 13 + gy * 7 + benih);
-      if (r > 0.82) warna = terang(warna, 1.05);
-      else if (r < 0.12) warna = terang(warna, 0.94);
-      poly(c, [P(gx, gy), P(gx + 1, gy), P(gx + 1, gy + 1), P(gx, gy + 1)], warna);
-    }
-  }
-}
-
-/** Satu bentang dinding (sisi s, dari u0 ke u1): papan atas, tiang, alas kayu, lis. */
-function dindingBand(c: Ctx, s: "L" | "R", u0: number, u1: number, warna: string, warnaLis: string, alas: string, papan: string) {
-  wq(c, s, u0, u1, 0, TINGGI_DINDING, warna);
-  for (let u = Math.ceil(u0); u < u1; u++) wq(c, s, u - 0.02, u + 0.02, 18, TINGGI_DINDING - 3, terang(warna, 1.18));
-  wq(c, s, u0, u1, 0, 16, alas);
-  for (let u = u0; u < u1; u += 1) wq(c, s, u + 0.04, Math.min(u1, u + 0.5), 3, 15, papan);
-  wq(c, s, u0, u1, 16, 18.5, warnaLis);
-  wq(c, s, u0, u1, 0, 3, C.kayuGelap);
-  wq(c, s, u0, u1, TINGGI_DINDING - 2.5, TINGGI_DINDING, "#1a1736");
-}
-
 export function gambarLatar(c: Ctx, malam: boolean) {
   c.clearRect(0, 0, W, H);
   px(c, 0, 0, W, H, "#0b0912");
   // lempeng lantai
-  poly(c, [P(0, NX, 0), P(NX, NX, 0), P(NX, NX, -6), P(0, NX, -6)], C.lempengL);
-  poly(c, [P(NX, 0, 0), P(NX, NX, 0), P(NX, NX, -6), P(NX, 0, -6)], C.lempengR);
+  poly(c, [P(0, PANJANG_Y, 0), P(PANJANG_X, PANJANG_Y, 0), P(PANJANG_X, PANJANG_Y, -6), P(0, PANJANG_Y, -6)], C.lempengL);
+  poly(c, [P(PANJANG_X, 0, 0), P(PANJANG_X, PANJANG_Y, 0), P(PANJANG_X, PANJANG_Y, -6), P(PANJANG_X, 0, -6)], C.lempengR);
   // lantai per ruang
   lantai(c, 0, 10, 0, 10, C.lantaiA, C.lantaiB, 0); // ruang kerja (kayu hangat)
   lantai(c, 10, 16, 0, 10, "#9db0c4", "#8da1b8", 31); // ruang meeting (karpet biru-abu)
@@ -190,34 +83,13 @@ export function gambarLatar(c: Ctx, malam: boolean) {
   dindingBand(c, "L", 10, 16, ZW.koorL, "#d9a441", "#3a4f73", "#46618a");
   poly(c, [P(0, 0, TINGGI_DINDING), P(0, 0, 0), [P(0, 0, 0)[0] + 1, P(0, 0, 0)[1]], [P(0, 0, TINGGI_DINDING)[0] + 1, P(0, 0, TINGGI_DINDING)[1]]], "#4a4a85");
   // jendela
-  const jendela = (s: "L" | "R", u0: number, u1: number) => {
-    wq(c, s, u0 - 0.14, u1 + 0.14, 21, 57, C.hiasan);
-    wq(c, s, u0, u1, 24, 54, malam ? "#0d1130" : "#aedcff");
-    if (!malam) {
-      wq(c, s, u0, u1, 24, 33, "#fff0c8");
-      wq(c, s, u0, u1, 33, 36, "#d9efff");
-    } else {
-      for (let i = 0; i < 7; i++) {
-        const q = WP(s, u0 + hs(i + u0) * (u1 - u0), 30 + hs(i * 3 + u0) * 20);
-        px(c, q[0], q[1], 1, 1, "#fff6cf");
-      }
-      const m = WP(s, u1 - 0.35, 48);
-      disc(c, m[0], m[1], 3, "#fff2b8");
-      disc(c, m[0] + 1, m[1] - 1, 3, "#0d1130");
-    }
-    if (!malam) {
-      for (let v = 44; v < 54; v += 2.6) wq(c, s, u0, u1, v, v + 1.1, "#f1e4c3");
-    }
-    wq(c, s, (u0 + u1) / 2 - 0.04, (u0 + u1) / 2 + 0.04, 24, 54, C.hiasan);
-    wq(c, s, u0 - 0.22, u1 + 0.22, 19.5, 21.5, "#e6b878");
-  };
-  jendela("L", 2.4, 3.8);
-  jendela("L", 4.3, 5.7);
-  jendela("R", 0.7, 2.1);
-  jendela("R", 7.1, 8.5);
-  jendela("R", 10.8, 12.0);
-  jendela("R", 14.4, 15.6);
-  jendela("L", 14.6, 15.7);
+  jendela(c, malam, "L", 2.4, 3.8);
+  jendela(c, malam, "L", 4.3, 5.7);
+  jendela(c, malam, "R", 0.7, 2.1);
+  jendela(c, malam, "R", 7.1, 8.5);
+  jendela(c, malam, "R", 10.8, 12.0);
+  jendela(c, malam, "R", 14.4, 15.6);
+  jendela(c, malam, "L", 14.6, 15.7);
   // papan kanban (dinding kiri ruang kerja)
   wq(c, "L", 6.1, 8.0, 20, 50, C.hiasan);
   wq(c, "L", 6.2, 7.9, 21, 49, "#ebe3d1");
@@ -233,6 +105,8 @@ export function gambarLatar(c: Ctx, malam: boolean) {
   // layar ruang meeting (dinding belakang)
   wq(c, "R", 11.9, 14.3, 18, 52, "#0e1626");
   wq(c, "R", 12.0, 14.2, 19, 51, "#08111f");
+  // sayap penghuni: aula, ruang database, ruang alat, ruang pos
+  latarSayap(c, malam);
 }
 
 // ---------- perabot ----------
@@ -619,15 +493,12 @@ function dindingRuangLain(a: Adegan) {
 
 // ---------- adegan ----------
 
-export type PosisiLayar = { sx: number; sy: number };
+export type { PosisiLayar } from "./dunia-primitif";
 
-export type Adegan = {
-  c: Ctx;
-  t: number;
+export type Adegan = AdeganSayap & {
   sim: SimulasiBot;
   rupa: Map<string, { rupa: RupaBot; warna: string }>;
   terpilihId: string | null;
-  malam: boolean;
   /** Posisi layar (titik kepala) tiap bot + "nara": dipakai penempatan tag & klik. */
   posisi: Map<string, PosisiLayar>;
 };
@@ -750,6 +621,9 @@ function gambarObjek(a: Adegan, sinar: Titik[]) {
   tambah(15.1 + 11.6 + 0.55, () => nakas(c, 15.1, 11.6, sinar));
   tambah(15.4 + 15.4, () => tanaman(c, 15.4, 15.4));
 
+  // sayap penghuni (aula, database, alat, pos) + semua penghuni online
+  daftarkanObjekSayap(a, tambah, sinar);
+
   // sekat kaca (pintu = celah) dan tiang pintu
   for (const s of SEKAT) for (const p of POTONGAN_SEKAT.get(s) ?? []) tambah(p.kunci, () => sekat(c, p.x, p.y, p.w, p.d, p.buram, p.batang));
   for (const p of TIANG_PINTU) tambah(p[0] + p[1] + 0.3, () => tiangPintu(c, p[0], p[1]));
@@ -838,6 +712,7 @@ export function gambarFrame(a: Adegan, bg: HTMLCanvasElement, sinar: Titik[]) {
   hitung[1] += antre; // yang antre tampil sebagai kertas tambahan di kolom Edit
   dindingDinamis(c, sim.jamSimulasi, sim.bots.slice(0, 3).map((b) => b.kuota), hitung);
   dindingRuangLain(a);
+  dindingSayap(a);
   gambarCahaya(c, a.t, a.malam);
   gambarObjek(a, sinar);
   gambarMalam(a, sinar);

@@ -7415,3 +7415,28 @@ export async function kirimKeputusanUsulan(aksi: "setuju" | "tolak", id: number)
   const json = await fetchJson("/api/bot/usulan", { method: "POST", headers: { "Content-Type": "application/json", ...headerToken() }, body: JSON.stringify({ aksi, id }) });
   return json as { sukses: boolean; pesan: string };
 }
+
+import type { StatusDunia } from "@/lib/dunia-murni";
+
+/** Siapa yang sedang online + layar + aksi yang dikerjakan (khusus master; untuk dunia Ruang Bot). */
+export async function getDunia(): Promise<StatusDunia> {
+  const json = await fetchJson("/api/bot/dunia", { headers: headerToken(), cache: "no-store" });
+  return json as StatusDunia;
+}
+
+/**
+ * Laporkan aksi dari peramban yang tidak lewat server (mis. unggah langsung ke penyimpanan awan) supaya
+ * karakter pengguna beranimasi di Ruang Bot master. Tidak pernah melempar; hanya tontonan.
+ */
+export async function laporAktivitas(aksi: { aksi: "mulai"; jenis: string; judul?: string; akun?: string; platform?: string } | { aksi: "denyut"; token: string } | { aksi: "selesai"; token: string; judul?: string }): Promise<string | null> {
+  try {
+    const json = (await fetchJson("/api/aktivitas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headerToken() },
+      body: JSON.stringify(aksi),
+    })) as { token?: string };
+    return typeof json.token === "string" ? json.token : null;
+  } catch {
+    return null;
+  }
+}

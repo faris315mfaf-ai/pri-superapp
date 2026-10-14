@@ -92,7 +92,7 @@ cek("segmen meeting|kamar tidur lewat celah (x 10.4..11.8) lolos", !segmenMenemb
 cek("segmen di satu ruang lolos", !segmenMenembus([1, 1], [9, 9]) && !segmenMenembus([11, 11], [15, 15]));
 cek("titikDiSekat: di dalam lempeng", titikDiSekat([10, 2]) && !titikDiSekat([11, 2]));
 cek("zonaDari empat ruang", zonaDari(3, 3) === "kerja" && zonaDari(13, 3) === "meeting" && zonaDari(3, 13) === "koordinator" && zonaDari(13, 13) === "tidur");
-cek("4 label ruang, satu per zona", new Set(LABEL_RUANG.map((l) => l.kunci)).size === 4);
+cek("8 label ruang (4 gedung bot + 4 sayap penghuni), satu per zona", new Set(LABEL_RUANG.map((l) => l.kunci)).size === 8 && LABEL_RUANG.length === 8);
 cek("kapasitas: 3 kursi rapat, 3 kasur", KAPASITAS.rapat === 3 && KAPASITAS.tidur === 3 && KURSI_RAPAT.length === 3 && KASUR.length === 3);
 cek("pintu kerja|meeting di tengah celah sekat", PINTU_KERJA_MEETING.every((p) => p[1] > 4.3 && p[1] < 5.9));
 cek("sekat tidak saling tumpang tindih dengan titik tengah", !titikDiSekat(TITIK_TENGAH));

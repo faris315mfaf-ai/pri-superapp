@@ -24,7 +24,9 @@ import { cn } from "@/lib/utils";
 import { WARNA_TAHAP, URUTAN_TAHAP, WARNA_TEMPAT } from "./data-contoh";
 import { LABEL_RUANG, STASIUN, type Titik, type ZonaRuang } from "./denah";
 import { H, ID_NARA, P, W, gambarFrame, gambarLatar, type PosisiLayar } from "./dunia-gambar";
+import type { PenghuniDunia } from "@/lib/dunia-murni";
 import type { BotHidup, SimulasiBot } from "./simulasi-bot";
+import { waktuTag, type SimulasiPenghuni } from "./simulasi-penghuni";
 import { WARNA_NARA } from "./simulasi-nara";
 import type { BotContoh, RupaBot } from "./tipe";
 
@@ -78,6 +80,11 @@ export type RuangIsometrikProps = {
   onPilih: (id: string | null) => void;
   /** Klik Nara di kanvas. */
   onPilihNara?: () => void;
+  /** Pengguna online (karakter di aula) + pemilihannya. */
+  penghuni: SimulasiPenghuni;
+  daftarPenghuni: readonly PenghuniDunia[];
+  terpilihPenghuniId: number | null;
+  onPilihPenghuni: (id: number | null) => void;
   /** Pil nama ruang yang bisa diklik (mis. Ruang Meeting -> tab Chat). Ruang tanpa pengendali hanya label. */
   onBukaZona?: Partial<Record<ZonaRuang, () => void>>;
   /** Lapisan di atas kanvas (HUD, spanduk jeda). */
@@ -85,7 +92,22 @@ export type RuangIsometrikProps = {
   className?: string;
 };
 
-export function RuangIsometrik({ sim, bots, malam, kecepatan, terpilihId, onPilih, onPilihNara, onBukaZona, children, className }: RuangIsometrikProps) {
+export function RuangIsometrik({
+  sim,
+  bots,
+  malam,
+  kecepatan,
+  terpilihId,
+  onPilih,
+  onPilihNara,
+  penghuni,
+  daftarPenghuni,
+  terpilihPenghuniId,
+  onPilihPenghuni,
+  onBukaZona,
+  children,
+  className,
+}: RuangIsometrikProps) {
   const tabAktif = useTabAktif();
   const halamanTerlihat = useHalamanTerlihat();
   const gerakDikurangi = useGerakDikurangi();
@@ -100,12 +122,14 @@ export function RuangIsometrik({ sim, bots, malam, kecepatan, terpilihId, onPili
   const naraGelembungRef = useRef<HTMLDivElement | null>(null);
   const naraTeksRef = useRef<HTMLSpanElement | null>(null);
   const naraNamaRef = useRef<HTMLSpanElement | null>(null);
+  const tagPenghuniRef = useRef<Map<number, { tag: HTMLDivElement | null; gel: HTMLDivElement | null; teks: HTMLSpanElement | null; waktu: HTMLSpanElement | null }>>(new Map());
   const pilRef = useRef<(HTMLDivElement | null)[]>([]);
   const zonaRef = useRef<(HTMLElement | null)[]>([]);
   const skalaRef = useRef(0);
   const terlihatRef = useRef(true);
   const kotorRef = useRef(true);
   const posisiRef = useRef<Map<string, PosisiLayar>>(new Map());
+  const posisiPenghuniRef = useRef<Map<number, PosisiLayar>>(new Map());
   const sinarRef = useRef<Titik[]>([]);
 
   // Nilai terbaru untuk loop (diisi lewat effect agar loop tidak dibuat ulang).
@@ -115,6 +139,8 @@ export function RuangIsometrik({ sim, bots, malam, kecepatan, terpilihId, onPili
   const rupaRef = useRef<Map<string, { rupa: RupaBot; warna: string }>>(new Map());
   const onPilihRef = useRef(onPilih);
   const onPilihNaraRef = useRef(onPilihNara);
+  const onPilihPenghuniRef = useRef(onPilihPenghuni);
+  const terpilihPenghuniRef = useRef(terpilihPenghuniId);
 
   useEffect(() => {
     malamRef.current = malam;
@@ -122,9 +148,11 @@ export function RuangIsometrik({ sim, bots, malam, kecepatan, terpilihId, onPili
     terpilihRef.current = terpilihId;
     onPilihRef.current = onPilih;
     onPilihNaraRef.current = onPilihNara;
+    onPilihPenghuniRef.current = onPilihPenghuni;
+    terpilihPenghuniRef.current = terpilihPenghuniId;
     rupaRef.current = new Map(bots.map((b) => [b.id, { rupa: b.rupa, warna: b.warna }]));
     kotorRef.current = true; // paksa gambar ulang walau mode gerak dikurangi
-  }, [malam, kecepatan, terpilihId, onPilih, onPilihNara, bots]);
+  }, [malam, kecepatan, terpilihId, onPilih, onPilihNara, onPilihPenghuni, terpilihPenghuniId, bots]);
 
   useEffect(() => {
     sim.setGerakKurang(gerakDikurangi);
@@ -218,6 +246,32 @@ export function RuangIsometrik({ sim, bots, malam, kecepatan, terpilihId, onPili
           }
         }
       }
+      // Penghuni (pengguna online)
+      const jam = penghuni.sekarangMs();
+      for (const p of penghuni.penghuni) {
+        const el = tagPenghuniRef.current.get(p.id);
+        const pos = posisiPenghuniRef.current.get(p.id);
+        if (!el?.tag || !pos) continue;
+        el.tag.style.visibility = p.alfa > 0.05 ? "visible" : "hidden";
+        el.tag.style.opacity = String(Math.max(0, Math.min(1, p.alfa)).toFixed(2));
+        el.tag.style.transform = `translate(${(pos.sx * sc).toFixed(1)}px, ${((pos.sy - 29) * sc).toFixed(1)}px) translate(-50%, -100%)`;
+        el.tag.style.zIndex = String(Math.round(p.y * 10 + p.x * 10) + 10);
+        if (el.waktu) {
+          const w = waktuTag(p, jam);
+          if (el.waktu.textContent !== w) el.waktu.textContent = w;
+        }
+        if (el.gel && el.teks) {
+          const teks = penghuni.teksTampil(p, terpilihPenghuniRef.current);
+          if (teks) {
+            if (el.teks.textContent !== teks) el.teks.textContent = teks;
+            el.gel.style.setProperty("--c", p.warna);
+            el.gel.style.fontSize = ukuranGelembung(sc);
+            el.gel.style.display = "block";
+          } else {
+            el.gel.style.display = "none";
+          }
+        }
+      }
       URUTAN_TAHAP.forEach((k, i) => {
         const pil = pilRef.current[i];
         if (!pil) return;
@@ -242,6 +296,7 @@ export function RuangIsometrik({ sim, bots, malam, kecepatan, terpilihId, onPili
       const dtNyata = Math.min(DT_MAKS, Math.max(0, (now - terakhir) / 1000));
       terakhir = now;
       sim.maju(dtNyata * kecepatanRef.current, dtNyata);
+      penghuni.maju(dtNyata);
 
       if (!terlihatRef.current || skalaRef.current <= 0) return;
       if (gerakDikurangi && !kotorRef.current && now - akhirGambar < SELANG_GAMBAR_DIKURANGI) return;
@@ -271,6 +326,9 @@ export function RuangIsometrik({ sim, bots, malam, kecepatan, terpilihId, onPili
           terpilihId: terpilihRef.current,
           malam: malamSekarang,
           posisi: posisiRef.current,
+          penghuni,
+          terpilihPenghuniId: terpilihPenghuniRef.current,
+          posisiPenghuni: posisiPenghuniRef.current,
         },
         bgRef.current.kanvas,
         sinarRef.current,
@@ -280,7 +338,7 @@ export function RuangIsometrik({ sim, bots, malam, kecepatan, terpilihId, onPili
 
     id = requestAnimationFrame(langkah);
     return () => cancelAnimationFrame(id);
-  }, [jalan, sim, gerakDikurangi]);
+  }, [jalan, sim, penghuni, gerakDikurangi]);
 
   const klikKanvas = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -294,9 +352,16 @@ export function RuangIsometrik({ sim, bots, malam, kecepatan, terpilihId, onPili
       onPilihNaraRef.current?.();
       return;
     }
+    let penghuniKena: number | null = null;
+    for (const p of penghuni.penghuni) if (kena(posisiPenghuniRef.current.get(p.id))) penghuniKena = p.id;
+    if (penghuniKena !== null) {
+      onPilihPenghuniRef.current(terpilihPenghuniRef.current === penghuniKena ? null : penghuniKena);
+      return;
+    }
     let dipilih: BotHidup | null = null;
     for (const b of sim.bots) if (kena(posisiRef.current.get(b.id))) dipilih = b;
     onPilihRef.current(dipilih ? (terpilihRef.current === dipilih.id ? null : dipilih.id) : null);
+    if (!dipilih) onPilihPenghuniRef.current(null);
   };
 
   return (
@@ -345,6 +410,53 @@ export function RuangIsometrik({ sim, bots, malam, kecepatan, terpilihId, onPili
             >
               <i className="inline-block h-[7px] w-[7px] rounded-full bg-[var(--c)]" />
               {b.nama}
+            </div>
+          </div>
+        ))}
+        {/* Pengguna online */}
+        {daftarPenghuni.map((p) => (
+          <div
+            key={p.id}
+            ref={(el) => {
+              const peta = tagPenghuniRef.current;
+              const lama = peta.get(p.id) ?? { tag: null, gel: null, teks: null, waktu: null };
+              peta.set(p.id, { ...lama, tag: el });
+            }}
+            className="absolute left-0 top-0 flex flex-col items-center gap-[2px]"
+            style={{ visibility: "hidden", "--c": "#94a3b8" } as CSSProperties}
+          >
+            <div
+              ref={(el) => {
+                const peta = tagPenghuniRef.current;
+                const lama = peta.get(p.id) ?? { tag: null, gel: null, teks: null, waktu: null };
+                peta.set(p.id, { ...lama, gel: el });
+              }}
+              className="relative hidden rounded-md border-2 border-[var(--c)] bg-[#f6f0e2] px-[6px] py-[2px] font-mono font-bold leading-tight text-[#2a2118] shadow-[0_2px_0_rgba(0,0,0,.35)] after:absolute after:-bottom-[6px] after:left-1/2 after:-ml-1 after:border-4 after:border-transparent after:border-t-[var(--c)] after:content-['']"
+            >
+              <span
+                ref={(el) => {
+                  const peta = tagPenghuniRef.current;
+                  const lama = peta.get(p.id) ?? { tag: null, gel: null, teks: null, waktu: null };
+                  peta.set(p.id, { ...lama, teks: el });
+                }}
+                className="block max-w-[170px] truncate whitespace-nowrap sm:max-w-[300px]"
+              />
+            </div>
+            <div
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border bg-[rgba(14,11,20,.85)] py-px pl-[4px] pr-[6px] text-[9.5px] font-bold text-[#f4efe8]",
+                terpilihPenghuniId === p.id ? "border-[#fde68a]" : "border-white/10",
+              )}
+            >
+              <span
+                ref={(el) => {
+                  const peta = tagPenghuniRef.current;
+                  const lama = peta.get(p.id) ?? { tag: null, gel: null, teks: null, waktu: null };
+                  peta.set(p.id, { ...lama, waktu: el });
+                }}
+                className="font-mono text-[8.5px] font-semibold text-[#fde68a]"
+              />
+              <span className="max-w-[90px] truncate">{p.nama.split(" ")[0] || p.username}</span>
             </div>
           </div>
         ))}
