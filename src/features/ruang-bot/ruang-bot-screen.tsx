@@ -20,7 +20,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Info, Lock } from "lucide-react";
+import { AlertTriangle, Lock } from "lucide-react";
 import { EmptyState, GlassSkeleton, ScreenHeader } from "@/components/pri-ui";
 import { KUOTA_BOT_MAKS, KUOTA_BOT_MIN, type AksiKendaliBot, type AksiSumberBot, type StatusBot } from "@/lib/bot-tipe";
 import { cn } from "@/lib/utils";
@@ -28,7 +28,7 @@ import { AntreanAccView } from "./antrean-acc-view";
 import { AntreanAccNyata } from "./antrean-acc-nyata";
 import { ChatBotView } from "./chat-bot-view";
 import { KoordinatorView } from "./koordinator-view";
-import { BOT_CONTOH, ACC_AWAL, BLOKIR_AWAL, HASIL_AWAL, KUOTA_AWAL, MAKS_KUOTA_AWAL, SUMBER_AWAL } from "./data-contoh";
+import { MAKS_KUOTA_AWAL } from "./data-contoh";
 import { DetailBotView } from "./detail-bot-view";
 import { RuangView } from "./ruang-view";
 import { petakanBot, petakanLog, petakanSumber, waktuRelatif } from "./peta-nyata";
@@ -85,33 +85,25 @@ function adaDataNyata(s: StatusBot | null): boolean {
 /** Peta kosong/daftar kosong tetap (identitas stabil, tidak memicu render ulang). */
 const HASIL_KOSONG: HasilHariIni[] = [];
 const BLOKIR_KOSONG: string[] = [];
-const ID_ANGKA = /\D/g;
-
-/**
- * Data contoh yang dipakai mode nyata (antrean ACC, sumber) memakai id "bot1"…"bot3";
- * arahkan ke bot sungguhan menurut urutan supaya nama/warnanya cocok.
- */
-function arahkanKeBotNyata<T extends { botId: string }>(daftar: T[], idNyata: string[]): T[] {
-  if (idNyata.length === 0) return daftar;
-  return daftar.map((x) => {
-    const urut = Math.max(1, Number(x.botId.replace(ID_ANGKA, "")) || 1);
-    return { ...x, botId: idNyata[(urut - 1) % idNyata.length] };
-  });
-}
 
 // ---------- potongan tampilan ----------
 
-function SpandukContoh({ children }: { children?: React.ReactNode }) {
+/** Awal yang kosong: belum ada bot. Dunia (pengguna online) tetap hidup; bot muncul setelah dibuat di Kelola Bot. */
+function KartuBelumAdaBot({ onBuka }: { onBuka?: () => void }) {
   return (
     <div
       role="note"
-      className="mb-3 flex items-start gap-2 rounded-2xl border border-amber-500/50 bg-amber-500/10 px-3.5 py-2.5 text-[12.5px] leading-snug text-amber-800 dark:text-amber-200"
+      className="mb-3 flex flex-col gap-2 rounded-2xl border border-amber-500/50 bg-amber-500/10 px-3.5 py-3 text-[12.5px] leading-snug text-amber-800 dark:text-amber-200 sm:flex-row sm:items-center"
     >
-      <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-      <p className="m-0">
-        <b>Contoh — tersambung pada pekerjaan berikutnya (Pekerjaan 3).</b>
-        {children ? <> {children}</> : null}
+      <p className="m-0 min-w-0 flex-1">
+        <b>Belum ada bot.</b> Ruangan di bawah menampilkan pengguna yang sedang online. Bot (beserta akun, profil upload-post, dan API key-nya) dibuat di{" "}
+        <b>Profil → Kelola Bot</b>; begitu bot pertama dibuat, layar ini otomatis berganti ke data nyata.
       </p>
+      {onBuka && (
+        <button type="button" onClick={onBuka} className="btn-tekan shrink-0 rounded-full bg-amber-600 px-4 py-2 text-[12px] font-bold text-white">
+          Buka Kelola Bot
+        </button>
+      )}
     </div>
   );
 }
@@ -122,7 +114,7 @@ function LencanaHeader({ status }: { status: StatusBot | null }) {
   if (!adaDataNyata(status)) {
     return (
       <span className="rounded-full border border-amber-500/50 bg-amber-500/10 px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-        Data contoh
+        Belum ada bot
       </span>
     );
   }
@@ -163,7 +155,7 @@ function SkeletonMemuat() {
 
 // ---------- cangkang: memuat status dari server, lalu memilih mode ----------
 
-export function RuangBotScreen() {
+export function RuangBotScreen({ onBukaKelolaBot }: { onBukaKelolaBot?: () => void } = {}) {
   const s = useStatusBot();
   const { data } = s;
   const nyata = adaDataNyata(data);
@@ -193,6 +185,7 @@ export function RuangBotScreen() {
         sibuk={s.sibuk}
         kendali={s.kendali}
         ubahSumber={s.ubahSumber}
+        onBukaKelolaBot={onBukaKelolaBot}
       />
     );
   }
@@ -220,28 +213,28 @@ type RuangBotIsiProps = {
   sibuk: ReadonlySet<string>;
   kendali: (aksi: AksiKendaliBot[]) => Promise<boolean>;
   ubahSumber: (aksi: AksiSumberBot) => Promise<HasilAksiSumber>;
+  onBukaKelolaBot?: () => void;
 };
 
-function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber }: RuangBotIsiProps) {
+function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber, onBukaKelolaBot }: RuangBotIsiProps) {
   const [tampilan, setTampilan] = useState<TampilanBot>("ruang");
   // State mode CONTOH (simulasi di peramban). Pada mode nyata sebagian besar tidak dipakai.
-  const [botsContoh, setBotsContoh] = useState<BotContoh[]>(BOT_CONTOH);
-  const [kuotaContoh, setKuotaContoh] = useState<Record<string, number>>(KUOTA_AWAL);
+  // Awal yang KOSONG (14 Okt 2026): tanpa bot contoh. Bot muncul setelah dibuat di Profil → Kelola Bot.
+  const [botsContoh, setBotsContoh] = useState<BotContoh[]>([]);
+  const [kuotaContoh, setKuotaContoh] = useState<Record<string, number>>({});
   const [maksKuotaContoh, setMaksKuotaContoh] = useState(MAKS_KUOTA_AWAL);
-  const [hasilContoh, setHasilContoh] = useState<HasilHariIni[]>(HASIL_AWAL);
+  const [hasilContoh, setHasilContoh] = useState<HasilHariIni[]>([]);
   const [logContoh, setLogContoh] = useState<LogItem[]>([]);
   const [jedaGlobalContoh, setJedaGlobalContoh] = useState(false);
   const [jedaBotContoh, setJedaBotContoh] = useState<Record<string, boolean>>({});
   // Sumber & blokir CONTOH (mode nyata memakai daftar dari server, lihat di bawah).
-  const [sumberContoh, setSumberContoh] = useState<SumberContoh[]>(SUMBER_AWAL);
-  const [blokirContoh, setBlokirContoh] = useState<string[]>(BLOKIR_AWAL);
+  const [sumberContoh, setSumberContoh] = useState<SumberContoh[]>([]);
+  const [blokirContoh, setBlokirContoh] = useState<string[]>([]);
   // State yang dipakai kedua mode (Antrean ACC tetap contoh pada mode nyata).
   const [statusHidup, setStatusHidup] = useState<Record<string, StatusHidup>>({});
   const [terpilihId, setTerpilihId] = useState<string | null>(null);
-  const [detailId, setDetailId] = useState<string>(() => (nyata ? String(server.bots[0]?.id ?? "") : BOT_CONTOH[0].id));
-  const [antrean, setAntrean] = useState<ItemAcc[]>(() =>
-    nyata ? arahkanKeBotNyata(ACC_AWAL, server.bots.map((b) => String(b.id))) : ACC_AWAL,
-  );
+  const [detailId, setDetailId] = useState<string>(() => (nyata ? String(server.bots[0]?.id ?? "") : ""));
+  const [antrean, setAntrean] = useState<ItemAcc[]>([]);
   const [riwayat, setRiwayat] = useState<KeputusanAcc[]>([]);
   const [jam, setJam] = useState(detikWibSekarang);
 
@@ -423,6 +416,7 @@ function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber }: RuangBotIsiP
 
   return (
     <>
+      {!nyata && <KartuBelumAdaBot onBuka={onBukaKelolaBot} />}
       <div
         role="tablist"
         aria-label="Tampilan Ruang Bot"
@@ -480,8 +474,8 @@ function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber }: RuangBotIsiP
           onBotSelesaiPosting={botSelesaiPosting}
           onLog={catatLog}
           onStatus={setStatusHidup}
-          koordinator={nyata ? server.koordinator : null}
-          chatTerakhir={nyata ? server.chat_terakhir : null}
+          koordinator={server.koordinator ?? null}
+          chatTerakhir={server.chat_terakhir ?? null}
           onBukaTab={setTampilan}
           onUbahOtakContoh={ubahOtakContoh}
         />

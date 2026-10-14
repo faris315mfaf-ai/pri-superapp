@@ -459,8 +459,9 @@ export function RuangView(p: RuangViewProps) {
   const kNama = koordinator?.nama;
   const kDiputus = koordinator?.diputus;
   useEffect(() => {
-    sim.nara.setKeadaan(nyata ? { punyaOtak: kPunyaOtak, usulanTerbuka: kUsulan, nama: kNama } : { punyaOtak: true, usulanTerbuka: 0 });
-  }, [sim, nyata, kPunyaOtak, kUsulan, kNama]);
+    // Nara mengikuti data server di kedua mode; tanpa data (migrasi belum jalan) ia tampil tanpa API key.
+    sim.nara.setKeadaan({ punyaOtak: kPunyaOtak, usulanTerbuka: kUsulan, nama: kNama });
+  }, [sim, kPunyaOtak, kUsulan, kNama]);
   useEffect(() => {
     if (!nyata || !kDiputus) return;
     const baru = suratBaru(kDiputus, new Set(bots.map((b) => b.id)), Date.now());
@@ -526,7 +527,7 @@ export function RuangView(p: RuangViewProps) {
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <Segmen label="Waktu ruangan" pilihan={["siang", "malam"] as const} nilai={malam ? "malam" : "siang"} onPilih={(v) => setMalam(v === "malam")} format={(v) => (v === "siang" ? "Siang" : "Malam")} />
-        {!nyata && (
+        {!nyata && p.bots.length > 0 && (
           <>
             <Segmen label="Kecepatan simulasi" pilihan={KECEPATAN} nilai={kecepatan as (typeof KECEPATAN)[number]} onPilih={setKecepatan} format={(v) => `${v}×`} />
             <button
@@ -599,7 +600,7 @@ export function RuangView(p: RuangViewProps) {
               <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">
                 Post hari ini {totalPost}/{nyata ? totalMaks : p.maksKuota * p.bots.length}
               </span>
-              {!nyata && (
+              {!nyata && p.bots.length > 0 && (
                 <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">
                   Render: {potret.render} berjalan · {potret.antre} antre
                 </span>
@@ -662,7 +663,7 @@ export function RuangView(p: RuangViewProps) {
             <KartuNara
               nara={potret.nara}
               peran={koordinator?.peran ?? "Koordinator Redaksi"}
-              nyata={nyata}
+              nyata
               tersedia={!!koordinator}
               onBuka={bukaKoordinator}
             />
@@ -670,6 +671,7 @@ export function RuangView(p: RuangViewProps) {
 
           <GlassCard className="p-3.5">
             <Judul>Tim bot</Judul>
+            {p.bots.length === 0 && <p className="text-[12px] text-teks-sekunder">Belum ada bot. Buat di Profil → Kelola Bot.</p>}
             <ul className="flex flex-col gap-2">
               {p.bots.map((b) => (
                 <KartuBot
@@ -786,10 +788,10 @@ export function RuangView(p: RuangViewProps) {
           </>
         ) : (
           <>
-            <b className="text-teks-utama">Cara membaca.</b> Pencarian → Edit → Posting → Istirahat di ruang kerja. Bot tanpa
-            API key tidur di kamar tidur (coba tombol &quot;Pasang API key&quot; di kartu bot); tombol Panggil rapat
-            mengumpulkan bot berkunci dan Nara di ruang meeting. Bila meja terisi, bot lain antre di tengah ruangan seperti
-            antrean render. Bot bermode ACC mengirim hasilnya ke tab Antrean ACC.
+            <b className="text-teks-utama">Cara membaca.</b> Gedung ini punya empat ruang bot (kerja, meeting, koordinator, kamar
+            tidur) dan sayap pengguna (aula, ruang database, ruang alat, ruang pos). Setiap pengguna yang sedang online muncul
+            sebagai karakter di aula dan beranimasi sesuai aksinya. Bot muncul setelah dibuat di Profil → Kelola Bot; bot tanpa
+            API key tidur di kamar tidur.
           </>
         )}
       </GlassCard>

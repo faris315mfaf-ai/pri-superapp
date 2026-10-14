@@ -1342,7 +1342,7 @@ export default function Page() {
       });
     }
     if (tabBoleh.includes("ruangbot") && bolehRuangBot(user)) {
-      layarTab.push({ kunci: "ruangbot", isi: <RuangBotScreen /> });
+      layarTab.push({ kunci: "ruangbot", isi: <RuangBotScreen onBukaKelolaBot={() => setSubLayar({ nama: "kelola-bot" })} /> });
     }
     if (tabBoleh.includes("tvrku")) {
       layarTab.push({
