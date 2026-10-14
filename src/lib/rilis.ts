@@ -12,6 +12,7 @@
 // ============================================================
 
 import { peranTersembunyi } from "@/lib/peran";
+import { DIVISI_PALUGODAM } from "@/lib/struktur";
 
 /**
  * 7 Oktober 2026 pukul 12.30 WIB. Semula 15.00; dimajukan pemilik setelah
@@ -25,6 +26,7 @@ const AKUN_UJI_COBA_21 = new Set(["4", "176"]);
 type AkunRilis = {
   id?: string | number | null;
   role?: string | null;
+  divisi?: string | null;
   superadmin?: boolean;
   verifikasi_21_pada?: string | null;
   tutorial_21_pada?: string | null;
@@ -60,6 +62,14 @@ export function rilis21Untuk(u: AkunRilis, kini = kiniServer()): boolean {
 /** Akun yang dibebaskan dari verifikasi & tutorial 2.1: master dan superadmin. */
 export function bebasPembaruan21(u: AkunRilis): boolean {
   return u?.superadmin === true || peranTersembunyi(u?.role);
+}
+
+/**
+ * Divisi PALUGODAM (dan HANYA divisi itu) tidak wajib mengisi / memverifikasi nomor WhatsApp pada pembaruan 2.1:
+ * langkah WA boleh dilewati. Divisi lain tetap wajib.
+ */
+export function bebasVerifikasiWa(u: { divisi?: string | null } | null | undefined): boolean {
+  return (u?.divisi ?? "").trim() === DIVISI_PALUGODAM;
 }
 
 /** Masih harus menjalani alur pembaruan 2.1 (verifikasi / tutorial)? */

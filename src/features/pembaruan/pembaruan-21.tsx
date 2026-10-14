@@ -30,6 +30,7 @@ import {
   verifikasiWa21,
   type OtpWaMasuk,
 } from "@/services";
+import { bebasVerifikasiWa } from "@/lib/rilis";
 import type { User } from "@/types";
 
 type Langkah = "sambut" | "wa" | "profil" | "autoedit" | "kompres" | "tema" | "akhir";
@@ -80,10 +81,12 @@ export function Pembaruan21({ user }: { user: User }) {
           </div>
         </div>
         <div className="scrollbar-tipis flex-1 overflow-y-auto px-5 pt-4 pb-5">
-          {langkah === "sambut" && <Sambut onLanjut={() => setLangkah("wa")} />}
+          {langkah === "sambut" && <Sambut onLanjut={() => setLangkah("wa")} tanpaWa={bebasVerifikasiWa(user)} />}
           {langkah === "wa" && (
             <VerifikasiWa
               user={user}
+              boleLewati={bebasVerifikasiWa(user)}
+              onLewati={() => setLangkah("profil")}
               onSelesai={(u) => {
                 setUser(u);
                 setLangkah("profil");
@@ -188,12 +191,12 @@ function Poin({ children }: { children: React.ReactNode }) {
 
 // ---- 1. Sambutan --------------------------------------------------------------
 
-function Sambut({ onLanjut }: { onLanjut: () => void }) {
+function Sambut({ onLanjut, tanpaWa }: { onLanjut: () => void; tanpaWa: boolean }) {
   return (
     <>
       <Judul ikon={Sparkles} judul="PRI SuperApp 2.1 sudah tiba" ket="Tampilan baru, lebih cepat, dan alat video baru." />
       <ul className="mt-4 flex flex-col gap-2">
-        <Poin>Verifikasi ulang akun lewat WhatsApp (±1 menit)</Poin>
+        <Poin>{tanpaWa ? "Verifikasi WhatsApp tidak wajib untuk divisi Anda (boleh dilewati)" : "Verifikasi ulang akun lewat WhatsApp (±1 menit)"}</Poin>
         <Poin>Periksa nama lengkap, username, dan email Anda</Poin>
         <Poin>Kenalan singkat dengan Edit Otomatis, kompres otomatis, dan 4 tema baru</Poin>
       </ul>
@@ -210,7 +213,7 @@ function Sambut({ onLanjut }: { onLanjut: () => void }) {
 
 // ---- 2. Verifikasi WhatsApp -------------------------------------------------------
 
-function VerifikasiWa({ user, onSelesai }: { user: User; onSelesai: (u: User) => void }) {
+function VerifikasiWa({ user, onSelesai, boleLewati, onLewati }: { user: User; onSelesai: (u: User) => void; boleLewati: boolean; onLewati: () => void }) {
   const [nomor, setNomor] = useState(nomorLokal(user.nomor_wa));
   const [wa, setWa] = useState<OtpWaMasuk | null>(null);
   const [memuat, setMemuat] = useState(false);
@@ -242,7 +245,20 @@ function VerifikasiWa({ user, onSelesai }: { user: User; onSelesai: (u: User) =>
 
   return (
     <>
-      <Judul ikon={MessageCircle} judul="Verifikasi nomor WhatsApp" ket="Pastikan nomor ini aktif dan ada di HP Anda." />
+      <Judul
+        ikon={MessageCircle}
+        judul={boleLewati ? "Verifikasi nomor WhatsApp (opsional)" : "Verifikasi nomor WhatsApp"}
+        ket={boleLewati ? "Tidak wajib untuk divisi Anda. Boleh diisi sekarang atau dilewati." : "Pastikan nomor ini aktif dan ada di HP Anda."}
+      />
+      {boleLewati && (
+        <button
+          type="button"
+          onClick={onLewati}
+          className="glass btn-tekan mt-4 flex h-11 w-full items-center justify-center rounded-xl text-[13px] font-bold text-teks-utama"
+        >
+          Lewati, tidak perlu WhatsApp
+        </button>
+      )}
       {!wa ? (
         <>
           <label className="mt-4 block text-[12px] font-semibold text-teks-utama" htmlFor="nomor-21">
@@ -330,7 +346,7 @@ function DataDiri({ user, onSelesai }: { user: User; onSelesai: (u: User) => voi
   const kolom = "glass mt-1.5 h-12 w-full rounded-xl px-3.5 text-[14px] text-teks-utama outline-none";
   return (
     <>
-      <Judul ikon={CheckCircle2} judul="Periksa data diri" ket="WhatsApp terverifikasi. Pastikan data di bawah ini benar." />
+      <Judul ikon={CheckCircle2} judul="Periksa data diri" ket={user.wa_terverifikasi ? "WhatsApp terverifikasi. Pastikan data di bawah ini benar." : "Pastikan data di bawah ini benar."} />
       <label className="mt-4 block text-[12px] font-semibold text-teks-utama" htmlFor="nama-21">
         Nama lengkap
       </label>

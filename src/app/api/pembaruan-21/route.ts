@@ -23,7 +23,7 @@ import { normalkanNomorWa, nomorWaSah } from "@/lib/fonnte";
 import { otpMasukSiap, siapkanOtpMasuk, verifikasiOtp } from "@/lib/otp";
 import { periksaUsername } from "@/lib/username";
 import { emailSah } from "@/lib/otp-email";
-import { bebasPembaruan21, rilis21Untuk } from "@/lib/rilis";
+import { bebasPembaruan21, bebasVerifikasiWa, rilis21Untuk } from "@/lib/rilis";
 
 export const dynamic = "force-dynamic";
 
@@ -102,7 +102,9 @@ export async function POST(request: Request) {
 
     if (aksi === "profil") {
       const { data: kini } = await db.from("app_user").select("wa_terverifikasi, nomor_wa, username, email").eq("id", uid).maybeSingle();
-      if (!kini?.wa_terverifikasi || !kini.nomor_wa) galat("Verifikasi nomor WhatsApp dulu.", 400);
+      // Divisi PALUGODAM tidak wajib WhatsApp (langkah WA boleh dilewati); divisi lain tetap wajib.
+      if (!kini) galat("Akun tidak ditemukan.", 404);
+      if ((!kini.wa_terverifikasi || !kini.nomor_wa) && !bebasVerifikasiWa(user)) galat("Verifikasi nomor WhatsApp dulu.", 400);
       const nama = String(body.nama ?? "").replace(/\s+/g, " ").trim();
       if (nama.length < 3 || nama.length > 80) galat("Nama lengkap 3–80 huruf.", 400);
       const un = periksaUsername(String(body.username ?? ""));
