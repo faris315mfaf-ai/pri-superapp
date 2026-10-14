@@ -265,7 +265,7 @@ export function TemplateBot() {
             {/* 3. Keadaan tiap bot */}
             <p className="mt-5 text-[12px] font-bold text-teks-utama">Template tiap bot</p>
             {status.bot.length === 0 ? (
-              <p className="mt-1 text-[11.5px] text-teks-sekunder">Belum ada bot. Akun bot dibuat lewat skrip master.</p>
+              <p className="mt-1 text-[11.5px] text-teks-sekunder">Belum ada bot. Buat bot di Profil → Kelola Bot.</p>
             ) : (
               <ul className="mt-2 flex flex-col gap-1.5">
                 {status.bot.map((b) => {

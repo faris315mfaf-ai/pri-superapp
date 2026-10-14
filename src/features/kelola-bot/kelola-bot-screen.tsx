@@ -10,15 +10,17 @@
 // ============================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BrainCircuit, ExternalLink, Link2, Loader2, Pencil, Plus, UserPlus } from "lucide-react";
+import { BrainCircuit, ExternalLink, Layers, Link2, Loader2, LogIn, Pencil, Plus, UserPlus } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton, ScreenHeader, SectionTitle } from "@/components/pri-ui";
-import { toast } from "@/hooks/use-app-store";
+import { toast, useAppStore } from "@/hooks/use-app-store";
 import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { ModalTautkanProfil } from "@/features/dashboard/modal-tautkan-profil";
 import { PotretBot } from "@/features/ruang-bot/potret-bot";
 import { OtakBot } from "@/features/tvr-ku/otak-bot";
 import { TautanProfilMaster } from "@/features/tvr-ku/tautan-profil-master";
+import { TemplateBot } from "@/features/tvr-ku/template-bot";
+import { masukSebagai } from "@/lib/kendali-klien";
 import {
   HANDLE_BOT_MAKS,
   MAKS_BOT,
@@ -34,12 +36,13 @@ import type { BotRingkas, StatusBot } from "@/lib/bot-tipe";
 import { getStatusBot, kirimAkunBot } from "@/services";
 import { cn } from "@/lib/utils";
 
-type Tab = "akun" | "profil" | "otak";
+type Tab = "akun" | "profil" | "otak" | "template";
 
 const TAB: { kunci: Tab; label: string }[] = [
   { kunci: "akun", label: "Akun Bot" },
   { kunci: "profil", label: "Profil Upload-Post" },
   { kunci: "otak", label: "Otak (API Key)" },
+  { kunci: "template", label: "Template Auto Edit" },
 ];
 
 type Isian = { nama: string; peran: string; persona: string; warna: string; handle: string; rupa: number; rupaDiubah?: boolean };
@@ -446,6 +449,84 @@ function TutorialApiKey() {
   );
 }
 
+// ---------- tab: template auto edit ----------
+
+function TabTemplate({ status }: { status: StatusBot | null }) {
+  const namaAdmin = useAppStore((s) => s.user?.nama ?? "");
+  const [sibuk, setSibuk] = useState<number | null>(null);
+  const bots = status?.bots ?? [];
+
+  const masuk = async (b: BotRingkas) => {
+    setSibuk(b.id);
+    try {
+      toast("info", `Masuk sebagai ${b.nama}…`, "Aplikasi dimuat ulang sebagai akun bot. Buka TVR Saya → Edit Otomatis → Template. Tekan \"Kembali ke akun saya\" di pita atas untuk pulang.");
+      await masukSebagai({ id: String(b.user_id), nama: b.nama }, namaAdmin);
+    } catch (e) {
+      toast("error", "Gagal beralih akun", e instanceof Error ? e.message : "");
+      setSibuk(null);
+    }
+  };
+
+  return (
+    <section className="flex flex-col gap-3">
+      <GlassCard className="p-4">
+        <p className="text-[12px] leading-relaxed text-teks-sekunder">
+          Bot membuat video lewat <b className="text-teks-utama">Auto Edit</b> memakai <b className="text-teks-utama">template per akun</b>. Tanpa template, bot berhenti dengan
+          penghalang &quot;template belum dibuat&quot;. Cara menyiapkannya:
+        </p>
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-[11.5px] leading-relaxed text-teks-sekunder">
+          <li>
+            Tekan <b className="text-teks-utama">Buat template sebagai …</b> di bawah. Anda masuk sebagai akun bot itu (hanya modul TVR Saya).
+          </li>
+          <li>
+            Buka <b className="text-teks-utama">Edit Otomatis → Template</b>: atur kanvas, overlay, kotak teks hook, dan badge kategori, lalu <b className="text-teks-utama">tetapkan</b> template
+            (unggah aset sesuai desain TV Rakyat).
+          </li>
+          <li>
+            Tekan <b className="text-teks-utama">Kembali ke akun saya</b> di pita atas. Kembali ke sini (Template Auto Edit).
+          </li>
+          <li>
+            Di <b className="text-teks-utama">Template Bot</b> (bawah): simpan template itu ke pustaka dengan nama, lalu <b className="text-teks-utama">pasang ke bot lain atau semua bot</b> tanpa
+            membuatnya ulang. Tiap bot memakai salinannya sendiri.
+          </li>
+        </ol>
+      </GlassCard>
+
+      <GlassCard className="p-4">
+        <SectionTitle judul="Buat template sebagai bot" />
+        {status === null ? (
+          <GlassSkeleton className="mt-2.5 h-20 rounded-2xl" />
+        ) : bots.length === 0 ? (
+          <p className="mt-2.5 text-[12px] text-teks-sekunder">Belum ada bot. Buat dulu di tab Akun Bot.</p>
+        ) : (
+          <ul className="mt-2.5 flex flex-col gap-2">
+            {bots.map((b) => (
+              <li key={b.id} className="flex items-center gap-2.5 rounded-xl bg-black/[0.03] px-2.5 py-2 dark:bg-white/5">
+                <PotretBot rupa={b.rupa} lencana={b.warna} skala={2} label={`Potret ${b.nama}`} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[12.5px] font-bold text-teks-utama">{b.nama}</span>
+                  <span className="block truncate text-[11px] text-teks-sekunder">@{b.username}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void masuk(b)}
+                  disabled={sibuk !== null}
+                  className="btn-tekan flex shrink-0 items-center gap-1 rounded-full bg-pri/12 px-3 py-1.5 text-[11px] font-bold text-pri disabled:opacity-50"
+                >
+                  {sibuk === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <LogIn className="h-3.5 w-3.5" aria-hidden="true" />}
+                  Buat template sebagai {b.nama}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </GlassCard>
+
+      <TemplateBot />
+    </section>
+  );
+}
+
 // ---------- layar ----------
 
 export function KelolaBotScreen({ onKembali }: { onKembali: () => void }) {
@@ -491,6 +572,7 @@ export function KelolaBotScreen({ onKembali }: { onKembali: () => void }) {
             className={cn("btn-tekan flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl px-3.5 text-[13px] font-semibold", tab === t.kunci ? "bg-pri/15 text-pri" : "text-teks-sekunder")}
           >
             {t.kunci === "profil" && <Link2 className="h-3.5 w-3.5" aria-hidden="true" />}
+            {t.kunci === "template" && <Layers className="h-3.5 w-3.5" aria-hidden="true" />}
             {t.label}
           </button>
         ))}
@@ -505,6 +587,7 @@ export function KelolaBotScreen({ onKembali }: { onKembali: () => void }) {
       )}
       {tab === "akun" && <TabAkun status={status} onSegar={segar} />}
       {tab === "profil" && <TabProfil status={status} onSegar={segar} />}
+      {tab === "template" && <TabTemplate status={status} />}
       {tab === "otak" && (
         <div className="flex flex-col gap-3">
           <TutorialApiKey />

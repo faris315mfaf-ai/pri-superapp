@@ -17,8 +17,13 @@ Menggantikan `scripts/buat-akun-bot.mjs` dan kerja di terminal. Tombol **Kelola 
    (`aistudio.google.com/apikey`), lalu kartu Nara + kartu per bot (`OtakBot`): pilih penyedia, tempel key, Simpan, Uji.
    Key tulis-saja, terenkripsi AES-GCM (`BOT_KUNCI_INDUK`), tidak pernah ditampilkan lagi dan tidak dikirim ke runner.
 
-Urutan menyiapkan bot baru: Akun Bot → Profil Upload-Post → Otak (API Key) → template video (TVR Saya → Kendali Akun BOT)
-→ sumber & kuota (Ruang Bot). Bot tanpa API key tidur di kamar tidur Ruang Bot.
+4. **Template Auto Edit** — tiap bot membuat video lewat Auto Edit dengan template per akun. Tab ini memuat panduan 4 langkah,
+   tombol **Buat template sebagai <bot>** (masuk sebagai akun bot, hanya modul TVR Saya, lewat `masukSebagai`; pulang dengan
+   "Kembali ke akun saya" di pita atas), dan komponen **Template Bot**: simpan template ke pustaka bernama lalu pasang ke satu
+   bot atau semua bot (berkas disalin di mesin; tiap bot memakai salinannya sendiri). Tanpa template bot berhenti dengan
+   penghalang "template belum dibuat".
+
+Urutan menyiapkan bot baru: Akun Bot → Profil Upload-Post → Otak (API Key) → Template Auto Edit → sumber & kuota (Ruang Bot). Bot tanpa API key tidur di kamar tidur Ruang Bot.
 
 Berkas: `src/features/kelola-bot/kelola-bot-screen.tsx`, `src/app/api/bot/akun/route.ts`, `src/lib/bot-akun-murni.ts`
 (validasi, username berikut, rupa), uji `tests/uji-bot-akun.mts`. Jenis audit: `bot_akun`.
