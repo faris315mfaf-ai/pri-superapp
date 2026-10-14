@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { tanyaOtakBot, botPunyaOtak, GalatOtak } from "@/lib/bot-otak";
 import { sumberUntukTugas } from "@/lib/bot-kerja";
 import { analisaAsal, labelKreditTakarir } from "@/lib/bot-asal";
-import { kunciPlatform } from "@/lib/bot-posting-murni";
+import { platformEfektif } from "@/lib/bot-platform";
 import { SISTEM_CAPTION, bangunPromptCaption, rapikanCaption } from "@/lib/bot-caption-murni";
 
 export async function tulisCaptionOtak(botId: number, tugasId: number): Promise<"ditulis" | "dilewati" | "gagal"> {
@@ -18,7 +18,7 @@ export async function tulisCaptionOtak(botId: number, tugasId: number): Promise<
     if (!tugas || tugas.tahap !== "siap_ditinjau" || String(tugas.caption_post ?? "").trim() !== "") return "dilewati";
     const { data: bot } = await db.from("bot_redaksi").select("user_id, platform").eq("id", botId).maybeSingle();
     if (!bot) return "dilewati";
-    const platform = kunciPlatform(String(bot.platform ?? ""));
+    const platform = await platformEfektif(db, bot as { user_id: number; platform: string | null });
     if (!platform) return "dilewati";
 
     const sumber = await sumberUntukTugas(Number(tugas.id), tugas.kandidat_id == null ? null : Number(tugas.kandidat_id));

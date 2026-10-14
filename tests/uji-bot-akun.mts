@@ -2,6 +2,7 @@
 // Jalankan: npx tsx tests/uji-bot-akun.mts
 import { MAKS_BOT, NAMA_BOT_MAKS, PERAN_MAKS, PERSONA_MAKS, WAJAH_BOT, WARNA_BOT_PILIHAN, emailAkunBot, normalkanProfilBot, rupaBot, usernameBerikut } from "@/lib/bot-akun-murni";
 import { DIVISI_BOT, adalahBot } from "@/lib/struktur";
+import { PRIORITAS_PLATFORM, pilihPlatformBot } from "@/lib/bot-posting-murni";
 
 let lulus = 0;
 let gagal = 0;
@@ -28,6 +29,8 @@ cek("watak boleh pendek, terlalu panjang ditolak", normalkanProfilBot({ ...sah, 
 cek("watak bukan teks ditolak", !normalkanProfilBot({ ...sah, persona: 5 }).ok);
 cek("warna bukan #rrggbb ditolak", !normalkanProfilBot({ ...sah, warna: "merah" }).ok && !normalkanProfilBot({ ...sah, warna: "#fff" }).ok && !normalkanProfilBot({ ...sah, warna: "<script>" }).ok);
 cek("platform tak dikenal ditolak", !normalkanProfilBot({ ...sah, platform: "Facebook" }).ok);
+cek("tanpa platform lolos: platform kosong = mengikuti profil upload-post", (() => { const { platform: _p, ...tanpa } = sah; void _p; const x = normalkanProfilBot(tanpa); return x.ok && x.nilai.platform === ""; })());
+cek("platform kosong/spasi dianggap tidak diisi", (() => { const x = normalkanProfilBot({ ...sah, platform: "  " }); return x.ok && x.nilai.platform === ""; })());
 cek("handle kosong boleh, handle aneh ditolak", normalkanProfilBot({ ...sah, handle: "" }).ok && !normalkanProfilBot({ ...sah, handle: "a b<c>" }).ok);
 cek("karakter kontrol dibuang dari nama", (() => { const x = normalkanProfilBot({ ...sah, nama: "Ra\u0000ka\n" }); return x.ok && x.nilai.nama === "Ra ka"; })());
 cek("bukan objek/field hilang ditolak", !normalkanProfilBot({}).ok);
@@ -48,6 +51,15 @@ cek("warna rusak -> kaus bawaan (tidak memasukkan teks liar)", rupaBot(0, "<x>")
 cek("topi membawa warnaTopi, kacamata/hud hanya bila true", rupaBot(0, "#f08a3c").warnaTopi === "#2d6a4f" && rupaBot(0, "#f08a3c").berhud === true && rupaBot(1, "#f08a3c").kacamata === undefined);
 cek("10 rupa dan 8 warna pilihan", WAJAH_BOT.length === 10 && WARNA_BOT_PILIHAN.length === 8);
 cek("semua warna pilihan sah", WARNA_BOT_PILIHAN.every((w) => normalkanProfilBot({ ...sah, warna: w }).ok));
+
+console.log("\n[E] pilihPlatformBot: platform mengikuti akun tertaut");
+cek("platform tersimpan yang dikenal dipakai (bot lama dari skrip)", pilihPlatformBot("TikTok", ["instagram"]) === "tiktok");
+cek("kosong -> akun tertaut pertama menurut prioritas", pilihPlatformBot("", ["youtube", "tiktok"]) === "tiktok" && pilihPlatformBot(null, ["youtube"]) === "youtube");
+cek("instagram menang atas yang lain", pilihPlatformBot("", ["tiktok", "instagram", "youtube"]) === "instagram");
+cek("tak ada akun tertaut -> null", pilihPlatformBot("", []) === null && pilihPlatformBot(undefined, []) === null);
+cek("platform tak dikenal di daftar tertaut diabaikan", pilihPlatformBot("", ["bilibili", null, "", "threads"]) === "threads");
+cek("nama 'x' dipetakan ke twitter", pilihPlatformBot("", ["X"]) === "twitter");
+cek("prioritas memuat enam platform tanpa duplikat", PRIORITAS_PLATFORM.length === 6 && new Set(PRIORITAS_PLATFORM).size === 6);
 
 console.log("\n[D] konstanta & pagar");
 cek("batas jumlah bot masuk akal", MAKS_BOT >= 3 && MAKS_BOT <= 50);

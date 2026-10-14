@@ -137,7 +137,8 @@ export async function POST(request: Request) {
       const { data: lama, error: eLama } = await db.from("bot_redaksi").select("id, user_id").eq("id", botId).maybeSingle();
       if (eLama) tolak("Gagal membaca bot.", 500);
       if (!lama) tolak("Bot tidak ditemukan.", 404);
-      const ubah: Record<string, unknown> = { nama: p.nama, peran: p.peran, persona: p.persona, warna: p.warna, handle: p.handle, platform: p.platform };
+      const ubah: Record<string, unknown> = { nama: p.nama, peran: p.peran, persona: p.persona, warna: p.warna, handle: p.handle };
+      if (p.platform) ubah.platform = p.platform;
       if (b.rupa_indeks != null) ubah.rupa = rupaBot(indeksRupa, p.warna);
       const { error } = await db.from("bot_redaksi").update(ubah).eq("id", botId);
       if (error) {

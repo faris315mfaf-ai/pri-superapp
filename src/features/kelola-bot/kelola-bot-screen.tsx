@@ -25,7 +25,6 @@ import {
   NAMA_BOT_MAKS,
   PERAN_MAKS,
   PERSONA_MAKS,
-  PLATFORM_SUMBER,
   WAJAH_BOT,
   WARNA_BOT_PILIHAN,
   normalkanProfilBot,
@@ -43,8 +42,8 @@ const TAB: { kunci: Tab; label: string }[] = [
   { kunci: "otak", label: "Otak (API Key)" },
 ];
 
-type Isian = { nama: string; peran: string; persona: string; warna: string; handle: string; platform: string; rupa: number; rupaDiubah?: boolean };
-const ISIAN_KOSONG: Isian = { nama: "", peran: "", persona: "", warna: WARNA_BOT_PILIHAN[0], handle: "", platform: PLATFORM_SUMBER[0], rupa: 0 };
+type Isian = { nama: string; peran: string; persona: string; warna: string; handle: string; rupa: number; rupaDiubah?: boolean };
+const ISIAN_KOSONG: Isian = { nama: "", peran: "", persona: "", warna: WARNA_BOT_PILIHAN[0], handle: "", rupa: 0 };
 
 // ---------- form profil bot (buat / ubah) ----------
 
@@ -99,22 +98,11 @@ function FormBot({
           disabled={sibuk}
         />
       </label>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1 text-[11.5px] font-semibold text-teks-sekunder">
-          Platform utama
-          <select value={i.platform} onChange={(e) => ubah({ platform: e.target.value })} className={kelasInput} disabled={sibuk}>
-            {PLATFORM_SUMBER.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-[11.5px] font-semibold text-teks-sekunder">
-          Nama akun sosmed (tampilan, opsional)
-          <input value={i.handle} onChange={(e) => ubah({ handle: e.target.value })} maxLength={HANDLE_BOT_MAKS} placeholder="mis. @tvr.raka" autoCapitalize="none" className={kelasInput} disabled={sibuk} />
-        </label>
-      </div>
+      <label className="flex flex-col gap-1 text-[11.5px] font-semibold text-teks-sekunder">
+        Nama akun sosmed (tampilan, opsional)
+        <input value={i.handle} onChange={(e) => ubah({ handle: e.target.value })} maxLength={HANDLE_BOT_MAKS} placeholder="mis. @tvr.raka" autoCapitalize="none" className={kelasInput} disabled={sibuk} />
+        <span className="text-[10.5px] font-normal">Platform tujuan posting tidak perlu diisi: mengikuti akun sosmed yang Anda tautkan di tab Profil Upload-Post.</span>
+      </label>
 
       <div>
         <p className="mb-1.5 text-[11.5px] font-semibold text-teks-sekunder">Warna bot</p>
@@ -182,7 +170,7 @@ function FormBot({
 
 const isianDari = (b: BotRingkas): Isian => {
   const cocok = WAJAH_BOT.findIndex((w) => w.kulit === b.rupa.kulit && w.rambut === b.rupa.rambut && w.gayaRambut === b.rupa.gayaRambut);
-  return { nama: b.nama, peran: b.peran, persona: b.persona, warna: b.warna, handle: b.handle, platform: b.platform || PLATFORM_SUMBER[0], rupa: cocok >= 0 ? cocok : 0 };
+  return { nama: b.nama, peran: b.peran, persona: b.persona, warna: b.warna, handle: b.handle, rupa: cocok >= 0 ? cocok : 0 };
 };
 
 // ---------- tab: akun bot ----------
@@ -195,7 +183,7 @@ function TabAkun({ status, onSegar }: { status: StatusBot | null; onSegar: () =>
   const buat = async (i: Isian) => {
     setSibuk(true);
     try {
-      const r = await kirimAkunBot({ aksi: "buat", nama: i.nama, peran: i.peran, persona: i.persona, warna: i.warna, handle: i.handle, platform: i.platform, rupa_indeks: i.rupa });
+      const r = await kirimAkunBot({ aksi: "buat", nama: i.nama, peran: i.peran, persona: i.persona, warna: i.warna, handle: i.handle, rupa_indeks: i.rupa });
       toast("sukses", "Bot dibuat", "username" in r ? `Akun ${r.username} siap. Lanjut: hubungkan profil upload-post dan API key.` : "");
       setTambah(false);
       onSegar();
@@ -218,7 +206,6 @@ function TabAkun({ status, onSegar }: { status: StatusBot | null; onSegar: () =>
         persona: i.persona,
         warna: i.warna,
         handle: i.handle,
-        platform: i.platform,
         ...(i.rupaDiubah ? { rupa_indeks: i.rupa } : {}),
       });
       toast("sukses", "Profil bot disimpan");
@@ -263,7 +250,7 @@ function TabAkun({ status, onSegar }: { status: StatusBot | null; onSegar: () =>
                     </p>
                     <p className="text-[12px] text-teks-utama">{b.peran}</p>
                     <p className="truncate text-[11.5px] text-teks-sekunder">
-                      {b.platform}
+                      {b.platform || "platform mengikuti profil upload-post"}
                       {b.handle ? ` · ${b.handle}` : ""}
                     </p>
                     <p className="mt-1.5 flex flex-wrap gap-1.5 text-[10.5px] font-bold">

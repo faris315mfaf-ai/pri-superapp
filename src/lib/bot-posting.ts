@@ -16,6 +16,7 @@
 //  - sebelum apa pun: BOT_POSTING_AKTIF, bot tidak dijeda, akun tujuan tertaut;
 //  - kunci proses (Redis/memori) + klaim atomik mencegah posting dobel;
 //  - tayang dijadwalkan beberapa menit ke depan agar masih bisa dibatalkan (hapus berkas).
+import { platformEfektif } from "@/lib/bot-platform";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { tabelBelumAda } from "@/lib/api-helper";
@@ -171,7 +172,7 @@ export async function bacaStatusAcc(sekarangMs: number = Date.now()): Promise<St
   for (const t of antre) {
     const bot = botPer.get(Number(t.bot_id));
     if (!bot) continue;
-    const platform = kunciPlatform(bot.platform);
+    const platform = await platformEfektif(db, bot);
     if (!akunPer.has(bot.id)) akunPer.set(bot.id, await keadaanAkun(db, Number(bot.user_id), platform));
     const akun = akunPer.get(bot.id)!;
     const sumber = await sumberUntukTugas(Number(t.id), t.kandidat_id);
@@ -301,7 +302,7 @@ export async function putuskanAcc(aksi: AksiAcc, pelaku: PelakuAcc, ktx: Konteks
   if (aksi.aksi === "batalkan_jadwal") return batalkanJadwal(db, tugas, bot, pelaku, ktx, sekarangMs);
 
   // ---- setuju ----
-  const platform = kunciPlatform(bot.platform);
+  const platform = await platformEfektif(db, bot);
   const akun = await keadaanAkun(db, Number(bot.user_id), platform);
   const tolak = alasanTolakSetuju({
     postingAktif: postingAktif(),
@@ -403,8 +404,8 @@ export async function jalankanPosting(tugasId: number, pelaku: PelakuAcc, ktx: K
     const tugas = klaim[0] as unknown as BarisTugasAcc;
     const bot = await muatBot(db, Number(tugas.bot_id));
     if (!bot) throw new GalatAcc("Bot tugas ini tidak ditemukan.", 404);
-    const platform = kunciPlatform(bot.platform);
-    if (!platform) throw new GalatAcc("Platform tujuan bot tidak dikenal.", 409);
+    const platform = await platformEfektif(db, bot);
+    if (!platform) throw new GalatAcc("Bot belum punya akun sosmed tertaut di profil upload-post-nya.", 409);
     const akun = await keadaanAkun(db, Number(bot.user_id), platform);
     if (!akun.profilAda) throw new GalatAcc("Bot belum punya profil upload-post.", 409);
     if (!tugas.id_stok_mesin) throw new GalatAcc("Video belum tersedia di stok.", 409);

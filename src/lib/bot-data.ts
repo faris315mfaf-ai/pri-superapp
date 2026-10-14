@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { tabelBelumAda } from "@/lib/api-helper";
 import type { BotRingkas, GayaRambutDb, LogBotDb, ModeBotDb, RunnerStatus, RupaBotDb, StatusBot, SumberBotDb, TahapBotDb, TugasAktifBot } from "@/lib/bot-tipe";
 import { muatDunia } from "@/lib/bot-dunia";
+import { LABEL_PLATFORM, pilihPlatformBot } from "@/lib/bot-posting-murni";
 import { normalkanKategori, normalkanPlatform } from "@/lib/bot-sumber";
 
 export const KUNCI_JEDA_GLOBAL = "bot_jeda_global";
@@ -84,7 +85,7 @@ export type BarisBot = {
 };
 
 /** Data dunia Ruang Bot; pemanggil yang tidak memuatnya mendapat punya_otak=false / tugas_aktif=null (tidak dipakai di luar Ruang Bot). */
-export type EkstraBot = { punyaOtak?: boolean; tugasAktif?: TugasAktifBot | null };
+export type EkstraBot = { punyaOtak?: boolean; tugasAktif?: TugasAktifBot | null; platformTurunan?: string };
 
 export function rakitBot(b: BarisBot, username: string, postHariIni: number, akunTertaut: number, ekstra: EkstraBot = {}): BotRingkas {
   const mode: ModeBotDb = b.mode === "otomatis" ? "otomatis" : "acc";
@@ -97,7 +98,8 @@ export function rakitBot(b: BarisBot, username: string, postHariIni: number, aku
     persona: String(b.persona ?? ""),
     warna: warnaHex(b.warna, "#f08a3c"),
     handle: String(b.handle ?? ""),
-    platform: String(b.platform ?? ""),
+    // Bot dari Kelola Bot tidak punya platform tersimpan: tampil mengikuti akun sosmed yang tertaut.
+    platform: String(b.platform ?? "").trim() || ekstra.platformTurunan || "",
     mode,
     rupa: rupaAman(b.rupa),
     kuota_harian: Math.min(6, Math.max(1, Number(b.kuota_harian ?? 1))),
@@ -252,7 +254,7 @@ export async function ambilStatusBot(): Promise<StatusBot> {
     idBot.length
       ? db.from("bot_tugas").select("bot_id").eq("tahap", "selesai").gte("selesai_pada", awalHari).in("bot_id", idBot)
       : Promise.resolve({ data: [], error: null }),
-    idUser.length ? db.from("akun_tvr_user").select("user_id").eq("terhubung", true).in("user_id", idUser) : Promise.resolve({ data: [], error: null }),
+    idUser.length ? db.from("akun_tvr_user").select("user_id, platform").eq("terhubung", true).in("user_id", idUser) : Promise.resolve({ data: [], error: null }),
     bacaJedaGlobal(),
     ambilSumberDanBlokir(),
     muatDunia(),
@@ -268,7 +270,15 @@ export async function ambilStatusBot(): Promise<StatusBot> {
   const selesai = new Map<number, number>();
   for (const t of (rTugas.data ?? []) as { bot_id: number }[]) selesai.set(Number(t.bot_id), (selesai.get(Number(t.bot_id)) ?? 0) + 1);
   const tertaut = new Map<number, number>();
-  for (const a of (rAkun.data ?? []) as { user_id: number }[]) tertaut.set(Number(a.user_id), (tertaut.get(Number(a.user_id)) ?? 0) + 1);
+  const platformPer = new Map<number, string[]>();
+  for (const a of (rAkun.data ?? []) as { user_id: number; platform: string | null }[]) {
+    tertaut.set(Number(a.user_id), (tertaut.get(Number(a.user_id)) ?? 0) + 1);
+    platformPer.set(Number(a.user_id), [...(platformPer.get(Number(a.user_id)) ?? []), String(a.platform ?? "")]);
+  }
+  const labelTurunan = (userId: number): string => {
+    const k = pilihPlatformBot("", platformPer.get(userId) ?? []);
+    return k ? (LABEL_PLATFORM[k] ?? k) : "";
+  };
 
   const runnerBaris = (rRunner.data ?? null) as { terakhir_denyut: string | null; versi: string | null } | null;
   const log: LogBotDb[] = ((rLog.data ?? []) as { id: number; bot_id: number; tahap: string; teks: string | null; dibuat_pada: string }[]).map((l) => ({
@@ -287,6 +297,7 @@ export async function ambilStatusBot(): Promise<StatusBot> {
       rakitBot(b, namaUser.get(Number(b.user_id)) ?? "", selesai.get(Number(b.id)) ?? 0, tertaut.get(Number(b.user_id)) ?? 0, {
         punyaOtak: dunia.punyaOtak.has(Number(b.id)),
         tugasAktif: dunia.tugas.get(Number(b.id)) ?? null,
+        platformTurunan: labelTurunan(Number(b.user_id)),
       }),
     ),
     log,

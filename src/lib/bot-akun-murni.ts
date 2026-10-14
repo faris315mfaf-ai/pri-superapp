@@ -21,8 +21,8 @@ export { PERAN_MAKS, PERSONA_MAKS, PLATFORM_SUMBER };
 
 /** Aksi POST /api/bot/akun (master saja). */
 export type AksiAkunBot =
-  | { aksi: "buat"; nama: string; peran: string; persona: string; warna: string; handle: string; platform: string; rupa_indeks: number }
-  | { aksi: "ubah"; bot_id: number; nama: string; peran: string; persona: string; warna: string; handle: string; platform: string; rupa_indeks?: number };
+  | { aksi: "buat"; nama: string; peran: string; persona: string; warna: string; handle: string; rupa_indeks: number }
+  | { aksi: "ubah"; bot_id: number; nama: string; peran: string; persona: string; warna: string; handle: string; rupa_indeks?: number };
 
 export type HasilBuatAkunBot = { id: number; user_id: number; username: string };
 
@@ -80,6 +80,7 @@ export function rupaBot(indeks: number, warna: string): RupaBotDb {
 const bersihBaris = (x: unknown, maks: number): string | null =>
   typeof x === "string" ? x.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, maks + 1) : null;
 
+/** `platform` "" = mengikuti akun sosmed yang tertaut di profil upload-post bot (bawaan Kelola Bot). */
 export type ProfilBotSah = { nama: string; peran: string; persona: string; warna: string; handle: string; platform: string };
 
 /**
@@ -101,8 +102,10 @@ export function normalkanProfilBot(m: Record<string, unknown>): { ok: true; nila
   const handleMentah = bersihBaris(m.handle, HANDLE_BOT_MAKS) ?? "";
   if (handleMentah.length > HANDLE_BOT_MAKS) return { ok: false, pesan: `Nama akun maksimal ${HANDLE_BOT_MAKS} karakter.` };
   if (handleMentah && !/^@?[\w.\-]{2,64}$/.test(handleMentah)) return { ok: false, pesan: "Nama akun sosmed hanya huruf, angka, titik, garis bawah, dan strip." };
-  const platform = normalkanPlatform(m.platform);
-  if (!platform) return { ok: false, pesan: `Platform utama harus salah satu dari ${PLATFORM_SUMBER.join(", ")}.` };
+  // Platform tidak diisi dari layar: bot mengikuti profil upload-post-nya. Bila dikirim (skrip lama), harus dikenal.
+  const adaPlatform = typeof m.platform === "string" && m.platform.trim() !== "";
+  const platform = adaPlatform ? normalkanPlatform(m.platform) : "";
+  if (platform === null) return { ok: false, pesan: `Platform harus salah satu dari ${PLATFORM_SUMBER.join(", ")}.` };
   return { ok: true, nilai: { nama, peran, persona, warna: warna.toLowerCase(), handle: handleMentah, platform } };
 }
 

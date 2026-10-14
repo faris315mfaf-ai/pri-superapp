@@ -33,6 +33,21 @@ export function kunciPlatform(label: string | null | undefined): string | null {
   return PETA_PLATFORM[String(label ?? "").trim().toLowerCase()] ?? null;
 }
 
+/** Urutan pilihan bila bot tidak punya platform tersimpan: yang pertama tertaut menang. */
+export const PRIORITAS_PLATFORM = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"] as const;
+
+/**
+ * Platform tujuan efektif sebuah bot. Platform tersimpan (bot lama dari skrip) dipakai bila dikenal; bila kosong
+ * (bot dari Kelola Bot) platform MENGIKUTI akun sosmed yang tertaut di profil upload-post bot itu — yang pertama
+ * menurut PRIORITAS_PLATFORM. null = belum ada yang bisa dipakai.
+ */
+export function pilihPlatformBot(tersimpan: string | null | undefined, tertaut: readonly (string | null | undefined)[]): string | null {
+  const k = kunciPlatform(tersimpan);
+  if (k) return k;
+  const ada = new Set(tertaut.map((x) => kunciPlatform(x)).filter((x): x is string => x !== null));
+  return PRIORITAS_PLATFORM.find((p) => ada.has(p)) ?? null;
+}
+
 export const LABEL_PLATFORM: Record<string, string> = {
   instagram: "Instagram",
   tiktok: "TikTok",

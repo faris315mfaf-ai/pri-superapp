@@ -4,7 +4,9 @@ Menggantikan `scripts/buat-akun-bot.mjs` dan kerja di terminal. Tombol **Kelola 
 (hanya tampil untuk master: `bolehRuangBot`). Tiga tab:
 
 1. **Akun Bot** — daftar bot (potret, username, platform, jumlah akun sosmed tertaut, punya API key atau tidur), ubah profil,
-   dan **Tambah bot**: nama, peran, watak, platform utama, nama akun sosmed (tampilan), warna, rupa karakter (10 pilihan).
+   dan **Tambah bot**: nama, peran, watak, nama akun sosmed (tampilan, opsional), warna, rupa karakter (10 pilihan). **Platform tidak diisi**: platform tujuan
+   posting dan caption mengikuti akun sosmed yang tertaut di profil upload-post bot (`pilihPlatformBot`: Instagram, TikTok, YouTube,
+   Facebook, Threads, X — yang pertama tertaut menang; `lib/bot-platform.ts`). Bot lama dari skrip yang sudah punya platform tersimpan tetap memakainya.
    Server (`POST /api/bot/akun`, aksi `buat`) membuat akun superapp di **Divisi BOT** (username otomatis `bot1`, `bot2`, …;
    kata sandi acak yang tidak pernah ditampilkan; **tidak bisa login** — `lib/sesi` menolak Divisi BOT) + baris `bot_redaksi`
    (mode ACC, kuota 1/hari). Bila baris `bot_redaksi` gagal, akun yang baru dibuat dibatalkan. Batas 12 bot (`MAKS_BOT`).
