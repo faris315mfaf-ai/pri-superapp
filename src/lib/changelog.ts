@@ -18,6 +18,18 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "2.2.0",
+    tanggal: "14 Oktober 2026",
+    judul: "Ruang Bot terbuka untuk semua + Chat Global",
+    poin: [
+      "Tab baru Ruang Bot: lihat langsung gedung redaksi, bot yang sedang bekerja, dan siapa saja yang sedang online di aplikasi",
+      "Setiap anggota yang online tampil sebagai karakter: masuk ruang database saat mengunggah video, ruang alat saat Edit Otomatis / Kompres / Blur, dan ruang pos saat posting ke sosmed",
+      "Chat Global: ngobrol dengan semua anggota yang sedang login langsung dari Ruang Bot — pesan Anda juga muncul sebagai gelembung di atas karakter Anda",
+      "Jaga sopan santun: maksimal 500 karakter per pesan, kata kasar disamarkan otomatis, dan master dapat menghapus pesan atau membisukan akun",
+      "Unggah gagal kini menjelaskan penyebab sebenarnya (token kedaluwarsa, batas akun, jaringan, dll.) beserta langkah yang perlu Anda lakukan",
+    ],
+  },
+  {
     versi: "2.1.0",
     tanggal: "7 Oktober 2026",
     judul: "Tampilan baru untuk semua + verifikasi akun",
