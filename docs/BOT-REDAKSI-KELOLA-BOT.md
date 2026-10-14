@@ -17,11 +17,12 @@ Menggantikan `scripts/buat-akun-bot.mjs` dan kerja di terminal. Tombol **Kelola 
    (`aistudio.google.com/apikey`), lalu kartu Nara + kartu per bot (`OtakBot`): pilih penyedia, tempel key, Simpan, Uji.
    Key tulis-saja, terenkripsi AES-GCM (`BOT_KUNCI_INDUK`), tidak pernah ditampilkan lagi dan tidak dikirim ke runner.
 
-4. **Template Auto Edit** — tiap bot membuat video lewat Auto Edit dengan template per akun. Tab ini memuat panduan 4 langkah,
-   tombol **Buat template sebagai <bot>** (masuk sebagai akun bot, hanya modul TVR Saya, lewat `masukSebagai`; pulang dengan
-   "Kembali ke akun saya" di pita atas), dan komponen **Template Bot**: simpan template ke pustaka bernama lalu pasang ke satu
-   bot atau semua bot (berkas disalin di mesin; tiap bot memakai salinannya sendiri). Tanpa template bot berhenti dengan
-   penghalang "template belum dibuat".
+4. **Template Auto Edit** — editor **Edit Otomatis yang sama** dengan TVR Saya (`EditOtomatisTvr` + `TemplateTvrModal`) tertanam
+   langsung untuk bot terpilih, tanpa beralih akun. Data & penyimpanan sama: template akun bot di mesin Auto Edit
+   (`templates/tvr-<id bot>`), lewat proxy `/api/autoedit` dengan header `X-Autoedit-Tim: bot:<id>`. Server
+   (`identitasTim` → `identitasAkunBot`, `lib/autoedit.ts`) hanya menerimanya dari **master** dan hanya untuk akun **Divisi BOT**;
+   jalurnya terbatas `tvr/*` seperti jalur tim. Di bawahnya **Template Bot**: simpan ke pustaka bernama lalu pasang ke bot lain.
+   Tautan "masuk sebagai bot" tetap ada sebagai alternatif.
 
 Urutan menyiapkan bot baru: Akun Bot → Profil Upload-Post → Otak (API Key) → Template Auto Edit → sumber & kuota (Ruang Bot). Bot tanpa API key tidur di kamar tidur Ruang Bot.
 

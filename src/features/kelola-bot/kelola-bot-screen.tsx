@@ -10,7 +10,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BrainCircuit, ExternalLink, Layers, Link2, Loader2, LogIn, Pencil, Plus, UserPlus } from "lucide-react";
+import { BrainCircuit, ExternalLink, Layers, Link2, Loader2, Pencil, Plus, UserPlus } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton, ScreenHeader, SectionTitle } from "@/components/pri-ui";
 import { toast, useAppStore } from "@/hooks/use-app-store";
@@ -21,6 +21,8 @@ import { OtakBot } from "@/features/tvr-ku/otak-bot";
 import { TautanProfilMaster } from "@/features/tvr-ku/tautan-profil-master";
 import { TemplateBot } from "@/features/tvr-ku/template-bot";
 import { masukSebagai } from "@/lib/kendali-klien";
+import { KonteksTimAutoEdit, tandaAkunBot } from "@/features/auto-edit/tim";
+import { EditOtomatisTvr } from "@/features/tvr-ku/edit-otomatis-tvr";
 import {
   HANDLE_BOT_MAKS,
   MAKS_BOT,
@@ -453,17 +455,20 @@ function TutorialApiKey() {
 
 function TabTemplate({ status }: { status: StatusBot | null }) {
   const namaAdmin = useAppStore((s) => s.user?.nama ?? "");
-  const [sibuk, setSibuk] = useState<number | null>(null);
-  const bots = status?.bots ?? [];
+  const bots = useMemo(() => status?.bots ?? [], [status]);
+  const [pilihId, setPilihId] = useState<number | null>(null);
+  const [beralih, setBeralih] = useState(false);
+  // Bot terpilih: pilihan Anda, atau bot pertama.
+  const bot = bots.find((b) => b.user_id === pilihId) ?? bots[0] ?? null;
 
   const masuk = async (b: BotRingkas) => {
-    setSibuk(b.id);
+    setBeralih(true);
     try {
-      toast("info", `Masuk sebagai ${b.nama}…`, "Aplikasi dimuat ulang sebagai akun bot. Buka TVR Saya → Edit Otomatis → Template. Tekan \"Kembali ke akun saya\" di pita atas untuk pulang.");
+      toast("info", `Masuk sebagai ${b.nama}…`, "Aplikasi dimuat ulang sebagai akun bot. Tekan \"Kembali ke akun saya\" di pita atas untuk pulang.");
       await masukSebagai({ id: String(b.user_id), nama: b.nama }, namaAdmin);
     } catch (e) {
       toast("error", "Gagal beralih akun", e instanceof Error ? e.message : "");
-      setSibuk(null);
+      setBeralih(false);
     }
   };
 
@@ -471,56 +476,64 @@ function TabTemplate({ status }: { status: StatusBot | null }) {
     <section className="flex flex-col gap-3">
       <GlassCard className="p-4">
         <p className="text-[12px] leading-relaxed text-teks-sekunder">
-          Bot membuat video lewat <b className="text-teks-utama">Auto Edit</b> memakai <b className="text-teks-utama">template per akun</b>. Tanpa template, bot berhenti dengan
-          penghalang &quot;template belum dibuat&quot;. Cara menyiapkannya:
+          Bot membuat video lewat <b className="text-teks-utama">Auto Edit</b> memakai <b className="text-teks-utama">template milik akunnya</b>. Editor di bawah ini sama persis
+          dengan Edit Otomatis di TVR Saya dan menyimpan ke tempat yang sama (template akun bot di mesin Auto Edit) — bedanya Anda tidak perlu beralih akun.
         </p>
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-[11.5px] leading-relaxed text-teks-sekunder">
+          <li>Pilih bot.</li>
           <li>
-            Tekan <b className="text-teks-utama">Buat template sebagai …</b> di bawah. Anda masuk sebagai akun bot itu (hanya modul TVR Saya).
+            Tekan tombol <b className="text-teks-utama">template</b> di kartu Edit Otomatis: atur kanvas, overlay, kotak teks hook, dan badge kategori, unggah aset, lalu{" "}
+            <b className="text-teks-utama">tetapkan</b>.
           </li>
+          <li>Opsional: buat satu video uji dari tautan untuk memastikan hasilnya (masuk Stok Video akun bot).</li>
           <li>
-            Buka <b className="text-teks-utama">Edit Otomatis → Template</b>: atur kanvas, overlay, kotak teks hook, dan badge kategori, lalu <b className="text-teks-utama">tetapkan</b> template
-            (unggah aset sesuai desain TV Rakyat).
-          </li>
-          <li>
-            Tekan <b className="text-teks-utama">Kembali ke akun saya</b> di pita atas. Kembali ke sini (Template Auto Edit).
-          </li>
-          <li>
-            Di <b className="text-teks-utama">Template Bot</b> (bawah): simpan template itu ke pustaka dengan nama, lalu <b className="text-teks-utama">pasang ke bot lain atau semua bot</b> tanpa
-            membuatnya ulang. Tiap bot memakai salinannya sendiri.
+            Simpan template itu ke <b className="text-teks-utama">pustaka</b> di bagian Template Bot (bawah), lalu pasang ke bot lain atau semua bot tanpa membuat ulang.
           </li>
         </ol>
       </GlassCard>
 
-      <GlassCard className="p-4">
-        <SectionTitle judul="Buat template sebagai bot" />
-        {status === null ? (
-          <GlassSkeleton className="mt-2.5 h-20 rounded-2xl" />
-        ) : bots.length === 0 ? (
-          <p className="mt-2.5 text-[12px] text-teks-sekunder">Belum ada bot. Buat dulu di tab Akun Bot.</p>
-        ) : (
-          <ul className="mt-2.5 flex flex-col gap-2">
-            {bots.map((b) => (
-              <li key={b.id} className="flex items-center gap-2.5 rounded-xl bg-black/[0.03] px-2.5 py-2 dark:bg-white/5">
-                <PotretBot rupa={b.rupa} lencana={b.warna} skala={2} label={`Potret ${b.nama}`} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[12.5px] font-bold text-teks-utama">{b.nama}</span>
-                  <span className="block truncate text-[11px] text-teks-sekunder">@{b.username}</span>
-                </span>
+      {status === null ? (
+        <GlassSkeleton className="h-24 rounded-2xl" />
+      ) : bots.length === 0 ? (
+        <GlassCard className="p-4 text-[12px] text-teks-sekunder">Belum ada bot. Buat dulu di tab Akun Bot.</GlassCard>
+      ) : (
+        <>
+          <div role="radiogroup" aria-label="Pilih bot" className="flex flex-wrap gap-2">
+            {bots.map((b) => {
+              const aktif = bot?.id === b.id;
+              return (
                 <button
+                  key={b.id}
                   type="button"
-                  onClick={() => void masuk(b)}
-                  disabled={sibuk !== null}
-                  className="btn-tekan flex shrink-0 items-center gap-1 rounded-full bg-pri/12 px-3 py-1.5 text-[11px] font-bold text-pri disabled:opacity-50"
+                  role="radio"
+                  aria-checked={aktif}
+                  onClick={() => setPilihId(b.user_id)}
+                  className={cn("glass btn-tekan flex min-h-11 items-center gap-2 rounded-xl py-1 pl-1.5 pr-3 text-left", aktif && "ring-2 ring-pri")}
                 >
-                  {sibuk === b.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <LogIn className="h-3.5 w-3.5" aria-hidden="true" />}
-                  Buat template sebagai {b.nama}
+                  <PotretBot rupa={b.rupa} lencana={b.warna} skala={1.5} label={`Potret ${b.nama}`} />
+                  <span className="text-[12.5px] font-bold text-teks-utama">{b.nama}</span>
                 </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </GlassCard>
+              );
+            })}
+          </div>
+
+          {bot && (
+            <>
+              <KonteksTimAutoEdit.Provider value={tandaAkunBot(bot.user_id)}>
+                {/* key = akun bot: ganti bot memuat ulang editor dengan template bot itu. */}
+                <EditOtomatisTvr key={bot.user_id} />
+              </KonteksTimAutoEdit.Provider>
+              <p className="text-[11px] text-teks-sekunder">
+                Menyunting template <b className="text-teks-utama">{bot.nama}</b> (@{bot.username}).{" "}
+                <button type="button" onClick={() => void masuk(bot)} disabled={beralih} className="font-semibold text-pri underline disabled:opacity-50">
+                  Atau masuk sebagai {bot.nama}
+                </button>{" "}
+                untuk memakai seluruh TVR Saya akun itu.
+              </p>
+            </>
+          )}
+        </>
+      )}
 
       <TemplateBot />
     </section>

@@ -16,6 +16,8 @@ import { Readable } from "node:stream";
 import type { ReadableStream as AliranNode } from "node:stream/web";
 import { bolehEditOtomatisTvr, modulDibuka } from "@/lib/peran";
 import { wewenangTv } from "@/lib/tv-tim";
+import { supabase } from "@/lib/supabase";
+import { adalahBot } from "@/lib/struktur";
 
 const HEADER_MASUK = ["content-type", "content-length", "range", "accept"];
 const HEADER_KELUAR = [
@@ -88,7 +90,23 @@ export const ID_TIM: Readonly<Record<string, string>> = { tv: "900000001" };
  * berwenang memproses video TV — Pimred, ketua & anggota Divisi TV Rakyat,
  * admin_tv, akun yang modul TV-nya dibuka master (lib/tv-tim).
  */
+/** Penanda akun bot di header X-Autoedit-Tim (Kelola Bot, 14 Okt 2026): "bot:<id app_user>". */
+const POLA_AKUN_BOT = /^bot:(\d{1,12})$/;
+
+/**
+ * Master menyunting template/Edit Otomatis AKUN BOT langsung dari Kelola Bot tanpa beralih akun.
+ * Hanya master, dan hanya akun Divisi BOT — akun manusia tidak bisa disasar lewat jalur ini.
+ */
+async function identitasAkunBot(user: PenggunaGerbang, idTarget: string): Promise<string | null> {
+  if (!user || user.ujiBeban === true || user.role !== "master") return null;
+  const { data, error } = await supabase().from("app_user").select("id, divisi").eq("id", Number(idTarget)).maybeSingle();
+  if (error || !data || !adalahBot(data as { divisi?: string | null })) return null;
+  return String((data as { id: number }).id);
+}
+
 export async function identitasTim(user: PenggunaGerbang, tim: string): Promise<string | null> {
+  const bot = POLA_AKUN_BOT.exec(tim);
+  if (bot) return identitasAkunBot(user, bot[1]);
   const id = ID_TIM[tim];
   if (!id || !user || user.ujiBeban === true || !/^\d{1,12}$/.test(user.id ?? "")) return null;
   if (user.role === "master" || user.role === "super_admin") return id;

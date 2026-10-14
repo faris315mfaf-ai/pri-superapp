@@ -12,8 +12,15 @@
 import { createContext, useContext, useMemo } from "react";
 import { apiFetch, apiUnggah } from "./api";
 
-/** "tv" = tim TV Rakyat Official; null = akun pribadi. */
+/**
+ * "tv" = tim TV Rakyat Official; "bot:<id>" = akun bot yang disunting master dari Kelola Bot
+ * (14 Okt 2026); null = akun pribadi. Nilainya dikirim sebagai header X-Autoedit-Tim.
+ */
 export const KonteksTimAutoEdit = createContext<string | null>(null);
+
+/** Penanda akun bot untuk konteks di atas. */
+export const tandaAkunBot = (userId: number | string): string => `bot:${userId}`;
+export const adalahKonteksBot = (tim: string | null): boolean => !!tim && tim.startsWith("bot:");
 
 export function useApiAutoEdit() {
   const tim = useContext(KonteksTimAutoEdit);

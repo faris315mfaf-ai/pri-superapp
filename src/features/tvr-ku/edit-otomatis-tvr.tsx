@@ -34,7 +34,7 @@ import { toast, useAppStore } from "@/hooks/use-app-store";
 import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 import { cn } from "@/lib/utils";
 import { bacaJson, pesanGalat } from "@/features/auto-edit/api";
-import { useApiAutoEdit } from "@/features/auto-edit/tim";
+import { adalahKonteksBot, useApiAutoEdit } from "@/features/auto-edit/tim";
 import { bolehAlatVideo } from "@/lib/peran";
 import { TemplateTvrModal } from "./template-tvr-modal";
 import { segarkanStokTvr } from "./stok-video-tvr";
@@ -107,7 +107,9 @@ export function EditOtomatisTvr() {
 
   const job = data?.job ?? null;
   // Akun TIM (TV Rakyat Official): antrean bersama seluruh tim.
-  const modeTim = Boolean(api.tim);
+  // Akun bot (Kelola Bot) bukan antrean bersama tim: diperlakukan seperti akun sendiri.
+  const modeBot = adalahKonteksBot(api.tim);
+  const modeTim = Boolean(api.tim) && !modeBot;
   const idSaya = useAppStore((s) => String(s.user?.id ?? ""));
   const bolehHapusLatar = useAppStore((s) => bolehAlatVideo(s.user, "hapuslatar"));
   // Template tim dipakai bersama — hanya master yang boleh menghapusnya.
@@ -359,10 +361,11 @@ export function EditOtomatisTvr() {
         <Wand2 className="h-5 w-5" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="font-heading text-[14px] font-bold text-teks-utama">{api.tim ? "Edit Otomatis Tim" : "Edit Otomatis"}</p>
+        <p className="font-heading text-[14px] font-bold text-teks-utama">{modeBot ? "Edit Otomatis akun bot" : api.tim ? "Edit Otomatis Tim" : "Edit Otomatis"}</p>
         <p className="mt-0.5 text-[11px] leading-snug text-teks-sekunder">
           {template.siap ? "Template terpasang otomatis di setiap video." : "Buat template dulu, lalu buat video otomatis."}
-          {api.tim && " Template & antrean dipakai bersama seluruh tim — satu video diproses bergantian."}
+          {modeTim && " Template & antrean dipakai bersama seluruh tim — satu video diproses bergantian."}
+          {modeBot && " Template ini milik akun bot dan dipakai bot saat membuat video."}
         </p>
       </div>
       <button
