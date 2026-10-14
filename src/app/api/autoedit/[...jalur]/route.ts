@@ -107,11 +107,11 @@ async function tangani(
   }
   const { jalur } = await params;
   const j = jalur ?? [];
-  // Lacak Sumber / Pencari Video Asli (15 Okt 2026): master, atau siapa pun yang boleh Edit Otomatis.
+  // Lacak Sumber / Pencari Video Asli (15 Okt 2026): KHUSUS MASTER (bot master memanggil mesin langsung).
   // Selalu atas nama akun ASLI (header tim diabaikan). Peran master dipasang server di sini — peramban tidak
   // bisa mengisinya (HEADER_MASUK). Koleksi & pengaturan khusus master diperiksa lagi di layanan lacak.
   if (j[0] === "lacak") {
-    if (user.ujiBeban === true || !(user.role === "master" || bolehEditOtomatisServer(user))) {
+    if (user.ujiBeban === true || user.role !== "master") {
       return galatAutoEdit(404, "Tidak ditemukan");
     }
     const tambahan: Record<string, string> = user.role === "master" ? { "x-autoedit-peran": "master" } : {};

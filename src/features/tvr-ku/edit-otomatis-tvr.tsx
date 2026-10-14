@@ -712,6 +712,8 @@ type FormProps = {
 
 function FormBuatVideo(p: FormProps) {
   const { batas } = p;
+  // Pencari Video Asli: khusus master (15 Okt 2026).
+  const bolehLacak = useAppStore((s) => s.user?.role === "master");
   const inputSumberRef = useRef<HTMLInputElement>(null);
   return (
     <div className="mt-3" data-tur="tvr-form-buat-video">
@@ -778,19 +780,21 @@ function FormBuatVideo(p: FormProps) {
             disabled={p.mengirim}
             className="glass-input mt-2 h-11 w-full rounded-xl px-3 text-sm text-teks-utama"
           />
-          {/* Pencari Video Asli (15 Okt 2026): tampil bila link sah & master menyalakannya. */}
-          <CariAsliTvr
-            link={p.link}
-            nonaktif={p.mengirim}
-            maksKredit={batas.maks_sumber_teks}
-            onPakaiAsli={(url, kredit) => {
-              p.setLink(url);
-              if (kredit) p.setTeksSumber(kredit.slice(0, batas.maks_sumber_teks));
-            }}
-            onIsiKredit={(kredit) => {
-              if (kredit) p.setTeksSumber(kredit.slice(0, batas.maks_sumber_teks));
-            }}
-          />
+          {/* Pencari Video Asli (15 Okt 2026): khusus master; tampil bila link sah & sakelarnya menyala. */}
+          {bolehLacak && (
+            <CariAsliTvr
+              link={p.link}
+              nonaktif={p.mengirim}
+              maksKredit={batas.maks_sumber_teks}
+              onPakaiAsli={(url, kredit) => {
+                p.setLink(url);
+                if (kredit) p.setTeksSumber(kredit.slice(0, batas.maks_sumber_teks));
+              }}
+              onIsiKredit={(kredit) => {
+                if (kredit) p.setTeksSumber(kredit.slice(0, batas.maks_sumber_teks));
+              }}
+            />
+          )}
         </>
       )}
       {p.potong && (

@@ -33,8 +33,9 @@ ACC, lainnya = bukan sumber. Video asli terpilih masuk koleksi (bila `simpan_ke_
 - **Ruang Bot → tab Lacak Sumber** (master): tempel link, lihat tahap, kandidat, perbandingan, putuskan.
 - **Profil → Kelola Bot → Lacak Sumber** (master): akun koleksi (dipanen tiap 2 jam, ≤ 3 video baru per
   putaran, disimpan 90 hari) dan pengaturan ambang & sakelar.
-- **TVR Saya → Edit Otomatis → Pakai Link**: kartu "Cari video asli" (sakelar `tombol_pengguna`).
-  Pengguna biasa: 1 pelacakan berjalan, 30 per hari.
+- **TVR Saya → Edit Otomatis → Pakai Link** (master): kartu "Cari video asli" (sakelar `tombol_pengguna`).
+- Akses: KHUSUS MASTER (gerbang aplikasi `/api/autoedit/lacak/*`) + runner bot lewat soket mesin. Jatah
+  pengguna biasa di layanan (1 berjalan, 30/hari) tetap ada sebagai pengaman bila nanti dibuka.
 - **Runner bot**: sebelum job dibuat (`src/bot-runner/giliran.ts`), bila sakelar `lacak_bot` menyala.
   Hasil yakin → link diganti video asli dan kredit ke pemiliknya; selain itu link semula (tidak pernah
   menggagalkan tugas). Menunggu paling lama 8 menit.
