@@ -7440,3 +7440,15 @@ export async function laporAktivitas(aksi: { aksi: "mulai"; jenis: string; judul
     return null;
   }
 }
+
+import type { AksiAkunBot, HasilBuatAkunBot } from "@/lib/bot-akun-murni";
+
+/** Kelola Bot: buat bot baru (akun superapp + profil) atau ubah profilnya. Khusus master. */
+export async function kirimAkunBot(aksi: AksiAkunBot): Promise<HasilBuatAkunBot | { sukses: true }> {
+  const json = await fetchJson("/api/bot/akun", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(aksi),
+  });
+  return json as HasilBuatAkunBot | { sukses: true };
+}

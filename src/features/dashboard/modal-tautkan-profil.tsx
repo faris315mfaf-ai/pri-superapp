@@ -27,13 +27,17 @@ export function ModalTautkanProfil({
   permintaan,
   onTutup,
   onSelesai,
+  userIdAwal,
 }: {
   permintaan: PermintaanTautkan;
   onTutup: () => void;
   onSelesai: () => void;
+  /** Akun yang sudah terpilih saat modal dibuka (mis. dari Kelola Bot); masih bisa diganti. */
+  userIdAwal?: number;
 }) {
   const [roster, setRoster] = useState<AnggotaTautan[] | null>(null);
-  const [pilih, setPilih] = useState<AnggotaTautan | null>(null);
+  const [pilihManual, setPilih] = useState<AnggotaTautan | null>(null);
+  const pilih = pilihManual ?? (userIdAwal !== undefined ? (roster?.find((r) => Number(r.id) === userIdAwal) ?? null) : null);
   const [username, setUsername] = useState("");
   const [sibuk, setSibuk] = useState(false);
   const [konfirmasiGanti, setKonfirmasiGanti] = useState(false);

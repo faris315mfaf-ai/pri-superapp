@@ -126,6 +126,8 @@ type ProfilScreenProps = {
   onBukaPanelMaster?: () => void;
   /** Modul Audit (6 Okt 2026) — diisi page.tsx hanya untuk superadmin & master. */
   onBukaAudit?: () => void;
+  /** Kelola Bot (14 Okt 2026) — diisi page.tsx hanya untuk master. */
+  onBukaKelolaBot?: () => void;
   /** Pet Robot (3 Sep 2026, terbuka untuk semua) */
   onBukaPet?: () => void;
   /** Ludo Robot multipemain (3 Sep 2026, terbuka untuk semua) */
@@ -369,6 +371,7 @@ export function ProfilScreen({
   onBukaNotifikasi,
   onBukaPanelMaster,
   onBukaAudit,
+  onBukaKelolaBot,
   onBukaPet,
   onBukaLudo,
   onBukaPengaturanFitur,
@@ -883,6 +886,31 @@ export function ProfilScreen({
               <span className="block text-sm font-bold text-teks-utama">Audit</span>
               <span className="block text-[11px] text-teks-sekunder">
                 Login, lama aplikasi menyala, alat & unggahan seluruh pengguna
+              </span>
+            </span>
+          </button>
+        </FadeInUp>
+      )}
+
+      {/* Kelola Bot (14 Okt 2026) — buat akun bot, hubungkan profil upload-post & API key LLM; khusus master */}
+      {onBukaKelolaBot && (
+        <FadeInUp delay={0.04}>
+          <button
+            type="button"
+            onClick={onBukaKelolaBot}
+            className="btn-tekan mt-2 flex w-full items-center gap-3 rounded-2xl border border-[#a56bd1]/40 bg-[#a56bd1]/10 px-4 py-3 text-left"
+          >
+            <span
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
+              style={{ background: "linear-gradient(135deg, #F08A3C, #A56BD1)" }}
+              aria-hidden="true"
+            >
+              <Bot className="h-4.5 w-4.5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold text-teks-utama">Kelola Bot</span>
+              <span className="block text-[11px] text-teks-sekunder">
+                Tambah bot & akunnya, hubungkan profil upload-post dan API key model
               </span>
             </span>
           </button>

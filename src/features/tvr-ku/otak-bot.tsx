@@ -110,7 +110,7 @@ export function OtakBot() {
               </p>
             )}
             {status.bot.length === 0 ? (
-              <p className="mt-3 text-[11.5px] text-teks-sekunder">Belum ada bot. Akun bot dibuat lewat skrip master.</p>
+              <p className="mt-3 text-[11.5px] text-teks-sekunder">Belum ada bot. Buat bot di Profil → Kelola Bot.</p>
             ) : (
               <ul className="mt-3 flex flex-col gap-3">
                 {status.bot.map((b) => {

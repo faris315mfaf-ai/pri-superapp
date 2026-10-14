@@ -98,6 +98,7 @@ const ProfilScreen = dynamic(() => import("@/features/profil/profil-screen").the
 const AbsensiScreen = dynamic(() => import("@/features/absensi/absensi-screen").then((m) => m.AbsensiScreen), { ssr: false, loading: MuatLayar });
 const LaporanKerjaScreen = dynamic(() => import("@/features/laporan-kerja/laporan-kerja-screen").then((m) => m.LaporanKerjaScreen), { ssr: false, loading: MuatLayar });
 const KelolaLaporanKpiScreen = dynamic(() => import("@/features/laporan-kerja/kelola-laporan-kpi-screen").then((m) => m.KelolaLaporanKpiScreen), { ssr: false, loading: MuatLayar });
+const KelolaBotScreen = dynamic(() => import("@/features/kelola-bot/kelola-bot-screen").then((m) => m.KelolaBotScreen), { ssr: false, loading: MuatLayar });
 const AuditScreen = dynamic(() => import("@/features/audit/audit-screen").then((m) => m.AuditScreen), { ssr: false, loading: MuatLayar });
 const PanelMasterScreen = dynamic(() => import("@/features/profil/panel-master").then((m) => m.PanelMasterScreen), { ssr: false, loading: MuatLayar });
 const PengaturanFiturScreen = dynamic(() => import("@/features/profil/pengaturan-fitur").then((m) => m.PengaturanFiturScreen), { ssr: false, loading: MuatLayar });
@@ -203,6 +204,8 @@ type SubLayar =
   | { nama: "panel-master" }
   // Audit aktivitas seluruh pengguna — superadmin & master (6 Okt 2026)
   | { nama: "audit" }
+  // Kelola Bot — buat akun bot, hubungkan profil upload-post & API key (master, 14 Okt 2026)
+  | { nama: "kelola-bot" }
   // Pet Robot (percobaan master, 3 Sep 2026)
   | { nama: "pet"; tab?: "rawat" | "toko" | "lemari" | "pasar" }
   // Ludo Robot multipemain (percobaan, 3 Sep 2026)
@@ -1390,6 +1393,7 @@ export default function Page() {
           onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           onBukaPanelMaster={() => setSubLayar({ nama: "panel-master" })}
           onBukaAudit={bolehAudit(user) ? () => setSubLayar({ nama: "audit" }) : undefined}
+          onBukaKelolaBot={bolehRuangBot(user) ? () => setSubLayar({ nama: "kelola-bot" }) : undefined}
           onBukaPet={bolehPet(user) ? () => setSubLayar({ nama: "pet" }) : undefined}
           onBukaLudo={sakelar.fitur.ludo === false ? undefined : () => setSubLayar({ nama: "ludo" })}
           onBukaPengaturanFitur={() =>
@@ -1622,6 +1626,8 @@ export default function Page() {
                     ) : null
                   ) : subLayar.nama === "audit" ? (
                     bolehAudit(user) ? <AuditScreen onKembali={() => setSubLayar(null)} /> : null
+                  ) : subLayar.nama === "kelola-bot" ? (
+                    bolehRuangBot(user) ? <KelolaBotScreen onKembali={() => setSubLayar(null)} /> : null
                   ) : subLayar.nama === "ludo" ? (
                     <LudoScreen onKembali={() => setSubLayar(null)} />
                   ) : subLayar.nama === "pet" ? (
