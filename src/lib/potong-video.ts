@@ -2,14 +2,12 @@
 // PILIH BAGIAN VIDEO + BINGKAI LANDSCAPE (14 Okt 2026) — aturan MURNI.
 // Sebelum Auto Edit, pengguna memilih detik mulai–akhir (ala CapCut). Video lebar tidak dipotong jadi
 // potret: mesin menaruhnya utuh di tengah, atas-bawah hitam (body job: mulai, akhir, bingkai:"hitam").
-// UJI COBA: hanya akun Faris (#4, #176) sampai pemilik menyatakan siap untuk semua.
+// Uji coba akun Faris (#4, #176) 14 Okt 2026; dibuka untuk SELURUH pengguna di hari yang sama.
 // ============================================================
 
-/** Akun uji coba fitur ini. */
-const AKUN_UJI_POTONG = new Set(["4", "176"]);
-
+/** Semua akun yang login (dulu hanya #4 & #176). Fungsi dipertahankan sebagai satu titik gerbang. */
 export function bolehPotongVideo(u: { id?: string | number | null } | null | undefined): boolean {
-  return u?.id != null && AKUN_UJI_POTONG.has(String(u.id));
+  return u?.id != null;
 }
 
 export type RentangVideo = { mulai: number; akhir: number };

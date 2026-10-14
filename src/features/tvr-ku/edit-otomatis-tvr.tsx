@@ -79,7 +79,7 @@ export function EditOtomatisTvr() {
   const [membuatHook, setMembuatHook] = useState(false);
   const [mengirim, setMengirim] = useState(false);
   const [pesan, setPesan] = useState("");
-  // Pilih bagian video + bingkai landscape (14 Okt 2026) — uji coba akun Faris.
+  // Pilih bagian video + bingkai landscape (14 Okt 2026) — semua pengguna (lib/potong-video).
   const bolehPotong = useAppStore((s) => bolehPotongVideo(s.user));
   const [videoLokal, setVideoLokal] = useState<string | null>(null);
   const [infoLink, setInfoLink] = useState<InfoLink | null>(null);
@@ -695,7 +695,7 @@ type FormProps = {
   mengirim: boolean;
   kurang: string[];
   kirim: () => void;
-  /** Uji coba akun Faris: editor pilih bagian video (null = tidak tampil). */
+  /** Editor pilih bagian video (null = tidak tampil: durasi sumber belum diketahui). */
   potong?: {
     durasi: number;
     maks: number;

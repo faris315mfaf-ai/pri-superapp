@@ -178,7 +178,7 @@ try {
   await klien.buatJob(7, { url: "https://www.instagram.com/reel/abc/", hook: "H ".repeat(200), sumber: "S".repeat(100), kategori: "K".repeat(60) });
   const b = JSON.parse(dicatat[2].badan);
   cek("buatJob: POST /api/tvr/jobs dengan batas panjang mesin", dicatat[2].url === "/api/tvr/jobs" && b.hook.length <= 180 && b.sumber.length <= 60 && b.kategori.length <= 30, b);
-  cek("buatJob: hanya 4 kolom", JSON.stringify(Object.keys(b).sort()) === JSON.stringify(["hook", "kategori", "sumber", "url"]));
+  cek("buatJob: hanya 5 kolom (+ bingkai hitam)", JSON.stringify(Object.keys(b).sort()) === JSON.stringify(["bingkai", "hook", "kategori", "sumber", "url"]) && b.bingkai === "hitam");
 
   const galat = async (status: number, badan: unknown, f: () => Promise<unknown>) => {
     skenario = () => ({ status, badan });

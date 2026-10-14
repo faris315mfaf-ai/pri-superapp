@@ -23,10 +23,11 @@ const cek = (n: string, ok: boolean, i?: unknown) => {
 };
 const sama = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
-console.log("\n[A] Gerbang uji coba");
+console.log("\n[A] Gerbang: seluruh pengguna yang login");
 cek("akun #4 boleh", bolehPotongVideo({ id: 4 }));
 cek("akun #176 boleh (string)", bolehPotongVideo({ id: "176" }));
-cek("akun lain tidak", !bolehPotongVideo({ id: 5 }) && !bolehPotongVideo(null) && !bolehPotongVideo({}));
+cek("akun lain juga boleh", bolehPotongVideo({ id: 5 }) && bolehPotongVideo({ id: "999" }));
+cek("tanpa akun tidak", !bolehPotongVideo(null) && !bolehPotongVideo({}));
 
 console.log("\n[B] Rentang");
 cek("awal: video pendek penuh", sama(rentangAwal(40, 180), { mulai: 0, akhir: 40 }));

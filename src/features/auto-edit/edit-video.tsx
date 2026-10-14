@@ -488,7 +488,7 @@ export function EditVideo() {
   const [pratinjau, setPratinjau] = useState<Pratinjau | null>(null);
   const [memuatPratinjau, setMemuatPratinjau] = useState(false);
   const [galatPratinjau, setGalatPratinjau] = useState("");
-  // Pilih bagian video + bingkai landscape (14 Okt 2026) — uji coba akun Faris.
+  // Pilih bagian video + bingkai landscape (14 Okt 2026) — semua pengguna (lib/potong-video).
   const bolehPotong = useAppStore((s) => bolehPotongVideo(s.user));
   const [videoLokal, setVideoLokal] = useState<string | null>(null);
   const [rentangLink, setRentangLink] = useState<RentangVideo | null>(null);

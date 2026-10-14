@@ -254,6 +254,8 @@ export function buatKlienMesin(opsi: Opsi): KlienMesin {
         hook: siapkanHook(badan.hook),
         sumber: potongTeks(badan.sumber, MAKS_SUMBER),
         kategori: potongTeks(badan.kategori, MAKS_KATEGORI),
+        // Video lebar tidak dipotong jadi potret (sama dengan Edit Otomatis pengguna, 14 Okt 2026).
+        bingkai: "hitam",
       };
       return normalisasiKeadaan(await panggil(opsi, idPengguna, "POST", "/api/tvr/jobs", aman, 90_000));
     },
