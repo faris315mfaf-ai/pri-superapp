@@ -1393,7 +1393,7 @@ export default function Page() {
           onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           onBukaPanelMaster={() => setSubLayar({ nama: "panel-master" })}
           onBukaAudit={bolehAudit(user) ? () => setSubLayar({ nama: "audit" }) : undefined}
-          onBukaKelolaBot={bolehRuangBot(user) ? () => setSubLayar({ nama: "kelola-bot" }) : undefined}
+          onBukaKelolaBot={bolehRuangBot(user) && ruangBotAktif ? () => setSubLayar({ nama: "kelola-bot" }) : undefined}
           onBukaPet={bolehPet(user) ? () => setSubLayar({ nama: "pet" }) : undefined}
           onBukaLudo={sakelar.fitur.ludo === false ? undefined : () => setSubLayar({ nama: "ludo" })}
           onBukaPengaturanFitur={() =>

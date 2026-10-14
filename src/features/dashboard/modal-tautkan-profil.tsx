@@ -36,8 +36,10 @@ export function ModalTautkanProfil({
   userIdAwal?: number;
 }) {
   const [roster, setRoster] = useState<AnggotaTautan[] | null>(null);
-  const [pilihManual, setPilih] = useState<AnggotaTautan | null>(null);
-  const pilih = pilihManual ?? (userIdAwal !== undefined ? (roster?.find((r) => Number(r.id) === userIdAwal) ?? null) : null);
+  // undefined = belum disentuh (pakai akun awal bila ada); null = sengaja dikosongkan lewat "Ganti".
+  const [pilihManual, setPilih] = useState<AnggotaTautan | null | undefined>(undefined);
+  const pilih =
+    pilihManual !== undefined ? pilihManual : userIdAwal !== undefined ? (roster?.find((r) => Number(r.id) === userIdAwal) ?? null) : null;
   const [username, setUsername] = useState("");
   const [sibuk, setSibuk] = useState(false);
   const [konfirmasiGanti, setKonfirmasiGanti] = useState(false);

@@ -9,7 +9,7 @@
 // Memakai ulang komponen yang sudah ada (OtakBot, TautanProfilMaster, ModalTautkanProfil).
 // ============================================================
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrainCircuit, ExternalLink, Link2, Loader2, Pencil, Plus, UserPlus } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton, ScreenHeader, SectionTitle } from "@/components/pri-ui";
@@ -43,7 +43,7 @@ const TAB: { kunci: Tab; label: string }[] = [
   { kunci: "otak", label: "Otak (API Key)" },
 ];
 
-type Isian = { nama: string; peran: string; persona: string; warna: string; handle: string; platform: string; rupa: number };
+type Isian = { nama: string; peran: string; persona: string; warna: string; handle: string; platform: string; rupa: number; rupaDiubah?: boolean };
 const ISIAN_KOSONG: Isian = { nama: "", peran: "", persona: "", warna: WARNA_BOT_PILIHAN[0], handle: "", platform: PLATFORM_SUMBER[0], rupa: 0 };
 
 // ---------- form profil bot (buat / ubah) ----------
@@ -64,7 +64,9 @@ function FormBot({
   const [i, setI] = useState<Isian>(awal);
   const ubah = (b: Partial<Isian>) => setI((s) => ({ ...s, ...b }));
   const sah = normalkanProfilBot({ ...i });
-  const pratinjau = rupaBot(i.rupa, i.warna);
+  const pratinjau = useMemo(() => rupaBot(i.rupa, i.warna), [i.rupa, i.warna]);
+  // 10 pilihan rupa digambar ulang hanya saat warna berganti, bukan tiap ketikan.
+  const daftarRupa = useMemo(() => WAJAH_BOT.map((_, n) => rupaBot(n, i.warna)), [i.warna]);
   const kelasInput = "glass-input h-11 w-full rounded-xl px-3 text-sm text-teks-utama";
 
   return (
@@ -134,19 +136,19 @@ function FormBot({
       <div>
         <p className="mb-1.5 text-[11.5px] font-semibold text-teks-sekunder">Tampilan karakter</p>
         <div className="flex flex-wrap gap-1.5">
-          {WAJAH_BOT.map((_, n) => (
+          {daftarRupa.map((rupa, n) => (
             <button
               key={n}
               type="button"
               aria-label={`Rupa ${n + 1}`}
               aria-pressed={i.rupa === n}
-              onClick={() => ubah({ rupa: n })}
+              onClick={() => ubah({ rupa: n, rupaDiubah: true })}
               className={cn(
                 "rounded-xl border-2 bg-black/5 p-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pri dark:bg-white/10",
                 i.rupa === n ? "border-pri" : "border-transparent",
               )}
             >
-              <PotretBot rupa={rupaBot(n, i.warna)} lencana={i.warna} skala={2} label={`Rupa ${n + 1}`} />
+              <PotretBot rupa={rupa} lencana={i.warna} skala={2} label={`Rupa ${n + 1}`} />
             </button>
           ))}
         </div>
@@ -207,7 +209,18 @@ function TabAkun({ status, onSegar }: { status: StatusBot | null; onSegar: () =>
   const simpan = async (botId: number, i: Isian) => {
     setSibuk(true);
     try {
-      await kirimAkunBot({ aksi: "ubah", bot_id: botId, nama: i.nama, peran: i.peran, persona: i.persona, warna: i.warna, handle: i.handle, platform: i.platform, rupa_indeks: i.rupa });
+      // Rupa dikirim hanya bila Anda memilihnya; bila tidak, tampilan yang sudah ada (mis. hasil skrip) tidak ditimpa.
+      await kirimAkunBot({
+        aksi: "ubah",
+        bot_id: botId,
+        nama: i.nama,
+        peran: i.peran,
+        persona: i.persona,
+        warna: i.warna,
+        handle: i.handle,
+        platform: i.platform,
+        ...(i.rupaDiubah ? { rupa_indeks: i.rupa } : {}),
+      });
       toast("sukses", "Profil bot disimpan");
       setUbahId(null);
       onSegar();
@@ -452,6 +465,7 @@ export function KelolaBotScreen({ onKembali }: { onKembali: () => void }) {
   const versiSegar = useVersiSegar();
   const [tab, setTab] = useState<Tab>("akun");
   const [status, setStatus] = useState<StatusBot | null>(null);
+  const [galat, setGalat] = useState("");
   const [tik, setTik] = useState(0);
   const nomor = useRef(0);
   const segar = useCallback(() => setTik((t) => t + 1), []);
@@ -459,11 +473,17 @@ export function KelolaBotScreen({ onKembali }: { onKembali: () => void }) {
   useEffect(() => {
     const ini = ++nomor.current;
     getStatusBot()
-      .then((d) => ini === nomor.current && setStatus(d))
+      .then((d) => {
+        if (ini !== nomor.current) return;
+        setStatus(d);
+        setGalat("");
+      })
       .catch((e) => {
         if (ini !== nomor.current) return;
-        setStatus({ tabel_ada: false, jeda_global: false, runner: { online: false, terakhir_denyut: null, versi: null }, bots: [], log: [] });
-        toast("error", "Daftar bot gagal dimuat", e instanceof Error ? e.message : "");
+        // Gagal memuat BUKAN "migrasi belum jalan": tampilkan galat sebenarnya dan data terakhir dipertahankan.
+        const pesan = e instanceof Error && e.message ? e.message : "Gagal memuat daftar bot";
+        setGalat(pesan);
+        toast("error", "Daftar bot gagal dimuat", pesan);
       });
     return () => {
       nomor.current++;
@@ -488,6 +508,14 @@ export function KelolaBotScreen({ onKembali }: { onKembali: () => void }) {
           </button>
         ))}
       </div>
+      {galat && (
+        <div role="alert" className="mb-3 flex items-center justify-between gap-2 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-[12px] text-amber-800 dark:text-amber-200">
+          <span className="min-w-0">Daftar bot gagal dimuat: {galat}</span>
+          <button type="button" onClick={segar} className="btn-tekan shrink-0 rounded-full bg-pri/15 px-3 py-1 text-[11px] font-bold text-pri">
+            Coba lagi
+          </button>
+        </div>
+      )}
       {tab === "akun" && <TabAkun status={status} onSegar={segar} />}
       {tab === "profil" && <TabProfil status={status} onSegar={segar} />}
       {tab === "otak" && (

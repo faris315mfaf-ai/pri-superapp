@@ -23,8 +23,9 @@ import { MAKS_BOT, KUOTA_AWAL_BOT, emailAkunBot, normalkanProfilBot, rupaBot, us
 
 export const dynamic = "force-dynamic";
 
+// Semua pesan di sini ditulis sendiri (aman ditampilkan), termasuk yang berstatus 5xx.
 function tolak(pesan: string, status = 400): never {
-  throw Object.assign(new Error(pesan), { status });
+  throw Object.assign(new Error(pesan), { status, pesanAman: true });
 }
 
 export async function POST(request: Request) {
@@ -53,47 +54,54 @@ export async function POST(request: Request) {
       }
       if ((count ?? 0) >= MAKS_BOT) tolak(`Jumlah bot sudah mencapai batas (${MAKS_BOT}).`, 409);
 
-      // Username: bot1, bot2, ... pertama yang bebas di seluruh akun (bukan hanya Divisi BOT).
-      const { data: ada, error: eAda } = await db.from("app_user").select("username").ilike("username", "bot%");
-      if (eAda) {
-        console.error("[bot-akun] baca username:", eAda.message);
-        tolak("Gagal memeriksa username.", 500);
-      }
-      const username = usernameBerikut(((ada ?? []) as { username: string | null }[]).map((r) => String(r.username ?? "")));
       const hash = await buatHashSandi(randomBytes(24).toString("base64url"));
       const sekarang = new Date().toISOString();
-      const { data: baru, error: eUser } = await db
-        .from("app_user")
-        .insert({
-          nama: p.nama,
-          username,
-          email: emailAkunBot(username),
-          nomor_wa: null,
-          password_hash: hash,
-          role: "anggota",
-          jabatan: "",
-          bidang_jabatan: "",
-          divisi: DIVISI_BOT,
-          sub_divisi: "",
-          posisi_divisi: "anggota",
-          status: "aktif",
-          aktif: true,
-          profil_lengkap: true,
-          // Rilis 2.1 mewajibkan verifikasi WA + tutorial: bot tidak pernah login, tetapi penandanya
-          // diisi supaya tidak memicu layar wajib saat master beralih ke akun bot.
-          wa_terverifikasi: true,
-          verifikasi_21_pada: sekarang,
-          tutorial_21_pada: sekarang,
-          disetujui_oleh: "sistem (akun bot)",
-          disetujui_pada: sekarang,
-        })
-        .select("id")
-        .single();
-      if (eUser || !baru) {
-        console.error("[bot-akun] buat akun:", eUser?.message);
-        tolak("Gagal membuat akun bot.", 500);
+      // Username: bot1, bot2, ... pertama yang bebas di seluruh akun (bukan hanya Divisi BOT). Dua pembuatan
+      // serentak bisa memilih nomor sama; yang kalah (pelanggaran unik 23505) membaca ulang dan mencoba lagi.
+      let userId = 0;
+      let username = "";
+      for (let percobaan = 0; percobaan < 3 && userId === 0; percobaan++) {
+        const { data: ada, error: eAda } = await db.from("app_user").select("username").ilike("username", "bot%");
+        if (eAda) {
+          console.error("[bot-akun] baca username:", eAda.message);
+          tolak("Gagal memeriksa username.", 500);
+        }
+        username = usernameBerikut(((ada ?? []) as { username: string | null }[]).map((r) => String(r.username ?? "")));
+        const { data: baru, error: eUser } = await db
+          .from("app_user")
+          .insert({
+            nama: p.nama,
+            username,
+            email: emailAkunBot(username),
+            nomor_wa: null,
+            password_hash: hash,
+            role: "anggota",
+            jabatan: "",
+            bidang_jabatan: "",
+            divisi: DIVISI_BOT,
+            sub_divisi: "",
+            posisi_divisi: "anggota",
+            status: "aktif",
+            aktif: true,
+            profil_lengkap: true,
+            // Rilis 2.1 mewajibkan verifikasi WA + tutorial: bot tidak pernah login, tetapi penandanya
+            // diisi supaya tidak memicu layar wajib saat master beralih ke akun bot.
+            wa_terverifikasi: true,
+            verifikasi_21_pada: sekarang,
+            tutorial_21_pada: sekarang,
+            disetujui_oleh: "sistem (akun bot)",
+            disetujui_pada: sekarang,
+          })
+          .select("id")
+          .single();
+        if (!eUser && baru) {
+          userId = Number((baru as { id: number }).id);
+        } else if (eUser?.code !== "23505") {
+          console.error("[bot-akun] buat akun:", eUser?.message);
+          tolak("Gagal membuat akun bot.", 500);
+        }
       }
-      const userId = Number((baru as { id: number }).id);
+      if (userId === 0) tolak("Gagal membuat akun bot: nomor username bentrok. Coba lagi.", 409);
       const { data: barisBot, error: eBot } = await db
         .from("bot_redaksi")
         .insert({
@@ -112,8 +120,9 @@ export async function POST(request: Request) {
         .single();
       if (eBot || !barisBot) {
         console.error("[bot-akun] buat bot_redaksi:", eBot?.message);
-        // Batalkan akun yatim.
-        await db.from("app_user").delete().eq("id", userId);
+        // Batalkan akun yatim (hasilnya dicatat: bila gagal, akun tanpa profil perlu dibersihkan manual).
+        const { error: eBatal } = await db.from("app_user").delete().eq("id", userId);
+        if (eBatal) console.error(`[bot-akun] GAGAL membatalkan akun ${userId} (${username}):`, eBatal.message);
         tolak("Gagal membuat profil bot. Akun dibatalkan.", 500);
       }
       const hasil: HasilBuatAkunBot = { id: Number((barisBot as { id: number }).id), user_id: userId, username };
@@ -129,14 +138,15 @@ export async function POST(request: Request) {
       if (eLama) tolak("Gagal membaca bot.", 500);
       if (!lama) tolak("Bot tidak ditemukan.", 404);
       const ubah: Record<string, unknown> = { nama: p.nama, peran: p.peran, persona: p.persona, warna: p.warna, handle: p.handle, platform: p.platform };
-      if (b.rupa_indeks !== undefined) ubah.rupa = rupaBot(indeksRupa, p.warna);
+      if (b.rupa_indeks != null) ubah.rupa = rupaBot(indeksRupa, p.warna);
       const { error } = await db.from("bot_redaksi").update(ubah).eq("id", botId);
       if (error) {
         console.error("[bot-akun] ubah bot:", error.message);
         tolak("Gagal menyimpan perubahan.", 500);
       }
       // Nama akun ikut (nama yang tampil di layar lain).
-      await db.from("app_user").update({ nama: p.nama }).eq("id", (lama as { user_id: number }).user_id).eq("divisi", DIVISI_BOT);
+      const { error: eNama } = await db.from("app_user").update({ nama: p.nama }).eq("id", (lama as { user_id: number }).user_id).eq("divisi", DIVISI_BOT);
+      if (eNama) console.error("[bot-akun] sinkron nama akun:", eNama.message);
       catatAudit(user.id, "bot_akun", `Mengubah profil bot ${p.nama}`, { request, detail: { bot_id: botId } });
       siarkanBot("kendali");
       return { sukses: true };
