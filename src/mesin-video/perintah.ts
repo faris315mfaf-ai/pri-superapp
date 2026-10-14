@@ -123,10 +123,61 @@ export function rentangPotong(
   return { mulai, durasi };
 }
 
-/** Video sumber -> kanvas: penuh (diperbesar lalu dipotong tengah) atau utuh dengan bingkai hitam. */
-export function filterBadan(lebar: number, tinggi: number, fps: number, bingkaiHitam: boolean): string {
+/**
+ * Rentang tegak area hook (kotak tulisan berita) di kanvas: text_box bila ada, selain itu lapisan teks
+ * "hook" (tinggi diperkirakan dari ukuran huruf × baris). null = template tanpa hook.
+ */
+export function areaHook(template: Template): { atas: number; bawah: number } | null {
+  const kotak = ambil(template, "text_box");
+  if (adalahDict(kotak)) {
+    const y = Number(ambil(kotak, "y"));
+    const h = Number(ambil(kotak, "h"));
+    if (Number.isFinite(y) && Number.isFinite(h) && h > 0) return { atas: y, bawah: y + h };
+  }
+  const teks = (pyOr(ambil(template, "texts"), []) as Record<string, unknown>[]) ?? [];
+  const hook = teks.find((t) => ambil(t, "name") === "hook");
+  const y = Number(ambil(hook ?? {}, "y"));
+  if (!hook || !Number.isFinite(y)) return null;
+  const ukuran = Number(ambil(hook, "size")) || 40;
+  const baris = Number(ambil(hook, "max_lines")) || 3;
+  const jarak = Number(ambil(hook, "line_height")) || 1.2;
+  return { atas: y, bawah: y + ukuran * jarak * baris };
+}
+
+/**
+ * Posisi tegak (y) video lebar berbingkai hitam (14 Okt 2026). Video digeser menjauhi kotak hook supaya
+ * hook (dan bingkai/kotak template di sekitarnya) jatuh di area hitam, bukan menutupi gambar:
+ * hook di separuh bawah -> video tepat DI ATAS kotak hook; hook di separuh atas -> tepat DI BAWAHnya.
+ * Tidak pernah melewati posisi tengah, dan tetap di dalam kanvas. `ruang` = jarak untuk tab/hiasan kotak
+ * (64 px pada kanvas 1280).
+ */
+export function yBingkaiHitam(
+  template: Template,
+  lebar: number,
+  tinggi: number,
+  lebarSumber: number,
+  tinggiSumber: number,
+): number {
+  const tinggiVideo = Math.min(tinggi, Math.round((lebar * tinggiSumber) / Math.max(1, lebarSumber)));
+  const tengah = Math.round((tinggi - tinggiVideo) / 2);
+  const hook = areaHook(template);
+  if (!hook) return tengah;
+  const ruang = Math.round((64 * tinggi) / 1280);
+  const y =
+    hook.atas + hook.bawah > tinggi
+      ? Math.min(tengah, hook.atas - ruang - tinggiVideo)
+      : Math.max(tengah, hook.bawah + ruang);
+  return Math.max(0, Math.min(tinggi - tinggiVideo, y));
+}
+
+/**
+ * Video sumber -> kanvas: penuh (diperbesar lalu dipotong tengah), atau utuh dengan bingkai hitam di posisi
+ * tegak `yHitam` (null = tengah). Ekspresi pad dijepit ke kanvas karena tinggi hasil scale bisa beda 1 px.
+ */
+export function filterBadan(lebar: number, tinggi: number, fps: number, bingkaiHitam: boolean, yHitam: number | null = null): string {
+  const yPad = yHitam === null ? "(oh-ih)/2" : `min(${Math.max(0, Math.round(yHitam))}\\,oh-ih)`;
   const ukur = bingkaiHitam
-    ? `scale=${lebar}:${tinggi}:force_original_aspect_ratio=decrease,pad=${lebar}:${tinggi}:(ow-iw)/2:(oh-ih)/2:color=black`
+    ? `scale=${lebar}:${tinggi}:force_original_aspect_ratio=decrease,pad=${lebar}:${tinggi}:(ow-iw)/2:${yPad}:color=black`
     : `scale=${lebar}:${tinggi}:force_original_aspect_ratio=increase,crop=${lebar}:${tinggi}`;
   return `[0:v]${ukur},fps=${fps},setsar=1,format=yuv420p[b0]`;
 }
@@ -180,11 +231,13 @@ export async function bangunPerintah(
 
   // ---------- BADAN: video sumber dipasang ke kanvas ----------
   let bingkaiHitam = false;
+  let yHitam: number | null = null;
   if (opsi.bingkaiHitam) {
     const tampil = await ukuranTampil(source).catch(() => ({ width: 0, height: 0 }));
     bingkaiHitam = tampil.width > 0 && tampil.height > 0 && tampil.width >= tampil.height;
+    if (bingkaiHitam) yHitam = yBingkaiHitam(template, lebar, tinggi, tampil.width, tampil.height);
   }
-  filters.push(filterBadan(lebar, tinggi, fps, bingkaiHitam));
+  filters.push(filterBadan(lebar, tinggi, fps, bingkaiHitam, yHitam));
   let sekarang = "b0";
 
   // ---------- LAPISAN: overlay PNG template + teks yang digambar sendiri ----------
