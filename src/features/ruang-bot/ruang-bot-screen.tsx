@@ -28,6 +28,7 @@ import { AntreanAccView } from "./antrean-acc-view";
 import { AntreanAccNyata } from "./antrean-acc-nyata";
 import { ChatBotView } from "./chat-bot-view";
 import { KoordinatorView } from "./koordinator-view";
+import { LacakSumberView } from "@/features/lacak-sumber/lacak-sumber-view";
 import { MAKS_KUOTA_AWAL } from "./data-contoh";
 import { DetailBotView } from "./detail-bot-view";
 import { RuangView } from "./ruang-view";
@@ -55,6 +56,7 @@ const TAB: { kunci: TampilanBot; label: string }[] = [
   { kunci: "sumber", label: "Sumber & Kuota" },
   { kunci: "chat", label: "Chat" },
   { kunci: "koordinator", label: "Koordinator" },
+  { kunci: "lacak", label: "Lacak Sumber" },
 ];
 
 const GRADASI_BARU: [string, string][] = [
@@ -239,6 +241,8 @@ function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber, onBukaKelolaBo
   const [antrean, setAntrean] = useState<ItemAcc[]>([]);
   const [riwayat, setRiwayat] = useState<KeputusanAcc[]>([]);
   const [jam, setJam] = useState(detikWibSekarang);
+  // Lacak Sumber dipasang sejak pertama dibuka lalu dibiarkan (disembunyikan) agar pelacakan yang berjalan tetap terpantau.
+  const [lacakDibuka, setLacakDibuka] = useState(false);
 
   // ---- nilai turunan dari server (mode nyata) ----
   const botsNyata = useMemo(() => server.bots.map(petakanBot), [server.bots]);
@@ -434,7 +438,10 @@ function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber, onBukaKelolaBo
               type="button"
               aria-selected={aktif}
               aria-controls={`rb-panel-${t.kunci}`}
-              onClick={() => setTampilan(t.kunci)}
+              onClick={() => {
+                setTampilan(t.kunci);
+                if (t.kunci === "lacak") setLacakDibuka(true);
+              }}
               className={cn(
                 "btn-tekan flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl px-3.5 text-[13px] font-semibold",
                 aktif ? "bg-pri/15 text-pri" : "text-teks-sekunder",
@@ -525,6 +532,12 @@ function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber, onBukaKelolaBo
       {tampilan === "koordinator" && nyata && (
         <div id="rb-panel-koordinator" role="tabpanel" aria-labelledby="rb-tab-koordinator">
           <KoordinatorView />
+        </div>
+      )}
+
+      {lacakDibuka && (
+        <div id="rb-panel-lacak" role="tabpanel" aria-labelledby="rb-tab-lacak" hidden={tampilan !== "lacak"}>
+          <LacakSumberView />
         </div>
       )}
 

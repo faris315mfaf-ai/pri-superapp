@@ -189,7 +189,7 @@ for (const nilai of ["", "abc", "12; rm", "1".repeat(13), "../1"]) {
   });
 }
 
-await uji("semua rute video, outro & tvr wajib identitas", async () => {
+await uji("semua rute video, outro, tvr & lacak wajib identitas", async () => {
   let diperiksa = 0;
   for (const { method, jalur: pola } of router.daftar()) {
     if (pola === "^\\/health$") continue;
@@ -198,7 +198,7 @@ await uji("semua rute video, outro & tvr wajib identitas", async () => {
       .replace(/\\\//g, "/")
       .replace(/\\\./g, ".")
       .replace(/\(\[\^\/\]\+\)/g, "abc");
-    pastikan(/^\/api\/(video|outro|tvr)/.test(contoh), contoh);
+    pastikan(/^\/api\/(video|outro|tvr|lacak)/.test(contoh), contoh);
     const r = await minta(method, contoh, { json: method === "GET" || method === "DELETE" ? undefined : {} });
     pastikan([401, 404].includes(r.status), `${method} ${contoh} -> ${r.status}`);
     diperiksa += 1;

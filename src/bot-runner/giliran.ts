@@ -33,6 +33,10 @@ export type PengaturanGiliran = {
   pantauSelangMs: number;
   /** Jeda antar-sumber saat panen (ms). */
   jedaAntarSumberMs: number;
+  /** Lacak Sumber: lama maksimal menunggu hasil pelacakan video asli sebelum job dibuat (ms). */
+  lacakMaksMs: number;
+  /** Selang polling hasil pelacakan (ms). */
+  lacakSelangMs: number;
   /** Jeda singkat setelah perintah yang mengerjakan sesuatu (ms). */
   jedaSetelahKerjaMs: number;
 };
@@ -42,6 +46,8 @@ export const PENGATURAN_BAWAAN: PengaturanGiliran = {
   pantauMaksMs: 60_000,
   pantauSelangMs: 4_000,
   jedaAntarSumberMs: 2_000,
+  lacakMaksMs: 8 * 60_000,
+  lacakSelangMs: 5_000,
   jedaSetelahKerjaMs: 1_000,
 };
 
@@ -140,12 +146,60 @@ async function lakukanSidik(
   await laporAman(dep, botId, { jenis: "sidik", kandidat_id: kandidatId, status: "gagal", sidik: null, galat: alasan });
 }
 
+// ---- Lacak Sumber (15 Okt 2026) ----
+
+/** "@kabarpesisir.tv" -> "kabarpesisir.tv" (bentuk sumber_label, lib/bot-pilih labelSumber). */
+export function labelDariAkun(akun: string): string {
+  return akun.trim().replace(/^@+/, "").slice(0, 60).trim();
+}
+
+/** Video asli bila layanan lacak YAKIN; selain itu null (termasuk saat dimatikan master atau galat). */
+async function lacakAsli(
+  botId: number,
+  idPengguna: number,
+  url: string,
+  dep: DepGiliran,
+  ker: KeadaanGiliran,
+): Promise<{ url: string; label: string } | null> {
+  const m = dep.mesin;
+  if (!m.mulaiLacak || !m.lihatLacak) return null;
+  const a = atur(dep);
+  let id: string;
+  try {
+    id = await m.mulaiLacak(idPengguna, url);
+  } catch (e) {
+    // 409 = sakelar "lacak otomatis untuk bot" dimatikan master: diam saja.
+    if (!(e instanceof GalatMesin && e.status === 409)) dep.log(`bot ${botId}: lacak sumber dilewati (${pesanGalat(e, 120)})`);
+    return null;
+  }
+  const batas = dep.sekarang() + a.lacakMaksMs;
+  while (dep.sekarang() < batas && !ker.harusBerhenti()) {
+    await dep.tidur(a.lacakSelangMs);
+    let h;
+    try {
+      h = await m.lihatLacak(idPengguna, id);
+    } catch {
+      continue; // gangguan sesaat: coba lagi sampai batas waktu
+    }
+    if (h.status === "gagal") return null;
+    if (h.status !== "selesai") continue;
+    if (h.zona === "yakin" && h.url_asli && h.url_asli !== url) {
+      dep.log(`bot ${botId}: video asli ditemukan (${h.akun || h.url_asli})`);
+      return { url: h.url_asli, label: labelDariAkun(h.akun) };
+    }
+    return null;
+  }
+  dep.log(`bot ${botId}: lacak sumber belum selesai, lanjut dengan link semula`);
+  return null;
+}
+
 // ---- Perintah: buat_video ----
 
 async function lakukanBuatVideo(
   botId: number,
   perintah: Extract<PerintahRunner, { perintah: "buat_video" }>,
   dep: DepGiliran,
+  ker: KeadaanGiliran,
 ): Promise<void> {
   const { tugas_id: tugasId, id_pengguna_mesin: idPengguna } = perintah;
   const gagal = (kode: ReturnType<typeof kodeGagalDariHttp>, pesan: string) =>
@@ -166,6 +220,16 @@ async function lakukanBuatVideo(
   }
   hook = siapkanHook(hook);
 
+  // 1b. Lacak Sumber: video asli (zona yakin) menggantikan link saduran & kreditnya. Gagal/tidak yakin = lanjut
+  //     dengan link semula — pelacakan tidak pernah menggagalkan tugas.
+  let urlJob = perintah.url;
+  let labelSumber = perintah.sumber_label;
+  const asli = await lacakAsli(botId, idPengguna, perintah.url, dep, ker);
+  if (asli) {
+    urlJob = asli.url;
+    if (asli.label) labelSumber = asli.label;
+  }
+
   // 2. Keadaan SEBELUM (untuk mengenali job baru dari selisih).
   let sebelum: KeadaanMesin;
   try {
@@ -180,9 +244,9 @@ async function lakukanBuatVideo(
   let sesudah: KeadaanMesin;
   try {
     sesudah = await dep.mesin.buatJob(idPengguna, {
-      url: perintah.url,
+      url: urlJob,
       hook,
-      sumber: perintah.sumber_label,
+      sumber: labelSumber,
       kategori: perintah.kategori,
     });
   } catch (e) {
@@ -304,7 +368,7 @@ export async function jalankanPerintah(botId: number, perintah: PerintahRunner, 
       await lakukanSidik(botId, perintah, dep);
       return "kerja";
     case "buat_video":
-      await lakukanBuatVideo(botId, perintah, dep);
+      await lakukanBuatVideo(botId, perintah, dep, ker);
       return "kerja";
     case "pantau_job":
       await lakukanPantau(botId, perintah, dep, ker);

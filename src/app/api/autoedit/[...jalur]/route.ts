@@ -107,6 +107,20 @@ async function tangani(
   }
   const { jalur } = await params;
   const j = jalur ?? [];
+  // Lacak Sumber / Pencari Video Asli (15 Okt 2026): master, atau siapa pun yang boleh Edit Otomatis.
+  // Selalu atas nama akun ASLI (header tim diabaikan). Peran master dipasang server di sini — peramban tidak
+  // bisa mengisinya (HEADER_MASUK). Koleksi & pengaturan khusus master diperiksa lagi di layanan lacak.
+  if (j[0] === "lacak") {
+    if (user.ujiBeban === true || !(user.role === "master" || bolehEditOtomatisServer(user))) {
+      return galatAutoEdit(404, "Tidak ditemukan");
+    }
+    const tambahan: Record<string, string> = user.role === "master" ? { "x-autoedit-peran": "master" } : {};
+    const jawaban = await teruskanAutoEdit(request, j, user.id, new Set(["lacak"]), undefined, tambahan);
+    if (request.method === "POST" && j[1] === "jobs" && j.length === 2 && jawaban.status < 400) {
+      catatAudit(user.id, "lacak_sumber", "Mencari video asli", { request });
+    }
+    return jawaban;
+  }
   // Pustaka template Bot Redaksi (13 Okt 2026): hanya server SuperApp yang boleh
   // memanggilnya (lib/bot-template); lewat proxy ini selalu tidak ada.
   if (j[0] === "tvr" && j[1] === "pustaka") return galatAutoEdit(404, "Tidak ditemukan");

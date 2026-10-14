@@ -38,6 +38,7 @@ import { adalahKonteksBot, useApiAutoEdit } from "@/features/auto-edit/tim";
 import { bolehAlatVideo } from "@/lib/peran";
 import { bidangJob, bolehPotongVideo, nilaiRentang, rentangAwal, type RentangVideo } from "@/lib/potong-video";
 import { PilihBagianVideo } from "@/features/auto-edit/pilih-bagian-video";
+import { CariAsliTvr } from "@/features/lacak-sumber/cari-asli-tvr";
 import { TemplateTvrModal } from "./template-tvr-modal";
 import { segarkanStokTvr } from "./stok-video-tvr";
 import {
@@ -768,14 +769,29 @@ function FormBuatVideo(p: FormProps) {
           </button>
         </>
       ) : (
-        <input
-          value={p.link}
-          onChange={(e) => p.setLink(e.target.value)}
-          placeholder="https://… link TikTok / Instagram / Facebook"
-          inputMode="url"
-          disabled={p.mengirim}
-          className="glass-input mt-2 h-11 w-full rounded-xl px-3 text-sm text-teks-utama"
-        />
+        <>
+          <input
+            value={p.link}
+            onChange={(e) => p.setLink(e.target.value)}
+            placeholder="https://… link TikTok / Instagram / Facebook"
+            inputMode="url"
+            disabled={p.mengirim}
+            className="glass-input mt-2 h-11 w-full rounded-xl px-3 text-sm text-teks-utama"
+          />
+          {/* Pencari Video Asli (15 Okt 2026): tampil bila link sah & master menyalakannya. */}
+          <CariAsliTvr
+            link={p.link}
+            nonaktif={p.mengirim}
+            maksKredit={batas.maks_sumber_teks}
+            onPakaiAsli={(url, kredit) => {
+              p.setLink(url);
+              if (kredit) p.setTeksSumber(kredit.slice(0, batas.maks_sumber_teks));
+            }}
+            onIsiKredit={(kredit) => {
+              if (kredit) p.setTeksSumber(kredit.slice(0, batas.maks_sumber_teks));
+            }}
+          />
+        </>
       )}
       {p.potong && (
         <PilihBagianVideo

@@ -136,4 +136,5 @@ export type LogItem = {
   teks: string;
 };
 
-export type TampilanBot = "ruang" | "detail" | "acc" | "sumber" | "chat" | "koordinator";
+/** "lacak" = Pencari Video Asli (Lacak Sumber, 15 Okt 2026). */
+export type TampilanBot = "ruang" | "detail" | "acc" | "sumber" | "chat" | "koordinator" | "lacak";

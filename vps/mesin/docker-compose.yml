@@ -55,6 +55,7 @@ services:
     environment:
       AUTOEDIT_PERAN: api
       REDIS_URL: redis://autoedit-redis:6379/0
+      LACAK_URL: http://autoedit-lacak:7100
       MEDIA_DIR: /data/media
       # Jatah penyimpanan per akun (template + stok + render): 2 GB (5 Okt 2026).
       KUOTA_AKUN_MB: "2048"
@@ -221,6 +222,84 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
+  # LACAK SUMBER / Pencari Video Asli (15 Okt 2026) — tahap 1, CPU saja. Kode: vps/lacak (Python),
+  # dibangun DI SINI oleh 12-perbarui.sh (perbarui_lacak_jauh). API mesin TS meneruskan /api/lacak/*
+  # ke sini (src/mesin-video/server/lacak.ts). Tanpa port ke host. `profiles: ["lacak"]`: tidak ikut
+  # `docker compose up -d` biasa; dinyalakan dengan --profile lacak.
+  autoedit-lacak:
+    build: ./lacak
+    image: pri-lacak:terbaru
+    container_name: pri-autoedit-lacak
+    profiles: ["lacak"]
+    restart: unless-stopped
+    environment:
+      LACAK_QDRANT: http://lacak-qdrant:6333
+      LACAK_SEARXNG: http://lacak-searxng:8080
+      # 2 utas per model: render Auto Edit tetap mendapat sebagian besar CPU.
+      LACAK_UTAS: "2"
+      OMP_NUM_THREADS: "2"
+      TZ: Asia/Jakarta
+    volumes:
+      - /srv/godam/media/lacak:/data/lacak
+    depends_on:
+      lacak-qdrant:
+        condition: service_started
+      lacak-searxng:
+        condition: service_started
+    networks: [autoedit]
+    healthcheck:
+      # /hidup dangkal (tanpa memanggil Qdrant/SearXNG); /sehat untuk diagnosis.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7100/hidup', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 6G, pids: 512 }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # Indeks vektor koleksi (frame video akun sumber asli). Data di volume bernama.
+  lacak-qdrant:
+    image: qdrant/qdrant:v1.19.1
+    container_name: pri-lacak-qdrant
+    profiles: ["lacak"]
+    restart: unless-stopped
+    environment:
+      QDRANT__TELEMETRY_DISABLED: "true"
+    volumes:
+      - lacak-qdrant-data:/qdrant/storage
+    networks: [autoedit]
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 2G }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # Mesin pencari meta (keluaran JSON) untuk mencari link video kandidat. Hanya dipakai autoedit-lacak.
+  lacak-searxng:
+    image: searxng/searxng:2026.10.9-f4822b3fc
+    container_name: pri-lacak-searxng
+    profiles: ["lacak"]
+    restart: unless-stopped
+    env_file:
+      - path: ./lacak.env
+        required: false
+    environment:
+      SEARXNG_BASE_URL: http://lacak-searxng:8080/
+    volumes:
+      - ./lacak/searxng/settings.yml:/etc/searxng/settings.yml:ro
+    networks: [autoedit]
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 1G }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
   # Jembatan TCP (jalur privat) -> socket API. Hanya mendengar di 10.77.0.2.
   autoedit-jembatan:
     image: alpine/socat:latest
@@ -246,6 +325,8 @@ volumes:
   autoedit-redis-data:
   rembg-model:
     name: pri-rembg-model
+  lacak-qdrant-data:
+    name: pri-lacak-qdrant
 
 networks:
   # Subnet tetap: firewall keluar (vps/autoedit/firewall-keluar.sh) menutup

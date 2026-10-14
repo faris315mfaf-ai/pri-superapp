@@ -62,6 +62,11 @@ rahasia (password, kunci API, isi env) di berkas ini atau di repo.**
   ruangan, siapa online (nama + jenis kegiatan saja — disanitasi di `src/lib/ruang-umum-murni.ts`),
   dan **chat global** (`/api/ruang/chat`, tabel `chat_global` + `chat_global_bisu` dari `sql/75`).
   Aturan chat: 500 karakter, 5 pesan/30 dtk, kata kasar disamarkan, riwayat 7 hari, master hapus/bisukan.
+- **Lacak Sumber / Pencari Video Asli** (15 Okt 2026, tahap 1 CPU): layanan Python `vps/lacak`
+  (SSCD + PDQ + RapidOCR + faster-whisper + Chromaprint + Qdrant + SearXNG) di VPS mesin, profil compose
+  `lacak`, dibangun DI VPS mesin oleh `12-perbarui.sh`. Mesin TS meneruskan `/api/lacak/*`
+  (`src/mesin-video/server/lacak.ts`); UI `src/features/lacak-sumber/`; runner bot memakainya sebelum job.
+  Panduan: `docs/LACAK-SUMBER.md`.
 - **Tutorial interaktif**: mesin `src/features/tur/lapisan-tur.tsx`, langkah di `src/lib/tur.ts`
   (penanda `data-tur` di komponen asli).
 - **Akun TIM TV Rakyat Official**: identitas mesin `900000001` (`ID_TIM` di `src/lib/autoedit.ts`),

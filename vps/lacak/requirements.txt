@@ -1,0 +1,17 @@
+# Layanan Lacak Sumber (tahap 1, CPU). Versi DIKUNCI = yang diuji 15 Okt 2026 (tests/).
+# torch dipasang terpisah dari indeks CPU PyTorch (lihat Dockerfile) supaya tanpa CUDA.
+fastapi==0.143.1
+uvicorn==0.54.0
+pydantic>=2.9,<3
+httpx==0.28.1
+numpy==2.5.4
+pillow==12.3.0
+qdrant-client==1.19.1
+scenedetect==0.7.2
+opencv-python-headless==5.0.0.93
+pdqhash==0.2.8
+rapidocr==3.10.0
+onnxruntime==1.31.0
+faster-whisper==1.2.1
+yt-dlp[default,curl-cffi]
+pytest==9.1.1

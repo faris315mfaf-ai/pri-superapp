@@ -273,6 +273,25 @@ MESIN_DIR=/opt/pri-mesin
 MESIN_SSH=(ssh -o BatchMode=yes -o ConnectTimeout=10 -i /root/.ssh/pri-mesin "$MESIN_HOST")
 MESIN_SCP=(scp -q -o BatchMode=yes -o ConnectTimeout=10 -i /root/.ssh/pri-mesin)
 
+# Lacak Sumber / Pencari Video Asli (15 Okt 2026): layanan Python + Qdrant + SearXNG di VPS mesin,
+# profil compose "lacak". Image-nya (model AI di dalamnya, ±3 GB) DIBANGUN DI VPS mesin dari konteks
+# vps/lacak yang dikirim utuh (tar) — tidak lewat docker save. Gagal di sini TIDAK menggagalkan Auto Edit.
+perbarui_lacak_jauh() {
+  [ -d "$SUMBER/vps/lacak" ] || return 0
+  tar -C "$SUMBER/vps" --exclude='__pycache__' --exclude='*.pyc' --exclude='tests/model' -czf - lacak \
+    | "${MESIN_SSH[@]}" "rm -rf $MESIN_DIR/lacak.baru && mkdir -p $MESIN_DIR/lacak.baru && tar -xzf - -C $MESIN_DIR/lacak.baru --strip-components=1 \
+        && rm -rf $MESIN_DIR/lacak && mv $MESIN_DIR/lacak.baru $MESIN_DIR/lacak" || return 1
+  "${MESIN_SSH[@]}" "set -e; cd $MESIN_DIR
+    mkdir -p /srv/godam/media/lacak && chown 10001:10001 /srv/godam/media/lacak
+    [ -f lacak.env ] || (umask 077; printf 'SEARXNG_SECRET=%s\\n' \"\$(openssl rand -hex 32)\" > lacak.env)
+    docker compose --profile lacak build -q autoedit-lacak
+    docker compose --profile lacak up -d autoedit-lacak lacak-qdrant lacak-searxng >/dev/null 2>&1
+    # settings.yml searxng dipasang sebagai berkas: folder lacak baru = inode baru -> buat ulang containernya.
+    docker compose --profile lacak up -d --force-recreate --no-deps lacak-searxng >/dev/null 2>&1
+    for i in \$(seq 1 40); do [ \"\$(docker inspect -f '{{.State.Health.Status}}' pri-autoedit-lacak 2>/dev/null)\" = healthy ] && exit 0; sleep 3; done
+    exit 1" || return 1
+}
+
 nyalakan_autoedit_jauh() {
   docker compose --profile ts build autoedit-ts-api || return 1
   # Socket di sini milik jembatan: mesin lokal (TS & Python) tidak boleh menyala.
@@ -315,6 +334,11 @@ if [ "$AUTOEDIT_SIAP" = "1" ]; then
     # ada di VPS mesin; mesin lokal yang kosong hanya membingungkan anggota.
     if nyalakan_autoedit_jauh; then
       echo "  Auto Edit jalan di VPS mesin (${MESIN_HOST#root@})."
+      if perbarui_lacak_jauh; then
+        echo "  Lacak Sumber jalan di VPS mesin."
+      else
+        echo "  PERINGATAN: Lacak Sumber gagal diperbarui — Auto Edit tetap jalan. Periksa: ssh -i /root/.ssh/pri-mesin $MESIN_HOST 'cd $MESIN_DIR && docker compose --profile lacak ps && docker logs --tail 50 pri-autoedit-lacak'" >&2
+      fi
     else
       echo "  PERINGATAN: Auto Edit di VPS mesin gagal diperbarui/dihubungi — aplikasi tetap jalan. Periksa: ssh -i /root/.ssh/pri-mesin $MESIN_HOST 'cd $MESIN_DIR && docker compose ps'" >&2
     fi

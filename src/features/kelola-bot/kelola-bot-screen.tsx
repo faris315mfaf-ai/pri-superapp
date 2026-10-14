@@ -10,7 +10,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BrainCircuit, ExternalLink, Layers, Link2, Loader2, Pencil, Plus, UserPlus } from "lucide-react";
+import { BrainCircuit, ExternalLink, Layers, Link2, Loader2, Pencil, Plus, ScanSearch, UserPlus } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton, ScreenHeader, SectionTitle } from "@/components/pri-ui";
 import { toast, useAppStore } from "@/hooks/use-app-store";
@@ -23,6 +23,7 @@ import { TemplateBot } from "@/features/tvr-ku/template-bot";
 import { masukSebagai } from "@/lib/kendali-klien";
 import { KonteksTimAutoEdit, tandaAkunBot } from "@/features/auto-edit/tim";
 import { EditOtomatisTvr } from "@/features/tvr-ku/edit-otomatis-tvr";
+import { KoleksiLacakView } from "@/features/lacak-sumber/koleksi-lacak-view";
 import {
   HANDLE_BOT_MAKS,
   MAKS_BOT,
@@ -38,13 +39,14 @@ import type { BotRingkas, StatusBot } from "@/lib/bot-tipe";
 import { getStatusBot, kirimAkunBot } from "@/services";
 import { cn } from "@/lib/utils";
 
-type Tab = "akun" | "profil" | "otak" | "template";
+type Tab = "akun" | "profil" | "otak" | "template" | "lacak";
 
 const TAB: { kunci: Tab; label: string }[] = [
   { kunci: "akun", label: "Akun Bot" },
   { kunci: "profil", label: "Profil Upload-Post" },
   { kunci: "otak", label: "Otak (API Key)" },
   { kunci: "template", label: "Template Auto Edit" },
+  { kunci: "lacak", label: "Lacak Sumber" },
 ];
 
 type Isian = { nama: string; peran: string; persona: string; warna: string; handle: string; rupa: number; rupaDiubah?: boolean };
@@ -586,6 +588,7 @@ export function KelolaBotScreen({ onKembali }: { onKembali: () => void }) {
           >
             {t.kunci === "profil" && <Link2 className="h-3.5 w-3.5" aria-hidden="true" />}
             {t.kunci === "template" && <Layers className="h-3.5 w-3.5" aria-hidden="true" />}
+            {t.kunci === "lacak" && <ScanSearch className="h-3.5 w-3.5" aria-hidden="true" />}
             {t.label}
           </button>
         ))}
@@ -601,6 +604,7 @@ export function KelolaBotScreen({ onKembali }: { onKembali: () => void }) {
       {tab === "akun" && <TabAkun status={status} onSegar={segar} />}
       {tab === "profil" && <TabProfil status={status} onSegar={segar} />}
       {tab === "template" && <TabTemplate status={status} />}
+      {tab === "lacak" && <KoleksiLacakView />}
       {tab === "otak" && (
         <div className="flex flex-col gap-3">
           <TutorialApiKey />

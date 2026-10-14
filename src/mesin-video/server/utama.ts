@@ -10,6 +10,7 @@ import { GalatIsiMedia } from "../media";
 import { pasangRedisBatas } from "../unduh";
 import { jagaVolume } from "../volume";
 import { GalatHttp, kirimJson, Router, SUDAH_DIKIRIM, type Permintaan } from "./dasar";
+import { pasangRuteLacak } from "./lacak";
 import { pasangRuteOutro } from "./outro";
 import { pasangRutePustaka } from "./pustaka";
 import { pasangRuteTvr } from "./tvr";
@@ -22,6 +23,7 @@ export function buatRouter(): Router {
   pasangRuteOutro(r);
   pasangRuteTvr(r);
   pasangRutePustaka(r);
+  pasangRuteLacak(r);
   return r;
 }
 

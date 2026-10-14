@@ -1,0 +1,31 @@
+# SearXNG untuk Lacak Sumber (15 Okt 2026): hanya dipakai layanan lacak di jaringan internal
+# pri-autoedit — tanpa port ke host, tanpa pengunjung. Keluaran JSON wajib dinyalakan.
+use_default_settings: true
+
+general:
+  instance_name: "pri-lacak"
+  enable_metrics: false
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  default_lang: "id"
+  formats:
+    - html
+    - json
+
+server:
+  # secret_key diisi dari env SEARXNG_SECRET (dibuat pasang.sh di VPS mesin, tidak di repo).
+  limiter: false
+  public_instance: false
+  image_proxy: false
+  method: "GET"
+
+outgoing:
+  request_timeout: 6.0
+  max_request_timeout: 12.0
+  pool_connections: 50
+  pool_maxsize: 10
+
+ui:
+  static_use_hash: true

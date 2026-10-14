@@ -193,6 +193,8 @@ export function teruskanAutoEdit(
   keluarga: ReadonlySet<string>,
   /** Akun tim: id anggota yang sebenarnya mengirim (antrean & unggahan per anggota). */
   idAnggota?: string,
+  /** Header tepercaya yang dipasang SERVER (mis. x-autoedit-peran untuk Lacak Sumber); bukan dari peramban. */
+  headerTambahan?: Record<string, string>,
 ): Promise<Response> {
   if (!jalur.length || !keluarga.has(jalur[0]) || jalur.some((b) => b === "." || b === "..")) {
     return Promise.resolve(galatAutoEdit(404, "Tidak ditemukan"));
@@ -201,6 +203,7 @@ export function teruskanAutoEdit(
 
   const header: Record<string, string> = { "x-autoedit-pengguna": idAkun };
   if (idAnggota && /^\d{1,12}$/.test(idAnggota)) header["x-autoedit-anggota"] = idAnggota;
+  if (headerTambahan) Object.assign(header, headerTambahan);
   for (const nama of HEADER_MASUK) {
     const nilai = request.headers.get(nama);
     if (nilai) header[nama] = nilai;

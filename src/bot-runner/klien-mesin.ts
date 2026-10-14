@@ -41,10 +41,35 @@ export type KeadaanMesin = { jobs: JobMesin[]; stok: StokMesin[] };
 
 export type BadanJob = { url: string; hook: string; sumber: string; kategori: string };
 
+/** Ringkasan satu pelacakan video asli (Lacak Sumber, /api/lacak/jobs/{id}). */
+export type RingkasLacakMesin = {
+  status: "antre" | "berjalan" | "selesai" | "gagal";
+  zona: "yakin" | "perlu_acc" | "bukan" | null;
+  /** URL video asli terpilih (zona yakin); "" bila tidak ada. */
+  url_asli: string;
+  /** Akun pemilik video asli ("@kabarpesisir.tv"); "" bila tidak ada. */
+  akun: string;
+};
+
 export interface KlienMesin {
   buatHook(idPengguna: number, naskah: string): Promise<string>;
   ambilKeadaan(idPengguna: number): Promise<KeadaanMesin>;
   buatJob(idPengguna: number, badan: BadanJob): Promise<KeadaanMesin>;
+  /** Lacak Sumber (15 Okt 2026). Opsional: tanpa ini runner melewati pelacakan. Mengembalikan id pelacakan. */
+  mulaiLacak?(idPengguna: number, url: string): Promise<string>;
+  lihatLacak?(idPengguna: number, id: string): Promise<RingkasLacakMesin>;
+}
+
+/** Jawaban /api/lacak/jobs/{id} -> ringkasan aman (bentuk tak dikenal = gagal). */
+export function ringkasLacak(j: unknown): RingkasLacakMesin {
+  const o = adalahObjek(j) ? j : {};
+  const status = o.status === "antre" || o.status === "berjalan" || o.status === "selesai" ? o.status : "gagal";
+  const zona = o.zona === "yakin" || o.zona === "perlu_acc" || o.zona === "bukan" ? o.zona : null;
+  const daftar = Array.isArray(o.kandidat) ? o.kandidat : [];
+  const idx = typeof o.terpilih === "number" ? o.terpilih : -1;
+  const k = idx >= 0 && idx < daftar.length && adalahObjek(daftar[idx]) ? (daftar[idx] as Record<string, unknown>) : null;
+  const url = k && typeof k.url === "string" && /^https:\/\//.test(k.url) ? k.url : "";
+  return { status, zona, url_asli: zona === "yakin" ? url : "", akun: zona === "yakin" && k && typeof k.akun === "string" ? k.akun : "" };
 }
 
 // ---- Batas mesin (src/mesin-video/server/tvr.ts) ----
@@ -185,6 +210,7 @@ function panggil(
   jalur: string,
   badan: unknown,
   batasMs: number,
+  headerTambahan: Record<string, string> = {},
 ): Promise<unknown> {
   if (!Number.isInteger(idPengguna) || idPengguna <= 0) {
     return Promise.reject(new GalatMesin(0, "id pengguna mesin tidak sah"));
@@ -200,6 +226,7 @@ function panggil(
         headers: {
           "x-autoedit-pengguna": String(idPengguna),
           accept: "application/json",
+          ...headerTambahan,
           ...(isi ? { "content-type": "application/json", "content-length": String(isi.length) } : {}),
         },
       },
@@ -258,6 +285,17 @@ export function buatKlienMesin(opsi: Opsi): KlienMesin {
         bingkai: "hitam",
       };
       return normalisasiKeadaan(await panggil(opsi, idPengguna, "POST", "/api/tvr/jobs", aman, 90_000));
+    },
+    async mulaiLacak(idPengguna, url) {
+      // x-autoedit-bot: 1 -> layanan lacak memakai sakelar "lacak otomatis untuk bot" & tanpa jatah harian.
+      const j = await panggil(opsi, idPengguna, "POST", "/api/lacak/jobs", { url }, 30_000, { "x-autoedit-bot": "1" });
+      const id = adalahObjek(j) && typeof j.id === "string" ? j.id : "";
+      if (!/^[0-9a-f]{16}$/.test(id)) throw new GalatMesin(502, "jawaban lacak tanpa id");
+      return id;
+    },
+    async lihatLacak(idPengguna, id) {
+      if (!/^[0-9a-f]{16}$/.test(id)) throw new GalatMesin(400, "id lacak tidak sah");
+      return ringkasLacak(await panggil(opsi, idPengguna, "GET", `/api/lacak/jobs/${id}`, undefined, 20_000, { "x-autoedit-bot": "1" }));
     },
   };
 }
