@@ -37,8 +37,13 @@ export function jenisGalat(pesan: string): JenisGalat {
   if (!m.trim()) return "tak-dikenal";
   const ada = (...kata: string[]) => kata.some((k) => m.includes(k));
 
-  if (ada("exceeded the number of videos", "uploadlimitexceeded", "upload limit", "quota", "kuota", "rate limit", "too many", "limit exceeded", "daily limit", "daily posting cap", "posting cap", "per day", "harian", "429")) {
+  if (ada("spend cap", "spending cap", "exceeded the number of videos", "uploadlimitexceeded", "upload limit", "quota", "kuota", "rate limit", "too many", "limit exceeded", "daily limit", "daily posting cap", "posting cap", "per day", "harian", "429")) {
     return "kuota";
+  }
+  // Gangguan sesaat yang pesannya kebetulan memuat kata "perbaiki" (mis. "already posted", "video"):
+  // diperiksa lebih dulu supaya tombol Ulangi tetap ditawarkan (14 Okt 2026, galat nyata upload-post/X).
+  if (ada("did not finish within the expected time", "failed to download the video", "incompleteread", "connection broken", "connection reset", "connection aborted", "service unavailable", "read timed out")) {
+    return "sementara";
   }
   // Bentuk "15/15" bersama kata batas: jatah harian platform yang habis.
   // Tanpa ini, pesan seperti "Daily limit 15/15" lolos ke "tak dikenal"
@@ -56,6 +61,9 @@ export function jenisGalat(pesan: string): JenisGalat {
       "format", "codec", "resolution", "aspect", "duration", "too short", "too large", "size",
       "copyright", "music",
       "inbox", "pending review",
+      "not permitted", "temporarily locked", "account locked", "suspended", "restricted",
+      "session has expired", "could not be refreshed", "please reconnect",
+      "no tweet id", "longer than 2 minutes",
     )
   ) {
     return "perbaiki-dulu";

@@ -532,7 +532,7 @@ export function gagalDariBalasan(mentah: unknown): { platform: string; pesan: st
   for (const r of daftar) {
     if (r.success !== false) continue;
     const up = String(r.platform ?? "").toLowerCase();
-    keluar.push({ platform: DARI_UP[up] ?? up, pesan: String(r.error ?? r.message ?? "").slice(0, 300) });
+    keluar.push({ platform: DARI_UP[up] ?? up, pesan: String(r.error_message ?? r.error ?? r.message ?? "").slice(0, 300) });
   }
   return keluar;
 }
@@ -697,7 +697,9 @@ export async function statusUnggahUp(id: string, timeoutMs = 20000): Promise<Sta
     const up = String(r.platform ?? "").toLowerCase();
     const app = DARI_UP[up] ?? up;
     if (!app) continue;
-    per[app] = { sukses: r.success === true, pesan: String(r.message ?? ""), waktu: keIso(r.upload_timestamp) };
+    // Alasan gagal ada di `error_message` (diverifikasi 14 Okt 2026); `message` hanya cadangan.
+    // Dulu hanya `message` yang dibaca, sehingga alasan tersimpan sebagai "completed".
+    per[app] = { sukses: r.success === true, pesan: String(r.error_message ?? r.message ?? r.error ?? ""), waktu: keIso(r.upload_timestamp) };
   }
   return { status: String(d.status ?? ""), completed: Number(d.completed ?? 0), total: Number(d.total ?? 0), per, mentah: d };
 }

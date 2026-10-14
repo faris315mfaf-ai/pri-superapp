@@ -53,6 +53,69 @@ export function solusiGagal(platform: string, pesan: string): { ringkas: string;
       solusi: `${nama} hanya mengizinkan ${angka[2]} unggahan per 24 jam lewat aplikasi pihak ketiga. Batas ini milik ${nama} — tidak bisa dibuka dari sini, dan mengulang sekarang pasti ditolak lagi. Jalan keluarnya: pakai tombol JADWALKAN dan pilih waktu setelah jatahnya pulih (jendelanya berjalan, bukan reset tengah malam — jatah pertama pulih 24 jam setelah unggahan pertama tadi). Untuk yang mendesak, unggah langsung dari aplikasi ${nama}.`,
     };
   }
+  // ---- Penyebab nyata dari upload-post / X (diverifikasi dari galat produksi, 14 Okt 2026) ----
+  // Urutannya penting: pesan upload-post sering memuat kata lain ("403", "already posted", "rate-limits")
+  // yang akan salah ditangkap aturan umum di bawah.
+  if (ada("spend cap", "spending cap")) {
+    return {
+      ringkas: `Kuota posting ${nama} di layanan upload-post habis (bukan masalah akun Anda)`,
+      solusi: `Batas biaya bulanan API ${nama} di layanan upload-post sudah tercapai, jadi SEMUA anggota tidak bisa memposting ke ${nama} sampai pengelola menambah kuotanya atau bulan berganti. Akun ${nama} Anda tidak bermasalah dan tidak perlu ditautkan ulang; mengulang sekarang pasti gagal lagi. Untuk yang mendesak, unggah langsung dari aplikasi ${nama}. Sosmed lain tetap berjalan normal.`,
+    };
+  }
+  if (ada("did not finish within the expected time")) {
+    return {
+      ringkas: `${nama} tidak selesai diproses tepat waktu (gangguan sesaat)`,
+      solusi: `Sosmed lain sudah terbit; hanya ${nama} yang terlambat diproses lalu dibatalkan. Akun Anda tidak bermasalah. Ulangi unggahan ke ${nama} saja — tidak membuat dobel di sosmed lain.`,
+    };
+  }
+  if (ada("failed to download the video", "incompleteread", "connection broken")) {
+    return {
+      ringkas: `Video gagal diambil server upload-post (jaringan terputus)`,
+      solusi: `Videonya tidak rusak dan akun ${nama} Anda tidak bermasalah; pengambilan video oleh server terputus di tengah jalan. Ulangi unggahan ke ${nama} saja. Bila terus terjadi, videonya kemungkinan terlalu besar — kompres dulu (≤ 50 MB) lalu unggah ulang.`,
+    };
+  }
+  if (ada("temporarily locked", "account is locked", "account locked")) {
+    return {
+      ringkas: `Akun ${nama} sedang dikunci oleh ${nama}`,
+      solusi: `${nama} mengunci akun ini sementara (biasanya minta verifikasi nomor HP/email). Buka aplikasi ${nama} dengan akun itu dan ikuti langkah membuka kunci, lalu ${CARA_TAUTKAN_ULANG} ${nama} dan unggah ulang.`,
+    };
+  }
+  if (ada("not permitted to perform this action", "not permitted", "suspended", "restricted")) {
+    return {
+      ringkas: `Akun ${nama} sedang dibatasi oleh ${nama}`,
+      solusi: `${nama} menolak postingan dari akun ini — akunnya dibatasi/ditangguhkan, belum verifikasi nomor, atau ditandai spam karena terlalu sering memposting konten yang mirip. Buka aplikasi ${nama} dengan akun itu, periksa pemberitahuan pembatasan atau permintaan verifikasi, dan selesaikan. Menautkan ulang TIDAK membantu; ulangi unggahan setelah pembatasan dicabut, dan beri jeda antar-unggahan.`,
+    };
+  }
+  if (ada("session has expired", "could not be refreshed", "unauthorized", "401", "please reconnect", "invalid_grant")) {
+    return {
+      ringkas: `Sambungan ${nama} kedaluwarsa — perlu ditautkan ulang`,
+      solusi: `Izin login ${nama} di upload-post sudah tidak berlaku (biasanya karena ganti kata sandi, keluar dari perangkat, atau lama tidak dipakai). ${CARA_TAUTKAN_ULANG} ${nama} lewat upload-post, lalu unggah ulang ke ${nama} saja.`,
+    };
+  }
+  if (ada("no tweet id", "no post id", "tweet creation failed for part")) {
+    return {
+      ringkas: `${nama} tidak mengonfirmasi postingan`,
+      solusi: `Postingan mungkin sudah tayang, mungkin juga tidak. Cek akun ${nama} Anda dulu; bila belum ada, baru unggah ulang ke ${nama} saja supaya tidak dobel.`,
+    };
+  }
+  if (ada("service unavailable", "connection reset", "connection aborted", "read timed out", "timed out", "bad gateway", "gateway timeout", "temporarily unavailable", "try again later")) {
+    return {
+      ringkas: `Gangguan sesaat di server ${nama} / upload-post`,
+      solusi: `Bukan kesalahan Anda dan akun Anda tidak bermasalah. Tunggu beberapa menit, lalu ulangi unggahan ke ${nama} saja.`,
+    };
+  }
+  if (p === "twitter" && ada("longer than 2 minutes", "video too long")) {
+    return {
+      ringkas: "Video terlalu panjang untuk X",
+      solusi: "X hanya menerima video maksimal 2 menit 20 detik untuk akun biasa. Potong videonya lalu unggah ulang ke X.",
+    };
+  }
+  if (["completed", "failed", "error", ""].includes(m.trim())) {
+    return {
+      ringkas: `${nama} gagal menerbitkan video (penyebab tidak dilaporkan)`,
+      solusi: `upload-post tidak menyebut penyebabnya. Ulangi unggahan ke ${nama} saja; bila gagal lagi, ${CARA_TAUTKAN_ULANG} ${nama}.`,
+    };
+  }
   if (p === "facebook" && ada("page", "halaman", "no facebook")) {
     return { ringkas: "Halaman Facebook belum dipilih", solusi: `${CARA_TAUTKAN_ULANG} Facebook dan pilih Halaman (Page) yang dipakai untuk posting.` };
   }
