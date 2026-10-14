@@ -62,6 +62,22 @@ export function solusiGagal(platform: string, pesan: string): { ringkas: string;
       solusi: `Batas biaya bulanan API ${nama} di layanan upload-post sudah tercapai, jadi SEMUA anggota tidak bisa memposting ke ${nama} sampai pengelola menambah kuotanya atau bulan berganti. Akun ${nama} Anda tidak bermasalah dan tidak perlu ditautkan ulang; mengulang sekarang pasti gagal lagi. Untuk yang mendesak, unggah langsung dari aplikasi ${nama}. Sosmed lain tetap berjalan normal.`,
     };
   }
+  // Jatah posting harian per akun di upload-post (mis. "daily posting cap on tiktok (15 posts per 24 hours)").
+  // Harus sebelum aturan TikTok "cap" (Kotak Masuk) di bawah — kata "cap" di sini bukan soal Kotak Masuk.
+  const capHarian = /daily posting cap[^(]*\((\d{1,4}) posts? per 24 hours\)/i.exec(pesan ?? "");
+  if (capHarian || ada("daily posting cap")) {
+    const n = capHarian ? `${capHarian[1]} posting per 24 jam` : "jatah 24 jam";
+    return {
+      ringkas: `Jatah posting harian ${nama} untuk akun ini habis (${n})`,
+      solusi: `Batas ini berlaku per akun ${nama} di upload-post; postingan ini tidak terkirim. Akun Anda tidak bermasalah dan tidak perlu ditautkan ulang. Pakai tombol JADWALKAN ke waktu setelah jatahnya pulih (jendelanya berjalan 24 jam sejak unggahan pertama), sebar unggahan sepanjang hari, atau unggah langsung dari aplikasi ${nama} untuk yang mendesak.`,
+    };
+  }
+  if (ada("number of videos it may upload", "exceeded the number of videos", "uploadlimitexceeded")) {
+    return {
+      ringkas: `Jatah unggah harian kanal ${nama} sudah habis`,
+      solusi: `${nama} membatasi jumlah video per kanal per hari; batasnya pulih sekitar tengah malam waktu Pasifik (± pukul 14.00–15.00 WIB). Akun Anda tidak bermasalah; mengulang sekarang pasti ditolak. Jadwalkan ulang setelah jam itu. Kanal yang belum diverifikasi punya batas lebih ketat — verifikasi di youtube.com/verify supaya batasnya naik.`,
+    };
+  }
   if (ada("did not finish within the expected time")) {
     return {
       ringkas: `${nama} tidak selesai diproses tepat waktu (gangguan sesaat)`,
@@ -74,22 +90,40 @@ export function solusiGagal(platform: string, pesan: string): { ringkas: string;
       solusi: `Videonya tidak rusak dan akun ${nama} Anda tidak bermasalah; pengambilan video oleh server terputus di tengah jalan. Ulangi unggahan ke ${nama} saja. Bila terus terjadi, videonya kemungkinan terlalu besar — kompres dulu (≤ 50 MB) lalu unggah ulang.`,
     };
   }
+  if (ada("may or may not have been published", "check the account before retrying")) {
+    return {
+      ringkas: `Unggahan ke ${nama} terputus di tengah jalan — belum pasti tayang`,
+      solusi: `Videonya sudah sempat diserahkan ke ${nama}, jadi mungkin sudah tayang, mungkin juga tidak. Cek akun ${nama} Anda dulu; bila belum ada, baru unggah ulang ke ${nama} saja supaya tidak dobel.`,
+    };
+  }
+  if (ada("akses terbatas", "alasan keamanan", "for security reasons, your account", "restricted access")) {
+    return {
+      ringkas: `Akun ${nama} dibatasi sementara oleh ${nama} (alasan keamanan)`,
+      solusi: `${nama} membatasi akses akun ini selama beberapa hari demi keamanan. Masuk ke aplikasi ${nama} dengan akun itu, selesaikan pemeriksaan keamanan yang diminta, lalu tunggu pembatasannya selesai. Menautkan ulang atau mengulang sekarang tidak membantu.`,
+    };
+  }
   if (ada("temporarily locked", "account is locked", "account locked")) {
     return {
       ringkas: `Akun ${nama} sedang dikunci oleh ${nama}`,
       solusi: `${nama} mengunci akun ini sementara (biasanya minta verifikasi nomor HP/email). Buka aplikasi ${nama} dengan akun itu dan ikuti langkah membuka kunci, lalu ${CARA_TAUTKAN_ULANG} ${nama} dan unggah ulang.`,
     };
   }
-  if (ada("not permitted to perform this action", "not permitted", "suspended", "restricted")) {
+  if (ada("not permitted to perform this action", "not permitted", "suspended", "restricted", "inactive")) {
     return {
       ringkas: `Akun ${nama} sedang dibatasi oleh ${nama}`,
       solusi: `${nama} menolak postingan dari akun ini — akunnya dibatasi/ditangguhkan, belum verifikasi nomor, atau ditandai spam karena terlalu sering memposting konten yang mirip. Buka aplikasi ${nama} dengan akun itu, periksa pemberitahuan pembatasan atau permintaan verifikasi, dan selesaikan. Menautkan ulang TIDAK membantu; ulangi unggahan setelah pembatasan dicabut, dan beri jeda antar-unggahan.`,
     };
   }
-  if (ada("session has expired", "could not be refreshed", "unauthorized", "401", "please reconnect", "invalid_grant")) {
+  if (
+    ada(
+      "session has expired", "session has been invalidated", "error validating access token", "could not be refreshed",
+      "token expired", "refresh failed", "unauthorized", "401", "please reconnect", "invalid_grant", "authentication failed",
+    )
+  ) {
+    const gantiSandi = ada("changed their password", "changed the session for security");
     return {
       ringkas: `Sambungan ${nama} kedaluwarsa — perlu ditautkan ulang`,
-      solusi: `Izin login ${nama} di upload-post sudah tidak berlaku (biasanya karena ganti kata sandi, keluar dari perangkat, atau lama tidak dipakai). ${CARA_TAUTKAN_ULANG} ${nama} lewat upload-post, lalu unggah ulang ke ${nama} saja.`,
+      solusi: `${gantiSandi ? `Sesi login ${nama} dibatalkan karena kata sandi akun diganti atau ${nama} mereset sesi demi keamanan.` : `Izin login ${nama} di upload-post sudah tidak berlaku (biasanya karena ganti kata sandi, keluar dari perangkat, atau lama tidak dipakai).`} ${CARA_TAUTKAN_ULANG} ${nama} lewat upload-post, lalu unggah ulang ke ${nama} saja.`,
     };
   }
   if (ada("no tweet id", "no post id", "tweet creation failed for part")) {
@@ -98,10 +132,22 @@ export function solusiGagal(platform: string, pesan: string): { ringkas: string;
       solusi: `Postingan mungkin sudah tayang, mungkin juga tidak. Cek akun ${nama} Anda dulu; bila belum ada, baru unggah ulang ke ${nama} saja supaya tidak dobel.`,
     };
   }
-  if (ada("service unavailable", "connection reset", "connection aborted", "read timed out", "timed out", "bad gateway", "gateway timeout", "temporarily unavailable", "try again later")) {
+  if (
+    ada(
+      "service unavailable", "connection reset", "connection aborted", "read timed out", "timed out", "bad gateway", "gateway timeout",
+      "temporarily unavailable", "try again later", "temporary internal issue", "retryable", "something went wrong", "unknown error occurred",
+    )
+  ) {
     return {
       ringkas: `Gangguan sesaat di server ${nama} / upload-post`,
       solusi: `Bukan kesalahan Anda dan akun Anda tidak bermasalah. Tunggu beberapa menit, lalu ulangi unggahan ke ${nama} saja.`,
+    };
+  }
+  const pendek = /(\d+(?:\.\d+)?)s long but \w+ requires at least (\d+) seconds/i.exec(pesan ?? "");
+  if (pendek || ada("requires at least 3 seconds", "video too short")) {
+    return {
+      ringkas: `Video terlalu pendek untuk ${nama}`,
+      solusi: `${pendek ? `Durasi video ${pendek[1]} detik, sedangkan ${nama} meminta minimal ${pendek[2]} detik.` : `${nama} meminta durasi minimal beberapa detik.`} Perpanjang video lalu unggah ulang ke ${nama}.`,
     };
   }
   if (p === "twitter" && ada("longer than 2 minutes", "video too long")) {
@@ -117,7 +163,10 @@ export function solusiGagal(platform: string, pesan: string): { ringkas: string;
     };
   }
   if (p === "facebook" && ada("page", "halaman", "no facebook")) {
-    return { ringkas: "Halaman Facebook belum dipilih", solusi: `${CARA_TAUTKAN_ULANG} Facebook dan pilih Halaman (Page) yang dipakai untuk posting.` };
+    return {
+      ringkas: "Halaman Facebook belum dipilih",
+      solusi: `Facebook tidak mengizinkan aplikasi memposting ke profil pribadi — hanya ke Halaman (Page). Bila belum punya Halaman, buat dulu di Facebook. Lalu ${CARA_TAUTKAN_ULANG} Facebook dan centang Halaman yang dipakai untuk posting. Mengulang sebelum itu pasti gagal lagi.`,
+    };
   }
   // "cap" dulu dicocokkan sebagai POTONGAN kata — dan "caption" memuat
   // "cap", sehingga caption TikTok yang kepanjangan diberi saran yang
