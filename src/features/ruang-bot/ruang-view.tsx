@@ -650,7 +650,6 @@ export function RuangView(p: RuangViewProps) {
             diluar={penghuni.diluar}
             terpotong={statusDunia?.terpotong ?? false}
             galat={dunia.galat}
-            sekarangMs={() => penghuni.sekarangMs()}
             terpilihId={terpilihPenghuniId}
             onPilih={(id) => {
               setTerpilihPenghuniId(id);

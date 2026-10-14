@@ -34,6 +34,7 @@ import {
 import { JUMLAH_KARAKTER, WAJAH, WARNA_KAUS, rupaKarakter } from "@/features/ruang-bot/karakter-pengguna";
 import { SimulasiPenghuni, jamWibDetik, stasiunUntuk, teksAktivitas, waktuTag } from "@/features/ruang-bot/simulasi-penghuni";
 import { potongSekat } from "@/features/ruang-bot/dunia-gambar";
+import { P, gridDariLayar } from "@/features/ruang-bot/dunia-primitif";
 
 let lulus = 0;
 let gagal = 0;
@@ -323,6 +324,18 @@ const cari = (sim: SimulasiPenghuni, id: number) => sim.penghuni.find((p) => p.i
   jalankan(sim, 3, j);
   cek("gerak dikurangi: langsung berdiri di rak", cari(sim, 41)?.keadaan === "kerja");
 }
+
+console.log("\n[H] Ruang di bawah kursor (kebalikan proyeksi)");
+cek("gridDariLayar membalik P pada lantai", [[3, 4], [20, 3], [26, 12], [12, 13], [5, 14]].every(([gx, gy]) => {
+  const [x, y] = P(gx, gy, 0);
+  const [bx, by] = gridDariLayar(x, y);
+  return Math.abs(bx - gx) < 0.07 && Math.abs(by - gy) < 0.07;
+}));
+cek("titik di tengah tiap ruang jatuh ke ruang yang benar", [[5, 5, "kerja"], [13, 5, "meeting"], [5, 13, "koordinator"], [13, 13, "tidur"], [22, 3, "aula"], [18, 11, "database"], [22, 11, "alat"], [26, 11, "pos"]].every(([gx, gy, z]) => {
+  const [x, y] = P(gx as number, gy as number, 0);
+  const [bx, by] = gridDariLayar(x, y);
+  return zonaDari(bx, by) === z;
+}));
 
 console.log("\n[G] Teks & waktu di atas nama");
 cek("teksAktivitas: label + judul + akun", teksAktivitas(akt({ judul: "Judul", akun: "instagram @a" })) === "Tambah ke Stok: Judul → instagram @a");

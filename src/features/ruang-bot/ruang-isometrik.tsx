@@ -22,11 +22,12 @@ import { useEffect, useRef, useSyncExternalStore, type CSSProperties, type React
 import { useTabAktif } from "@/hooks/use-tab-aktif";
 import { cn } from "@/lib/utils";
 import { WARNA_TAHAP, URUTAN_TAHAP, WARNA_TEMPAT } from "./data-contoh";
-import { LABEL_RUANG, STASIUN, type Titik, type ZonaRuang } from "./denah";
+import { LABEL_RUANG, PANJANG_X, PANJANG_Y, STASIUN, zonaDari, type Titik, type ZonaRuang } from "./denah";
 import { H, ID_NARA, P, W, gambarFrame, gambarLatar, type PosisiLayar } from "./dunia-gambar";
+import { gridDariLayar } from "./dunia-primitif";
 import type { PenghuniDunia } from "@/lib/dunia-murni";
 import type { BotHidup, SimulasiBot } from "./simulasi-bot";
-import { waktuTag, type SimulasiPenghuni } from "./simulasi-penghuni";
+import type { SimulasiPenghuni } from "./simulasi-penghuni";
 import { WARNA_NARA } from "./simulasi-nara";
 import type { BotContoh, RupaBot } from "./tipe";
 
@@ -122,9 +123,13 @@ export function RuangIsometrik({
   const naraGelembungRef = useRef<HTMLDivElement | null>(null);
   const naraTeksRef = useRef<HTMLSpanElement | null>(null);
   const naraNamaRef = useRef<HTMLSpanElement | null>(null);
-  const tagPenghuniRef = useRef<Map<number, { tag: HTMLDivElement | null; gel: HTMLDivElement | null; teks: HTMLSpanElement | null; waktu: HTMLSpanElement | null }>>(new Map());
+  const tagPenghuniRef = useRef<Map<number, { tag: HTMLDivElement | null; gel: HTMLDivElement | null; teks: HTMLSpanElement | null }>>(new Map());
   const pilRef = useRef<(HTMLDivElement | null)[]>([]);
   const zonaRef = useRef<(HTMLElement | null)[]>([]);
+  // Ruang yang sedang didekati kursor (null = di luar denah). Label ruang dan gelembung teks hanya tampil di sana.
+  const zonaKursorRef = useRef<ZonaRuang | null>(null);
+  // Layar sentuh tidak punya hover: tampilkan semuanya seperti semula.
+  const tanpaHoverRef = useRef(false);
   const skalaRef = useRef(0);
   const terlihatRef = useRef(true);
   const kotorRef = useRef(true);
@@ -157,6 +162,10 @@ export function RuangIsometrik({
   useEffect(() => {
     sim.setGerakKurang(gerakDikurangi);
   }, [sim, gerakDikurangi]);
+
+  useEffect(() => {
+    tanpaHoverRef.current = window.matchMedia("(hover: none)").matches;
+  }, []);
 
   // Ukuran kanvas -> skala overlay. Ukuran 0 (tersembunyi) = tidak menggambar.
   useEffect(() => {
@@ -201,6 +210,8 @@ export function RuangIsometrik({
     const taruhOverlay = () => {
       const sc = skalaRef.current;
       if (sc <= 0) return;
+      // Teks hanya terlihat saat kursor berada di ruangannya (atau yang bersangkutan sedang dipilih).
+      const tampilDi = (zona: ZonaRuang, dipilih = false) => tanpaHoverRef.current || dipilih || zonaKursorRef.current === zona;
       const daftar = sim.bots;
       for (let i = 0; i < daftar.length; i++) {
         const b = daftar[i];
@@ -213,7 +224,7 @@ export function RuangIsometrik({
         const gel = gelembungRef.current[i];
         const isi = teksGelembungRef.current[i];
         if (gel && isi) {
-          const teks = sim.teksTampil(b);
+          const teks = tampilDi(zonaDari(b.x, b.y), terpilihRef.current === b.id) ? sim.teksTampil(b) : "";
           if (teks) {
             if (isi.textContent !== teks) isi.textContent = teks;
             gel.style.setProperty("--c", WARNA_TEMPAT[b.tempat]);
@@ -236,7 +247,7 @@ export function RuangIsometrik({
         const gel = naraGelembungRef.current;
         const isi = naraTeksRef.current;
         if (gel && isi) {
-          const teks = n.teksTampil();
+          const teks = tampilDi(zonaDari(n.x, n.y)) ? n.teksTampil() : "";
           if (teks) {
             if (isi.textContent !== teks) isi.textContent = teks;
             gel.style.fontSize = ukuranGelembung(sc);
@@ -247,7 +258,6 @@ export function RuangIsometrik({
         }
       }
       // Penghuni (pengguna online)
-      const jam = penghuni.sekarangMs();
       for (const p of penghuni.penghuni) {
         const el = tagPenghuniRef.current.get(p.id);
         const pos = posisiPenghuniRef.current.get(p.id);
@@ -256,12 +266,9 @@ export function RuangIsometrik({
         el.tag.style.opacity = String(Math.max(0, Math.min(1, p.alfa)).toFixed(2));
         el.tag.style.transform = `translate(${(pos.sx * sc).toFixed(1)}px, ${((pos.sy - 29) * sc).toFixed(1)}px) translate(-50%, -100%)`;
         el.tag.style.zIndex = String(Math.round(p.y * 10 + p.x * 10) + 10);
-        if (el.waktu) {
-          const w = waktuTag(p, jam);
-          if (el.waktu.textContent !== w) el.waktu.textContent = w;
-        }
         if (el.gel && el.teks) {
-          const teks = penghuni.teksTampil(p, terpilihPenghuniRef.current);
+          const dipilih = terpilihPenghuniRef.current === p.id;
+          const teks = tampilDi(zonaDari(p.x, p.y), dipilih) ? penghuni.teksTampil(p, terpilihPenghuniRef.current) : "";
           if (teks) {
             if (el.teks.textContent !== teks) el.teks.textContent = teks;
             el.gel.style.setProperty("--c", p.warna);
@@ -280,6 +287,7 @@ export function RuangIsometrik({
         pil.style.fontSize = `${Math.max(8, sc * 2.9).toFixed(1)}px`;
         pil.dataset.sibuk = sim.terisi(k) ? "ya" : "tidak";
         pil.style.visibility = "visible";
+        pil.style.opacity = tampilDi("kerja") ? "1" : "0";
       });
       LABEL_RUANG.forEach((z, i) => {
         const el = zonaRef.current[i];
@@ -288,6 +296,9 @@ export function RuangIsometrik({
         el.style.transform = `translate(${(p[0] * sc).toFixed(1)}px, ${(p[1] * sc).toFixed(1)}px) translate(-50%, -50%)`;
         el.style.fontSize = `${Math.max(7.5, Math.min(10, sc * 2.7)).toFixed(1)}px`;
         el.style.visibility = "visible";
+        const nampak = tampilDi(z.kunci);
+        el.style.opacity = nampak ? "1" : "0";
+        el.style.pointerEvents = nampak ? "auto" : "none";
       });
     };
 
@@ -340,6 +351,17 @@ export function RuangIsometrik({
     return () => cancelAnimationFrame(id);
   }, [jalan, sim, penghuni, gerakDikurangi]);
 
+  /** Ruang di bawah kursor: kebalikan proyeksi isometrik pada bidang lantai (z=0). */
+  const gerakKursor = (e: React.MouseEvent<HTMLDivElement>) => {
+    const kanvas = kanvasRef.current;
+    if (!kanvas) return;
+    const r = kanvas.getBoundingClientRect();
+    if (r.width <= 0) return;
+    const sc = r.width / W;
+    const [gx, gy] = gridDariLayar((e.clientX - r.left) / sc, (e.clientY - r.top) / sc);
+    zonaKursorRef.current = gx >= 0 && gx <= PANJANG_X && gy >= 0 && gy <= PANJANG_Y ? zonaDari(gx, gy) : null;
+  };
+
   const klikKanvas = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     if (r.width <= 0) return;
@@ -368,6 +390,10 @@ export function RuangIsometrik({
     <div
       className={cn("relative w-full overflow-hidden rounded-xl bg-[#0b0912]", className)}
       style={{ aspectRatio: `${W} / ${H}` }}
+      onMouseMove={gerakKursor}
+      onMouseLeave={() => {
+        zonaKursorRef.current = null;
+      }}
     >
       <canvas
         ref={kanvasRef}
@@ -419,7 +445,7 @@ export function RuangIsometrik({
             key={p.id}
             ref={(el) => {
               const peta = tagPenghuniRef.current;
-              const lama = peta.get(p.id) ?? { tag: null, gel: null, teks: null, waktu: null };
+              const lama = peta.get(p.id) ?? { tag: null, gel: null, teks: null };
               peta.set(p.id, { ...lama, tag: el });
             }}
             className="absolute left-0 top-0 flex flex-col items-center gap-[2px]"
@@ -428,7 +454,7 @@ export function RuangIsometrik({
             <div
               ref={(el) => {
                 const peta = tagPenghuniRef.current;
-                const lama = peta.get(p.id) ?? { tag: null, gel: null, teks: null, waktu: null };
+                const lama = peta.get(p.id) ?? { tag: null, gel: null, teks: null };
                 peta.set(p.id, { ...lama, gel: el });
               }}
               className="relative hidden rounded-md border-2 border-[var(--c)] bg-[#f6f0e2] px-[6px] py-[2px] font-mono font-bold leading-tight text-[#2a2118] shadow-[0_2px_0_rgba(0,0,0,.35)] after:absolute after:-bottom-[6px] after:left-1/2 after:-ml-1 after:border-4 after:border-transparent after:border-t-[var(--c)] after:content-['']"
@@ -436,7 +462,7 @@ export function RuangIsometrik({
               <span
                 ref={(el) => {
                   const peta = tagPenghuniRef.current;
-                  const lama = peta.get(p.id) ?? { tag: null, gel: null, teks: null, waktu: null };
+                  const lama = peta.get(p.id) ?? { tag: null, gel: null, teks: null };
                   peta.set(p.id, { ...lama, teks: el });
                 }}
                 className="block max-w-[170px] truncate whitespace-nowrap sm:max-w-[300px]"
@@ -448,15 +474,7 @@ export function RuangIsometrik({
                 terpilihPenghuniId === p.id ? "border-[#fde68a]" : "border-white/10",
               )}
             >
-              <span
-                ref={(el) => {
-                  const peta = tagPenghuniRef.current;
-                  const lama = peta.get(p.id) ?? { tag: null, gel: null, teks: null, waktu: null };
-                  peta.set(p.id, { ...lama, waktu: el });
-                }}
-                className="font-mono text-[8.5px] font-semibold text-[#fde68a]"
-              />
-              <span className="max-w-[90px] truncate">{p.nama.split(" ")[0] || p.username}</span>
+              <span className="max-w-[110px] truncate">{p.nama.split(" ")[0] || p.username}</span>
             </div>
           </div>
         ))}
@@ -484,7 +502,7 @@ export function RuangIsometrik({
               pilRef.current[i] = el;
             }}
             data-sibuk="tidak"
-            className="group absolute left-0 top-0 inline-flex items-center gap-[5px] whitespace-nowrap rounded-[5px] border border-[var(--c)] bg-[rgba(14,11,20,.8)] px-[7px] py-[3px] font-mono text-[9.5px] font-bold leading-none tracking-[.6px] text-[#f4efe8] max-[560px]:hidden"
+            className="group absolute left-0 top-0 inline-flex items-center gap-[5px] whitespace-nowrap rounded-[5px] border border-[var(--c)] bg-[rgba(14,11,20,.8)] px-[7px] py-[3px] font-mono text-[9.5px] font-bold leading-none tracking-[.6px] text-[#f4efe8] max-[560px]:hidden transition-opacity duration-150"
             style={{ visibility: "hidden", "--c": WARNA_TAHAP[k] } as CSSProperties}
           >
             <i className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--c)] group-data-[sibuk=ya]:shadow-[0_0_6px_var(--c)]" />
@@ -494,7 +512,7 @@ export function RuangIsometrik({
         {LABEL_RUANG.map((z, i) => {
           const buka = onBukaZona?.[z.kunci];
           const kelas =
-            "absolute left-0 top-0 inline-flex items-center gap-1 whitespace-nowrap rounded-[5px] border border-[var(--c)] bg-[rgba(14,11,20,.82)] px-[6px] py-[2px] font-mono text-[9px] font-bold leading-none tracking-[.5px] text-[#f4efe8]";
+            "absolute left-0 top-0 inline-flex items-center gap-1 whitespace-nowrap transition-opacity duration-150 rounded-[5px] border border-[var(--c)] bg-[rgba(14,11,20,.82)] px-[6px] py-[2px] font-mono text-[9px] font-bold leading-none tracking-[.5px] text-[#f4efe8]";
           const gaya = { visibility: "hidden", "--c": z.warna } as CSSProperties;
           return buka ? (
             <button

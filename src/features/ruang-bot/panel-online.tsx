@@ -3,17 +3,13 @@
 // ============================================================
 // PanelOnline (14 Okt 2026) — daftar pengguna yang SEDANG ONLINE di aplikasi (khusus master).
 // Lengkap: nama, divisi, layar yang dibuka, aksi yang dikerjakan, judul video, akun sosmed,
-// dan waktunya. Klik baris = pilih karakternya di ruangan. Jam berdetak tiap detik di sini saja
-// (komponen terpisah supaya seluruh layar tidak ikut render ulang).
+// Klik baris = pilih karakternya di ruangan.
 // ============================================================
 
-import { useState } from "react";
 import { GlassCard } from "@/components/glass-card";
-import { useIntervalAktif } from "@/hooks/use-tab-aktif";
 import type { PenghuniDunia } from "@/lib/dunia-murni";
 import { cn } from "@/lib/utils";
 import { rupaKarakter, warnaKarakter } from "./karakter-pengguna";
-import { jamWibDetik, waktuTag } from "./simulasi-penghuni";
 import { WARNA_STASIUN } from "./dunia-sayap";
 
 const LABEL_ANIM: Record<string, string> = {
@@ -30,7 +26,6 @@ export function PanelOnline({
   diluar,
   terpotong,
   galat,
-  sekarangMs,
   terpilihId,
   onPilih,
 }: {
@@ -41,20 +36,16 @@ export function PanelOnline({
   diluar: number;
   terpotong: boolean;
   galat: string;
-  sekarangMs: () => number;
   terpilihId: number | null;
   onPilih: (id: number | null) => void;
 }) {
-  const [, setTik] = useState(0);
-  useIntervalAktif(() => setTik((t) => t + 1), 1000);
-  const jam = sekarangMs();
 
   return (
     <GlassCard className="p-3.5">
       <h3 className="mb-2.5 flex items-center justify-between font-mono text-[11px] font-bold uppercase tracking-wider text-teks-sekunder">
         <span>Sedang online</span>
         <span className="rounded-full bg-emerald-500/15 px-2 py-px text-[10.5px] text-emerald-700 dark:text-emerald-300">
-          {jumlah} orang · {jamWibDetik(jam)} WIB
+          {jumlah} orang
         </span>
       </h3>
       {galat && daftar.length === 0 ? (
@@ -89,7 +80,6 @@ export function PanelOnline({
                     <span className="flex flex-wrap items-baseline gap-x-1.5">
                       <b className="text-[12.5px] text-teks-utama">{p.nama || p.username}</b>
                       <span className="text-[10.5px] text-teks-sekunder">@{p.username}</span>
-                      <span className="ml-auto font-mono text-[10.5px] font-semibold text-teks-sekunder angka-tab">{waktuTag({ data: p }, jam)}</span>
                     </span>
                     <span className="block text-[11px] text-teks-sekunder">
                       {[p.divisi, p.role].filter(Boolean).join(" · ") || "—"}

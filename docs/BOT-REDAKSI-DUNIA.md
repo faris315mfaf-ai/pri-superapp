@@ -71,7 +71,9 @@ garis y=6; semua jalan lewat pintu (diuji `segmenMenembus`).
 - Siaran Realtime `dunia-ruang` (payload `{t}`) -> klien muat ulang `GET /api/bot/dunia` (hanya master; memuat nama,
   judul, akun). Polling cadangan 8 dtk. Akun sosmed diperkaya dari `akun_tvr_user` (platform @username).
 - Karakter: `karakterDariId` (permutasi, 288 rupa = 24 kaus x 12 wajah); bentrokan diselesaikan `tetapkanKarakter`.
-- Di atas nama: waktu (lama aksi m:ss / jam selesai WIB / jam WIB sekarang). Gelembung: aksi + judul + akun.
+- Tampilan (15 Okt 2026): di atas karakter pengguna hanya NAMA, dan gelembung aksi (aksi + judul + akun) di atasnya; tanpa jam.
+  Label ruang, label meja, dan SEMUA gelembung teks (bot, Nara, pengguna) hanya tampil saat kursor berada di ruangannya
+  (atau karakternya dipilih); layar sentuh tanpa hover menampilkan semuanya. Nama selalu terlihat.
 
 Berkas: `src/lib/dunia-murni.ts`, `dunia.ts`; `src/features/ruang-bot/{karakter-pengguna,simulasi-penghuni,dunia-sayap,dunia-primitif,use-dunia,panel-online}.ts(x)`;
 uji: `tests/uji-dunia.mts`. Batas: aula menampung ~60 karakter (lebihnya tercantum di daftar saja).

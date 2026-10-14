@@ -23,6 +23,13 @@ export type PosisiLayar = { sx: number; sy: number };
 
 export const P = (gx: number, gy: number, z = 0): Titik => [Math.round(OX + (gx - gy) * 16), Math.round(OY + (gx + gy) * 8 - z)];
 
+/** Kebalikan P() pada bidang lantai (z=0): titik kanvas logis -> koordinat grid (pecahan). */
+export function gridDariLayar(x: number, y: number): Titik {
+  const dx = (x - OX) / 16; // gx - gy
+  const dy = (y - OY) / 8; // gx + gy
+  return [(dx + dy) / 2, (dy - dx) / 2];
+}
+
 export function px(c: Ctx, x: number, y: number, w: number, h: number, warna: string) {
   c.fillStyle = warna;
   c.fillRect(x, y, w, h);

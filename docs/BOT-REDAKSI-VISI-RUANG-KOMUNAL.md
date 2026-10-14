@@ -41,5 +41,4 @@ untuk bot Redaksi (lihat `BOT-REDAKSI-DUNIA.md`). Satu ruang, banyak orang: Ruan
   (topik `dunia-ruang`), panel "Sedang online". Penjelasan teknis: bagian "Penghuni (pengguna online)" di
   `BOT-REDAKSI-DUNIA.md`.
 - Belum: tampilan untuk non-master (menunggu keputusan audiens & privasi), animasi untuk aksi di luar daftar
-  `JENIS_AUDIT` (mis. membuka layar tertentu hanya tampil sebagai teks), hitungan "waktu" di atas nama sudah
-  memakai: lama aksi (m:ss) bila berjalan, jam selesai (WIB) bila baru selesai, jam WIB sekarang bila tidak ada aksi.
+  `JENIS_AUDIT` (mis. membuka layar tertentu hanya tampil sebagai teks). Jam di atas nama dihapus (15 Okt 2026): hanya nama + aksi.
