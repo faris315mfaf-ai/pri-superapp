@@ -18,13 +18,15 @@
 // saat props berubah.
 // ============================================================
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GlassCard } from "@/components/glass-card";
 import { useLebarWadah } from "@/hooks/use-kolom-wadah";
 import { useIntervalAktif } from "@/hooks/use-tab-aktif";
 import { rapatBerlangsung, sisaRapatMs } from "@/lib/bot-dunia-murni";
 import type { KoordinatorRingkas } from "@/lib/bot-tipe";
+import type { PesanGlobal } from "@/lib/chat-global-murni";
 import { cn } from "@/lib/utils";
+import { ChatGlobal } from "./chat-global";
 import { NAMA_TAHAP, NAMA_TEMPAT, URUTAN_TEMPAT, WARNA_TAHAP, WARNA_TEMPAT } from "./data-contoh";
 import type { ZonaRuang } from "./denah";
 import { petaCatatan, petaSasaran, suratBaru } from "./peta-nyata";
@@ -33,6 +35,7 @@ import { PotretBot } from "./potret-bot";
 import { RuangIsometrik } from "./ruang-isometrik";
 import { SimulasiBot, formatJam } from "./simulasi-bot";
 import { SimulasiPenghuni } from "./simulasi-penghuni";
+import { useChatGlobal } from "./use-chat-global";
 import { useDunia } from "./use-dunia";
 import { RUPA_NARA, WARNA_NARA, type KeadaanNara } from "./simulasi-nara";
 import type { BotContoh, HasilHariIni, LogItem, ModeBot, StatusHidup, TampilanBot, TempatBot } from "./tipe";
@@ -68,6 +71,8 @@ export type RuangViewProps = {
   onBukaTab?: (tab: TampilanBot) => void;
   /** Mode contoh saja: pasang/cabut API key bot (menunjukkan bot bangun / tidur). */
   onUbahOtakContoh?: (id: string, ada: boolean) => void;
+  /** Akun master yang membuka layar (pesan chat global miliknya ditandai "Anda"). */
+  sayaId?: number;
 };
 
 const KECEPATAN = [1, 3, 8] as const;
@@ -426,6 +431,14 @@ export function RuangView(p: RuangViewProps) {
     if (statusDunia) penghuni.setDaftar(statusDunia.online, statusDunia.waktu);
   }, [penghuni, statusDunia]);
   const [terpilihPenghuniId, setTerpilihPenghuniId] = useState<number | null>(null);
+  // Chat global (semua anggota): master membaca, membalas, dan memoderasi; pesan baru jadi gelembung di aula.
+  const kabarChat = useCallback(
+    (baru: PesanGlobal[]) => {
+      for (const m of baru) penghuni.kabarChat(m.user_id, m.teks);
+    },
+    [penghuni],
+  );
+  const chatGlobal = useChatGlobal(kabarChat);
   const daftarOnline = statusDunia?.online ?? [];
 
   // Pembaca mode & callback laporan selalu mengikuti props terbaru
@@ -657,6 +670,8 @@ export function RuangView(p: RuangViewProps) {
               if (id !== null) p.onPilih(null);
             }}
           />
+
+          <ChatGlobal chat={chatGlobal} sayaId={p.sayaId ?? 0} />
 
           <GlassCard className="p-3.5">
             <Judul>Koordinator</Judul>

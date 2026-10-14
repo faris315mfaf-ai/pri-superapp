@@ -2,8 +2,9 @@
 
 // ============================================================
 // useDunia (14 Okt 2026) — daftar pengguna online + aksi mereka untuk Ruang Bot (master).
+// useRuangUmum — versi pengguna umum (GET /api/ruang/status, sudah disanitasi server).
 //
-// Memuat GET /api/bot/dunia saat dibuka, lalu menyegarkan: siaran Realtime topik "dunia-ruang"
+// Memuat datanya saat dibuka, lalu menyegarkan: siaran Realtime topik "dunia-ruang"
 // (muat ulang 400 ms setelah pesan) + polling 8 dtk saat tab terlihat (presence berubah di
 // detak, bukan di siaran). Hasil lama yang tiba terlambat dibuang (nomor permintaan).
 // Galat sesaat tidak mengosongkan dunia: data terakhir dipertahankan.
@@ -11,20 +12,32 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EVENT_DUNIA, TOPIK_DUNIA, type StatusDunia } from "@/lib/dunia-murni";
+import type { StatusRuangUmum } from "@/lib/ruang-umum-murni";
 import { kanalLangsung } from "@/lib/realtime-klien";
-import { getDunia } from "@/services";
+import { getDunia, getRuangUmum } from "@/services";
 
 const POLLING_MS = 8000;
 
-export type DuniaKlien = {
-  status: StatusDunia | null;
+export type DataLangsung<T> = {
+  status: T | null;
   /** Pesan galat muatan terakhir ("" bila sehat). */
   galat: string;
   muatUlang: () => Promise<void>;
 };
 
+export type DuniaKlien = DataLangsung<StatusDunia>;
+
 export function useDunia(): DuniaKlien {
-  const [status, setStatus] = useState<StatusDunia | null>(null);
+  return useDataLangsung(getDunia);
+}
+
+export function useRuangUmum(): DataLangsung<StatusRuangUmum> {
+  return useDataLangsung(getRuangUmum);
+}
+
+/** `ambil` harus stabil (fungsi tingkat modul). */
+function useDataLangsung<T>(ambil: () => Promise<T>): DataLangsung<T> {
+  const [status, setStatus] = useState<T | null>(null);
   const [galat, setGalat] = useState("");
   const nomorRef = useRef(0);
   const hidupRef = useRef(true);
@@ -39,7 +52,7 @@ export function useDunia(): DuniaKlien {
   const muat = useCallback(async () => {
     const nomor = ++nomorRef.current;
     try {
-      const d = await getDunia();
+      const d = await ambil();
       if (!hidupRef.current || nomor !== nomorRef.current) return;
       setStatus(d);
       setGalat("");
@@ -47,7 +60,7 @@ export function useDunia(): DuniaKlien {
       if (!hidupRef.current || nomor !== nomorRef.current) return;
       setGalat(e instanceof Error && e.message ? e.message : "Gagal memuat pengguna online");
     }
-  }, []);
+  }, [ambil]);
 
   useEffect(() => {
     void Promise.resolve().then(muat);

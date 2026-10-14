@@ -268,7 +268,9 @@ export function RuangIsometrik({
         el.tag.style.zIndex = String(Math.round(p.y * 10 + p.x * 10) + 10);
         if (el.gel && el.teks) {
           const dipilih = terpilihPenghuniRef.current === p.id;
-          const teks = tampilDi(zonaDari(p.x, p.y), dipilih) ? penghuni.teksTampil(p, terpilihPenghuniRef.current) : "";
+          // Gelembung chat global selalu tampil (tidak menunggu kursor mendekat).
+          const teks =
+            penghuni.teksChat(p.id) || tampilDi(zonaDari(p.x, p.y), dipilih) ? penghuni.teksTampil(p, terpilihPenghuniRef.current) : "";
           if (teks) {
             if (el.teks.textContent !== teks) el.teks.textContent = teks;
             el.gel.style.setProperty("--c", p.warna);

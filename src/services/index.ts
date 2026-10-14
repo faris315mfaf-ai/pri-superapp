@@ -7452,3 +7452,28 @@ export async function kirimAkunBot(aksi: AksiAkunBot): Promise<HasilBuatAkunBot 
   });
   return json as HasilBuatAkunBot | { sukses: true };
 }
+
+// ---- RUANG BOT UNTUK SEMUA ANGGOTA & CHAT GLOBAL (14 Okt 2026) ----
+import type { StatusRuangUmum } from "@/lib/ruang-umum-murni";
+import type { AksiChatGlobal, StatusChatGlobal } from "@/lib/chat-global-murni";
+
+/** Ruangan + siapa online (nama + jenis kegiatan) untuk semua anggota; tanpa rincian milik master. */
+export async function getRuangUmum(): Promise<StatusRuangUmum> {
+  const json = await fetchJson("/api/ruang/status", { headers: headerToken(), cache: "no-store" });
+  return json as StatusRuangUmum;
+}
+
+export async function getChatGlobal(): Promise<StatusChatGlobal> {
+  const json = await fetchJson("/api/ruang/chat", { headers: headerToken(), cache: "no-store" });
+  return json as StatusChatGlobal;
+}
+
+/** Kirim pesan, atau (master) hapus pesan / bisukan / buka bisu. */
+export async function kirimAksiChatGlobal(aksi: AksiChatGlobal): Promise<{ sukses: true; sampai?: string }> {
+  const json = await fetchJson("/api/ruang/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify(aksi),
+  });
+  return json as { sukses: true; sampai?: string };
+}

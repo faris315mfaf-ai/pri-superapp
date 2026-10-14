@@ -1,7 +1,7 @@
 "use client";
 
 // ============================================================
-// RUANG BOT — tab khusus MASTER (13 Okt 2026).
+// RUANG BOT — tampilan MASTER (13 Okt 2026). Pengguna umum memakai ruang-bot-umum.tsx (14 Okt 2026).
 //
 // Cangkang tampilan: Ruang (gedung pixel-art empat ruang tempat bot bekerja),
 // Detail Bot, Antrean ACC, Sumber & Kuota, serta Chat dan Koordinator (mode nyata). Cangkang ini PEMEGANG STATE;
@@ -155,7 +155,7 @@ function SkeletonMemuat() {
 
 // ---------- cangkang: memuat status dari server, lalu memilih mode ----------
 
-export function RuangBotScreen({ onBukaKelolaBot }: { onBukaKelolaBot?: () => void } = {}) {
+export function RuangBotScreen({ onBukaKelolaBot, sayaId }: { onBukaKelolaBot?: () => void; sayaId?: number } = {}) {
   const s = useStatusBot();
   const { data } = s;
   const nyata = adaDataNyata(data);
@@ -186,6 +186,7 @@ export function RuangBotScreen({ onBukaKelolaBot }: { onBukaKelolaBot?: () => vo
         kendali={s.kendali}
         ubahSumber={s.ubahSumber}
         onBukaKelolaBot={onBukaKelolaBot}
+        sayaId={sayaId}
       />
     );
   }
@@ -214,9 +215,10 @@ type RuangBotIsiProps = {
   kendali: (aksi: AksiKendaliBot[]) => Promise<boolean>;
   ubahSumber: (aksi: AksiSumberBot) => Promise<HasilAksiSumber>;
   onBukaKelolaBot?: () => void;
+  sayaId?: number;
 };
 
-function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber, onBukaKelolaBot }: RuangBotIsiProps) {
+function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber, onBukaKelolaBot, sayaId }: RuangBotIsiProps) {
   const [tampilan, setTampilan] = useState<TampilanBot>("ruang");
   // State mode CONTOH (simulasi di peramban). Pada mode nyata sebagian besar tidak dipakai.
   // Awal yang KOSONG (14 Okt 2026): tanpa bot contoh. Bot muncul setelah dibuat di Profil → Kelola Bot.
@@ -478,6 +480,7 @@ function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber, onBukaKelolaBo
           chatTerakhir={server.chat_terakhir ?? null}
           onBukaTab={setTampilan}
           onUbahOtakContoh={ubahOtakContoh}
+          sayaId={sayaId}
         />
       </div>
 

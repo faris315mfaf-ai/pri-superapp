@@ -1,8 +1,9 @@
 "use client";
 
 // ============================================================
-// PanelOnline (14 Okt 2026) — daftar pengguna yang SEDANG ONLINE di aplikasi (khusus master).
-// Lengkap: nama, divisi, layar yang dibuka, aksi yang dikerjakan, judul video, akun sosmed,
+// PanelOnline (14 Okt 2026) — daftar pengguna yang SEDANG ONLINE di aplikasi.
+// Master: nama, divisi, layar yang dibuka, aksi yang dikerjakan, judul video, akun sosmed.
+// Pengguna umum (`ringkas`): nama + jenis kegiatan saja (server sudah membuang rinciannya).
 // Klik baris = pilih karakternya di ruangan.
 // ============================================================
 
@@ -28,6 +29,10 @@ export function PanelOnline({
   galat,
   terpilihId,
   onPilih,
+  ringkas = false,
+  sayaId,
+  className,
+  tinggiDaftar = "max-h-[420px]",
 }: {
   daftar: readonly PenghuniDunia[];
   /** Jumlah online sebenarnya (bisa lebih dari yang dikirim server). */
@@ -38,10 +43,16 @@ export function PanelOnline({
   galat: string;
   terpilihId: number | null;
   onPilih: (id: number | null) => void;
+  /** Tampilan pengguna umum: tanpa username, divisi, peran, judul, akun. */
+  ringkas?: boolean;
+  /** Akun yang membuka layar (ditandai "Anda"). */
+  sayaId?: number;
+  className?: string;
+  tinggiDaftar?: string;
 }) {
 
   return (
-    <GlassCard className="p-3.5">
+    <GlassCard className={cn("p-3.5", className)}>
       <h3 className="mb-2.5 flex items-center justify-between font-mono text-[11px] font-bold uppercase tracking-wider text-teks-sekunder">
         <span>Sedang online</span>
         <span className="rounded-full bg-emerald-500/15 px-2 py-px text-[10.5px] text-emerald-700 dark:text-emerald-300">
@@ -53,7 +64,7 @@ export function PanelOnline({
       ) : daftar.length === 0 ? (
         <p className="text-[12px] text-teks-sekunder">Belum ada yang online. Orang muncul di aula begitu membuka aplikasi.</p>
       ) : (
-        <ul className="scrollbar-tipis flex max-h-[420px] flex-col gap-1.5 overflow-y-auto">
+        <ul className={cn("scrollbar-tipis flex flex-col gap-1.5 overflow-y-auto", tinggiDaftar)}>
           {daftar.map((p) => {
             const a = p.aktivitas;
             const aktif = a !== null;
@@ -79,11 +90,14 @@ export function PanelOnline({
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-baseline gap-x-1.5">
                       <b className="text-[12.5px] text-teks-utama">{p.nama || p.username}</b>
-                      <span className="text-[10.5px] text-teks-sekunder">@{p.username}</span>
+                      {sayaId === p.id && <span className="rounded-full bg-pri/12 px-1.5 text-[9.5px] font-extrabold text-pri">ANDA</span>}
+                      {!ringkas && <span className="text-[10.5px] text-teks-sekunder">@{p.username}</span>}
                     </span>
-                    <span className="block text-[11px] text-teks-sekunder">
-                      {[p.divisi, p.role].filter(Boolean).join(" · ") || "—"}
-                    </span>
+                    {!ringkas && (
+                      <span className="block text-[11px] text-teks-sekunder">
+                        {[p.divisi, p.role].filter(Boolean).join(" · ") || "—"}
+                      </span>
+                    )}
                     {aktif ? (
                       <span className="mt-1 block rounded-lg px-2 py-1 text-[11.5px] leading-snug text-teks-utama" style={{ background: `${WARNA_STASIUN[a.anim === "layar" ? "rak" : a.anim]}22` }}>
                         <b>{a.label}</b>

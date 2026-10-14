@@ -91,6 +91,7 @@ const PengumumanScreen = dynamic(() => import("@/features/pengguna/pengumuman-sc
 const PersetujuanKpiScreen = dynamic(() => import("@/features/pengguna/persetujuan-kpi-screen").then((m) => m.PersetujuanKpiScreen), { ssr: false, loading: MuatLayar });
 const KontenScreen = dynamic(() => import("@/features/konten/konten-screen").then((m) => m.KontenScreen), { ssr: false, loading: MuatLayar });
 const RuangBotScreen = dynamic(() => import("@/features/ruang-bot/ruang-bot-screen").then((m) => m.RuangBotScreen), { ssr: false, loading: MuatLayar });
+const RuangBotUmumScreen = dynamic(() => import("@/features/ruang-bot/ruang-bot-umum").then((m) => m.RuangBotUmumScreen), { ssr: false, loading: MuatLayar });
 const TvrKuScreen = dynamic(() => import("@/features/tvr-ku/tvrku-screen").then((m) => m.TvrKuScreen), { ssr: false, loading: MuatLayar });
 const ChatScreen = dynamic(() => import("@/features/chat/chat-screen").then((m) => m.ChatScreen), { ssr: false, loading: MuatLayar });
 const NotifikasiScreen = dynamic(() => import("@/features/notifikasi/notifikasi-screen").then((m) => m.NotifikasiScreen), { ssr: false, loading: MuatLayar });
@@ -299,21 +300,22 @@ const URUTAN_TAB: KunciTab[] = ["beranda", "konten", "qc", "tv", "tvnas", "tvrku
 const TAB_ROLE: Record<Role, KunciTab[]> = {
   // Modul KONTEN kembali & WAJIB untuk semua peran (fitur 1.20/5):
   // menampilkan tarikan konten sosmed TV Rakyat dari Ayrshare.
-  // ruangbot (13 Okt 2026): HANYA master — superadmin yang berperan master ikut.
+  // ruangbot: master = kendali penuh (13 Okt 2026); peran lain = mode lihat + chat global (14 Okt 2026).
+  // superadmin tidak mendapatkannya (perannya tanpa chat).
   master: ["beranda", "konten", "qc", "tv", "tvrku", "ruangbot", "chat", "profil"],
   // Super admin TIDAK punya tab TV Rakyat: otomatisasi video adalah
   // tanggung jawab tim TV Rakyat (lihat bolehProsesVideo di types).
   // HR Center (qc) hanya untuk Divisi HR (10 Sep 2026) — ditambahkan
   // dinamis oleh adalahHR(), bukan bawaan peran.
-  super_admin: ["beranda", "konten", "chat", "profil"],
+  super_admin: ["beranda", "konten", "ruangbot", "chat", "profil"],
   // superadmin (10 Sep 2026): beranda = Dashboard penuh, Konten penuh,
   // tab Dashboard ditambahkan dinamis (aksesPenuh). Tanpa TV Official,
   // chat, robot, dan perintah suara.
   superadmin: ["beranda", "konten", "profil"],
-  admin_hr: ["konten", "qc", "chat", "profil"],
-  admin_tv: ["konten", "tv", "chat", "profil"],
-  ketua: ["beranda", "konten", "tvrku", "chat", "profil"],
-  anggota: ["beranda", "konten", "tvrku", "chat", "profil"],
+  admin_hr: ["konten", "qc", "ruangbot", "chat", "profil"],
+  admin_tv: ["konten", "tv", "ruangbot", "chat", "profil"],
+  ketua: ["beranda", "konten", "tvrku", "ruangbot", "chat", "profil"],
+  anggota: ["beranda", "konten", "tvrku", "ruangbot", "chat", "profil"],
 };
 
 const berlanggananKosong = () => () => {};
@@ -635,9 +637,9 @@ export default function Page() {
       dasar.push("qc");
       dasar.sort((a, b) => URUTAN_TAB.indexOf(a) - URUTAN_TAB.indexOf(b));
     }
-    // Pertahanan berlapis: tab Ruang Bot HANYA untuk master, apa pun sumbernya.
+    // Ruang Bot: semua peran yang membawanya (master = kendali, lainnya = mode lihat).
     // Sakelar modul global (Panel Master) bisa mematikan tab tanpa deploy.
-    return bolehRuangBot(user) && ruangBotAktif ? dasar : dasar.filter((k) => k !== "ruangbot");
+    return ruangBotAktif ? dasar : dasar.filter((k) => k !== "ruangbot");
   }, [user, tvAnggota, aksesDashboard, bolehAsisten, ruangBotAktif]);
 
   // Kustomisasi footer (fitur 1.20/4): modul yang disembunyikan
@@ -1341,8 +1343,15 @@ export default function Page() {
         ),
       });
     }
-    if (tabBoleh.includes("ruangbot") && bolehRuangBot(user)) {
-      layarTab.push({ kunci: "ruangbot", isi: <RuangBotScreen onBukaKelolaBot={() => setSubLayar({ nama: "kelola-bot" })} /> });
+    if (tabBoleh.includes("ruangbot")) {
+      layarTab.push({
+        kunci: "ruangbot",
+        isi: bolehRuangBot(user) ? (
+          <RuangBotScreen onBukaKelolaBot={() => setSubLayar({ nama: "kelola-bot" })} sayaId={Number(user.id)} />
+        ) : (
+          <RuangBotUmumScreen sayaId={Number(user.id)} />
+        ),
+      });
     }
     if (tabBoleh.includes("tvrku")) {
       layarTab.push({

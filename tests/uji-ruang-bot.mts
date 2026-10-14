@@ -27,10 +27,11 @@ cek("null ditolak", bolehRuangBot(null) === false);
 cek("undefined ditolak", bolehRuangBot(undefined) === false);
 cek("objek kosong ditolak", bolehRuangBot({}) === false);
 
-console.log("\n[B] Tab Ruang Bot di dock: hanya master");
+console.log("\n[B] Tab Ruang Bot di dock: semua peran kecuali superadmin (14 Okt 2026: pengguna umum = mode lihat)");
 for (const [role, tabs] of Object.entries(TAB_PER_ROLE)) {
   const punya = tabs.includes("ruangbot");
-  cek(`TAB_PER_ROLE.${role} ${role === "master" ? "memuat" : "TIDAK memuat"} ruangbot`, punya === (role === "master"));
+  const harus = role !== "superadmin";
+  cek(`TAB_PER_ROLE.${role} ${harus ? "memuat" : "TIDAK memuat"} ruangbot`, punya === harus);
 }
 cek("KONFIG_TAB.ruangbot ada (label + ikon)", !!KONFIG_TAB.ruangbot?.label && !!KONFIG_TAB.ruangbot?.ikon);
 cek("label tab = Ruang Bot", KONFIG_TAB.ruangbot.label === "Ruang Bot");

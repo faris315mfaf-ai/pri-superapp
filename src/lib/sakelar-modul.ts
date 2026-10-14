@@ -23,7 +23,7 @@ export const DAFTAR_MODUL = [
     kunci: "ruangbot",
     label: "Ruang Bot",
     keterangan:
-      "Tab Ruang Bot (khusus master): kantor pantau bot redaksi. Mematikannya menyembunyikan tab dan membuat /api/bot/* menolak permintaan, tanpa deploy. Bot yang sudah berjalan di mesin tidak ikut berhenti — pakai Jeda Darurat untuk itu.",
+      "Tab Ruang Bot: kantor pantau bot redaksi (master: kendali penuh; anggota lain: mode lihat, daftar online, dan chat global). Mematikannya menyembunyikan tab dan membuat /api/bot/* serta /api/ruang/* menolak permintaan, tanpa deploy. Bot yang sudah berjalan di mesin tidak ikut berhenti — pakai Jeda Darurat untuk itu.",
     bawaan: true,
   },
   {

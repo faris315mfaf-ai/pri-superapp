@@ -37,6 +37,9 @@ const TENGGANG_HILANG_DETIK = 25;
 const DURASI_PUDAR = 0.8;
 const LANGKAH_MAKS = 0.25;
 const MAKS_TEKS = 110;
+/** Gelembung chat global di atas karakter pengirim. */
+const MAKS_TEKS_CHAT = 80;
+export const LAMA_GELEMBUNG_CHAT_MS = 8000;
 
 export type KeadaanPenghuni = "masuk" | "jalan" | "diam" | "kerja" | "keluar";
 
@@ -96,6 +99,8 @@ export class SimulasiPenghuni {
   private selisihServer = 0;
   private readonly milikStasiun = new Map<string, number>();
   private readonly milikSlot = new Map<number, number>();
+  /** Pesan chat global terbaru per orang + kapan gelembungnya hilang (ms epoch perangkat). */
+  private readonly chat = new Map<number, { teks: string; sampai: number }>();
 
   constructor(opsi: OpsiPenghuni = {}) {
     this.opsi = opsi;
@@ -120,14 +125,38 @@ export class SimulasiPenghuni {
     return this.dalam.some((p) => p.keadaan === "kerja" && p.stasiun?.jenis === jenis);
   }
 
-  /** Teks gelembung untuk penghuni (aksi yang sedang dikerjakan; yang dipilih juga menampilkan layarnya). */
+  /** Gelembung chat yang masih tampil untuk orang ini ("" bila tidak ada). */
+  teksChat(id: number, kini: number = Date.now()): string {
+    const c = this.chat.get(id);
+    if (!c) return "";
+    if (c.sampai <= kini) {
+      this.chat.delete(id);
+      return "";
+    }
+    return c.teks;
+  }
+
+  /**
+   * Teks gelembung untuk penghuni: pesan chat global yang baru dikirim lebih dulu, lalu aksi yang sedang
+   * dikerjakan; yang dipilih juga menampilkan layarnya.
+   */
   teksTampil(p: Penghuni, terpilihId: number | null): string {
+    const chat = this.teksChat(p.id);
+    if (chat) return chat;
     if (p.teks) return p.teks;
     if (terpilihId === p.id) return p.data.layar_label ? `Membuka ${p.data.layar_label}` : "Online";
     return "";
   }
 
   // ---------- kendali dari luar ----------
+
+  /** Pesan chat global baru dari `id`: tampil sebagai gelembung di atas karakternya selama `lamaMs`. */
+  kabarChat(id: number, teks: string, lamaMs: number = LAMA_GELEMBUNG_CHAT_MS, kini: number = Date.now()): void {
+    const rapi = teks.replace(/\s+/g, " ").trim();
+    if (!rapi) return;
+    const potong = rapi.length > MAKS_TEKS_CHAT ? `${rapi.slice(0, MAKS_TEKS_CHAT - 1)}…` : rapi;
+    this.chat.set(id, { teks: `“${potong}”`, sampai: kini + lamaMs });
+  }
 
   /**
    * Cocokkan dengan daftar terbaru dari server. `waktuServerMs` dipakai menghitung selisih jam

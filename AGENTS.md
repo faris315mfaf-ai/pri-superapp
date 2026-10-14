@@ -57,6 +57,11 @@ rahasia (password, kunci API, isi env) di berkas ini atau di repo.**
   `src/app/api/autoedit/[...jalur]/route.ts`.
 - **Stok Video** (`src/features/tvr-ku/stok-video-tvr.tsx`) untuk semua akun TVR Saya;
   video terhapus otomatis 48 jam; kuota pribadi 2 GB (`KUOTA_AKUN_MB` di VPS mesin).
+- **Ruang Bot untuk semua anggota** (14 Okt 2026): master tetap layar penuh (`ruang-bot-screen.tsx`, `/api/bot/*`);
+  peran lain (kecuali superadmin) mendapat mode lihat `src/features/ruang-bot/ruang-bot-umum.tsx`:
+  ruangan, siapa online (nama + jenis kegiatan saja — disanitasi di `src/lib/ruang-umum-murni.ts`),
+  dan **chat global** (`/api/ruang/chat`, tabel `chat_global` + `chat_global_bisu` dari `sql/75`).
+  Aturan chat: 500 karakter, 5 pesan/30 dtk, kata kasar disamarkan, riwayat 7 hari, master hapus/bisukan.
 - **Tutorial interaktif**: mesin `src/features/tur/lapisan-tur.tsx`, langkah di `src/lib/tur.ts`
   (penanda `data-tur` di komponen asli).
 - **Akun TIM TV Rakyat Official**: identitas mesin `900000001` (`ID_TIM` di `src/lib/autoedit.ts`),

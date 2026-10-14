@@ -40,8 +40,8 @@ export const KONFIG_TAB: Record<
   tvnas: { label: "TV Nasional", ikon: Radio },
   acara: { label: "Acara", ikon: CalendarDays },
   tvrku: { label: "TVR Saya", ikon: Clapperboard },
-  // Ruang Bot (13 Okt 2026): ruang pantau bot redaksi — HANYA master
-  // (TAB_ROLE.master di page.tsx; gerbang server bolehRuangBot di peran.ts).
+  // Ruang Bot (13 Okt 2026): ruang pantau bot redaksi. Master = kendali penuh (/api/bot/*, bolehRuangBot);
+  // peran lain = mode lihat + chat global (/api/ruang/*, 14 Okt 2026). superadmin tidak membawanya.
   ruangbot: { label: "Ruang Bot", ikon: Cpu },
   // Modul Dashboard (fitur 1.19/3.3): tampil hanya bila jabatannya
   // diberi akses master — daftar tab dinamis dihitung di page.tsx.
@@ -62,16 +62,16 @@ export const TAB_PER_ROLE: Record<Role, KunciTab[]> = {
   master: ["beranda", "konten", "qc", "tv", "tvrku", "ruangbot", "chat", "profil"],
   // HR Center (qc) hanya untuk Divisi HR (10 Sep 2026) — Ketua Umum tidak
   // lagi membawanya di tab bawaan; page.tsx menambahkannya bila adalahHR().
-  super_admin: ["beranda", "konten", "chat", "profil"],
+  super_admin: ["beranda", "konten", "ruangbot", "chat", "profil"],
   // superadmin: Dashboard penuh (beranda) + Konten penuh; tab Dashboard
   // ditambahkan dinamis. Tanpa TV Official, chat, robot, suara.
   superadmin: ["beranda", "konten", "profil"],
-  admin_hr: ["konten", "qc", "chat", "profil"],
-  admin_tv: ["konten", "tv", "chat", "profil"],
-  // Ketua & anggota: konten + TVR Saya + chat. Ketua tambahannya ada
+  admin_hr: ["konten", "qc", "ruangbot", "chat", "profil"],
+  admin_tv: ["konten", "tv", "ruangbot", "chat", "profil"],
+  // Ketua & anggota: konten + TVR Saya + Ruang Bot (mode lihat) + chat. Ketua tambahannya ada
   // di hak (membentuk tim), bukan di tab.
-  ketua: ["beranda", "konten", "tvrku", "chat", "profil"],
-  anggota: ["beranda", "konten", "tvrku", "chat", "profil"],
+  ketua: ["beranda", "konten", "tvrku", "ruangbot", "chat", "profil"],
+  anggota: ["beranda", "konten", "tvrku", "ruangbot", "chat", "profil"],
 };
 
 type BottomNavProps = {
