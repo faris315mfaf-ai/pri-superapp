@@ -15,6 +15,37 @@
 -- bila SQL ini belum dijalankan (fitur wajib posting/pantau mati sendiri).
 -- ============================================================
 
+-- (0) Tabel perintah video wajib. Di produksi sql/46 & sql/52 TERNYATA belum pernah dijalankan
+--     (15 Okt 2026: "relation public.tvr_video_wajib does not exist"), jadi panel Video Wajib selama
+--     ini kosong. Bagian ini membuatnya (bentuk akhir 46 + 52) tanpa menyentuh bagian lain sql/46
+--     (jabatan_tvr, tvr_metrik_harian, kolom keyword) — itu keputusan terpisah.
+create table if not exists public.tvr_video_wajib (
+  id             bigint generated always as identity primary key,
+  judul          text not null,
+  keterangan     text not null default '',
+  link_doksli    text not null default '',
+  kategori       text not null default '',
+  batas_waktu    date,
+  aktif          boolean not null default true,
+  dibuat_oleh_id bigint references public.app_user(id),
+  dibuat_pada    timestamptz not null default now(),
+  sumber_video   text   not null default '',
+  berkas_cara    text   not null default '',
+  berkas_key     text   not null default '',
+  berkas_nama    text   not null default '',
+  berkas_ukuran  bigint not null default 0
+);
+create index if not exists idx_tvr_video_wajib_aktif
+  on public.tvr_video_wajib (aktif, dibuat_pada desc);
+alter table public.tvr_video_wajib enable row level security;
+-- Bila tabelnya sudah ada dari sql/46 tanpa kolom sql/52, lengkapi:
+alter table public.tvr_video_wajib
+  add column if not exists sumber_video  text   not null default '',
+  add column if not exists berkas_cara   text   not null default '',
+  add column if not exists berkas_key    text   not null default '',
+  add column if not exists berkas_nama   text   not null default '',
+  add column if not exists berkas_ukuran bigint not null default 0;
+
 -- (1) Pengaturan wajib posting pada perintah.
 alter table public.tvr_video_wajib
   add column if not exists wajib_posting boolean not null default false,
