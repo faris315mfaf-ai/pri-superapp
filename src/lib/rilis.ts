@@ -12,7 +12,7 @@
 // ============================================================
 
 import { peranTersembunyi } from "@/lib/peran";
-import { DIVISI_PALUGODAM } from "@/lib/struktur";
+import { adalahDaerah, DIVISI_PALUGODAM, DIVISI_SAYAP } from "@/lib/struktur";
 
 /**
  * 7 Oktober 2026 pukul 12.30 WIB. Semula 15.00; dimajukan pemilik setelah
@@ -65,11 +65,12 @@ export function bebasPembaruan21(u: AkunRilis): boolean {
 }
 
 /**
- * Divisi PALUGODAM (dan HANYA divisi itu) tidak wajib mengisi / memverifikasi nomor WhatsApp pada pembaruan 2.1:
- * langkah WA boleh dilewati. Divisi lain tetap wajib.
+ * Divisi PALUGODAM, akun organisasi SAYAP partai, dan DPD/DPC tidak wajib mengisi / memverifikasi nomor
+ * WhatsApp pada pembaruan 2.1: langkah WA boleh dilewati. Divisi lain tetap wajib.
  */
 export function bebasVerifikasiWa(u: { divisi?: string | null } | null | undefined): boolean {
-  return (u?.divisi ?? "").trim() === DIVISI_PALUGODAM;
+  const d = (u?.divisi ?? "").trim();
+  return d === DIVISI_PALUGODAM || d === DIVISI_SAYAP || adalahDaerah(d);
 }
 
 /** Masih harus menjalani alur pembaruan 2.1 (verifikasi / tutorial)? */

@@ -102,7 +102,7 @@ export async function POST(request: Request) {
 
     if (aksi === "profil") {
       const { data: kini } = await db.from("app_user").select("wa_terverifikasi, nomor_wa, username, email").eq("id", uid).maybeSingle();
-      // Divisi PALUGODAM tidak wajib WhatsApp (langkah WA boleh dilewati); divisi lain tetap wajib.
+      // PALUGODAM, Sayap, DPD & DPC tidak wajib WhatsApp (langkah WA boleh dilewati); divisi lain tetap wajib.
       if (!kini) galat("Akun tidak ditemukan.", 404);
       if ((!kini.wa_terverifikasi || !kini.nomor_wa) && !bebasVerifikasiWa(user)) galat("Verifikasi nomor WhatsApp dulu.", 400);
       const nama = String(body.nama ?? "").replace(/\s+/g, " ").trim();
