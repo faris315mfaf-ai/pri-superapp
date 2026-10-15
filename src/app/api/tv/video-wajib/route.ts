@@ -40,11 +40,13 @@ import {
   bersihkanBatasJam,
   bersihkanPola,
   PENGATURAN_WAJIB_BAWAAN,
+  tanggalWibWajib,
   type KemajuanSaya,
   type PolaWajib,
   type RingkasKepatuhan,
 } from "@/lib/video-wajib-perintah";
-import { bentukPerintah, kemajuanPerintahSaya, ringkasHariIni, roster } from "@/lib/video-wajib-pantau";
+import { bentukPerintah, kemajuanPerintahSaya, kolomBelumAda, ringkasHariIni, roster } from "@/lib/video-wajib-pantau";
+import { pastikanKategoriBolehDipakai } from "@/lib/kategori-status";
 
 export const dynamic = "force-dynamic";
 
@@ -244,7 +246,7 @@ async function ambilBaris(hanyaAktif: boolean): Promise<Baris[]> {
     if (!error) return (data ?? []) as unknown as Baris[];
     console.error("[tv/video-wajib] select:", error.code, error.message);
     if (tabelBelumAda(error)) return [];
-    if (error.code !== "42703") throw new Error("Gagal memuat video wajib.");
+    if (!kolomBelumAda(error)) throw new Error("Gagal memuat video wajib.");
   }
   throw new Error("Gagal memuat video wajib.");
 }
@@ -261,8 +263,11 @@ export async function GET(request: Request) {
     // Kemajuan pemanggil atas perintah wajib posting yang aktif, dan (untuk
     // yang berwenang) ringkasan kepatuhan hari ini. Gagal = tanpa tambahan,
     // panelnya tetap tampil.
+    const hariIni = tanggalWibWajib(Date.now());
     const wajibAktif = baris
       .filter((b) => b.aktif === true && b.wajib_posting === true)
+      // Perintah yang sudah lewat batas waktunya tidak lagi punya kewajiban hari ini.
+      .filter((b) => !b.batas_waktu || hariIni <= String(b.batas_waktu))
       .map((b) =>
         bentukPerintah({
           id: b.id,
@@ -364,6 +369,16 @@ export async function POST(request: Request) {
     if (wajibPosting && !kategori) {
       throw Object.assign(new Error("Pilih kategori dulu: kategori itu yang dibawa videonya sampai insight."), { status: 400 });
     }
+    if (wajibPosting) {
+      // Kategori harus bisa dipakai anggota saat mengunggah (aktif, tidak SELESAI): perintah
+      // wajib dengan kategori yang ditolak server akan membuat SEMUA anggota gagal memenuhinya.
+      try {
+        await pastikanKategoriBolehDipakai(kategori);
+      } catch (e) {
+        await hapusBerkas({ berkas_cara: berkas.cara, berkas_key: berkas.key });
+        throw e;
+      }
+    }
     const isi: Record<string, unknown> = {
       judul,
       keterangan: teks(body.keterangan, 2000),
@@ -391,7 +406,7 @@ export async function POST(request: Request) {
       .insert({ ...isi, ...pengaturan })
       .select(KOLOM)
       .single();
-    if (hasil.error?.code === "42703") {
+    if (kolomBelumAda(hasil.error)) {
       // Kolom wajib posting belum ada (sql/76). Perintah biasa tetap bisa
       // terbit; perintah WAJIB POSTING tidak boleh jadi perintah biasa diam-diam.
       if (wajibPosting) {
@@ -404,7 +419,7 @@ export async function POST(request: Request) {
       hasil = (await db.from("tvr_video_wajib").insert(isi).select(KOLOM_52).single()) as typeof hasil;
     }
     const { data, error } = hasil;
-    if (error?.code === "42703") {
+    if (kolomBelumAda(error)) {
       // Berkas sudah telanjur di penyimpanan; jangan tinggalkan yatim.
       await hapusBerkasYatim();
       throw Object.assign(

@@ -56,22 +56,46 @@ export async function POST(request: Request) {
       throw Object.assign(new Error(`Pengingat baru saja dikirim. Coba lagi ${sisa} menit lagi.`), { status: 429 });
     }
 
+    // Pembacaan KETAT: data parsial akan mengingatkan anggota yang sebenarnya sudah selesai.
     const [anggota, { catatan }] = await Promise.all([roster(), catatanPosting(id)]);
     const { daftar } = hitungKepatuhan(perintah, hari, anggota, catatan);
     const belum = daftar.filter((b) => b.status !== "selesai").map((b) => Number(b.user_id)).filter((n) => n > 0);
     if (belum.length === 0) return { dikirim: 0, pesan: "Semua akun sudah menuntaskan perintah ini." };
 
-    await kirimKabar({
-      judul: `⏰ Video Wajib belum diposting: ${perintah.judul}`.slice(0, 120),
-      isi: `Anda belum memposting "${perintah.judul}"${perintah.kategori ? ` (kategori ${perintah.kategori})` : ""} di semua akun hari ini. Batas ${perintah.batas_jam.replace(":", ".")} WIB. Buka TV Rakyat Saya.`,
-      kategori: "peringatan",
-      jenis_peristiwa: "video_wajib_pengingat",
-      target: "tvrku",
-      untukUserIds: belum,
-    });
-    await db
+    // Catat DULU lalu pastikan penanda ini yang paling awal dalam jendela 1 jam: dua klik berbarengan
+    // sama-sama lolos pemeriksaan di atas, tetapi hanya yang pertama boleh mengirim.
+    const { data: tanda, error: galatTanda } = await db
       .from("tvr_wajib_pengingat")
-      .insert({ perintah_id: id, tanggal_wib: hari, jenis: "manual", jumlah: belum.length, dikirim_oleh: Number(user.id) });
+      .insert({ perintah_id: id, tanggal_wib: hari, jenis: "manual", jumlah: belum.length, dikirim_oleh: Number(user.id) })
+      .select("id")
+      .single();
+    if (galatTanda || !tanda) throw new Error("Gagal mencatat pengingat.");
+    const { data: awal } = await db
+      .from("tvr_wajib_pengingat")
+      .select("id")
+      .eq("perintah_id", id)
+      .eq("jenis", "manual")
+      .gte("dikirim_pada", new Date(Date.now() - JEDA_MANUAL_MS).toISOString())
+      .order("id", { ascending: true })
+      .limit(1);
+    if (awal?.[0] && Number(awal[0].id) !== Number(tanda.id)) {
+      await db.from("tvr_wajib_pengingat").delete().eq("id", tanda.id);
+      throw Object.assign(new Error("Pengingat baru saja dikirim. Coba lagi beberapa menit lagi."), { status: 429 });
+    }
+
+    try {
+      await kirimKabar({
+        judul: `⏰ Video Wajib belum diposting: ${perintah.judul}`.slice(0, 120),
+        isi: `Anda belum memposting "${perintah.judul}"${perintah.kategori ? ` (kategori ${perintah.kategori})` : ""} di semua akun hari ini. Batas ${perintah.batas_jam.replace(":", ".")} WIB. Buka TV Rakyat Saya.`,
+        kategori: "peringatan",
+        jenis_peristiwa: "video_wajib_pengingat",
+        target: "tvrku",
+        untukUserIds: belum,
+      });
+    } catch (e) {
+      await db.from("tvr_wajib_pengingat").delete().eq("id", tanda.id);
+      throw e;
+    }
     return { dikirim: belum.length };
   });
 }

@@ -55,6 +55,10 @@ create table if not exists public.tvr_wajib_pengingat (
 );
 create index if not exists idx_tvr_wajib_pengingat
   on public.tvr_wajib_pengingat (perintah_id, tanggal_wib, jenis);
+-- Pengingat otomatis: SATU per perintah per hari (penjadwal yang tumpang tindih tak bisa mengirim dobel).
+create unique index if not exists uq_tvr_wajib_pengingat_otomatis
+  on public.tvr_wajib_pengingat (perintah_id, tanggal_wib)
+  where jenis = 'otomatis';
 alter table public.tvr_wajib_pengingat enable row level security;
 
 notify pgrst, 'reload schema';

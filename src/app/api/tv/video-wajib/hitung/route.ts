@@ -37,6 +37,7 @@ export async function POST(request: Request) {
     const perintah = await muatPerintah(perintahId);
     if (!perintah) throw Object.assign(new Error("Perintah tidak ditemukan."), { status: 404 });
     if (!perintah.kategori) throw Object.assign(new Error("Perintah ini belum punya kategori."), { status: 409 });
+    if (!perintah.aktif) throw Object.assign(new Error("Perintah ini sudah dimatikan."), { status: 409 });
 
     const db = supabase();
     const { data, error } = await db

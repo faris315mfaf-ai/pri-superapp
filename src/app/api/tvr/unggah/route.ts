@@ -664,7 +664,9 @@ export async function POST(request: Request) {
           hapus_media_pada: pakaiLink ? null : hapusPada,
         };
       if (await kolomTabelAda("tvrku_post", "keyword")) isiRiwayat.keyword = kategori;
-      if (perintahId && (await kolomTabelAda("tvrku_post", "perintah_id"))) isiRiwayat.perintah_id = perintahId;
+      // Tanpa kolomTabelAda: hasilnya disimpan seumur proses, jadi SQL 76 yang dijalankan sesudahnya
+      // tak akan pernah terbaca. sisipkanLonggar membuang sendiri kolom yang belum ada.
+      if (perintahId) isiRiwayat.perintah_id = perintahId;
       if (await kolomTabelAda("tvrku_post", "penyedia")) isiRiwayat.penyedia = profil.penyedia;
 
       const { data: baris, error } = await sisipkanLonggar("tvrku_post", isiRiwayat);

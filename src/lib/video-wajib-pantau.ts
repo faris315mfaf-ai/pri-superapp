@@ -15,7 +15,7 @@
 // membuat galat: fitur pantau cukup melapor "belum siap".
 // ============================================================
 import { supabase } from "@/lib/supabase";
-import { semuaBaris } from "@/lib/semua-baris";
+import { namaKolomHilang } from "@/lib/kolom-struktur";
 import { denganCache } from "@/lib/cache-bersama";
 import { peranTersembunyi } from "@/lib/peran";
 import { adalahBot } from "@/lib/struktur";
@@ -43,6 +43,35 @@ function potong<T>(daftar: T[], ukuran: number): T[][] {
   const hasil: T[][] = [];
   for (let i = 0; i < daftar.length; i += ukuran) hasil.push(daftar.slice(i, i + ukuran));
   return hasil;
+}
+
+type BalasanKetat<T> = PromiseLike<{ data: T[] | null; error: { message: string; code?: string } | null }>;
+
+/**
+ * Membaca SEMUA baris (per 1000, batas PostgREST) dan MELEMPAR bila ada galat.
+ * Sengaja tidak memakai semuaBaris (yang menelan galat lalu mengembalikan hasil
+ * parsial): kepatuhan dari data parsial menyesatkan, dan pengingat massal yang
+ * dikirim darinya salah sasaran.
+ */
+async function bacaSemuaKetat<T>(buat: (dari: number, sampai: number) => BalasanKetat<T>, maks = 50_000): Promise<T[]> {
+  const semua: T[] = [];
+  for (let dari = 0; dari < maks; dari += 1000) {
+    const { data, error } = await buat(dari, dari + 999);
+    if (error) throw new Error(`Gagal membaca data video wajib: ${error.message}`);
+    const b = data ?? [];
+    semua.push(...b);
+    if (b.length < 1000) break;
+  }
+  return semua;
+}
+
+/**
+ * Galat karena KOLOM belum ada (sql/76 belum dijalankan): 42703 untuk SELECT,
+ * PGRST204 untuk INSERT/UPDATE pada kolom yang tidak ada di schema cache.
+ */
+export function kolomBelumAda(error: { message: string; code?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return error.code === "42703" || error.code === "PGRST204" || namaKolomHilang(error.message) !== null;
 }
 
 function normalPlatform(p: unknown): string {
@@ -129,17 +158,16 @@ export type AnggotaRoster = { user_id: string; nama: string; wilayah: string; pl
 
 async function bacaRoster(): Promise<AnggotaRoster[]> {
   const db = supabase();
-  const akun = await semuaBaris<{ user_id: number | string; platform: string }>(
+  const akun = await bacaSemuaKetat<{ user_id: number | string; platform: string }>(
     (dari, sampai) =>
       db
         .from("akun_tvr_user")
         .select("user_id, platform")
         .eq("terhubung", true)
+        // Pemutus ikatan: tanpa urutan unik, OFFSET/LIMIT bisa melewatkan baris antar-halaman.
         .order("user_id", { ascending: true })
-        .range(dari, sampai) as unknown as PromiseLike<{
-        data: { user_id: number | string; platform: string }[] | null;
-        error: { message: string } | null;
-      }>,
+        .order("platform", { ascending: true })
+        .range(dari, sampai) as unknown as BalasanKetat<{ user_id: number | string; platform: string }>,
     30_000,
   );
   const per = new Map<string, Set<string>>();
@@ -161,19 +189,29 @@ async function bacaRoster(): Promise<AnggotaRoster[]> {
     aktif: boolean | null;
     divisi: string | null;
     sub_divisi: string | null;
-    zona_id: number | string | null;
+    zona_id?: number | string | null;
   };
   const users = new Map<string, BarisUser>();
+  // zona_id belum tentu ada di database lama: ulangi tanpanya (wilayah jatuh ke DPD/DPC/Sayap/Pusat).
+  let adaZona = true;
   for (const bagian of potong(idSemua, 300)) {
-    const { data } = await db
+    let hasil = await db
       .from("app_user")
       .select("id, nama, role, status, aktif, divisi, sub_divisi, zona_id")
       .in("id", bagian);
-    for (const u of (data ?? []) as unknown as BarisUser[]) users.set(String(u.id), u);
+    if (hasil.error && adaZona && kolomBelumAda(hasil.error)) {
+      adaZona = false;
+      hasil = (await db.from("app_user").select("id, nama, role, status, aktif, divisi, sub_divisi").in("id", bagian)) as typeof hasil;
+    } else if (hasil.error && !adaZona) {
+      hasil = (await db.from("app_user").select("id, nama, role, status, aktif, divisi, sub_divisi").in("id", bagian)) as typeof hasil;
+    }
+    if (hasil.error) throw new Error(`Gagal membaca anggota: ${hasil.error.message}`);
+    for (const u of (hasil.data ?? []) as unknown as BarisUser[]) users.set(String(u.id), u);
   }
 
   const zonaNama = new Map<string, string>();
-  const { data: zonaData } = await db.from("zona").select("id, nama");
+  // Nama zona hanya hiasan wilayah: gagal membacanya tidak boleh menggagalkan kepatuhan.
+  const { data: zonaData } = adaZona ? await db.from("zona").select("id, nama") : { data: null };
   for (const z of (zonaData ?? []) as { id: number | string; nama: string | null }[]) {
     zonaNama.set(String(z.id), String(z.nama ?? ""));
   }
@@ -219,57 +257,55 @@ export async function catatanPosting(perintahId: number): Promise<{ siap: boolea
     unik.set(`${u}|${p}|${tanggal}`, { user_id: u, platform: p, tanggal });
   };
 
+  // Kolom perintah_id ada? Belum = sql/76 belum dijalankan → pantau melapor "belum siap".
+  const cek = await db.from("tvrku_post").select("id").eq("perintah_id", perintahId).limit(1);
+  if (cek.error) {
+    if (kolomBelumAda(cek.error)) return { siap: false, catatan: [] };
+    throw new Error(`Gagal memeriksa unggahan: ${cek.error.message}`);
+  }
+
   type BarisPost = {
     user_id: number | string;
     platforms: string[] | null;
     hasil: Record<string, unknown> | null;
     dibuat_pada: string;
-    jadwal: string | null;
   };
-  const posts = await semuaBaris<BarisPost>(
+  // Hanya unggahan LANGSUNG. Unggahan terjadwal baru terhitung setelah benar-benar terbit
+  // (laporan_video bernomor perintah): jadwal yang dibatalkan atau belum tayang bukan "sudah posting".
+  const posts = await bacaSemuaKetat<BarisPost>(
     (dari, sampai) =>
       db
         .from("tvrku_post")
-        .select("user_id, platforms, hasil, dibuat_pada, jadwal")
+        .select("user_id, platforms, hasil, dibuat_pada")
         .eq("perintah_id", perintahId)
-        .order("dibuat_pada", { ascending: true })
-        .range(dari, sampai) as unknown as PromiseLike<{
-        data: BarisPost[] | null;
-        error: { message: string } | null;
-      }>,
+        .is("jadwal", null)
+        .order("id", { ascending: true })
+        .range(dari, sampai) as unknown as BalasanKetat<BarisPost>,
     20_000,
   );
   for (const p of posts) {
     const gagal = new Set(
       (Array.isArray(p.hasil?.kpi_gagal) ? (p.hasil!.kpi_gagal as unknown[]) : []).map(normalPlatform),
     );
-    // Terjadwal dihitung pada tanggal terbitnya, bukan tanggal membuat jadwal.
-    const tanggal = tanggalWibWajib(p.jadwal ?? p.dibuat_pada);
+    const tanggal = tanggalWibWajib(p.dibuat_pada);
     for (const pf of p.platforms ?? []) {
       if (!gagal.has(normalPlatform(pf))) tambah(p.user_id, pf, tanggal);
     }
   }
 
-  // Cek kolomnya ada di laporan_video juga (galat 42703 → belum siap).
-  const cek = await db.from("laporan_video").select("id").eq("perintah_id", perintahId).limit(1);
-  const siap = !cek.error;
-  if (siap) {
-    type BarisLaporan = { user_id: number | string; platform: string; tanggal_wib: string };
-    const laporan = await semuaBaris<BarisLaporan>(
-      (dari, sampai) =>
-        db
-          .from("laporan_video")
-          .select("user_id, platform, tanggal_wib")
-          .eq("perintah_id", perintahId)
-          .order("tanggal_wib", { ascending: true })
-          .range(dari, sampai) as unknown as PromiseLike<{
-          data: BarisLaporan[] | null;
-          error: { message: string } | null;
-        }>,
-      20_000,
-    );
-    for (const l of laporan) tambah(l.user_id, l.platform, String(l.tanggal_wib ?? "").slice(0, 10));
-  }
+  type BarisLaporan = { user_id: number | string; platform: string; tanggal_wib: string };
+  const laporan = await bacaSemuaKetat<BarisLaporan>(
+    (dari, sampai) =>
+      db
+        .from("laporan_video")
+        .select("user_id, platform, tanggal_wib")
+        .eq("perintah_id", perintahId)
+        .order("id", { ascending: true })
+        .range(dari, sampai) as unknown as BalasanKetat<BarisLaporan>,
+    20_000,
+  );
+  for (const l of laporan) tambah(l.user_id, l.platform, String(l.tanggal_wib ?? "").slice(0, 10));
+  const siap = true;
   return { siap, catatan: [...unik.values()] };
 }
 
@@ -376,21 +412,23 @@ export async function kemajuanPerintahSaya(
     arr.push({ user_id: String(userId), platform: pf, tanggal });
     catatan.set(k, arr);
   };
-  const { data: posts } = await db
+  // Unggahan terjadwal baru terhitung setelah terbit (lewat laporan_video di bawah).
+  const { data: posts, error: galatPost } = await db
     .from("tvrku_post")
-    .select("perintah_id, platforms, hasil, dibuat_pada, jadwal")
+    .select("perintah_id, platforms, hasil, dibuat_pada")
     .eq("user_id", userId)
     .in("perintah_id", idSemua)
+    .is("jadwal", null)
     .limit(2000);
+  if (galatPost) throw new Error(`Gagal membaca unggahan saya: ${galatPost.message}`);
   for (const p of (posts ?? []) as unknown as {
     perintah_id: number | string;
     platforms: string[] | null;
     hasil: Record<string, unknown> | null;
     dibuat_pada: string;
-    jadwal: string | null;
   }[]) {
     const gagal = new Set((Array.isArray(p.hasil?.kpi_gagal) ? (p.hasil!.kpi_gagal as unknown[]) : []).map(normalPlatform));
-    const tanggal = tanggalWibWajib(p.jadwal ?? p.dibuat_pada);
+    const tanggal = tanggalWibWajib(p.dibuat_pada);
     for (const pf of p.platforms ?? []) if (!gagal.has(normalPlatform(pf))) tambah(p.perintah_id, pf, tanggal);
   }
   const { data: laporan } = await db

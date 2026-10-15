@@ -23,13 +23,16 @@ tanpa hashtag, tanpa model bahasa, biaya tambahan nol. Mockup: artefak "Kategori
   (zona → DPD/DPC → Sayap → "Pusat"), grafik 7 hari. UI: `features/tv-rakyat/pantau-video-wajib.tsx`.
 - Yang wajib = anggota aktif (bukan master/superadmin/bot) dengan ≥1 akun di `akun_tvr_user.terhubung`; platform
   wajib = semua yang tertaut. "Selesai" = semua platform terposting pada hari itu (pola `sekali`: kapan pun sejak terbit).
-- Posting dihitung dari `tvrku_post` (gagal terbit tidak dihitung; terjadwal pada tanggal terbitnya) ∪ `laporan_video`
-  bernomor perintah. Tidak memanggil platform. Logika murni: `lib/video-wajib-perintah.ts`; kueri: `lib/video-wajib-pantau.ts`.
+- Posting dihitung dari `tvrku_post` LANGSUNG (gagal terbit tidak dihitung) ∪ `laporan_video` bernomor perintah.
+  Unggahan TERJADWAL baru terhitung setelah benar-benar terbit (laporan otomatis dari rekonsiliasi KPI, ≤15 menit) —
+  jadwal yang dibatalkan/belum tayang bukan "sudah posting". Pembacaan data KETAT: kueri gagal melempar galat
+  (bukan hasil parsial), jadi pengingat tidak pernah dikirim berdasarkan data yang bolong. Tidak memanggil platform. Logika murni: `lib/video-wajib-perintah.ts`; kueri: `lib/video-wajib-pantau.ts`.
 - Panel menampilkan pembagian ringkas (`ringkas`, cache 60 dtk) di bawah tiap perintah; anggota melihat `saya`.
 
 ## Pengingat
 - Otomatis: `/api/cron/video-wajib` (penjadwal VPS menit 6,16,…; `vps/aplikasi/jadwal/jalankan.sh`) — 2 jam sebelum
-  batas jam, sekali per perintah per hari, hanya yang belum selesai. Manual: tombol "Ingatkan yang belum" (1× per jam).
+  batas jam, sekali per perintah per hari (indeks unik), hanya yang belum selesai; dilewati bila kategori sudah
+  SELESAI/nonaktif. Gagal sebelum terkirim → penanda dicabut dan dicoba lagi di putaran berikutnya. Manual: tombol "Ingatkan yang belum" (1× per jam).
   Keduanya tercatat di `tvr_wajib_pengingat`. Notifikasi dalam aplikasi + push, target `tvrku`.
 
 ## Migrasi & kompatibilitas
@@ -42,3 +45,7 @@ tanpa hashtag, tanpa model bahasa, biaya tambahan nol. Mockup: artefak "Kategori
 ## Belum ada / keputusan
 - Pantau memakai data yang sudah ada; "pilihan kategori manual anggota" tetap ada (saklar Insight, bawaan mati).
 - Video dari bot/Edit Otomatis tim Official tidak ikut perintah (hanya unggahan TV Rakyat Saya).
+- Isolasi Insight menyembunyikan (bukan menghapus) laporan manual lama sebuah kategori begitu kategori itu punya
+  perintah wajib posting; saklar "Hitung juga yang dipilih anggota" menampilkannya lagi. `tvr_kategori_link`
+  (link yang ditambahkan langsung ke kategori oleh master) sengaja tetap dihitung.
+- Perintah yang melewati `batas_waktu` berhenti menampilkan kemajuan/ringkasan dan berhenti diingatkan.

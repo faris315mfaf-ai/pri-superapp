@@ -10,6 +10,7 @@
 // ============================================================
 import { supabase } from "@/lib/supabase";
 import { kirimKabar } from "@/lib/notifikasi";
+import { pastikanKategoriBolehDipakai } from "@/lib/kategori-status";
 import {
   catatanPosting,
   hitungKepatuhan,
@@ -50,49 +51,63 @@ export async function jalankanPengingatWajib(ms = Date.now()): Promise<HasilPeng
     if (!saatnyaMengingatkan(p, ms)) continue;
     const id = Number(p.id);
 
-    // Sekali per hari per perintah (idempoten walau penjadwal tumpang tindih).
-    const { data: sudah, error } = await db
-      .from("tvr_wajib_pengingat")
-      .select("id")
-      .eq("perintah_id", id)
-      .eq("tanggal_wib", hari)
-      .eq("jenis", "otomatis")
-      .limit(1);
-    if (error) {
-      hasil.lewati.push(`${p.id}: tabel pengingat belum ada (sql/76)`);
+    // Kategori yang sudah SELESAI/nonaktif ditolak server saat unggah: mengingatkan hanya membuat
+    // anggota mencoba sesuatu yang pasti gagal.
+    try {
+      await pastikanKategoriBolehDipakai(p.kategori);
+    } catch {
+      hasil.lewati.push(`${p.id}: kategori tidak bisa dipakai lagi`);
       continue;
     }
-    if ((sudah ?? []).length > 0) continue;
 
-    // Catat DULU supaya putaran yang berbarengan tidak ikut mengirim.
+    // Catat DULU (indeks unik per perintah per hari) supaya putaran yang berbarengan tidak ikut
+    // mengirim. Bentrok (23505) = sudah dikirim/sedang dikirim oleh putaran lain.
     const { error: galatCatat } = await db
       .from("tvr_wajib_pengingat")
       .insert({ perintah_id: id, tanggal_wib: hari, jenis: "otomatis", jumlah: 0 });
     if (galatCatat) {
-      hasil.lewati.push(`${p.id}: gagal mencatat`);
+      if (galatCatat.code !== "23505") hasil.lewati.push(`${p.id}: gagal mencatat (${galatCatat.message})`);
       continue;
     }
 
-    const [anggota, { catatan }] = await Promise.all([roster(), catatanPosting(id)]);
-    const { daftar: baris } = hitungKepatuhan(p, hari, anggota, catatan);
-    const belum = baris.filter((b) => b.status !== "selesai").map((b) => Number(b.user_id)).filter((n) => n > 0);
-    if (belum.length === 0) continue;
-
-    await kirimKabar({
-      judul: `⏰ Video Wajib: ${p.judul}`.slice(0, 120),
-      isi: `Anda belum memposting "${p.judul}"${p.kategori ? ` (kategori ${p.kategori})` : ""} di semua akun. Batas ${p.batas_jam.replace(":", ".")} WIB. Buka TV Rakyat Saya sekarang.`,
-      kategori: "peringatan",
-      jenis_peristiwa: "video_wajib_pengingat",
-      target: "tvrku",
-      untukUserIds: belum,
-    });
-    await db
-      .from("tvr_wajib_pengingat")
-      .update({ jumlah: belum.length })
-      .eq("perintah_id", id)
-      .eq("tanggal_wib", hari)
-      .eq("jenis", "otomatis");
-    hasil.dikirim.push({ perintah: p.id, penerima: belum.length });
+    try {
+      // Pembacaan KETAT (melempar bila ada kueri gagal): data parsial akan mengirim "belum memposting"
+      // ke anggota yang sebenarnya sudah selesai.
+      const [anggota, { catatan }] = await Promise.all([roster(), catatanPosting(id)]);
+      const { daftar: baris } = hitungKepatuhan(p, hari, anggota, catatan);
+      const belum = baris.filter((b) => b.status !== "selesai").map((b) => Number(b.user_id)).filter((n) => n > 0);
+      if (belum.length > 0) {
+        await kirimKabar({
+          judul: `⏰ Video Wajib: ${p.judul}`.slice(0, 120),
+          isi: `Anda belum memposting "${p.judul}"${p.kategori ? ` (kategori ${p.kategori})` : ""} di semua akun. Batas ${p.batas_jam.replace(":", ".")} WIB. Buka TV Rakyat Saya sekarang.`,
+          kategori: "peringatan",
+          jenis_peristiwa: "video_wajib_pengingat",
+          target: "tvrku",
+          untukUserIds: belum,
+        });
+        await db
+          .from("tvr_wajib_pengingat")
+          .update({ jumlah: belum.length })
+          .eq("perintah_id", id)
+          .eq("tanggal_wib", hari)
+          .eq("jenis", "otomatis");
+        hasil.dikirim.push({ perintah: p.id, penerima: belum.length });
+      }
+    } catch (e) {
+      // Gagal sebelum terkirim: cabut penanda supaya putaran berikutnya (10 menit lagi) mencoba lagi.
+      console.error("[video-wajib] pengingat gagal:", e);
+      await db
+        .from("tvr_wajib_pengingat")
+        .delete()
+        .eq("perintah_id", id)
+        .eq("tanggal_wib", hari)
+        .eq("jenis", "otomatis")
+        .then(
+          () => undefined,
+          () => undefined,
+        );
+      hasil.lewati.push(`${p.id}: ${e instanceof Error ? e.message : "gagal"}`);
+    }
   }
   return hasil;
 }
