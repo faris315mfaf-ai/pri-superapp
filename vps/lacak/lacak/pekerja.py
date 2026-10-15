@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import cari, indeks, konfig, media, sidik, simpan, skor, teks
+from . import cari, indeks, konfig, lens, media, sidik, simpan, skor, teks
 from .media import GalatLacak
 
 TAHAP = [
@@ -292,11 +292,15 @@ def proses(job: dict, folder: Path) -> None:
         dari_akun = cari.gabung(dari_akun)[:MAKS_PER_SUMBER]
         dari_yt = cari.dari_youtube(kata)[:MAKS_PER_SUMBER]
         dari_web = cari.dari_web(kata)[:MAKS_PER_SUMBER]
-        semua = cari.gabung(dari_kol, dari_akun, dari_yt, dari_web, kecuali={kunci_sad})
+        # Cari balik gambar (Google Lens): berbayar/terbatas, jadi hanya bila koleksi & akun watermark
+        # tidak menemukan apa pun (atau LACAK_LENS_SELALU=1 untuk uji).
+        dari_lens, catatan_lens = lens.dari_frame(list(frame_s), atur, butuh=not dari_kol and not dari_akun)
+        dari_lens = dari_lens[:MAKS_PER_SUMBER]
+        semua = cari.gabung(dari_kol, dari_akun, dari_yt, dari_web, dari_lens, kecuali={kunci_sad})
         calon = _saring_sampul(semua[: konfig.MAKS_KANDIDAT_AWAL], vek_s, folder / "sampul")
         t["catatan"] = (
             f"{len(calon)} diperiksa dari {len(semua)} · koleksi {len(dari_kol)}, akun {len(dari_akun)}, "
-            f"YouTube {len(dari_yt)}, web {len(dari_web)}"
+            f"YouTube {len(dari_yt)}, web {len(dari_web)}, {catatan_lens}"
         )
 
     # 6. Cocokkan

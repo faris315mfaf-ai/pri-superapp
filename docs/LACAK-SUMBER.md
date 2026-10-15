@@ -69,5 +69,24 @@ Di dalam container: `docker exec -e LACAK_MODEL_UJI=/opt/model pri-autoedit-laca
 
 ## Belum (tahap 2)
 
-Cari balik gambar (SerpAPI Google Lens butuh gambar publik), pelokalan segmen neural (VSC22/TransVCL),
-DINOv3/Perception Encoder, sidik suara neural — semuanya butuh GPU atau layanan berbayar.
+Pelokalan segmen neural (VSC22/TransVCL), DINOv3/Perception Encoder, sidik suara neural — semuanya butuh
+GPU atau layanan berbayar.
+
+## Cari balik gambar (Google Lens via SerpApi, 15 Okt 2026)
+
+Kode: `vps/lacak/lacak/lens.py`. Lens hanya MENEMUKAN kandidat (sumber `lens`, prioritas 4); pencocokan isi
+tetap di pekerja. Tahap "cari" memanggilnya hanya bila koleksi & akun watermark tidak menemukan apa pun.
+
+- Per video: `LACAK_LENS_FRAME` frame (bawaan 2, maks 4) = 1 pencarian per frame. Frame → JPEG ≤ 480 KB →
+  `POST serpapi.com/image` (image_id, berlaku 10 menit — TANPA URL publik) → `google_lens` `type=visual_matches`
+  → hanya link satu video TikTok/Instagram/YouTube/Facebook/X.
+- Kuota: batas lokal `LACAK_LENS_KUOTA` (bawaan 90, paket gratis ±100/bulan; dihitung di SQLite per bulan) DAN
+  sisa nyata dari `serpapi.com/account` (gratis) bila terbaca. Habis/ditolak (401/403/429) → berhenti diam-diam,
+  pelacakan lanjut tanpa Lens. Pencarian yang gagal tidak dihitung. Biaya unggah gambar tidak terdokumentasi
+  SerpApi — cek pemakaian di dasbor SerpApi setelah beberapa percobaan.
+- **Pasang kunci (dikerjakan pemilik, jangan di chat/repo):** di VPS mesin tambahkan satu baris
+  `SERPAPI_KEY=<kunci>` ke `/opt/pri-mesin/lacak.env` (berkas 0600), lalu
+  `cd /opt/pri-mesin && docker compose --profile lacak up -d autoedit-lacak`. Nyalakan sakelar
+  "Cari balik gambar" di Profil → Kelola Bot → Lacak Sumber (ditolak 400 bila kunci belum ada).
+- Env: `LACAK_LENS_NEGARA` (id), `LACAK_LENS_SELALU=1` (uji: abaikan syarat "sumber lain kosong").
+- Uji: `vps/lacak/tests/test_lens.py` (SerpApi dipalsukan dengan MockTransport; ikut gerbang build image).

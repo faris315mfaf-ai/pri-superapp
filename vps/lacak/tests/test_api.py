@@ -73,9 +73,27 @@ def test_sakelar_pengguna_dan_bot(klien):
 def test_pengaturan_validasi(klien):
     p = klien.get("/pengaturan", headers=MASTER).json()
     assert klien.put("/pengaturan", json={**p, "ambang_yakin": 0.62, "ambang_acc": 0.6}, headers=MASTER).status_code == 400
+    # Lens menyala hanya bila SERPAPI_KEY terpasang di mesin.
     r = klien.put("/pengaturan", json={**p, "ambang_yakin": 0.9, "ambang_acc": 0.65, "cari_lens": True}, headers=MASTER)
+    assert r.status_code == 400 and "SerpApi" in r.json()["detail"]
+    r = klien.put("/pengaturan", json={**p, "ambang_yakin": 0.9, "ambang_acc": 0.65, "cari_lens": False}, headers=MASTER)
     assert r.status_code == 200 and r.json()["ambang_yakin"] == 0.9 and r.json()["cari_lens"] is False
     assert klien.put("/pengaturan", json={**p, "ambang_yakin": 1.5}, headers=MASTER).status_code == 422
+
+
+def test_pengaturan_lens_menyala_dengan_kunci(klien, monkeypatch):
+    monkeypatch.setenv("SERPAPI_KEY", "kunci-uji")
+    p = klien.get("/pengaturan", headers=MASTER).json()
+    r = klien.put("/pengaturan", json={**p, "cari_lens": True}, headers=MASTER)
+    assert r.status_code == 200 and r.json()["cari_lens"] is True
+    s = klien.get("/koleksi", headers=MASTER).json()["statistik"]
+    assert s["lens_kuota"] > 0 and s["lens_bulan_ini"] == 0
+
+
+def test_statistik_lens_nol_tanpa_kunci(klien, monkeypatch):
+    monkeypatch.delenv("SERPAPI_KEY", raising=False)
+    s = klien.get("/koleksi", headers=MASTER).json()["statistik"]
+    assert s["lens_kuota"] == 0
 
 
 def test_koleksi_crud(klien):

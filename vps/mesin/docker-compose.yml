@@ -232,6 +232,11 @@ services:
     container_name: pri-autoedit-lacak
     profiles: ["lacak"]
     restart: unless-stopped
+    # lacak.env juga memuat SERPAPI_KEY (opsional; diisi pemilik, TIDAK di repo) untuk cari balik
+    # gambar Google Lens. Tanpa kunci itu fitur Lens mati sendiri.
+    env_file:
+      - path: ./lacak.env
+        required: false
     environment:
       LACAK_QDRANT: http://lacak-qdrant:6333
       LACAK_SEARXNG: http://lacak-searxng:8080

@@ -19,7 +19,7 @@ from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from . import cari, indeks, konfig, media, pekerja, simpan
+from . import cari, indeks, konfig, lens, media, pekerja, simpan
 from .media import GalatLacak
 
 
@@ -216,8 +216,9 @@ def _statistik() -> dict:
         "video": simpan.hitung_video(),
         "vektor": indeks.hitung(),
         **s30,
-        "lens_bulan_ini": 0,
-        "lens_kuota": 0,
+        "lens_bulan_ini": lens.terpakai(),
+        # 0 = kunci SerpApi belum dipasang di mesin (UI menampilkan "belum dipasang").
+        "lens_kuota": lens.kuota(),
     }
 
 
@@ -293,6 +294,7 @@ def ubah_pengaturan(b: BodiPengaturan, x_pengguna: str | None = Header(None), x_
     data = b.model_dump()
     data["ambang_yakin"] = round(data["ambang_yakin"], 2)
     data["ambang_acc"] = round(data["ambang_acc"], 2)
-    # Cari balik gambar belum tersedia di tahap 1 (butuh kunci SerpAPI + gambar publik).
-    data["cari_lens"] = False
+    # Cari balik gambar (Google Lens via SerpApi) hanya bisa menyala bila kuncinya terpasang di mesin.
+    if data["cari_lens"] and not lens.kunci_ada():
+        raise HTTPException(400, "Kunci SerpApi belum dipasang di mesin (SERPAPI_KEY di /opt/pri-mesin/lacak.env).")
     return simpan.simpan_pengaturan(data)

@@ -57,7 +57,7 @@ RUN mkdir -p /opt/model/whisper \
 COPY lacak ./lacak
 COPY tests ./tests
 # Gerbang mutu saat build: uji murni wajib lolos.
-RUN python -m pytest -q -p no:cacheprovider tests/test_skor.py tests/test_teks.py tests/test_media.py
+RUN python -m pytest -q -p no:cacheprovider tests/test_skor.py tests/test_teks.py tests/test_media.py tests/test_lens.py
 
 RUN useradd --uid 10001 --create-home lacak \
  && mkdir -p /data/lacak \

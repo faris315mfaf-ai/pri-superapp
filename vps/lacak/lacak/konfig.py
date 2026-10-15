@@ -56,6 +56,19 @@ MAKS_FRAME_SADURAN = _int("LACAK_MAKS_FRAME", 24)
 JARAK_FRAME_KANDIDAT = _float("LACAK_JARAK_FRAME", 2.0)  # detik antar frame kandidat
 BATAS_WAKTU_JOB = _int("LACAK_BATAS_WAKTU", 900)  # detik
 
+# Cari balik gambar (Google Lens lewat SerpApi, 15 Okt 2026). Kunci dibaca dari env SERPAPI_KEY
+# (diisi pemilik di /opt/pri-mesin/lacak.env; TIDAK PERNAH disimpan di repo). Kosong = fitur mati.
+# Paket gratis SerpApi ±100 pencarian/bulan: LACAK_LENS_KUOTA menyisakan margin dan jadi batas keras.
+LENS_KUOTA = _int("LACAK_LENS_KUOTA", 90)
+LENS_FRAME = max(1, min(4, _int("LACAK_LENS_FRAME", 2)))  # frame per video = pencarian per video
+LENS_NEGARA = os.environ.get("LACAK_LENS_NEGARA", "id").strip() or "id"
+LENS_SELALU = os.environ.get("LACAK_LENS_SELALU", "0").strip() == "1"  # uji: abaikan syarat "sumber lain kosong"
+
+
+def serpapi_kunci() -> str:
+    return os.environ.get("SERPAPI_KEY", "").strip()
+
+
 # Pemakai biasa (bukan master, bukan bot): satu pelacakan berjalan & jatah per hari.
 JATAH_HARIAN = _int("LACAK_JATAH_HARIAN", 30)
 RETENSI_HARI = _int("LACAK_RETENSI_HARI", 30)

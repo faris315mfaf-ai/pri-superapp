@@ -376,3 +376,25 @@ def simpan_pengaturan(baru: dict[str, Any]) -> dict[str, Any]:
                     (k, json.dumps(v)),
                 )
     return pengaturan()
+
+
+# ------------------------------------------------------------ pemakaian Lens
+
+
+def lens_terpakai(bulan: str) -> int:
+    """Pencarian Lens yang sudah dipakai pada bulan itu ('YYYY-MM')."""
+    with baca() as c:
+        r = c.execute("SELECT nilai FROM pengaturan WHERE kunci=?", (f"lens:{bulan}",)).fetchone()
+    try:
+        return int(r["nilai"]) if r else 0
+    except (TypeError, ValueError):
+        return 0
+
+
+def lens_tambah(bulan: str, n: int = 1) -> None:
+    with tulis() as c:
+        c.execute(
+            "INSERT INTO pengaturan(kunci, nilai) VALUES(?,?) "
+            "ON CONFLICT(kunci) DO UPDATE SET nilai=CAST(CAST(nilai AS INTEGER) + ? AS TEXT)",
+            (f"lens:{bulan}", str(n), n),
+        )
