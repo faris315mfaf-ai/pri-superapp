@@ -60,6 +60,11 @@ export type PenghuniDunia = {
   /** Nomor rupa karakter 0..UKURAN_KOLAM_KARAKTER-1 (unik di antara yang online). */
   karakter: number;
   aktivitas: AktivitasDunia | null;
+  /**
+   * Dipanggil Koordinator ke ruangan untuk siaran ke akunnya (15 Okt 2026), walau tidak online.
+   * Tampil sebagai karakter selama gilirannya; TIDAK dihitung "online" di ruang umum.
+   */
+  dipanggil?: boolean;
 };
 
 export type StatusDunia = {

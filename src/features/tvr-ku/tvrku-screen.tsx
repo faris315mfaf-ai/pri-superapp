@@ -111,6 +111,7 @@ import { desainBaru } from "@/lib/desain-apple";
 import { motion as gerak } from "framer-motion";
 import { useModulAktif } from "@/hooks/use-modul";
 import { PanelVideoWajib } from "@/features/tv-rakyat/panel-video-wajib";
+import { KartuSiaranKoordinator } from "./kartu-siaran-koordinator";
 
 const PLATFORM_TVR = [
   { id: "instagram", label: "Instagram" },
@@ -1106,6 +1107,7 @@ export function TvrKuScreen({
       <FadeInUp delay={0.02}>
         <div className="mt-1">
           <PanelVideoWajib />
+          <KartuSiaranKoordinator />
         </div>
       </FadeInUp>
         ) },

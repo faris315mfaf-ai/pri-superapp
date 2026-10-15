@@ -70,6 +70,10 @@ rahasia (password, kunci API, isi env) di berkas ini atau di repo.**
 - **Video Wajib bernomor perintah** (15 Okt 2026): kategori video dibawa dari perintah Pimred sampai Insight (tanpa
   hashtag/LLM); wajib posting otomatis semua akun & platform, Pantau, pengingat, panel bisa diciutkan. Wajib jalankan
   `sql/76_video_wajib_perintah.sql` di produksi. Panduan: `docs/VIDEO-WAJIB.md`.
+- **Siaran Koordinator ke akun anggota** (15 Okt 2026): Ruang Bot → Koordinator → Siaran Anggota (master) menyiarkan
+  satu video ke akun upload-post anggota (persetujuan saat pendaftaran); bawaan serentak (upload-post asinkron,
+  ±150 akun/menit), opsi bertahap/terjadwal; karakter anggota dipanggil ke Ruang Bot. Wajib
+  `sql/77_siaran_koordinator.sql`; cron `/api/cron/siaran` tiap menit. Panduan: `docs/SIARAN-KOORDINATOR.md`.
 - **Tutorial interaktif**: mesin `src/features/tur/lapisan-tur.tsx`, langkah di `src/lib/tur.ts`
   (penanda `data-tur` di komponen asli).
 - **Akun TIM TV Rakyat Official**: identitas mesin `900000001` (`ID_TIM` di `src/lib/autoedit.ts`),

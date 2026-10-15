@@ -7556,3 +7556,89 @@ export async function kirimAksiChatGlobal(aksi: AksiChatGlobal): Promise<{ sukse
   });
   return json as { sukses: true; sampai?: string };
 }
+
+// ------------------------------------------------------------
+// SIARAN KOORDINATOR KE AKUN ANGGOTA (15 Okt 2026) — Ruang Bot → Koordinator (master)
+// ------------------------------------------------------------
+import type {
+  AksiSiaran,
+  PenerimaSiaran,
+  PilihanVideo,
+  SiaranRiwayat,
+  SiaranSaya,
+} from "@/lib/siaran-koordinator";
+import type { ModeSiaran, SumberVideoSiaran } from "@/lib/siaran-koordinator-murni";
+
+export type { AksiSiaran, PenerimaSiaran, PilihanVideo, SiaranRiwayat, SiaranSaya };
+
+/** Semua anggota berprofil upload-post + status kesiapan (perintah = tandai yang sudah memposting perintah itu hari ini). */
+export async function getPenerimaSiaran(perintahId?: string | null): Promise<PenerimaSiaran[]> {
+  const q = perintahId ? `&perintah=${encodeURIComponent(perintahId)}` : "";
+  const json = await fetchJson(`/api/bot/siaran?bagian=penerima${q}`, { headers: headerToken() });
+  return (json.data ?? []) as PenerimaSiaran[];
+}
+
+export async function getSumberVideoSiaran(): Promise<{ acc: PilihanVideo[]; stok_tim: PilihanVideo[]; video_wajib: PilihanVideo[] }> {
+  const json = await fetchJson("/api/bot/siaran?bagian=video", { headers: headerToken() });
+  return {
+    acc: (json.acc ?? []) as PilihanVideo[],
+    stok_tim: (json.stok_tim ?? []) as PilihanVideo[],
+    video_wajib: (json.video_wajib ?? []) as PilihanVideo[],
+  };
+}
+
+export async function getRiwayatSiaranKoordinator(): Promise<SiaranRiwayat[]> {
+  const json = await fetchJson("/api/bot/siaran?bagian=riwayat", { headers: headerToken() });
+  return (json.data ?? []) as SiaranRiwayat[];
+}
+
+/** Variasi caption oleh Nara (fakta & sumber dikunci; variasi yang mengubah angka/sumber dibuang server). */
+export async function variasiCaptionNara(judul: string, caption: string): Promise<{ tersedia: boolean; variasi: string[]; pesan: string }> {
+  const json = await fetchJson("/api/bot/siaran", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "variasi", judul, caption }),
+  });
+  return json as unknown as { tersedia: boolean; variasi: string[]; pesan: string };
+}
+
+export type IsianSiaranKoordinator = {
+  video: { sumber: SumberVideoSiaran; id?: string; r2_key?: string; path?: string; ukuran?: number };
+  judul: string;
+  caption: string;
+  variasi: string[];
+  platforms: string[];
+  penerima: string[];
+  mode: ModeSiaran;
+  jeda_detik: number;
+  /** ISO; hanya untuk mode terjadwal. */
+  mulai?: string;
+  /** Wajib "SIARKAN" bila lebih dari 50 akun. */
+  konfirmasi?: string;
+  tampil_ruang: boolean;
+  perintah_id?: string | null;
+};
+
+export async function siarkanKoordinator(isi: IsianSiaranKoordinator): Promise<{ id: string; jumlah: number; dilewati: number; mulai: string; selesai: string | null }> {
+  const json = await fetchJson("/api/bot/siaran", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ aksi: "siarkan", ...isi }),
+  });
+  return json as unknown as { id: string; jumlah: number; dilewati: number; mulai: string; selesai: string | null };
+}
+
+export async function kendaliSiaranKoordinator(id: string, aksi: AksiSiaran): Promise<{ ok: boolean; pesan: string }> {
+  const json = await fetchJson("/api/bot/siaran", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id, aksi }),
+  });
+  return json as unknown as { ok: boolean; pesan: string };
+}
+
+/** Siaran koordinator ke akun saya (kartu di TV Rakyat Saya). */
+export async function getSiaranSaya(): Promise<SiaranSaya[]> {
+  const json = await fetchJson("/api/tvr/siaran-saya", { headers: headerToken() });
+  return (json.data ?? []) as SiaranSaya[];
+}

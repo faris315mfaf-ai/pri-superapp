@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 import { AntreanAccView } from "./antrean-acc-view";
 import { AntreanAccNyata } from "./antrean-acc-nyata";
 import { ChatBotView } from "./chat-bot-view";
-import { KoordinatorView } from "./koordinator-view";
+import { KoordinatorTab } from "./koordinator-tab";
 import { LacakSumberView } from "@/features/lacak-sumber/lacak-sumber-view";
 import { MAKS_KUOTA_AWAL } from "./data-contoh";
 import { DetailBotView } from "./detail-bot-view";
@@ -531,7 +531,7 @@ function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber, onBukaKelolaBo
 
       {tampilan === "koordinator" && nyata && (
         <div id="rb-panel-koordinator" role="tabpanel" aria-labelledby="rb-tab-koordinator">
-          <KoordinatorView />
+          <KoordinatorTab />
         </div>
       )}
 

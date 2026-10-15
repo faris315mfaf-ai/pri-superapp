@@ -40,8 +40,10 @@ export function penghuniUmum(p: PenghuniDunia): PenghuniDunia {
 }
 
 export function duniaUmum(d: StatusDunia): StatusDunia {
-  const online = d.online.filter((p) => !tersembunyi(p.role)).map(penghuniUmum);
-  const disembunyikan = d.online.length - online.length;
+  // Yang hanya "dipanggil" Koordinator untuk siaran tidak sedang online: tidak ditampilkan ke umum.
+  const benarOnline = d.online.filter((p) => !p.dipanggil);
+  const online = benarOnline.filter((p) => !tersembunyi(p.role)).map(penghuniUmum);
+  const disembunyikan = benarOnline.length - online.length;
   return { waktu: d.waktu, jumlah: Math.max(online.length, d.jumlah - disembunyikan), terpotong: d.terpotong, online };
 }
 

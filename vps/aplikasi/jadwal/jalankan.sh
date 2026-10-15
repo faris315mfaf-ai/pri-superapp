@@ -29,6 +29,10 @@ cat > /etc/crontabs/root <<'JADWAL'
 # (29 Sep 2026: jadwal lama butuh 3x kemampuan robot). Menit 2,7,12,… supaya tidak
 # berbarengan dengan tugas lain di menit kelipatan 5.
 2,7,12,17,22,27,32,37,42,47,52,57 * * * * /panggil.sh metrik-video
+# Antrean siaran (15 Okt 2026): tiap menit mengirim item siaran yang sudah jatuh
+# giliran (Siaran Koordinator ke akun anggota, bertahap ±45 dtk) dan memanggil
+# karakter anggota ke Ruang Bot. Satu putaran sekaligus (kunci di aplikasi).
+* * * * * /panggil.sh siaran
 # Pengingat Video Wajib (15 Okt 2026): tiap 10 menit memeriksa perintah wajib
 # posting; dua jam sebelum batas jam, anggota yang belum memposting dikabari
 # (sekali per perintah per hari). Menit 6,16,… supaya tidak berbarengan.

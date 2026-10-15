@@ -242,6 +242,64 @@ export async function denganAktivitas<T>(userId: string | number, m: Masukan, ke
   }
 }
 
+// ---------- dipanggil koordinator (siaran ke akun anggota) ----------
+
+const KUNCI_PANGGIL = "dunia:dipanggil";
+const g2 = globalThis as unknown as { __priPanggil?: Map<string, number> };
+const panggilMemori: Map<string, number> = (g2.__priPanggil ??= new Map());
+
+async function bacaPanggil(kini: number): Promise<Map<string, number>> {
+  const hasil = new Map<string, number>();
+  const r = klienCache();
+  let sumber: Record<string, number> | null = null;
+  if (r) {
+    try {
+      const v = await r.get<Record<string, number>>(KUNCI_PANGGIL);
+      if (v && typeof v === "object") sumber = v;
+    } catch {
+      sumber = null;
+    }
+  }
+  const semua = sumber ? Object.entries(sumber) : [...panggilMemori.entries()];
+  for (const [id, sampai] of semua) {
+    if (idSah(id) && Number(sampai) > kini) hasil.set(id, Number(sampai));
+  }
+  return hasil;
+}
+
+/**
+ * Koordinator memanggil karakter anggota ke Ruang Bot selama `ttlDetik` (giliran siarannya dekat),
+ * walau orangnya tidak online. Tidak pernah melempar.
+ */
+export async function panggilKeRuang(userIds: number[], ttlDetik: number): Promise<void> {
+  try {
+    const ids = userIds.map(String).filter((x) => idSah(x));
+    if (ids.length === 0) return;
+    await berurutan("__panggil", async () => {
+      const kini = Date.now();
+      const daftar = await bacaPanggil(kini);
+      const sampai = kini + Math.max(30, Math.min(1800, ttlDetik)) * 1000;
+      let berubah = false;
+      for (const id of ids) {
+        if ((daftar.get(id) ?? 0) < sampai) {
+          if (!daftar.has(id)) berubah = true;
+          daftar.set(id, sampai);
+        }
+      }
+      // Batasi ukuran: paling banyak MAKS_PENGHUNI yang dipanggil sekaligus (yang paling lama tetap).
+      const urut = [...daftar.entries()].sort((a, b) => b[1] - a[1]).slice(0, MAKS_PENGHUNI);
+      const obj = Object.fromEntries(urut);
+      panggilMemori.clear();
+      for (const [k, v] of urut) panggilMemori.set(k, v);
+      const r = klienCache();
+      if (r) await r.set(KUNCI_PANGGIL, obj, { ex: 1800 }).catch(() => undefined);
+      if (berubah) siarkanDunia();
+    });
+  } catch {
+    // tontonan saja
+  }
+}
+
 // ---------- layar ----------
 
 /** Catat layar yang sedang dibuka (dipanggil detak). Tidak pernah melempar. */
@@ -288,7 +346,14 @@ export async function bacaStatusDunia(): Promise<StatusDunia> {
   const idHadir = await daftarHadir().catch(() => [] as string[]);
   const nomor = idHadir.map(Number).filter((n) => Number.isSafeInteger(n) && n > 0);
   const terpotong = nomor.length > MAKS_PENGHUNI;
-  const dipakai = nomor.slice(0, MAKS_PENGHUNI);
+  const hadirSet = new Set(nomor);
+  // Anggota yang dipanggil Koordinator (giliran siarannya) ikut tampil walau tidak online.
+  const dipanggil = [...(await bacaPanggil(kini).catch(() => new Map<string, number>())).keys()]
+    .map(Number)
+    .filter((n) => Number.isSafeInteger(n) && n > 0 && !hadirSet.has(n));
+  const sisa = Math.max(0, MAKS_PENGHUNI - Math.min(nomor.length, MAKS_PENGHUNI));
+  const tamu = new Set(dipanggil.slice(0, sisa));
+  const dipakai = [...nomor.slice(0, MAKS_PENGHUNI), ...tamu];
   if (dipakai.length === 0) return { waktu: kini, jumlah: nomor.length, terpotong: false, online: [] };
 
   const { data, error } = await supabase()
@@ -314,6 +379,7 @@ export async function bacaStatusDunia(): Promise<StatusDunia> {
         layar_label: layar ? labelLayarAudit(layar) : "",
         karakter: karakter.get(Number(o.id)) ?? 0,
         aktivitas: pilihAktivitas(akt, kini),
+        ...(tamu.has(Number(o.id)) ? { dipanggil: true, layar_label: "Dipanggil Koordinator · siaran" } : {}),
       };
     }),
   );

@@ -55,12 +55,19 @@ export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await pastikanPengatur(request);
     const db = supabase();
-    const { data: induk } = await db
-      .from("tvr_siaran")
-      .select("id, judul, caption, platforms, jadwal, status, dibuat_pada, video_path")
-      .eq("dibuat_oleh", Number(user.id))
-      .order("id", { ascending: false })
-      .limit(20);
+    // Siaran Koordinator (sql/77) punya layar sendiri (Ruang Bot → Koordinator → Riwayat Siaran);
+    // giliran bertahapnya akan tampak "menggantung" di sini. Tanpa kolom sumber = perilaku lama.
+    const bacaInduk = (tanpaKoordinator: boolean) => {
+      let q = db
+        .from("tvr_siaran")
+        .select("id, judul, caption, platforms, jadwal, status, dibuat_pada, video_path")
+        .eq("dibuat_oleh", Number(user.id));
+      if (tanpaKoordinator) q = q.neq("sumber", "koordinator");
+      return q.order("id", { ascending: false }).limit(20);
+    };
+    let { data: induk, error: galatInduk } = await bacaInduk(true);
+    if (galatInduk) ({ data: induk, error: galatInduk } = await bacaInduk(false));
+    if (galatInduk) console.error("[siaran] baca induk:", galatInduk.message);
     const ids = (induk ?? []).map((s) => Number(s.id));
     const { data: item } = ids.length
       ? await db

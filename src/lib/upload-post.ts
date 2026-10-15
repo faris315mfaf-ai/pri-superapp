@@ -456,6 +456,14 @@ export async function unggahVideoUp(opsi: {
    * `title` umum. Dipakai fitur PALUGODAM (2 Sep 2026).
    */
   captionPer?: Record<string, string>;
+  /**
+   * `async_upload=true` (15 Okt 2026, Siaran Koordinator): upload-post langsung membalas
+   * request_id lalu mengunduh & memposting di latar — balasan dalam hitungan detik, jadi
+   * ratusan akun bisa dikirim sekaligus. Kegagalan per platform menyusul lewat status/rekonsiliasi.
+   */
+  asinkron?: boolean;
+  /** Header Idempotency-Key: upload-post menolak kiriman ganda dengan kunci yang sama. */
+  kunciIdempotensi?: string;
 }): Promise<HasilUnggahUp> {
   const judul = opsi.judul.trim().slice(0, 100) || "TV Rakyat";
   const caption = opsi.caption?.trim() ?? "";
@@ -495,12 +503,14 @@ export async function unggahVideoUp(opsi: {
   // Jadwal: field yang benar `scheduled_date` — nama lama "schedule_date"
   // DIABAIKAN diam-diam oleh API (video langsung terposting!).
   if (opsi.scheduleDate) form.set("scheduled_date", opsi.scheduleDate);
+  if (opsi.asinkron) form.set("async_upload", "true");
 
   const d = await panggil<Record<string, unknown>>("/upload", {
     method: "POST",
     body: form,
-    // Posting multi-platform bisa lama (server mereka mengunduh video).
-    timeoutMs: 180000,
+    ...(opsi.kunciIdempotensi ? { headers: { "Idempotency-Key": opsi.kunciIdempotensi } } : {}),
+    // Posting multi-platform bisa lama (server mereka mengunduh video); mode asinkron membalas cepat.
+    timeoutMs: opsi.asinkron ? 60000 : 180000,
     // Timeout BUKAN bukti gagal: upload-post mungkin sudah menerima video.
     pesanWaktuHabis:
       "Waktu tunggu habis. Video mungkin sudah terkirim — cek Riwayat sebelum mengulang.",

@@ -17,7 +17,7 @@
 //
 // Anggaran waktu: upload-post bisa 30–180 dtk per profil (mereka mengunduh
 // videonya). Item diproses dalam KELOMPOK paralel (12 Okt 2026, 3 item
-// serentak); kelompok baru hanya dimulai bila sisa waktu masih cukup untuk
+// serentak; Siaran Koordinator 15 item, asinkron); kelompok baru hanya dimulai bila sisa waktu masih cukup untuk
 // satu panggilan terlama + margin, sehingga fungsi tak pernah melewati
 // maxDuration. Sisanya diselesaikan sapuan berikutnya (layar memantau tiap
 // 10 dtk). Bila upload-post membalas 429 (kuota laju), sapuan dihentikan
@@ -29,7 +29,10 @@ import { kirimKabar } from "@/lib/notifikasi";
 import { LABEL_SOSMED, solusiGagal } from "@/lib/batas-caption";
 import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { dariR2, hapusVideoR2 } from "@/lib/r2";
-import { sisipkanLonggar } from "@/lib/kolom-struktur";
+import { namaKolomHilang, sisipkanLonggar } from "@/lib/kolom-struktur";
+import { klasifikasiGalatUnggah } from "@/lib/bot-posting-murni";
+import { PESAN_TERPUTUS } from "@/lib/siaran-koordinator-murni";
+import { akhiriAktivitas, mulaiAktivitas, panggilKeRuang } from "@/lib/dunia";
 
 /** Timeout terlama satu panggilan upload-post (lihat unggahVideoUp). */
 const PANGGILAN_TERLAMA_MS = 180_000;
@@ -39,8 +42,33 @@ const BASI_DIPROSES_MENIT = 15;
 const MARGIN_KELOMPOK_MS = 10_000;
 /** Item yang dikirim serentak dalam satu kelompok. */
 const KONKURENSI_KELOMPOK = 3;
-/** Maks item per sapuan (kelipatan konkurensi) — pagar tambahan di luar anggaran waktu. */
-const MAKS_ITEM_PER_SAPUAN = 9;
+/** Maks item per sapuan — pagar tambahan di luar anggaran waktu. */
+const MAKS_ITEM_PER_SAPUAN = 150;
+/**
+ * Siaran Koordinator memakai upload-post ASINKRON (balasan dalam detik), jadi dikirim jauh lebih
+ * banyak sekaligus: kelompok 15 paralel, batas waktu satu panggilan 60 dtk (15 Okt 2026,
+ * permintaan pemilik: sebanyak mungkin akun sekaligus, boleh menumpuk).
+ */
+const KONKURENSI_ASINKRON = 15;
+const PANGGILAN_ASINKRON_TERLAMA_MS = 60_000;
+
+/** Kolom belum ada (sql/77 belum dijalankan): 42703 SELECT, PGRST204 INSERT/UPDATE. */
+function kolomBelumAda(e: { code?: string; message: string } | null | undefined): boolean {
+  return Boolean(e) && (e!.code === "42703" || e!.code === "PGRST204" || namaKolomHilang(e!.message) !== null);
+}
+
+/** Galat yang kita lempar sendiri SEBELUM/TANPA upload-post menerima kiriman: pasti belum terposting. */
+function galatPasti(pesan: string): Error {
+  return Object.assign(new Error(pesan), { pasti: true });
+}
+
+/** pasti = belum ada yang terkirim (aman diulang); ambigu = mungkin sudah terposting. */
+function jenisGalat(e: unknown): "pasti" | "ambigu" {
+  const g = e as { pasti?: unknown; status?: unknown } | null;
+  if (g && g.pasti === true) return "pasti";
+  if (g && typeof g.status === "number") return klasifikasiGalatUnggah(g.status);
+  return "ambigu";
+}
 
 /** Galat 429 dari upload-post (kuota laju) — lihat panggilDenganBatas di upload-post.ts. */
 function adalahBatasLaju(e: unknown): boolean {
@@ -94,7 +122,106 @@ type Induk = {
   video_url: string;
   jadwal: string | null;
   status: string;
+  /** Siaran koordinator ke akun anggota (sql/77). */
+  koordinator: boolean;
+  kategori: string;
+  perintah_id: number | null;
+  tampil_ruang: boolean;
+  dijeda: boolean;
 };
+
+const KOLOM_INDUK = "id, judul, caption, video_url, jadwal, status, sumber, kategori, perintah_id, tampil_ruang, dijeda";
+const KOLOM_INDUK_LAMA = "id, judul, caption, video_url, jadwal, status";
+const KOLOM_ITEM = "id, siaran_id, profil, user_id, platforms, video_url, judul, caption";
+
+/**
+ * Item yang sudah jatuh giliran (jadwal_kirim lewat atau kosong), tanpa item siaran yang
+ * sedang DIJEDA (supaya tidak memenuhi kuota sapuan dan menahan siaran lain).
+ */
+async function ambilKandidat(db: ReturnType<typeof supabase>, batas: number) {
+  const kini = new Date().toISOString();
+  const { data: jeda, error: eJeda } = await db
+    .from("tvr_siaran")
+    .select("id")
+    .eq("dijeda", true)
+    .in("status", ["menunggu", "berjalan"])
+    .limit(200);
+  if (eJeda && !kolomBelumAda(eJeda)) throw new Error(`baca siaran dijeda: ${eJeda.message}`);
+  if (eJeda) {
+    // sql/77 belum dijalankan: perilaku lama (tanpa giliran/jeda).
+    const { data } = await db.from("tvr_siaran_item").select(KOLOM_ITEM).eq("status", "menunggu").order("id", { ascending: true }).limit(batas);
+    return data ?? [];
+  }
+  let q = db
+    .from("tvr_siaran_item")
+    .select(KOLOM_ITEM)
+    .eq("status", "menunggu")
+    .or(`jadwal_kirim.is.null,jadwal_kirim.lte."${kini}"`);
+  const idJeda = (jeda ?? []).map((r) => Number(r.id)).filter((n) => Number.isSafeInteger(n));
+  if (idJeda.length > 0) q = q.not("siaran_id", "in", `(${idJeda.join(",")})`);
+  const { data, error } = await q
+    .order("jadwal_kirim", { ascending: true, nullsFirst: true })
+    .order("id", { ascending: true })
+    .limit(batas);
+  if (error) throw new Error(`baca antrean siaran: ${error.message}`);
+  return data ?? [];
+}
+
+/**
+ * Ruang Bot: karakter anggota yang gilirannya dekat "dipanggil" ke ruangan (walau tidak online),
+ * supaya terlihat membawa video ke Kotak Post. Tontonan saja — tidak pernah melempar.
+ */
+async function panggilAntreanKeRuang(db: ReturnType<typeof supabase>): Promise<void> {
+  try {
+    const { data: induk, error } = await db
+      .from("tvr_siaran")
+      .select("id")
+      .eq("sumber", "koordinator")
+      .eq("tampil_ruang", true)
+      .eq("dijeda", false)
+      .in("status", ["menunggu", "berjalan"])
+      .limit(20);
+    if (error || !induk || induk.length === 0) return;
+    const batasAtas = new Date(Date.now() + 150_000).toISOString();
+    const { data: item } = await db
+      .from("tvr_siaran_item")
+      .select("user_id")
+      .in("siaran_id", induk.map((r) => Number(r.id)))
+      .in("status", ["menunggu", "diproses"])
+      .lte("jadwal_kirim", batasAtas)
+      .order("jadwal_kirim", { ascending: true })
+      // Siaran serentak boleh menumpuk: ruangan terisi banyak karakter sekaligus (batas MAKS_PENGHUNI di dunia.ts).
+      .limit(60);
+    const ids = [...new Set((item ?? []).map((i) => Number(i.user_id)).filter((n) => Number.isSafeInteger(n) && n > 0))];
+    if (ids.length > 0) await panggilKeRuang(ids, 300);
+  } catch {
+    // tontonan saja
+  }
+}
+
+/**
+ * Induk yang semua itemnya sudah beres → 'selesai'. Hanya bila hitungan BERHASIL dibaca (galat
+ * baca tidak boleh menandai selesai siaran yang masih punya antrean).
+ */
+async function rampungkanInduk(db: ReturnType<typeof supabase>, ids: number[]): Promise<void> {
+  for (const id of ids) {
+    const { count, error } = await db
+      .from("tvr_siaran_item")
+      .select("id", { count: "exact", head: true })
+      .eq("siaran_id", id)
+      .in("status", ["menunggu", "diproses"]);
+    if (error || count === null) continue;
+    if (count === 0) {
+      await db.from("tvr_siaran").update({ status: "selesai" }).eq("id", id).in("status", ["menunggu", "berjalan"]);
+    }
+  }
+}
+
+/** Siaran yang masih "berjalan" tanpa antrean (mis. item terakhir disapu basi → gagal) juga dirampungkan. */
+async function rampungkanYangTersisa(db: ReturnType<typeof supabase>): Promise<void> {
+  const { data } = await db.from("tvr_siaran").select("id").in("status", ["menunggu", "berjalan"]).order("id", { ascending: false }).limit(30);
+  await rampungkanInduk(db, (data ?? []).map((r) => Number(r.id)));
+}
 
 /**
  * Proses item siaran yang masih menunggu. `anggaranMs` = total waktu yang
@@ -113,27 +240,28 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
       .from("tvr_siaran_item")
       .update({
         status: "gagal",
-        pesan: "Terputus saat mengirim — periksa di upload-post sebelum mengirim ulang.",
+        pesan: `${PESAN_TERPUTUS} — periksa di upload-post sebelum mengirim ulang.`,
+        hasil: { galat: "ambigu" },
         selesai_pada: new Date().toISOString(),
       })
       .eq("status", "diproses")
       .lt("diproses_pada", basi);
 
-    const { data: kandidat } = await db
-      .from("tvr_siaran_item")
-      .select("id, siaran_id, profil, user_id, platforms, video_url, judul, caption")
-      .eq("status", "menunggu")
-      .order("id", { ascending: true })
-      .limit(MAKS_ITEM_PER_SAPUAN);
-    if (!kandidat || kandidat.length === 0) return;
+    await panggilAntreanKeRuang(db);
+    const kandidat = await ambilKandidat(db, MAKS_ITEM_PER_SAPUAN);
+    if (kandidat.length === 0) {
+      await rampungkanYangTersisa(db);
+      return;
+    }
 
     const indukIds = [...new Set(kandidat.map((k) => Number(k.siaran_id)))];
-    const { data: indukRows } = await db
-      .from("tvr_siaran")
-      .select("id, judul, caption, video_url, jadwal, status")
-      .in("id", indukIds);
+    let indukBaca = await db.from("tvr_siaran").select(KOLOM_INDUK).in("id", indukIds);
+    if (indukBaca.error && kolomBelumAda(indukBaca.error)) {
+      indukBaca = (await db.from("tvr_siaran").select(KOLOM_INDUK_LAMA).in("id", indukIds)) as typeof indukBaca;
+    }
+    const indukRows = (indukBaca.data ?? []) as unknown as Record<string, unknown>[];
     const induk = new Map<number, Induk>(
-      (indukRows ?? []).map((r) => [
+      indukRows.map((r) => [
         Number(r.id),
         {
           id: Number(r.id),
@@ -142,6 +270,11 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
           video_url: String(r.video_url ?? ""),
           jadwal: r.jadwal ? String(r.jadwal) : null,
           status: String(r.status ?? ""),
+          koordinator: r.sumber === "koordinator",
+          kategori: String(r.kategori ?? ""),
+          perintah_id: r.perintah_id == null ? null : Number(r.perintah_id),
+          tampil_ruang: r.tampil_ruang === true,
+          dijeda: r.dijeda === true,
         },
       ]),
     );
@@ -155,6 +288,7 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
       if (kuotaPenuh) return "ok"; // biarkan 'menunggu' untuk sapuan berikut
       const s = induk.get(Number(item.siaran_id));
       if (!s) return "ok";
+      if (s.dijeda) return "ok"; // dijeda: biarkan 'menunggu'
       if (s.status === "dibatalkan") {
         await db
           .from("tvr_siaran_item")
@@ -165,6 +299,7 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
       }
 
       // KLAIM atomik — hanya pemenang yang boleh memposting item ini.
+      const klaimMs = Date.now();
       const { data: terkunci } = await db
         .from("tvr_siaran_item")
         .update({ status: "diproses", diproses_pada: new Date().toISOString() })
@@ -178,11 +313,32 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
         s.status = "berjalan";
       }
 
+      let tokenRuang: string | null = null;
       try {
         const platforms = (item.platforms ?? []).filter((x: string) =>
           (PLATFORM_KPI as readonly string[]).includes(x),
         );
-        if (platforms.length === 0) throw new Error("Tidak ada platform tertaut yang cocok.");
+        if (platforms.length === 0) throw galatPasti("Tidak ada platform tertaut yang cocok.");
+
+        // Siaran koordinator: pemilik akun harus masih anggota aktif TEPAT sebelum dikirim.
+        if (s.koordinator && item.user_id) {
+          const { data: pemilik, error: ePemilik } = await db
+            .from("app_user")
+            .select("aktif, status")
+            .eq("id", Number(item.user_id))
+            .maybeSingle();
+          if (ePemilik) throw galatPasti("Gagal memeriksa akun anggota (belum dikirim).");
+          if (!pemilik || pemilik.aktif !== true || pemilik.status !== "aktif") {
+            throw galatPasti("Akun anggota sudah nonaktif — tidak dikirim.");
+          }
+        }
+        if (s.tampil_ruang && item.user_id) {
+          tokenRuang = await mulaiAktivitas(Number(item.user_id), {
+            jenis: "unggah_sosmed",
+            ringkasan: `Siaran koordinator: mengunggah "${String(item.judul || s.judul).slice(0, 120)}"`,
+            detail: { judul: String(item.judul || s.judul), platforms },
+          });
+        }
 
         // Jadwal yang sudah lewat = kirim sekarang (antrean bisa lebih lama
         // dari perkiraan).
@@ -204,17 +360,24 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
           caption: captionItem,
           platforms,
           scheduleDate: jadwal,
+          ...(s.koordinator ? { asinkron: true, kunciIdempotensi: `pri-siaran-${item.id}-${klaimMs}` } : {}),
         });
         if (!hasil.sukses) {
           const galat = (hasil.mentah as { message?: string; error?: string })?.message ??
             (hasil.mentah as { error?: string })?.error;
-          throw new Error(String(galat ?? "upload-post menolak kiriman ini."));
+          // upload-post MENJAWAB dan menolak: belum ada yang terposting.
+          throw galatPasti(String(galat ?? "upload-post menolak kiriman ini."));
         }
 
         // Balasan 200 bisa memuat platform yang langsung dinyatakan gagal
         // (success=false per platform) — jangan dicatat "terkirim" mentah.
         const gagalAwal = gagalDariBalasan(hasil.mentah);
-        const hasilSimpan = hasilDenganKegagalan(hasil.mentah, gagalAwal);
+        // Siaran koordinator berkategori/bernomor perintah: ikut ke riwayat & laporan otomatis anggota
+        // (kunci hasil.kategori / hasil.perintah_id sama dengan /api/tvr/unggah).
+        const tanda: Record<string, unknown> = {};
+        if (s.kategori) tanda.kategori = s.kategori;
+        if (s.perintah_id) tanda.perintah_id = s.perintah_id;
+        const hasilSimpan = { ...hasilDenganKegagalan(hasil.mentah, gagalAwal), ...tanda };
         const nama = (pf: string) => LABEL_SOSMED[pf] ?? pf;
         const semuaGagal = gagalAwal.length > 0 && platforms.every((pf) => gagalAwal.some((g) => g.platform === pf));
         const kabari = async () => {
@@ -233,7 +396,7 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
             .update({
               status: "gagal",
               request_id: hasil.request_id,
-              hasil: hasilSimpan,
+              hasil: { ...hasilSimpan, galat: "pasti" },
               pesan: `Gagal di semua sosmed: ${gagalAwal.map((g) => nama(g.platform)).join(", ")}`.slice(0, 300),
               selesai_pada: new Date().toISOString(),
             })
@@ -253,7 +416,7 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
             hasil: hasilSimpan,
             pesan: (gagalAwal.length > 0
               ? `Terkirim sebagian — gagal di: ${gagalAwal.map((g) => nama(g.platform)).join(", ")}`
-              : jadwal ? "Terjadwal" : "Terkirim"
+              : jadwal ? "Terjadwal" : s.koordinator ? "Terkirim ke upload-post (diposting di latar)" : "Terkirim"
             ).slice(0, 300),
             selesai_pada: new Date().toISOString(),
           })
@@ -261,7 +424,7 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
 
         // Riwayat TVR Saya milik pemilik profil + KPI otomatis.
         if (item.user_id) {
-          const { error } = await sisipkanLonggar("tvrku_post", {
+          const riwayat: Record<string, unknown> = {
             user_id: Number(item.user_id),
             judul: judulItem.slice(0, 100),
             caption: captionItem.slice(0, 2200),
@@ -272,8 +435,27 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
             hasil: hasilSimpan,
             request_id: hasil.request_id,
             hapus_media_pada: null,
-          });
+          };
+          // Kolom yang belum ada di database dibuang sendiri oleh sisipkanLonggar.
+          if (s.kategori) riwayat.keyword = s.kategori;
+          if (s.perintah_id) riwayat.perintah_id = s.perintah_id;
+          const { error } = await sisipkanLonggar("tvrku_post", riwayat);
           if (error) console.error("[siaran] simpan riwayat:", error.message);
+        }
+        if (s.koordinator && item.user_id) {
+          const terbit = platforms.filter((pf) => !gagalAwal.some((g) => g.platform === pf));
+          try {
+            await kirimKabar({
+              judul: "📣 Koordinator memposting ke akun Anda",
+              isi: `"${judulItem.slice(0, 120)}" ${jadwal ? "dijadwalkan" : "terbit"} di ${terbit.map(nama).join(", ")} Anda.`,
+              kategori: "info",
+              jenis_peristiwa: "siaran_koordinator",
+              target: "tvrku",
+              untukUserIds: [Number(item.user_id)],
+            });
+          } catch (e) {
+            console.error("[siaran] kabar koordinator:", e);
+          }
         }
         await kabari();
         return "ok";
@@ -294,39 +476,49 @@ export async function prosesSiaranSerentak(anggaranMs = 240_000): Promise<void> 
           .update({
             status: "gagal",
             pesan: (e instanceof Error ? e.message : "Gagal memposting").slice(0, 300),
+            hasil: { galat: jenisGalat(e) },
             selesai_pada: new Date().toISOString(),
           })
           .eq("id", item.id);
         return "ok";
+      } finally {
+        if (tokenRuang && item.user_id) void akhiriAktivitas(Number(item.user_id), tokenRuang);
       }
     };
 
-    // Kelompok paralel: pagar anggaran dihitung per kelompok.
-    for (let i = 0; i < kandidat.length; i += KONKURENSI_KELOMPOK) {
-      if (kuotaPenuh) break;
-      if (Date.now() - mulai + PANGGILAN_TERLAMA_MS + MARGIN_KELOMPOK_MS > anggaranMs) break;
-      const kelompok = kandidat.slice(i, i + KONKURENSI_KELOMPOK);
-      const hasilKelompok = await Promise.allSettled(kelompok.map((it) => prosesItem(it)));
-      for (const h of hasilKelompok) {
-        if (h.status === "rejected") console.error("[siaran] item:", h.reason);
+    // Jeda/batal yang ditekan SELAMA sapuan berjalan berlaku untuk kelompok berikutnya: baca ulang
+    // status induk tepat sebelum tiap kelompok diklaim.
+    const segarkanInduk = async (kelompok: typeof kandidat) => {
+      const ids = [...new Set(kelompok.map((k) => Number(k.siaran_id)))];
+      let r = await db.from("tvr_siaran").select("id, status, dijeda").in("id", ids);
+      if (r.error && kolomBelumAda(r.error)) r = (await db.from("tvr_siaran").select("id, status").in("id", ids)) as typeof r;
+      for (const b of (r.data ?? []) as unknown as { id: number; status: string; dijeda?: boolean }[]) {
+        const x = induk.get(Number(b.id));
+        if (!x) continue;
+        x.status = String(b.status ?? x.status);
+        x.dijeda = b.dijeda === true;
       }
-    }
+    };
+    // Kelompok paralel: pagar anggaran dihitung per kelompok. Item Siaran Koordinator (asinkron,
+    // cepat) lebih dulu dan dalam kelompok besar; Siaran Serentak lama (sinkron) seperti sebelumnya.
+    const jalankanKelompok = async (daftar: typeof kandidat, konkurensi: number, terlamaMs: number) => {
+      for (let i = 0; i < daftar.length; i += konkurensi) {
+        if (kuotaPenuh) break;
+        if (Date.now() - mulai + terlamaMs + MARGIN_KELOMPOK_MS > anggaranMs) break;
+        const kelompok = daftar.slice(i, i + konkurensi);
+        await segarkanInduk(kelompok);
+        const hasilKelompok = await Promise.allSettled(kelompok.map((it) => prosesItem(it)));
+        for (const h of hasilKelompok) {
+          if (h.status === "rejected") console.error("[siaran] item:", h.reason);
+        }
+      }
+    };
+    const adalahKoor = (it: (typeof kandidat)[number]) => induk.get(Number(it.siaran_id))?.koordinator === true;
+    await jalankanKelompok(kandidat.filter(adalahKoor), KONKURENSI_ASINKRON, PANGGILAN_ASINKRON_TERLAMA_MS);
+    await jalankanKelompok(kandidat.filter((it) => !adalahKoor(it)), KONKURENSI_KELOMPOK, PANGGILAN_TERLAMA_MS);
 
     // Induk yang semua itemnya sudah beres → 'selesai'.
-    for (const id of indukIds) {
-      const { count } = await db
-        .from("tvr_siaran_item")
-        .select("id", { count: "exact", head: true })
-        .eq("siaran_id", id)
-        .in("status", ["menunggu", "diproses"]);
-      if ((count ?? 0) === 0) {
-        await db
-          .from("tvr_siaran")
-          .update({ status: "selesai" })
-          .eq("id", id)
-          .neq("status", "dibatalkan");
-      }
-    }
+    await rampungkanInduk(db, indukIds);
   } catch (e) {
     console.error("[siaran] pemroses:", e);
   }
@@ -347,8 +539,27 @@ export async function bersihkanMediaSiaran(): Promise<void> {
       .neq("video_path", "")
       .limit(10);
     if (!data || data.length === 0) return;
-    const jalurStorage: string[] = [];
+    // Siaran yang masih punya giliran (dijeda, diulang, antrean panjang) TIDAK boleh kehilangan
+    // berkasnya: tunda 2 jam lagi. Galat baca = anggap masih dipakai (lebih aman).
+    const masihDipakai = new Set<number>();
     for (const b of data) {
+      const { count, error } = await db
+        .from("tvr_siaran_item")
+        .select("id", { count: "exact", head: true })
+        .eq("siaran_id", b.id)
+        .in("status", ["menunggu", "diproses"]);
+      if (error || count === null || count > 0) masihDipakai.add(Number(b.id));
+    }
+    if (masihDipakai.size > 0) {
+      await db
+        .from("tvr_siaran")
+        .update({ hapus_media_pada: new Date(Date.now() + 2 * 3600_000).toISOString() })
+        .in("id", [...masihDipakai]);
+    }
+    const bebas = data.filter((b) => !masihDipakai.has(Number(b.id)));
+    if (bebas.length === 0) return;
+    const jalurStorage: string[] = [];
+    for (const b of bebas) {
       const path = String(b.video_path ?? "");
       if (!path) continue;
       if (dariR2(String(b.video_url ?? ""))) await hapusVideoR2(path);
@@ -358,7 +569,7 @@ export async function bersihkanMediaSiaran(): Promise<void> {
     await db
       .from("tvr_siaran")
       .update({ hapus_media_pada: null, video_path: "" })
-      .in("id", data.map((b) => b.id));
+      .in("id", bebas.map((b) => b.id));
   } catch (e) {
     console.error("[siaran] penyapu media:", e);
   }
