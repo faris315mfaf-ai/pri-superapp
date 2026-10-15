@@ -14,3 +14,9 @@
 
 /** Minta halaman utama berpindah ke tab Chat. */
 export const PERISTIWA_BUKA_CHAT = "pri:buka-chat";
+
+/**
+ * Minta halaman utama berpindah ke tab TV Rakyat Saya (15 Okt 2026) — dari
+ * tombol "Buat video dari perintah ini" di panel Video Wajib.
+ */
+export const PERISTIWA_BUKA_TVRKU = "pri:buka-tvrku";

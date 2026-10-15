@@ -22,8 +22,8 @@
 // benar-benar nol, "–" berarti tidak diketahui.
 // ============================================================
 
-import { useEffect, useState } from "react";
-import { AlertTriangle, ExternalLink, Layers, RefreshCw, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertTriangle, ExternalLink, Info, Layers, Loader2, RefreshCw, Upload } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { EmptyState, GlassSkeleton } from "@/components/pri-ui";
 import { PlatformIcon } from "@/components/platform-icon";
@@ -33,6 +33,7 @@ import { toast } from "@/hooks/use-app-store";
 import {
   getInsightKategori,
   getKeywordWajib,
+  hitungKePerintah,
   tarikMetrikPostSekarang,
   type HasilTarikMetrik,
   type InsightKategori,
@@ -74,6 +75,285 @@ const LABEL_STATUS: Record<string, string> = {
 
 const angka = (v: number | null | undefined) => (v == null ? "–" : formatAngkaRingkas(v));
 
+// ------------------------------------------------------------
+// Isolasi per perintah (15 Okt 2026). Potongan di bawah dipakai bersama
+// oleh panel ini dan halaman penuh (insight-kategori-screen.tsx).
+// Kategori tanpa perintah (terisolasi falsy) tidak memunculkan satupun.
+// ------------------------------------------------------------
+
+/**
+ * Memuat insight satu kategori. Saklar "Hitung juga yang dipilih anggota"
+ * diingat selama layar terbuka saja dan direset saat kategori berganti.
+ * Respons basi (kategori/saklar sudah berganti lagi) diabaikan.
+ */
+export function useInsightKategoriData(pilih: string) {
+  const [data, setData] = useState<InsightKategori | null>(null);
+  const [galat, setGalat] = useState("");
+  const [muat, setMuat] = useState(0);
+  const [manual, setManual] = useState(false);
+  const [menyegarkan, setMenyegarkan] = useState(false);
+  const [pilihSebelum, setPilihSebelum] = useState(pilih);
+  // Muat ulang "senyap": data lama tetap terlihat (saklar / tombol tidak
+  // hilang) sampai respons baru datang.
+  const senyapRef = useRef(false);
+
+  if (pilihSebelum !== pilih) {
+    setPilihSebelum(pilih);
+    setManual(false);
+  }
+
+  useEffect(() => {
+    if (!pilih) return;
+    let hidup = true;
+    const senyap = senyapRef.current;
+    senyapRef.current = false;
+    void (async () => {
+      if (senyap) setMenyegarkan(true);
+      else setData(null);
+      setGalat("");
+      try {
+        const d = await getInsightKategori(pilih, manual ? { manual: true } : undefined);
+        if (hidup) {
+          setData(d);
+          setMenyegarkan(false);
+        }
+      } catch (e) {
+        if (hidup) {
+          setGalat(e instanceof Error ? e.message : "Gagal memuat.");
+          setMenyegarkan(false);
+        }
+      }
+    })();
+    return () => {
+      hidup = false;
+    };
+  }, [pilih, muat, manual]);
+
+  return {
+    data,
+    galat,
+    manual,
+    menyegarkan,
+    /** Muat ulang penuh (kerangka dulu). */
+    segarkan: () => setMuat((n) => n + 1),
+    /** Muat ulang tanpa mengosongkan tampilan. */
+    segarkanSenyap: () => {
+      senyapRef.current = true;
+      setMuat((n) => n + 1);
+    },
+    ubahManual: (v: boolean) => {
+      if (v === manual) return;
+      senyapRef.current = true;
+      setManual(v);
+    },
+  };
+}
+
+/** Banner biru + saklar; hanya untuk kategori yang terisolasi. */
+export function BannerIsolasi({
+  data,
+  manual,
+  menyegarkan,
+  onUbah,
+}: {
+  data: InsightKategori;
+  manual: boolean;
+  menyegarkan: boolean;
+  onUbah: (v: boolean) => void;
+}) {
+  if (data.terisolasi !== true) return null;
+  const termasuk = data.termasuk_manual === true;
+  return (
+    <div
+      className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-dashed border-sky-400/70 bg-sky-500/10 px-3 py-2.5"
+      role="note"
+    >
+      <Info className="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-300" aria-hidden="true" />
+      <p className="min-w-0 flex-1 basis-56 text-[11.5px] leading-relaxed text-sky-900 dark:text-sky-100">
+        <b>Terisolasi per perintah.</b>{" "}
+        {termasuk
+          ? "Termasuk video yang kategorinya dipilih anggota sendiri."
+          : `Insight ${data.kategori} hanya menghitung video bernomor perintah — dibuat lewat 'Buat video dari perintah ini' atau dimasukkan Pimred. Pilihan kategori manual anggota tidak ikut.`}
+      </p>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={manual}
+        onClick={() => onUbah(!manual)}
+        className="btn-tekan flex min-h-9 items-center gap-2 text-[11.5px] font-semibold text-sky-900 dark:text-sky-100"
+      >
+        <span
+          aria-hidden="true"
+          className={cn(
+            "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+            manual ? "bg-sky-600" : "bg-teks-sekunder/30",
+          )}
+        >
+          <span
+            className={cn(
+              "absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
+              manual && "translate-x-4",
+            )}
+          />
+        </span>
+        Hitung juga yang dipilih anggota
+        {menyegarkan && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+      </button>
+    </div>
+  );
+}
+
+/** "2026-10-15" → "15/10". */
+function labelTanggalPendek(t: string): string {
+  const m = /^\d{4}-(\d{2})-(\d{2})/.exec(t);
+  return m ? `${m[2]}/${m[1]}` : t.slice(-5);
+}
+
+/** Grafik batang sederhana: tinggi = jumlah video per tanggal. */
+export function TrenHarian({ tren }: { tren: NonNullable<InsightKategori["tren_harian"]> }) {
+  if (tren.length === 0) return null;
+  const maks = Math.max(1, ...tren.map((t) => t.video));
+  const TINGGI = 72;
+  return (
+    <section aria-label="Tren harian">
+      <h3 className="mt-4 font-heading text-[13px] font-bold text-teks-utama">
+        Tren harian
+        <span className="ml-1 text-[11px] font-semibold text-teks-sekunder">
+          · video terbit per hari, {tren.length} hari
+        </span>
+      </h3>
+      <div className="mt-2 flex items-end gap-1" role="list">
+        {tren.map((t, i) => {
+          const tinggi = t.video > 0 ? Math.max(4, Math.round((t.video / maks) * TINGGI)) : 2;
+          // Label selang-seling supaya tidak berdesakan di ponsel.
+          const tampilLabel = tren.length <= 8 || (tren.length - 1 - i) % 2 === 0;
+          return (
+            <div
+              key={t.tanggal}
+              role="listitem"
+              title={`${labelTanggalPendek(t.tanggal)}: ${t.video} video · ${formatAngkaRingkas(t.tayangan)} tayangan`}
+              className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1"
+              style={{ height: TINGGI + 16 }}
+            >
+              <span
+                className={cn("w-full rounded-t", t.video > 0 ? "bg-sky-600" : "bg-teks-sekunder/25")}
+                style={{ height: tinggi }}
+              />
+              <span className="h-3 text-[8.5px] leading-3 whitespace-nowrap text-teks-sekunder">
+                {tampilLabel ? labelTanggalPendek(t.tanggal) : ""}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** Lencana ungu untuk video yang dimasukkan Pimred ke sebuah perintah. */
+export function LencanaAsal({ asal }: { asal: string }) {
+  if (asal !== "dimasukkan") return null;
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-full bg-violet-500/15 px-2 py-px text-[9.5px] font-extrabold text-violet-700 dark:text-violet-300">
+      Dimasukkan Pimred
+    </span>
+  );
+}
+
+const MAKS_BARIS_TIDAK_DIHITUNG = 50;
+
+/** Video yang tidak dihitung ke kategori; Pimred bisa memasukkannya satu per satu. */
+export function PanelTidakDihitung({
+  data,
+  onBerhasil,
+}: {
+  data: InsightKategori;
+  onBerhasil: () => void;
+}) {
+  const [berjalan, setBerjalan] = useState<string | null>(null);
+  const td = data.tidak_dihitung;
+  if (data.terisolasi !== true || data.termasuk_manual === true || !td || td.jumlah <= 0) return null;
+  const perintah = data.perintah?.find((p) => p.aktif) ?? data.perintah?.[0];
+  const baris = td.daftar.slice(0, MAKS_BARIS_TIDAK_DIHITUNG);
+
+  async function hitung(id: string) {
+    if (berjalan || !perintah) return;
+    setBerjalan(id);
+    try {
+      await hitungKePerintah(perintah.id, id);
+      toast("sukses", `Dihitung sebagai ${data.kategori}`, `Video dimasukkan ke perintah "${perintah.judul}".`);
+      onBerhasil();
+    } catch (e) {
+      toast("error", "Gagal menghitung video", e instanceof Error ? e.message : "");
+    } finally {
+      setBerjalan(null);
+    }
+  }
+
+  return (
+    <section
+      className="mt-5 rounded-2xl border border-amber-400/50 bg-amber-500/10 p-3"
+      aria-label={`Tidak dihitung ke ${data.kategori}`}
+    >
+      <h3 className="flex flex-wrap items-center gap-x-1.5 font-heading text-[13px] font-bold text-amber-900 dark:text-amber-100">
+        Tidak dihitung ke {data.kategori}
+        <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-200">· {td.jumlah} video</span>
+      </h3>
+      <p className="mt-1 text-[10.5px] leading-relaxed text-amber-800 dark:text-amber-200">
+        Dibuat di luar perintah (kategori dipilih anggota sendiri). Mesin tidak menebak kategorinya; Pimred memutuskan.
+        {perintah && (
+          <>
+            {" "}
+            Tujuan: <b>{perintah.judul}</b>.
+          </>
+        )}
+      </p>
+      <ul className="mt-2 flex flex-col gap-1.5">
+        {baris.map((b) => (
+          <li key={b.id} className="glass-soft flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-xl p-2.5">
+            <PlatformIcon platform={b.platform} size={14} />
+            <div className="min-w-0 flex-1 basis-40">
+              <p className="truncate text-[12px] font-bold text-teks-utama">
+                {LABEL_PLATFORM[b.platform] ?? b.platform}
+                {b.pelapor ? ` · ${b.pelapor}` : ""}
+              </p>
+              <p className="mt-0.5 truncate text-[10.5px] text-teks-sekunder">
+                {b.tanggal_wib}
+                {" · "}
+                <a
+                  href={hrefAman(b.url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5 underline-offset-2 hover:underline"
+                >
+                  {b.url.replace(/^https?:\/\/(www\.)?/, "")}
+                  <ExternalLink className="h-3 w-3 shrink-0" aria-hidden="true" />
+                </a>
+              </p>
+            </div>
+            {perintah && (
+              <button
+                type="button"
+                onClick={() => void hitung(b.id)}
+                disabled={berjalan !== null}
+                className="glass btn-tekan flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[11px] font-bold text-sky-700 disabled:opacity-50 dark:text-sky-300"
+              >
+                {berjalan === b.id && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+                Hitung sebagai {data.kategori}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {td.jumlah > baris.length && (
+        <p className="mt-2 text-[10.5px] text-amber-800 dark:text-amber-200">
+          Menampilkan {baris.length} dari {td.jumlah} video.
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function PanelInsightKategori({
   onBukaHalaman,
 }: {
@@ -85,9 +365,10 @@ export function PanelInsightKategori({
   // yang dibutuhkan setelah acara usai) — hanya diberi tanda.
   const [selesai, setSelesai] = useState<Set<string>>(() => new Set());
   const [pilih, setPilih] = useState("");
-  const [data, setData] = useState<InsightKategori | null>(null);
-  const [galat, setGalat] = useState("");
-  const [muat, setMuat] = useState(0);
+  const [galatDaftar, setGalatDaftar] = useState("");
+  const { data, galat: galatData, manual, menyegarkan, segarkan, segarkanSenyap, ubahManual } =
+    useInsightKategoriData(pilih);
+  const galat = galatData || galatDaftar;
   // "Tarik sekarang" per unggahan: satu permintaan live ke upload-post.
   // Hasil per platform (termasuk alasan bila gagal) ditampilkan di bawah
   // daftar supaya "–" selalu punya penjelasan.
@@ -111,7 +392,7 @@ export function PanelInsightKategori({
             ? "Langsung dari upload-post."
             : "Lihat rincian di bawah daftar.",
       );
-      setMuat((n) => n + 1);
+      segarkan();
     } catch (e) {
       toast("error", "Gagal menarik dari upload-post", e instanceof Error ? e.message : "");
     } finally {
@@ -132,31 +413,13 @@ export function PanelInsightKategori({
       } catch (e) {
         if (!hidup) return;
         setDaftar([]);
-        setGalat(e instanceof Error ? e.message : "Gagal memuat kategori.");
+        setGalatDaftar(e instanceof Error ? e.message : "Gagal memuat kategori.");
       }
     })();
     return () => {
       hidup = false;
     };
   }, []);
-
-  useEffect(() => {
-    if (!pilih) return;
-    let hidup = true;
-    void (async () => {
-      setData(null);
-      setGalat("");
-      try {
-        const d = await getInsightKategori(pilih);
-        if (hidup) setData(d);
-      } catch (e) {
-        if (hidup) setGalat(e instanceof Error ? e.message : "Gagal memuat.");
-      }
-    })();
-    return () => {
-      hidup = false;
-    };
-  }, [pilih, muat]);
 
   const r = data?.ringkasan;
   // Impresi & jangkauan hanya ada bila database menyimpan angka mentah
@@ -198,7 +461,7 @@ export function PanelInsightKategori({
         )}
         <button
           type="button"
-          onClick={() => setMuat((n) => n + 1)}
+          onClick={segarkan}
           aria-label="Muat ulang"
           className="glass btn-tekan flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-teks-utama"
         >
@@ -240,7 +503,7 @@ export function PanelInsightKategori({
           judul="Gagal memuat"
           keterangan={galat}
           labelAksi="Coba Lagi"
-          onAksi={() => setMuat((n) => n + 1)}
+          onAksi={segarkan}
         />
       ) : !data || !r ? (
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -250,8 +513,14 @@ export function PanelInsightKategori({
         </div>
       ) : (
         <>
+          {/* Isolasi per perintah: banner + saklar (hanya kategori yang punya perintah). */}
+          <BannerIsolasi data={data} manual={manual} menyegarkan={menyegarkan} onUbah={ubahManual} />
+
           {/* ===== Ringkasan seluruh video kategori ===== */}
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div
+            className={cn("mt-3 grid grid-cols-2 gap-2 transition-opacity sm:grid-cols-4", menyegarkan && "opacity-60")}
+            aria-busy={menyegarkan}
+          >
             {TILE_KATEGORI.map((t) => (
               <div key={t.kunci} className="glass-soft rounded-xl p-2.5 text-center">
                 <p className="angka-tab font-heading text-[16px] leading-none font-extrabold text-teks-utama">
@@ -289,6 +558,9 @@ export function PanelInsightKategori({
               Kunci upload-post belum terpasang di server ini — angka tidak bisa ditarik.
             </p>
           )}
+
+          {/* Tren harian (data selalu ada, juga untuk kategori tanpa isolasi). */}
+          {data.tren_harian && data.tren_harian.length > 0 && <TrenHarian tren={data.tren_harian} />}
 
           {/* ===== 1. Unggahan lewat SuperApp ===== */}
           <h3 className="mt-4 flex items-center gap-1.5 font-heading text-[13px] font-bold text-teks-utama">
@@ -483,6 +755,11 @@ export function PanelInsightKategori({
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
+                    {v.asal === "dimasukkan" && (
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        <LencanaAsal asal={v.asal} />
+                      </div>
+                    )}
                     {v.metrik ? (
                       <p className="angka-tab mt-0.5 text-[10.5px] text-teks-sekunder">
                         {formatAngkaRingkas(v.metrik.tayangan)} tayangan · {formatAngkaRingkas(v.metrik.suka)} suka ·{" "}
@@ -513,6 +790,8 @@ export function PanelInsightKategori({
               Menampilkan {data.ditampilkan} dari {r.jumlah_video} video; totalnya tetap dihitung dari semua.
             </p>
           )}
+
+          <PanelTidakDihitung data={data} onBerhasil={segarkanSenyap} />
         </>
       )}
     </GlassCard>

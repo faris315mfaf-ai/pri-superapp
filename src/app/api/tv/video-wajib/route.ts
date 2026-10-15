@@ -14,19 +14,37 @@
 //          berkas_url dibuat bertanda tangan SAAT DIBACA (tidak disimpan).
 // POST   { aksi:"siapkan", nama, ukuran } → URL unggah bertanda tangan
 // POST   { judul, keterangan, link_doksli, sumber_video, kategori,
-//          batas_waktu, berkas?{cara,key,nama,ukuran} }
+//          batas_waktu, berkas?{cara,key,nama,ukuran},
+//          wajib_posting?, pola?('harian'|'sekali'), batas_jam?('HH:MM'), pengingat? }
+//
+// 15 Okt 2026 — perintah BERNOMOR: kategori yang dipilih Pimred terbawa ke
+// unggahan, laporan, dan insight lewat nomor perintah (sql/76). "Wajib
+// posting" berlaku otomatis untuk semua akun tersambung & semua platform.
+// GET menambahkan `saya` (kemajuan pemanggil) dan, untuk yang berwenang,
+// `ringkas` (kepatuhan hari ini).
 // PATCH  { id, aktif }
 // DELETE { id }  — berkasnya ikut dihapus dari penyimpanan
 //
 // Siapa yang berwenang: seluruh anggota TV Rakyat (wewenangTv), Direktur
 // Eksekutif, Pimpinan Redaksi, dan jabatan TV Rakyat Nasional.
 import { randomBytes } from "node:crypto";
+import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { bungkus, tabelBelumAda } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { bolehKelolaTvr } from "@/lib/tv-tim";
 import { maksUploadMb } from "@/lib/pengaturan-tv";
 import { hapusVideoR2, presignR2, r2Siap } from "@/lib/r2";
+import { kirimKabar } from "@/lib/notifikasi";
+import {
+  bersihkanBatasJam,
+  bersihkanPola,
+  PENGATURAN_WAJIB_BAWAAN,
+  type KemajuanSaya,
+  type PolaWajib,
+  type RingkasKepatuhan,
+} from "@/lib/video-wajib-perintah";
+import { bentukPerintah, kemajuanPerintahSaya, ringkasHariIni, roster } from "@/lib/video-wajib-pantau";
 
 export const dynamic = "force-dynamic";
 
@@ -115,8 +133,10 @@ function bersihkanBerkas(v: unknown): { cara: CaraBerkas; key: string; nama: str
   };
 }
 
-const KOLOM =
+const KOLOM_52 =
   "id, judul, keterangan, link_doksli, sumber_video, kategori, batas_waktu, aktif, dibuat_pada, dibuat_oleh_id, berkas_cara, berkas_key, berkas_nama, berkas_ukuran";
+/** Dengan pengaturan wajib posting (sql/76). */
+const KOLOM = `${KOLOM_52}, wajib_posting, pola, batas_jam, pengingat`;
 /** Bentuk lama, dipakai bila sql/52 belum dijalankan. */
 const KOLOM_LAMA = "id, judul, keterangan, link_doksli, kategori, batas_waktu, aktif, dibuat_pada, dibuat_oleh_id";
 
@@ -135,10 +155,34 @@ type Baris = {
   berkas_key?: string | null;
   berkas_nama?: string | null;
   berkas_ukuran?: number | string | null;
+  wajib_posting?: boolean | null;
+  pola?: string | null;
+  batas_jam?: string | null;
+  pengingat?: boolean | null;
 };
 
-function bentuk(b: Baris, berkasUrl = "") {
+type Tambahan = { saya?: KemajuanSaya; ringkas?: RingkasKepatuhan };
+
+function bentuk(b: Baris, berkasUrl = "", tambahan: Tambahan = {}) {
+  const wajib = bentukPerintah({
+    id: b.id,
+    judul: b.judul,
+    kategori: b.kategori,
+    aktif: b.aktif,
+    batas_waktu: b.batas_waktu,
+    dibuat_pada: b.dibuat_pada,
+    wajib_posting: b.wajib_posting,
+    pola: b.pola,
+    batas_jam: b.batas_jam,
+    pengingat: b.pengingat,
+  });
   return {
+    wajib_posting: wajib.wajib_posting,
+    pola: wajib.pola,
+    batas_jam: wajib.batas_jam,
+    pengingat: wajib.pengingat,
+    saya: tambahan.saya ?? null,
+    ringkas: tambahan.ringkas ?? null,
     id: String(b.id),
     judul: b.judul,
     keterangan: b.keterangan ?? "",
@@ -188,25 +232,21 @@ async function urlBerkas(baris: Baris[]): Promise<Map<string, string>> {
 
 async function ambilBaris(hanyaAktif: boolean): Promise<Baris[]> {
   const db = supabase();
-  let q = db.from("tvr_video_wajib").select(KOLOM).order("dibuat_pada", { ascending: false }).limit(50);
-  if (hanyaAktif) q = q.eq("aktif", true);
-  const { data, error } = await q;
-  if (!error) return (data ?? []) as Baris[];
-  console.error("[tv/video-wajib] select:", error.code, error.message);
-  // Migrasi sql/46 belum dijalankan: jangan jatuhkan seluruh modul TV.
-  if (tabelBelumAda(error)) return [];
-  // Kolom baru belum ada (sql/52 belum dijalankan): tampilkan bentuk
-  // lama daripada panel kosong dengan galat.
-  if (error.code !== "42703") throw new Error("Gagal memuat video wajib.");
-  let lama = db.from("tvr_video_wajib").select(KOLOM_LAMA).order("dibuat_pada", { ascending: false }).limit(50);
-  if (hanyaAktif) lama = lama.eq("aktif", true);
-  const ulang = await lama;
-  if (ulang.error) {
-    console.error("[tv/video-wajib] select-lama:", ulang.error.code, ulang.error.message);
-    if (tabelBelumAda(ulang.error)) return [];
-    throw new Error("Gagal memuat video wajib.");
+  const baca = (kolom: string) => {
+    let q = db.from("tvr_video_wajib").select(kolom).order("dibuat_pada", { ascending: false }).limit(50);
+    if (hanyaAktif) q = q.eq("aktif", true);
+    return q;
+  };
+  // Tiga generasi kolom: sql/76 (wajib posting) → sql/52 (berkas) → sql/46.
+  // Migrasi yang belum dijalankan tidak boleh menjatuhkan seluruh modul TV.
+  for (const kolom of [KOLOM, KOLOM_52, KOLOM_LAMA]) {
+    const { data, error } = await baca(kolom);
+    if (!error) return (data ?? []) as unknown as Baris[];
+    console.error("[tv/video-wajib] select:", error.code, error.message);
+    if (tabelBelumAda(error)) return [];
+    if (error.code !== "42703") throw new Error("Gagal memuat video wajib.");
   }
-  return (ulang.data ?? []) as Baris[];
+  throw new Error("Gagal memuat video wajib.");
 }
 
 export async function GET(request: Request) {
@@ -217,7 +257,51 @@ export async function GET(request: Request) {
     // dimatikan bukan lagi kewajibannya.
     const baris = await ambilBaris(!boleh);
     const url = await urlBerkas(baris);
-    return { data: baris.map((b) => bentuk(b, url.get(String(b.id)) ?? "")), boleh };
+
+    // Kemajuan pemanggil atas perintah wajib posting yang aktif, dan (untuk
+    // yang berwenang) ringkasan kepatuhan hari ini. Gagal = tanpa tambahan,
+    // panelnya tetap tampil.
+    const wajibAktif = baris
+      .filter((b) => b.aktif === true && b.wajib_posting === true)
+      .map((b) =>
+        bentukPerintah({
+          id: b.id,
+          judul: b.judul,
+          kategori: b.kategori,
+          aktif: b.aktif,
+          batas_waktu: b.batas_waktu,
+          dibuat_pada: b.dibuat_pada,
+          wajib_posting: b.wajib_posting,
+          pola: b.pola,
+          batas_jam: b.batas_jam,
+          pengingat: b.pengingat,
+        }),
+      );
+    const saya = await kemajuanPerintahSaya(Number(user.id), wajibAktif).catch((e) => {
+      console.error("[tv/video-wajib] kemajuan saya:", e);
+      return new Map<string, KemajuanSaya>();
+    });
+    const ringkas = new Map<string, RingkasKepatuhan>();
+    if (boleh) {
+      await Promise.all(
+        wajibAktif.map(async (p) => {
+          try {
+            ringkas.set(p.id, await ringkasHariIni(p));
+          } catch (e) {
+            console.error("[tv/video-wajib] ringkas:", e);
+          }
+        }),
+      );
+    }
+    return {
+      data: baris.map((b) =>
+        bentuk(b, url.get(String(b.id)) ?? "", {
+          saya: saya.get(String(b.id)),
+          ringkas: ringkas.get(String(b.id)),
+        }),
+      ),
+      boleh,
+    };
   });
 }
 
@@ -273,12 +357,19 @@ export async function POST(request: Request) {
       throw Object.assign(new Error("Judul perintah minimal 3 huruf."), { status: 400 });
     }
     const berkas = bersihkanBerkas(body.berkas);
-    const isi = {
+    const kategori = teks(body.kategori, 120);
+    const wajibPosting = body.wajib_posting === true;
+    // Kategori itulah yang dibawa video sampai insight; wajib posting tanpa
+    // kategori akan menghasilkan video tanpa kelompok.
+    if (wajibPosting && !kategori) {
+      throw Object.assign(new Error("Pilih kategori dulu: kategori itu yang dibawa videonya sampai insight."), { status: 400 });
+    }
+    const isi: Record<string, unknown> = {
       judul,
       keterangan: teks(body.keterangan, 2000),
       link_doksli: bersihkanLink(body.link_doksli),
       sumber_video: teks(body.sumber_video, 200),
-      kategori: teks(body.kategori, 120),
+      kategori,
       batas_waktu: bersihkanTanggal(body.batas_waktu),
       dibuat_oleh_id: Number(user.id),
       berkas_cara: berkas.cara,
@@ -286,17 +377,43 @@ export async function POST(request: Request) {
       berkas_nama: berkas.nama,
       berkas_ukuran: berkas.ukuran,
     };
-    const { data, error } = await supabase().from("tvr_video_wajib").insert(isi).select(KOLOM).single();
+    const pengaturan = {
+      wajib_posting: wajibPosting,
+      pola: bersihkanPola(body.pola) satisfies PolaWajib,
+      batas_jam: bersihkanBatasJam(body.batas_jam ?? PENGATURAN_WAJIB_BAWAAN.batas_jam),
+      pengingat: body.pengingat !== false,
+    };
+    const hapusBerkasYatim = () => hapusBerkas({ berkas_cara: berkas.cara, berkas_key: berkas.key });
+
+    const db = supabase();
+    let hasil = await db
+      .from("tvr_video_wajib")
+      .insert({ ...isi, ...pengaturan })
+      .select(KOLOM)
+      .single();
+    if (hasil.error?.code === "42703") {
+      // Kolom wajib posting belum ada (sql/76). Perintah biasa tetap bisa
+      // terbit; perintah WAJIB POSTING tidak boleh jadi perintah biasa diam-diam.
+      if (wajibPosting) {
+        await hapusBerkasYatim();
+        throw Object.assign(
+          new Error("Fitur wajib posting belum aktif di database: jalankan sql/76_video_wajib_perintah.sql dulu."),
+          { status: 503, pesanAman: true },
+        );
+      }
+      hasil = (await db.from("tvr_video_wajib").insert(isi).select(KOLOM_52).single()) as typeof hasil;
+    }
+    const { data, error } = hasil;
     if (error?.code === "42703") {
       // Berkas sudah telanjur di penyimpanan; jangan tinggalkan yatim.
-      await hapusBerkas({ berkas_cara: berkas.cara, berkas_key: berkas.key });
+      await hapusBerkasYatim();
       throw Object.assign(
         new Error("Kolom bahan video belum ada di database: jalankan pri-sql 52_video_wajib_berkas.sql dulu."),
         { status: 503, pesanAman: true },
       );
     }
     if (tabelBelumAda(error)) {
-      await hapusBerkas({ berkas_cara: berkas.cara, berkas_key: berkas.key });
+      await hapusBerkasYatim();
       throw Object.assign(
         new Error(
           "Tabel video wajib belum ada di database. Jalankan sql/46_tvr_nasional.sql lalu sql/52_video_wajib_berkas.sql di SQL Editor Supabase.",
@@ -305,8 +422,29 @@ export async function POST(request: Request) {
       );
     }
     if (error || !data) throw new Error("Gagal menyimpan video wajib.");
-    const url = await urlBerkas([data as Baris]);
-    return bentuk(data as Baris, url.get(String((data as Baris).id)) ?? "");
+    const baris = data as unknown as Baris;
+    const url = await urlBerkas([baris]);
+
+    // Kabari semua akun yang wajib: perintah baru bernomor, berlaku otomatis.
+    if (wajibPosting) {
+      after(async () => {
+        try {
+          const penerima = (await roster()).map((a) => Number(a.user_id)).filter((n) => Number.isFinite(n) && n > 0);
+          if (penerima.length === 0) return;
+          await kirimKabar({
+            judul: `🎬 Video Wajib: ${judul}`.slice(0, 120),
+            isi: `Perintah baru${kategori ? ` kategori ${kategori}` : ""}. Wajib diposting di semua akun Anda sebelum ${pengaturan.batas_jam.replace(":", ".")} WIB. Buka TV Rakyat Saya untuk membuat videonya.`,
+            kategori: "peringatan",
+            jenis_peristiwa: "video_wajib_baru",
+            target: "tvrku",
+            untukUserIds: penerima,
+          });
+        } catch (e) {
+          console.error("[video-wajib] kabar perintah baru:", e);
+        }
+      });
+    }
+    return bentuk(baris, url.get(String(baris.id)) ?? "");
   });
 }
 

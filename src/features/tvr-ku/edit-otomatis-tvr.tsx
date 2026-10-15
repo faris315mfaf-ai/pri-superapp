@@ -32,6 +32,8 @@ import { GlassCard } from "@/components/glass-card";
 import { GlassSkeleton } from "@/components/pri-ui";
 import { toast, useAppStore } from "@/hooks/use-app-store";
 import { useRefTabAktif } from "@/hooks/use-tab-aktif";
+import { usePerintahAktif } from "@/hooks/use-perintah-aktif";
+import type { PerintahAktif } from "@/lib/video-wajib-perintah";
 import { cn } from "@/lib/utils";
 import { bacaJson, pesanGalat } from "@/features/auto-edit/api";
 import { adalahKonteksBot, useApiAutoEdit } from "@/features/auto-edit/tim";
@@ -74,7 +76,9 @@ export function EditOtomatisTvr() {
   const [persenSumber, setPersenSumber] = useState<number | null>(null);
   const [hook, setHook] = useState("");
   const [teksSumber, setTeksSumber] = useState("");
-  const [kategori, setKategori] = useState("");
+  const [kategoriManual, setKategori] = useState("");
+  // Perintah Video Wajib yang sedang dikerjakan: kategorinya TERKUNCI (15 Okt 2026).
+  const [perintahAktif, setPerintahAktif] = usePerintahAktif();
   const [naskah, setNaskah] = useState("");
   const [bukaNaskah, setBukaNaskah] = useState(false);
   const [membuatHook, setMembuatHook] = useState(false);
@@ -256,6 +260,7 @@ export function EditOtomatisTvr() {
   if (!data) return <GlassSkeleton className="h-32 rounded-2xl" />;
 
   const { template, batas } = data;
+  const kategori = perintahAktif ? perintahAktif.kategori.toUpperCase().slice(0, batas.maks_kategori) : kategoriManual;
   const gagal = job && (job.status === "error" || job.status === "dibatalkan") ? job : null;
 
   function segarkan() {
@@ -533,6 +538,8 @@ export function EditOtomatisTvr() {
             setTeksSumber={setTeksSumber}
             kategori={kategori}
             setKategori={setKategori}
+            perintah={perintahAktif}
+            lepasPerintah={() => setPerintahAktif(null)}
             naskah={naskah}
             setNaskah={setNaskah}
             bukaNaskah={bukaNaskah}
@@ -687,6 +694,9 @@ type FormProps = {
   setTeksSumber: (s: string) => void;
   kategori: string;
   setKategori: (s: string) => void;
+  /** Perintah Video Wajib yang dikerjakan: kategori terkunci; null = pilih sendiri. */
+  perintah: PerintahAktif | null;
+  lepasPerintah: () => void;
   naskah: string;
   setNaskah: (s: string) => void;
   bukaNaskah: boolean;
@@ -866,6 +876,22 @@ function FormBuatVideo(p: FormProps) {
         disabled={p.mengirim}
         className="glass-input mt-1 h-10 w-full rounded-xl px-3 text-[12.5px] text-teks-utama"
       />
+      {p.perintah && (
+        <div className="mt-2 flex items-center gap-2 rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2 dark:border-[#1E3A8A] dark:bg-[#172554]/40">
+          <span className="min-w-0 flex-1 text-[11.5px] leading-snug text-[#1E3A8A] dark:text-[#BFDBFE]">
+            <b>Video Wajib:</b> {p.perintah.judul || `perintah #${p.perintah.id}`} · kategori{" "}
+            <b>{p.perintah.kategori}</b> terkunci.
+          </span>
+          <button
+            type="button"
+            onClick={p.lepasPerintah}
+            disabled={p.mengirim}
+            className="btn-tekan shrink-0 rounded-full border border-[#1D4ED8] px-2.5 py-1 text-[10.5px] font-bold text-[#1D4ED8] disabled:opacity-50 dark:text-[#93C5FD]"
+          >
+            Lepas
+          </button>
+        </div>
+      )}
       <div className="mt-2 flex items-center gap-2">
         <label htmlFor="tvr-kategori-video" className="shrink-0 text-[12px] font-bold text-teks-utama">
           Kategori
@@ -876,7 +902,8 @@ function FormBuatVideo(p: FormProps) {
           onChange={(e) => p.setKategori(e.target.value.toUpperCase().slice(0, batas.maks_kategori))}
           placeholder="NEWS (opsional — kosong = tanpa badge)"
           disabled={p.mengirim}
-          className="glass-input h-10 min-w-0 flex-1 rounded-xl px-3 text-[12.5px] font-bold tracking-wide text-teks-utama uppercase"
+          readOnly={Boolean(p.perintah)}
+          className="glass-input h-10 min-w-0 flex-1 rounded-xl px-3 text-[12.5px] font-bold tracking-wide text-teks-utama uppercase read-only:opacity-70"
         />
       </div>
 

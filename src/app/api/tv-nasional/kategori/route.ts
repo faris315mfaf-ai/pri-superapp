@@ -19,6 +19,12 @@
 //   • tvr_kategori_link (sql/50) bila tabelnya ada.
 // Kolom/tabel yang belum ada di database dilewati, tidak membuat galat.
 //
+// ISOLASI PER PERINTAH (15 Okt 2026): bila kategori ini punya perintah Video
+// Wajib (sql/76), yang dihitung HANYA video bernomor perintah — pilihan
+// kategori manual anggota tidak ikut, kecuali ?manual=1 (saklar "Hitung juga
+// yang dipilih anggota"). Yang tidak dihitung dilaporkan di `tidak_dihitung`
+// supaya Pimred bisa memasukkannya (POST /api/tv/video-wajib/hitung).
+//
 // ?mentah=<id tvrku_post>: tarik angka SATU unggahan sekarang juga
 // (tombol di panel) — satu permintaan ke upload-post, dibatasi bersama.
 //
@@ -33,6 +39,7 @@ import {
   kodeMetrik,
   polaPersis,
   susunInsightKategori,
+  susunTrenHarian,
   type LaporanKategori,
   type MetrikVideoKategori,
 } from "@/lib/insight-kategori";
@@ -69,7 +76,7 @@ type BarisPost = {
   dibuat_pada: string;
 };
 
-type BarisLaporan = LaporanKategori & { tvrku_post_id?: unknown };
+type BarisLaporan = LaporanKategori & { tvrku_post_id?: unknown; perintah_oleh?: unknown };
 
 /** Angka satu platform satu unggahan untuk layar (tanpa `mentah` yang besar). */
 type MetrikTampil = Omit<MetrikPostTerurai, "mentah">;
@@ -98,6 +105,34 @@ export async function GET(request: Request) {
     const kategori = (url.searchParams.get("kategori") ?? "").trim().slice(0, 120);
     if (!kategori) throw Object.assign(new Error("Sebutkan kategorinya."), { status: 400 });
     const pola = polaPersis(kategori);
+    const termasukManual = url.searchParams.get("manual") === "1";
+
+    // ---- Isolasi: kategori ini punya perintah bernomor? -----------------
+    const [{ data: perintahKategori, error: galatPerintah }, { data: laporanBernomor }, { data: postBernomor }] =
+      await Promise.all([
+        db
+          .from("tvr_video_wajib")
+          .select("id, judul, aktif, dibuat_pada")
+          .ilike("kategori", pola)
+          .order("dibuat_pada", { ascending: false })
+          .limit(20),
+        db.from("laporan_video").select("id").ilike("keyword", pola).not("perintah_id", "is", null).limit(1),
+        db.from("tvrku_post").select("id").ilike("keyword", pola).not("perintah_id", "is", null).limit(1),
+      ]);
+    // Baris perintah kategori ini bisa saja perintah lama (tanpa wajib posting); yang
+    // menentukan isolasi: ada video bernomor, atau ada perintah wajib posting.
+    let adaPerintahWajib = false;
+    if (!galatPerintah && (perintahKategori ?? []).length > 0) {
+      const { data: wajib, error: galatWajib } = await db
+        .from("tvr_video_wajib")
+        .select("id")
+        .ilike("kategori", pola)
+        .eq("wajib_posting", true)
+        .limit(1);
+      adaPerintahWajib = !galatWajib && (wajib ?? []).length > 0;
+    }
+    const terisolasi = adaPerintahWajib || (laporanBernomor ?? []).length > 0 || (postBernomor ?? []).length > 0;
+    const hanyaBernomor = terisolasi && !termasukManual;
 
     const [adaKeywordPost, adaFavorit, adaDurasi, adaSumber, adaMentah] = await Promise.all([
       kolomTabelAda("tvrku_post", "keyword"),
@@ -112,16 +147,17 @@ export async function GET(request: Request) {
     // ==================================================================
     const [laporan, { data: linkKategori }, { data: postHasil }, { data: postKeyword }] = await Promise.all([
       semuaBaris<BarisLaporan>(
-        (dari, sampai) =>
-          db
+        (dari, sampai) => {
+          let q = db
             .from("laporan_video")
-            .select("id, user_id, platform, url_video, tanggal_wib, tvrku_post_id")
-            .ilike("keyword", pola)
-            .order("tanggal_wib", { ascending: false })
-            .range(dari, sampai) as unknown as PromiseLike<{
+            .select(terisolasi ? "id, user_id, platform, url_video, tanggal_wib, tvrku_post_id, perintah_oleh" : "id, user_id, platform, url_video, tanggal_wib, tvrku_post_id")
+            .ilike("keyword", pola);
+          if (hanyaBernomor) q = q.not("perintah_id", "is", null);
+          return q.order("tanggal_wib", { ascending: false }).range(dari, sampai) as unknown as PromiseLike<{
             data: BarisLaporan[] | null;
             error: { message: string } | null;
-          }>,
+          }>;
+        },
         20_000,
       ),
       // Tabel sql/50 — belum tentu ada; galatnya = tidak ada link tambahan.
@@ -131,17 +167,17 @@ export async function GET(request: Request) {
         .ilike("kategori", pola)
         .order("dibuat_pada", { ascending: false })
         .limit(1000),
-      db
-        .from("tvrku_post")
-        .select(KOLOM_POST)
-        .ilike("hasil->>kategori", pola)
+      (hanyaBernomor
+        ? db.from("tvrku_post").select(KOLOM_POST).ilike("hasil->>kategori", pola).not("perintah_id", "is", null)
+        : db.from("tvrku_post").select(KOLOM_POST).ilike("hasil->>kategori", pola)
+      )
         .order("dibuat_pada", { ascending: false })
         .limit(1000),
       adaKeywordPost
-        ? db
-            .from("tvrku_post")
-            .select(KOLOM_POST)
-            .ilike("keyword", pola)
+        ? (hanyaBernomor
+            ? db.from("tvrku_post").select(KOLOM_POST).ilike("keyword", pola).not("perintah_id", "is", null)
+            : db.from("tvrku_post").select(KOLOM_POST).ilike("keyword", pola)
+          )
             .order("dibuat_pada", { ascending: false })
             .limit(1000)
         : Promise.resolve({ data: [] as BarisPost[] }),
@@ -282,7 +318,7 @@ export async function GET(request: Request) {
         platform: String(l.platform ?? ""),
         url_video: String(l.url_video ?? ""),
         tanggal_wib: String(l.tanggal_wib ?? ""),
-        asal: "laporan" as const,
+        asal: l.perintah_oleh ? ("dimasukkan" as const) : ("laporan" as const),
       })),
       ...tautanKategori,
     ];
@@ -329,8 +365,46 @@ export async function GET(request: Request) {
     });
     const totalUp = jumlahkanMetrikPost(daftarPost.flatMap((p) => Object.values(p.per_platform)));
 
+    // ---- Video yang TIDAK dihitung (tanpa nomor perintah) --------------
+    let tidakDihitung: {
+      jumlah: number;
+      daftar: { id: string; platform: string; url: string; pelapor: string; tanggal_wib: string }[];
+    } | null = null;
+    if (hanyaBernomor) {
+      const { data: lepas, count } = await db
+        .from("laporan_video")
+        .select("id, user_id, platform, url_video, tanggal_wib", { count: "exact" })
+        .ilike("keyword", pola)
+        .is("perintah_id", null)
+        .order("tanggal_wib", { ascending: false })
+        .limit(50);
+      const idPelapor = [...new Set((lepas ?? []).map((l) => Number(l.user_id)).filter((n) => n > 0))];
+      const namaLepas = new Map<string, string>();
+      for (const bagian of potong(idPelapor, 300)) {
+        const { data } = await db.from("app_user").select("id, nama").in("id", bagian);
+        for (const u of data ?? []) namaLepas.set(String(u.id), String(u.nama ?? ""));
+      }
+      tidakDihitung = {
+        jumlah: count ?? (lepas ?? []).length,
+        daftar: (lepas ?? []).map((l) => ({
+          id: String(l.id),
+          platform: String(l.platform ?? ""),
+          url: String(l.url_video ?? ""),
+          pelapor: namaLepas.get(String(l.user_id)) ?? "",
+          tanggal_wib: String(l.tanggal_wib ?? ""),
+        })),
+      };
+    }
+
     const status = await statusPenyegar().catch(() => null);
     return {
+      /** true = hanya video bernomor perintah yang dihitung (kecuali saklar manual). */
+      terisolasi,
+      termasuk_manual: termasukManual,
+      /** Perintah untuk kategori ini (terbaru dulu) — dasar tombol "Hitung sebagai …". */
+      perintah: (perintahKategori ?? []).map((p) => ({ id: String(p.id), judul: String(p.judul ?? ""), aktif: p.aktif === true })),
+      tidak_dihitung: tidakDihitung,
+      tren_harian: susunTrenHarian(video),
       kategori,
       ringkasan,
       video: video.slice(0, 300),

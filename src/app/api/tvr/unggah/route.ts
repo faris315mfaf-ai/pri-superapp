@@ -30,6 +30,7 @@ import { PLATFORM_KPI } from "@/lib/kpi-video";
 import { rekonsiliasiKpiOtomatis } from "@/lib/kpi-otomatis";
 import { beriKoin } from "@/lib/koin";
 import { pastikanKategoriBolehDipakai } from "@/lib/kategori-status";
+import { muatPerintah } from "@/lib/video-wajib-pantau";
 import { hapusVideoCloudinary, konfigUploadCloudinary } from "@/lib/cloudinary";
 import { kompresLaluSalinKeR2 } from "@/lib/kompres-r2";
 import { BATAS_CAPTION_TVR, LABEL_SOSMED, solusiGagal } from "@/lib/batas-caption";
@@ -245,6 +246,8 @@ export async function POST(request: Request) {
       /** Caption KHUSUS per sosmed (8 Sep 2026) — hanya platform yang diisi. */
       caption_per?: Record<string, string>;
       keyword?: string;
+      /** Nomor perintah Video Wajib (15 Okt 2026): mengunci kategori ke kategori perintah. */
+      perintah_id?: number | string;
       platforms?: string[];
       jadwal?: string;
     };
@@ -450,7 +453,27 @@ export async function POST(request: Request) {
       // server, bukan hanya di layar: unggahan yang lolos tanpa kategori
       // akan menjadi lubang permanen di pengelompokan — datanya tidak
       // bisa ditebak lagi setelah videonya terlanjur naik.
-      const kategori = (body.keyword ?? "").trim().slice(0, 120);
+      let kategori = (body.keyword ?? "").trim().slice(0, 120);
+      // PERINTAH VIDEO WAJIB (15 Okt 2026): video dari perintah membawa
+      // nomor + kategori perintahnya. Kategori dikunci di server — kiriman
+      // `keyword` yang berbeda diabaikan, jadi satu perintah tidak mungkin
+      // pecah ke kategori lain.
+      let perintahId = 0;
+      const perintahMentah = Number(body.perintah_id ?? 0);
+      if (Number.isFinite(perintahMentah) && perintahMentah > 0) {
+        const perintah = await muatPerintah(Math.floor(perintahMentah));
+        if (!perintah || !perintah.aktif) {
+          throw Object.assign(
+            new Error("Perintah video wajib ini sudah tidak aktif. Lepas perintahnya atau pilih kategori sendiri."),
+            { status: 409 },
+          );
+        }
+        if (!perintah.kategori) {
+          throw Object.assign(new Error("Perintah ini belum punya kategori. Hubungi tim TV Rakyat."), { status: 409 });
+        }
+        perintahId = Number(perintah.id);
+        kategori = perintah.kategori.slice(0, 120);
+      }
       if (!kategori) {
         throw Object.assign(new Error("Pilih kategori videonya dulu."), { status: 400 });
       }
@@ -601,8 +624,8 @@ export async function POST(request: Request) {
       // insight per kategori & laporan otomatis tidak tahu videonya milik
       // kategori apa. Rekonsiliasi KPI mempertahankan kunci ini.
       const hasilSimpan = gagalAwal.length
-        ? { ...hasil.mentah, kategori, kpi_gagal: gagalAwal.map((g) => g.platform), kpi_gagal_alasan: Object.fromEntries(gagalAwal.map((g) => [g.platform, g.pesan])) }
-        : { ...hasil.mentah, kategori };
+        ? { ...hasil.mentah, kategori, ...(perintahId ? { perintah_id: perintahId } : {}), kpi_gagal: gagalAwal.map((g) => g.platform), kpi_gagal_alasan: Object.fromEntries(gagalAwal.map((g) => [g.platform, g.pesan])) }
+        : { ...hasil.mentah, kategori, ...(perintahId ? { perintah_id: perintahId } : {}) };
 
       // Berkas dihapus 2 jam setelah TAYANG: post langsung = sekarang+2j;
       // terjadwal = jadwal+2j (upload-post butuh URL-nya masih hidup
@@ -641,6 +664,7 @@ export async function POST(request: Request) {
           hapus_media_pada: pakaiLink ? null : hapusPada,
         };
       if (await kolomTabelAda("tvrku_post", "keyword")) isiRiwayat.keyword = kategori;
+      if (perintahId && (await kolomTabelAda("tvrku_post", "perintah_id"))) isiRiwayat.perintah_id = perintahId;
       if (await kolomTabelAda("tvrku_post", "penyedia")) isiRiwayat.penyedia = profil.penyedia;
 
       const { data: baris, error } = await sisipkanLonggar("tvrku_post", isiRiwayat);

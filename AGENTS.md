@@ -67,6 +67,9 @@ rahasia (password, kunci API, isi env) di berkas ini atau di repo.**
   `lacak`, dibangun DI VPS mesin oleh `12-perbarui.sh`. Mesin TS meneruskan `/api/lacak/*`
   (`src/mesin-video/server/lacak.ts`); UI `src/features/lacak-sumber/`; runner bot memakainya sebelum job.
   Panduan: `docs/LACAK-SUMBER.md`.
+- **Video Wajib bernomor perintah** (15 Okt 2026): kategori video dibawa dari perintah Pimred sampai Insight (tanpa
+  hashtag/LLM); wajib posting otomatis semua akun & platform, Pantau, pengingat, panel bisa diciutkan. Wajib jalankan
+  `sql/76_video_wajib_perintah.sql` di produksi. Panduan: `docs/VIDEO-WAJIB.md`.
 - **Tutorial interaktif**: mesin `src/features/tur/lapisan-tur.tsx`, langkah di `src/lib/tur.ts`
   (penanda `data-tur` di komponen asli).
 - **Akun TIM TV Rakyat Official**: identitas mesin `900000001` (`ID_TIM` di `src/lib/autoedit.ts`),

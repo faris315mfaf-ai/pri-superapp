@@ -38,13 +38,19 @@ import { toast } from "@/hooks/use-app-store";
 import { idVideo } from "@/lib/tautan-video";
 import { formatAngkaRingkas, sejakRingkas, waktuJelasWIB } from "@/lib/format";
 import {
-  getInsightKategori,
   getKeywordWajib,
   segarkanKategoriUp,
   tambahLinkKategori,
   type InsightKategori,
 } from "@/services";
 import { cn } from "@/lib/utils";
+import {
+  BannerIsolasi,
+  LencanaAsal,
+  PanelTidakDihitung,
+  TrenHarian,
+  useInsightKategoriData,
+} from "./panel-insight-kategori";
 
 const LABEL_PLATFORM: Record<string, string> = {
   tiktok: "TikTok",
@@ -134,6 +140,11 @@ function KartuVideo({ v, adaFavorit }: { v: Video; adaFavorit: boolean }) {
             .filter(Boolean)
             .join(" · ")}
         </p>
+        {v.asal === "dimasukkan" && (
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            <LencanaAsal asal={v.asal} />
+          </div>
+        )}
         {v.metrik ? (
           <div className="angka-tab mt-1.5 grid grid-cols-3 gap-x-2 gap-y-0.5 text-[10.5px] text-teks-sekunder">
             <span><b className="text-teks-utama">{angka(v.metrik.tayangan)}</b> tayang</span>
@@ -177,9 +188,10 @@ export function InsightKategoriScreen({
   const [selesai, setSelesai] = useState<Set<string>>(() => new Set());
   const [pilih, setPilih] = useState(kategoriAwal ?? "");
   const [platform, setPlatform] = useState("semua");
-  const [data, setData] = useState<InsightKategori | null>(null);
-  const [galat, setGalat] = useState("");
-  const [muat, setMuat] = useState(0);
+  const [galatDaftar, setGalatDaftar] = useState("");
+  const { data, galat: galatData, manual, menyegarkan, segarkan, segarkanSenyap, ubahManual } =
+    useInsightKategoriData(pilih);
+  const galat = galatData || galatDaftar;
 
   // Tarik sekarang (upload-post) — berulang sampai sisa nol atau direm.
   const [menarik, setMenarik] = useState<{ terisi: number; gagal: number; sisa: number | null } | null>(null);
@@ -201,31 +213,13 @@ export function InsightKategoriScreen({
       } catch (e) {
         if (!hidup) return;
         setDaftar([]);
-        setGalat(e instanceof Error ? e.message : "Gagal memuat kategori.");
+        setGalatDaftar(e instanceof Error ? e.message : "Gagal memuat kategori.");
       }
     })();
     return () => {
       hidup = false;
     };
   }, []);
-
-  useEffect(() => {
-    if (!pilih) return;
-    let hidup = true;
-    void (async () => {
-      setData(null);
-      setGalat("");
-      try {
-        const d = await getInsightKategori(pilih);
-        if (hidup) setData(d);
-      } catch (e) {
-        if (hidup) setGalat(e instanceof Error ? e.message : "Gagal memuat.");
-      }
-    })();
-    return () => {
-      hidup = false;
-    };
-  }, [pilih, muat]);
 
   async function tarikSemua() {
     if (menarik || !pilih) return;
@@ -264,7 +258,7 @@ export function InsightKategoriScreen({
           `${terisi} video diperbarui angkanya${gagalN > 0 ? ` · ${gagalN} tidak terbaca upload-post` : ""}.`,
         );
       }
-      setMuat((n) => n + 1);
+      segarkan();
     } catch (e) {
       toast("error", "Tarik terhenti", e instanceof Error ? e.message : "");
     } finally {
@@ -288,7 +282,7 @@ export function InsightKategoriScreen({
       if (h.ditambahkan > 0) {
         setTeksLink("");
         setFormLink(false);
-        setMuat((n) => n + 1);
+        segarkan();
       }
     } catch (e) {
       toast("error", "Gagal menambah link", e instanceof Error ? e.message : "");
@@ -396,7 +390,7 @@ export function InsightKategoriScreen({
         </button>
         <button
           type="button"
-          onClick={() => setMuat((n) => n + 1)}
+          onClick={segarkan}
           aria-label="Muat ulang"
           className="glass btn-tekan flex h-9 w-9 items-center justify-center rounded-xl text-teks-utama"
         >
@@ -434,7 +428,7 @@ export function InsightKategoriScreen({
       {!pilih ? (
         <EmptyState ikon={Layers} judul="Belum ada kategori" keterangan="Tambahkan dari modul TV Rakyat Official." />
       ) : galat ? (
-        <EmptyState ikon={AlertTriangle} judul="Gagal memuat" keterangan={galat} labelAksi="Coba Lagi" onAksi={() => setMuat((n) => n + 1)} />
+        <EmptyState ikon={AlertTriangle} judul="Gagal memuat" keterangan={galat} labelAksi="Coba Lagi" onAksi={segarkan} />
       ) : !data || !r || !ringkasTampil ? (
         <div className="mt-4 grid grid-cols-2 gap-2">
           {[0, 1, 2, 3].map((i) => (
@@ -443,6 +437,9 @@ export function InsightKategoriScreen({
         </div>
       ) : (
         <>
+          {/* Isolasi per perintah: banner + saklar (hanya kategori yang punya perintah). */}
+          <BannerIsolasi data={data} manual={manual} menyegarkan={menyegarkan} onUbah={ubahManual} />
+
           {/* Tab platform */}
           <div className="scrollbar-tipis -mx-1 mt-4 flex gap-1.5 overflow-x-auto px-1 pb-1">
             {["semua", ...platformAda].map((p) => (
@@ -466,7 +463,7 @@ export function InsightKategoriScreen({
           </div>
 
           {/* Total kategori (atau per platform yang dipilih) */}
-          <GlassCard className="mt-3 p-3.5">
+          <GlassCard className={cn("mt-3 p-3.5 transition-opacity", menyegarkan && "opacity-60")}>
             <div className="grid grid-cols-3 gap-2">
               {(
                 [
@@ -501,6 +498,8 @@ export function InsightKategoriScreen({
               {data.pembaruan?.terakhir ? ` — terakhir ${waktuJelasWIB(data.pembaruan.terakhir)}` : ""}. Video di akun
               yang tidak tersambung tampil tanpa angka.
             </p>
+            {/* Tren harian (data selalu ada, juga untuk kategori tanpa isolasi). */}
+            {data.tren_harian && data.tren_harian.length > 0 && <TrenHarian tren={data.tren_harian} />}
           </GlassCard>
 
           {videoTampil.length === 0 ? (
@@ -512,6 +511,8 @@ export function InsightKategoriScreen({
               ))}
             </ul>
           )}
+
+          <PanelTidakDihitung data={data} onBerhasil={segarkanSenyap} />
         </>
       )}
     </div>

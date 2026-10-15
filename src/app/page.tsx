@@ -161,7 +161,7 @@ import {
 } from "@/services";
 import type { Role, User } from "@/types";
 import { cn } from "@/lib/utils";
-import { PERISTIWA_BUKA_CHAT } from "@/lib/peristiwa";
+import { PERISTIWA_BUKA_CHAT, PERISTIWA_BUKA_TVRKU } from "@/lib/peristiwa";
 import { useModulAktif } from "@/hooks/use-modul";
 
 // ------------------------------------------------------------
@@ -958,6 +958,13 @@ export default function Page() {
     const keChat = () => pilihTab("chat");
     window.addEventListener(PERISTIWA_BUKA_CHAT, keChat);
     return () => window.removeEventListener(PERISTIWA_BUKA_CHAT, keChat);
+  }, []);
+
+  // "Buat video dari perintah ini" (panel Video Wajib di tab TV Rakyat) → TV Rakyat Saya.
+  useEffect(() => {
+    const keTvrku = () => pilihTab("tvrku");
+    window.addEventListener(PERISTIWA_BUKA_TVRKU, keTvrku);
+    return () => window.removeEventListener(PERISTIWA_BUKA_TVRKU, keTvrku);
   }, []);
 
   const izinFitur = useAppStore((s) => s.izinFitur);

@@ -23,6 +23,7 @@ import type {
 import { PERIODE_AKTIF } from "@/types";
 import { buatPenggabungGet } from "@/lib/gabung-get";
 import type { AnggotaTautan } from "@/lib/tautan-profil";
+import type { BarisPantauWajib, KemajuanSaya, PolaWajib, RingkasKepatuhan } from "@/lib/video-wajib-perintah";
 
 // ------------------------------------------------------------
 // Tipe tambahan lapisan services
@@ -1445,6 +1446,19 @@ export type PembaruanMetrikVideo = {
 };
 
 export type InsightKategori = {
+  /** true = hanya video bernomor perintah yang dihitung (15 Okt 2026). */
+  terisolasi?: boolean;
+  /** Saklar "Hitung juga yang dipilih anggota" sedang menyala. */
+  termasuk_manual?: boolean;
+  /** Perintah Video Wajib kategori ini (terbaru dulu). */
+  perintah?: { id: string; judul: string; aktif: boolean }[];
+  /** Video kategori ini yang TIDAK dihitung karena tanpa nomor perintah. */
+  tidak_dihitung?: {
+    jumlah: number;
+    daftar: { id: string; platform: string; url: string; pelapor: string; tanggal_wib: string }[];
+  } | null;
+  /** Video terbit per tanggal WIB + total tayangannya (14 hari terakhir). */
+  tren_harian?: { tanggal: string; video: number; tayangan: number }[];
   /** Postingan lewat SuperApp — angka dari upload-post per platform. */
   postingan: {
     id: string;
@@ -1482,8 +1496,8 @@ export type InsightKategori = {
     akun: string;
     /** Pelapor (laporan) atau pengunggah (unggahan). */
     pelapor: string;
-    /** "laporan" (anggota), "kategori" (ditambahkan langsung), "unggahan" (lewat SuperApp). */
-    asal: "laporan" | "kategori" | "unggahan";
+    /** "laporan" (anggota), "kategori" (ditambahkan langsung), "unggahan" (lewat SuperApp), "dimasukkan" (dimasukkan Pimred ke perintah). */
+    asal: "laporan" | "kategori" | "unggahan" | "dimasukkan";
     tanggal_wib: string;
     waktu_posting: string | null;
     metrik: {
@@ -1604,9 +1618,9 @@ export async function segarkanKategoriUp(kategori: string): Promise<HasilSegarKa
   return json as unknown as HasilSegarKategori;
 }
 
-export async function getInsightKategori(kategori: string): Promise<InsightKategori> {
+export async function getInsightKategori(kategori: string, opsi: { manual?: boolean } = {}): Promise<InsightKategori> {
   const json = await fetchJson(
-    `/api/tv-nasional/kategori?kategori=${encodeURIComponent(kategori)}`,
+    `/api/tv-nasional/kategori?kategori=${encodeURIComponent(kategori)}${opsi.manual ? "&manual=1" : ""}`,
     { headers: headerToken() },
   );
   return json as unknown as InsightKategori;
@@ -1627,6 +1641,16 @@ export type VideoWajib = {
   berkas_url: string;
   berkas_nama: string;
   berkas_ukuran: number;
+  /** Wajib posting (15 Okt 2026): berlaku otomatis untuk semua akun & platform tersambung. */
+  wajib_posting: boolean;
+  pola: PolaWajib;
+  /** 'HH:MM' WIB. */
+  batas_jam: string;
+  pengingat: boolean;
+  /** Kemajuan saya hari ini (hanya perintah wajib posting yang aktif). */
+  saya: KemajuanSaya | null;
+  /** Kepatuhan hari ini — hanya untuk yang berwenang. */
+  ringkas: RingkasKepatuhan | null;
 };
 
 /** Berkas bahan yang sudah diunggah, dilaporkan saat menerbitkan perintah. */
@@ -1658,6 +1682,10 @@ export async function tambahVideoWajib(isi: {
   kategori?: string;
   batas_waktu?: string;
   berkas?: BerkasVideoWajib | null;
+  wajib_posting?: boolean;
+  pola?: PolaWajib;
+  batas_jam?: string;
+  pengingat?: boolean;
 }): Promise<VideoWajib> {
   const json = await fetchJson("/api/tv/video-wajib", {
     method: "POST",
@@ -1665,6 +1693,55 @@ export async function tambahVideoWajib(isi: {
     body: JSON.stringify(isi),
   });
   return json as unknown as VideoWajib;
+}
+
+/** Lembar Pantau: kepatuhan satu perintah pada satu tanggal (WIB). */
+export type PantauVideoWajib = {
+  perintah: {
+    id: string;
+    judul: string;
+    kategori: string;
+    aktif: boolean;
+    batas_waktu: string;
+    wajib_posting: boolean;
+    pola: PolaWajib;
+    batas_jam: string;
+    pengingat: boolean;
+  };
+  tanggal: string;
+  hari_ini: string;
+  kemarin: string;
+  terbit: string;
+  /** false = sql/76 belum dijalankan (angka nol bukan kelalaian anggota). */
+  siap: boolean;
+  ringkas: RingkasKepatuhan;
+  daftar: BarisPantauWajib[];
+  tujuh_hari: { tanggal: string; selesai: number; akun: number; persen: number }[];
+};
+
+export async function getPantauVideoWajib(id: string, tanggal?: string): Promise<PantauVideoWajib> {
+  const q = `id=${encodeURIComponent(id)}${tanggal ? `&tanggal=${encodeURIComponent(tanggal)}` : ""}`;
+  const json = await fetchJson(`/api/tv/video-wajib/pantau?${q}`, { headers: headerToken() });
+  return json as unknown as PantauVideoWajib;
+}
+
+/** Tombol "Ingatkan yang belum" — kabar ke anggota yang hari ini belum menuntaskan. */
+export async function ingatkanVideoWajib(id: string): Promise<{ dikirim: number; pesan?: string }> {
+  const json = await fetchJson("/api/tv/video-wajib/ingatkan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ id }),
+  });
+  return json as unknown as { dikirim: number; pesan?: string };
+}
+
+/** "Hitung sebagai <kategori>": masukkan satu video laporan ke sebuah perintah. */
+export async function hitungKePerintah(perintahId: string, laporanId: string): Promise<void> {
+  await fetchJson("/api/tv/video-wajib/hitung", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ perintah_id: perintahId, laporan_id: laporanId }),
+  });
 }
 
 export async function toggleVideoWajib(id: string, aktif: boolean): Promise<void> {
@@ -3787,6 +3864,8 @@ export async function postTvrku(data: {
   /** Kategori video — WAJIB sejak 12 Sep 2026, dari daftar tim TV
    *  Rakyat Official. Server menolak unggahan tanpa ini. */
   keyword: string;
+  /** Nomor perintah Video Wajib: server mengunci kategori ke kategori perintah (15 Okt 2026). */
+  perintah_id?: string;
   platforms: string[];
   jadwal?: string;
 }): Promise<{

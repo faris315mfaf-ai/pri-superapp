@@ -39,7 +39,8 @@ export type MetrikVideoKategori = {
   diperbarui_pada: string | null;
 };
 
-export type AsalVideoKategori = "laporan" | "kategori" | "unggahan";
+/** "dimasukkan" = dimasukkan manual ke perintah oleh Pimred/TV Rakyat Nasional (15 Okt 2026). */
+export type AsalVideoKategori = "laporan" | "kategori" | "unggahan" | "dimasukkan";
 
 export type LaporanKategori = {
   id: string;
@@ -49,7 +50,8 @@ export type LaporanKategori = {
   tanggal_wib: string;
   /**
    * "laporan" (anggota), "kategori" (ditambahkan langsung ke kategori),
-   * atau "unggahan" (diunggah lewat SuperApp dengan kategori ini).
+   * "unggahan" (diunggah lewat SuperApp dengan kategori ini), atau
+   * "dimasukkan" (dimasukkan manual ke perintah oleh Pimred).
    */
   asal?: AsalVideoKategori;
 };
@@ -264,4 +266,23 @@ export function uraiBatchLink(teks: string): {
     sah.push({ platform, url, kode });
   }
   return { sah, ditolak };
+}
+
+export type TitikTren = { tanggal: string; video: number; tayangan: number };
+
+/**
+ * Tren harian kategori: jumlah video yang terbit per tanggal WIB dan total
+ * tayangannya (angka terkini video-video itu). `hari` tanggal terakhir saja.
+ */
+export function susunTrenHarian(video: VideoKategori[], hari = 14): TitikTren[] {
+  const per = new Map<string, TitikTren>();
+  for (const v of video) {
+    const tanggal = (v.tanggal_wib || "").slice(0, 10);
+    if (!tanggal) continue;
+    const t = per.get(tanggal) ?? { tanggal, video: 0, tayangan: 0 };
+    t.video += 1;
+    t.tayangan += v.metrik?.tayangan ?? 0;
+    per.set(tanggal, t);
+  }
+  return [...per.values()].sort((a, b) => a.tanggal.localeCompare(b.tanggal)).slice(-hari);
 }

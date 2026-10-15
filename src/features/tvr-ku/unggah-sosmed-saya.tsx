@@ -43,6 +43,7 @@ import { PlatformIcon, labelPlatform } from "@/components/platform-icon";
 import { adalahPembatalanUnggah, unggahVideoTvrku } from "@/lib/unggah-video-klien";
 import { cn } from "@/lib/utils";
 import { useRefTabAktif } from "@/hooks/use-tab-aktif";
+import { usePerintahAktif } from "@/hooks/use-perintah-aktif";
 
 const LABEL: Record<string, string> = {
   instagram: "Instagram",
@@ -196,8 +197,18 @@ export function UnggahSosmedSaya({
   const [judul, setJudul] = useState("");
   // Kategori WAJIB (12 Sep 2026) — daftarnya ditetapkan tim TV Rakyat
   // Official, dipakai sistem untuk mengelompokkan video.
-  const [kategori, setKategori] = useState("");
+  const [kategoriPilih, setKategori] = useState("");
   const [daftarKategori, setDaftarKategori] = useState<string[]>([]);
+  // PERINTAH VIDEO WAJIB (15 Okt 2026): bila anggota datang dari "Buat video
+  // dari perintah ini", kategori terkunci ke kategori perintah dan nomornya
+  // ikut terkirim — video itu tercatat milik perintah sampai Insight. Server
+  // yang memutuskan (perintah tak aktif ditolak), anggota bisa melepasnya.
+  const [perintahAktif, setPerintahAktif] = usePerintahAktif();
+  // Disimpan sebagai id yang DITOLAK (bukan boolean) supaya perintah baru otomatis terpakai lagi.
+  const [perintahDitolak, setPerintahDitolak] = useState("");
+  const pakaiPerintah = !perintahAktif || perintahDitolak !== perintahAktif.id;
+  const perintahDipakai = perintahAktif && pakaiPerintah ? perintahAktif : null;
+  const kategori = perintahDipakai ? perintahDipakai.kategori : kategoriPilih;
   const [caption, setCaption] = useState("");
   // CAPTION PER SOSMED (8 Sep 2026): teks khusus tiap platform — X 280,
   // Threads 500, TikTok/IG 2200… Platform tanpa teks khusus memakai caption utama.
@@ -391,6 +402,8 @@ export function UnggahSosmedSaya({
     } else {
       toast("peringatan", "Sebagian gagal", "Cek rincian di riwayat — platform yang gagal bisa dicoba lagi.");
     }
+    // Satu perintah = satu video: lepas supaya video berikutnya tidak ikut berlabel.
+    if (perintahDipakai && (h.sukses || h.terjadwal)) setPerintahAktif(null);
     setRiwayat(await getRiwayatTvrkuPost().catch(() => riwayat ?? []));
     setJadwalAntre(await getJadwalTvrku().catch(() => jadwalAntre ?? []));
     useAppStore.getState().segarkanData();
@@ -434,6 +447,7 @@ export function UnggahSosmedSaya({
           video_link: tautan.trim(),
           judul: judul.trim(),
           keyword: kategori,
+          perintah_id: perintahDipakai?.id,
           caption: caption.trim() || undefined,
           caption_per: Object.keys(captionPerKirim).length > 0 ? captionPerKirim : undefined,
           platforms: [...pilih],
@@ -479,6 +493,7 @@ export function UnggahSosmedSaya({
         ukuran: hasilUnggah.ukuran,
         judul: judul.trim(),
         keyword: kategori,
+        perintah_id: perintahDipakai?.id,
         caption: caption.trim() || undefined,
         caption_per: Object.keys(captionPerKirim).length > 0 ? captionPerKirim : undefined,
         platforms: [...pilih],
@@ -706,21 +721,39 @@ export function UnggahSosmedSaya({
           disabled={Boolean(tahap)}
           className="glass-input mt-3 h-11 w-full rounded-xl px-3 text-sm text-teks-utama"
         />
-        <select
-          value={kategori}
-          onChange={(e) => setKategori(e.target.value)}
-          disabled={Boolean(tahap)}
-          aria-label="Kategori video"
-          className="glass-input mt-2 h-11 w-full rounded-xl px-3 text-sm text-teks-utama"
-        >
-          <option value="">Kategori video (wajib)…</option>
-          {daftarKategori.map((k) => (
-            <option key={k} value={k}>
-              {k}
-            </option>
-          ))}
-        </select>
-        {daftarKategori.length === 0 && (
+        {perintahAktif && (
+          <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2 dark:border-[#1E3A8A] dark:bg-[#172554]/40">
+            <input
+              type="checkbox"
+              checked={pakaiPerintah}
+              onChange={(e) => setPerintahDitolak(e.target.checked ? "" : perintahAktif.id)}
+              disabled={Boolean(tahap)}
+              className="mt-0.5 h-4 w-4 shrink-0"
+            />
+            <span className="min-w-0 text-[11.5px] leading-snug text-[#1E3A8A] dark:text-[#BFDBFE]">
+              <b>Video ini untuk perintah Video Wajib:</b> {perintahAktif.judul || `#${perintahAktif.id}`} · kategori{" "}
+              <b>{perintahAktif.kategori}</b>
+              {pakaiPerintah ? " terkunci." : " — dimatikan, pilih kategori sendiri di bawah."}
+            </span>
+          </label>
+        )}
+        {perintahDipakai ? null : (
+          <select
+            value={kategoriPilih}
+            onChange={(e) => setKategori(e.target.value)}
+            disabled={Boolean(tahap)}
+            aria-label="Kategori video"
+            className="glass-input mt-2 h-11 w-full rounded-xl px-3 text-sm text-teks-utama"
+          >
+            <option value="">Kategori video (wajib)…</option>
+            {daftarKategori.map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
+        )}
+        {!perintahDipakai && daftarKategori.length === 0 && (
           <p className="mt-1 text-[10.5px] leading-snug text-teks-sekunder">
             Belum ada kategori dari tim TV Rakyat Official — mintalah mereka
             menambahkannya dulu.

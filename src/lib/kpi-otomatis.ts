@@ -160,7 +160,55 @@ type KonteksCatat = {
    * masuk pengelompokan kategori di TV Rakyat Nasional.
    */
   kategoriPost: Map<number, string>;
+  /**
+   * Nomor perintah Video Wajib tiap unggahan (tvrku_post.hasil.perintah_id,
+   * 15 Okt 2026) → ikut dicatat pada laporan otomatisnya supaya video itu
+   * terhitung milik perintah (Pantau & Insight per Kategori).
+   */
+  perintahPost: Map<number, number>;
 };
+
+/** Nomor perintah yang tersimpan di hasil unggahan; 0 bila tidak ada. */
+export function perintahDariHasil(hasil: Record<string, unknown> | null | undefined): number {
+  const n = Number(hasil?.perintah_id ?? 0);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
+/** Isi perintah_id laporan yang masih kosong. Galat (kolom belum ada) diabaikan. */
+async function isiPerintahKosong(db: ReturnType<typeof supabase>, idLaporan: number, perintahId: number): Promise<void> {
+  if (!perintahId || idLaporan <= 0) return;
+  await db
+    .from("laporan_video")
+    .update({ perintah_id: perintahId })
+    .eq("id", idLaporan)
+    .is("perintah_id", null)
+    .then(
+      () => undefined,
+      () => undefined,
+    );
+}
+
+/**
+ * Upsert laporan yang mengulang tanpa kolom opsional yang belum ada di
+ * database (keyword: sql/46, perintah_id: sql/76).
+ */
+async function upsertLaporanLonggar(db: ReturnType<typeof supabase>, isi: Record<string, unknown>) {
+  const muatan = { ...isi };
+  let hasil = await db
+    .from("laporan_video")
+    .upsert(muatan, { onConflict: "user_id,url_video", ignoreDuplicates: true })
+    .select("id");
+  for (let i = 0; i < 2 && hasil.error; i += 1) {
+    const kolom = namaKolomHilang(hasil.error.message);
+    if ((kolom !== "keyword" && kolom !== "perintah_id") || !(kolom in muatan)) break;
+    delete muatan[kolom];
+    hasil = await db
+      .from("laporan_video")
+      .upsert(muatan, { onConflict: "user_id,url_video", ignoreDuplicates: true })
+      .select("id");
+  }
+  return hasil;
+}
 
 /** Kategori yang tersimpan di hasil unggahan; "" bila tidak ada. */
 export function kategoriDariHasil(hasil: Record<string, unknown> | null | undefined): string {
@@ -210,6 +258,7 @@ async function tautkanOrphanKePost(
   baris.postId = postId;
   ctx.adaTerkait.add(`${postId}|${platform}`);
   await isiKategoriKosong(db, baris.id, ctx.kategoriPost.get(postId) ?? "");
+  await isiPerintahKosong(db, baris.id, ctx.perintahPost.get(postId) ?? 0);
   return "baru";
 }
 
@@ -251,35 +300,10 @@ async function catatLaporan(
     sumber: "otomatis",
   };
   if (postId > 0) isi.tvrku_post_id = postId;
-  const { data: barisBaru, error } = await db
-    .from("laporan_video")
-    .upsert(isi, { onConflict: "user_id,url_video", ignoreDuplicates: true })
-    .select("id");
-  if (error) {
-    if (namaKolomHilang(error.message) === "keyword") {
-      delete isi.keyword;
-      const ulang = await db
-        .from("laporan_video")
-        .upsert(isi, { onConflict: "user_id,url_video", ignoreDuplicates: true })
-        .select("id");
-      if (ulang.error) return "gagal";
-      ctx.kunciSudah.add(kunci);
-      if ((ulang.data ?? []).length > 0) {
-        const idBaru = Number(ulang.data![0].id);
-        ctx.barisPerKunci.set(kunci, { id: idBaru, postId: postId > 0 ? postId : null, url, waktu });
-        if (postId > 0) ctx.adaTerkait.add(`${postId}|${platform}`);
-        await db
-          .from("laporan_video_pending")
-          .update({ status: "disetujui", catatan: "Terdeteksi otomatis dari unggahan aplikasi", diputus_oleh: "sistem", diputus_pada: new Date().toISOString() })
-          .eq("user_id", userId)
-          .eq("url_video", url)
-          .eq("status", "menunggu");
-        return "baru";
-      }
-      return tautkanOrphanKePost(db, platform, kunci, postId, ctx);
-    }
-    return "gagal";
-  }
+  const perintahId = postId > 0 ? (ctx.perintahPost.get(postId) ?? 0) : 0;
+  if (perintahId > 0) isi.perintah_id = perintahId;
+  const { data: barisBaru, error } = await upsertLaporanLonggar(db, isi);
+  if (error) return "gagal";
   ctx.kunciSudah.add(kunci);
   if ((barisBaru ?? []).length > 0) {
     const idBaru = Number(barisBaru![0].id);
@@ -456,7 +480,12 @@ export async function rekonsiliasiKpiRinci(
       const k = kategoriDariHasil(p.hasil);
       if (k) kategoriPost.set(p.id, k);
     }
-    const ctx: KonteksCatat = { usernamePer, kunciSudah, adaTerkait, barisPerKunci, kategoriPost };
+    const perintahPost = new Map<number, number>();
+    for (const p of posts) {
+      const n = perintahDariHasil(p.hasil);
+      if (n) perintahPost.set(p.id, n);
+    }
+    const ctx: KonteksCatat = { usernamePer, kunciSudah, adaTerkait, barisPerKunci, kategoriPost, perintahPost };
     // URL yang SUDAH terkait unggahan dilewati; orphan boleh dipasangkan lagi.
     const sudahTerkaitPost = (pf: string) => (url: string) => {
       const baris = barisPerKunci.get(kunciVideo(pf, url));
