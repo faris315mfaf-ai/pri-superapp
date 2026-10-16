@@ -79,7 +79,7 @@ const LEMBAR = [
   {
     berkas: "perabot_3_ruang.png",
     benda: [
-      { id: "meja_resepsionis", tapak: [3, 1], penuh: true },
+      { id: "meja_resepsionis", tapak: [1, 3], penuh: true },
       { id: "bangku", tapak: [1, 2], penuh: true },
       { id: "tanaman_kecil", tapak: [1, 1] },
       { id: "tanaman_besar", tapak: [1, 1] },
