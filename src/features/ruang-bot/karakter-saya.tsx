@@ -27,6 +27,7 @@ import {
 } from "@/lib/karakter-murni";
 import { cn } from "@/lib/utils";
 import { getKarakterSaya, simpanKarakterSaya, type KarakterSaya } from "@/services";
+import { umumkanRupaSaya } from "./rupa-saya";
 import { URUTAN_ARAH, infoAnimasi, rakitFrame, rakitPotret, siapkanKarakter, type AnimKarakter, type ArahKarakter } from "./karakter-sprite";
 
 type Kategori = "preset" | "kulit" | "rambut" | "atasan" | "bawah";
@@ -206,6 +207,7 @@ export function KarakterSayaPanel({ ringkas = false }: { ringkas?: boolean }) {
       const d = await simpanKarakterSaya(draf);
       setData(d);
       setDraf(d.konfig);
+      umumkanRupaSaya(d.konfig);
       toast("sukses", "Karakter tersimpan", "Rupa baru Anda tampil di Ruang Bot.");
     } catch (e) {
       toast("error", "Karakter gagal disimpan", e instanceof Error ? e.message : "");

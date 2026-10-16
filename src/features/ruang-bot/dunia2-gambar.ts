@@ -47,6 +47,8 @@ export type Adegan2 = {
   /** Diisi: posisi kaki di layar (untuk tag nama, gelembung, klik). */
   posisi: Map<string, PosisiLayar2>;
   posisiPenghuni: Map<number, PosisiLayar2>;
+  /** Persegi latar yang terlihat kamera (px latar); benda di luarnya tidak digambar. Bawaan: seluruh latar. */
+  pandang?: { x0: number; y0: number; x1: number; y1: number };
 };
 
 // ---------- frame karakter (cache sinkron di atas perakit async) ----------
@@ -158,7 +160,14 @@ type Objek = { kunci: number; gambar: () => void };
 export function gambarFrame2(a: Adegan2): void {
   const { c, aset, t, sim, penghuni } = a;
   c.imageSmoothingEnabled = false;
-  c.drawImage(aset.latar, 0, 0);
+  // Hanya bagian latar & benda yang terlihat kamera (zoom dekat = jauh lebih ringan).
+  const lw = aset.latar.width, lh = aset.latar.height;
+  const v = a.pandang ?? { x0: 0, y0: 0, x1: lw, y1: lh };
+  const vx0 = Math.max(0, Math.floor(v.x0)), vy0 = Math.max(0, Math.floor(v.y0));
+  const vx1 = Math.min(lw, Math.ceil(v.x1)), vy1 = Math.min(lh, Math.ceil(v.y1));
+  if (vx1 > vx0 && vy1 > vy0) c.drawImage(aset.latar, vx0, vy0, vx1 - vx0, vy1 - vy0, vx0, vy0, vx1 - vx0, vy1 - vy0);
+  const tampak = (x: number, y: number, w: number, h: number) => x < v.x1 && x + w > v.x0 && y < v.y1 && y + h > v.y0;
+  const tampakKarakter = (sx: number, sy: number) => tampak(sx - 34, sy - 98, 68, 112);
 
   const sibukStasiun = (jenis: JenisStasiunPenghuni2, idx: number) => penghuni.penghuniDi(jenis, idx) !== null;
   const mejaSibuk = (tahap: "cari" | "edit" | "posting") => sim.bots.some((b) => b.tempat === tahap && b.keadaan === "bekerja");
@@ -169,6 +178,7 @@ export function gambarFrame2(a: Adegan2): void {
     if (!s) continue;
     const f = p.kunci && s.frames > 1 ? Math.min(s.frames - 1, frameKeadaan(p.kunci, { mejaSibuk, stasiunSibuk: sibukStasiun }, t)) : 0;
     const d = keLayar(p.x + p.tapak[0], p.y + p.tapak[1]);
+    if (!tampak(d.x - s.jx, d.y - s.jy, s.w, s.h)) continue;
     objek.push({ kunci: kedalamanPerabot(p), gambar: () => c.drawImage(s.img, f * s.w, 0, s.w, s.h, Math.round(d.x - s.jx), Math.round(d.y - s.jy), s.w, s.h) });
   }
   for (const r of RUAS_SEKAT2) objek.push({ kunci: r.kunci, gambar: () => ruasSekat(c, r) });
@@ -194,7 +204,7 @@ export function gambarFrame2(a: Adegan2): void {
     const s = keLayar(titik[0], titik[1]);
     a.posisi.set(b.id, { sx: s.x, sy: s.y });
     const dipilih = a.terpilihId === b.id;
-    objek.push({
+    if (tampakKarakter(s.x, s.y)) objek.push({
       kunci,
       gambar: () => {
         if (!pose.duduk && kasur < 0) bayangan(c, s.x, s.y);
@@ -210,7 +220,7 @@ export function gambarFrame2(a: Adegan2): void {
     const pose = poseKarakter(n, n.keadaan === "jalan");
     const s = keLayar(n.x, n.y);
     a.posisi.set(ID_NARA2, { sx: s.x, sy: s.y });
-    objek.push({
+    if (tampakKarakter(s.x, s.y)) objek.push({
       kunci: kedalamanKarakter(n.x, n.y, pose.duduk) + 0.002,
       gambar: () => {
         if (!pose.duduk) bayangan(c, s.x, s.y);
@@ -228,7 +238,7 @@ export function gambarFrame2(a: Adegan2): void {
     a.posisiPenghuni.set(p.id, { sx: s.x, sy: s.y });
     const konfig = a.konfigPenghuni(p);
     const dipilih = a.terpilihPenghuniId === p.id;
-    objek.push({
+    if (tampakKarakter(s.x, s.y)) objek.push({
       kunci: kedalamanKarakter(p.x, p.y, pose.duduk) + 0.001,
       gambar: () => {
         if (p.alfa > 0.3 && !pose.duduk) bayangan(c, s.x, s.y);
@@ -258,6 +268,6 @@ export function gambarFrame2(a: Adegan2): void {
 
   if (a.malam) {
     c.fillStyle = "rgba(10,12,40,.42)";
-    c.fillRect(0, 0, aset.latar.width, aset.latar.height);
+    c.fillRect(vx0, vy0, vx1 - vx0, vy1 - vy0);
   }
 }

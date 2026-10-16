@@ -78,7 +78,10 @@ rahasia (password, kunci API, isi env) di berkas ini atau di repo.**
   tab Ruang Bot untuk memilih rupa pixel art (kulit, rambut 20, atasan 9, warna pakaian). Aset `public/karakter|ruang|perabot/v1`
   dibuat dari lembar ChatGPT oleh `alat/sprite/potong-*.mjs` (ruang memakai `alat/sprite/kalibrasi-ruang.json`). Perakit klien:
   `src/features/ruang-bot/karakter-sprite.ts`; API `/api/ruang/karakter`; wajib `sql/78_karakter_pengguna.sql`.
-  Tahap 2 (belum): dunia Ruang Bot baru di tile 64×32 memakai modul ruang & perabot.
+  Tahap 2 (16 Okt, akun yang sama): dunia v2 gedung 8 ruang tile 64×32 — denah `denah2.ts`, simulasi `DENAH_SIM_V2`
+  (`denah2-sim.ts`), penggambar `ruang-dunia2.tsx` + `dunia2-*.ts` (kamera geser/zoom/lompat ruang), rupa tersimpan ikut
+  `PenghuniDunia.rupa`. Dipasang di `ruang-view.tsx` & `ruang-bot-umum.tsx` di balik `bolehKarakterSaya`; akun lain tetap
+  `ruang-isometrik.tsx`.
 - **Tutorial interaktif**: mesin `src/features/tur/lapisan-tur.tsx`, langkah di `src/lib/tur.ts`
   (penanda `data-tur` di komponen asli).
 - **Akun TIM TV Rakyat Official**: identitas mesin `900000001` (`ID_TIM` di `src/lib/autoedit.ts`),

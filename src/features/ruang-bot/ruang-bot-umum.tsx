@@ -26,8 +26,11 @@ import { ChatGlobal } from "./chat-global";
 import { KarakterSayaPanel } from "./karakter-saya";
 import { WARNA_STASIUN } from "./dunia-sayap";
 import { PanelOnline } from "./panel-online";
+import { DENAH_SIM_V2 } from "./denah2-sim";
 import { petaSasaran } from "./peta-nyata";
+import { RuangDunia2 } from "./ruang-dunia2";
 import { RuangIsometrik } from "./ruang-isometrik";
+import { useRupaSaya } from "./rupa-saya";
 import { SimulasiBot } from "./simulasi-bot";
 import { SimulasiPenghuni } from "./simulasi-penghuni";
 import type { BotContoh } from "./tipe";
@@ -88,6 +91,8 @@ function KanvasUmum({
   daftar,
   terpilihPenghuniId,
   onPilihPenghuni,
+  dunia2,
+  sayaId,
 }: {
   bots: BotContoh[];
   status: StatusRuangUmum;
@@ -95,10 +100,21 @@ function KanvasUmum({
   daftar: readonly PenghuniDunia[];
   terpilihPenghuniId: number | null;
   onPilihPenghuni: (id: number | null) => void;
+  /** Dunia v2 (gedung 8 ruang pixel art) — harus sama dengan denah simulasi `penghuni`. */
+  dunia2: boolean;
+  sayaId: number;
 }) {
   const jedaGlobal = status.jeda_global;
+  const rupaSaya = useRupaSaya();
   const [sim] = useState(
-    () => new SimulasiBot(bots, { kuotaAwal: {}, maksKuota: 1, diam: true, sasaranAwal: petaSasaran(bots, jedaGlobal) }),
+    () =>
+      new SimulasiBot(bots, {
+        kuotaAwal: {},
+        maksKuota: 1,
+        diam: true,
+        sasaranAwal: petaSasaran(bots, jedaGlobal),
+        denah: dunia2 ? DENAH_SIM_V2 : undefined,
+      }),
   );
   const [terpilihBot, setTerpilihBot] = useState<string | null>(null);
 
@@ -126,6 +142,45 @@ function KanvasUmum({
 
   const botAktif = bots.filter((b) => !b.nyata?.jeda).length;
 
+  const pilihBot = (id: string | null) => {
+    setTerpilihBot(id);
+    if (id) onPilihPenghuni(null);
+  };
+  const pilihPenghuni = (id: number | null) => {
+    onPilihPenghuni(id);
+    if (id !== null) setTerpilihBot(null);
+  };
+  const pilStatus = (
+    <>
+      <span className="rounded-lg border border-emerald-400/40 bg-[rgba(8,40,28,.85)] px-2 py-0.5 text-[#bbf7d0]">{status.dunia.jumlah} online</span>
+      {bots.length > 0 && (
+        <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">
+          {jedaGlobal ? "Semua bot dijeda" : `${botAktif} bot aktif`}
+        </span>
+      )}
+    </>
+  );
+
+  if (dunia2) {
+    return (
+      <RuangDunia2
+        sim={sim}
+        bots={bots}
+        malam={false}
+        kecepatan={1}
+        terpilihId={terpilihBot}
+        onPilih={pilihBot}
+        penghuni={penghuni}
+        daftarPenghuni={daftar}
+        terpilihPenghuniId={terpilihPenghuniId}
+        onPilihPenghuni={pilihPenghuni}
+        sayaId={sayaId}
+        rupaSaya={rupaSaya}
+        ruangAwal="aula"
+        hud={<div className="flex max-w-full flex-wrap gap-1.5 font-mono text-[11px] font-semibold text-[#f4efe8]">{pilStatus}</div>}
+      />
+    );
+  }
   return (
     <RuangIsometrik
       sim={sim}
@@ -133,26 +188,13 @@ function KanvasUmum({
       malam={false}
       kecepatan={1}
       terpilihId={terpilihBot}
-      onPilih={(id) => {
-        setTerpilihBot(id);
-        if (id) onPilihPenghuni(null);
-      }}
+      onPilih={pilihBot}
       penghuni={penghuni}
       daftarPenghuni={daftar}
       terpilihPenghuniId={terpilihPenghuniId}
-      onPilihPenghuni={(id) => {
-        onPilihPenghuni(id);
-        if (id !== null) setTerpilihBot(null);
-      }}
+      onPilihPenghuni={pilihPenghuni}
     >
-      <div className="pointer-events-none absolute left-2.5 top-2.5 flex flex-wrap gap-1.5 font-mono text-[11px] font-semibold text-[#f4efe8]">
-        <span className="rounded-lg border border-emerald-400/40 bg-[rgba(8,40,28,.85)] px-2 py-0.5 text-[#bbf7d0]">{status.dunia.jumlah} online</span>
-        {bots.length > 0 && (
-          <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">
-            {jedaGlobal ? "Semua bot dijeda" : `${botAktif} bot aktif`}
-          </span>
-        )}
-      </div>
+      <div className="pointer-events-none absolute left-2.5 top-2.5 flex flex-wrap gap-1.5 font-mono text-[11px] font-semibold text-[#f4efe8]">{pilStatus}</div>
     </RuangIsometrik>
   );
 }
@@ -175,7 +217,9 @@ function Legenda() {
 export function RuangBotUmumScreen({ sayaId }: { sayaId: number }) {
   const ruang = useRuangUmum();
   const status = ruang.status;
-  const [penghuni] = useState(() => new SimulasiPenghuni({ gerakKurang }));
+  // Dunia v2 (gedung 8 ruang pixel art) — uji coba terbatas akun Karakter Saya.
+  const [dunia2] = useState(() => bolehKarakterSaya({ id: sayaId }));
+  const [penghuni] = useState(() => new SimulasiPenghuni({ gerakKurang, denah: dunia2 ? DENAH_SIM_V2.penghuni : undefined }));
   const kabarChat = useCallback(
     (baru: PesanGlobal[]) => {
       for (const p of baru) penghuni.kabarChat(p.user_id, p.teks);
@@ -240,6 +284,8 @@ export function RuangBotUmumScreen({ sayaId }: { sayaId: number }) {
             daftar={daftar}
             terpilihPenghuniId={terpilihPenghuniId}
             onPilihPenghuni={setTerpilihPenghuniId}
+            dunia2={dunia2}
+            sayaId={sayaId}
           />
           {duaKolom && <Legenda />}
         </GlassCard>

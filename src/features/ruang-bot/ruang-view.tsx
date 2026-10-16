@@ -25,14 +25,19 @@ import { useIntervalAktif } from "@/hooks/use-tab-aktif";
 import { rapatBerlangsung, sisaRapatMs } from "@/lib/bot-dunia-murni";
 import type { KoordinatorRingkas } from "@/lib/bot-tipe";
 import type { PesanGlobal } from "@/lib/chat-global-murni";
+import { bolehKarakterSaya } from "@/lib/karakter-murni";
 import { cn } from "@/lib/utils";
 import { ChatGlobal } from "./chat-global";
 import { NAMA_TAHAP, NAMA_TEMPAT, URUTAN_TEMPAT, WARNA_TAHAP, WARNA_TEMPAT } from "./data-contoh";
 import type { ZonaRuang } from "./denah";
+import type { KunciRuang2 } from "./denah2";
 import { petaCatatan, petaSasaran, suratBaru } from "./peta-nyata";
 import { PanelOnline } from "./panel-online";
+import { DENAH_SIM_V2 } from "./denah2-sim";
 import { PotretBot } from "./potret-bot";
+import { RuangDunia2 } from "./ruang-dunia2";
 import { RuangIsometrik } from "./ruang-isometrik";
+import { useRupaSaya } from "./rupa-saya";
 import { SimulasiBot, formatJam } from "./simulasi-bot";
 import { SimulasiPenghuni } from "./simulasi-penghuni";
 import { useChatGlobal } from "./use-chat-global";
@@ -409,6 +414,9 @@ export function RuangView(p: RuangViewProps) {
 
   const nyata = !!p.nyata;
   const sibuk = p.sibuk;
+  // Dunia v2 (gedung 8 ruang pixel art) — uji coba terbatas akun Karakter Saya; tetap sama selama layar terpasang.
+  const [dunia2] = useState(() => bolehKarakterSaya({ id: p.sayaId }));
+  const rupaSaya = useRupaSaya();
   const [sim] = useState(
     () =>
       new SimulasiBot(p.bots, {
@@ -416,6 +424,7 @@ export function RuangView(p: RuangViewProps) {
         maksKuota: p.maksKuota,
         diam: nyata,
         sasaranAwal: nyata ? petaSasaran(p.bots, p.jedaGlobal) : undefined,
+        denah: dunia2 ? DENAH_SIM_V2 : undefined,
       }),
   );
 
@@ -423,7 +432,7 @@ export function RuangView(p: RuangViewProps) {
   const [penghuni] = useState(() => {
     // Satu MediaQueryList dipakai ulang (jarak() dipanggil per orang tiap langkah simulasi).
     const gerak = typeof window !== "undefined" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
-    return new SimulasiPenghuni({ gerakKurang: () => gerak?.matches === true });
+    return new SimulasiPenghuni({ gerakKurang: () => gerak?.matches === true, denah: dunia2 ? DENAH_SIM_V2.penghuni : undefined });
   });
   const dunia = useDunia();
   const statusDunia = dunia.status;
@@ -498,7 +507,8 @@ export function RuangView(p: RuangViewProps) {
 
   // Klik pil ruang / Nara di kanvas -> tab terkait (hanya mode nyata).
   const { onBukaTab } = p;
-  const bukaZona = useMemo<Partial<Record<ZonaRuang, () => void>> | undefined>(
+  // Kunci meeting/koordinator sama di denah lama (ZonaRuang) dan dunia v2 (KunciRuang2).
+  const bukaZona = useMemo<Partial<Record<ZonaRuang & KunciRuang2, () => void>> | undefined>(
     () => (nyata && onBukaTab ? { meeting: () => onBukaTab("chat"), koordinator: () => onBukaTab("koordinator") } : undefined),
     [nyata, onBukaTab],
   );
@@ -534,6 +544,49 @@ export function RuangView(p: RuangViewProps) {
     sim.hariBaru();
     p.onHariBaru();
   };
+
+  const pilihBot = (id: string | null) => {
+    p.onPilih(id);
+    if (id) setTerpilihPenghuniId(null);
+  };
+  const pilihPenghuni = (id: number | null) => {
+    setTerpilihPenghuniId(id);
+    if (id !== null) p.onPilih(null);
+  };
+  const pilStatus = (
+    <>
+      <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">
+        {p.jedaGlobal ? "Semua bot dijeda" : `${nyata ? botAktif : p.bots.length} bot aktif`}
+      </span>
+      <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">
+        Post hari ini {totalPost}/{nyata ? totalMaks : p.maksKuota * p.bots.length}
+      </span>
+      {!nyata && p.bots.length > 0 && (
+        <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">
+          Render: {potret.render} berjalan · {potret.antre} antre
+        </span>
+      )}
+      {potret.tidur > 0 && (
+        <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">{potret.tidur} tidur (tanpa API key)</span>
+      )}
+      {potret.rapat && (
+        <span className="rounded-lg border border-[#fb7185]/60 bg-[rgba(60,16,32,.85)] px-2 py-0.5 text-[#fecdd3]">Rapat berlangsung</span>
+      )}
+      <span className="rounded-lg border border-emerald-400/40 bg-[rgba(8,40,28,.85)] px-2 py-0.5 text-[#bbf7d0]">
+        {statusDunia ? statusDunia.jumlah : "…"} online
+      </span>
+      <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">{potret.jam} WIB</span>
+    </>
+  );
+  const spandukJeda = (posisi: string) =>
+    p.jedaGlobal && (
+      <div
+        role="status"
+        className={cn("pointer-events-none absolute left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-[#f87171] bg-[#4a1f1f] px-3 py-1 text-[12px] font-bold text-[#fecaca]", posisi)}
+      >
+        Semua bot dijeda, kembali ke sofa
+      </div>
+    );
 
   return (
     <div ref={wadahRef} className="flex flex-col gap-3" aria-label="Ruang bot">
@@ -586,58 +639,46 @@ export function RuangView(p: RuangViewProps) {
       >
         {/* Kolom kiri: kanvas + legenda */}
         <GlassCard className="min-w-0 p-2.5">
-          <RuangIsometrik
-            sim={sim}
-            bots={p.bots}
-            malam={malam}
-            kecepatan={kecepatan}
-            terpilihId={p.terpilihId}
-            onPilih={(id) => {
-              p.onPilih(id);
-              if (id) setTerpilihPenghuniId(null);
-            }}
-            onPilihNara={bukaKoordinator}
-            penghuni={penghuni}
-            daftarPenghuni={daftarOnline}
-            terpilihPenghuniId={terpilihPenghuniId}
-            onPilihPenghuni={(id) => {
-              setTerpilihPenghuniId(id);
-              if (id !== null) p.onPilih(null);
-            }}
-            onBukaZona={bukaZona}
-          >
-            <div className="pointer-events-none absolute left-2.5 top-2.5 flex flex-wrap gap-1.5 font-mono text-[11px] font-semibold text-[#f4efe8]">
-              <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">
-                {p.jedaGlobal ? "Semua bot dijeda" : `${nyata ? botAktif : p.bots.length} bot aktif`}
-              </span>
-              <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">
-                Post hari ini {totalPost}/{nyata ? totalMaks : p.maksKuota * p.bots.length}
-              </span>
-              {!nyata && p.bots.length > 0 && (
-                <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">
-                  Render: {potret.render} berjalan · {potret.antre} antre
-                </span>
-              )}
-              {potret.tidur > 0 && (
-                <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">{potret.tidur} tidur (tanpa API key)</span>
-              )}
-              {potret.rapat && (
-                <span className="rounded-lg border border-[#fb7185]/60 bg-[rgba(60,16,32,.85)] px-2 py-0.5 text-[#fecdd3]">Rapat berlangsung</span>
-              )}
-              <span className="rounded-lg border border-emerald-400/40 bg-[rgba(8,40,28,.85)] px-2 py-0.5 text-[#bbf7d0]">
-                {statusDunia ? statusDunia.jumlah : "…"} online
-              </span>
-              <span className="rounded-lg border border-white/10 bg-[rgba(14,11,20,.8)] px-2 py-0.5">{potret.jam} WIB</span>
-            </div>
-            {p.jedaGlobal && (
-              <div
-                role="status"
-                className="pointer-events-none absolute left-1/2 top-12 -translate-x-1/2 whitespace-nowrap rounded-full border border-[#f87171] bg-[#4a1f1f] px-3 py-1 text-[12px] font-bold text-[#fecaca]"
-              >
-                Semua bot dijeda, kembali ke sofa
-              </div>
-            )}
-          </RuangIsometrik>
+          {dunia2 ? (
+            <RuangDunia2
+              sim={sim}
+              bots={p.bots}
+              malam={malam}
+              kecepatan={kecepatan}
+              terpilihId={p.terpilihId}
+              onPilih={pilihBot}
+              onPilihNara={bukaKoordinator}
+              penghuni={penghuni}
+              daftarPenghuni={daftarOnline}
+              terpilihPenghuniId={terpilihPenghuniId}
+              onPilihPenghuni={pilihPenghuni}
+              onBukaZona={bukaZona}
+              sayaId={p.sayaId}
+              rupaSaya={rupaSaya}
+              ruangAwal="kerja"
+              hud={<div className="flex max-w-full flex-wrap gap-1.5 font-mono text-[11px] font-semibold text-[#f4efe8]">{pilStatus}</div>}
+            >
+              {spandukJeda("bottom-14")}
+            </RuangDunia2>
+          ) : (
+            <RuangIsometrik
+              sim={sim}
+              bots={p.bots}
+              malam={malam}
+              kecepatan={kecepatan}
+              terpilihId={p.terpilihId}
+              onPilih={pilihBot}
+              onPilihNara={bukaKoordinator}
+              penghuni={penghuni}
+              daftarPenghuni={daftarOnline}
+              terpilihPenghuniId={terpilihPenghuniId}
+              onPilihPenghuni={pilihPenghuni}
+              onBukaZona={bukaZona}
+            >
+              <div className="pointer-events-none absolute left-2.5 top-2.5 flex flex-wrap gap-1.5 font-mono text-[11px] font-semibold text-[#f4efe8]">{pilStatus}</div>
+              {spandukJeda("top-12")}
+            </RuangIsometrik>
+          )}
 
           <ul className="mt-2.5 grid grid-cols-2 gap-2 xl:grid-cols-3">
             {URUTAN_TEMPAT.map((k) => {

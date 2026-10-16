@@ -29,8 +29,17 @@ import {
   frameKeadaan,
   keLayar,
   poseKarakter,
+  dekatiKamera,
+  jepitKamera,
+  latarKeWadah,
   petaRupaAnggota,
   poseTidur,
+  pusatRuang,
+  skalaPas,
+  skalaRuang,
+  terlihatDiKamera,
+  zoomDiJangkar,
+  ZOOM_MAKS2,
   rupaAnggota,
   type StatusPerabot,
 } from "@/features/ruang-bot/dunia2-murni";
@@ -219,6 +228,40 @@ console.log("Rupa anggota (Karakter Saya di status dunia)");
   cek("umum: tanpa rupa → tanpa kunci rupa", !("rupa" in penghuniUmum(orang(8))));
   const d = duniaUmum({ waktu: 1, jumlah: 2, terpotong: false, online: [orang(4, rA), orang(7)] });
   cek("duniaUmum meneruskan rupa", samaKonfig(d.online.find((p) => p.id === 4)!.rupa!, rA) && !("rupa" in d.online.find((p) => p.id === 7)!));
+}
+
+console.log("Kamera");
+{
+  const W = 1248, H = 640;
+  const pas = skalaPas(W, H);
+  cek("Pas: seluruh latar muat", LEBAR_LATAR * pas <= W && TINGGI_LATAR * pas <= H && pas > 0.3, pas);
+  cek("Pas wadah 0×0 tidak nol/NaN", skalaPas(0, 0) === 0.15);
+  cek("skala ruang desktop bulat (1×), ponsel < 1 tapi ≥ Pas", skalaRuang(W, H) === 1 && skalaRuang(360, 420) < 1 && skalaRuang(360, 420) >= skalaPas(360, 420), [skalaRuang(W, H), skalaRuang(360, 420)]);
+  cek("skala ruang wadah besar dijepit 3×", skalaRuang(5000, 4000) === ZOOM_MAKS2);
+  const j = jepitKamera({ cx: -500, cy: 99999, s: 9 }, W, H);
+  cek("jepit: skala ≤ 3, latar menutupi layar", j.s === ZOOM_MAKS2 && j.cx === W / 2 / j.s && j.cy === TINGGI_LATAR - H / 2 / j.s, j);
+  const jp = jepitKamera({ cx: 0, cy: 0, s: 0.01 }, W, H);
+  cek("jepit: skala ≥ Pas, latar lebih kecil → di tengah", jp.s === pas && jp.cx === LEBAR_LATAR / 2 && jp.cy === TINGGI_LATAR / 2, jp);
+  const k0 = { cx: 900, cy: 600, s: 1 };
+  const z = zoomDiJangkar(k0, 2, 300, 200, W, H);
+  const a0 = latarKeWadah(k0, (300 - W / 2) / 1 + 900, (200 - H / 2) / 1 + 600, W, H);
+  const a1 = latarKeWadah(z, (300 - W / 2) / 1 + 900, (200 - H / 2) / 1 + 600, W, H);
+  cek("zoom di jangkar: titik di bawah kursor tetap", dekat(a0.x, a1.x, 1e-6) && dekat(a0.y, a1.y, 1e-6) && z.s === 2);
+  let k = { cx: 100, cy: 100, s: 0.4 };
+  const tujuan = { cx: 1500, cy: 700, s: 2 };
+  let n = 0, selesai = false;
+  while (!selesai && n < 600) { const l = dekatiKamera(k, tujuan, 1 / 60); k = l.kamera; selesai = l.selesai; n++; }
+  cek("animasi kamera menempel tujuan ±0,4–1 dtk", selesai && k.cx === tujuan.cx && k.s === tujuan.s && n > 15 && n < 70, n);
+  const satu = dekatiKamera({ cx: 0, cy: 0, s: 1 }, { cx: 100, cy: 0, s: 4 }, 1 / 60);
+  cek("animasi monoton & skala log (bukan linear)", satu.kamera.cx > 0 && satu.kamera.cx < 100 && satu.kamera.s > 1 && satu.kamera.s < 1 + (4 - 1) * (satu.kamera.cx / 100));
+  cek("dt 0 tidak bergerak", dekatiKamera({ cx: 5, cy: 5, s: 1 }, { cx: 50, cy: 50, s: 2 }, 0).kamera.cx === 5);
+  const kv = { cx: 1000, cy: 600, s: 1 };
+  cek("terlihat: pusat ya, jauh tidak", terlihatDiKamera(kv, 1000, 600, W, H) && !terlihatDiKamera(kv, 1000 + W, 600, W, H) && !terlihatDiKamera(kv, 1000 + W / 2 - 10, 600, W, H, 0.1));
+  cek("pusat ruang di dalam latar & di atas lantai tengah", RUANG2.every((r) => {
+    const c = pusatRuang(r);
+    const t = keLayar(r.x + r.w / 2, r.y + r.d / 2);
+    return c.x === t.x && c.y === t.y - 60 && c.x > 0 && c.x < LEBAR_LATAR && c.y > 0 && c.y < TINGGI_LATAR;
+  }));
 }
 
 console.log(`\nHasil: ${lulus} lulus, ${gagal} gagal`);

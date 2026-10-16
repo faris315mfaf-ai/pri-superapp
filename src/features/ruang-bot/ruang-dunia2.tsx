@@ -6,9 +6,11 @@
 // dunia v2: props & tanggung jawab sama (memajukan simulasi di loop rAF,
 // overlay tag/gelembung via style, klik memilih Nara / anggota / bot).
 //
-// Kamera: tampilan awal "Pas" (seluruh gedung); zoom bilangan bulat 1×/2×/3×
-// supaya piksel tetap tajam. Seret = geser; pinch (sentuh) atau ctrl/⌘ + gulir
-// = zoom (gulir biasa tetap menggulir halaman). Klik ≠ seret (ambang 5 px).
+// Kamera: tampilan awal "Pas" (seluruh gedung; di layar sempit langsung ke
+// `ruangAwal`). Tombol & chip ruang meluncur halus ke tujuan (tanpa animasi
+// bila pengguna memilih gerak dikurangi); seret, pinch, dan ctrl/⌘ + gulir
+// langsung. Memilih orang dari luar kanvas (panel Online) membawa kamera ke
+// orang itu bila ia di luar layar. Klik ≠ seret (ambang 5 px).
 // ============================================================
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
@@ -21,8 +23,25 @@ import { WARNA_TEMPAT } from "./data-contoh";
 import { LABEL_RUANG2, RUANG2, zonaDari2, type KunciRuang2 } from "./denah2";
 import { muatAsetDunia2, type AsetDunia2 } from "./dunia2-aset";
 import { ID_NARA2, gambarFrame2, type PosisiLayar2 } from "./dunia2-gambar";
-import { LEBAR_LATAR, TINGGI_LATAR, dariLayar, keLayar, petaRupaAnggota, rupaAnggota } from "./dunia2-murni";
-import type { BotHidup, SimulasiBot } from "./simulasi-bot";
+import {
+  LEBAR_LATAR,
+  TINGGI_LATAR,
+  ZOOM_MAKS2,
+  dariLayar,
+  dekatiKamera,
+  jepitKamera,
+  keLayar,
+  latarKeWadah,
+  petaRupaAnggota,
+  pusatRuang,
+  rupaAnggota,
+  skalaPas,
+  skalaRuang,
+  terlihatDiKamera,
+  zoomDiJangkar,
+  type Kamera2,
+} from "./dunia2-murni";
+import type { SimulasiBot } from "./simulasi-bot";
 import { WARNA_NARA } from "./simulasi-nara";
 import type { Penghuni, SimulasiPenghuni } from "./simulasi-penghuni";
 import type { BotContoh } from "./tipe";
@@ -30,10 +49,13 @@ import type { BotContoh } from "./tipe";
 const DT_MAKS = 0.1;
 const SELANG_GAMBAR_DIKURANGI = 250;
 const WAKTU_BEKU = 100;
-const ZOOM_MAKS = 3;
 const AMBANG_SERET = 5;
-/** Tinggi tag nama di atas kaki (px dunia). */
+/** Tinggi tag nama di atas kaki (px latar). */
 const ATAS_KEPALA = 64;
+/** Wadah lebih sempit dari skala Pas ini (ponsel) → mulai di ruangAwal, bukan seluruh gedung. */
+const PAS_TERLALU_KECIL = 0.42;
+/** Batas waktu menunggu posisi orang yang dipilih dari luar kanvas (baru masuk ruangan). */
+const TUNGGU_IKUTI_MS = 3000;
 
 function langganVisibilitas(cb: () => void) {
   document.addEventListener("visibilitychange", cb);
@@ -67,11 +89,16 @@ export type RuangDunia2Props = {
   onBukaZona?: Partial<Record<KunciRuang2, () => void>>;
   /** Id akun sendiri: tombol "Saya" memusatkan kamera ke karakter ini. */
   sayaId?: number;
+  /** Ruang pembuka di layar sempit (seluruh gedung terlalu kecil). */
+  ruangAwal?: KunciRuang2;
+  /** Pil status di pojok kiri atas (di atas chip ruang). */
+  hud?: ReactNode;
   children?: ReactNode;
   className?: string;
 };
 
-type Kamera = { cx: number; cy: number; s: number };
+type Kena = { jenis: "nara" } | { jenis: "anggota"; id: number } | { jenis: "bot"; id: string };
+type Ikuti = { jenis: "anggota"; id: number; sampai: number } | { jenis: "bot"; id: string; sampai: number };
 
 export function RuangDunia2({
   sim,
@@ -86,9 +113,11 @@ export function RuangDunia2({
   terpilihPenghuniId,
   onPilihPenghuni,
   konfigPenghuni,
+  rupaSaya,
   onBukaZona,
   sayaId,
-  rupaSaya,
+  ruangAwal,
+  hud,
   children,
   className,
 }: RuangDunia2Props) {
@@ -102,9 +131,17 @@ export function RuangDunia2({
   const [aset, setAset] = useState<AsetDunia2 | null>(null);
   const [galat, setGalat] = useState<string | null>(null);
   const [zoomTampil, setZoomTampil] = useState<number | "pas">("pas");
+  const [ruangAktif, setRuangAktif] = useState<KunciRuang2 | null>(null);
 
-  const kameraRef = useRef<Kamera>({ cx: LEBAR_LATAR / 2, cy: TINGGI_LATAR / 2, s: 0.5 });
+  const kameraRef = useRef<Kamera2>({ cx: LEBAR_LATAR / 2, cy: TINGGI_LATAR / 2, s: 0.5 });
+  /** Tujuan animasi kamera (null = diam). */
+  const tujuanRef = useRef<Kamera2 | null>(null);
   const pasRef = useRef(true);
+  const awalRef = useRef(false);
+  const ikutiRef = useRef<Ikuti | null>(null);
+  /** performance.now() klik terakhir di kanvas: pilihan dari kanvas tidak menggerakkan kamera. */
+  const klikKanvasRef = useRef(-1e9);
+  const gerakRef = useRef(gerakDikurangi);
   const ukuranRef = useRef({ w: 0, h: 0, dpr: 1 });
   const kotorRef = useRef(true);
   const terlihatRef = useRef(true);
@@ -126,7 +163,10 @@ export function RuangDunia2({
     kotorRef.current = true;
   }, [malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota]);
 
-  useEffect(() => { sim.setGerakKurang(gerakDikurangi); }, [sim, gerakDikurangi]);
+  useEffect(() => {
+    gerakRef.current = gerakDikurangi;
+    sim.setGerakKurang(gerakDikurangi);
+  }, [sim, gerakDikurangi]);
   useEffect(() => { tanpaHoverRef.current = window.matchMedia("(hover: none)").matches; }, []);
 
   useEffect(() => {
@@ -137,64 +177,86 @@ export function RuangDunia2({
     return () => { batal = true; };
   }, []);
 
+  // Dipilih dari luar kanvas (panel Online / daftar bot) → kamera menyusul bila orangnya di luar layar.
+  useEffect(() => {
+    if (performance.now() - klikKanvasRef.current < 400) return;
+    const sampai = performance.now() + TUNGGU_IKUTI_MS;
+    if (terpilihPenghuniId !== null) ikutiRef.current = { jenis: "anggota", id: terpilihPenghuniId, sampai };
+    else if (terpilihId) ikutiRef.current = { jenis: "bot", id: terpilihId, sampai };
+  }, [terpilihId, terpilihPenghuniId]);
+
   // ---------- kamera ----------
 
-  const skalaPas = () => {
+  /** Kamera yang sedang dituju (tujuan animasi, atau posisi kini). */
+  const kameraAkhir = () => tujuanRef.current ?? kameraRef.current;
+  const tampilkanZoom = (s: number) => setZoomTampil(pasRef.current ? "pas" : Math.round(s * 10) / 10);
+
+  /** Pindah kamera: meluncur halus, atau langsung bila gerak dikurangi / wadah belum berukuran. */
+  const pasang = (k: Kamera2, meluncur = true) => {
     const { w, h } = ukuranRef.current;
-    return Math.max(0.15, Math.min(w / LEBAR_LATAR, h / TINGGI_LATAR) * 0.98);
+    const t = jepitKamera(k, w, h);
+    if (meluncur && !gerakRef.current && w > 0) tujuanRef.current = t;
+    else {
+      kameraRef.current = t;
+      tujuanRef.current = null;
+    }
+    kotorRef.current = true;
+    tampilkanZoom(t.s);
   };
-  const jepitKamera = () => {
-    const k = kameraRef.current;
+  /** Ubah kamera langsung (seret / pinch / roda): animasi berjalan dibatalkan. */
+  const geserLangsung = (k: Kamera2) => {
     const { w, h } = ukuranRef.current;
-    const setengahW = w / 2 / k.s, setengahH = h / 2 / k.s;
-    k.cx = LEBAR_LATAR / 2 <= setengahW ? LEBAR_LATAR / 2 : Math.min(LEBAR_LATAR - setengahW, Math.max(setengahW, k.cx));
-    k.cy = TINGGI_LATAR / 2 <= setengahH ? TINGGI_LATAR / 2 : Math.min(TINGGI_LATAR - setengahH, Math.max(setengahH, k.cy));
+    tujuanRef.current = null;
+    kameraRef.current = jepitKamera(k, w, h);
     kotorRef.current = true;
   };
-  const aturZoom = (s: number | "pas", jangkar?: { x: number; y: number }) => {
-    const k = kameraRef.current;
-    const baru = s === "pas" ? skalaPas() : Math.min(ZOOM_MAKS, Math.max(skalaPas(), s));
-    if (jangkar) {
-      // Titik dunia di bawah jangkar layar tetap di tempat.
-      const { w, h } = ukuranRef.current;
-      const wx = (jangkar.x - w / 2) / k.s + k.cx;
-      const wy = (jangkar.y - h / 2) / k.s + k.cy;
-      k.cx = wx - (jangkar.x - w / 2) / baru;
-      k.cy = wy - (jangkar.y - h / 2) / baru;
-    }
-    k.s = baru;
-    pasRef.current = s === "pas";
-    if (s === "pas") { k.cx = LEBAR_LATAR / 2; k.cy = TINGGI_LATAR / 2; }
-    jepitKamera();
-    setZoomTampil(s === "pas" ? "pas" : Math.round(baru * 10) / 10);
+
+  const aturPas = () => {
+    const { w, h } = ukuranRef.current;
+    pasRef.current = true;
+    setRuangAktif(null);
+    pasang({ cx: LEBAR_LATAR / 2, cy: TINGGI_LATAR / 2, s: skalaPas(w, h) });
   };
   const zoomBertahap = (arah: 1 | -1) => {
-    const s = kameraRef.current.s;
-    if (arah > 0) aturZoom(Math.min(ZOOM_MAKS, Math.floor(s + 1e-6) + 1));
-    else {
-      const turun = Math.ceil(s - 1e-6) - 1;
-      aturZoom(turun >= 1 && turun > skalaPas() ? turun : "pas");
+    const { w, h } = ukuranRef.current;
+    const k = kameraAkhir();
+    if (arah > 0) {
+      pasRef.current = false;
+      pasang({ ...k, s: Math.min(ZOOM_MAKS2, Math.floor(k.s + 1e-6) + 1) });
+      return;
     }
+    const turun = Math.ceil(k.s - 1e-6) - 1;
+    if (turun >= 1 && turun > skalaPas(w, h)) {
+      pasRef.current = false;
+      pasang({ ...k, s: turun });
+    } else aturPas();
   };
-  const pusatKe = (x: number, y: number, s?: number) => {
-    const k = kameraRef.current;
-    if (s !== undefined) { k.s = Math.min(ZOOM_MAKS, Math.max(skalaPas(), s)); pasRef.current = false; setZoomTampil(k.s); }
-    k.cx = x;
-    k.cy = y;
-    jepitKamera();
+  const keRuang = (kunci: KunciRuang2, meluncur = true) => {
+    const r = RUANG2.find((x) => x.kunci === kunci);
+    if (!r) return;
+    const { w, h } = ukuranRef.current;
+    const c = pusatRuang(r);
+    pasRef.current = false;
+    setRuangAktif(kunci);
+    pasang({ cx: c.x, cy: c.y, s: Math.max(skalaRuang(w, h), kameraAkhir().s) }, meluncur);
   };
-  const keRuang = (kunci: KunciRuang2) => {
-    const r = RUANG2.find((x) => x.kunci === kunci)!;
-    const p = keLayar(r.x + r.w / 2, r.y + r.d / 2);
-    pusatKe(p.x, p.y - 60, Math.max(1, kameraRef.current.s));
+  /** Skala dekat untuk memusatkan satu orang: satu tingkat di atas skala ruang. */
+  const skalaOrang = () => {
+    const { w, h } = ukuranRef.current;
+    const sr = skalaRuang(w, h);
+    return sr >= 1 ? Math.min(ZOOM_MAKS2, sr + 1) : Math.min(1, sr * 2);
+  };
+  const keOrang = (pos: PosisiLayar2, sMin: number) => {
+    pasRef.current = false;
+    setRuangAktif(null);
+    pasang({ cx: pos.sx, cy: pos.sy - 30, s: Math.max(kameraAkhir().s, sMin) });
   };
   const keSaya = () => {
-    if (sayaId === undefined) return;
-    const p = posisiPenghuniRef.current.get(sayaId);
-    if (p) pusatKe(p.sx, p.sy - 30, Math.max(2, kameraRef.current.s));
+    const pos = sayaId === undefined ? undefined : posisiPenghuniRef.current.get(sayaId);
+    if (pos) keOrang(pos, skalaOrang());
   };
 
-  // Ukuran wadah → resolusi kanvas (× devicePixelRatio).
+  // Ukuran wadah → resolusi kanvas (× devicePixelRatio) & kamera awal.
   useEffect(() => {
     const el = wadahRef.current;
     const kanvas = kanvasRef.current;
@@ -205,8 +267,20 @@ export function RuangDunia2({
       ukuranRef.current = { w, h, dpr };
       kanvas.width = Math.max(1, Math.round(w * dpr));
       kanvas.height = Math.max(1, Math.round(h * dpr));
-      if (pasRef.current) kameraRef.current.s = skalaPas();
-      jepitKamera();
+      if (w <= 0 || h <= 0) return;
+      if (!awalRef.current) {
+        awalRef.current = true;
+        if (ruangAwal && skalaPas(w, h) < PAS_TERLALU_KECIL) {
+          keRuang(ruangAwal, false);
+          return;
+        }
+      }
+      if (pasRef.current) pasang({ cx: LEBAR_LATAR / 2, cy: TINGGI_LATAR / 2, s: skalaPas(w, h) }, false);
+      else {
+        kameraRef.current = jepitKamera(kameraRef.current, w, h);
+        if (tujuanRef.current) tujuanRef.current = jepitKamera(tujuanRef.current, w, h);
+        kotorRef.current = true;
+      }
     };
     ukur();
     const ro = new ResizeObserver(ukur);
@@ -233,8 +307,13 @@ export function RuangDunia2({
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const r = el.getBoundingClientRect();
+      const { w, h } = ukuranRef.current;
       const k = kameraRef.current;
-      aturZoom(Math.min(ZOOM_MAKS, Math.max(skalaPas(), k.s * Math.exp(-e.deltaY * 0.01))), { x: e.clientX - r.left, y: e.clientY - r.top });
+      const s = Math.min(ZOOM_MAKS2, Math.max(skalaPas(w, h), k.s * Math.exp(-e.deltaY * 0.01)));
+      pasRef.current = false;
+      setRuangAktif(null);
+      geserLangsung(zoomDiJangkar(k, s, e.clientX - r.left, e.clientY - r.top, w, h));
+      tampilkanZoom(kameraRef.current.s);
     };
     el.addEventListener("wheel", roda, { passive: false });
     return () => el.removeEventListener("wheel", roda);
@@ -251,14 +330,13 @@ export function RuangDunia2({
     let terakhir = performance.now();
     let akhirGambar = 0;
     const ukuranGelembung = (s: number) => `${Math.max(9, Math.min(12, 9 + s * 1.2)).toFixed(1)}px`;
-    const keLayarLayar = (sx: number, sy: number) => {
-      const k = kameraRef.current;
+    const keWadah = (sx: number, sy: number) => {
       const { w, h } = ukuranRef.current;
-      return { x: (sx - k.cx) * k.s + w / 2, y: (sy - k.cy) * k.s + h / 2 };
+      return latarKeWadah(kameraRef.current, sx, sy, w, h);
     };
 
     const taruh = (el: HTMLElement, sx: number, sy: number, z: number) => {
-      const p = keLayarLayar(sx, sy);
+      const p = keWadah(sx, sy);
       el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -100%)`;
       el.style.zIndex = String(Math.round(z * 10) + 10);
       el.style.visibility = "visible";
@@ -305,13 +383,29 @@ export function RuangDunia2({
         const el = zonaRef.current[i];
         if (!el) return;
         const p = keLayar(z.titik[0], z.titik[1]);
-        const q = keLayarLayar(p.x, p.y);
+        const q = keWadah(p.x, p.y);
         el.style.transform = `translate(${q.x.toFixed(1)}px, ${q.y.toFixed(1)}px) translate(-50%, -50%)`;
         el.style.visibility = "visible";
         const nampak = tanpaHoverRef.current || zonaKursorRef.current === z.kunci || s >= 1;
         el.style.opacity = nampak ? "1" : "0";
         el.style.pointerEvents = nampak ? "auto" : "none";
       });
+    };
+
+    /** Orang yang dipilih dari luar kanvas: begitu posisinya diketahui, kamera menyusul bila perlu. */
+    const susulPilihan = (now: number) => {
+      const ik = ikutiRef.current;
+      if (!ik) return;
+      const pos = ik.jenis === "bot" ? posisiRef.current.get(ik.id) : posisiPenghuniRef.current.get(ik.id);
+      if (!pos) {
+        if (now > ik.sampai) ikutiRef.current = null;
+        return;
+      }
+      ikutiRef.current = null;
+      const { w, h } = ukuranRef.current;
+      const k = kameraAkhir();
+      const kecil = k.s < 0.75;
+      if (kecil || !terlihatDiKamera(k, pos.sx, pos.sy - 30, w, h, 0.12)) keOrang(pos, kecil ? Math.min(1, skalaOrang()) : k.s);
     };
 
     const langkah = (now: number) => {
@@ -321,6 +415,13 @@ export function RuangDunia2({
       sim.maju(dt * terbaru.current.kecepatan, dt);
       penghuni.maju(dt);
       if (!terlihatRef.current || ukuranRef.current.w <= 0) return;
+      const tujuan = tujuanRef.current;
+      if (tujuan) {
+        const l = dekatiKamera(kameraRef.current, tujuan, dt);
+        kameraRef.current = l.kamera;
+        if (l.selesai) tujuanRef.current = null;
+        kotorRef.current = true;
+      }
       if (gerakDikurangi && !kotorRef.current && now - akhirGambar < SELANG_GAMBAR_DIKURANGI) return;
       kotorRef.current = false;
       akhirGambar = now;
@@ -344,8 +445,10 @@ export function RuangDunia2({
         malam: t.malam,
         posisi: posisiRef.current,
         posisiPenghuni: posisiPenghuniRef.current,
+        pandang: { x0: k.cx - w / 2 / k.s, y0: k.cy - h / 2 / k.s, x1: k.cx + w / 2 / k.s, y1: k.cy + h / 2 / k.s },
       });
       taruhOverlay();
+      susulPilihan(now);
     };
     id = requestAnimationFrame(langkah);
     return () => cancelAnimationFrame(id);
@@ -356,28 +459,47 @@ export function RuangDunia2({
   const penunjuk = useRef(new Map<number, { x: number; y: number }>());
   const seret = useRef<{ x: number; y: number; cx: number; cy: number; jauh: number; pinch?: { d: number; s: number } } | null>(null);
 
-  const titikDunia = (e: { clientX: number; clientY: number }) => {
-    const el = wadahRef.current!;
-    const r = el.getBoundingClientRect();
+  const titikLatar = (e: { clientX: number; clientY: number }) => {
+    const r = wadahRef.current!.getBoundingClientRect();
     const k = kameraRef.current;
-    return { x: (e.clientX - r.left - r.width / 2) / k.s + k.cx, y: (e.clientY - r.top - r.height / 2) / k.s + k.cy, lx: e.clientX - r.left, ly: e.clientY - r.top };
+    return { x: (e.clientX - r.left - r.width / 2) / k.s + k.cx, y: (e.clientY - r.top - r.height / 2) / k.s + k.cy };
+  };
+
+  /** Karakter di bawah titik latar (x, y). Kotak kena membesar saat kamera jauh supaya tetap mudah diketuk. */
+  const cariDi = (x: number, y: number): Kena | null => {
+    const f = Math.max(1, 0.6 / kameraRef.current.s);
+    const jarak = (p: PosisiLayar2 | undefined) =>
+      p && Math.abs(x - p.sx) < 14 * f && y < p.sy + 4 * f && y > p.sy - 62 * f ? Math.abs(x - p.sx) + Math.abs(y - (p.sy - 30)) * 0.5 : Infinity;
+    if (jarak(posisiRef.current.get(ID_NARA2)) < Infinity) return { jenis: "nara" };
+    let anggota: number | null = null;
+    let dAnggota = Infinity;
+    for (const p of penghuni.penghuni) {
+      const d = p.alfa > 0.3 ? jarak(posisiPenghuniRef.current.get(p.id)) : Infinity;
+      if (d < dAnggota) { dAnggota = d; anggota = p.id; }
+    }
+    if (anggota !== null) return { jenis: "anggota", id: anggota };
+    let bot: string | null = null;
+    let dBot = Infinity;
+    for (const b of sim.bots) {
+      const d = jarak(posisiRef.current.get(b.id));
+      if (d < dBot) { dBot = d; bot = b.id; }
+    }
+    return bot !== null ? { jenis: "bot", id: bot } : null;
   };
 
   const pilihDi = (x: number, y: number) => {
-    const kena = (p: PosisiLayar2 | undefined) => !!p && Math.abs(x - p.sx) < 14 && y < p.sy + 4 && y > p.sy - 62;
     const t = terbaru.current;
-    if (kena(posisiRef.current.get(ID_NARA2))) { t.onPilihNara?.(); return; }
-    let anggota: number | null = null;
-    for (const p of penghuni.penghuni) if (kena(posisiPenghuniRef.current.get(p.id))) anggota = p.id;
-    if (anggota !== null) { t.onPilihPenghuni(t.terpilihPenghuniId === anggota ? null : anggota); return; }
-    let dipilih: BotHidup | null = null;
-    for (const b of sim.bots) if (kena(posisiRef.current.get(b.id))) dipilih = b;
-    t.onPilih(dipilih ? (t.terpilihId === dipilih.id ? null : dipilih.id) : null);
-    if (!dipilih) t.onPilihPenghuni(null);
+    const kena = cariDi(x, y);
+    klikKanvasRef.current = performance.now();
+    if (kena?.jenis === "nara") { t.onPilihNara?.(); return; }
+    if (kena?.jenis === "anggota") { t.onPilihPenghuni(t.terpilihPenghuniId === kena.id ? null : kena.id); return; }
+    if (kena?.jenis === "bot") { t.onPilih(t.terpilihId === kena.id ? null : kena.id); return; }
+    t.onPilih(null);
+    t.onPilihPenghuni(null);
   };
 
   const turun = (e: React.PointerEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest("button")) return;
+    if ((e.target as HTMLElement).closest("button,[data-kendali]")) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     penunjuk.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const k = kameraRef.current;
@@ -387,40 +509,50 @@ export function RuangDunia2({
     } else seret.current = { x: e.clientX, y: e.clientY, cx: k.cx, cy: k.cy, jauh: 0 };
   };
   const gerak = (e: React.PointerEvent<HTMLDivElement>) => {
-    const w = titikDunia(e);
-    const [gx, gy] = dariLayar(w.x, w.y);
+    const p = titikLatar(e);
+    const [gx, gy] = dariLayar(p.x, p.y);
     zonaKursorRef.current = zonaDari2(gx, gy);
-    if (!penunjuk.current.has(e.pointerId)) return;
+    if (!penunjuk.current.has(e.pointerId)) {
+      if (e.pointerType === "mouse" && kanvasRef.current) kanvasRef.current.style.cursor = cariDi(p.x, p.y) ? "pointer" : "";
+      return;
+    }
     penunjuk.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const s = seret.current;
     if (!s) return;
-    const k = kameraRef.current;
+    const { w, h } = ukuranRef.current;
     if (s.pinch && penunjuk.current.size >= 2) {
       const [a, b] = [...penunjuk.current.values()];
       const d = Math.hypot(a!.x - b!.x, a!.y - b!.y);
       const r = wadahRef.current!.getBoundingClientRect();
-      aturZoom(Math.min(ZOOM_MAKS, Math.max(skalaPas(), (s.pinch.s * d) / Math.max(1, s.pinch.d))), { x: (a!.x + b!.x) / 2 - r.left, y: (a!.y + b!.y) / 2 - r.top });
+      const sBaru = Math.min(ZOOM_MAKS2, Math.max(skalaPas(w, h), (s.pinch.s * d) / Math.max(1, s.pinch.d)));
+      pasRef.current = false;
+      geserLangsung(zoomDiJangkar(kameraRef.current, sBaru, (a!.x + b!.x) / 2 - r.left, (a!.y + b!.y) / 2 - r.top, w, h));
+      tampilkanZoom(kameraRef.current.s);
       return;
     }
+    const sebelum = s.jauh;
     s.jauh = Math.max(s.jauh, Math.hypot(e.clientX - s.x, e.clientY - s.y));
     if (s.jauh < AMBANG_SERET) return;
-    k.cx = s.cx - (e.clientX - s.x) / k.s;
-    k.cy = s.cy - (e.clientY - s.y) / k.s;
-    pasRef.current = false;
-    jepitKamera();
+    if (sebelum < AMBANG_SERET) {
+      pasRef.current = false;
+      setRuangAktif(null);
+      tampilkanZoom(kameraRef.current.s);
+    }
+    const k = kameraRef.current;
+    geserLangsung({ cx: s.cx - (e.clientX - s.x) / k.s, cy: s.cy - (e.clientY - s.y) / k.s, s: k.s });
   };
   const naik = (e: React.PointerEvent<HTMLDivElement>) => {
     const s = seret.current;
-    const klik = penunjuk.current.size === 1 && s && !s.pinch && s.jauh < AMBANG_SERET;
+    const klik = e.type === "pointerup" && penunjuk.current.size === 1 && s && !s.pinch && s.jauh < AMBANG_SERET;
     penunjuk.current.delete(e.pointerId);
     if (penunjuk.current.size === 0) seret.current = null;
     if (klik) {
-      const w = titikDunia(e);
-      pilihDi(w.x, w.y);
+      const p = titikLatar(e);
+      pilihDi(p.x, p.y);
     }
   };
 
-  const tombol = "btn-tekan pointer-events-auto flex h-9 min-w-9 items-center justify-center rounded-lg border border-white/15 bg-[rgba(14,11,20,.82)] px-2 text-[12px] font-bold text-[#f4efe8] hover:bg-[rgba(40,32,58,.95)]";
+  const tombol = "btn-tekan pointer-events-auto flex h-9 min-w-9 items-center justify-center rounded-lg border border-white/15 bg-[rgba(14,11,20,.82)] px-2 text-[12px] font-bold text-[#f4efe8] hover:bg-[rgba(40,32,58,.95)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#fde68a]";
 
   return (
     <div
@@ -436,12 +568,12 @@ export function RuangDunia2({
         ref={kanvasRef}
         role="img"
         aria-label="Gedung Ruang Bot pixel art: ruang kerja, koordinator, meeting, aula, istirahat, database, alat, dan kotak post. Seret untuk menggeser, klik karakter untuk memilih."
-        className="absolute inset-0 block h-full w-full cursor-grab active:cursor-grabbing"
+        className={cn("absolute inset-0 block h-full w-full cursor-grab transition-opacity duration-300 active:cursor-grabbing", aset ? "opacity-100" : "opacity-0")}
         style={{ imageRendering: "pixelated" }}
       />
       {!aset && (
         <div role="status" className="absolute inset-0 flex items-center justify-center text-[13px] font-semibold text-[#f4efe8]/80">
-          {galat ? `Dunia gagal dimuat: ${galat}` : "Memuat gedung…"}
+          {galat ? `Dunia gagal dimuat: ${galat}` : <span className="animate-pulse">Memuat gedung…</span>}
         </div>
       )}
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
@@ -500,24 +632,35 @@ export function RuangDunia2({
         })}
       </div>
 
-      {/* Kendali kamera */}
-      <div className="pointer-events-none absolute inset-x-2 top-2 flex flex-wrap gap-1">
-        {RUANG2.map((r) => (
-          <button key={r.kunci} type="button" onClick={() => keRuang(r.kunci)} className={cn(tombol, "h-7 px-2 text-[10.5px]")} style={{ boxShadow: `inset 3px 0 0 ${r.warna}` }} aria-label={`Lihat ${r.nama.toLowerCase()}`}>
-            {r.nama.replace(/^RUANG /, "").replace(" · ONLINE", "")}
-          </button>
-        ))}
+      {/* Pil status + chip lompat ruang (satu baris, bisa digulir di layar sempit) */}
+      <div className="pointer-events-none absolute inset-x-2 top-2 flex flex-col items-start gap-1.5">
+        {hud}
+        <div data-kendali className="pointer-events-auto flex max-w-full gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="group" aria-label="Lompat ke ruang">
+          {RUANG2.map((r) => (
+            <button
+              key={r.kunci}
+              type="button"
+              onClick={() => keRuang(r.kunci)}
+              aria-pressed={ruangAktif === r.kunci}
+              className={cn(tombol, "h-7 shrink-0 px-2 text-[10.5px]", ruangAktif === r.kunci && "border-white/40 bg-[rgba(52,42,74,.95)]")}
+              style={{ boxShadow: `inset 3px 0 0 ${r.warna}` }}
+              aria-label={`Lihat ${r.nama.replace(" · ONLINE", "").toLowerCase()}`}
+            >
+              {r.nama.replace(/^RUANG /, "").replace(" · ONLINE", "")}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1">
         {sayaId !== undefined && daftarPenghuni.some((p) => p.id === sayaId) && (
           <button type="button" onClick={keSaya} className={tombol} aria-label="Pusatkan kamera ke karakter saya">Saya</button>
         )}
         <button type="button" onClick={() => zoomBertahap(-1)} className={tombol} aria-label="Perkecil"><Minus size={15} /></button>
-        <span className="pointer-events-none min-w-10 rounded-lg bg-[rgba(14,11,20,.82)] px-2 py-1.5 text-center font-mono text-[11px] font-bold text-[#f4efe8]">
+        <span className="pointer-events-none min-w-10 rounded-lg bg-[rgba(14,11,20,.82)] px-2 py-1.5 text-center font-mono text-[11px] font-bold tabular-nums text-[#f4efe8]" aria-live="polite">
           {zoomTampil === "pas" ? "Pas" : `${zoomTampil}×`}
         </span>
         <button type="button" onClick={() => zoomBertahap(1)} className={tombol} aria-label="Perbesar"><Plus size={15} /></button>
-        <button type="button" onClick={() => aturZoom("pas")} className={tombol} aria-label="Tampilkan seluruh gedung"><Maximize2 size={14} /></button>
+        <button type="button" onClick={aturPas} className={tombol} aria-label="Tampilkan seluruh gedung"><Maximize2 size={14} /></button>
       </div>
       {children}
     </div>

@@ -190,3 +190,68 @@ export function petaRupaAnggota(
 export function rupaAnggota(peta: ReadonlyMap<number, KonfigKarakter>, id: number): KonfigKarakter {
   return peta.get(id) ?? konfigBawaan(id);
 }
+
+// ---------- kamera ----------
+
+/** Kamera: titik latar di tengah layar (cx, cy) & skala (px layar per px latar). */
+export type Kamera2 = { cx: number; cy: number; s: number };
+export const ZOOM_MAKS2 = 3;
+
+/** Skala "Pas": seluruh gedung terlihat dalam wadah w×h. */
+export function skalaPas(w: number, h: number): number {
+  return Math.max(0.15, Math.min(w / LEBAR_LATAR, h / TINGGI_LATAR) * 0.98);
+}
+
+/**
+ * Skala untuk melihat satu ruang (±720×480 px latar): bilangan bulat bila ≥ 1 supaya piksel
+ * tetap tajam, selain itu sebesar yang muat (tidak lebih kecil dari Pas).
+ */
+export function skalaRuang(w: number, h: number): number {
+  const v = Math.min(w / 720, h / 480);
+  return v >= 1 ? Math.min(ZOOM_MAKS2, Math.floor(v)) : Math.max(skalaPas(w, h), v);
+}
+
+/** Skala dijepit [Pas, 3×]; pusat dijepit agar latar menutupi layar (atau di tengah bila lebih kecil). */
+export function jepitKamera(k: Kamera2, w: number, h: number): Kamera2 {
+  const s = Math.min(ZOOM_MAKS2, Math.max(skalaPas(w, h), k.s));
+  const sw = w / 2 / s, sh = h / 2 / s;
+  const cx = LEBAR_LATAR / 2 <= sw ? LEBAR_LATAR / 2 : Math.min(LEBAR_LATAR - sw, Math.max(sw, k.cx));
+  const cy = TINGGI_LATAR / 2 <= sh ? TINGGI_LATAR / 2 : Math.min(TINGGI_LATAR - sh, Math.max(sh, k.cy));
+  return { cx, cy, s };
+}
+
+/** Ubah skala sambil menahan titik latar yang berada di bawah (jx, jy) layar. */
+export function zoomDiJangkar(k: Kamera2, sBaru: number, jx: number, jy: number, w: number, h: number): Kamera2 {
+  const wx = (jx - w / 2) / k.s + k.cx;
+  const wy = (jy - h / 2) / k.s + k.cy;
+  return { cx: wx - (jx - w / 2) / sBaru, cy: wy - (jy - h / 2) / sBaru, s: sBaru };
+}
+
+/**
+ * Satu langkah animasi kamera menuju tujuan (redaman eksponensial, τ detik): pusat linear,
+ * skala di ruang log (zoom terasa rata). `selesai` = sudah menempel tujuan (selisih < 0,5 px layar).
+ */
+export function dekatiKamera(k: Kamera2, tujuan: Kamera2, dt: number, tau = 0.11): { kamera: Kamera2; selesai: boolean } {
+  const a = 1 - Math.exp(-Math.max(0, dt) / tau);
+  const s = Math.exp(Math.log(k.s) + (Math.log(tujuan.s) - Math.log(k.s)) * a);
+  const kamera = { cx: k.cx + (tujuan.cx - k.cx) * a, cy: k.cy + (tujuan.cy - k.cy) * a, s };
+  const selesai = Math.abs(kamera.cx - tujuan.cx) * s < 0.5 && Math.abs(kamera.cy - tujuan.cy) * s < 0.5 && Math.abs(kamera.s / tujuan.s - 1) < 0.002;
+  return { kamera: selesai ? { ...tujuan } : kamera, selesai };
+}
+
+/** Titik latar → piksel wadah. */
+export function latarKeWadah(k: Kamera2, sx: number, sy: number, w: number, h: number): { x: number; y: number } {
+  return { x: (sx - k.cx) * k.s + w / 2, y: (sy - k.cy) * k.s + h / 2 };
+}
+
+/** Titik latar terlihat di wadah dengan pinggiran `pinggir` (pecahan lebar/tinggi). */
+export function terlihatDiKamera(k: Kamera2, sx: number, sy: number, w: number, h: number, pinggir = 0.1): boolean {
+  const p = latarKeWadah(k, sx, sy, w, h);
+  return p.x >= w * pinggir && p.x <= w * (1 - pinggir) && p.y >= h * pinggir && p.y <= h * (1 - pinggir);
+}
+
+/** Pusat pandangan satu ruang (sedikit ke atas: dinding belakang ikut terlihat). */
+export function pusatRuang(r: Ruang2): { x: number; y: number } {
+  const p = keLayar(r.x + r.w / 2, r.y + r.d / 2);
+  return { x: p.x, y: p.y - 60 };
+}
