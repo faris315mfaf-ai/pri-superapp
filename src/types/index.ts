@@ -21,8 +21,9 @@ export type Role =
   // superadmin (10 Sep 2026): akun operasional pusat — tersembunyi seperti
   // master; Dashboard & Konten penuh; tanpa TV Official/chat/robot/suara.
   | "superadmin"
-  // superuser (16 Okt 2026): MODE LIHAT — melihat seperti superadmin, semua
-  // perubahan data ditolak (lib/hanya-lihat, src/proxy.ts). Tersembunyi.
+  // superuser (16 Okt 2026): MODE LIHAT — peran biasa bermenu terbatas
+  // (Beranda ringkas, Konten, TV Nasional ringkas, Ruang Bot hanya ruang,
+  // Profil); semua perubahan data ditolak (lib/hanya-lihat, src/proxy.ts).
   | "superuser"
   | "admin_hr"
   | "admin_tv"
@@ -60,8 +61,8 @@ export type User = {
    */
   superadmin?: boolean;
   /**
-   * SUPERUSER (16 Okt 2026): peran DB "superuser" = superadmin MODE LIHAT
-   * (`role: "master"`, `superadmin: true`, penanda ini). Hanya membaca.
+   * SUPERUSER (16 Okt 2026): `role: "superuser"` + penanda ini = MODE LIHAT
+   * (dibaca proxy). Hanya membaca.
    */
   superuser?: boolean;
   avatar_url: string;

@@ -30,7 +30,7 @@ import { useModeNav } from "@/hooks/use-mode-nav";
 import { temaApple, useLatarApple } from "@/hooks/use-latar-apple";
 import { SplashScreen } from "@/features/auth/splash-screen";
 import { bolehPet } from "@/lib/pet-akses";
-import { MODUL_AKUN, bolehAudit, bolehRuangBot, modulDibuka } from "@/lib/peran";
+import { MODUL_AKUN, adalahSuperuser, bolehAudit, bolehRuangBot, modulDibuka } from "@/lib/peran";
 import { adalahBot } from "@/lib/struktur";
 import { useDetakGlobal } from "@/hooks/use-detak-global";
 import { KonteksTabAktif } from "@/hooks/use-tab-aktif";
@@ -87,6 +87,7 @@ const QcScreen = dynamic(() => import("@/features/qc-konten/qc-screen").then((m)
 const AccountDetailScreen = dynamic(() => import("@/features/qc-konten/account-detail-screen").then((m) => m.AccountDetailScreen), { ssr: false, loading: MuatLayar });
 const PostDetailScreen = dynamic(() => import("@/features/qc-konten/post-detail-screen").then((m) => m.PostDetailScreen), { ssr: false, loading: MuatLayar });
 const TvScreen = dynamic(() => import("@/features/tv-rakyat/tv-screen").then((m) => m.TvScreen), { ssr: false, loading: MuatLayar });
+const TvNasionalRingkasSuperuser = dynamic(() => import("@/features/tv-rakyat/tv-nasional-ringkas").then((m) => m.TvNasionalRingkas), { ssr: false, loading: MuatLayar });
 const TvNasionalScreen = dynamic(() => import("@/features/tv-rakyat/tv-nasional-screen").then((m) => m.TvNasionalScreen), { ssr: false, loading: MuatLayar });
 const PengumumanScreen = dynamic(() => import("@/features/pengguna/pengumuman-screen").then((m) => m.PengumumanScreen), { ssr: false, loading: MuatLayar });
 const PersetujuanKpiScreen = dynamic(() => import("@/features/pengguna/persetujuan-kpi-screen").then((m) => m.PersetujuanKpiScreen), { ssr: false, loading: MuatLayar });
@@ -340,8 +341,8 @@ const TAB_ROLE: Record<Role, KunciTab[]> = {
   // tab Dashboard ditambahkan dinamis (aksesPenuh). Tanpa TV Official,
   // chat, robot, dan perintah suara.
   superadmin: ["beranda", "konten", "profil"],
-  // superuser: sesi memetakannya ke master (entri ini hanya pelengkap tipe).
-  superuser: ["beranda", "konten", "profil"],
+  // superuser (mode lihat): menu tetap — lihat juga early return di tabPenuh.
+  superuser: ["beranda", "konten", "tvnas", "ruangbot", "profil"],
   admin_hr: ["konten", "qc", "ruangbot", "chat", "profil"],
   admin_tv: ["konten", "tv", "ruangbot", "chat", "profil"],
   ketua: ["beranda", "konten", "tvrku", "ruangbot", "chat", "profil"],
@@ -592,6 +593,12 @@ export default function Page() {
     // Akun bot (Divisi BOT, 13 Okt 2026): HANYA modul TV Rakyat Saya (+ Konten
     // dan Profil yang memang wajib untuk semua akun).
     if (adalahBot(user)) return ["konten", "tvrku", "profil"];
+    // SUPERUSER (16 Okt 2026, mode lihat): menu TETAP — tanpa modul jabatan,
+    // divisi, HR, Dashboard, Asisten, TV Official, TVR Saya, maupun Chat.
+    if (adalahSuperuser(user)) {
+      const menu: KunciTab[] = ["beranda", "konten", "tvnas", "ruangbot", "profil"];
+      return ruangBotAktif ? menu : menu.filter((k) => k !== "ruangbot");
+    }
     const dasar = [...TAB_ROLE[user.role]];
     // Modul TV terbuka untuk Pimred (jabatan) ATAU anggota tim TV yang
     // ditunjuk Pimred (tvAnggota dari server).
@@ -1247,7 +1254,23 @@ export default function Page() {
         ),
       });
     }
-    if (
+    if (tabBoleh.includes("beranda") && adalahSuperuser(user)) {
+      // Superuser: beranda hanya sapaan di atas (tanpa Token Merah Putih & isi di bawahnya).
+      layarTab.push({
+        kunci: "beranda",
+        isi: (
+          <BerandaFaris
+            user={user}
+            hanyaSapaan
+            onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
+            onBukaAbsensi={() => undefined}
+            onBukaLaporanKerja={() => undefined}
+            onBukaProfil={() => pilihTab("profil")}
+            onBukaPengumuman={() => setSubLayar({ nama: "pengumuman-daftar" })}
+          />
+        ),
+      });
+    } else if (
       tabBoleh.includes("beranda") &&
       (user.role === "ketua" || user.role === "anggota")
     ) {
@@ -1367,7 +1390,9 @@ export default function Page() {
     if (tabBoleh.includes("tvnas")) {
       layarTab.push({
         kunci: "tvnas",
-        isi: (
+        isi: adalahSuperuser(user) ? (
+          <TvNasionalRingkasSuperuser onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })} />
+        ) : (
           <TvNasionalScreen
             onBukaNotifikasi={() => setSubLayar({ nama: "notifikasi" })}
           />
@@ -1422,7 +1447,7 @@ export default function Page() {
         isi: bolehRuangBot(user) ? (
           <RuangBotScreen onBukaKelolaBot={() => setSubLayar({ nama: "kelola-bot" })} sayaId={Number(user.id)} />
         ) : (
-          <RuangBotUmumScreen sayaId={Number(user.id)} />
+          <RuangBotUmumScreen sayaId={Number(user.id)} hanyaRuang={adalahSuperuser(user)} />
         ),
       });
     }
@@ -1476,7 +1501,7 @@ export default function Page() {
           onBukaPanelMaster={() => setSubLayar({ nama: "panel-master" })}
           onBukaAudit={bolehAudit(user) ? () => setSubLayar({ nama: "audit" }) : undefined}
           onBukaKelolaBot={bolehRuangBot(user) && ruangBotAktif ? () => setSubLayar({ nama: "kelola-bot" }) : undefined}
-          onBukaPet={bolehPet(user) ? () => setSubLayar({ nama: "pet" }) : undefined}
+          onBukaPet={bolehPet(user) && !adalahSuperuser(user) ? () => setSubLayar({ nama: "pet" }) : undefined}
           onBukaLudo={sakelar.fitur.ludo === false ? undefined : () => setSubLayar({ nama: "ludo" })}
           onBukaPengaturanFitur={() =>
             setSubLayar({ nama: "pengaturan-fitur" })
@@ -1556,7 +1581,7 @@ export default function Page() {
       {/* Juara komentar ikut sakelar modul kepatuhan_komen (24 Sep 2026). */}
       {aplikasiAktif && !pembaruanWajib && !changelogBuka && komenAktif && sakelar.fitur.juara_efek !== false && <ModalKembangApi />}
       {/* Hadiah login harian (v5, 5 Sep 2026): sekali per hari, diperiksa sekali per sesi. */}
-      {aplikasiAktif && user && !pembaruanWajib && <ModalHadiahHarian tunda={changelogBuka} />}
+      {aplikasiAktif && user && !pembaruanWajib && !adalahSuperuser(user) && <ModalHadiahHarian tunda={changelogBuka} />}
       {/* Tutorial ini menuntun ke Kepatuhan Komen — ikut sakelar modulnya. */}
       {aplikasiAktif && !pembaruanWajib && !changelogBuka && komenAktif && <TurPemandu />}
       {/* Tutorial TVR Saya (5 Okt 2026): sambung ulang akun → Edit Otomatis → Stok Video. */}

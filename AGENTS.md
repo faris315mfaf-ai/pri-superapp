@@ -105,8 +105,10 @@ rahasia (password, kunci API, isi env) di berkas ini atau di repo.**
   platform di `video_antrian.unggah_hasil` (`src/lib/unggah-hasil.ts`). Pemeriksaan KOMENTAR otomatis QC DIMATIKAN
   (upload-post tak punya API komentar); riwayat lama hanya dibaca (`/api/analisis/riwayat`). Anggota yang dulu lewat
   Ayrshare wajib hubungkan ulang. SQL: `sql/79` SEBELUM deploy, `sql/80` SESUDAH deploy (menghapus data Ayrshare).
-- **Peran SUPERUSER = mode lihat** (16 Okt 2026): peran DB `superuser` dipetakan sesi ke `master` + `superadmin: true` +
-  `superuser: true` (`keUserPublik`, `src/lib/sesi.ts`) — melihat seperti superadmin, tersembunyi. SEMUA permintaan /api
+- **Peran SUPERUSER = mode lihat** (16 Okt 2026): peran BIASA `superuser` (+ penanda `superuser: true` dari `keUserPublik`,
+  `src/lib/sesi.ts`; TIDAK dipetakan ke master), tersembunyi. Menu tetap (early return `tabPenuh` di `page.tsx`): Beranda
+  hanya sapaan (`BerandaFaris hanyaSapaan`), Konten, TV Nasional ringkas 7 angka (`tv-nasional-ringkas.tsx`), Ruang Bot
+  hanya ruang (`hanyaRuang`), Profil polos. Tanpa HR, TV Official, TVR Saya, Dashboard, Chat, audit, absensi, KPI. SEMUA permintaan /api
   selain GET/HEAD ditolak 403 di `src/proxy.ts` (daftar pengecualian: keluar, notifikasi dibaca, push, preferensi,
   keamanan akun, orientasi wajib — `src/lib/hanya-lihat.ts`); `/api/autoedit` (di luar proxy) menjaga sendiri.
   Dibuat master lewat Panel Master → Akun Baru. Wajib `sql/81_role_superuser.sql`. Rute GET yang menulis (sinkron

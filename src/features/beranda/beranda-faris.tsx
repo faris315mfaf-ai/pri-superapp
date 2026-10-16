@@ -45,6 +45,8 @@ type Props = {
   onBukaPengumuman: () => void;
   onBukaKonten?: () => void;
   onBukaTvrKu?: (seksi: TujuanTvr) => void;
+  /** Superuser (mode lihat, 16 Okt 2026): hanya sapaan di atas — tanpa Token Merah Putih & isi di bawahnya. */
+  hanyaSapaan?: boolean;
 };
 
 const tanggalPanjang = () =>
@@ -179,8 +181,8 @@ export function BerandaFaris(props: Props) {
   const { user, onBukaTvrKu } = props;
   const izin = useAppStore((s) => s.izinFitur);
   const bebas = bebasKewajiban(user);
-  const mauVideo = !bebas && bolehFitur(izin, "beranda.kpi_video", user.role);
-  const mauAbsen = !bebas && bolehFitur(izin, "beranda.absensi", user.role);
+  const mauVideo = !props.hanyaSapaan && !bebas && bolehFitur(izin, "beranda.kpi_video", user.role);
+  const mauAbsen = !props.hanyaSapaan && !bebas && bolehFitur(izin, "beranda.absensi", user.role);
   const mauPengumuman = bolehFitur(izin, "beranda.pengumuman", user.role);
   const ringkas = useRingkasanHariIni(user, mauAbsen, mauVideo);
   const wadah = useRef<HTMLDivElement>(null);
@@ -196,25 +198,36 @@ export function BerandaFaris(props: Props) {
   ].filter(Boolean) as { judul: string; ket: string; selesai: boolean; aksi: () => void; Ikon: KomponenIkon; warna: string }[];
   const sisa = langkah.filter((l) => !l.selesai).length;
 
+  const kepala = (
+    <header className="flex items-center gap-3 px-1">
+      <div className="min-w-0 flex-1">
+        <p className="mb-1 text-[11px] font-bold tracking-[0.14em] text-teks-sekunder uppercase">Beranda · Ruang pribadi</p>
+        <h1 className="font-heading text-[clamp(28px,4.2vw,40px)] leading-[1.06] font-bold tracking-[-0.028em] text-teks-utama">
+          {sapaanHari()}, {namaSapaan(user)}<span className="text-pri">.</span>
+        </h1>
+        <p className="mt-1.5 text-[13.5px] text-teks-sekunder">
+          {tanggalPanjang()}
+          {ringkas.masuk && <> · <b className="text-emerald-600 dark:text-emerald-400">Hadir</b> sejak {jamWIB(ringkas.masuk.waktu)}</>}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <TombolLonceng onBuka={props.onBukaNotifikasi} />
+        <ThemeToggle />
+        <button type="button" onClick={props.onBukaProfil} className="btn-tekan hidden rounded-full sm:block" aria-label="Buka profil saya"><AvatarInisial nama={user.nama} ukuran={40} /></button>
+      </div>
+    </header>
+  );
+  if (props.hanyaSapaan) {
+    return (
+      <div ref={wadah} className="kolom-aplikasi kolom-lebar flex flex-col gap-3 px-4 pt-5 pb-32">
+        {kepala}
+      </div>
+    );
+  }
+
   return (
     <div ref={wadah} className="kolom-aplikasi kolom-lebar flex flex-col gap-3 px-4 pt-5 pb-32">
-      <header className="flex items-center gap-3 px-1">
-        <div className="min-w-0 flex-1">
-          <p className="mb-1 text-[11px] font-bold tracking-[0.14em] text-teks-sekunder uppercase">Beranda · Ruang pribadi</p>
-          <h1 className="font-heading text-[clamp(28px,4.2vw,40px)] leading-[1.06] font-bold tracking-[-0.028em] text-teks-utama">
-            {sapaanHari()}, {namaSapaan(user)}<span className="text-pri">.</span>
-          </h1>
-          <p className="mt-1.5 text-[13.5px] text-teks-sekunder">
-            {tanggalPanjang()}
-            {ringkas.masuk && <> · <b className="text-emerald-600 dark:text-emerald-400">Hadir</b> sejak {jamWIB(ringkas.masuk.waktu)}</>}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <TombolLonceng onBuka={props.onBukaNotifikasi} />
-          <ThemeToggle />
-          <button type="button" onClick={props.onBukaProfil} className="btn-tekan hidden rounded-full sm:block" aria-label="Buka profil saya"><AvatarInisial nama={user.nama} ukuran={40} /></button>
-        </div>
-      </header>
+      {kepala}
 
       <BarisAtasBeranda user={user} onBukaAbsensi={props.onBukaAbsensi} />
 

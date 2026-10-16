@@ -530,6 +530,8 @@ export function ProfilScreen({
   const [modalKeluar, setModalKeluar] = useState(false);
   const gelap = tema === "dark";
   const peran = KONFIG_ROLE[user.superuser ? "superuser" : user.role];
+  // Superuser (mode lihat, 16 Okt 2026): profil polos — tanpa TVR, tim, kehadiran & kinerja, akun sosmed, masukan.
+  const modeLihat = user.superuser === true;
   // Efek meriah + topi avatar khusus di hari ulang tahun pemilik profil.
   const ultah = ulangTahunHariIni(user);
   const IkonPeran = peran.ikon;
@@ -732,10 +734,10 @@ export function ProfilScreen({
       <div className={cn(lebar && lebarWadah >= 900 && "grid grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] items-start gap-x-6")}>
       <div className="min-w-0">
       {/* Ajakan melengkapi data baru (panggilan/tgl lahir/divisi) */}
-      <KartuLengkapiData user={user} />
+      {!modeLihat && <KartuLengkapiData user={user} />}
 
       {/* TV Rakyat Saya di profil (spek 1.15): username + video embed */}
-      {momen &&
+      {!modeLihat && momen &&
         (momen.akun_tvr.length > 0 || (TAMPIL_PROFIL.videoSaya && momen.video_terbaru.length > 0)) && (
           <FadeInUp delay={0.05}>
             {momen.akun_tvr.length > 0 && (
@@ -931,14 +933,14 @@ export function ProfilScreen({
       <MenuUpdateAplikasi />
 
       {/* Antrean ACC pengajuan tim — khusus super admin / admin HR */}
-      <AntreanAccTim user={user} />
+      {!modeLihat && <AntreanAccTim user={user} />}
 
       {/* Keanggotaan tim: ketua mengajukan anggota (aktif setelah ACC),
           memberi tugas, dan memantau; anggota melihat siapa atasannya. */}
-      <KartuTim user={user} />
+      {!modeLihat && <KartuTim user={user} />}
 
       {/* Kehadiran & kinerja harian — Ketua Umum bukan objek absensi/KPI (2 Sep 2026) */}
-      {!bebasKewajiban(user) && (
+      {!bebasKewajiban(user) && !modeLihat && (
         <FadeInUp delay={0.06}>
           <SectionTitle judul="Kehadiran & Kinerja" className="mt-6" />
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
@@ -1197,14 +1199,16 @@ export function ProfilScreen({
               <BarisWajah />
 
               {/* Akun sosmed — tombol pembuka pop-up kelola */}
-              <TombolAkunSosmed
-                onBuka={() => setModalSosmed(true)}
-                versiData={versiSosmed}
-              />
+              {!modeLihat && (
+                <TombolAkunSosmed
+                  onBuka={() => setModalSosmed(true)}
+                  versiData={versiSosmed}
+                />
+              )}
 
               {/* Tutorial interaktif daftar akun → cek Kepatuhan Komen (3 Sep 2026);
                   ikut sakelar modul kepatuhan_komen (24 Sep 2026). */}
-              {komenAktif && (
+              {komenAktif && !modeLihat && (
                 <BarisPengaturan
                   ikon={GraduationCap}
                   warnaIkon="#F59E0B"
@@ -1214,7 +1218,7 @@ export function ProfilScreen({
               )}
 
               {/* Bug / kritik / saran → pengembang; SA juga punya kotak masuk */}
-              <SeksiMasukan user={user} />
+              {!modeLihat && <SeksiMasukan user={user} />}
 
               {/* Pengaturan fitur per peran — super admin & master */}
               {(user.role === "super_admin" || user.role === "master") &&

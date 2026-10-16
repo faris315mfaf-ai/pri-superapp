@@ -17,6 +17,7 @@
 //   latar (after(), maks 5 per permintaan) — konvergen tanpa cron.
 // Payload menyertakan cakupan (x dari y profil terbaca) — tanpa
 // pemotongan diam-diam.
+import { adalahSuperuser } from "@/lib/peran";
 import { after } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
@@ -57,7 +58,8 @@ export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await userDariToken(tokenDari(request));
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku"), { status: 401 });
-    if (!PENGATUR.has(user.role) && !(await bolehDashboard(user, "tvnasional"))) {
+    // Superuser (mode lihat, 16 Okt 2026): membaca angka total untuk TV Nasional ringkas.
+    if (!PENGATUR.has(user.role) && !adalahSuperuser(user) && !(await bolehDashboard(user, "tvnasional"))) {
       throw Object.assign(
         new Error("Jabatan Anda tidak punya akses dashboard TV Rakyat Nasional."),
         { status: 403 },

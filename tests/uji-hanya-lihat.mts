@@ -68,5 +68,13 @@ cek("proxy memakai penjaga mode lihat", /bolehTulisSuperuser/.test(proxy) && /su
 const ae = fs.readFileSync("src/app/api/autoedit/[...jalur]/route.ts", "utf8");
 cek("gateway autoedit (di luar proxy) ikut menjaga", /user\.superuser/.test(ae));
 
+console.log("Peran biasa bermenu terbatas");
+const sesi = fs.readFileSync("src/lib/sesi.ts", "utf8");
+cek("sesi TIDAK memetakan superuser ke master/superadmin", /const superadmin = b\.role === "superadmin";/.test(sesi) && /superuser \? \{ superuser: true \}/.test(sesi));
+cek("superuser tidak dipromosikan jadi super_admin oleh jabatan Ketua Umum (2 jalur)", (sesi.match(/u\.role !== "superuser"/g) ?? []).length === 2);
+const halaman = fs.readFileSync("src/app/page.tsx", "utf8");
+cek("menu superuser tetap: beranda, konten, tvnas, ruangbot, profil", /adalahSuperuser\(user\)\) \{\s*const menu: KunciTab\[\] = \["beranda", "konten", "tvnas", "ruangbot", "profil"\]/.test(halaman));
+cek("beranda hanya sapaan, TV Nasional ringkas, Ruang Bot hanya ruang", /hanyaSapaan/.test(halaman) && /TvNasionalRingkasSuperuser/.test(halaman) && /hanyaRuang=\{adalahSuperuser\(user\)\}/.test(halaman));
+
 console.log(`\nHasil: ${lulus} lulus, ${gagal} gagal`);
 process.exit(gagal > 0 ? 1 : 0);

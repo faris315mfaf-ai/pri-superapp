@@ -66,7 +66,7 @@ export const TAB_PER_ROLE: Record<Role, KunciTab[]> = {
   // superadmin: Dashboard penuh (beranda) + Konten penuh; tab Dashboard
   // ditambahkan dinamis. Tanpa TV Official, chat, robot, suara.
   superadmin: ["beranda", "konten", "profil"],
-  superuser: ["beranda", "konten", "profil"],
+  superuser: ["beranda", "konten", "tvnas", "ruangbot", "profil"],
   admin_hr: ["konten", "qc", "ruangbot", "chat", "profil"],
   admin_tv: ["konten", "tv", "ruangbot", "chat", "profil"],
   // Ketua & anggota: konten + TVR Saya + Ruang Bot (mode lihat) + chat. Ketua tambahannya ada

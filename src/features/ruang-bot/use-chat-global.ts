@@ -26,7 +26,8 @@ export type ChatGlobalKlien = {
 
 const pesanGalat = (e: unknown, cadangan: string) => (e instanceof Error && e.message ? e.message : cadangan);
 
-export function useChatGlobal(onPesanBaru?: (baru: PesanGlobal[]) => void): ChatGlobalKlien {
+/** `aktif` false (mis. Superuser mode lihat tanpa chat): tidak memuat, tidak berlangganan, tidak memoles. */
+export function useChatGlobal(onPesanBaru?: (baru: PesanGlobal[]) => void, aktif = true): ChatGlobalKlien {
   const [status, setStatus] = useState<StatusChatGlobal | null>(null);
   const [galat, setGalat] = useState("");
   const nomorRef = useRef(0);
@@ -67,10 +68,12 @@ export function useChatGlobal(onPesanBaru?: (baru: PesanGlobal[]) => void): Chat
   }, []);
 
   useEffect(() => {
+    if (!aktif) return;
     void Promise.resolve().then(muat);
-  }, [muat]);
+  }, [muat, aktif]);
 
   useEffect(() => {
+    if (!aktif) return;
     let batal = false;
     let stop: (() => void) | null = null;
     let jeda: ReturnType<typeof setTimeout> | null = null;
@@ -92,14 +95,15 @@ export function useChatGlobal(onPesanBaru?: (baru: PesanGlobal[]) => void): Chat
       if (jeda) clearTimeout(jeda);
       stop?.();
     };
-  }, [muat]);
+  }, [muat, aktif]);
 
   useEffect(() => {
+    if (!aktif) return;
     const id = window.setInterval(() => {
       if (document.visibilityState === "visible") void muat();
     }, POLLING_MS);
     return () => window.clearInterval(id);
-  }, [muat]);
+  }, [muat, aktif]);
 
   const aksi = useCallback(
     async (a: AksiChatGlobal) => {

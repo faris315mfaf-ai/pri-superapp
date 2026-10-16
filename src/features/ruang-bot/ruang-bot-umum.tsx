@@ -215,7 +215,8 @@ function Legenda() {
 
 // ---------- layar ----------
 
-export function RuangBotUmumScreen({ sayaId }: { sayaId: number }) {
+/** hanyaRuang (Superuser mode lihat, 16 Okt 2026): hanya ruangan — tanpa Online, Chat, dan Karakter Saya. */
+export function RuangBotUmumScreen({ sayaId, hanyaRuang = false }: { sayaId: number; hanyaRuang?: boolean }) {
   const ruang = useRuangUmum();
   const status = ruang.status;
   // Dunia v2 (gedung 8 ruang pixel art) — semua akun (gerbang bolehKarakterSaya).
@@ -227,7 +228,7 @@ export function RuangBotUmumScreen({ sayaId }: { sayaId: number }) {
     },
     [penghuni],
   );
-  const chat = useChatGlobal(kabarChat);
+  const chat = useChatGlobal(kabarChat, !hanyaRuang);
 
   useEffect(() => {
     if (status) {
@@ -240,7 +241,7 @@ export function RuangBotUmumScreen({ sayaId }: { sayaId: number }) {
   const lebar = useLebarWadah(wadahRef) ?? 0;
   const duaKolom = lebar >= BATAS_DUA_KOLOM;
   const [tab, setTab] = useState<TabPonsel>("chat");
-  const bolehKarakter = bolehKarakterSaya({ id: sayaId });
+  const bolehKarakter = !hanyaRuang && bolehKarakterSaya({ id: sayaId });
   const [layar, setLayar] = useState<"ruang" | "karakter">("ruang");
   const [terpilihPenghuniId, setTerpilihPenghuniId] = useState<number | null>(null);
 
@@ -278,7 +279,7 @@ export function RuangBotUmumScreen({ sayaId }: { sayaId: number }) {
       />
     );
     isi = (
-      <div className="grid items-start gap-3.5" style={{ gridTemplateColumns: duaKolom ? `minmax(0,1fr) ${LEBAR_PANEL}px` : "minmax(0,1fr)" }}>
+      <div className="grid items-start gap-3.5" style={{ gridTemplateColumns: duaKolom && !hanyaRuang ? `minmax(0,1fr) ${LEBAR_PANEL}px` : "minmax(0,1fr)" }}>
         <GlassCard className="min-w-0 p-2.5">
           <KanvasUmum
             key={tandaBot}
@@ -294,7 +295,12 @@ export function RuangBotUmumScreen({ sayaId }: { sayaId: number }) {
           {duaKolom && <Legenda />}
         </GlassCard>
 
-        {duaKolom ? (
+        {hanyaRuang ? (
+          <GlassCard className="p-3.5 text-[12.5px] leading-relaxed text-teks-sekunder">
+            Ketuk karakter di ruangan untuk melihat nama dan kegiatannya.
+            {!duaKolom && <Legenda />}
+          </GlassCard>
+        ) : duaKolom ? (
           <div className="flex min-w-0 flex-col gap-3">
             {panelOnline(undefined, "max-h-[300px]")}
             <ChatGlobal chat={chat} sayaId={sayaId} />

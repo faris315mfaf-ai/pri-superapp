@@ -136,11 +136,11 @@ export function keUserPublik(b: BarisUser): UserPublik {
   // KECUALI Panel Master. Satu titik pemetaan ini membuat ratusan
   // pemeriksaan `role === "master"` berlaku juga baginya; Panel Master
   // sendiri memeriksa adalahMasterAsli() yang menolak penanda ini.
-  // SUPERUSER (16 Okt 2026): dilihat seperti superadmin (semua yang
-  // dikecualikan dari superadmin ikut dikecualikan), plus penanda mode lihat
-  // yang membuat proxy menolak semua perubahan data (lib/hanya-lihat).
+  // SUPERUSER (16 Okt 2026): peran BIASA (tidak dipetakan ke master) dengan
+  // menu terbatas (page.tsx) + penanda mode lihat yang membuat proxy menolak
+  // semua perubahan data (lib/hanya-lihat).
   const superuser = b.role === "superuser";
-  const superadmin = b.role === "superadmin" || superuser;
+  const superadmin = b.role === "superadmin";
   return {
     id: String(b.id),
     nama: b.nama,
@@ -293,7 +293,7 @@ export async function userDariToken(token: string): Promise<UserPublik | null> {
   // "Ketua Umum" — tidak lagi ditetapkan manual. Peran DB boleh apa saja
   // (anggota/ketua); yang berubah hanya peran EFEKTIF yang dilihat sistem.
   // Master tak diutak-atik (kuasa tertinggi, tersembunyi).
-  if (u.role !== "master" && u.role !== "superadmin" && (u.jabatan ?? "").trim() === "Ketua Umum") {
+  if (u.role !== "master" && u.role !== "superadmin" && u.role !== "superuser" && (u.jabatan ?? "").trim() === "Ketua Umum") {
     u.role = "super_admin";
   }
 
