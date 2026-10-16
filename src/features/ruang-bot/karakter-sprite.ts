@@ -192,6 +192,17 @@ export async function rakitFrame(k: KonfigKarakter, anim: AnimKarakter, arah: Ar
   return kanvas;
 }
 
+let manifestSiap: Manifest | null = null;
+
+/** Info animasi tanpa menunggu: null bila manifest belum dimuat (pemuatan dipicu). */
+export function infoAnimasiSegera(anim: AnimKarakter): { frames: number; fps: number } | null {
+  if (manifestSiap) return manifestSiap.animations[anim];
+  muatManifestKarakter()
+    .then((m) => { manifestSiap = m; })
+    .catch(() => {});
+  return null;
+}
+
 /** Info animasi (jumlah frame & fps) dari manifest. */
 export async function infoAnimasi(anim: AnimKarakter): Promise<{ frames: number; fps: number }> {
   const m = await muatManifestKarakter();

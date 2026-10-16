@@ -179,6 +179,42 @@ export function keKonfigKit(k: KonfigKarakter, userId: number | string) {
   };
 }
 
+// ---------- rupa bot lama → sprite (dunia v2) ----------
+
+const rgb = (hex: string): [number, number, number] => {
+  const n = parseInt(hex.replace("#", "").slice(0, 6), 16) || 0;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+/** Warna palet terdekat (jarak RGB berbobot persepsi). */
+export function warnaTerdekat(daftar: readonly Warna[], hex: string): string {
+  const [r, g, b] = rgb(hex);
+  let terbaik = daftar[0]![0];
+  let jarak = Infinity;
+  for (const [h] of daftar) {
+    const [r2, g2, b2] = rgb(h);
+    const d = 2 * (r - r2) ** 2 + 4 * (g - g2) ** 2 + 3 * (b - b2) ** 2;
+    if (d < jarak) { jarak = d; terbaik = h; }
+  }
+  return terbaik;
+}
+
+/** Rupa bot (bot_redaksi.rupa, digambar kode) → konfigurasi sprite dunia v2. */
+export function konfigDariRupaBot(r: { kaus: string; celana: string; kulit: string; rambut: string; gayaRambut: "pendek" | "panjang" | "topi"; berhud?: boolean }): KonfigKarakter {
+  return {
+    v: VERSI_KONFIG,
+    kulit: warnaTerdekat(KULIT, r.kulit),
+    rambut: r.gayaRambut === "panjang" ? 15 : r.gayaRambut === "topi" ? 1 : 2,
+    warnaRambut: warnaTerdekat(WARNA_RAMBUT, r.rambut),
+    atasan: r.berhud ? 4 : 1,
+    warnaAtasan: warnaTerdekat(WARNA_ATASAN, r.kaus),
+    warnaCelana: warnaTerdekat(WARNA_CELANA, r.celana),
+    warnaSepatu: "#22222A",
+  };
+}
+
+/** Rupa Nara (koordinator) di dunia v2: blazer navy, rambut bob hitam. */
+export const KONFIG_NARA: KonfigKarakter = { v: VERSI_KONFIG, kulit: "#DAA17C", rambut: 13, warnaRambut: "#24252B", atasan: 7, warnaAtasan: "#2F3F6B", warnaCelana: "#2C2F3A", warnaSepatu: "#22222A" };
+
 /** Batas simpan per akun (anti spam tulis). */
 export const BATAS_SIMPAN = 30;
 export const JENDELA_SIMPAN_DETIK = 3600;

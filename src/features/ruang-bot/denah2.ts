@@ -425,7 +425,7 @@ export function zonaDari2(x: number, y: number): KunciRuang2 | null {
 export const LABEL_RUANG2: { kunci: KunciRuang2; nama: string; titik: Titik; warna: string }[] = RUANG2.map((r) => ({
   kunci: r.kunci,
   nama: r.nama,
-  titik: [r.x + r.w - 1.2, r.y + r.d - 0.4] as Titik,
+  titik: [r.x + r.w / 2, r.y + r.d - 0.7] as Titik,
   warna: r.warna,
 }));
 
