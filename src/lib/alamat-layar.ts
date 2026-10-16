@@ -52,6 +52,11 @@ const ALIAS: Record<string, string> = {
   beranda: "",
 };
 
+/** Semua segmen alamat yang dikenali cangkang (baku + alias), huruf kecil, "" = akar. */
+export const SEGMEN_ALAMAT: readonly string[] = [
+  ...new Set([...Object.values(ALAMAT_TAB), ...Object.values(ALAMAT_SUB_LAYAR), ...Object.keys(ALIAS)]),
+];
+
 export type PosisiAlamat = { tab: KunciTab | null; subLayar: SubLayarBeralamat | null };
 
 /** Segmen pertama path yang bersih (huruf kecil, tanpa garis miring), atau null bila lebih dari satu segmen. */

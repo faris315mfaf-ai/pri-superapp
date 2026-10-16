@@ -150,6 +150,14 @@ async function tandaiPerluCekManual(
     .eq("id_postingan", idPost);
 }
 
+/** Galat Ayrshare yang tidak akan sembuh dengan mencoba lagi: profil/akun ditangguhkan, kunci ditolak. */
+export function galatPermanenAyrshare(e: unknown): boolean {
+  const status = (e as { status?: unknown } | null)?.status;
+  if (status === 401 || status === 403) return true;
+  const pesan = e instanceof Error ? e.message : String(e ?? "");
+  return /suspend/i.test(pesan);
+}
+
 /**
  * Semua SUMBER pembacaan (1.17): profil utama (kunci env) + tiap profil
  * QC tambahan di sosmed_profile. Tiap sumber menyumbang akun tertautnya;
@@ -172,7 +180,8 @@ export async function kumpulkanAkunTertaut(): Promise<
   // putaran sinkron menyerah ("tidak ada akun wajib tertaut") — padahal
   // akunnya ada. Tiga percobaan dengan jeda bertambah.
   const PERCOBAAN_AKUN = 3;
-  for (const src of sumber) {
+  for (const [nomor, src] of sumber.entries()) {
+    const label = src.kunci === undefined ? "profil utama" : `profil QC #${nomor}`;
     for (let ke = 1; ke <= PERCOBAAN_AKUN; ke++) {
       try {
         const t = await ambilAkunTertaut(src.kunci);
@@ -186,7 +195,13 @@ export async function kumpulkanAkunTertaut(): Promise<
         break;
       } catch (e) {
         // Satu profil gagal dibaca tidak boleh mengosongkan yang lain.
-        console.error(`[analisis/ayrshare] profil gagal dibaca (percobaan ${ke}/${PERCOBAAN_AKUN}):`, e);
+        // Galat PERMANEN (profil ditangguhkan / kunci ditolak) tidak diulang (16 Okt 2026): dulu tiap putaran
+        // menunggu 2+4 dtk per profil mati dan memenuhi log 3 baris per profil.
+        if (galatPermanenAyrshare(e)) {
+          console.error(`[analisis/ayrshare] ${label} tidak bisa dipakai (ditangguhkan/ditolak Ayrshare, tidak diulang): ${e instanceof Error ? e.message.slice(0, 160) : e}`);
+          break;
+        }
+        console.error(`[analisis/ayrshare] ${label} gagal dibaca (percobaan ${ke}/${PERCOBAAN_AKUN}):`, e);
         if (ke < PERCOBAAN_AKUN) await new Promise((r) => setTimeout(r, 2000 * ke));
       }
     }

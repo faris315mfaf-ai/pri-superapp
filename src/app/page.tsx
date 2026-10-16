@@ -299,10 +299,13 @@ function subLayarDariAlamat(): SubLayar | null {
   return p?.subLayar ? ({ nama: p.subLayar } as SubLayar) : null;
 }
 
-/** Tab yang diminta alamat (bila ada & sah untuk peran ini). */
-function tabDariAlamat(role: Role): KunciTab | null {
-  const t = posisiDariAlamat()?.tab ?? null;
-  return t && (TAB_ROLE[role] ?? []).includes(t) ? t : null;
+/**
+ * Tab yang diminta alamat. SENGAJA tidak dicocokkan ke TAB_ROLE statis: tab dinamis (TV Rakyat Ofc,
+ * TV Nasional, Acara, Dashboard, Asisten, HR Center Divisi HR, modul per akun) baru diketahui setelah
+ * data modul termuat. Izin tetap dijaga tabEfektif — tab yang tidak boleh tidak pernah tampil.
+ */
+function tabDariAlamat(_role: Role): KunciTab | null {
+  return posisiDariAlamat()?.tab ?? null;
 }
 
 /** Tab tersimpan hanya dipakai bila masih sah untuk peran ini. Alamat URL (link /tvrsaya) menang. */
@@ -1100,16 +1103,27 @@ export default function Page() {
 
   // Alamat per layar (16 Okt 2026): URL mengikuti layar yang terlihat (/tvrsaya, /absensi, ...).
   // replaceState (bukan pushState) — tumpukan riwayat tetap diurus penangan back di bawah.
+  // Tab dari alamat yang belum termasuk tabBoleh (data modul belum termuat) ditunggu sebentar;
+  // lewat 8 detik tetap tidak boleh = alamat dirapikan ke layar yang benar-benar tampil.
+  const [tungguAlamat, setTungguAlamat] = useState(true);
   useEffect(() => {
     if (!user) return;
+    const t = setTimeout(() => setTungguAlamat(false), 8000);
+    return () => clearTimeout(t);
+  }, [user]);
+  useEffect(() => {
+    if (!siap || !user) return;
+    // Balikan login Google (?gtoken/?gerror/?gtautkan) dibereskan penangannya sendiri lebih dulu.
+    if (/[?&](gtoken|gerror|gtautkan)=/.test(window.location.search)) return;
+    if (tungguAlamat && tab !== tabEfektif && posisiDariAlamat()?.tab === tab) return;
     const semestinya = pathDariPosisi(tabEfektif, subLayar?.nama ?? null);
     if (!perluGantiPath(window.location.pathname, semestinya)) return;
     try {
-      window.history.replaceState(window.history.state, "", semestinya + window.location.hash);
+      window.history.replaceState(window.history.state, "", semestinya + window.location.search + window.location.hash);
     } catch {
       // peramban menolak: alamat tetap, navigasi tetap jalan
     }
-  }, [user, tabEfektif, subLayar]);
+  }, [siap, user, tab, tabEfektif, subLayar, tungguAlamat]);
 
   // Simpan posisi terakhir untuk restor saat refresh (fitur 1 Sep 2026).
   useEffect(() => {

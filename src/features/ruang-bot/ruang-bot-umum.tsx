@@ -106,7 +106,7 @@ function KanvasUmum({
   sayaId: number;
 }) {
   const jedaGlobal = status.jeda_global;
-  const rupaSaya = useRupaSaya();
+  const rupaSaya = useRupaSaya(sayaId);
   const [sim] = useState(
     () =>
       new SimulasiBot(bots, {

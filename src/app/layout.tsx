@@ -6,6 +6,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { DaftarServiceWorker } from "@/components/daftar-service-worker";
 import { PindahDomain } from "@/components/pindah-domain";
+import { SEGMEN_ALAMAT } from "@/lib/alamat-layar";
 
 // ============================================================
 // Jaring pengaman pemulihan — WAJIB berjalan sebelum berkas
@@ -33,7 +34,10 @@ const SKRIP_PEMULIHAN = `
   // mengembalikan ke "/" bila sesi tak ada, jadi tidak mungkin berputar).
   try {
     if (
-      location.pathname === "/" &&
+      // "/" dan alamat layar cangkang (/tvrsaya, /chat, ...; daftar dari lib/alamat-layar).
+      // Tanpa regex bergaris miring: skrip ini template literal, garis miring ber-escape hilang.
+      location.pathname.split("/").filter(Boolean).length <= 1 &&
+      ${JSON.stringify(SEGMEN_ALAMAT)}.indexOf((location.pathname.split("/").filter(Boolean)[0] || "").toLowerCase()) >= 0 &&
       localStorage.getItem("pri-mode-simpel") === "1" &&
       localStorage.getItem("pri-token-perangkat")
     ) {

@@ -417,7 +417,7 @@ export function RuangView(p: RuangViewProps) {
   const sibuk = p.sibuk;
   // Dunia v2 (gedung 8 ruang pixel art) — semua akun (gerbang bolehKarakterSaya); tetap sama selama layar terpasang.
   const [dunia2] = useState(() => bolehKarakterSaya({ id: p.sayaId }));
-  const rupaSaya = useRupaSaya();
+  const rupaSaya = useRupaSaya(p.sayaId);
   const [sim] = useState(
     () =>
       new SimulasiBot(p.bots, {

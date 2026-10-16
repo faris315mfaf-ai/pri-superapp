@@ -1,6 +1,6 @@
 // Uji ALAMAT PER LAYAR (16 Okt 2026). Murni. Jalankan: npx tsx tests/uji-alamat-layar.mts
 import fs from "node:fs";
-import { ALAMAT_SUB_LAYAR, ALAMAT_TAB, pathDariPosisi, perluGantiPath, posisiDariPath } from "@/lib/alamat-layar";
+import { ALAMAT_SUB_LAYAR, ALAMAT_TAB, SEGMEN_ALAMAT, pathDariPosisi, perluGantiPath, posisiDariPath } from "@/lib/alamat-layar";
 
 let lulus = 0;
 let gagal = 0;
@@ -43,6 +43,23 @@ const statis = fs.readdirSync("src/app", { withFileTypes: true }).filter((d) => 
 cek("alamat tidak bertabrakan dengan folder rute statis", [...Object.values(ALAMAT_TAB), ...Object.values(ALAMAT_SUB_LAYAR)].every((a) => !statis.includes(a)), statis);
 const publik = fs.readdirSync("public");
 cek("alamat tidak bertabrakan dengan berkas public", [...Object.values(ALAMAT_TAB), ...Object.values(ALAMAT_SUB_LAYAR)].every((a) => !a || !publik.includes(a)), publik.filter((p) => !p.includes(".")));
+
+console.log("Skrip pemulihan layout");
+{
+  // Template literal: garis miring ber-escape di regex hilang dan merusak SELURUH skrip pemulihan.
+  const src = fs.readFileSync("src/app/layout.tsx", "utf8");
+  const m = src.match(/const SKRIP_PEMULIHAN = (`[\s\S]*?\n`);/);
+  let ok = false;
+  let galat: unknown;
+  try {
+    const skrip = new Function("SEGMEN_ALAMAT", `return ${m![1]};`)(SEGMEN_ALAMAT) as string;
+    new Function(skrip);
+    ok = skrip.includes('"tvrsaya"') && !skrip.includes('"api"');
+  } catch (e) {
+    galat = String(e);
+  }
+  cek("skrip inline layout sah secara sintaks & memuat daftar alamat", ok, galat);
+}
 
 console.log(`\nHasil: ${lulus} lulus, ${gagal} gagal`);
 process.exit(gagal > 0 ? 1 : 0);

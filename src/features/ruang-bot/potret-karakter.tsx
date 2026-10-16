@@ -55,16 +55,25 @@ function minta(id: number) {
   if (jadwal) return;
   jadwal = setTimeout(async () => {
     jadwal = null;
-    const ids = [...antre];
+    // Yang sudah diketahui (mis. diisi status dunia sesudah antre) tidak diminta lagi.
+    const ids = [...antre].filter((i) => !rupa.has(i));
     antre.clear();
+    if (ids.length === 0) return;
     for (let i = 0; i < ids.length; i += MAKS_ID_RUPA) {
       const kelompok = ids.slice(i, i + MAKS_ID_RUPA);
       try {
         const hasil = await getRupaBanyak(kelompok);
         for (const id of kelompok) rupa.set(id, bacaKonfig(hasil[String(id)]));
       } catch {
-        // gagal: tetap rupa bawaan; boleh diminta lagi di kunjungan berikutnya
-        for (const id of kelompok) diminta.delete(id);
+        // Gagal (jaringan / modul nonaktif): pakai rupa bawaan sekarang (bukan placeholder abadi),
+        // dan boleh diminta lagi bila potretnya dipasang ulang nanti.
+        for (const id of kelompok) {
+          diminta.delete(id);
+          if (!rupa.has(id)) rupa.set(id, null);
+        }
+        setTimeout(() => {
+          for (const id of kelompok) if (rupa.get(id) === null && !diminta.has(id)) rupa.delete(id);
+        }, 60_000);
       }
     }
     kabari();
@@ -81,11 +90,11 @@ function langgan(f: () => void) {
 /** Rupa yang dipakai untuk akun ini (tersimpan, atau bawaan bila tidak ada / belum diketahui). */
 export function useRupaAkun(id: number, sayaId?: number): { konfig: KonfigKarakter; pasti: boolean } {
   useSyncExternalStore(langgan, () => versi, () => 0);
-  const rupaSaya = useRupaSaya();
+  const rupaSaya = useRupaSaya(sayaId);
   useEffect(() => {
     minta(id);
   }, [id]);
-  if (sayaId !== undefined && id === sayaId && rupaSaya) return { konfig: rupaSaya, pasti: true };
+  if (id === sayaId && rupaSaya) return { konfig: rupaSaya, pasti: true };
   const ada = rupa.get(id);
   return { konfig: ada ?? konfigBawaan(id), pasti: ada !== undefined };
 }

@@ -35,8 +35,10 @@ export async function GET(request: Request) {
   return bungkus(async () => {
     const q = new URL(request.url).searchParams.get("ids");
     if (q !== null) {
-      // Rupa banyak akun: cukup masuk (akun bot pun boleh melihat potret).
-      await pastikanMasuk(request);
+      // Rupa banyak akun: cukup masuk (akun bot pun boleh melihat potret). Dibatasi lajunya.
+      const pembaca = await pastikanMasuk(request);
+      const lewat = await pastikanTidakMelebihiBatas(request, "karakter-baca", 120, 60, String(pembaca.id));
+      if (lewat) tolak("Terlalu sering memuat potret. Coba lagi sebentar.", 429);
       if (!(await modulAktifServer("ruangbot"))) tolak("Modul Ruang Bot sedang dinonaktifkan.", 423);
       const ids = idRupaDariQuery(q);
       if (!ids) tolak("Daftar akun tidak sah.", 400);
