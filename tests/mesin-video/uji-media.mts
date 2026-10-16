@@ -438,7 +438,7 @@ console.log("\n[I] Penahan situs lewat Redis (antarmuka ioredis)");
   } catch (e) {
     pesan = (e as Error).message;
   }
-  cek("ditolak saat ditahan", pesan === "facebook.com sedang membatasi permintaan dari server ini (429). Tunggu 181 detik lagi, atau unggah berkas videonya langsung.", pesan);
+  cek("ditolak saat ditahan", pesan === "facebook.com sedang membatasi permintaan dari server ini (429). Tunggu 180 detik lagi, atau unggah berkas videonya langsung.", pesan);
   cek("Instagram + Session ID tidak ditolak", await unduh.tahanSitus("https://instagram.com/a").then(() => unduh.tolakKalauDitahan("https://instagram.com/a")).then(() => true, () => false));
   await unduh.bebaskanSitus("https://www.facebook.com/x");
   cek("bebas → DEL & TTL -2 → 0", panggilan.includes("del videojob:batas:facebook.com") && (await unduh.sisaTahanan("https://facebook.com")) === 0);

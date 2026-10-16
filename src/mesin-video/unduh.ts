@@ -467,7 +467,8 @@ export async function tolakKalauDitahan(url: string): Promise<void> {
   if (tahanan > 0 && !(IG_SESSIONID && situs(url) === "instagram.com")) {
     throw new GalatVideo(
       `${situs(url) || "Situs ini"} sedang membatasi permintaan dari server ` +
-        `ini (429). Tunggu ${Math.trunc(tahanan) + 1} detik lagi, atau unggah berkas ` +
+        // ceil, bukan trunc+1: sisa tepat 180 dtk (TTL Redis bulat) dulu tertulis "181 detik".
+        `ini (429). Tunggu ${Math.max(1, Math.ceil(tahanan))} detik lagi, atau unggah berkas ` +
         "videonya langsung.",
     );
   }

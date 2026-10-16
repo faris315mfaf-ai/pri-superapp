@@ -1717,6 +1717,14 @@ function pasangRuteStudio(r: Router, stokMilik: (a: string, id: string) => Promi
     const t = bacaTemplate(p);
     const dipakai = t ? asetDokumen(studioDariTemplate(t as Record<string, unknown>, {}, null)) : new Set<string>();
     sapuAsetStudio(p, dipakai, 24);
+    // Batas jumlah berkas tak terpakai = batas daftar editor: berkas di luar daftar tidak terlihat
+    // tapi tetap memakan kuota (sebelumnya unggahan tak terbatas sampai kuota habis).
+    const takTerpakai = fs.existsSync(folderStudio(p))
+      ? fs.readdirSync(folderStudio(p), { withFileTypes: true }).filter((d) => d.isFile() && !d.name.startsWith("_") && !dipakai.has(`assets/studio/${d.name}`)).length
+      : 0;
+    if (takTerpakai >= MAKS_ASET_STUDIO) {
+      throw new GalatHttp(409, `Sudah ada ${MAKS_ASET_STUDIO} berkas yang belum dipakai. Berkas tak terpakai terhapus otomatis 24 jam setelah diunggah.`);
+    }
     const batasMaks = Math.trunc(Math.max(MAKS_GIF_MB, MAX_ASSET_MB) * 1_048_576);
     await sediakanRuangUnggah(pm, batasMaks);
     const folder = folderStudio(p);
