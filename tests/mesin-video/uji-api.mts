@@ -1064,6 +1064,98 @@ await uji("pustaka template bot: simpan, pasang, hapus, dan penjagaan", async ()
   pastikan(!fs.readdirSync(path.join(MEDIA, "templates")).some((n) => n.includes(".salin-")));
 });
 
+
+// ---------------------------------------------------------------- Studio Template (16 Okt 2026)
+
+await uji("studio: template lama diterjemahkan, aset, hapus latar, simpan, pratinjau dirender", async () => {
+  const a = "8391";
+  await templateSiap(a);
+  let r = await minta("GET", "/api/tvr/studio", { id: a });
+  pastikan(r.status === 200, r.teks);
+  let d = r.json();
+  const dok = d.dok;
+  const jenisElemen = dok.elemen.map((e: any) => e.jenis);
+  pastikan(sama(jenisElemen, ["berita", "kategori", "footer"]), JSON.stringify(jenisElemen));
+  const footer = dok.elemen.find((e: any) => e.jenis === "footer");
+  pastikan(footer.file === "assets/bingkai.png" && footer.rect.w === 720 && footer.rect.h === 120 && footer.rect.y === 1160, JSON.stringify(footer));
+  const berita = dok.elemen.find((e: any) => e.jenis === "berita");
+  pastikan(berita.file === "assets/kotak.png" && sama(berita.teks, KOTAK_UJI) && berita.waktu.selesai.d === 3, JSON.stringify(berita));
+  pastikan(d.aset.some((x: any) => x.ref === "assets/kotak.png" && x.w > 0), JSON.stringify(d.aset));
+  pastikan(d.studio_tersimpan === false && d.pratinjau === null);
+
+  r = await minta("GET", "/api/tvr/studio/aset/gambar?ref=assets/bingkai.png", { id: a });
+  pastikan(r.status === 200 && r.tipe === "image/png");
+  pastikan((await minta("GET", "/api/tvr/studio/aset/gambar?ref=../template.json", { id: a })).status === 404);
+
+  const { default: sharp } = await import("sharp");
+  const jpg = await sharp({ create: { width: 200, height: 100, channels: 3, background: { r: 255, g: 200, b: 0 } } }).jpeg().toBuffer();
+  r = await minta("POST", "/api/tvr/studio/aset?jenis=gambar", { id: a, berkas: { nama: "logo.jpg", isi: jpg } });
+  pastikan(r.status === 200, r.teks);
+  const logo = r.json().aset;
+  pastikan(/^assets\/studio\/[0-9a-f]{12}\.png$/.test(logo.ref) && logo.w === 200 && logo.h === 100 && logo.jenis === "gambar", JSON.stringify(logo));
+  pastikan((await minta("POST", "/api/tvr/studio/aset?jenis=gambar", { id: a, berkas: { nama: "x.gif", isi: gif() } })).status === 415);
+  pastikan((await minta("POST", "/api/tvr/studio/aset?jenis=lain", { id: a, berkas: { nama: "x.png", isi: jpg } })).status === 404);
+
+  r = await minta("POST", "/api/tvr/studio/aset/hapus-latar", { id: a, json: { ref: logo.ref } });
+  pastikan(r.status === 200, r.teks);
+  const tanpaLatar = r.json().aset;
+  pastikan(tanpaLatar.ref !== logo.ref && tanpaLatar.alpha === true, JSON.stringify(tanpaLatar));
+  pastikan((await minta("POST", "/api/tvr/studio/aset/hapus-latar", { id: a, json: { ref: logo.ref } })).status === 429);
+
+  r = await minta("POST", "/api/tvr/studio/aset?jenis=outro", { id: a, berkas: { nama: "outro.mp4", isi: videoSumber(3) } });
+  pastikan(r.status === 200, r.teks);
+  const outroRef = r.json().aset.ref;
+  pastikan(r.json().aset.jenis === "video" && r.json().aset.durasi >= 2.9);
+
+  const elemenBaru = (id: string, jenis: string, file: string, waktu: any, tambahan: any = {}) => ({
+    id, jenis, nama: "", file, rect: { x: 20, y: 20, w: 100, h: 50 }, waktu, opacity: 1, tersembunyi: false, teks: null, kunci_hijau: false, ...tambahan,
+  });
+  const baru = {
+    ...dok,
+    elemen: [
+      ...dok.elemen,
+      elemenBaru("logo", "logo", tanpaLatar.ref, { mulai: { dari: "awal", d: 0 }, selesai: { dari: "akhir", d: 0 } }, { opacity: 0.8, rect: { x: 600, y: 20, w: 100, h: 50 } }),
+      elemenBaru("pernak-1", "pernak", logo.ref, { mulai: { dari: "awal", d: 1 }, selesai: { dari: "akhir", d: 0.5 } }),
+    ],
+    outro: { file: outroRef, durasi: 1.5 },
+  };
+  r = await minta("PUT", "/api/tvr/studio", { id: a, json: { dok: { ...baru, elemen: [...baru.elemen, { ...baru.elemen[3], id: "logo-dua" }] } } });
+  pastikan(r.status === 400 && r.json().detail.includes("Logo hanya boleh satu"), r.teks);
+  r = await minta("PUT", "/api/tvr/studio", { id: a, json: { dok: { ...baru, elemen: baru.elemen.map((e: any) => (e.id === "logo" ? { ...e, file: "assets/studio/tidakada.png" } : e)) } } });
+  pastikan(r.status === 409, r.teks);
+  pastikan((await minta("PUT", "/api/tvr/studio", { id: a, json: { dok: { v: 2 } } })).status === 422);
+  r = await minta("PUT", "/api/tvr/studio", { id: a, json: { dok: baru } });
+  pastikan(r.status === 200, r.teks);
+  const t = tpl.loadTemplate(`tvr-${a}`) as any;
+  pastikan(t.siap && t.studio && t.outro === outroRef && t.outro_durasi === 1.5, JSON.stringify({ outro: t.outro, d: t.outro_durasi }));
+  const ovLogo = t.overlays.find((o: any) => o.file === tanpaLatar.ref);
+  pastikan(ovLogo && ovLogo.opacity === 0.8 && ovLogo.start === undefined && ovLogo.x === 600, JSON.stringify(ovLogo));
+  const ovPernak = t.overlays.find((o: any) => o.file === logo.ref);
+  pastikan(ovPernak.start === 1 && ovPernak.end === 0.5 && ovPernak.end_akhir === true && !ovPernak.start_akhir, JSON.stringify(ovPernak));
+  pastikan(sama(t.text_box, KOTAK_UJI) && t.badge_box && t.texts.length === 3, JSON.stringify(t.texts));
+  // Berkas editor 4-slot tetap utuh (dua editor berdampingan).
+  pastikan(asetTvr(a).includes("kotak.png") && asetTvr(a).includes("bingkai.png"), JSON.stringify(asetTvr(a)));
+  d = (await minta("GET", "/api/tvr/studio", { id: a })).json();
+  pastikan(d.studio_tersimpan && d.dok.elemen.length === 5 && d.dok.outro.durasi === 1.5);
+
+  TUGAS.length = 0;
+  r = await minta("POST", "/api/tvr/studio/pratinjau", { id: a, json: { dok: baru, sumber: "contoh:tegak" } });
+  pastikan(r.status === 200, r.teks);
+  const tugas = TUGAS.at(-1)!;
+  pastikan(tugas.jenis === "pratinjau" && tugas.template_id === `tvrp-${a}` && tugas.url === "contoh:tegak", JSON.stringify(tugas));
+  pastikan((await minta("POST", "/api/tvr/studio/pratinjau", { id: a, json: { dok: baru } })).status === 429);
+  const hasil = await pekerja.pratinjauJob(tugas);
+  pastikan(hasil.status === "done", JSON.stringify(hasil));
+  const pr = (await minta("GET", "/api/tvr/studio/pratinjau", { id: a })).json().pratinjau;
+  pastikan(pr.status === "done" && pr.durasi > 16 && pr.durasi < 17.2, JSON.stringify(pr));
+  r = await minta("GET", `/api/tvr/studio/pratinjau/${pr.id}/video`, { id: a });
+  pastikan(r.status === 200 && r.isi.length > 1000, `${r.status}`);
+  pastikan((await minta("GET", `/api/tvr/studio/pratinjau/${pr.id}/video`, { id: "8392" })).status === 404);
+  // Pratinjau bukan video berita: tidak masuk Stok/antrean.
+  const ringkas = (await minta("GET", "/api/tvr/ringkas", { id: a })).json();
+  pastikan(ringkas.stok.length === 0 && ringkas.jobs.length === 0 && ringkas.job === null, JSON.stringify(ringkas.stok));
+});
+
 // ---------------------------------------------------------------- selesai
 
 server.close();

@@ -86,6 +86,13 @@ rahasia (password, kunci API, isi env) di berkas ini atau di repo.**
   (`denah2-sim.ts`), penggambar `ruang-dunia2.tsx` + `dunia2-*.ts` (kamera geser/zoom/lompat ruang), rupa tersimpan ikut
   `PenghuniDunia.rupa`. Dipasang di `ruang-view.tsx` & `ruang-bot-umum.tsx` di balik `bolehKarakterSaya`; akun lain tetap
   `ruang-isometrik.tsx`.
+- **Studio Template** (16 Okt 2026, uji coba akun Faris #4/#176 — `bolehStudioTemplate` di `src/lib/studio-template.ts`,
+  dijaga juga di gateway `/api/autoedit`): editor visual template Edit Otomatis (logo, kotak berita + area tulisan,
+  kotak kategori, footer, boom, pernak-pernik + hapus latar rembg, outro dipendekkan) dengan timeline waktu tampil
+  dipatok ke awal/akhir video, plus VIDEO PRATINJAU (job `jenis: "pratinjau"`, template draf `tvrp-<id>` meminjam aset
+  `tvr-<id>`, tidak masuk Stok). Model bersama: `src/mesin-video/studio-model.ts`; rute `/api/tvr/studio*` di
+  `src/mesin-video/server/tvr.ts`; UI `src/features/tvr-ku/studio/`; perender: `start_akhir`/`end_akhir`,
+  `opacity`, `outro_durasi`. Aset Studio di `assets/studio/` (berkas editor 4-slot tidak disentuh). Tanpa SQL.
 - **Tutorial interaktif**: mesin `src/features/tur/lapisan-tur.tsx`, langkah di `src/lib/tur.ts`
   (penanda `data-tur` di komponen asli).
 - **Akun TIM TV Rakyat Official**: identitas mesin `900000001` (`ID_TIM` di `src/lib/autoedit.ts`),

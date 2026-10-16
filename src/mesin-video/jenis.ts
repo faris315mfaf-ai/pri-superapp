@@ -20,6 +20,11 @@ export type Overlay = {
   end?: number | null;
   loop?: boolean;
   kunci_hijau?: boolean;
+  /** Studio (16 Okt 2026): start/end dihitung mundur dari akhir video sumber. */
+  start_akhir?: boolean;
+  end_akhir?: boolean;
+  /** Studio: transparansi 0..1 (kosong = 1). */
+  opacity?: number | null;
 };
 
 export type LapisanTeks = {
@@ -49,6 +54,8 @@ export type LapisanTeks = {
   box_padding?: number;
   start?: number | null;
   end?: number | null;
+  start_akhir?: boolean;
+  end_akhir?: boolean;
 };
 
 export type Template = {
@@ -61,6 +68,8 @@ export type Template = {
   intro?: string | null;
   outro?: string | null;
   max_duration?: number | null;
+  /** Studio: outro dipendekkan ke detik ini (kosong = panjang aslinya). */
+  outro_durasi?: number | null;
   overlays: Overlay[];
   texts: LapisanTeks[];
   text_box?: Kotak | null;

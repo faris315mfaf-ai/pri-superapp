@@ -42,8 +42,25 @@ import {
 } from "../job";
 import { kirimRender } from "../antrean";
 import { previewSource } from "../unduh";
-import { buangAsetTakTerpakai, loadTemplate, namaSetUnik, saveTemplate } from "../template";
+import { buangAsetTakTerpakai, loadTemplate, namaSetUnik, saveTemplate, tulisJsonAtomik } from "../template";
 import { kotakKategoriBawaan } from "../teks";
+import { hapusLatarGambar } from "../hapus-latar";
+import {
+  AREA_TEKS_BAWAAN,
+  asetDokumen,
+  DokStudio,
+  MAKS_ELEMEN,
+  MAKS_PERNAK,
+  PILIHAN_RATA as PILIHAN_RATA_STUDIO,
+  POLA_ASET,
+  periksaAturan,
+  studioDariTemplate,
+  TEKS_HOOK,
+  TEKS_KATEGORI,
+  TEKS_SUMBER,
+  templateDariStudio,
+  type UkuranAset,
+} from "../studio-model";
 import {
   akhiran,
   bidangPotong,
@@ -102,19 +119,10 @@ const MAKS_SUMBER = 60;
 const UMUR_PENUNJUK = Math.trunc(JOB_RETENTION_HOURS * 3600) + 3600;
 const KUNCI_UNGGAHAN = "tvrunggah:";
 
-// Susunan tulisan PERSIS template GODAM (kanvas 720x1280).
-const TEKS_HOOK = {
-  name: "hook", style: "berita", align: "justify", size: 38, min_size: 22,
-  max_lines: 4, x: 38, y: 783, width: 660, line_height: 1.15,
-  color: "black", kicker_color: "#d32d27", start: 0, end: 3,
-};
-const TEKS_KATEGORI = { name: "kategori", style: "kategori", source: "kategori", color: "white", start: 0, end: 3 };
-const PILIHAN_RATA = ["justify", "left", "center", "right"];
+// Susunan tulisan PERSIS template GODAM (kanvas 720x1280): TEKS_HOOK, TEKS_KATEGORI, TEKS_SUMBER,
+// PILIHAN_RATA di ../studio-model.ts (sumber tunggal, dipakai juga Studio Template).
 const MAKS_KATEGORI = 30;
-const TEKS_SUMBER = {
-  name: "sumber", size: 10, x: null, y: 1253, align: "right",
-  color: "white", stroke: 1, stroke_color: "black",
-};
+const PILIHAN_RATA: readonly string[] = PILIHAN_RATA_STUDIO;
 
 type Kotak = { x: number; y: number; w: number; h: number };
 
@@ -505,7 +513,9 @@ const jobHapusLatar = (j: Job) => (j as Record<string, unknown>).jenis === "hapu
 /** Job Blur Watermark: hasilnya masuk Stok seperti Kompres. */
 const jobBlur = (j: Job) => (j as Record<string, unknown>).jenis === "blur";
 /** Job "sampingan" tidak memblokir antrean Edit Otomatis akun. */
-const jobSampingan = (j: Job) => jobKompres(j) || jobHapusLatar(j) || jobBlur(j);
+/** Video pratinjau Studio Template: bukan video berita, tidak masuk Stok. */
+const jobPratinjauStudio = (j: Job) => (j as Record<string, unknown>).jenis === "pratinjau";
+const jobSampingan = (j: Job) => jobKompres(j) || jobHapusLatar(j) || jobBlur(j) || jobPratinjauStudio(j);
 
 async function jobAktif(a: string): Promise<Job | null> {
   for (const j of await daftarJob(50, a)) {
@@ -564,7 +574,7 @@ function ringkasStok(job: Job): Record<string, unknown> {
 
 /** Stok = video jadi milik akun (hasil render + unggahan manual), terbaru dulu. */
 async function daftarStok(a: string): Promise<Job[]> {
-  return (await daftarJob(maksStok(a) * 2, a)).filter((j) => j.status === "done" && Boolean(j.output));
+  return (await daftarJob(maksStok(a) * 2, a)).filter((j) => j.status === "done" && Boolean(j.output) && !jobPratinjauStudio(j));
 }
 
 /**
@@ -573,7 +583,7 @@ async function daftarStok(a: string): Promise<Job[]> {
  */
 async function pastikanStokMuat(a: string, tambahan = 1): Promise<void> {
   const [stok, semua] = await Promise.all([daftarStok(a), daftarJob(Math.max(100, maksJobAktif(a) * 3), a)]);
-  const antre = semua.filter((j) => STATUS_AKTIF_JOB.includes(j.status) && !jobHapusLatar(j)).length;
+  const antre = semua.filter((j) => STATUS_AKTIF_JOB.includes(j.status) && !jobHapusLatar(j) && !jobPratinjauStudio(j)).length;
   if (stok.length + antre + tambahan > maksStok(a)) {
     throw new GalatHttp(
       409,
@@ -1490,6 +1500,392 @@ export function pasangRuteTvr(r: Router): void {
     });
     lupakan(a);
     return stokDanAntrean(p);
+  });
+
+  pasangRuteStudio(r, stokMilik);
+}
+
+// ============================================================
+//  STUDIO TEMPLATE (16 Okt 2026) — editor visual lapisan template TVR Saya.
+//  Model & terjemahan: ../studio-model.ts. Aset Studio tinggal di
+//  assets/studio/ template akun (berkas editor 4-slot di assets/ tidak
+//  disentuh, jadi kedua editor bisa berdampingan). Video pratinjau dirender
+//  dari template draf tvrp-<id> yang meminjam aset tvr-<id>.
+// ============================================================
+
+const folderStudio = (p: Pengguna) => path.join(folderAset(p), "studio");
+const idPratinjau = (p: Pengguna) => `tvrp-${p.user_id}`;
+const MAKS_ASET_STUDIO = 40;
+const JENIS_ASET_STUDIO: Record<"gambar" | "boom" | "outro", Set<string>> = {
+  gambar: new Set([".png", ".jpg", ".jpeg", ".webp"]),
+  boom: new Set([".png", ".gif", ...JENIS_VIDEO]),
+  outro: new Set(JENIS_VIDEO),
+};
+const NAMA_ASET_STUDIO = { gambar: "Gambar", boom: "Boom like share", outro: "Outro" } as const;
+const jobPratinjau = (j: Job) => (j as Record<string, unknown>).jenis === "pratinjau";
+const hapusLatarStudioTerakhir = new Map<string, number>();
+const pratinjauStudioTerakhir = new Map<string, number>();
+
+/** Info aset untuk editor: jenis, ukuran asli, durasi, transparansi. */
+async function infoAsetStudio(p: Pengguna, ref: string): Promise<Record<string, unknown> | null> {
+  if (!POLA_ASET.test(ref)) return null;
+  const jalur = path.join(templatePath(idTemplate(p)), ref);
+  if (!fs.existsSync(jalur) || !fs.statSync(jalur).isFile()) return null;
+  const j = jenis(jalur);
+  const hasil: Record<string, unknown> = { ref, jenis: j, nama: path.basename(ref), size: fs.statSync(jalur).size };
+  try {
+    if (j === "gambar" || j === "gif") {
+      const m = await sharp(jalur, { animated: j === "gif" }).metadata();
+      hasil.w = m.width ?? 0;
+      hasil.h = m.pageHeight ?? m.height ?? 0;
+      hasil.alpha = Boolean(m.hasAlpha);
+    } else {
+      const info = await probe(jalur);
+      hasil.w = Number(info.width) || 0;
+      hasil.h = Number(info.height) || 0;
+      hasil.durasi = Math.round((Number(info.duration) || 0) * 10) / 10;
+      hasil.alpha = await punyaAlpha(jalur).catch(() => false);
+    }
+  } catch {
+    return null;
+  }
+  return hasil;
+}
+
+/** Ukuran gambar berkas editor lama (untuk menerjemahkan kotak monas/bingkai ke Studio). */
+async function ukuranAsetLama(p: Pengguna, t: Template | null): Promise<UkuranAset> {
+  const ukuran: UkuranAset = {};
+  for (const o of (t?.overlays as Record<string, unknown>[] | undefined) ?? []) {
+    const ref = String(o.file ?? "");
+    if (!ref || jenis(ref) !== "gambar") continue;
+    try {
+      const m = await sharp(path.join(templatePath(idTemplate(p)), ref)).metadata();
+      if (m.width && m.height) ukuran[ref] = { w: m.width, h: m.height };
+    } catch {
+      // berkas hilang: ukuran cadangan dipakai
+    }
+  }
+  return ukuran;
+}
+
+/** Validasi dokumen kiriman editor + keberadaan semua berkasnya. */
+function dokSah(p: Pengguna, mentah: unknown): DokStudio {
+  const hasil = DokStudio.safeParse(mentah);
+  if (!hasil.success) throw new GalatHttp(422, "Susunan template tidak sah. Muat ulang Studio lalu coba lagi.");
+  const dok = hasil.data;
+  const salah = periksaAturan(dok);
+  if (salah) throw new GalatHttp(400, salah);
+  for (const ref of asetDokumen(dok)) {
+    const jalur = path.join(templatePath(idTemplate(p)), ref);
+    if (!fs.existsSync(jalur) || !fs.statSync(jalur).isFile()) throw new GalatHttp(409, "Ada berkas yang sudah tidak ada. Pilih ulang berkasnya.");
+  }
+  return dok;
+}
+
+/** Pratinjau terbaru milik akun. */
+async function pratinjauTerakhirAkun(a: string): Promise<Job | null> {
+  for (const j of await daftarJob(40, a)) if (jobPratinjau(j)) return j;
+  return null;
+}
+
+async function ringkasPratinjau(a: string): Promise<Record<string, unknown> | null> {
+  const j = await pratinjauTerakhirAkun(a);
+  if (!j) return null;
+  const aktif = STATUS_AKTIF_JOB.includes(j.status);
+  return {
+    id: j.job_id,
+    status: j.status,
+    progress: j.progress ?? 0,
+    error: j.error ?? null,
+    log: j.message ?? null,
+    durasi: j.durasi ?? null,
+    dibuat: j.created ?? null,
+    sumber: (j as Record<string, unknown>).sumber_pratinjau ?? null,
+    antrean: aktif && j.status === "queued" ? await posisiAntrean(j.job_id) : null,
+  };
+}
+
+/** Berkas studio yang tidak dirujuk template tersimpan & lebih tua dari `umurJam` disapu. */
+function sapuAsetStudio(p: Pengguna, dipakai: Set<string>, umurJam: number): void {
+  const folder = folderStudio(p);
+  if (!fs.existsSync(folder)) return;
+  const batas = Date.now() - umurJam * 3_600_000;
+  for (const d of fs.readdirSync(folder, { withFileTypes: true })) {
+    if (!d.isFile()) continue;
+    const ref = `assets/studio/${d.name}`;
+    const jalur = path.join(folder, d.name);
+    try {
+      if (!dipakai.has(ref) && fs.statSync(jalur).mtimeMs < batas) fs.rmSync(jalur, { force: true });
+    } catch {
+      // disapu lain kali
+    }
+  }
+  fs.rmSync(path.join(folder, ".poster"), { recursive: true, force: true });
+}
+
+function pasangRuteStudio(r: Router, stokMilik: (a: string, id: string) => Promise<Job>): void {
+  const S = "/api/tvr/studio";
+
+  r.get(S, async (pm) => {
+    const p = penggunaTvr(pm);
+    const t = bacaTemplate(p);
+    const areaTeks = (t?.text_box as Kotak | null | undefined) ?? AREA_TEKS_BAWAAN;
+    const dok = studioDariTemplate(t as Record<string, unknown> | null, await ukuranAsetLama(p, t), kotakKategoriBawaan(areaTeks));
+    const refs = new Set(asetDokumen(dok));
+    if (fs.existsSync(folderStudio(p))) {
+      const terbaru = fs
+        .readdirSync(folderStudio(p), { withFileTypes: true })
+        .filter((d) => d.isFile())
+        .map((d) => ({ ref: `assets/studio/${d.name}`, waktu: fs.statSync(path.join(folderStudio(p), d.name)).mtimeMs }))
+        .sort((x, y) => y.waktu - x.waktu)
+        .slice(0, MAKS_ASET_STUDIO);
+      for (const x of terbaru) refs.add(x.ref);
+    }
+    const aset = (await Promise.all([...refs].map((ref) => infoAsetStudio(p, ref)))).filter(Boolean);
+    return {
+      dok,
+      studio_tersimpan: Boolean(t && (t as Record<string, unknown>).studio),
+      siap: Boolean(t?.siap),
+      aset,
+      pratinjau: await ringkasPratinjau(akun(p)),
+      batas: {
+        maks_aset_mb: MAX_ASSET_MB,
+        maks_gif_mb: MAKS_GIF_MB,
+        maks_animasi_detik: batasTvr.maksAnimasiDetik,
+        maks_elemen: MAKS_ELEMEN,
+        maks_pernak: MAKS_PERNAK,
+        jenis_aset: Object.fromEntries(Object.entries(JENIS_ASET_STUDIO).map(([k, v]) => [k, urut(v)])),
+      },
+    };
+  });
+
+  r.get(`${S}/aset/gambar`, async (pm) => {
+    // Gambar aset untuk kanvas editor. Video (boom/outro) -> satu frame PNG (transparan bila beralpha).
+    const p = penggunaTvr(pm);
+    const ref = String(pm.query.get("ref") ?? "");
+    if (!POLA_ASET.test(ref)) throw new GalatHttp(404, "Aset tidak ditemukan.");
+    const jalur = path.join(templatePath(idTemplate(p)), ref);
+    if (!fs.existsSync(jalur) || !fs.statSync(jalur).isFile()) throw new GalatHttp(404, "Aset tidak ditemukan.");
+    const a = akhiran(jalur);
+    const mime: Record<string, string> = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif" };
+    if (mime[a]) return kirimGambar(pm, fs.readFileSync(jalur), mime[a]);
+    const poster = path.join(folderStudio(p), ".poster", `${aman(ref.replace(/\//g, "_"))}.png`);
+    if (!fs.existsSync(poster)) {
+      fs.mkdirSync(path.dirname(poster), { recursive: true });
+      const dasar = ["-hide_banner", "-loglevel", "error", "-nostdin", "-y"];
+      const keluar = ["-frames:v", "1", "-vf", "scale='min(720,iw)':-2,format=rgba", poster];
+      try {
+        await jalankan(FFMPEG_BIN, [...dasar, "-ss", "0.3", "-i", jalur, ...keluar], { timeout: 30_000 });
+      } catch {
+        await jalankan(FFMPEG_BIN, [...dasar, "-i", jalur, ...keluar], { timeout: 30_000 }).catch(() => undefined);
+      }
+    }
+    if (!fs.existsSync(poster)) throw new GalatHttp(404, "Gambar aset gagal dibuat.");
+    return kirimGambar(pm, fs.readFileSync(poster), "image/png");
+  });
+
+  r.post(`${S}/aset`, async (pm) => {
+    // Unggah satu berkas Studio: ?jenis=gambar|boom|outro. Langsung tersimpan (belum dipakai sampai disimpan).
+    const p = penggunaTvr(pm);
+    const jenisAset = String(pm.query.get("jenis") ?? "gambar") as keyof typeof JENIS_ASET_STUDIO;
+    if (!(jenisAset in JENIS_ASET_STUDIO)) throw new GalatHttp(404, "Jenis berkas tidak dikenal.");
+    await pastikanKuota(p);
+    pastikanTemplate(p);
+    const t = bacaTemplate(p);
+    const dipakai = t ? asetDokumen(studioDariTemplate(t as Record<string, unknown>, {}, null)) : new Set<string>();
+    sapuAsetStudio(p, dipakai, 24);
+    const batasMaks = Math.trunc(Math.max(MAKS_GIF_MB, MAX_ASSET_MB) * 1_048_576);
+    await sediakanRuangUnggah(pm, batasMaks);
+    const folder = folderStudio(p);
+    let sementara = "";
+    let akhir = "";
+    try {
+      const h = await tulisUnggahan(
+        pm,
+        (asli) => {
+          const a = akhiran(asli || "");
+          if (!JENIS_ASET_STUDIO[jenisAset].has(a)) {
+            const daftar = urut(JENIS_ASET_STUDIO[jenisAset]).map((s) => s.replace(/^\./, "").toUpperCase()).join(", ");
+            throw new GalatHttp(415, `${NAMA_ASET_STUDIO[jenisAset]} harus ${daftar}.`);
+          }
+          fs.mkdirSync(folder, { recursive: true });
+          const batas = Math.trunc((a === ".gif" ? MAKS_GIF_MB : MAX_ASSET_MB) * 1_048_576);
+          sementara = path.join(folder, `_unggah-${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}${a}`);
+          return { jalur: sementara, batas, pesan: `${NAMA_ASET_STUDIO[jenisAset]} melebihi ${f0(batas / 1_048_576)} MB.` };
+        },
+        batasMaks,
+        `${NAMA_ASET_STUDIO[jenisAset]} melebihi ${f0(batasMaks / 1_048_576)} MB.`,
+      );
+      let jalur = h.jalur;
+      // JPG/WEBP -> PNG (perender & pratinjau memakai PNG); orientasi kamera dirapikan.
+      if ([".jpg", ".jpeg", ".webp"].includes(akhiran(jalur))) {
+        const png = jalur.slice(0, -path.extname(jalur).length) + ".png";
+        try {
+          await sharp(jalur).rotate().png().toFile(png);
+        } catch {
+          throw new GalatHttp(415, "Gambar ini tidak bisa dibaca. Coba simpan ulang sebagai PNG.");
+        } finally {
+          fs.rmSync(jalur, { force: true });
+        }
+        jalur = png;
+        sementara = png;
+      }
+      const slot: Slot = jenisAset === "outro" ? "penutup" : jenisAset === "boom" ? "boom" : "kotak";
+      jalur = await periksaDanRapikan(slot, jalur);
+      sementara = jalur;
+      akhir = path.join(folder, `${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}${akhiran(jalur)}`);
+      fs.renameSync(jalur, akhir);
+      sementara = "";
+    } catch (e) {
+      if (sementara) fs.rmSync(sementara, { force: true });
+      throw e;
+    } finally {
+      lupakan(akun(p));
+    }
+    const info = await infoAsetStudio(p, `assets/studio/${path.basename(akhir)}`);
+    if (!info) throw new GalatHttp(415, "Berkas tidak bisa dibaca.");
+    return { aset: info };
+  });
+
+  r.post(`${S}/aset/hapus-latar`, async (pm) => {
+    // Buang latar satu gambar (pernak-pernik/logo) lewat rembg; hasilnya aset BARU (aslinya tetap).
+    const p = penggunaTvr(pm);
+    const a = akun(p);
+    const body = await bacaJson(pm, z.object({ ref: z.string().regex(POLA_ASET) }));
+    const kini = Date.now();
+    if (kini - (hapusLatarStudioTerakhir.get(a) ?? 0) < 4000) throw new GalatHttp(429, "Tunggu sebentar sebelum menghapus latar lagi.");
+    hapusLatarStudioTerakhir.set(a, kini);
+    const asal = path.join(templatePath(idTemplate(p)), body.ref);
+    if (!fs.existsSync(asal) || jenis(asal) !== "gambar") throw new GalatHttp(400, "Hapus latar hanya untuk gambar PNG/JPG.");
+    await pastikanKuota(p);
+    let png: Buffer;
+    try {
+      png = await hapusLatarGambar(asal);
+    } catch (e) {
+      return tangani(e);
+    }
+    const folder = folderStudio(p);
+    fs.mkdirSync(folder, { recursive: true });
+    const tujuan = path.join(folder, `${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}.png`);
+    try {
+      // Sisa tepi transparan dipangkas supaya kotak elemen pas dengan objeknya.
+      await sharp(png).trim({ threshold: 1 }).png().toFile(tujuan);
+    } catch {
+      fs.writeFileSync(tujuan, png);
+    }
+    lupakan(a);
+    const info = await infoAsetStudio(p, `assets/studio/${path.basename(tujuan)}`);
+    if (!info) throw new GalatHttp(500, "Hasil hapus latar tidak terbaca.");
+    return { aset: info };
+  });
+
+  r.put(S, async (pm) => {
+    // Simpan & Tetapkan: dokumen Studio -> template.json akun (overlays + texts), siap dipakai.
+    const p = penggunaTvr(pm);
+    const a = akun(p);
+    const body = await bacaJson(pm, z.object({ dok: z.unknown() }));
+    const dok = dokSah(p, body.dok);
+    await denganKunci(a, () => {
+      const lama = pastikanTemplate(p);
+      const isi: Record<string, unknown> = {
+        ...templateDariStudio(dok, String(lama.kategori || "")),
+        name: lama.name || "TVR Saya",
+        max_duration: MAKS_DURASI_DETIK,
+        siap: true,
+        diperbarui: Date.now() / 1000,
+      };
+      try {
+        saveTemplate(isi, idTemplate(p), a);
+      } catch (e) {
+        tangani(e);
+      }
+      sapuAsetStudio(p, asetDokumen(dok), 6);
+    });
+    lupakan(a);
+    return { ok: true, template: await keadaan(p) };
+  });
+
+  r.get(`${S}/pratinjau`, async (pm) => ({ pratinjau: await ringkasPratinjau(akun(penggunaTvr(pm))) }));
+
+  r.post(`${S}/pratinjau`, async (pm) => {
+    // Video pratinjau dari dokumen draf (belum disimpan): template sementara tvrp-<id>.
+    const p = penggunaTvr(pm);
+    const a = akun(p);
+    const body = await bacaJson(
+      pm,
+      z.object({
+        dok: z.unknown(),
+        sumber: z.string().regex(/^(contoh:(tegak|lebar)|stok:[A-Za-z0-9_-]{6,64})$/).default("contoh:tegak"),
+        bingkai_hitam: z.boolean().default(false),
+      }),
+    );
+    const kini = Date.now();
+    if (kini - (pratinjauStudioTerakhir.get(a) ?? 0) < 8000) throw new GalatHttp(429, "Tunggu beberapa detik sebelum membuat pratinjau lagi.");
+    pratinjauStudioTerakhir.set(a, kini);
+    const dok = dokSah(p, body.dok);
+    await pastikanKuota(p);
+    let url = body.sumber;
+    if (url.startsWith("stok:")) {
+      const st = await stokMilik(a, url.slice(5));
+      url = `stok:${st.job_id}/${aman(String(st.output))}`;
+    }
+    // Pratinjau lama: dihentikan / dibuang (satu pratinjau per akun).
+    for (const j of (await daftarJob(40, a)).filter(jobPratinjau)) {
+      if (STATUS_BERJALAN_JOB.includes(j.status)) await mintaBatal(j.job_id);
+      else {
+        if (j.status === "queued") await cabutTugas(j);
+        await buangJob(j.job_id);
+      }
+    }
+    const tid = idPratinjau(p);
+    fs.mkdirSync(path.join(templatePath(tid), "assets"), { recursive: true });
+    tulisJsonAtomik(path.join(templatePath(tid), "template.json"), {
+      ...templateDariStudio(dok, "POLITIK"),
+      id: tid,
+      name: "Pratinjau Studio",
+      owner: a,
+      aset_dari: idTemplate(p),
+      max_duration: 15,
+      siap: true,
+    });
+    const texts = {
+      hook: "VIRAL! CONTOH TULISAN BERITA UNTUK MELIHAT LETAK DAN UKURANNYA DI VIDEO",
+      sumber: "SUMBER: CONTOH",
+      kategori: "POLITIK",
+    };
+    const id = await buatJob(url, tid, texts, a);
+    await tulisStatus(id, { jenis: "pratinjau", judul: "Pratinjau Studio", sumber_pratinjau: body.sumber });
+    await kirimRender({ job_id: id, url, template_id: tid, texts, jenis: "pratinjau", potong: { mulai: 0, akhir: 15 }, ...(body.bingkai_hitam ? { bingkai: "hitam" as const } : {}) });
+    return { pratinjau: await ringkasPratinjau(a) };
+  });
+
+  r.delete(`${S}/pratinjau`, async (pm) => {
+    const p = penggunaTvr(pm);
+    const j = await pratinjauTerakhirAkun(akun(p));
+    if (j && STATUS_AKTIF_JOB.includes(j.status)) {
+      if (STATUS_BERJALAN_JOB.includes(j.status)) await mintaBatal(j.job_id);
+      else {
+        await cabutTugas(j);
+        await buangJob(j.job_id);
+      }
+    }
+    return { pratinjau: await ringkasPratinjau(akun(p)) };
+  });
+
+  r.get(`${S}/pratinjau/{id}/video`, async (pm) => {
+    const p = penggunaTvr(pm);
+    let st: Job;
+    try {
+      st = await bacaStatus(pm.params.id);
+    } catch {
+      throw new GalatHttp(404, "Pratinjau tidak ditemukan.");
+    }
+    if (String(st.owner ?? "") !== akun(p) || !jobPratinjau(st) || st.status !== "done" || !st.output) {
+      throw new GalatHttp(404, "Pratinjau tidak ditemukan.");
+    }
+    const berkas = path.join(jobPath(st.job_id), aman(String(st.output)));
+    if (!fs.existsSync(berkas)) throw new GalatHttp(404, "Berkas pratinjau sudah tidak ada.");
+    return kirimBerkas(pm, berkas, "video/mp4", `pratinjau-${st.job_id}.mp4`);
   });
 }
 

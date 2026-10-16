@@ -184,6 +184,25 @@ export function filterBadan(lebar: number, tinggi: number, fps: number, bingkaiH
 
 export type HasilPerintah = { args: string[]; total: number };
 
+const bulat3 = (x: number) => Math.round(x * 1000) / 1000;
+
+/**
+ * Waktu tampil satu lapisan. Tanpa patokan akhir: start/end apa adanya (perilaku lama, keluaran sama
+ * persis). Dengan `start_akhir`/`end_akhir` (Studio): detik dihitung mundur dari akhir video sumber;
+ * rentang yang habis (video terlalu pendek) -> null = lapisan tidak dipasang.
+ */
+export function waktuLapisan(item: Record<string, unknown>, durasiBadan: number): { start: unknown; end: unknown } | null {
+  const mulaiAkhir = pyTruthy(item.start_akhir);
+  const selesaiAkhir = pyTruthy(item.end_akhir);
+  if (!mulaiAkhir && !selesaiAkhir) return { start: item.start, end: item.end };
+  const ada = (v: unknown) => v !== null && v !== undefined;
+  const m = ada(item.start) ? pyFloat(item.start) : 0;
+  const mulai = Math.max(0, mulaiAkhir ? durasiBadan - m : m);
+  const selesai = selesaiAkhir ? durasiBadan - (ada(item.end) ? pyFloat(item.end) : 0) : ada(item.end) ? pyFloat(item.end) : durasiBadan;
+  if (!(selesai - mulai >= 0.05)) return null;
+  return { start: bulat3(mulai), end: bulat3(Math.min(selesai, durasiBadan)) };
+}
+
 /**
  * Rakit satu perintah ffmpeg yang mengerjakan seluruh template sekaligus:
  * video sumber, overlay, teks, lalu sambungan intro/outro dalam satu kali
@@ -277,11 +296,19 @@ export async function bangunPerintah(
     }
     const png = await penggambar(teks, isi as string, lebar, tinggi, path.join(kerja, `text_${nomor}.png`));
     // PNG teks sudah seukuran kanvas, jadi cukup ditempel di 0,0.
-    lapisan.push({ path: png, x: 0, y: 0, start: ambil(teks, "start"), end: ambil(teks, "end") });
+    lapisan.push({
+      path: png, x: 0, y: 0, start: ambil(teks, "start"), end: ambil(teks, "end"),
+      // Studio (16 Okt 2026): ujung waktu yang dipatok ke akhir video.
+      ...(pyTruthy(ambil(teks, "start_akhir")) ? { start_akhir: true } : {}),
+      ...(pyTruthy(ambil(teks, "end_akhir")) ? { end_akhir: true } : {}),
+    });
   }
 
   for (let nomor = 0; nomor < lapisan.length; nomor++) {
     const item = lapisan[nomor];
+    const waktu = waktuLapisan(item, durasiBadan);
+    // Patokan akhir pada video yang terlalu pendek: lapisan tidak tampil sama sekali.
+    if (waktu === null) continue;
     // Overlay video diputar berulang ("loop"); "-t" wajib menyertai
     // pengulangan tak terbatas, kalau tidak ffmpeg menggantung saat menutup.
     if (pyTruthy(item.loop)) inputs.push("-stream_loop", "-1", "-t", formatF(durasiBadan, 3));
@@ -305,6 +332,9 @@ export async function bangunPerintah(
       // -2 dan bukan -1: sisi otomatis dibulatkan genap (yuv420p menolak ganjil).
       rantai.push(`scale=${pyTruthy(w) ? teksBulat(pyInt(w)) : -2}:${pyTruthy(h) ? teksBulat(pyInt(h)) : -2}`);
     }
+    // Transparansi (Studio): hanya bila < 1, jadi template lama tidak berubah.
+    const opasitas = typeof item.opacity === "number" ? item.opacity : null;
+    if (opasitas !== null && opasitas > 0 && opasitas < 1) rantai.push(`format=rgba,colorchannelmixer=aa=${opasitas.toFixed(2)}`);
     if (rantai.length) {
       filters.push(`[${sumberOv}]${rantai.join(",")}[ov${nomor}]`);
       sumberOv = `ov${nomor}`;
@@ -312,8 +342,8 @@ export async function bangunPerintah(
     const posisiX = posisi(item.x, "(W-w)/2");
     const posisiY = posisi(item.y, "(H-h)/2");
     let opsiOv = `overlay=${posisiX}:${posisiY}`;
-    const mulai = item.start;
-    const selesai = item.end;
+    const mulai = waktu.start;
+    const selesai = waktu.end;
     const ada = (v: unknown) => v !== null && v !== undefined;
     if (ada(mulai) || ada(selesai)) {
       opsiOv +=
@@ -346,7 +376,12 @@ export async function bangunPerintah(
     if (berkas === null) continue;
     berkas = await asetRingan(berkas, lebar, tinggi);
     const info = await probe(berkas);
-    total += info.duration;
+    // Outro boleh dipendekkan (Studio, outro_durasi); tanpa itu panjang aslinya.
+    const batasOutro = bagian === "outro" ? Number(ambil(template, "outro_durasi")) : Number.NaN;
+    const dipotong = Number.isFinite(batasOutro) && batasOutro > 0 && batasOutro < info.duration;
+    const durasiKlip = dipotong ? batasOutro : info.duration;
+    total += durasiKlip;
+    if (dipotong) inputs.push("-t", formatF(durasiKlip, 3));
     inputs.push("-i", berkas);
     const idxKlip = idx;
     idx += 1;
@@ -358,7 +393,7 @@ export async function bangunPerintah(
       );
     } else {
       inputs.push(
-        "-f", "lavfi", "-t", formatF(Math.max(info.duration, 0.1), 3),
+        "-f", "lavfi", "-t", formatF(Math.max(durasiKlip, 0.1), 3),
         "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
       );
       filters.push(`[${idx}:a]anull[${bagian}a]`);

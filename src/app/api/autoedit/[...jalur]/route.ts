@@ -12,6 +12,7 @@ import {
   teruskanAutoEdit,
 } from "@/lib/autoedit";
 import { bolehAlatVideo } from "@/lib/peran";
+import { bolehStudioTemplate } from "@/lib/studio-template";
 import { pastikanMasuk } from "@/lib/sesi";
 import { catatAudit } from "@/lib/audit";
 import type { JenisAudit } from "@/lib/audit-jenis";
@@ -35,6 +36,7 @@ function aksiAudit(metode: string, j: string[]): { jenis: JenisAudit; ringkasan:
     if (metode === "POST" && a1 === "template" && a2 === "hapus-latar") return { jenis: "hapus_latar", ringkasan: "Menghapus latar bahan template" };
     if (metode === "PUT" && a1 === "template" && !a2) return { jenis: "template", ringkasan: "Menyimpan template Edit Otomatis" };
     if (metode === "DELETE" && a1 === "template" && !a2) return { jenis: "template", ringkasan: "Menghapus template Edit Otomatis" };
+    if (metode === "PUT" && a1 === "studio" && !a2) return { jenis: "template", ringkasan: "Menyimpan template di Studio Template" };
     if (metode === "POST" && a1 === "stok" && !a2) return { jenis: "stok_tambah", ringkasan: "Menambah video ke Stok" };
     if (metode === "DELETE" && a1 === "stok" && a2) return { jenis: "stok_hapus", ringkasan: "Menghapus video dari Stok" };
   }
@@ -124,6 +126,10 @@ async function tangani(
   // Pustaka template Bot Redaksi (13 Okt 2026): hanya server SuperApp yang boleh
   // memanggilnya (lib/bot-template); lewat proxy ini selalu tidak ada.
   if (j[0] === "tvr" && j[1] === "pustaka") return galatAutoEdit(404, "Tidak ditemukan");
+  // Studio Template (16 Okt 2026): uji coba akun tertentu, hanya template pribadi (bukan jalur tim).
+  if (j[0] === "tvr" && j[1] === "studio" && (!bolehStudioTemplate(user) || (request.headers.get("x-autoedit-tim") ?? "").trim())) {
+    return galatAutoEdit(404, "Tidak ditemukan");
+  }
   // Alat video (Kompres Video, Hapus Latar Boom, Blur Watermark): terbuka
   // untuk semua kecuali ditutup master per akun — juga lewat jalur tim. Tanpa izin: 404.
   const fiturUji =

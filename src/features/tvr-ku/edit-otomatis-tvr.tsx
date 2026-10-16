@@ -17,6 +17,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Clapperboard,
+  LayoutTemplate,
   Link2,
   Loader2,
   Pencil,
@@ -42,6 +43,8 @@ import { bidangJob, bolehPotongVideo, nilaiRentang, rentangAwal, type RentangVid
 import { PilihBagianVideo } from "@/features/auto-edit/pilih-bagian-video";
 import { CariAsliTvr } from "@/features/lacak-sumber/cari-asli-tvr";
 import { TemplateTvrModal } from "./template-tvr-modal";
+import { StudioTemplate } from "./studio/studio-template";
+import { bolehStudioTemplate } from "@/lib/studio-template";
 import { segarkanStokTvr } from "./stok-video-tvr";
 import {
   STATUS_AKTIF,
@@ -67,6 +70,7 @@ export function EditOtomatisTvr() {
   const [galatMuat, setGalatMuat] = useState("");
   const [muatUlang, setMuatUlang] = useState(0);
   const [bukaTemplate, setBukaTemplate] = useState(false);
+  const [bukaStudio, setBukaStudio] = useState(false);
   const [menghapusTemplate, setMenghapusTemplate] = useState(false);
 
   // Form Buat Video
@@ -133,6 +137,8 @@ export function EditOtomatisTvr() {
   const modeTim = Boolean(api.tim) && !modeBot;
   const idSaya = useAppStore((s) => String(s.user?.id ?? ""));
   const bolehHapusLatar = useAppStore((s) => bolehAlatVideo(s.user, "hapuslatar"));
+  // Studio Template (16 Okt 2026): uji coba akun tertentu, template pribadi saja.
+  const bolehStudio = useAppStore((s) => bolehStudioTemplate(s.user)) && !api.tim;
   // Template tim dipakai bersama — hanya master yang boleh menghapusnya.
   const bolehHapusTemplate = useAppStore((s) => !modeTim || s.user?.role === "master");
   // Semua akun boleh mengantre banyak video sekaligus (6 Okt 2026).
@@ -465,6 +471,18 @@ export function EditOtomatisTvr() {
       >
         {template.siap ? <Pencil className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
       </button>
+      {bolehStudio && (
+        <button
+          type="button"
+          onClick={() => setBukaStudio(true)}
+          aria-label="Buka Studio Template"
+          title="Studio Template: tata logo, kotak berita, footer, boom, pernak-pernik, dan outro dengan seret & lepas"
+          className="btn-tekan flex h-11 shrink-0 items-center gap-1.5 rounded-2xl bg-teks-utama px-3 text-[12px] font-bold text-app-bg"
+        >
+          <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
+          Studio
+        </button>
+      )}
       {template.ada && bolehHapusTemplate && (
         <button
           type="button"
@@ -586,6 +604,15 @@ export function EditOtomatisTvr() {
         <p className="mt-3 rounded-xl border border-gagal/30 bg-gagal/10 p-2.5 text-[11.5px] text-teks-utama" role="alert">
           {pesan}
         </p>
+      )}
+      {bukaStudio && (
+        <StudioTemplate
+          onTutup={() => {
+            setBukaStudio(false);
+            segarkan();
+          }}
+          onTersimpan={segarkan}
+        />
       )}
       {bukaTemplate && (
         <TemplateTvrModal

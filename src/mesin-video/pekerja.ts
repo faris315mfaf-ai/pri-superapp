@@ -26,6 +26,7 @@ import { render } from "./render";
 import { loadTemplate } from "./template";
 import { downloadSource, pasangRedisBatas } from "./unduh";
 import { bersihkanJobLama } from "./volume";
+import { siapkanContoh } from "./contoh-video";
 
 /** Durasi hasil render dalam detik; 0 kalau tidak terbaca. */
 async function durasiVideo(berkas: string): Promise<number> {
@@ -416,8 +417,70 @@ export async function blurJob(m: MuatanRender): Promise<{ job_id: string; status
   }
 }
 
-/** Satu pintu worker: render template, Kompres Video, Hapus Latar Boom, Blur Watermark. */
+/**
+ * VIDEO PRATINJAU Studio Template (16 Okt 2026). Template draf (tvrp-<id>, aset dipinjam dari tvr-<id>)
+ * dirender ke video pendek dari video contoh ("contoh:tegak" / "contoh:lebar") atau video Stok milik
+ * pemilik ("stok:<job>/<berkas>", diperiksa API). Hasil TIDAK masuk Stok dan tidak dikompres.
+ */
+export async function pratinjauJob(m: MuatanRender): Promise<{ job_id: string; status: string; [k: string]: unknown }> {
+  const jobId = m.job_id;
+  const folder = jobPath(jobId);
+  const catat = (teks: string) => tulisStatus(jobId, { log: teks }).then(() => undefined);
+  try {
+    if ((await bacaStatus(jobId)).status !== "queued") return { job_id: jobId, status: "dilewati" };
+    if (await dimintaBatal(jobId)) {
+      await lupakanBatal(jobId);
+      await tulisStatus(jobId, { status: "dibatalkan", log: "Dihentikan sebelum mulai." });
+      return { job_id: jobId, status: "dibatalkan" };
+    }
+    await tulisStatus(jobId, { status: "downloading", progress: 0, task_id: jobId, mulai_proses: Date.now() / 1000 });
+    const template = loadTemplate(m.template_id);
+    let sumber: string;
+    const url = String(m.url || "");
+    if (url === "contoh:tegak" || url === "contoh:lebar") {
+      await catat("Menyiapkan video contoh.");
+      sumber = await siapkanContoh(url === "contoh:lebar" ? "lebar" : "tegak");
+    } else if (url.startsWith("stok:")) {
+      const [idStok, nama] = url.slice(5).split("/");
+      sumber = path.join(jobPath(String(idStok)), path.basename(String(nama)));
+      if (!fs.existsSync(sumber)) throw new GalatVideo("Video stok untuk pratinjau sudah tidak ada.");
+    } else {
+      throw new GalatVideo("Sumber pratinjau tidak dikenal.");
+    }
+    await tulisStatus(jobId, { status: "rendering", progress: 0, mulai_render: Date.now() / 1000 });
+    const hasil = await render(template, sumber, folder, {
+      texts: m.texts ?? {},
+      log: catat,
+      progress: (p: number) => tulisStatus(jobId, { progress: p }).then(() => undefined),
+      batal: () => dimintaBatal(jobId),
+      potong: m.potong ?? null,
+      bingkaiHitam: m.bingkai === "hitam",
+    });
+    await tulisStatus(jobId, {
+      status: "done",
+      progress: 100,
+      output: path.basename(hasil),
+      url: "",
+      durasi: await durasiVideo(hasil),
+      size: fs.statSync(hasil).size,
+      log: "Pratinjau siap.",
+    });
+    bersihkanBerkasKerja(folder);
+    return { job_id: jobId, status: "done", output: hasil };
+  } catch (e) {
+    const dibatal = e instanceof Dibatalkan;
+    if (dibatal) await lupakanBatal(jobId);
+    const pesan = e instanceof GalatVideo ? e.message : e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    if (!dibatal && !(e instanceof GalatVideo)) console.error(`Pratinjau ${jobId} gagal tak terduga`, e);
+    await tulisStatus(jobId, dibatal ? { status: "dibatalkan", log: "Pratinjau dihentikan." } : { status: "error", error: pesan, log: `Gagal: ${pesan}` });
+    await bersihkanSetelahGagal(jobId, folder);
+    return { job_id: jobId, status: dibatal ? "dibatalkan" : "error" };
+  }
+}
+
+/** Satu pintu worker: render template, Kompres Video, Hapus Latar Boom, Blur Watermark, Pratinjau Studio. */
 function kerjakan(m: MuatanRender) {
+  if (m.jenis === "pratinjau") return pratinjauJob(m);
   if (m.jenis === "kompres") return kompresJob(m);
   if (m.jenis === "blur") return blurJob(m);
   if (m.jenis === "hapuslatar") return hapusLatarJob(m);

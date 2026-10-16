@@ -148,9 +148,21 @@ async function satuFrame(berkas: string): Promise<Buffer> {
   }
   if (!res.ok) {
     console.error("rembg menolak:", res.status, (await res.text().catch(() => "")).slice(0, 300));
-    throw new GalatVideo("Layanan hapus latar gagal memproses video ini.");
+    throw new GalatVideo("Layanan hapus latar gagal memproses berkas ini.");
   }
   return Buffer.from(await res.arrayBuffer());
+}
+
+/**
+ * Studio Template (16 Okt 2026): buang latar SATU gambar (pernak-pernik, logo) lewat rembg yang sama.
+ * Mengembalikan PNG beralpha. Satu kali coba lagi bila rembg sesaat sibuk.
+ */
+export async function hapusLatarGambar(berkas: string): Promise<Buffer> {
+  try {
+    return await satuFrame(berkas);
+  } catch {
+    return await satuFrame(berkas);
+  }
 }
 
 async function lewatAi(masukan: string, keluaran: string, kerja: string, opsi: Opsi): Promise<number> {
