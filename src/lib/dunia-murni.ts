@@ -8,6 +8,8 @@
 // bisa diuji: klasifikasi aksi, umur animasi, pemilihan karakter unik.
 // ============================================================
 
+import type { KonfigKarakter } from "@/lib/karakter-murni";
+
 /** Topik & event siaran Realtime (payload hanya {t}); sama dipakai server dan klien. */
 export const TOPIK_DUNIA = "dunia-ruang";
 export const EVENT_DUNIA = "berubah";
@@ -59,6 +61,11 @@ export type PenghuniDunia = {
   layar_label: string;
   /** Nomor rupa karakter 0..UKURAN_KOLAM_KARAKTER-1 (unik di antara yang online). */
   karakter: number;
+  /**
+   * Rupa pilihan sendiri (Karakter Saya, tabel karakter_pengguna) untuk dunia v2; tidak ada bila
+   * belum pernah memilih (penggambar memakai rupa bawaan konfigBawaan(id)). Sudah tervalidasi katalog.
+   */
+  rupa?: KonfigKarakter;
   aktivitas: AktivitasDunia | null;
   /**
    * Dipanggil Koordinator ke ruangan untuk siaran ke akunnya (15 Okt 2026), walau tidak online.

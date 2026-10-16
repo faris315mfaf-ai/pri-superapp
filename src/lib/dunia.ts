@@ -18,6 +18,8 @@ import { klienCache } from "@/lib/redis";
 import { daftarHadir } from "@/lib/kehadiran";
 import { siarkanRealtime } from "@/lib/realtime-server";
 import { labelJenisAudit, labelLayarAudit } from "@/lib/audit-jenis";
+import { bacaKarakterBanyak } from "@/lib/karakter";
+import type { KonfigKarakter } from "@/lib/karakter-murni";
 import {
   EVENT_DUNIA,
   TOPIK_DUNIA,
@@ -363,11 +365,13 @@ export async function bacaStatusDunia(): Promise<StatusDunia> {
   if (error) throw new Error("Gagal memuat pengguna online.");
   const orang = (data ?? []) as unknown as BarisOrang[];
   const karakter = tetapkanKarakter(orang.map((o) => Number(o.id)));
+  // Rupa Karakter Saya (dunia v2). Tidak pernah melempar: gagal/tabel belum ada = rupa bawaan.
+  const rupaPeta = bacaKarakterBanyak(orang.map((o) => Number(o.id))).catch(() => new Map<number, KonfigKarakter>());
 
   const penghuni = await Promise.all(
     orang.map(async (o): Promise<PenghuniDunia> => {
       const id = String(o.id);
-      const [layar, akt] = await Promise.all([bacaLayar(id), bacaAkt(id)]);
+      const [layar, akt, rupa] = await Promise.all([bacaLayar(id), bacaAkt(id), rupaPeta.then((m) => m.get(Number(o.id)))]);
       return {
         id: Number(o.id),
         nama: String(o.nama ?? ""),
@@ -378,6 +382,7 @@ export async function bacaStatusDunia(): Promise<StatusDunia> {
         layar,
         layar_label: layar ? labelLayarAudit(layar) : "",
         karakter: karakter.get(Number(o.id)) ?? 0,
+        ...(rupa ? { rupa } : {}),
         aktivitas: pilihAktivitas(akt, kini),
         ...(tamu.has(Number(o.id)) ? { dipanggil: true, layar_label: "Dipanggil Koordinator · siaran" } : {}),
       };

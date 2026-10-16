@@ -25,6 +25,7 @@ import {
   type Ruang2,
   type Titik,
 } from "./denah2";
+import { konfigBawaan, type KonfigKarakter } from "@/lib/karakter-murni";
 import type { AnimKarakter } from "./karakter-sprite";
 
 // ---------- proyeksi ----------
@@ -167,3 +168,25 @@ export const KUSEN2: readonly { titik: Titik; kunci: number }[] = PINTU2.flatMap
 /** Tinggi sekat rendah & kusen (px layar). */
 export const TINGGI_SEKAT = 16;
 export const TINGGI_KUSEN = 54;
+
+// ---------- rupa anggota ----------
+
+/**
+ * Rupa tiap anggota untuk penggambar: rupa tersimpan dari status dunia (Karakter Saya), ditimpa
+ * rupa akun sendiri yang baru disimpan (tampil langsung tanpa menunggu status berikutnya).
+ */
+export function petaRupaAnggota(
+  daftar: readonly { id: number; rupa?: KonfigKarakter }[],
+  sayaId?: number,
+  rupaSaya?: KonfigKarakter,
+): Map<number, KonfigKarakter> {
+  const m = new Map<number, KonfigKarakter>();
+  for (const p of daftar) if (p.rupa) m.set(p.id, p.rupa);
+  if (sayaId !== undefined && rupaSaya) m.set(sayaId, rupaSaya);
+  return m;
+}
+
+/** Rupa satu anggota: tersimpan, atau rupa bawaan stabil per akun. */
+export function rupaAnggota(peta: ReadonlyMap<number, KonfigKarakter>, id: number): KonfigKarakter {
+  return peta.get(id) ?? konfigBawaan(id);
+}

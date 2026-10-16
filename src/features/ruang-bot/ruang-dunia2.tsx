@@ -15,13 +15,13 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSPro
 import { Maximize2, Minus, Plus } from "lucide-react";
 import { useTabAktif } from "@/hooks/use-tab-aktif";
 import type { PenghuniDunia } from "@/lib/dunia-murni";
-import { konfigBawaan, konfigDariRupaBot, type KonfigKarakter } from "@/lib/karakter-murni";
+import { konfigDariRupaBot, type KonfigKarakter } from "@/lib/karakter-murni";
 import { cn } from "@/lib/utils";
 import { WARNA_TEMPAT } from "./data-contoh";
 import { LABEL_RUANG2, RUANG2, zonaDari2, type KunciRuang2 } from "./denah2";
 import { muatAsetDunia2, type AsetDunia2 } from "./dunia2-aset";
 import { ID_NARA2, gambarFrame2, type PosisiLayar2 } from "./dunia2-gambar";
-import { LEBAR_LATAR, TINGGI_LATAR, dariLayar, keLayar } from "./dunia2-murni";
+import { LEBAR_LATAR, TINGGI_LATAR, dariLayar, keLayar, petaRupaAnggota, rupaAnggota } from "./dunia2-murni";
 import type { BotHidup, SimulasiBot } from "./simulasi-bot";
 import { WARNA_NARA } from "./simulasi-nara";
 import type { Penghuni, SimulasiPenghuni } from "./simulasi-penghuni";
@@ -60,8 +60,10 @@ export type RuangDunia2Props = {
   daftarPenghuni: readonly PenghuniDunia[];
   terpilihPenghuniId: number | null;
   onPilihPenghuni: (id: number | null) => void;
-  /** Rupa anggota (Karakter Saya); bawaan: rupa bawaan stabil per akun. */
+  /** Rupa anggota; bawaan: `rupa` dari daftarPenghuni (Karakter Saya), lalu rupa bawaan stabil per akun. */
   konfigPenghuni?: (p: Penghuni) => KonfigKarakter;
+  /** Rupa akun sendiri yang baru disimpan — tampil langsung sebelum status dunia berikutnya tiba. */
+  rupaSaya?: KonfigKarakter;
   onBukaZona?: Partial<Record<KunciRuang2, () => void>>;
   /** Id akun sendiri: tombol "Saya" memusatkan kamera ke karakter ini. */
   sayaId?: number;
@@ -86,6 +88,7 @@ export function RuangDunia2({
   konfigPenghuni,
   onBukaZona,
   sayaId,
+  rupaSaya,
   children,
   className,
 }: RuangDunia2Props) {
@@ -115,11 +118,13 @@ export function RuangDunia2({
   const zonaRef = useRef<(HTMLElement | null)[]>([]);
 
   const konfigBot = useMemo(() => new Map(bots.map((b) => [b.id, konfigDariRupaBot(b.rupa)])), [bots]);
-  const terbaru = useRef({ malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigPenghuni });
+  const petaRupa = useMemo(() => petaRupaAnggota(daftarPenghuni, sayaId, rupaSaya), [daftarPenghuni, sayaId, rupaSaya]);
+  const konfigAnggota = useMemo(() => konfigPenghuni ?? ((p: Penghuni) => rupaAnggota(petaRupa, p.id)), [konfigPenghuni, petaRupa]);
+  const terbaru = useRef({ malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota });
   useEffect(() => {
-    terbaru.current = { malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigPenghuni };
+    terbaru.current = { malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota };
     kotorRef.current = true;
-  }, [malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigPenghuni]);
+  }, [malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota]);
 
   useEffect(() => { sim.setGerakKurang(gerakDikurangi); }, [sim, gerakDikurangi]);
   useEffect(() => { tanpaHoverRef.current = window.matchMedia("(hover: none)").matches; }, []);
@@ -333,7 +338,7 @@ export function RuangDunia2({
         sim,
         penghuni,
         konfigBot: t.konfigBot,
-        konfigPenghuni: t.konfigPenghuni ?? ((p) => konfigBawaan(p.id)),
+        konfigPenghuni: t.konfigAnggota,
         terpilihId: t.terpilihId,
         terpilihPenghuniId: t.terpilihPenghuniId,
         malam: t.malam,

@@ -7,6 +7,7 @@
 
 import type { BotRingkas, KoordinatorRingkas, StatusBot } from "@/lib/bot-tipe";
 import type { AktivitasDunia, PenghuniDunia, StatusDunia } from "@/lib/dunia-murni";
+import { bacaKonfig } from "@/lib/karakter-murni";
 import { PERAN_TERSEMBUNYI } from "@/lib/peran";
 
 /** Bot seperti terlihat pengguna umum: rupa & tempatnya saja. */
@@ -34,9 +35,14 @@ function aktivitasUmum(a: AktivitasDunia | null): AktivitasDunia | null {
   return { ...a, ringkasan: a.label, judul: "", akun: "", platform: "" };
 }
 
-/** Penghuni untuk pengguna umum: nama + layar + jenis kegiatan. Master/superadmin tidak dicantumkan. */
+/**
+ * Penghuni untuk pengguna umum: nama + layar + jenis kegiatan + rupa karakter (tampilan publik,
+ * divalidasi ulang ke katalog). Master/superadmin tidak dicantumkan.
+ */
 export function penghuniUmum(p: PenghuniDunia): PenghuniDunia {
-  return { ...p, username: "", divisi: "", role: "", avatar_url: "", aktivitas: aktivitasUmum(p.aktivitas) };
+  const { rupa: mentah, ...lain } = p;
+  const rupa = bacaKonfig(mentah);
+  return { ...lain, username: "", divisi: "", role: "", avatar_url: "", aktivitas: aktivitasUmum(p.aktivitas), ...(rupa ? { rupa } : {}) };
 }
 
 export function duniaUmum(d: StatusDunia): StatusDunia {

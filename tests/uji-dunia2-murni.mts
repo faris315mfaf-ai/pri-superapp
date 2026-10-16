@@ -29,11 +29,15 @@ import {
   frameKeadaan,
   keLayar,
   poseKarakter,
+  petaRupaAnggota,
   poseTidur,
+  rupaAnggota,
   type StatusPerabot,
 } from "@/features/ruang-bot/dunia2-murni";
+import { karakterDariId, type PenghuniDunia } from "@/lib/dunia-murni";
+import { duniaUmum, penghuniUmum } from "@/lib/ruang-umum-murni";
 import { BOT_CONTOH } from "@/features/ruang-bot/data-contoh";
-import { KONFIG_NARA, KULIT, WARNA_ATASAN, konfigDariRupaBot, validasiKonfig, warnaTerdekat } from "@/lib/karakter-murni";
+import { KONFIG_NARA, KULIT, PRESET, WARNA_ATASAN, konfigBawaan, konfigDariRupaBot, samaKonfig, validasiKonfig, warnaTerdekat } from "@/lib/karakter-murni";
 
 let lulus = 0;
 let gagal = 0;
@@ -188,6 +192,33 @@ cek("warnaTerdekat: hasil selalu dari katalog", ["#000000", "#ffffff", "#ff00ff"
     const n = parseInt(h.slice(1), 16);
     return (n & 255) > ((n >> 16) & 255);
   })());
+}
+
+console.log("Rupa anggota (Karakter Saya di status dunia)");
+{
+  const rA = PRESET[0]!.konfig, rB = PRESET[1]!.konfig, rC = PRESET[2]!.konfig;
+  const orang = (id: number, rupa?: typeof rA): PenghuniDunia => ({
+    id, nama: `Orang ${id}`, username: `u${id}`, divisi: "Divisi TV", role: "anggota", avatar_url: "x.png", layar: "tvrku", layar_label: "TVR Saya",
+    karakter: karakterDariId(id), aktivitas: null, ...(rupa ? { rupa } : {}),
+  });
+  const peta = petaRupaAnggota([orang(4, rA), orang(7), orang(9, rB)]);
+  cek("peta: hanya yang punya rupa tersimpan", peta.size === 2 && peta.get(4) === rA && peta.get(9) === rB && !peta.has(7));
+  cek("rupaAnggota: tersimpan, atau bawaan stabil", rupaAnggota(peta, 4) === rA && samaKonfig(rupaAnggota(peta, 7), konfigBawaan(7)));
+  const petaSaya = petaRupaAnggota([orang(4, rA), orang(7)], 4, rC);
+  cek("rupa sendiri yang baru disimpan menimpa status lama", petaSaya.get(4) === rC);
+  cek("rupa sendiri tampil walau status belum membawa rupa", petaRupaAnggota([orang(7)], 7, rC).get(7) === rC);
+  cek("tanpa sayaId: rupaSaya diabaikan", !petaRupaAnggota([orang(7)], undefined, rC).has(7));
+
+  const u = penghuniUmum(orang(4, rA));
+  cek("umum: rupa sah dipertahankan (sama isi)", !!u.rupa && samaKonfig(u.rupa, rA));
+  cek("umum: sanitasi lain tetap (username/divisi/role/avatar kosong)", u.username === "" && u.divisi === "" && u.role === "" && u.avatar_url === "");
+  const palsu = { ...rA, warnaAtasan: "#123457" };
+  cek("umum: rupa di luar katalog dibuang", !("rupa" in penghuniUmum({ ...orang(5), rupa: palsu })));
+  const ekstra = penghuniUmum({ ...orang(6), rupa: { ...rA, bocor: "rahasia" } as unknown as typeof rA });
+  cek("umum: kolom asing di rupa tidak ikut", !!ekstra.rupa && !("bocor" in ekstra.rupa));
+  cek("umum: tanpa rupa → tanpa kunci rupa", !("rupa" in penghuniUmum(orang(8))));
+  const d = duniaUmum({ waktu: 1, jumlah: 2, terpotong: false, online: [orang(4, rA), orang(7)] });
+  cek("duniaUmum meneruskan rupa", samaKonfig(d.online.find((p) => p.id === 4)!.rupa!, rA) && !("rupa" in d.online.find((p) => p.id === 7)!));
 }
 
 console.log(`\nHasil: ${lulus} lulus, ${gagal} gagal`);
