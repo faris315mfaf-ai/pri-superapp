@@ -11,7 +11,7 @@
 // ============================================================
 
 import { RUANG2 } from "./denah2";
-import { LEBAR_LATAR, MODE_DINDING, TINGGI_LATAR, dindingUtuh, keLayar, pikselDindingDalam, type ModeDinding } from "./dunia2-murni";
+import { LEBAR_LATAR, MODE_DINDING, TINGGI_LATAR, diCelahPintu, dindingUtuh, keLayar, pikselDindingDalam, type ModeDinding } from "./dunia2-murni";
 
 type ManifestRuang = {
   ruang: Record<string, { file: string; kanvas: { width: number; height: number }; ukuran: { w: number; d: number }; sudutBelakang: { x: number; y: number } }>;
@@ -67,6 +67,94 @@ function potongKotak(data: ImageData): { img: HTMLCanvasElement; x: number; y: n
   return { img, x: x0, y: y0 };
 }
 
+type NasibPiksel = ReturnType<typeof pikselDindingDalam>;
+type SisiDinding = "kiri" | "kanan";
+
+/**
+ * Inti pemisahan dinding dalam (murni, tanpa DOM — diuji di tests/uji-dunia2-murni.mts).
+ * `d` = RGBA modul lebar×tinggi: alfa piksel dinding dalam dinolkan di tempat; `keluaran[mode]` (RGBA
+ * ukuran sama, awalnya kosong) diisi piksel dinding dalam mode itu. `sb` = sudutBelakang modul.
+ *
+ * Semua yang hanya bergantung pada kolom x (sisi, t sepanjang dinding, dindingUtuh, celah pintu,
+ * garis lantai) dihitung sekali per kolom, dan nasib piksel dihafal per (sisi, celah, mode, tinggi) —
+ * pikselDindingDalam bergantung pada t hanya lewat diCelahPintu. Hanya piksel di atas garis lantai
+ * yang dikunjungi, kerja per piksel O(1) (dulu: tiap piksel memindai 8 ruang + 2× semua pintu →
+ * utas utama terblokir saat gedung dirakit, terasa di ponsel). Hasil identik per byte dengan cara
+ * lama — dijaga uji pembanding di tests/uji-dunia2-murni.mts.
+ */
+export function pisahPikselDinding(
+  d: Uint8ClampedArray,
+  lebar: number,
+  tinggiKanvas: number,
+  sb: { x: number; y: number },
+  ruang: (typeof RUANG2)[number],
+  keluaran: Record<ModeDinding, Uint8ClampedArray>,
+): void {
+  const { x: bx, y: by } = sb;
+  const jepit = (t: number, a: number, b: number) => Math.min(b - 0.01, Math.max(a, t));
+  // Per kolom: garis lantai dinding (NaN = kolom tanpa dinding dalam sisi itu), t, dan celah pintu.
+  // Garis lantai dinding kiri y = by + (bx − x)/2, kanan y = by + (x − bx)/2.
+  const lantaiKiri = new Float64Array(lebar).fill(NaN);
+  const lantaiKanan = new Float64Array(lebar).fill(NaN);
+  const tKiri = new Float64Array(lebar);
+  const tKanan = new Float64Array(lebar);
+  const celahKiri = new Uint8Array(lebar);
+  const celahKanan = new Uint8Array(lebar);
+  for (let x = 0; x < lebar; x++) {
+    if (ruang.potongKiri && x <= bx && x >= bx - ruang.d * 32 - 40) {
+      const t = jepit(ruang.y + (bx - x) / 32, ruang.y, ruang.y + ruang.d);
+      if (!dindingUtuh(ruang, "kiri", t)) {
+        lantaiKiri[x] = by + (bx - x) / 2;
+        tKiri[x] = t;
+        celahKiri[x] = diCelahPintu(ruang, "kiri", t) ? 1 : 0;
+      }
+    }
+    if (ruang.potongKanan && x >= bx && x <= bx + ruang.w * 32 + 40) {
+      const t = jepit(ruang.x + (x - bx) / 32, ruang.x, ruang.x + ruang.w);
+      if (!dindingUtuh(ruang, "kanan", t)) {
+        lantaiKanan[x] = by + (x - bx) / 2;
+        tKanan[x] = t;
+        celahKanan[x] = diCelahPintu(ruang, "kanan", t) ? 1 : 0;
+      }
+    }
+  }
+  // Hafalan nasib per (sisi, celah, mode) → (tinggi → nasib); indeks = sisi·2M + celah·M + mode.
+  const nMode = MODE_DINDING.length;
+  const hafal = Array.from({ length: 4 * nMode }, () => new Map<number, NasibPiksel>());
+  const keluaranMode = MODE_DINDING.map((mode) => keluaran[mode]);
+  /** Baris y0..y1−1 kolom x adalah dinding dalam sisi itu (tiap piksel berdiri sendiri: urutan bebas). */
+  const isiKolom = (x: number, y0: number, y1: number, sisi: SisiDinding, lantai: number, t: number, celah: number) => {
+    const dasar = (sisi === "kiri" ? 0 : 2 * nMode) + celah * nMode;
+    for (let y = y0; y < y1; y++) {
+      const o = (y * lebar + x) * 4;
+      if (!d[o + 3]) continue;
+      const tinggi = lantai - y;
+      for (let i = 0; i < nMode; i++) {
+        const m = hafal[dasar + i]!;
+        let nasib = m.get(tinggi);
+        if (nasib === undefined) m.set(tinggi, (nasib = pikselDindingDalam(ruang, sisi, t, tinggi, MODE_DINDING[i]!)));
+        if (nasib === "buang") continue;
+        const k = keluaranMode[i]!;
+        const warna = nasib === "tutup" ? WARNA_TUTUP : nasib === "garis" ? WARNA_GARIS : null;
+        k[o] = warna ? warna[0] : d[o]!;
+        k[o + 1] = warna ? warna[1] : d[o + 1]!;
+        k[o + 2] = warna ? warna[2] : d[o + 2]!;
+        k[o + 3] = warna ? 255 : d[o + 3]!;
+      }
+      d[o + 3] = 0;
+    }
+  };
+  // Hanya piksel di atas garis lantai yang disentuh (y < lantai ⇔ y < ⌈lantai⌉ untuk y bulat);
+  // sisi kiri didahulukan bila kedua sisi berlaku (sama seperti pemeriksaan per piksel dulu).
+  const jepitBaris = (v: number) => Math.max(0, Math.min(tinggiKanvas, Math.ceil(v)));
+  for (let x = 0; x < lebar; x++) {
+    const lk = lantaiKiri[x]!, ln = lantaiKanan[x]!;
+    const batasKiri = Number.isNaN(lk) ? 0 : jepitBaris(lk);
+    if (batasKiri > 0) isiKolom(x, 0, batasKiri, "kiri", lk, tKiri[x]!, celahKiri[x]!);
+    if (!Number.isNaN(ln)) isiKolom(x, batasKiri, jepitBaris(ln), "kanan", ln, tKanan[x]!, celahKanan[x]!);
+  }
+}
+
 /**
  * Modul ruang dipisah: `latar` = modul tanpa dinding dalam; `dinding[mode]` = hanya dinding dalam
  * (mode rendah: dipotong & bertutup kayu; penuh: utuh) dengan celah pintu.
@@ -83,45 +171,22 @@ function pisahDinding(img: HTMLImageElement, m: ManifestRuang["ruang"][string], 
     return { latar: c, dinding };
   }
   const data = ctx.getImageData(0, 0, c.width, c.height);
-  const d = data.data;
   const keluaran = Object.fromEntries(MODE_DINDING.map((mode) => [mode, new ImageData(c.width, c.height)])) as Record<ModeDinding, ImageData>;
-  const { x: bx, y: by } = m.sudutBelakang;
-  const jepit = (t: number, a: number, b: number) => Math.min(b - 0.01, Math.max(a, t));
-  for (let y = 0; y < c.height; y++) {
-    for (let x = 0; x < c.width; x++) {
-      const o = (y * c.width + x) * 4;
-      if (!d[o + 3]) continue;
-      // Sisi dinding & posisi t sepanjang dinding; garis lantai dinding kiri y = by + (bx − x)/2, kanan y = by + (x − bx)/2.
-      let sisi: "kiri" | "kanan" | null = null;
-      let t = 0;
-      let lantai = 0;
-      if (ruang.potongKiri && x <= bx && y < by + (bx - x) / 2 && x >= bx - ruang.d * 32 - 40) {
-        t = jepit(ruang.y + (bx - x) / 32, ruang.y, ruang.y + ruang.d);
-        if (!dindingUtuh(ruang, "kiri", t)) { sisi = "kiri"; lantai = by + (bx - x) / 2; }
-      }
-      if (!sisi && ruang.potongKanan && x >= bx && y < by + (x - bx) / 2 && x <= bx + ruang.w * 32 + 40) {
-        t = jepit(ruang.x + (x - bx) / 32, ruang.x, ruang.x + ruang.w);
-        if (!dindingUtuh(ruang, "kanan", t)) { sisi = "kanan"; lantai = by + (x - bx) / 2; }
-      }
-      if (!sisi) continue;
-      const tinggi = lantai - y;
-      for (const mode of MODE_DINDING) {
-        const nasib = pikselDindingDalam(ruang, sisi, t, tinggi, mode);
-        if (nasib === "buang") continue;
-        const k = keluaran[mode].data;
-        const warna = nasib === "tutup" ? WARNA_TUTUP : nasib === "garis" ? WARNA_GARIS : null;
-        k[o] = warna ? warna[0] : d[o]!;
-        k[o + 1] = warna ? warna[1] : d[o + 1]!;
-        k[o + 2] = warna ? warna[2] : d[o + 2]!;
-        k[o + 3] = warna ? 255 : d[o + 3]!;
-      }
-      d[o + 3] = 0;
-    }
-  }
+  pisahPikselDinding(
+    data.data,
+    c.width,
+    c.height,
+    m.sudutBelakang,
+    ruang,
+    Object.fromEntries(MODE_DINDING.map((mode) => [mode, keluaran[mode].data])) as Record<ModeDinding, Uint8ClampedArray>,
+  );
   ctx.putImageData(data, 0, 0);
   for (const mode of MODE_DINDING) dinding[mode] = potongKotak(keluaran[mode]);
   return { latar: c, dinding };
 }
+
+/** Beri giliran ke utas utama di antara modul (masukan & animasi "Memuat gedung…" tetap jalan). */
+const giliran = () => new Promise<void>((ok) => setTimeout(ok, 0));
 
 async function rakit(): Promise<AsetDunia2> {
   const [mr, mp] = await Promise.all([json<ManifestRuang>("/ruang/v1/manifest.json"), json<ManifestPerabot>("/perabot/v1/manifest.json")]);
@@ -133,7 +198,10 @@ async function rakit(): Promise<AsetDunia2> {
   const urut = [...RUANG2].sort((a, b) => a.x + a.y - (b.x + b.y));
   const gambarRuang = await Promise.all(urut.map((r) => muatGambar(`/ruang/v1/${mr.ruang[r.modul]!.file}`)));
   const dinding: Record<ModeDinding, DindingDalam[]> = { rendah: [], penuh: [] };
-  urut.forEach((r, i) => {
+  for (let i = 0; i < urut.length; i++) {
+    // Satu modul per giliran: urutan gambar (belakang → depan) tetap sama.
+    if (i > 0) await giliran();
+    const r = urut[i]!;
     const m = mr.ruang[r.modul]!;
     const modul = pisahDinding(gambarRuang[i]!, m, r);
     const s = keLayar(r.x, r.y);
@@ -143,7 +211,7 @@ async function rakit(): Promise<AsetDunia2> {
       const w = modul.dinding[mode];
       if (w) dinding[mode].push({ kunci: r.kunci, img: w.img, x: ox + w.x, y: oy + w.y });
     }
-  });
+  }
   const perabot = new Map<string, SpritePerabot>();
   await Promise.all(
     Object.entries(mp.benda).map(async ([id, b]) => {

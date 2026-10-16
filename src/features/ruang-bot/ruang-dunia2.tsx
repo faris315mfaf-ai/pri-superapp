@@ -109,6 +109,15 @@ export type RuangDunia2Props = {
   className?: string;
 };
 
+type ElTag = { tag: HTMLDivElement | null; gel: HTMLDivElement | null; teks: HTMLSpanElement | null };
+
+/** Simpan satu elemen tag (callback ref); entri dibuang bila ketiga elemennya sudah dilepas (unmount). */
+function simpanTag<K>(m: Map<K, ElTag>, id: K, bagian: keyof ElTag, el: HTMLElement | null) {
+  const isi = { ...(m.get(id) ?? { tag: null, gel: null, teks: null }), [bagian]: el } as ElTag;
+  if (isi.tag || isi.gel || isi.teks) m.set(id, isi);
+  else m.delete(id);
+}
+
 type Kena = { jenis: "nara" } | { jenis: "anggota"; id: number } | { jenis: "bot"; id: string };
 type Ikuti = { jenis: "anggota"; id: number; sampai: number } | { jenis: "bot"; id: string; sampai: number };
 
@@ -171,18 +180,29 @@ export function RuangDunia2({
   const posisiRef = useRef<Map<string, PosisiLayar2>>(new Map());
   const posisiPenghuniRef = useRef<Map<number, PosisiLayar2>>(new Map());
 
-  const tagRef = useRef<Map<string, { tag: HTMLDivElement | null; gel: HTMLDivElement | null; teks: HTMLSpanElement | null }>>(new Map());
-  const tagPenghuniRef = useRef<Map<number, { tag: HTMLDivElement | null; gel: HTMLDivElement | null; teks: HTMLSpanElement | null }>>(new Map());
+  const tagRef = useRef<Map<string, ElTag>>(new Map());
+  const tagPenghuniRef = useRef<Map<number, ElTag>>(new Map());
   const zonaRef = useRef<(HTMLElement | null)[]>([]);
+
+  // Orang yang sudah lepas dari daftar server tetap ada di simulasi selama tenggang presence lalu
+  // berjalan ke pintu: tag namanya dipertahankan (data terakhir) sampai simulasi membuangnya.
+  // Disesuaikan saat render (bukan efek) supaya tag tidak sempat lepas-pasang satu frame.
+  const [daftarLalu, setDaftarLalu] = useState(daftarPenghuni);
+  const [pergi, setPergi] = useState<readonly PenghuniDunia[]>([]);
+  if (daftarLalu !== daftarPenghuni) {
+    setDaftarLalu(daftarPenghuni);
+    const kini = new Set(daftarPenghuni.map((p) => p.id));
+    setPergi([...pergi, ...daftarLalu].filter((p) => !kini.has(p.id)));
+  }
 
   const konfigBot = useMemo(() => new Map(bots.map((b) => [b.id, konfigDariRupaBot(b.rupa)])), [bots]);
   const petaRupa = useMemo(() => petaRupaAnggota(daftarPenghuni, sayaId, rupaSaya), [daftarPenghuni, sayaId, rupaSaya]);
   const konfigAnggota = useMemo(() => konfigPenghuni ?? ((p: Penghuni) => rupaAnggota(petaRupa, p.id)), [konfigPenghuni, petaRupa]);
-  const terbaru = useRef({ malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota, modeDinding });
+  const terbaru = useRef({ malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota, modeDinding, pergi });
   useEffect(() => {
-    terbaru.current = { malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota, modeDinding };
+    terbaru.current = { malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota, modeDinding, pergi };
     kotorRef.current = true;
-  }, [malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota, modeDinding]);
+  }, [malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota, modeDinding, pergi]);
 
   useEffect(() => {
     gerakRef.current = gerakDikurangi;
@@ -446,6 +466,9 @@ export function RuangDunia2({
       terakhir = now;
       sim.maju(dt * terbaru.current.kecepatan, dt);
       penghuni.maju(dt);
+      // Yang sudah keluar pintu (dibuang simulasi) → tag "pergi"-nya dilepas.
+      const ada = (p: PenghuniDunia) => penghuni.penghuni.some((q) => q.id === p.id);
+      if (!terbaru.current.pergi.every(ada)) setPergi((lama) => (lama.every(ada) ? lama : lama.filter(ada)));
       if (!terlihatRef.current || ukuranRef.current.w <= 0) return;
       const tujuan = tujuanRef.current;
       if (tujuan) {
@@ -620,15 +643,15 @@ export function RuangDunia2({
         {[...bots.map((b) => ({ id: b.id, nama: b.nama, warna: b.warna })), { id: ID_NARA2, nama: sim.nara.nama, warna: WARNA_NARA }].map((b) => (
           <div
             key={b.id}
-            ref={(el) => { const m = tagRef.current; m.set(b.id, { ...(m.get(b.id) ?? { gel: null, teks: null }), tag: el }); }}
+            ref={(el) => simpanTag(tagRef.current, b.id, "tag", el)}
             className="absolute left-0 top-0 flex flex-col items-center gap-[3px]"
             style={{ visibility: "hidden", "--c": b.warna } as CSSProperties}
           >
             <div
-              ref={(el) => { const m = tagRef.current; m.set(b.id, { ...(m.get(b.id) ?? { tag: null, teks: null }), gel: el }); }}
+              ref={(el) => simpanTag(tagRef.current, b.id, "gel", el)}
               className="relative hidden rounded-md border-2 border-[var(--c)] bg-[#f6f0e2] px-[7px] py-[3px] font-mono font-bold leading-tight text-[#2a2118] shadow-[0_2px_0_rgba(0,0,0,.35)] after:absolute after:-bottom-[6px] after:left-1/2 after:-ml-1 after:border-4 after:border-transparent after:border-t-[var(--c)] after:content-['']"
             >
-              <span ref={(el) => { const m = tagRef.current; m.set(b.id, { ...(m.get(b.id) ?? { tag: null, gel: null }), teks: el }); }} className="block max-w-[170px] truncate whitespace-nowrap sm:max-w-[260px]" />
+              <span ref={(el) => simpanTag(tagRef.current, b.id, "teks", el)} className="block max-w-[170px] truncate whitespace-nowrap sm:max-w-[260px]" />
             </div>
             <div className={cn("inline-flex items-center gap-1 rounded-full border bg-[rgba(14,11,20,.85)] py-px pl-[5px] pr-[7px] text-[10.5px] font-bold text-[#f4efe8]", terpilihId === b.id ? "border-[#fde68a]" : "border-white/10")}>
               <i className="inline-block h-[7px] w-[7px] rounded-full bg-[var(--c)]" />
@@ -636,18 +659,18 @@ export function RuangDunia2({
             </div>
           </div>
         ))}
-        {daftarPenghuni.map((p) => (
+        {[...daftarPenghuni, ...pergi].map((p) => (
           <div
             key={p.id}
-            ref={(el) => { const m = tagPenghuniRef.current; m.set(p.id, { ...(m.get(p.id) ?? { gel: null, teks: null }), tag: el }); }}
+            ref={(el) => simpanTag(tagPenghuniRef.current, p.id, "tag", el)}
             className="absolute left-0 top-0 flex flex-col items-center gap-[2px]"
             style={{ visibility: "hidden", "--c": "#94a3b8" } as CSSProperties}
           >
             <div
-              ref={(el) => { const m = tagPenghuniRef.current; m.set(p.id, { ...(m.get(p.id) ?? { tag: null, teks: null }), gel: el }); }}
+              ref={(el) => simpanTag(tagPenghuniRef.current, p.id, "gel", el)}
               className="relative hidden rounded-md border-2 border-[var(--c)] bg-[#f6f0e2] px-[6px] py-[2px] font-mono font-bold leading-tight text-[#2a2118] shadow-[0_2px_0_rgba(0,0,0,.35)] after:absolute after:-bottom-[6px] after:left-1/2 after:-ml-1 after:border-4 after:border-transparent after:border-t-[var(--c)] after:content-['']"
             >
-              <span ref={(el) => { const m = tagPenghuniRef.current; m.set(p.id, { ...(m.get(p.id) ?? { tag: null, gel: null }), teks: el }); }} className="block max-w-[170px] truncate whitespace-nowrap sm:max-w-[300px]" />
+              <span ref={(el) => simpanTag(tagPenghuniRef.current, p.id, "teks", el)} className="block max-w-[170px] truncate whitespace-nowrap sm:max-w-[300px]" />
             </div>
             <div className={cn("inline-flex items-center gap-1 rounded-full border bg-[rgba(14,11,20,.85)] py-px pl-[4px] pr-[6px] text-[9.5px] font-bold text-[#f4efe8]", terpilihPenghuniId === p.id ? "border-[#fde68a]" : sayaId === p.id ? "border-[#f87171]" : "border-white/10")}>
               <span className="max-w-[110px] truncate">{p.nama.split(" ")[0] || p.username}</span>

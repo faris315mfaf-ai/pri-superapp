@@ -50,8 +50,11 @@ import {
   zoomDiJangkar,
   ZOOM_MAKS2,
   rupaAnggota,
+  MODE_DINDING,
+  type ModeDinding,
   type StatusPerabot,
 } from "@/features/ruang-bot/dunia2-murni";
+import { pisahPikselDinding } from "@/features/ruang-bot/dunia2-aset";
 import { karakterDariId, type PenghuniDunia } from "@/lib/dunia-murni";
 import { duniaUmum, penghuniUmum } from "@/lib/ruang-umum-murni";
 import { BOT_CONTOH } from "@/features/ruang-bot/data-contoh";
@@ -299,6 +302,78 @@ console.log("Dinding dalam & lapisan ruang");
   cek("lapisDi: titik di ruang → indeks ruangnya; halaman kosong → −1; di luar dijepit", lapisDi(5, 5) === URUT_RUANG2.indexOf(r("kerja")) && lapisDi(15, 1) === -1 && lapisDi(-3, 15) === URUT_RUANG2.indexOf(r("istirahat")));
   cek("kunciLapis: lapisan menang atas kedalaman", kunciLapis(1, -900) > kunciLapis(0, 60) && kunciLapis(2, -1) < kunciLapis(2, 0.5));
   cek("semua perabot di dalam ruang (punya lapisan)", PERABOT2.every((p) => lapisDi(p.x + p.tapak[0] / 2, p.y + p.tapak[1] / 2) >= 0));
+}
+
+console.log("Pemisahan dinding dalam (dunia2-aset): hasil cepat = rujukan per piksel");
+{
+  // Rujukan = loop lama (dindingUtuh + pikselDindingDalam per piksel), disalin apa adanya.
+  const TUTUP = [0x8a, 0x5a, 0x3a], GARIS = [0x2a, 0x20, 0x28];
+  const rujukan = (d: Uint8ClampedArray, w: number, h: number, sb: { x: number; y: number }, ruang: (typeof RUANG2)[number], kel: Record<ModeDinding, Uint8ClampedArray>) => {
+    const { x: bx, y: by } = sb;
+    const jepit = (t: number, a: number, b: number) => Math.min(b - 0.01, Math.max(a, t));
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const o = (y * w + x) * 4;
+        if (!d[o + 3]) continue;
+        let sisi: "kiri" | "kanan" | null = null;
+        let t = 0;
+        let lantai = 0;
+        if (ruang.potongKiri && x <= bx && y < by + (bx - x) / 2 && x >= bx - ruang.d * 32 - 40) {
+          t = jepit(ruang.y + (bx - x) / 32, ruang.y, ruang.y + ruang.d);
+          if (!dindingUtuh(ruang, "kiri", t)) { sisi = "kiri"; lantai = by + (bx - x) / 2; }
+        }
+        if (!sisi && ruang.potongKanan && x >= bx && y < by + (x - bx) / 2 && x <= bx + ruang.w * 32 + 40) {
+          t = jepit(ruang.x + (x - bx) / 32, ruang.x, ruang.x + ruang.w);
+          if (!dindingUtuh(ruang, "kanan", t)) { sisi = "kanan"; lantai = by + (x - bx) / 2; }
+        }
+        if (!sisi) continue;
+        const tinggi = lantai - y;
+        for (const mode of MODE_DINDING) {
+          const nasib = pikselDindingDalam(ruang, sisi, t, tinggi, mode);
+          if (nasib === "buang") continue;
+          const k = kel[mode];
+          const warna = nasib === "tutup" ? TUTUP : nasib === "garis" ? GARIS : null;
+          k[o] = warna ? warna[0]! : d[o]!;
+          k[o + 1] = warna ? warna[1]! : d[o + 1]!;
+          k[o + 2] = warna ? warna[2]! : d[o + 2]!;
+          k[o + 3] = warna ? 255 : d[o + 3]!;
+        }
+        d[o + 3] = 0;
+      }
+    }
+  };
+  // Piksel sintetis acak (deterministik), ±10% transparan; geometri modul asli dari manifest.
+  let benih = 12345;
+  const acak = () => ((benih = (Math.imul(benih, 1103515245) + 12345) >>> 0) >>> 16) & 255;
+  const sama = (a: Uint8ClampedArray, b: Uint8ClampedArray) => a.length === b.length && a.every((v, i) => v === b[i]);
+  let semuaSama = true;
+  let adaDinding = 0;
+  let tRujukan = 0, tCepat = 0;
+  for (const r of RUANG2.filter((x) => x.potongKiri || x.potongKanan)) {
+    const m = mRuang.ruang[r.modul];
+    const { width: w, height: h } = m.kanvas;
+    const asli = new Uint8ClampedArray(w * h * 4);
+    for (let i = 0; i < asli.length; i += 4) {
+      asli[i] = acak(); asli[i + 1] = acak(); asli[i + 2] = acak();
+      asli[i + 3] = acak() < 26 ? 0 : 1 + (acak() % 255);
+    }
+    const kosong = () => Object.fromEntries(MODE_DINDING.map((mode) => [mode, new Uint8ClampedArray(w * h * 4)])) as Record<ModeDinding, Uint8ClampedArray>;
+    const dA = asli.slice(), kA = kosong();
+    const dB = asli.slice(), kB = kosong();
+    let t0 = performance.now();
+    rujukan(dA, w, h, m.sudutBelakang, r, kA);
+    tRujukan += performance.now() - t0;
+    t0 = performance.now();
+    pisahPikselDinding(dB, w, h, m.sudutBelakang, r, kB);
+    tCepat += performance.now() - t0;
+    const ok = sama(dA, dB) && MODE_DINDING.every((mode) => sama(kA[mode], kB[mode]));
+    if (!ok) console.log("    beda di modul", r.kunci);
+    semuaSama &&= ok;
+    adaDinding += kA.rendah.some((v, i) => i % 4 === 3 && v > 0) ? 1 : 0;
+  }
+  cek("latar & dinding (rendah/penuh) identik per byte dengan rujukan, semua modul berdinding dalam", semuaSama);
+  cek("uji benar-benar menyentuh piksel dinding (tiap modul punya dinding rendah)", adaDinding === RUANG2.filter((x) => x.potongKiri || x.potongKanan).length, adaDinding);
+  console.log(`    waktu: rujukan ${tRujukan.toFixed(0)} ms, cepat ${tCepat.toFixed(0)} ms`);
 }
 
 console.log(`\nHasil: ${lulus} lulus, ${gagal} gagal`);
