@@ -12,23 +12,8 @@
 // MENAMPILKAN lewat setKeadaan / antar / setCatatan.
 // ============================================================
 
-import {
-  JALAN_KELUAR_RAPAT_NARA,
-  JALAN_KERJA_KE_KOORDINATOR,
-  JALAN_KOORDINATOR_KE_KERJA,
-  JALAN_MASUK_RAPAT_NARA,
-  JALAN_MEJA_KE_PAPAN,
-  JALAN_PAPAN_KE_KERJA,
-  JALAN_PAPAN_KE_MEJA,
-  JALAN_PULANG_KE_MEJA,
-  MEJA_KOORDINATOR,
-  PINTU_KERJA_MEETING,
-  TITIK_TENGAH,
-  ikutiJalur,
-  zonaDari,
-  type Badan,
-  type Titik,
-} from "./denah";
+import { ikutiJalur, type Badan, type Titik } from "./denah";
+import { DENAH_SIM_V1, type DenahNara } from "./denah-sim";
 import type { RupaBot } from "./tipe";
 
 export const NAMA_NARA_BAWAAN = "Nara";
@@ -60,6 +45,8 @@ export type OpsiNara = {
   gerakKurang: () => boolean;
   /** Catatan untuk umpan aktivitas (opsional). */
   catat?: (teks: string) => void;
+  /** Tata letak (bawaan: denah lama). */
+  denah?: DenahNara;
 };
 
 const KECEPATAN = 2.6;
@@ -73,11 +60,9 @@ export const TEKS_TANPA_KUNCI = "Belum punya API key — belum bisa berpikir";
 
 export type Kertas = { t0: number; dur: number; x0: number; y0: number; x1: number; y1: number };
 
-const jepit = (n: number, a: number, b: number) => Math.min(b, Math.max(a, n));
-
 export class SimulasiNara implements Badan {
-  x: number = MEJA_KOORDINATOR.kursi[0];
-  y: number = MEJA_KOORDINATOR.kursi[1];
+  x: number;
+  y: number;
   arah: 1 | -1 = 1;
   belakang = false;
   keadaan: KeadaanNara = "meja";
@@ -102,7 +87,13 @@ export class SimulasiNara implements Badan {
   private menganggur = 0;
   private urutPikir = 0;
 
-  constructor(private readonly opsi: OpsiNara) {}
+  private readonly d: DenahNara;
+
+  constructor(private readonly opsi: OpsiNara) {
+    this.d = opsi.denah ?? DENAH_SIM_V1.nara;
+    this.x = this.d.kursiMeja[0];
+    this.y = this.d.kursiMeja[1];
+  }
 
   // ---------- baca ----------
 
@@ -199,12 +190,12 @@ export class SimulasiNara implements Badan {
     if (this.antrean.length > 0) {
       this.sedang = this.antrean.shift() ?? null;
       this.bicara("Menempel tugas di papan", 4);
-      this.jalan([...JALAN_MEJA_KE_PAPAN], "papan");
+      this.jalan(this.d.mejaKePapan(), "papan");
       return;
     }
     if (this.opsi.rapat()) {
       this.bicara("Menuju ruang meeting", 3);
-      this.jalan([...JALAN_KOORDINATOR_KE_KERJA, TITIK_TENGAH, ...JALAN_MASUK_RAPAT_NARA], "rapat");
+      this.jalan(this.d.mejaKeRapat(), "rapat");
       return;
     }
     if (this.menganggur > JEDA_PIKIR && this.punyaOtak) {
@@ -235,8 +226,8 @@ export class SimulasiNara implements Badan {
         this.keadaan = "meja";
         this.menganggur = 0;
         this.belakang = false;
-        this.x = MEJA_KOORDINATOR.kursi[0];
-        this.y = MEJA_KOORDINATOR.kursi[1];
+        this.x = this.d.kursiMeja[0];
+        this.y = this.d.kursiMeja[1];
     }
   }
 
@@ -244,22 +235,18 @@ export class SimulasiNara implements Badan {
   private selesaiTempel(): void {
     const t = this.sedang;
     if (!t) {
-      this.pulang(JALAN_PAPAN_KE_MEJA);
+      this.pulang(this.d.papanKeMeja());
       return;
     }
     this.tertunda.delete(t.id);
     const bot = this.opsi.posisiBot(t.botId);
     if (!bot) {
       this.sedang = null;
-      this.pulang(JALAN_PAPAN_KE_MEJA);
+      this.pulang(this.d.papanKeMeja());
       return;
     }
     this.bicara("Mengantar surat tugas", 4);
-    const menuju: Titik[] =
-      zonaDari(bot.x, bot.y) === "kerja"
-        ? [[jepit(bot.x + 0.6, 0.5, 9.4), jepit(bot.y + 0.7, 0.5, 9.4)]]
-        : [...PINTU_KERJA_MEETING]; // bot di ruang lain: serahkan dari pintu
-    this.jalan([...JALAN_PAPAN_KE_KERJA, TITIK_TENGAH, ...menuju], "serah");
+    this.jalan(this.d.papanKeBot(bot), "serah");
   }
 
   private mulaiSerah(): void {
@@ -288,9 +275,7 @@ export class SimulasiNara implements Badan {
       this.sedang = null;
       this.sudahSerah = false;
       this.bicara("Kembali ke meja", 3);
-      // Dari ruang kerja atau dari pintu ruang meeting: sama-sama lewat titik tengah.
-      const dariPintu = this.x > 10;
-      this.jalan([...(dariPintu ? [PINTU_KERJA_MEETING[0]] : []), TITIK_TENGAH, ...JALAN_PULANG_KE_MEJA], "meja");
+      this.jalan(this.d.serahKeMeja([this.x, this.y]), "meja");
     }
   }
 
@@ -299,13 +284,13 @@ export class SimulasiNara implements Badan {
       // Surat tugas tidak menunggu rapat selesai.
       this.sedang = this.antrean.shift() ?? null;
       this.bicara("Menempel tugas di papan", 4);
-      this.jalan([...JALAN_KELUAR_RAPAT_NARA, TITIK_TENGAH, ...JALAN_KERJA_KE_KOORDINATOR, ...JALAN_MEJA_KE_PAPAN.slice(1)], "papan");
+      this.jalan(this.d.rapatKePapan(), "papan");
       return;
     }
     if (!this.opsi.rapat()) {
       this.bicara("Rapat selesai", 3);
       this.belakang = false;
-      this.jalan([...JALAN_KELUAR_RAPAT_NARA, TITIK_TENGAH, ...JALAN_PULANG_KE_MEJA], "meja");
+      this.jalan(this.d.rapatKeMeja(), "meja");
     }
   }
 

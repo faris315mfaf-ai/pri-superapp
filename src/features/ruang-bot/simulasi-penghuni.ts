@@ -13,20 +13,8 @@
 // ============================================================
 
 import { aktivitasMasihHidup, type AktivitasDunia, type JenisAnimasi, type PenghuniDunia } from "@/lib/dunia-murni";
-import {
-  PINTU_MASUK,
-  PINTU_SAYAP,
-  SLOT_AULA,
-  STASIUN_PENGHUNI,
-  ikutiJalur,
-  zonaDari,
-  jalanKeluarPenghuni,
-  jalanMasukPenghuni,
-  type Badan,
-  type JenisStasiunPenghuni,
-  type StasiunPenghuni,
-  type Titik,
-} from "./denah";
+import { ikutiJalur, type Badan, type JenisStasiunPenghuni, type Titik } from "./denah";
+import { DENAH_SIM_V1, type DenahPenghuni, type StasiunSim } from "./denah-sim";
 import { rupaKarakter, warnaKarakter } from "./karakter-pengguna";
 import type { RupaBot } from "./tipe";
 
@@ -51,7 +39,7 @@ export type Penghuni = Badan & {
   warna: string;
   keadaan: KeadaanPenghuni;
   /** Stasiun yang dituju / ditempati; null = di aula. */
-  stasiun: StasiunPenghuni | null;
+  stasiun: StasiunSim | null;
   slot: number;
   /** 0..1 */
   alfa: number;
@@ -71,9 +59,11 @@ export type OpsiPenghuni = {
   /** Jam server saat ini (ms epoch). Bawaan: Date.now() + selisih dari setDaftar. */
   sekarangMs?: () => number;
   gerakKurang?: () => boolean;
+  /** Tata letak (bawaan: denah lama). */
+  denah?: DenahPenghuni;
 };
 
-const kunciStasiun = (s: StasiunPenghuni) => `${s.jenis}:${s.idx}`;
+const kunciStasiun = (s: StasiunSim) => `${s.jenis}:${s.idx}`;
 
 /** Teks gelembung dari satu aktivitas. */
 export function teksAktivitas(a: AktivitasDunia): string {
@@ -95,6 +85,7 @@ export class SimulasiPenghuni {
 
   private readonly dalam: Dalam[] = [];
   private readonly opsi: OpsiPenghuni;
+  private readonly d: DenahPenghuni;
   private waktu = 0;
   private selisihServer = 0;
   private readonly milikStasiun = new Map<string, number>();
@@ -104,6 +95,7 @@ export class SimulasiPenghuni {
 
   constructor(opsi: OpsiPenghuni = {}) {
     this.opsi = opsi;
+    this.d = opsi.denah ?? DENAH_SIM_V1.penghuni;
   }
 
   // ---------- baca ----------
@@ -212,7 +204,7 @@ export class SimulasiPenghuni {
   }
 
   private cariSlot(id: number): number {
-    const n = SLOT_AULA.length;
+    const n = this.d.slotAula.length;
     const awal = (Math.abs(id) * 7919) % n;
     for (let i = 0; i < n; i++) {
       const k = (awal + i) % n;
@@ -227,8 +219,8 @@ export class SimulasiPenghuni {
       data: d,
       rupa: rupaKarakter(d.karakter),
       warna: warnaKarakter(d.karakter),
-      x: PINTU_MASUK[0],
-      y: PINTU_MASUK[1],
+      x: this.d.pintuMasuk[0],
+      y: this.d.pintuMasuk[1],
       arah: -1 as 1 | -1,
       belakang: false,
       keadaan: "masuk" as KeadaanPenghuni,
@@ -237,7 +229,7 @@ export class SimulasiPenghuni {
       alfa: 0,
       teks: "",
       mulaiKerja: 0,
-      jalur: [SLOT_AULA[slot]],
+      jalur: this.d.jalanKeSlot(this.d.pintuMasuk, this.d.slotAula[slot]!),
       hilangSejak: null,
       tujuanSlot: true,
     } satisfies Dalam;
@@ -267,14 +259,7 @@ export class SimulasiPenghuni {
   private panggilKembali(p: Dalam): void {
     p.keadaan = "jalan";
     p.tujuanSlot = true;
-    p.jalur = [...this.keAula(p), SLOT_AULA[p.slot]];
-  }
-
-  /** Titik yang harus dilalui supaya orang yang sedang di dalam sebuah ruang kembali ke aula lewat pintunya. */
-  private keAula(p: Dalam): Titik[] {
-    const z = zonaDari(p.x, p.y);
-    const pintu = z === "database" ? PINTU_SAYAP.database : z === "alat" ? PINTU_SAYAP.alat : z === "pos" ? PINTU_SAYAP.pos : null;
-    return pintu === null ? [] : [[pintu, 6.9], [pintu, 5.0]];
+    p.jalur = this.d.jalanKeSlot([p.x, p.y], this.d.slotAula[p.slot]!);
   }
 
   /** Aktivitas yang sedang hidup menurut jam server, atau null. */
@@ -283,11 +268,11 @@ export class SimulasiPenghuni {
     return a && aktivitasMasihHidup(a, this.sekarangMs()) ? a : null;
   }
 
-  private ambilStasiun(jenis: JenisStasiunPenghuni, id: number): StasiunPenghuni | null {
-    const daftar = STASIUN_PENGHUNI[jenis];
+  private ambilStasiun(jenis: JenisStasiunPenghuni, id: number): StasiunSim | null {
+    const daftar = this.d.stasiun[jenis];
     const awal = Math.abs(id) % daftar.length;
     for (let i = 0; i < daftar.length; i++) {
-      const s = daftar[(awal + i) % daftar.length];
+      const s = daftar[(awal + i) % daftar.length]!;
       if (!this.milikStasiun.has(kunciStasiun(s))) return s;
     }
     return null;
@@ -323,7 +308,7 @@ export class SimulasiPenghuni {
       case "keluar": {
         const selesai = ikutiJalur(p, p.jalur, this.jarak(p, dt));
         // Pudar hanya di ujung perjalanan (dekat pintu) supaya tidak menghilang di tengah aula.
-        const dekat = Math.hypot(p.x - PINTU_MASUK[0], p.y - PINTU_MASUK[1]);
+        const dekat = Math.hypot(p.x - this.d.pintuMasuk[0], p.y - this.d.pintuMasuk[1]);
         p.alfa = Math.max(0, Math.min(p.alfa, dekat / 1.8));
         if (selesai || p.alfa <= 0) this.hapus(p);
         break;
@@ -348,10 +333,8 @@ export class SimulasiPenghuni {
   }
 
   private mulaiKeluar(p: Dalam): void {
-    const jalur: Titik[] = [...this.keAula(p)];
+    p.jalur = this.d.jalanKePintu([p.x, p.y]);
     this.lepasStasiun(p);
-    jalur.push(PINTU_MASUK);
-    p.jalur = jalur;
     p.keadaan = "keluar";
     p.teks = "";
   }
@@ -372,7 +355,7 @@ export class SimulasiPenghuni {
     this.milikStasiun.set(kunciStasiun(s), p.id);
     p.stasiun = s;
     p.tujuanSlot = false;
-    p.jalur = jalanMasukPenghuni(s);
+    p.jalur = this.d.jalanKeStasiun([p.x, p.y], s);
     p.keadaan = "jalan";
     p.teks = teksAktivitas(a);
   }
@@ -389,7 +372,7 @@ export class SimulasiPenghuni {
       p.teks = teksAktivitas(a);
       return;
     }
-    p.jalur = [...jalanKeluarPenghuni(s), SLOT_AULA[p.slot]];
+    p.jalur = this.d.jalanKeSlot([p.x, p.y], this.d.slotAula[p.slot]!);
     this.lepasStasiun(p);
     p.tujuanSlot = true;
     p.keadaan = "jalan";

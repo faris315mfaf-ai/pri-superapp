@@ -4,8 +4,9 @@
 // Diporting dari mockup docs/mockups/pri-ruang-bot.html: satu gedung empat
 // ruang (kerja, meeting, koordinator, kamar tidur), jalur jalan lewat pintu
 // sekat kaca, mesin status bot (jalan / kerja / antre), kuota harian, jeda
-// darurat, dan jam simulasi. Tata letak ada di denah.ts; koordinator (Nara)
-// di simulasi-nara.ts. Koordinat memakai GRID isometrik (0..16).
+// darurat, dan jam simulasi. Tata letak disuntikkan lewat opsi `denah` (denah-sim.ts:
+// bawaan DENAH_SIM_V1 = denah lama, DENAH_SIM_V2 = gedung v2 dengan A*); koordinator
+// (Nara) di simulasi-nara.ts. Koordinat memakai GRID isometrik (pecahan).
 //
 // DUA MODE:
 //  • contoh (bawaan) — tiap bot bergantian Pencarian -> Edit -> Posting ->
@@ -23,17 +24,8 @@
 // ============================================================
 
 import { JUDUL_CONTOH, URUTAN_TAHAP } from "./data-contoh";
-import {
-  KAPASITAS,
-  STASIUN,
-  TEMPAT_ANTRE,
-  TITIK_TENGAH,
-  ikutiJalur,
-  jalanKeluar,
-  jalanMasuk,
-  titikKursi,
-  type Titik,
-} from "./denah";
+import { ikutiJalur, type Titik } from "./denah";
+import { DENAH_SIM_V1, type DenahBot, type DenahSim } from "./denah-sim";
 import { SimulasiNara } from "./simulasi-nara";
 import type { BotContoh, LogItem, ModeBot, StatusHidup, TahapBot, TempatBot } from "./tipe";
 
@@ -128,6 +120,8 @@ export type OpsiSimulasi = {
   diam?: boolean;
   /** Sasaran awal (mode nyata) supaya bot langsung duduk di tempatnya saat layar dibuka. */
   sasaranAwal?: Record<string, Sasaran>;
+  /** Tata letak dunia (bawaan: denah lama). Dunia v2: DENAH_SIM_V2 dari denah2-sim.ts. */
+  denah?: DenahSim;
 };
 
 /** Detik sejak tengah malam menurut WIB (UTC+7) — jam nyata, bukan jam simulasi. */
@@ -158,6 +152,7 @@ export class SimulasiBot {
 
   private readonly dalam: BotSim[];
   private readonly acak: () => number;
+  private readonly denah: DenahBot;
   private readonly diam: boolean;
   private ambilModeFn: (botId: string) => ModeBot;
   /** Penghuni tiap kursi/kasur: id bot atau null. */
@@ -174,6 +169,7 @@ export class SimulasiBot {
 
   constructor(bots: BotContoh[], opsi: OpsiSimulasi) {
     this.acak = opsi.acak ?? Math.random;
+    this.denah = (opsi.denah ?? DENAH_SIM_V1).bot;
     this.diam = !!opsi.diam;
     this.maks = Math.max(0, Math.floor(opsi.maksKuota));
     this.onLog = opsi.onLog;
@@ -182,12 +178,12 @@ export class SimulasiBot {
     const daftarMode = new Map(bots.map((b) => [b.id, b.mode] as const));
     this.ambilModeFn = opsi.ambilMode ?? ((id) => daftarMode.get(id) ?? "acc");
     this.penghuni = {
-      cari: [null],
-      edit: [null],
-      posting: [null],
-      istirahat: [null, null],
-      rapat: Array.from({ length: KAPASITAS.rapat }, () => null),
-      tidur: Array.from({ length: KAPASITAS.tidur }, () => null),
+      cari: Array.from({ length: this.denah.kursiPerTahap.cari }, () => null),
+      edit: Array.from({ length: this.denah.kursiPerTahap.edit }, () => null),
+      posting: Array.from({ length: this.denah.kursiPerTahap.posting }, () => null),
+      istirahat: Array.from({ length: this.denah.kursiPerTahap.istirahat }, () => null),
+      rapat: Array.from({ length: this.denah.kapasitas.rapat }, () => null),
+      tidur: Array.from({ length: this.denah.kapasitas.tidur }, () => null),
     };
     const awal: TahapBot[] = ["cari", "edit", "posting"];
     this.dalam = bots.map((b, i): BotSim => {
@@ -231,6 +227,7 @@ export class SimulasiBot {
       kabar: (id, teks) => this.kabarKe(id, teks, DURASI_KABAR),
       rapat: () => this.rapatNyala,
       gerakKurang: () => this.gerakKurang,
+      denah: (opsi.denah ?? DENAH_SIM_V1).nara,
     });
     if (this.diam) {
       this.detikJam = detikWibNyata();
@@ -419,7 +416,7 @@ export class SimulasiBot {
     const idx = this.cariKursiKosong(s, b);
     b.terakhirPesan = "";
     if (idx >= 0) {
-      const t = titikKursi(s, idx);
+      const t = this.denah.titikKursi(s, idx);
       b.x = t[0];
       b.y = t[1];
       b.tempat = s;
@@ -442,8 +439,9 @@ export class SimulasiBot {
   }
 
   private tempatAntre(i: number): Titik {
-    const dasar = TEMPAT_ANTRE[i % TEMPAT_ANTRE.length];
-    const lapis = Math.floor(i / TEMPAT_ANTRE.length);
+    const antre = this.denah.tempatAntre;
+    const dasar = antre[i % antre.length]!;
+    const lapis = Math.floor(i / antre.length);
     return [dasar[0] + lapis * 0.5, dasar[1] + lapis * 0.35];
   }
 
@@ -505,9 +503,9 @@ export class SimulasiBot {
 
   private keKursi(b: BotSim, tempat: TempatBot, idx: number): void {
     const titik: Titik[] = [];
-    if (b.kursi) titik.push(...jalanKeluar(b.kursi.tahap, b.kursi.idx));
+    if (b.kursi) titik.push(...this.denah.jalanKeluar(b.kursi.tahap, b.kursi.idx));
     this.lepasKursi(b);
-    titik.push(TITIK_TENGAH, ...jalanMasuk(tempat, idx));
+    titik.push(this.denah.titikTengah, ...this.denah.jalanMasuk(tempat, idx));
     this.penghuni[tempat][idx] = b.id;
     b.tujuan = { tahap: tempat, idx };
     b.jalur = titik;
@@ -520,9 +518,9 @@ export class SimulasiBot {
 
   private keAntre(b: BotSim, alasan: string): void {
     const titik: Titik[] = [];
-    if (b.kursi) titik.push(...jalanKeluar(b.kursi.tahap, b.kursi.idx));
+    if (b.kursi) titik.push(...this.denah.jalanKeluar(b.kursi.tahap, b.kursi.idx));
     this.lepasKursi(b);
-    titik.push(TITIK_TENGAH, this.tempatAntre(b.indeks));
+    titik.push(this.denah.titikTengah, this.tempatAntre(b.indeks));
     b.jalur = titik;
     b.tujuan = null;
     this.set(b, "jalan");
@@ -559,7 +557,7 @@ export class SimulasiBot {
       idx = this.cariKursiKosong(s, b);
     }
     if (idx < 0) {
-      const nama = s === "tidur" ? "kamar tidur" : s === "rapat" ? "ruang meeting" : STASIUN[s].nama.toLowerCase();
+      const nama = this.denah.namaTempat(s);
       if (b.keadaanDalam === "jalan" && !b.tujuan) return;
       if (b.keadaanDalam === "antre" && !b.kursi) {
         this.ubahTeks(b, this.diam && s === "istirahat" ? b.sasaran.teks : `Antre ${nama}`);
