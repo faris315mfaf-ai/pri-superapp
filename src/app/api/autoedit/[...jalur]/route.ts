@@ -139,7 +139,7 @@ async function tangani(
         ? "kompres"
         : j[1] === "blur"
           ? "blurwm"
-          : j[1] === "template" && j[2] === "hapus-latar"
+          : (j[1] === "template" && j[2] === "hapus-latar") || (j[1] === "studio" && j[2] === "aset" && j[3] === "hapus-latar")
             ? "hapuslatar"
             : null;
   if (fiturUji && !bolehAlatVideo(user, fiturUji)) return galatAutoEdit(404, "Tidak ditemukan");

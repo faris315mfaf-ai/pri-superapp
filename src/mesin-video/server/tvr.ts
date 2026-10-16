@@ -1571,13 +1571,25 @@ async function ukuranAsetLama(p: Pengguna, t: Template | null): Promise<UkuranAs
 /** Validasi dokumen kiriman editor + keberadaan semua berkasnya. */
 function dokSah(p: Pengguna, mentah: unknown): DokStudio {
   const hasil = DokStudio.safeParse(mentah);
-  if (!hasil.success) throw new GalatHttp(422, "Susunan template tidak sah. Muat ulang Studio lalu coba lagi.");
+  if (!hasil.success) {
+    // Sebut bagian yang salah (mis. "elemen.3.rect.x") supaya bisa dibetulkan tanpa memuat ulang.
+    const isu = hasil.error.issues[0];
+    const bagian = isu?.path.length ? ` (${isu.path.join(".")})` : "";
+    throw new GalatHttp(422, `Susunan template tidak sah${bagian}. Periksa posisi/ukuran elemen lalu coba lagi.`);
+  }
   const dok = hasil.data;
   const salah = periksaAturan(dok);
   if (salah) throw new GalatHttp(400, salah);
   for (const ref of asetDokumen(dok)) {
     const jalur = path.join(templatePath(idTemplate(p)), ref);
     if (!fs.existsSync(jalur) || !fs.statSync(jalur).isFile()) throw new GalatHttp(409, "Ada berkas yang sudah tidak ada. Pilih ulang berkasnya.");
+  }
+  // Jenis berkas per tempat: outro gambar (atau elemen berupa berkas asing) membuat SEMUA render akun gagal.
+  if (dok.outro.file && !JENIS_ASET_STUDIO.outro.has(akhiran(dok.outro.file))) throw new GalatHttp(400, "Outro harus berupa video.");
+  for (const e of dok.elemen) {
+    if (e.file && !JENIS_ASET_STUDIO.gambar.has(akhiran(e.file)) && !JENIS_ASET_STUDIO.boom.has(akhiran(e.file))) {
+      throw new GalatHttp(400, `Berkas ${e.nama || e.jenis} tidak didukung. Pilih gambar atau video.`);
+    }
   }
   return dok;
 }
@@ -1621,6 +1633,17 @@ function sapuAsetStudio(p: Pengguna, dipakai: Set<string>, umurJam: number): voi
     }
   }
   fs.rmSync(path.join(folder, ".poster"), { recursive: true, force: true });
+  // Salinan ringan (media.ts asetRingan: "<batang>-<w>x<h>-<ukuran>.mp4|mov") milik berkas yang sudah
+  // tersapu ikut dibuang — dulu menumpuk dan memakan kuota.
+  const ringan = path.join(folder, ".ringan");
+  if (!fs.existsSync(ringan)) return;
+  const batangAda = fs
+    .readdirSync(folder, { withFileTypes: true })
+    .filter((d) => d.isFile())
+    .map((d) => d.name.slice(0, d.name.length - path.extname(d.name).length));
+  for (const nama of fs.readdirSync(ringan)) {
+    if (!batangAda.some((b) => nama.startsWith(`${b}-`))) fs.rmSync(path.join(ringan, nama), { force: true });
+  }
 }
 
 function pasangRuteStudio(r: Router, stokMilik: (a: string, id: string) => Promise<Job>): void {

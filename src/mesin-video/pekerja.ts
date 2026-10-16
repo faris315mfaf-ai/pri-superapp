@@ -427,7 +427,16 @@ export async function pratinjauJob(m: MuatanRender): Promise<{ job_id: string; s
   const folder = jobPath(jobId);
   const catat = (teks: string) => tulisStatus(jobId, { log: teks }).then(() => undefined);
   try {
-    if ((await bacaStatus(jobId)).status !== "queued") return { job_id: jobId, status: "dilewati" };
+    // Pratinjau yang sudah dibatalkan & dibuang (diganti permintaan baru) bisa masih ada di antrean:
+    // status hilang = lewati, jangan sampai catch di bawah menulis ulang status job yatim.
+    let keadaan: string | null;
+    try {
+      keadaan = (await bacaStatus(jobId)).status;
+    } catch (e) {
+      if (!(e instanceof GalatVideo)) throw e;
+      keadaan = null;
+    }
+    if (keadaan !== "queued") return { job_id: jobId, status: "dilewati" };
     if (await dimintaBatal(jobId)) {
       await lupakanBatal(jobId);
       await tulisStatus(jobId, { status: "dibatalkan", log: "Dihentikan sebelum mulai." });

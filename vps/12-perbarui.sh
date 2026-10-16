@@ -153,6 +153,9 @@ case "$MESIN_AUTOEDIT" in ts|jauh) ;; *) MESIN_AUTOEDIT="python" ;; esac
 # `rm -rf /srv/godam` memutus Auto Edit — jembatan masih memegang folder lama,
 # aplikasi memasang folder baru yang kosong, semua permintaan 503).
 SOCK_AUTOEDIT=/srv/godam/sock/api.sock
+# Kunci bersama penjaga cron & deploy: keduanya tidak boleh membuat ulang jembatan bersamaan
+# ("name already in use" -> deploy salah melapor Auto Edit gagal).
+KUNCI_JEMBATAN=/run/pri-jembatan.lock
 jembatan_sehat() {
   curl -fsS --max-time 10 --unix-socket "$SOCK_AUTOEDIT" http://mesin/health >/dev/null 2>&1
 }
@@ -193,7 +196,7 @@ UNIT
     echo 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
     if [ "$MESIN_AUTOEDIT" = "jauh" ]; then
       # Penjaga jembatan: socket hilang (folder dihapus/dibuat ulang) -> container jembatan dibuat ulang.
-      echo "* * * * * root [ -S $SOCK_AUTOEDIT ] || (cd $APP && docker compose --profile jauh up -d --force-recreate --no-deps autoedit-jembatan >/dev/null 2>&1 && logger -t pri-autoedit 'socket jembatan hilang: jembatan dibuat ulang')"
+      echo "* * * * * root [ -S $SOCK_AUTOEDIT ] || flock -n $KUNCI_JEMBATAN sh -c 'cd $APP && docker compose --profile jauh up -d --force-recreate --no-deps autoedit-jembatan >/dev/null 2>&1 && logger -t pri-autoedit \"socket jembatan hilang: jembatan dibuat ulang\"'"
     else
       echo "50 2 * * * root bash $SKRIP/autoedit/cadangan-template.sh >> /var/log/pri-autoedit-cadangan.log 2>&1"
     fi
@@ -343,12 +346,12 @@ nyalakan_autoedit_jauh() {
   fi
   "${MESIN_SSH[@]}" "cd $MESIN_DIR && docker compose up -d >/dev/null 2>&1 \
     && for i in \$(seq 1 30); do [ \"\$(docker inspect -f '{{.State.Health.Status}}' pri-autoedit-ts-api 2>/dev/null)\" = healthy ] && exit 0; sleep 3; done; exit 1" || return 1
-  docker compose --profile jauh up -d autoedit-jembatan >/dev/null 2>&1 || return 1
+  flock -w 120 "$KUNCI_JEMBATAN" docker compose --profile jauh up -d autoedit-jembatan >/dev/null 2>&1 || return 1
   # Ujung ke ujung, lewat socket yang sama dengan yang dipakai aplikasi. Bila socket tidak ada /
   # tidak menjawab (mis. folder socket dibuat ulang saat jembatan menyala), jembatan dibuat ulang sekali.
   for _ in $(seq 1 5); do jembatan_sehat && return 0; sleep 2; done
   echo "  socket jembatan tidak menjawab — jembatan dibuat ulang"
-  docker compose --profile jauh up -d --force-recreate --no-deps autoedit-jembatan >/dev/null 2>&1 || return 1
+  flock -w 120 "$KUNCI_JEMBATAN" docker compose --profile jauh up -d --force-recreate --no-deps autoedit-jembatan >/dev/null 2>&1 || return 1
   for _ in $(seq 1 10); do jembatan_sehat && return 0; sleep 2; done
   return 1
 }

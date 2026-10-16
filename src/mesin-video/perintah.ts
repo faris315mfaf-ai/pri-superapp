@@ -311,7 +311,12 @@ export async function bangunPerintah(
     if (waktu === null) continue;
     // Overlay video diputar berulang ("loop"); "-t" wajib menyertai
     // pengulangan tak terbatas, kalau tidak ffmpeg menggantung saat menutup.
-    if (pyTruthy(item.loop)) inputs.push("-stream_loop", "-1", "-t", formatF(durasiBadan, 3));
+    // Studio (16 Okt 2026, loop_dari_mulai): overlay berulang yang mulai di tengah video (mis. boom
+    // "5 dtk terakhir") memulai animasinya dari bingkai pertama saat tampil, bukan dari fase
+    // (mulai mod durasi). Template lama tanpa penanda tetap seperti versi Python (uji emas).
+    const mulaiGeser =
+      pyTruthy(item.loop) && pyTruthy(item.loop_dari_mulai) && waktu.start != null ? Math.max(0, pyFloat(waktu.start)) : 0;
+    if (pyTruthy(item.loop)) inputs.push("-stream_loop", "-1", "-t", formatF(Math.max(0.05, durasiBadan - mulaiGeser), 3));
     const w = item.w;
     const h = item.h;
     // Aset yang jauh lebih besar dari tempatnya digambar dikecilkan dulu.
@@ -335,6 +340,7 @@ export async function bangunPerintah(
     // Transparansi (Studio): hanya bila < 1, jadi template lama tidak berubah.
     const opasitas = typeof item.opacity === "number" ? item.opacity : null;
     if (opasitas !== null && opasitas > 0 && opasitas < 1) rantai.push(`format=rgba,colorchannelmixer=aa=${opasitas.toFixed(2)}`);
+    if (mulaiGeser > 0) rantai.push(`setpts=PTS-STARTPTS+${pyFloatRepr(mulaiGeser)}/TB`);
     if (rantai.length) {
       filters.push(`[${sumberOv}]${rantai.join(",")}[ov${nomor}]`);
       sumberOv = `ov${nomor}`;

@@ -190,7 +190,8 @@ export function templateDariStudio(dok: DokStudio, kategoriBawaan = ""): Record<
       h: e.rect.h,
       ...bidangWaktu(e.waktu),
     };
-    if (asetBergerak(e.file)) ov.loop = true;
+    // loop_dari_mulai: animasi berulang mulai dari bingkai pertama saat elemen tampil (perintah.ts).
+    if (asetBergerak(e.file)) Object.assign(ov, { loop: true, loop_dari_mulai: true });
     if (e.jenis === "boom" && e.kunci_hijau) ov.kunci_hijau = true;
     if (e.opacity < 1) ov.opacity = Math.round(e.opacity * 100) / 100;
     overlays.push(ov);
