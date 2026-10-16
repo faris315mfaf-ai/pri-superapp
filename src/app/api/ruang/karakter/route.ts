@@ -1,14 +1,16 @@
-// /api/ruang/karakter — KARAKTER SAYA (16 Okt 2026). Uji coba bertahap: akun Faris saja
-// (bolehKarakterSaya di src/lib/karakter-murni.ts).
-//   GET            → KarakterSaya (konfig tersimpan, atau rupa bawaan bila belum memilih)
-//   PUT { konfig } → simpan (divalidasi ketat terhadap katalog; maks 30 simpan / jam)
+// /api/ruang/karakter — KARAKTER SAYA (16 Okt 2026; semua akun sejak 16 Okt malam — bolehKarakterSaya).
+//   GET              → KarakterSaya (konfig tersimpan, atau rupa bawaan bila belum memilih)
+//   GET ?ids=1,2,3   → { rupa: { "<id>": konfig } } rupa TERSIMPAN akun-akun itu (potret di panel Online
+//                      & chat); id tanpa rupa tidak dicantumkan (klien memakai rupa bawaan). Rupa = tampilan
+//                      publik karakter, sama dengan yang terlihat semua orang di Ruang Bot.
+//   PUT { konfig }   → simpan (divalidasi ketat terhadap katalog; maks 30 simpan / jam)
 import { bungkus } from "@/lib/api-helper";
 import { pastikanMasuk } from "@/lib/sesi";
 import { modulAktifServer } from "@/lib/sakelar";
 import { pastikanTidakMelebihiBatas } from "@/lib/rate-limit";
 import { adalahBot } from "@/lib/struktur";
-import { BATAS_SIMPAN, JENDELA_SIMPAN_DETIK, bolehKarakterSaya, validasiKonfig } from "@/lib/karakter-murni";
-import { GalatKarakter, bacaKarakterSaya, simpanKarakterSaya } from "@/lib/karakter";
+import { BATAS_SIMPAN, JENDELA_SIMPAN_DETIK, bolehKarakterSaya, idRupaDariQuery, validasiKonfig } from "@/lib/karakter-murni";
+import { GalatKarakter, bacaKarakterBanyak, bacaKarakterSaya, simpanKarakterSaya } from "@/lib/karakter";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,16 @@ function lempar(e: unknown): never {
 
 export async function GET(request: Request) {
   return bungkus(async () => {
+    const q = new URL(request.url).searchParams.get("ids");
+    if (q !== null) {
+      // Rupa banyak akun: cukup masuk (akun bot pun boleh melihat potret).
+      await pastikanMasuk(request);
+      if (!(await modulAktifServer("ruangbot"))) tolak("Modul Ruang Bot sedang dinonaktifkan.", 423);
+      const ids = idRupaDariQuery(q);
+      if (!ids) tolak("Daftar akun tidak sah.", 400);
+      const peta = await bacaKarakterBanyak(ids);
+      return { rupa: Object.fromEntries([...peta].map(([id, k]) => [String(id), k])) };
+    }
     const user = await pengguna(request);
     try {
       return await bacaKarakterSaya(Number(user.id));

@@ -26,7 +26,8 @@ const DASAR = "/karakter/v1";
 let manifestJanji: Promise<Manifest> | null = null;
 const dataJanji = new Map<string, Promise<ImageData>>();
 const frameCache = new Map<string, HTMLCanvasElement>();
-const MAKS_CACHE = 400;
+// Satu frame 64x96 RGBA ±24 KB; 1200 frame ±29 MB paling banyak (dunia v2 untuk semua akun: banyak rupa sekaligus).
+const MAKS_CACHE = 1200;
 
 export function muatManifestKarakter(): Promise<Manifest> {
   if (!manifestJanji) {
@@ -111,7 +112,11 @@ export async function rakitFrame(k: KonfigKarakter, anim: AnimKarakter, arah: Ar
   const f = ((frame % jumlah) + jumlah) % jumlah;
   const kunci = `${kunciKonfig(k)}|${anim}|${arah}|${f}|${kali}`;
   const ada = frameCache.get(kunci);
-  if (ada) return ada;
+  if (ada) {
+    frameCache.delete(kunci);
+    frameCache.set(kunci, ada);
+    return ada;
+  }
 
   const s = akhiran(kali);
   const fw = m.frame.width * kali;

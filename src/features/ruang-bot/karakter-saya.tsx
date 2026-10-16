@@ -4,7 +4,7 @@
 // KARAKTER SAYA (16 Okt 2026) — sub tab Ruang Bot: pengguna memilih rupa
 // karakternya dari aset pixel art (public/karakter/v1). Pratinjau 4 arah &
 // 4 pose, preset, kulit, rambut + warna, atasan + warna, celana & sepatu.
-// Uji coba bertahap: hanya akun Faris (bolehKarakterSaya).
+// Terbuka untuk semua akun sejak 16 Okt 2026 malam (bolehKarakterSaya).
 // ============================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -343,7 +343,6 @@ export function KarakterSayaPanel({ ringkas = false }: { ringkas?: boolean }) {
             <h2 className="m-0 font-heading text-[18px] font-extrabold tracking-tight text-teks-utama">Karakter Saya</h2>
             <p className="m-0 text-[12.5px] text-teks-sekunder">Pilih rupa yang mewakili Anda di Ruang Bot.</p>
           </div>
-          <span className="whitespace-nowrap rounded-full bg-blue-500/10 px-2.5 py-1 text-[11px] font-bold text-blue-700 dark:text-blue-300">Uji coba</span>
         </div>
 
         <div role="tablist" aria-label="Bagian karakter" className={cn("tanpa-scrollbar flex gap-1 rounded-2xl bg-slate-400/20 p-1", ringkas ? "overflow-x-auto" : "flex-wrap")}>

@@ -7655,6 +7655,13 @@ export async function getKarakterSaya(): Promise<KarakterSaya> {
   return json as KarakterSaya;
 }
 
+/** Rupa tersimpan banyak akun (potret Ruang Bot). Akun tanpa rupa tidak dicantumkan. */
+export async function getRupaBanyak(ids: readonly number[]): Promise<Record<string, KonfigKarakter>> {
+  if (ids.length === 0) return {};
+  const json = await fetchJson(`/api/ruang/karakter?ids=${ids.join(",")}`, { headers: headerToken(), cache: "no-store" });
+  return ((json as { rupa?: Record<string, KonfigKarakter> }).rupa ?? {}) as Record<string, KonfigKarakter>;
+}
+
 export async function simpanKarakterSaya(konfig: KonfigKarakter): Promise<KarakterSaya> {
   const json = await fetchJson("/api/ruang/karakter", {
     method: "PUT",

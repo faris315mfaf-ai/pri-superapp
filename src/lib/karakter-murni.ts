@@ -7,16 +7,35 @@
 // kulit / rambut / pakaian diwarnai ulang di klien. Yang disimpan hanya
 // konfigurasi kecil ini (tabel karakter_pengguna, sql/78), bukan gambar.
 //
-// Tahap 1 dibuka bertahap: mula-mula hanya akun uji coba Faris (#4, #176).
+// Dibuka bertahap: uji coba akun Faris (#4, #176) 16 Okt 2026, lalu SEMUA akun (16 Okt 2026, malam).
 // ============================================================
 
 export const VERSI_KONFIG = 1;
 
-/** Akun yang sudah boleh memilih karakter (uji coba bertahap). */
-const AKUN_UJI_KARAKTER = new Set(["4", "176"]);
-
+/**
+ * Karakter Saya + dunia Ruang Bot v2: terbuka untuk SEMUA akun yang masuk (akun bot ditolak di API).
+ * Gerbang tetap satu fungsi supaya bisa dipersempit lagi tanpa menyisir pemakainya.
+ */
 export function bolehKarakterSaya(u: { id?: string | number | null } | null | undefined): boolean {
-  return u?.id != null && AKUN_UJI_KARAKTER.has(String(u.id));
+  return u?.id != null && String(u.id).trim() !== "";
+}
+
+/** Batas id per permintaan rupa banyak (potret di panel Online & chat). */
+export const MAKS_ID_RUPA = 60;
+
+/** Daftar id dari query "1,2,3": bilangan bulat positif unik, maks MAKS_ID_RUPA; null bila tidak sah. */
+export function idRupaDariQuery(nilai: string | null): number[] | null {
+  if (nilai === null) return null;
+  const bagian = nilai.split(",").map((x) => x.trim()).filter(Boolean);
+  if (bagian.length === 0 || bagian.length > MAKS_ID_RUPA) return null;
+  const ids: number[] = [];
+  for (const b of bagian) {
+    if (!/^\d{1,9}$/.test(b)) return null;
+    const n = Number(b);
+    if (n <= 0) return null;
+    if (!ids.includes(n)) ids.push(n);
+  }
+  return ids;
 }
 
 export type Warna = readonly [hex: string, nama: string];

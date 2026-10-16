@@ -10,7 +10,7 @@
 import { GlassCard } from "@/components/glass-card";
 import type { PenghuniDunia } from "@/lib/dunia-murni";
 import { cn } from "@/lib/utils";
-import { rupaKarakter, warnaKarakter } from "./karakter-pengguna";
+import { PotretKarakter } from "./potret-karakter";
 import { WARNA_STASIUN } from "./dunia-sayap";
 
 const LABEL_ANIM: Record<string, string> = {
@@ -80,13 +80,7 @@ export function PanelOnline({
                     pilih ? "border-emas bg-emas/10" : "border-black/10 bg-black/[0.03] dark:border-white/10 dark:bg-white/5",
                   )}
                 >
-                  <span
-                    aria-hidden="true"
-                    className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
-                    style={{ background: warnaKarakter(p.karakter), boxShadow: `inset 0 0 0 2px ${rupaKarakter(p.karakter).rambut}55` }}
-                  >
-                    {(p.nama || p.username || "?").trim().charAt(0).toUpperCase()}
-                  </span>
+                  <PotretKarakter userId={p.id} sayaId={sayaId} ukuran={30} className="mt-0.5" />
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-baseline gap-x-1.5">
                       <b className="text-[12.5px] text-teks-utama">{p.nama || p.username}</b>

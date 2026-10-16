@@ -31,6 +31,7 @@ import { petaSasaran } from "./peta-nyata";
 import { RuangDunia2 } from "./ruang-dunia2";
 import { RuangIsometrik } from "./ruang-isometrik";
 import { useRupaSaya } from "./rupa-saya";
+import { isiRupaDariDaftar } from "./potret-karakter";
 import { SimulasiBot } from "./simulasi-bot";
 import { SimulasiPenghuni } from "./simulasi-penghuni";
 import type { BotContoh } from "./tipe";
@@ -217,7 +218,7 @@ function Legenda() {
 export function RuangBotUmumScreen({ sayaId }: { sayaId: number }) {
   const ruang = useRuangUmum();
   const status = ruang.status;
-  // Dunia v2 (gedung 8 ruang pixel art) — uji coba terbatas akun Karakter Saya.
+  // Dunia v2 (gedung 8 ruang pixel art) — semua akun (gerbang bolehKarakterSaya).
   const [dunia2] = useState(() => bolehKarakterSaya({ id: sayaId }));
   const [penghuni] = useState(() => new SimulasiPenghuni({ gerakKurang, denah: dunia2 ? DENAH_SIM_V2.penghuni : undefined }));
   const kabarChat = useCallback(
@@ -229,7 +230,10 @@ export function RuangBotUmumScreen({ sayaId }: { sayaId: number }) {
   const chat = useChatGlobal(kabarChat);
 
   useEffect(() => {
-    if (status) penghuni.setDaftar(status.dunia.online, status.dunia.waktu);
+    if (status) {
+      penghuni.setDaftar(status.dunia.online, status.dunia.waktu);
+      isiRupaDariDaftar(status.dunia.online);
+    }
   }, [penghuni, status]);
 
   const wadahRef = useRef<HTMLDivElement>(null);

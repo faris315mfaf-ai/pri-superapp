@@ -14,6 +14,7 @@ import {
   WARNA_SEPATU,
   bacaKonfig,
   bolehKarakterSaya,
+  idRupaDariQuery,
   keKonfigKit,
   konfigBawaan,
   samaKonfig,
@@ -35,11 +36,16 @@ const cek = (n: string, ok: boolean, i?: unknown) => {
 
 const contoh: KonfigKarakter = PRESET[0]!.konfig;
 
-console.log("Gerbang uji coba");
+console.log("Gerbang (semua akun sejak 16 Okt malam)");
 cek("akun #4 boleh", bolehKarakterSaya({ id: 4 }));
 cek("akun #176 boleh (string)", bolehKarakterSaya({ id: "176" }));
-cek("akun lain belum boleh", !bolehKarakterSaya({ id: 5 }));
-cek("tanpa akun tidak boleh", !bolehKarakterSaya(null) && !bolehKarakterSaya({}));
+cek("akun lain juga boleh", bolehKarakterSaya({ id: 5 }) && bolehKarakterSaya({ id: "981" }));
+cek("tanpa akun tidak boleh", !bolehKarakterSaya(null) && !bolehKarakterSaya({}) && !bolehKarakterSaya({ id: " " }));
+
+console.log("Daftar id rupa");
+cek("id sah, unik, urutan dijaga", JSON.stringify(idRupaDariQuery("5, 3,5,10")) === "[5,3,10]");
+cek("kosong / bukan angka / nol / negatif ditolak", [null, "", "a", "0", "-3", "1.5", "1,,x"].every((q) => idRupaDariQuery(q as string | null) === null));
+cek("maks 60 id", idRupaDariQuery(Array.from({ length: 60 }, (_, i) => i + 1).join(","))?.length === 60 && idRupaDariQuery(Array.from({ length: 61 }, (_, i) => i + 1).join(",")) === null);
 
 console.log("Validasi");
 cek("preset valid", PRESET.every((p) => validasiKonfig(p.konfig).ok));

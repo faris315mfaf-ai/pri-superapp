@@ -78,14 +78,15 @@ rahasia (password, kunci API, isi env) di berkas ini atau di repo.**
   satu video ke akun upload-post anggota (persetujuan saat pendaftaran); bawaan serentak (upload-post asinkron,
   ±150 akun/menit), opsi bertahap/terjadwal; karakter anggota dipanggil ke Ruang Bot. Wajib
   `sql/77_siaran_koordinator.sql`; cron `/api/cron/siaran` tiap menit. Panduan: `docs/SIARAN-KOORDINATOR.md`.
-- **Karakter Saya** (16 Okt 2026, tahap 1, uji coba akun Faris #4/#176 — `bolehKarakterSaya` di `src/lib/karakter-murni.ts`):
+- **Karakter Saya** (16 Okt 2026; SEMUA akun sejak 16 Okt malam — gerbang `bolehKarakterSaya` di `src/lib/karakter-murni.ts`;
+  potret di panel Online & chat lewat `potret-karakter.tsx` + `GET /api/ruang/karakter?ids=`):
   tab Ruang Bot untuk memilih rupa pixel art (kulit, rambut 20, atasan 9, warna pakaian). Aset `public/karakter|ruang|perabot/v1`
   dibuat dari lembar ChatGPT oleh `alat/sprite/potong-*.mjs` (ruang memakai `alat/sprite/kalibrasi-ruang.json`). Perakit klien:
   `src/features/ruang-bot/karakter-sprite.ts`; API `/api/ruang/karakter`; wajib `sql/78_karakter_pengguna.sql`.
   Tahap 2 (16 Okt, akun yang sama): dunia v2 gedung 8 ruang tile 64×32 — denah `denah2.ts`, simulasi `DENAH_SIM_V2`
   (`denah2-sim.ts`), penggambar `ruang-dunia2.tsx` + `dunia2-*.ts` (kamera geser/zoom/lompat ruang), rupa tersimpan ikut
-  `PenghuniDunia.rupa`. Dipasang di `ruang-view.tsx` & `ruang-bot-umum.tsx` di balik `bolehKarakterSaya`; akun lain tetap
-  `ruang-isometrik.tsx`.
+  `PenghuniDunia.rupa`. Dipasang di `ruang-view.tsx` & `ruang-bot-umum.tsx` di balik `bolehKarakterSaya` (kini semua akun);
+  `ruang-isometrik.tsx` tinggal cadangan bila gerbang dipersempit lagi.
 - **Studio Template** (16 Okt 2026, uji coba akun Faris #4/#176 — `bolehStudioTemplate` di `src/lib/studio-template.ts`,
   dijaga juga di gateway `/api/autoedit`): editor visual template Edit Otomatis (logo, kotak berita + area tulisan,
   kotak kategori, footer, boom, pernak-pernik + hapus latar rembg, outro dipendekkan) dengan timeline waktu tampil

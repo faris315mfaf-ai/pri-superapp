@@ -60,14 +60,20 @@ export type Adegan2 = {
 // ---------- frame karakter (cache sinkron di atas perakit async) ----------
 
 const siap = new Map<string, HTMLCanvasElement | "proses">();
-const MAKS_SIAP = 600;
+// Merujuk kanvas yang sama dengan cache perakit (tidak menggandakan memori).
+const MAKS_SIAP = 1200;
 const kunciKonfig = (k: KonfigKarakter) => `${k.kulit}${k.rambut}${k.warnaRambut}${k.atasan}${k.warnaAtasan}${k.warnaCelana}${k.warnaSepatu}`;
 
 /** Frame karakter bila sudah dirakit; bila belum, minta dirakit (muncul di frame berikutnya). */
 function frameSegera(k: KonfigKarakter, anim: AnimKarakter, arah: ArahKarakter, frame: number): HTMLCanvasElement | null {
   const kunci = `${kunciKonfig(k)}|${anim}|${arah}|${frame}`;
   const ada = siap.get(kunci);
-  if (ada && ada !== "proses") return ada;
+  if (ada && ada !== "proses") {
+    // LRU: frame yang dipakai pindah ke paling baru, jadi yang dibuang selalu yang lama tak terpakai.
+    siap.delete(kunci);
+    siap.set(kunci, ada);
+    return ada;
+  }
   if (!ada) {
     if (siap.size >= MAKS_SIAP) siap.delete(siap.keys().next().value!);
     siap.set(kunci, "proses");

@@ -38,6 +38,7 @@ import { PotretBot } from "./potret-bot";
 import { RuangDunia2 } from "./ruang-dunia2";
 import { RuangIsometrik } from "./ruang-isometrik";
 import { useRupaSaya } from "./rupa-saya";
+import { isiRupaDariDaftar } from "./potret-karakter";
 import { SimulasiBot, formatJam } from "./simulasi-bot";
 import { SimulasiPenghuni } from "./simulasi-penghuni";
 import { useChatGlobal } from "./use-chat-global";
@@ -414,7 +415,7 @@ export function RuangView(p: RuangViewProps) {
 
   const nyata = !!p.nyata;
   const sibuk = p.sibuk;
-  // Dunia v2 (gedung 8 ruang pixel art) — uji coba terbatas akun Karakter Saya; tetap sama selama layar terpasang.
+  // Dunia v2 (gedung 8 ruang pixel art) — semua akun (gerbang bolehKarakterSaya); tetap sama selama layar terpasang.
   const [dunia2] = useState(() => bolehKarakterSaya({ id: p.sayaId }));
   const rupaSaya = useRupaSaya();
   const [sim] = useState(
@@ -437,7 +438,10 @@ export function RuangView(p: RuangViewProps) {
   const dunia = useDunia();
   const statusDunia = dunia.status;
   useEffect(() => {
-    if (statusDunia) penghuni.setDaftar(statusDunia.online, statusDunia.waktu);
+    if (statusDunia) {
+      penghuni.setDaftar(statusDunia.online, statusDunia.waktu);
+      isiRupaDariDaftar(statusDunia.online);
+    }
   }, [penghuni, statusDunia]);
   const [terpilihPenghuniId, setTerpilihPenghuniId] = useState<number | null>(null);
   // Chat global (semua anggota): master membaca, membalas, dan memoderasi; pesan baru jadi gelembung di aula.
@@ -710,6 +714,7 @@ export function RuangView(p: RuangViewProps) {
               setTerpilihPenghuniId(id);
               if (id !== null) p.onPilih(null);
             }}
+            sayaId={p.sayaId}
           />
 
           <ChatGlobal chat={chatGlobal} sayaId={p.sayaId ?? 0} />

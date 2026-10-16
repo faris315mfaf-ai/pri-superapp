@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { GlassCard } from "@/components/glass-card";
 import { MAKS_KARAKTER_CHAT, type PesanGlobal } from "@/lib/chat-global-murni";
 import { cn } from "@/lib/utils";
-import { rupaKarakter, warnaKarakter } from "./karakter-pengguna";
+import { PotretKarakter } from "./potret-karakter";
 import type { ChatGlobalKlien } from "./use-chat-global";
 
 const PILIHAN_BISU: { menit: number; label: string }[] = [
@@ -150,13 +150,7 @@ export function ChatGlobal({
           const saya = p.user_id === sayaId;
           return (
             <li key={p.id} className={cn("flex gap-2", saya && "flex-row-reverse")}>
-              <span
-                aria-hidden="true"
-                className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
-                style={{ background: warnaKarakter(p.karakter), boxShadow: `inset 0 0 0 2px ${rupaKarakter(p.karakter).rambut}55` }}
-              >
-                {(p.nama || "?").trim().charAt(0).toUpperCase()}
-              </span>
+              <PotretKarakter userId={p.user_id} sayaId={sayaId} ukuran={30} className="mt-0.5" />
               <div className={cn("min-w-0 max-w-[85%]", saya && "text-right")}>
                 <div className={cn("flex flex-wrap items-baseline gap-x-1.5", saya && "justify-end")}>
                   <b className="text-[12.5px] text-teks-utama">{saya ? "Anda" : p.nama}</b>
