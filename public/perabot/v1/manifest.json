@@ -1,0 +1,722 @@
+{
+  "schemaVersion": 1,
+  "artStatus": "AI_DRAFT",
+  "dibuat": "2026-10-16T04:07:52.135Z",
+  "tile": {
+    "width": 64,
+    "height": 32
+  },
+  "penempatan": "jangkar sprite (sudut depan jejak) = (sudutBelakang.x + (i + a - j - b) * 32, sudutBelakang.y + (i + a + j + b) * 16) untuk jejak [a,b] di tile (i,j)",
+  "benda": {
+    "meja_kiri": {
+      "file": "meja_kiri.png",
+      "tapak": [
+        1,
+        2
+      ],
+      "frame": {
+        "width": 93,
+        "height": 81
+      },
+      "jangkar": {
+        "x": 27,
+        "y": 80
+      },
+      "sumber": "perabot_1_ruang.png"
+    },
+    "meja_kanan": {
+      "file": "meja_kanan.png",
+      "tapak": [
+        2,
+        1
+      ],
+      "frame": {
+        "width": 88,
+        "height": 79
+      },
+      "jangkar": {
+        "x": 60,
+        "y": 78
+      },
+      "catatan": "monitor menghadap belakang",
+      "sumber": "perabot_1_ruang.png"
+    },
+    "kursi_se": {
+      "file": "kursi_se.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 49,
+        "height": 75
+      },
+      "jangkar": {
+        "x": 24,
+        "y": 74
+      },
+      "sumber": "perabot_1_ruang.png"
+    },
+    "kursi_sw": {
+      "file": "kursi_sw.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 49,
+        "height": 76
+      },
+      "jangkar": {
+        "x": 24,
+        "y": 75
+      },
+      "sumber": "perabot_1_ruang.png"
+    },
+    "kursi_ne": {
+      "file": "kursi_ne.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 52,
+        "height": 69
+      },
+      "jangkar": {
+        "x": 23,
+        "y": 68
+      },
+      "sumber": "perabot_1_ruang.png"
+    },
+    "kursi_nw": {
+      "file": "kursi_nw.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 52,
+        "height": 69
+      },
+      "jangkar": {
+        "x": 28,
+        "y": 68
+      },
+      "sumber": "perabot_1_ruang.png"
+    },
+    "meja_laptop": {
+      "file": "meja_laptop.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 69,
+        "height": 70
+      },
+      "jangkar": {
+        "x": 29,
+        "y": 69
+      },
+      "sumber": "perabot_1_ruang.png"
+    },
+    "lemari_arsip": {
+      "file": "lemari_arsip.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 47,
+        "height": 83
+      },
+      "jangkar": {
+        "x": 23,
+        "y": 82
+      },
+      "sumber": "perabot_1_ruang.png"
+    },
+    "rak_buku_kiri": {
+      "file": "rak_buku_kiri.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 57,
+        "height": 90
+      },
+      "jangkar": {
+        "x": 14,
+        "y": 89
+      },
+      "sumber": "perabot_1_ruang.png"
+    },
+    "rak_buku_kanan": {
+      "file": "rak_buku_kanan.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 56,
+        "height": 89
+      },
+      "jangkar": {
+        "x": 41,
+        "y": 88
+      },
+      "sumber": "perabot_1_ruang.png"
+    },
+    "tempat_sampah": {
+      "file": "tempat_sampah.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 34,
+        "height": 42
+      },
+      "jangkar": {
+        "x": 17,
+        "y": 41
+      },
+      "sumber": "perabot_1_ruang.png"
+    },
+    "tanaman_tinggi": {
+      "file": "tanaman_tinggi.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 59,
+        "height": 83
+      },
+      "jangkar": {
+        "x": 28,
+        "y": 82
+      },
+      "sumber": "perabot_1_ruang.png"
+    },
+    "meja_rapat_panjang": {
+      "file": "meja_rapat_panjang.png",
+      "tapak": [
+        2,
+        3
+      ],
+      "frame": {
+        "width": 107,
+        "height": 79
+      },
+      "jangkar": {
+        "x": 34,
+        "y": 78
+      },
+      "sumber": "perabot_2_ruang.png"
+    },
+    "meja_rapat_bundar": {
+      "file": "meja_rapat_bundar.png",
+      "tapak": [
+        2,
+        2
+      ],
+      "frame": {
+        "width": 81,
+        "height": 59
+      },
+      "jangkar": {
+        "x": 42,
+        "y": 58
+      },
+      "sumber": "perabot_2_ruang.png"
+    },
+    "layar_presentasi": {
+      "file": "layar_presentasi.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 54,
+        "height": 87
+      },
+      "jangkar": {
+        "x": 25,
+        "y": 86
+      },
+      "sumber": "perabot_2_ruang.png"
+    },
+    "meja_eksekutif": {
+      "file": "meja_eksekutif.png",
+      "tapak": [
+        1,
+        2
+      ],
+      "frame": {
+        "width": 100,
+        "height": 84
+      },
+      "jangkar": {
+        "x": 27,
+        "y": 83
+      },
+      "sumber": "perabot_2_ruang.png"
+    },
+    "sofa_se": {
+      "file": "sofa_se.png",
+      "tapak": [
+        1,
+        2
+      ],
+      "frame": {
+        "width": 102,
+        "height": 80
+      },
+      "jangkar": {
+        "x": 26,
+        "y": 79
+      },
+      "sumber": "perabot_2_ruang.png"
+    },
+    "sofa_sw": {
+      "file": "sofa_sw.png",
+      "tapak": [
+        2,
+        1
+      ],
+      "frame": {
+        "width": 93,
+        "height": 75
+      },
+      "jangkar": {
+        "x": 68,
+        "y": 74
+      },
+      "sumber": "perabot_2_ruang.png"
+    },
+    "meja_kopi": {
+      "file": "meja_kopi.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 69,
+        "height": 56
+      },
+      "jangkar": {
+        "x": 26,
+        "y": 55
+      },
+      "sumber": "perabot_2_ruang.png"
+    },
+    "kasur_kiri": {
+      "file": "kasur_kiri.png",
+      "tapak": [
+        2,
+        1
+      ],
+      "frame": {
+        "width": 103,
+        "height": 87
+      },
+      "jangkar": {
+        "x": 65,
+        "y": 86
+      },
+      "sumber": "perabot_2_ruang.png"
+    },
+    "kasur_kanan": {
+      "file": "kasur_kanan.png",
+      "tapak": [
+        1,
+        2
+      ],
+      "frame": {
+        "width": 107,
+        "height": 85
+      },
+      "jangkar": {
+        "x": 35,
+        "y": 84
+      },
+      "sumber": "perabot_2_ruang.png"
+    },
+    "nakas": {
+      "file": "nakas.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 44,
+        "height": 64
+      },
+      "jangkar": {
+        "x": 20,
+        "y": 63
+      },
+      "sumber": "perabot_2_ruang.png"
+    },
+    "kursi_santai": {
+      "file": "kursi_santai.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 63,
+        "height": 69
+      },
+      "jangkar": {
+        "x": 26,
+        "y": 68
+      },
+      "sumber": "perabot_2_ruang.png"
+    },
+    "karpet": {
+      "file": "karpet.png",
+      "tapak": [
+        2,
+        3
+      ],
+      "frame": {
+        "width": 115,
+        "height": 67
+      },
+      "jangkar": {
+        "x": 66,
+        "y": 66
+      },
+      "datar": true,
+      "sumber": "perabot_2_ruang.png"
+    },
+    "meja_resepsionis": {
+      "file": "meja_resepsionis.png",
+      "tapak": [
+        3,
+        1
+      ],
+      "frame": {
+        "width": 114,
+        "height": 87
+      },
+      "jangkar": {
+        "x": 26,
+        "y": 86
+      },
+      "sumber": "perabot_3_ruang.png"
+    },
+    "bangku": {
+      "file": "bangku.png",
+      "tapak": [
+        1,
+        2
+      ],
+      "frame": {
+        "width": 93,
+        "height": 71
+      },
+      "jangkar": {
+        "x": 21,
+        "y": 70
+      },
+      "sumber": "perabot_3_ruang.png"
+    },
+    "tanaman_kecil": {
+      "file": "tanaman_kecil.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 49,
+        "height": 57
+      },
+      "jangkar": {
+        "x": 24,
+        "y": 56
+      },
+      "sumber": "perabot_3_ruang.png"
+    },
+    "tanaman_besar": {
+      "file": "tanaman_besar.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 60,
+        "height": 90
+      },
+      "jangkar": {
+        "x": 30,
+        "y": 89
+      },
+      "sumber": "perabot_3_ruang.png"
+    },
+    "dispenser": {
+      "file": "dispenser.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 36,
+        "height": 89
+      },
+      "jangkar": {
+        "x": 17,
+        "y": 88
+      },
+      "sumber": "perabot_3_ruang.png"
+    },
+    "mesin_kopi": {
+      "file": "mesin_kopi.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 62,
+        "height": 85
+      },
+      "jangkar": {
+        "x": 25,
+        "y": 84
+      },
+      "sumber": "perabot_3_ruang.png"
+    },
+    "mesin_minuman": {
+      "file": "mesin_minuman.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 54,
+        "height": 95
+      },
+      "jangkar": {
+        "x": 19,
+        "y": 94
+      },
+      "sumber": "perabot_3_ruang.png"
+    },
+    "banner": {
+      "file": "banner.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 41,
+        "height": 92
+      },
+      "jangkar": {
+        "x": 15,
+        "y": 91
+      },
+      "sumber": "perabot_3_ruang.png"
+    },
+    "konter_pos": {
+      "file": "konter_pos.png",
+      "tapak": [
+        1,
+        2
+      ],
+      "frame": {
+        "width": 105,
+        "height": 85
+      },
+      "jangkar": {
+        "x": 20,
+        "y": 84
+      },
+      "sumber": "perabot_3_ruang.png"
+    },
+    "sekat_kaca_kiri": {
+      "file": "sekat_kaca_kiri.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 71,
+        "height": 85
+      },
+      "jangkar": {
+        "x": 58,
+        "y": 84
+      },
+      "sumber": "perabot_3_ruang.png"
+    },
+    "sekat_kaca_kanan": {
+      "file": "sekat_kaca_kanan.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 70,
+        "height": 86
+      },
+      "jangkar": {
+        "x": 13,
+        "y": 85
+      },
+      "sumber": "perabot_3_ruang.png"
+    },
+    "kardus": {
+      "file": "kardus.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 62,
+        "height": 73
+      },
+      "jangkar": {
+        "x": 26,
+        "y": 72
+      },
+      "sumber": "perabot_3_ruang.png"
+    },
+    "rak_server": {
+      "file": "rak_server.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 53,
+        "height": 81
+      },
+      "jangkar": {
+        "x": 18,
+        "y": 80
+      },
+      "keadaan": [
+        "kosong",
+        "separuh",
+        "penuh",
+        "penuh_kedip"
+      ],
+      "sumber": "animasi_1_mesin.png"
+    },
+    "mesin_autoedit": {
+      "file": "mesin_autoedit.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 73,
+        "height": 81
+      },
+      "jangkar": {
+        "x": 35,
+        "y": 80
+      },
+      "keadaan": [
+        "mati",
+        "jalan_1",
+        "jalan_2",
+        "jalan_3"
+      ],
+      "sumber": "animasi_1_mesin.png"
+    },
+    "mesin_kompres": {
+      "file": "mesin_kompres.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 87,
+        "height": 56
+      },
+      "jangkar": {
+        "x": 26,
+        "y": 55
+      },
+      "keadaan": [
+        "mati",
+        "jalan_1",
+        "jalan_2",
+        "jalan_3"
+      ],
+      "sumber": "animasi_1_mesin.png"
+    },
+    "mesin_blur": {
+      "file": "mesin_blur.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 64,
+        "height": 81
+      },
+      "jangkar": {
+        "x": 31,
+        "y": 80
+      },
+      "keadaan": [
+        "mati",
+        "jalan_1",
+        "jalan_2",
+        "selesai"
+      ],
+      "sumber": "animasi_2_pos.png"
+    },
+    "kotak_post": {
+      "file": "kotak_post.png",
+      "tapak": [
+        1,
+        1
+      ],
+      "frame": {
+        "width": 55,
+        "height": 84
+      },
+      "jangkar": {
+        "x": 27,
+        "y": 83
+      },
+      "keadaan": [
+        "tutup",
+        "buka",
+        "masuk",
+        "terkirim"
+      ],
+      "sumber": "animasi_2_pos.png"
+    },
+    "meja_monitor": {
+      "file": "meja_monitor.png",
+      "tapak": [
+        1,
+        2
+      ],
+      "frame": {
+        "width": 93,
+        "height": 83
+      },
+      "jangkar": {
+        "x": 29,
+        "y": 82
+      },
+      "keadaan": [
+        "mati",
+        "cari",
+        "edit",
+        "unggah"
+      ],
+      "sumber": "animasi_2_pos.png"
+    }
+  }
+}

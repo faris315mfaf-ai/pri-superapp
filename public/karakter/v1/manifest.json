@@ -1,0 +1,324 @@
+{
+  "schemaVersion": 1,
+  "id": "tvr_ai_v1",
+  "artStatus": "AI_DRAFT",
+  "dibuat": "2026-10-15T18:49:21.371Z",
+  "frame": {
+    "width": 64,
+    "height": 96,
+    "anchor": {
+      "x": 32,
+      "y": 80
+    }
+  },
+  "versi2x": {
+    "akhiran": "@2x",
+    "width": 128,
+    "height": 192,
+    "anchor": {
+      "x": 64,
+      "y": 160
+    }
+  },
+  "tinggiKarakter": 60,
+  "directions": [
+    "NW",
+    "NE",
+    "SE",
+    "SW"
+  ],
+  "atlasFormat": "columns=animation frame index, rows=direction (NW,NE,SE,SW)",
+  "animations": {
+    "idle": {
+      "frames": 1,
+      "fps": 2,
+      "loop": true
+    },
+    "walk": {
+      "frames": 6,
+      "fps": 8,
+      "loop": true
+    },
+    "sit": {
+      "frames": 1,
+      "fps": 1,
+      "loop": true
+    },
+    "work": {
+      "frames": 4,
+      "fps": 6,
+      "loop": true
+    }
+  },
+  "layers": {
+    "badan": {
+      "file": "badan_{animation}.png",
+      "kulit": "badan_{animation}_kulit.png",
+      "animations": [
+        "idle",
+        "walk",
+        "sit",
+        "work"
+      ]
+    },
+    "rambut": {
+      "jumlah": 20,
+      "file": "rambut_{nn}.png",
+      "frames": 1,
+      "ikutKepala": true,
+      "warna": "abu-abu netral; warnai ulang di klien"
+    },
+    "atasan": {
+      "jumlah": 9,
+      "file": "atasan_{nn}_idle.png",
+      "kulit": "atasan_{nn}_idle_kulit.png",
+      "animations": [
+        "idle"
+      ],
+      "warna": "abu-abu netral; warnai ulang di klien"
+    }
+  },
+  "kepala": {
+    "idle": {
+      "NW": [
+        [
+          33,
+          23
+        ]
+      ],
+      "NE": [
+        [
+          32,
+          21
+        ]
+      ],
+      "SE": [
+        [
+          33,
+          20
+        ]
+      ],
+      "SW": [
+        [
+          33,
+          20
+        ]
+      ]
+    },
+    "walk": {
+      "NW": [
+        [
+          33,
+          22
+        ],
+        [
+          32,
+          22
+        ],
+        [
+          32,
+          22
+        ],
+        [
+          32,
+          22
+        ],
+        [
+          32,
+          22
+        ],
+        [
+          32,
+          22
+        ]
+      ],
+      "NE": [
+        [
+          33,
+          22
+        ],
+        [
+          33,
+          22
+        ],
+        [
+          32,
+          22
+        ],
+        [
+          32,
+          22
+        ],
+        [
+          32,
+          22
+        ],
+        [
+          31,
+          21
+        ]
+      ],
+      "SE": [
+        [
+          32,
+          20
+        ],
+        [
+          33,
+          20
+        ],
+        [
+          32,
+          20
+        ],
+        [
+          32,
+          20
+        ],
+        [
+          33,
+          20
+        ],
+        [
+          32,
+          20
+        ]
+      ],
+      "SW": [
+        [
+          33,
+          20
+        ],
+        [
+          33,
+          20
+        ],
+        [
+          32,
+          20
+        ],
+        [
+          33,
+          20
+        ],
+        [
+          32,
+          20
+        ],
+        [
+          31,
+          20
+        ]
+      ]
+    },
+    "sit": {
+      "NW": [
+        [
+          33,
+          28
+        ]
+      ],
+      "NE": [
+        [
+          30,
+          28
+        ]
+      ],
+      "SE": [
+        [
+          32,
+          28
+        ]
+      ],
+      "SW": [
+        [
+          32,
+          28
+        ]
+      ]
+    },
+    "work": {
+      "NW": [
+        [
+          31,
+          22
+        ],
+        [
+          31,
+          22
+        ],
+        [
+          31,
+          22
+        ],
+        [
+          31,
+          22
+        ]
+      ],
+      "NE": [
+        [
+          30,
+          21
+        ],
+        [
+          30,
+          21
+        ],
+        [
+          30,
+          21
+        ],
+        [
+          29,
+          21
+        ]
+      ],
+      "SE": [
+        [
+          31,
+          20
+        ],
+        [
+          30,
+          20
+        ],
+        [
+          30,
+          20
+        ],
+        [
+          30,
+          20
+        ]
+      ],
+      "SW": [
+        [
+          33,
+          20
+        ],
+        [
+          32,
+          20
+        ],
+        [
+          32,
+          20
+        ],
+        [
+          32,
+          20
+        ]
+      ]
+    }
+  },
+  "warnaDasar": {
+    "kulit": "#cd8558",
+    "terangRambut": 91
+  },
+  "sumber": {
+    "badan": "Sprite Piksel Karakter Isometrik Magenta.png",
+    "rambut": "Atlas Rambut Pixel Empat Arah.png",
+    "atasan": "Lembar Sprite Pixel Art Pakaian Torso.png"
+  }
+}

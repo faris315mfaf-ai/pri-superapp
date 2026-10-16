@@ -1,0 +1,13 @@
+{
+  "keterangan": "Sudut belakang lantai (titik temu lantai di bawah tiang sudut dinding) per gambar sumber ruang_<nama>.png, dalam piksel gambar sumber 1536x1024. Diukur manual 16 Okt 2026 dari potongan berpenggaris; ketelitian ±2 px sumber. Ruang tanpa entri memakai deteksi otomatis.",
+  "ruang": {
+    "alat": { "belakang": [768, 319] },
+    "aula": { "belakang": [763, 315] },
+    "database": { "belakang": [767, 320] },
+    "istirahat": { "belakang": [763, 360] },
+    "kerja": { "belakang": [767, 376] },
+    "koordinator": { "belakang": [638, 365] },
+    "meeting": { "belakang": [776, 358] },
+    "pos": { "belakang": [767, 330] }
+  }
+}
