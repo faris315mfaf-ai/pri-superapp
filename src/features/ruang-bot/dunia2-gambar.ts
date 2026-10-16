@@ -1,25 +1,29 @@
 // ============================================================
 // DUNIA v2 — penggambar satu frame (klien), 16 Okt 2026.
 //
-// Urutan: latar gedung (modul ruang, dinding dalam sudah dibuang) → objek
-// terurut kedalaman (perabot [titik tengah jejak], sekat rendah per tile,
-// kusen pintu, bot, Nara, anggota online [aturan dudukan]) → kertas surat
-// Nara yang melayang → lapisan malam. Koordinat gambar = piksel latar (1x);
+// Urutan: latar gedung (lantai + dinding luar) → objek per LAPISAN RUANG
+// (belakang → depan; di tiap ruang: dinding dalamnya [mode rendah/penuh], kusen
+// pintunya, lalu perabot [titik tengah jejak], bot, Nara, anggota online
+// [aturan dudukan] terurut kedalaman) → kertas surat Nara yang melayang →
+// lapisan malam. Koordinat gambar = piksel latar (1x);
 // kamera (geser/zoom) dipasang pemanggil lewat transform konteks.
 // ============================================================
 
 import { KONFIG_NARA, konfigBawaan, type KonfigKarakter } from "@/lib/karakter-murni";
-import { KASUR2, PERABOT2, kedalamanKarakter, kedalamanPerabot, type JenisStasiunPenghuni2 } from "./denah2";
+import { KASUR2, PERABOT2, PINTU2, kedalamanKarakter, kedalamanPerabot, type JenisStasiunPenghuni2 } from "./denah2";
 import type { AsetDunia2 } from "./dunia2-aset";
 import {
-  KUSEN2,
-  RUAS_SEKAT2,
-  TINGGI_KUSEN,
-  TINGGI_SEKAT,
+  TINGGI_DINDING_RENDAH,
+  TINGGI_PINTU,
+  URUT_RUANG2,
   frameKeadaan,
   keLayar,
+  kunciLapis,
+  lapisDi,
+  pemilikPintu,
   poseKarakter,
   poseTidur,
+  type ModeDinding,
   type PoseKarakter2,
 } from "./dunia2-murni";
 import { infoAnimasiSegera, rakitFrame, siapkanKarakter, type AnimKarakter, type ArahKarakter } from "./karakter-sprite";
@@ -47,6 +51,8 @@ export type Adegan2 = {
   /** Diisi: posisi kaki di layar (untuk tag nama, gelembung, klik). */
   posisi: Map<string, PosisiLayar2>;
   posisiPenghuni: Map<number, PosisiLayar2>;
+  /** Dinding dalam: rendah (bawaan) atau penuh setinggi aslinya. */
+  dinding?: ModeDinding;
   /** Persegi latar yang terlihat kamera (px latar); benda di luarnya tidak digambar. Bawaan: seluruh latar. */
   pandang?: { x0: number; y0: number; x1: number; y1: number };
 };
@@ -108,49 +114,44 @@ function karakter(c: CanvasRenderingContext2D, k: KonfigKarakter, pose: PoseKara
   c.globalAlpha = 1;
 }
 
-const SEKAT_DEPAN = "#dccdb0";
-const SEKAT_SISI = "#cbb994";
-const SEKAT_TUTUP = "#8a5a3a";
+const KAYU = "#8a5a3a";
+const KAYU_TERANG = "#b07a4f";
 const GARIS = "#2a2028";
 
-/** Sekat rendah satu tile: muka tegak + tutup kayu, garis tepi gelap. */
-function ruasSekat(c: CanvasRenderingContext2D, r: (typeof RUAS_SEKAT2)[number]) {
-  const a = r.sumbu === "x" ? keLayar(r.pada, r.dari) : keLayar(r.dari, r.pada);
-  const b = r.sumbu === "x" ? keLayar(r.pada, r.sampai) : keLayar(r.sampai, r.pada);
-  const h = TINGGI_SEKAT;
-  c.fillStyle = r.sumbu === "x" ? SEKAT_SISI : SEKAT_DEPAN;
-  c.beginPath();
-  c.moveTo(a.x, a.y);
-  c.lineTo(b.x, b.y);
-  c.lineTo(b.x, b.y - h);
-  c.lineTo(a.x, a.y - h);
-  c.closePath();
-  c.fill();
-  c.fillStyle = SEKAT_TUTUP;
-  c.beginPath();
-  c.moveTo(a.x, a.y - h);
-  c.lineTo(b.x, b.y - h);
-  c.lineTo(b.x, b.y - h + 3);
-  c.lineTo(a.x, a.y - h + 3);
-  c.closePath();
-  c.fill();
-  c.strokeStyle = GARIS;
-  c.lineWidth = 1;
-  c.beginPath();
-  c.moveTo(a.x, a.y - h);
-  c.lineTo(b.x, b.y - h);
-  c.stroke();
-}
-
-function kusen(c: CanvasRenderingContext2D, x: number, y: number) {
+/** Tiang kusen pintu setinggi h px di titik dunia (x, y). */
+function tiangKusen(c: CanvasRenderingContext2D, x: number, y: number, h: number) {
   const p = keLayar(x, y);
   const px = Math.round(p.x), py = Math.round(p.y);
   c.fillStyle = GARIS;
-  c.fillRect(px - 3, py - TINGGI_KUSEN - 1, 6, TINGGI_KUSEN + 1);
-  c.fillStyle = SEKAT_TUTUP;
-  c.fillRect(px - 2, py - TINGGI_KUSEN, 4, TINGGI_KUSEN);
-  c.fillStyle = "#b07a4f";
-  c.fillRect(px - 2, py - TINGGI_KUSEN, 1, TINGGI_KUSEN);
+  c.fillRect(px - 3, py - h - 1, 6, h + 1);
+  c.fillStyle = KAYU;
+  c.fillRect(px - 2, py - h, 4, h);
+  c.fillStyle = KAYU_TERANG;
+  c.fillRect(px - 2, py - h, 1, h);
+}
+
+/** Kusen satu pintu: dua tiang; pada dinding penuh ditambah ambang kayu di atas celah. */
+function kusenPintu(c: CanvasRenderingContext2D, p: (typeof PINTU2)[number], mode: ModeDinding) {
+  const h = mode === "penuh" ? TINGGI_PINTU : TINGGI_DINDING_RENDAH;
+  const [ax, ay] = p.sumbu === "x" ? [p.pada, p.dari] : [p.dari, p.pada];
+  const [bx, by] = p.sumbu === "x" ? [p.pada, p.sampai] : [p.sampai, p.pada];
+  if (mode === "penuh") {
+    const a = keLayar(ax, ay, h), b = keLayar(bx, by, h);
+    c.strokeStyle = GARIS;
+    c.lineWidth = 6;
+    c.beginPath();
+    c.moveTo(a.x, a.y - 1);
+    c.lineTo(b.x, b.y - 1);
+    c.stroke();
+    c.strokeStyle = KAYU;
+    c.lineWidth = 4;
+    c.beginPath();
+    c.moveTo(a.x, a.y - 1);
+    c.lineTo(b.x, b.y - 1);
+    c.stroke();
+  }
+  tiangKusen(c, ax, ay, h);
+  tiangKusen(c, bx, by, h);
 }
 
 // ---------- frame ----------
@@ -179,10 +180,21 @@ export function gambarFrame2(a: Adegan2): void {
     const f = p.kunci && s.frames > 1 ? Math.min(s.frames - 1, frameKeadaan(p.kunci, { mejaSibuk, stasiunSibuk: sibukStasiun }, t)) : 0;
     const d = keLayar(p.x + p.tapak[0], p.y + p.tapak[1]);
     if (!tampak(d.x - s.jx, d.y - s.jy, s.w, s.h)) continue;
-    objek.push({ kunci: kedalamanPerabot(p), gambar: () => c.drawImage(s.img, f * s.w, 0, s.w, s.h, Math.round(d.x - s.jx), Math.round(d.y - s.jy), s.w, s.h) });
+    const lapis = lapisDi(p.x + p.tapak[0] / 2, p.y + p.tapak[1] / 2);
+    objek.push({ kunci: kunciLapis(lapis, kedalamanPerabot(p)), gambar: () => c.drawImage(s.img, f * s.w, 0, s.w, s.h, Math.round(d.x - s.jx), Math.round(d.y - s.jy), s.w, s.h) });
   }
-  for (const r of RUAS_SEKAT2) objek.push({ kunci: r.kunci, gambar: () => ruasSekat(c, r) });
-  for (const k of KUSEN2) objek.push({ kunci: k.kunci, gambar: () => kusen(c, k.titik[0], k.titik[1]) });
+  // Dinding dalam tiap ruang: paling awal di lapisannya (di depan isi ruang belakang, di belakang isi ruangnya).
+  const mode = a.dinding ?? "rendah";
+  for (const w of aset.dinding[mode]) {
+    const lapis = URUT_RUANG2.findIndex((r) => r.kunci === w.kunci);
+    if (!tampak(w.x, w.y, w.img.width, w.img.height)) continue;
+    objek.push({ kunci: kunciLapis(lapis, -900), gambar: () => c.drawImage(w.img, w.x, w.y) });
+  }
+  for (const p of PINTU2) {
+    const pemilik = pemilikPintu(p);
+    if (!pemilik) continue;
+    objek.push({ kunci: kunciLapis(URUT_RUANG2.indexOf(pemilik), -800), gambar: () => kusenPintu(c, p, mode) });
+  }
 
   // Bot
   a.posisi.clear();
@@ -196,10 +208,10 @@ export function gambarFrame2(a: Adegan2): void {
       const tidur = poseTidur(kasur);
       titik = tidur.titik;
       pose = tidur.pose;
-      kunci = kedalamanPerabot(PERABOT2.find((p) => p.kunci === `kasur:${kasur}`)!) + 0.01;
+      kunci = kunciLapis(lapisDi(titik[0], titik[1]), kedalamanPerabot(PERABOT2.find((p) => p.kunci === `kasur:${kasur}`)!) + 0.01);
     } else {
       pose = poseKarakter(b, b.keadaan === "berjalan");
-      kunci = kedalamanKarakter(b.x, b.y, pose.duduk);
+      kunci = kunciLapis(lapisDi(b.x, b.y), kedalamanKarakter(b.x, b.y, pose.duduk));
     }
     const s = keLayar(titik[0], titik[1]);
     a.posisi.set(b.id, { sx: s.x, sy: s.y });
@@ -221,7 +233,7 @@ export function gambarFrame2(a: Adegan2): void {
     const s = keLayar(n.x, n.y);
     a.posisi.set(ID_NARA2, { sx: s.x, sy: s.y });
     if (tampakKarakter(s.x, s.y)) objek.push({
-      kunci: kedalamanKarakter(n.x, n.y, pose.duduk) + 0.002,
+      kunci: kunciLapis(lapisDi(n.x, n.y), kedalamanKarakter(n.x, n.y, pose.duduk) + 0.002),
       gambar: () => {
         if (!pose.duduk) bayangan(c, s.x, s.y);
         karakter(c, KONFIG_NARA, pose, s.x, s.y, t);
@@ -239,7 +251,7 @@ export function gambarFrame2(a: Adegan2): void {
     const konfig = a.konfigPenghuni(p);
     const dipilih = a.terpilihPenghuniId === p.id;
     if (tampakKarakter(s.x, s.y)) objek.push({
-      kunci: kedalamanKarakter(p.x, p.y, pose.duduk) + 0.001,
+      kunci: kunciLapis(lapisDi(p.x, p.y), kedalamanKarakter(p.x, p.y, pose.duduk) + 0.001),
       gambar: () => {
         if (p.alfa > 0.3 && !pose.duduk) bayangan(c, s.x, s.y);
         if (dipilih) cincinPilih(c, s.x, s.y);

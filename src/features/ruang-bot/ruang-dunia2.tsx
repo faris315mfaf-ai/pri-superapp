@@ -40,6 +40,7 @@ import {
   terlihatDiKamera,
   zoomDiJangkar,
   type Kamera2,
+  type ModeDinding,
 } from "./dunia2-murni";
 import type { SimulasiBot } from "./simulasi-bot";
 import { WARNA_NARA } from "./simulasi-nara";
@@ -54,6 +55,17 @@ const AMBANG_SERET = 5;
 const ATAS_KEPALA = 64;
 /** Wadah lebih sempit dari skala Pas ini (ponsel) → mulai di ruangAwal, bukan seluruh gedung. */
 const PAS_TERLALU_KECIL = 0.42;
+/** Pilihan tampilan dinding dalam disimpan per peramban (kenyamanan saja). */
+const KUNCI_DINDING = "ruangbot:dinding";
+
+function bacaModeDinding(): ModeDinding {
+  try {
+    return window.localStorage.getItem(KUNCI_DINDING) === "penuh" ? "penuh" : "rendah";
+  } catch {
+    return "rendah";
+  }
+}
+
 /** Batas waktu menunggu posisi orang yang dipilih dari luar kanvas (baru masuk ruangan). */
 const TUNGGU_IKUTI_MS = 3000;
 
@@ -132,6 +144,15 @@ export function RuangDunia2({
   const [galat, setGalat] = useState<string | null>(null);
   const [zoomTampil, setZoomTampil] = useState<number | "pas">("pas");
   const [ruangAktif, setRuangAktif] = useState<KunciRuang2 | null>(null);
+  const [modeDinding, setModeDinding] = useState<ModeDinding>("rendah");
+  const pilihDinding = (m: ModeDinding) => {
+    setModeDinding(m);
+    try {
+      window.localStorage.setItem(KUNCI_DINDING, m);
+    } catch {
+      // penyimpanan peramban diblokir: pilihan berlaku sampai halaman ditutup
+    }
+  };
 
   const kameraRef = useRef<Kamera2>({ cx: LEBAR_LATAR / 2, cy: TINGGI_LATAR / 2, s: 0.5 });
   /** Tujuan animasi kamera (null = diam). */
@@ -157,17 +178,22 @@ export function RuangDunia2({
   const konfigBot = useMemo(() => new Map(bots.map((b) => [b.id, konfigDariRupaBot(b.rupa)])), [bots]);
   const petaRupa = useMemo(() => petaRupaAnggota(daftarPenghuni, sayaId, rupaSaya), [daftarPenghuni, sayaId, rupaSaya]);
   const konfigAnggota = useMemo(() => konfigPenghuni ?? ((p: Penghuni) => rupaAnggota(petaRupa, p.id)), [konfigPenghuni, petaRupa]);
-  const terbaru = useRef({ malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota });
+  const terbaru = useRef({ malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota, modeDinding });
   useEffect(() => {
-    terbaru.current = { malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota };
+    terbaru.current = { malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota, modeDinding };
     kotorRef.current = true;
-  }, [malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota]);
+  }, [malam, kecepatan, terpilihId, terpilihPenghuniId, onPilih, onPilihNara, onPilihPenghuni, konfigBot, konfigAnggota, modeDinding]);
 
   useEffect(() => {
     gerakRef.current = gerakDikurangi;
     sim.setGerakKurang(gerakDikurangi);
   }, [sim, gerakDikurangi]);
   useEffect(() => { tanpaHoverRef.current = window.matchMedia("(hover: none)").matches; }, []);
+  // Pilihan dinding tersimpan dibaca setelah pasang (server selalu "rendah" → tanpa beda hidrasi).
+  useEffect(() => {
+    const tersimpan = bacaModeDinding();
+    if (tersimpan !== "rendah") queueMicrotask(() => setModeDinding(tersimpan));
+  }, []);
 
   useEffect(() => {
     let batal = false;
@@ -443,6 +469,7 @@ export function RuangDunia2({
         terpilihId: t.terpilihId,
         terpilihPenghuniId: t.terpilihPenghuniId,
         malam: t.malam,
+        dinding: t.modeDinding,
         posisi: posisiRef.current,
         posisiPenghuni: posisiPenghuniRef.current,
         pandang: { x0: k.cx - w / 2 / k.s, y0: k.cy - h / 2 / k.s, x1: k.cx + w / 2 / k.s, y1: k.cy + h / 2 / k.s },
@@ -650,6 +677,25 @@ export function RuangDunia2({
             </button>
           ))}
         </div>
+      </div>
+      <div data-kendali className="pointer-events-auto absolute bottom-2 left-2 flex items-center gap-0.5 rounded-lg border border-white/15 bg-[rgba(14,11,20,.82)] p-0.5" role="radiogroup" aria-label="Tampilan dinding ruang">
+        <span className="px-1.5 font-mono text-[10px] font-bold uppercase tracking-wide text-[#f4efe8]/70 max-sm:hidden">Dinding</span>
+        {(["rendah", "penuh"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={modeDinding === m}
+            onClick={() => pilihDinding(m)}
+            title={m === "rendah" ? "Dinding dalam dipotong rendah: isi semua ruang terlihat" : "Dinding dalam setinggi aslinya: ruang di belakang banyak tertutup"}
+            className={cn(
+              "btn-tekan h-8 rounded-md px-2.5 text-[11.5px] font-bold focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#fde68a]",
+              modeDinding === m ? "bg-[#f4efe8] text-[#1a1422]" : "text-[#f4efe8] hover:bg-white/10",
+            )}
+          >
+            {m === "rendah" ? "Rendah" : "Penuh"}
+          </button>
+        ))}
       </div>
       <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1">
         {sayaId !== undefined && daftarPenghuni.some((p) => p.id === sayaId) && (

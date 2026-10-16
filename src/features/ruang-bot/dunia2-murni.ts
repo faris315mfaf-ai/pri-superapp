@@ -16,6 +16,7 @@ import {
   MEJA_KOORDINATOR2,
   PAPAN_TUGAS2,
   PINTU2,
+  RUANG2,
   STASIUN2,
   STASIUN_PENGHUNI2,
   ruangDi,
@@ -255,3 +256,58 @@ export function pusatRuang(r: Ruang2): { x: number; y: number } {
   const p = keLayar(r.x + r.w / 2, r.y + r.d / 2);
   return { x: p.x, y: p.y - 60 };
 }
+
+// ---------- dinding dalam (dua mode) & lapisan gambar ----------
+
+/**
+ * Dinding dalam = dinding modul yang berbatasan dengan ruang lain (dinding luar gedung selalu utuh di latar).
+ *  "rendah": setinggi TINGGI_DINDING_RENDAH dengan tutup kayu (isi ruang di belakang tetap terlihat);
+ *  "penuh":  setinggi gambar aslinya (±170 px; isi ruang di belakang banyak tertutup).
+ */
+export type ModeDinding = "rendah" | "penuh";
+export const MODE_DINDING: readonly ModeDinding[] = ["rendah", "penuh"];
+export const TINGGI_DINDING_RENDAH = 56;
+/** Tinggi celah pintu pada dinding penuh (di atasnya ambang/lintel). */
+export const TINGGI_PINTU = 84;
+
+/** Posisi t (sepanjang dinding) berada di celah pintu dinding sisi itu milik ruang r. */
+export function diCelahPintu(r: Ruang2, sisi: "kiri" | "kanan", t: number): boolean {
+  const sumbu = sisi === "kiri" ? "x" : "y";
+  const pada = sisi === "kiri" ? r.x : r.y;
+  return PINTU2.some((p) => p.sumbu === sumbu && p.pada === pada && t > p.dari && t < p.sampai);
+}
+
+/**
+ * Nasib satu piksel dinding dalam. `tinggi` = px di atas garis lantai dinding.
+ * buang = transparan; tutup = kayu tutup dinding rendah; garis = tepi atas gelap; simpan = piksel asli.
+ */
+export function pikselDindingDalam(r: Ruang2, sisi: "kiri" | "kanan", t: number, tinggi: number, mode: ModeDinding): "simpan" | "tutup" | "garis" | "buang" {
+  if (diCelahPintu(r, sisi, t) && (mode === "rendah" || tinggi < TINGGI_PINTU)) return "buang";
+  if (mode === "penuh") return "simpan";
+  if (tinggi > TINGGI_DINDING_RENDAH) return "buang";
+  if (tinggi > TINGGI_DINDING_RENDAH - 1) return "garis";
+  if (tinggi > TINGGI_DINDING_RENDAH - 4) return "tutup";
+  return "simpan";
+}
+
+/**
+ * Urutan ruang belakang → depan. Setiap dinding dalam memisahkan ruang di depannya (pemilik dinding)
+ * dari ruang di belakangnya, dan pemilik selalu datang lebih akhir di urutan ini — jadi menggambar
+ * per ruang (isi ruang belakang → dinding ruang depan → isi ruang depan) selalu benar.
+ */
+export const URUT_RUANG2: readonly Ruang2[] = [...RUANG2].sort((a, b) => a.x + a.y - (b.x + b.y) || a.x - b.x);
+
+/** Lapisan gambar titik dunia: indeks ruangnya di URUT_RUANG2 (−1 di luar ruang mana pun). */
+export function lapisDi(x: number, y: number): number {
+  const r = ruangDi(Math.min(LEBAR_DUNIA - 1e-6, Math.max(0, x)), Math.min(DALAM_DUNIA - 1e-6, Math.max(0, y)));
+  return r ? URUT_RUANG2.indexOf(r) : -1;
+}
+
+/** Ruang pemilik dinding tempat pintu p berada (ruang di sisi depan garis pintu). */
+export function pemilikPintu(p: { sumbu: "x" | "y"; pada: number; dari: number; sampai: number }): Ruang2 | null {
+  const t = (p.dari + p.sampai) / 2;
+  return p.sumbu === "x" ? ruangDi(p.pada + 0.01, t) : ruangDi(t, p.pada + 0.01);
+}
+
+/** Kunci urut global: lapisan ruang dulu, lalu kedalaman di dalam ruang. */
+export const kunciLapis = (lapis: number, kunci: number) => lapis * 1000 + kunci;

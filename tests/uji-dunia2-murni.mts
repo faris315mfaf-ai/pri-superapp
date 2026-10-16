@@ -3,6 +3,7 @@
 // Jalankan: npx tsx tests/uji-dunia2-murni.mts
 import fs from "node:fs";
 import {
+  BATAS2,
   DALAM_DUNIA,
   KASUR2,
   KURSI_NARA_RAPAT2,
@@ -29,6 +30,14 @@ import {
   frameKeadaan,
   keLayar,
   poseKarakter,
+  TINGGI_DINDING_RENDAH,
+  TINGGI_PINTU,
+  URUT_RUANG2,
+  diCelahPintu,
+  kunciLapis,
+  lapisDi,
+  pemilikPintu,
+  pikselDindingDalam,
   dekatiKamera,
   jepitKamera,
   latarKeWadah,
@@ -262,6 +271,34 @@ console.log("Kamera");
     const t = keLayar(r.x + r.w / 2, r.y + r.d / 2);
     return c.x === t.x && c.y === t.y - 60 && c.x > 0 && c.x < LEBAR_LATAR && c.y > 0 && c.y < TINGGI_LATAR;
   }));
+}
+
+console.log("Dinding dalam & lapisan ruang");
+{
+  const r = (k: string) => RUANG2.find((x) => x.kunci === k)!;
+  cek("celah pintu: koordinator kiri y 6..8, bukan 5", diCelahPintu(r("koordinator"), "kiri", 7) && !diCelahPintu(r("koordinator"), "kiri", 5.5) && !diCelahPintu(r("koordinator"), "kanan", 7));
+  cek("celah pintu: istirahat kanan x 3..5", diCelahPintu(r("istirahat"), "kanan", 4) && !diCelahPintu(r("istirahat"), "kanan", 6));
+  cek("tiap pintu punya pemilik = ruang sisi depan (salah satu ruang 'antara')", PINTU2.every((p) => {
+    const o = pemilikPintu(p);
+    return !!o && p.antara.includes(o.kunci) && (p.sumbu === "x" ? o.x === p.pada : o.y === p.pada) && (o.potongKiri || o.potongKanan);
+  }));
+  const k = r("database");
+  cek("rendah: piksel di bawah batas simpan, di atas buang", pikselDindingDalam(k, "kiri", 15, 10, "rendah") === "simpan" && pikselDindingDalam(k, "kiri", 15, TINGGI_DINDING_RENDAH + 1, "rendah") === "buang");
+  cek("rendah: tutup kayu 3 px + garis atas 1 px", pikselDindingDalam(k, "kiri", 15, TINGGI_DINDING_RENDAH - 2, "rendah") === "tutup" && pikselDindingDalam(k, "kiri", 15, TINGGI_DINDING_RENDAH - 0.5, "rendah") === "garis");
+  cek("penuh: setinggi apa pun disimpan", pikselDindingDalam(k, "kiri", 15, 160, "penuh") === "simpan");
+  const alat = r("alat");
+  cek("pintu dinding penuh: celah di bawah 84 px, ambang di atasnya", pikselDindingDalam(alat, "kiri", 13, 20, "penuh") === "buang" && pikselDindingDalam(alat, "kiri", 13, TINGGI_PINTU + 2, "penuh") === "simpan");
+  cek("pintu dinding rendah: celah setinggi dinding", pikselDindingDalam(alat, "kiri", 13, 20, "rendah") === "buang" && pikselDindingDalam(alat, "kiri", 13, TINGGI_DINDING_RENDAH - 2, "rendah") === "buang");
+  cek("urutan ruang: 8, unik", URUT_RUANG2.length === 8 && new Set(URUT_RUANG2).size === 8);
+  // Setiap batas dalam: ruang pemilik dinding (sisi depan) datang SETELAH ruang di belakangnya.
+  cek("tiap dinding dalam: pemilik digambar setelah ruang di baliknya", BATAS2.filter((b) => b.dalam).every((b) => {
+    const t = (b.dari + b.sampai) / 2;
+    const [belakang, depan] = b.sumbu === "x" ? [ruangDi(b.pada - 0.5, t), ruangDi(b.pada + 0.5, t)] : [ruangDi(t, b.pada - 0.5), ruangDi(t, b.pada + 0.5)];
+    return !!belakang && !!depan && URUT_RUANG2.indexOf(belakang) < URUT_RUANG2.indexOf(depan);
+  }));
+  cek("lapisDi: titik di ruang → indeks ruangnya; halaman kosong → −1; di luar dijepit", lapisDi(5, 5) === URUT_RUANG2.indexOf(r("kerja")) && lapisDi(15, 1) === -1 && lapisDi(-3, 15) === URUT_RUANG2.indexOf(r("istirahat")));
+  cek("kunciLapis: lapisan menang atas kedalaman", kunciLapis(1, -900) > kunciLapis(0, 60) && kunciLapis(2, -1) < kunciLapis(2, 0.5));
+  cek("semua perabot di dalam ruang (punya lapisan)", PERABOT2.every((p) => lapisDi(p.x + p.tapak[0] / 2, p.y + p.tapak[1] / 2) >= 0));
 }
 
 console.log(`\nHasil: ${lulus} lulus, ${gagal} gagal`);
