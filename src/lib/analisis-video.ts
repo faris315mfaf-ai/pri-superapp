@@ -36,6 +36,8 @@ export type BarisAnalisis = {
   suka: number | string | null;
   komentar: number | string | null;
   bagikan: number | string | null;
+  /** sql/82 (16 Okt 2026); tidak ada di database lama. */
+  jangkauan?: number | string | null;
   diperbarui_pada: string | null;
 };
 
@@ -56,6 +58,8 @@ export type BarisSiap = {
   suka: number;
   komentar: number;
   bagikan: number;
+  /** Jangkauan (reach) — hanya platform yang melaporkannya; 0 bila tidak ada. */
+  jangkauan: number;
 };
 
 export type Rentang = "1" | "7" | "30" | "90" | "semua";
@@ -73,6 +77,8 @@ export type Ringkas = {
   suka: number;
   komentar: number;
   bagikan: number;
+  /** Jumlah jangkauan (reach) video berangka yang melaporkannya (sql/82). */
+  jangkauan: number;
   /** Rata-rata tayangan per video berangka. */
   rata_tayangan: number;
   median_tayangan: number;
@@ -168,6 +174,7 @@ export function siapkanBaris(b: BarisAnalisis): BarisSiap {
     suka: angka(b.suka),
     komentar: angka(b.komentar),
     bagikan: angka(b.bagikan),
+    jangkauan: angka(b.jangkauan ?? 0),
   };
 }
 
@@ -201,8 +208,8 @@ function persen(bagian: number, total: number): number {
   return total > 0 ? Math.round((bagian / total) * 10_000) / 100 : 0;
 }
 
-type Akumulator = { video: number; berangka: number; tayangan: number; suka: number; komentar: number; bagikan: number; daftar: number[] };
-const akumBaru = (): Akumulator => ({ video: 0, berangka: 0, tayangan: 0, suka: 0, komentar: 0, bagikan: 0, daftar: [] });
+type Akumulator = { video: number; berangka: number; tayangan: number; suka: number; komentar: number; bagikan: number; jangkauan: number; daftar: number[] };
+const akumBaru = (): Akumulator => ({ video: 0, berangka: 0, tayangan: 0, suka: 0, komentar: 0, bagikan: 0, jangkauan: 0, daftar: [] });
 function tambahAkum(a: Akumulator, b: BarisSiap) {
   a.video += 1;
   if (!b.berangka) return;
@@ -211,6 +218,7 @@ function tambahAkum(a: Akumulator, b: BarisSiap) {
   a.suka += b.suka;
   a.komentar += b.komentar;
   a.bagikan += b.bagikan;
+  a.jangkauan += b.jangkauan;
   a.daftar.push(b.tayangan);
 }
 function keRingkas(a: Akumulator): Ringkas {
@@ -221,6 +229,7 @@ function keRingkas(a: Akumulator): Ringkas {
     suka: a.suka,
     komentar: a.komentar,
     bagikan: a.bagikan,
+    jangkauan: a.jangkauan,
     rata_tayangan: a.berangka ? Math.round(a.tayangan / a.berangka) : 0,
     median_tayangan: median(a.daftar),
     er: persen(a.suka + a.komentar + a.bagikan, a.tayangan),

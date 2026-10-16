@@ -508,10 +508,11 @@ type Konteks = {
 };
 
 async function muatKonteks(db: Db): Promise<Konteks> {
-  const [fav, sum, men] = await Promise.all([
+  const [fav, sum, men, jang] = await Promise.all([
     kolomTabelAda("tvr_video_metrik", "favorit"),
     kolomTabelAda("tvr_video_metrik", "sumber"),
     kolomTabelAda("tvr_video_metrik", "mentah"),
+    kolomTabelAda("tvr_video_metrik", "jangkauan"),
   ]);
   type BarisAkun = { user_id: number | string; platform: string; username: string | null; terhubung: boolean | null };
   const [{ data: profil }, akun] = await Promise.all([
@@ -556,7 +557,7 @@ async function muatKonteks(db: Db): Promise<Konteks> {
       if (pk && platformDidukung(pf) && !daftar.has(k)) daftar.set(k, { uid, platform: pf, username: nama, profil: pk, kunci: k });
     }
   }
-  return { kolom: { favorit: fav, sumber: sum, mentah: men }, profilPer, akunUser, pemilikAkun, tersambung, akun: [...daftar.values()] };
+  return { kolom: { favorit: fav, sumber: sum, mentah: men, jangkauan: jang }, profilPer, akunUser, pemilikAkun, tersambung, akun: [...daftar.values()] };
 }
 
 // ------------------------------------------------------------

@@ -197,7 +197,7 @@ function bulat(v: number | null | undefined): number {
 export function angkaSimpan(
   platform: string,
   m: MetrikPost,
-): { tayangan: number; suka: number; komentar: number; bagikan: number; favorit: number } {
+): { tayangan: number; suka: number; komentar: number; bagikan: number; favorit: number; jangkauan: number | null } {
   const p = platformApp(platform);
   const tayangan = m.tayangan ?? (p === "twitter" ? m.impresi : null);
   return {
@@ -206,11 +206,13 @@ export function angkaSimpan(
     komentar: bulat(m.komentar),
     bagikan: bulat(m.bagikan),
     favorit: bulat(m.simpan),
+    // null = platform tidak melaporkan jangkauan (angka lama tidak ditimpa).
+    jangkauan: m.jangkauan == null ? null : bulat(m.jangkauan),
   };
 }
 
 /** Kolom sql/50 yang belum tentu ada di database. */
-export type KolomTambahan = { favorit: boolean; sumber: boolean; mentah: boolean };
+export type KolomTambahan = { favorit: boolean; sumber: boolean; mentah: boolean; /** sql/82 */ jangkauan?: boolean };
 
 export type BarisLama = {
   akun_username?: string | null;
@@ -261,6 +263,7 @@ export function barisMetrikVideo(o: {
     diperbarui_pada: o.kini,
   };
   if (o.kolom.favorit) baris.favorit = a.favorit;
+  if (o.kolom.jangkauan && a.jangkauan !== null) baris.jangkauan = a.jangkauan;
   if (o.kolom.sumber) baris.sumber = "upload-post";
   if (o.kolom.mentah) baris.mentah = o.mentah;
   return baris;

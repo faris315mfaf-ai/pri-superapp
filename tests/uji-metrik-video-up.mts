@@ -156,6 +156,12 @@ const b3 = barisMetrikVideo({ ...dasar, kolom: { favorit: true, sumber: true, me
 cek("kolom sql/50 ikut bila ada", b3.favorit === 5 && b3.sumber === "upload-post" && typeof b3.mentah === "object");
 const b4 = barisMetrikVideo({ ...dasar, user_id: null, lama: { user_id: "77" } });
 cek("user_id lama dipakai bila pemilik tak diketahui", b4.user_id === 77);
+const b5 = barisMetrikVideo({ ...dasar, metrik: { ...dasar.metrik, jangkauan: 1234.4 }, kolom: { favorit: false, sumber: false, mentah: false, jangkauan: true } });
+cek("jangkauan disimpan bila kolom sql/82 ada", b5.jangkauan === 1234);
+const b6 = barisMetrikVideo({ ...dasar, metrik: { ...dasar.metrik, jangkauan: null }, kolom: { favorit: false, sumber: false, mentah: false, jangkauan: true } });
+cek("jangkauan tak dilaporkan → kolom tidak ditimpa", !("jangkauan" in b6));
+const b7 = barisMetrikVideo({ ...dasar, metrik: { ...dasar.metrik, jangkauan: 99 } });
+cek("tanpa kolom sql/82 → tidak ditulis", !("jangkauan" in b7));
 
 // ---------------------------------------------------------------
 console.log("batas kuota");

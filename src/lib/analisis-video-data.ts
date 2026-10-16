@@ -13,6 +13,7 @@
 // 10 MB bolak-balik ke Redis lebih mahal daripada membaca ulang).
 // ============================================================
 import { supabase } from "./supabase";
+import { kolomTabelAda } from "./kolom-struktur";
 import { jalankanLatar } from "./penjaga-supabase";
 import {
   siapkanBaris,
@@ -47,11 +48,13 @@ const g = ((globalThis as unknown as { __priAnalisisVideo?: Gudang }).__priAnali
 type Db = ReturnType<typeof supabase>;
 
 /** Baca seluruh katalog akun tersambung (untuk diuji: db bisa tiruan). */
-export async function bacaKatalog(db: Db): Promise<Katalog> {
+/** `jangkauan`: kolom sql/82 terpasang (dibaca bila ya). */
+export async function bacaKatalog(db: Db, jangkauan = false): Promise<Katalog> {
+  const kolom = jangkauan ? `${KOLOM}, jangkauan` : KOLOM;
   const baris: BarisSiap[] = [];
   let setelah = "";
   for (let i = 0; i < MAKS_HALAMAN; i++) {
-    let q = db.from("tvr_video_metrik").select(KOLOM).not("user_id", "is", null);
+    let q = db.from("tvr_video_metrik").select(kolom).not("user_id", "is", null);
     if (setelah) q = q.gt("kode", setelah);
     const { data, error } = await q.order("kode", { ascending: true }).limit(HALAMAN);
     if (error) throw new Error(`Gagal membaca katalog video: ${error.message}`);
@@ -71,7 +74,7 @@ export async function bacaKatalog(db: Db): Promise<Katalog> {
 
 function mulaiMuat(): Promise<Katalog> {
   if (!g.proses) {
-    const p = jalankanLatar("analisis-video", () => bacaKatalog(supabase()))
+    const p = jalankanLatar("analisis-video", async () => bacaKatalog(supabase(), await kolomTabelAda("tvr_video_metrik", "jangkauan")))
       .then((k) => {
         g.katalog = k;
         g.memo.clear();

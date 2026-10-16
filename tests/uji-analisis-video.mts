@@ -73,6 +73,11 @@ console.log("susunTampilan — rentang, saringan, ringkasan");
   cek("video = semua di rentang (termasuk yang belum berangka)", t.ringkas.video === 4 && t.ringkas.berangka === 3, t.ringkas);
   cek("tayangan hanya dari yang berangka (99.999 tidak ikut)", t.ringkas.tayangan === 4500, t.ringkas.tayangan);
   cek("rata-rata & median per video berangka", t.ringkas.rata_tayangan === 1500 && t.ringkas.median_tayangan === 1000, t.ringkas);
+  const j = susunTampilan(
+    [{ ...baris({ wib: "2026-09-29 10:00", tayangan: 10 }), jangkauan: 700 }, { ...baris({ wib: "2026-09-29 11:00", tayangan: 5 }), jangkauan: "300" }, baris({ wib: "2026-09-29 12:30", tayangan: 1 })].map(siapkanBaris),
+    { rentang: "1", kiniMs: KINI },
+  );
+  cek("jangkauan dijumlah dari katalog (kolom kosong = 0)", j.ringkas.jangkauan === 1000, j.ringkas.jangkauan);
   const h = susunTampilan(data, { rentang: "1", kiniMs: KINI });
   cek("rentang 1 = hari ini saja (29 Sep), satu titik tren", h.dari === "2026-09-29" && h.sampai === "2026-09-29" && h.tren.length === 1, { dari: h.dari, tren: h.tren.length });
   cek("ER = interaksi / tayangan", t.ringkas.er === Math.round((310 / 4500) * 10_000) / 100, t.ringkas.er);
