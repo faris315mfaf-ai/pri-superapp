@@ -36,7 +36,10 @@ import {
   catatRiwayat,
   elemenBaru,
   fmtDurasi,
+  jepitKanvas,
+  jepitRect,
   namaElemen,
+  perluCatat,
   pindahUrutan,
   sesuaikanTinggi,
   ubahElemen,
@@ -70,7 +73,11 @@ export function StudioTemplate({ onTutup, onTersimpan }: Props) {
   const [data, setData] = useState<DataStudio | null>(null);
   const [galat, setGalat] = useState("");
   const [dok, setDok] = useState<DokStudio | null>(null);
+  // Garis dasar "Tersimpan" = JSON dokumen terakhir yang dimuat/disimpan (bukan "" — itu membuat lencana
+  // "Belum disimpan" & konfirmasi tutup muncul tanpa satu pun perubahan).
   const [tersimpan, setTersimpan] = useState("");
+  // Template Studio belum pernah ditetapkan (dok hasil konversi editor lama): Simpan tetap boleh tanpa perubahan.
+  const [belumDitetapkan, setBelumDitetapkan] = useState(false);
   const [riwayat, setRiwayat] = useState<Riwayat>({ lalu: [], nanti: [] });
   const [pilih, setPilih] = useState<string | null>(null);
   const [aset, setAset] = useState<Record<string, AsetStudio>>({});
@@ -91,6 +98,8 @@ export function StudioTemplate({ onTutup, onTersimpan }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const targetRef = useRef<TargetBerkas | null>(null);
   const dokRef = useRef<DokStudio | null>(null);
+  /** JSON keadaan saat gerakan dimulai; dicatat ke riwayat hanya bila dokumen benar-benar berubah. */
+  const tundaRef = useRef<string | null>(null);
   useEffect(() => {
     dokRef.current = dok;
   }, [dok]);
@@ -107,7 +116,8 @@ export function StudioTemplate({ onTutup, onTersimpan }: Props) {
         const isi = d as DataStudio;
         setData(isi);
         setDok(isi.dok);
-        setTersimpan(isi.studio_tersimpan ? JSON.stringify(isi.dok) : "");
+        setTersimpan(JSON.stringify(isi.dok));
+        setBelumDitetapkan(!isi.studio_tersimpan);
         setAset(Object.fromEntries(isi.aset.map((a) => [a.ref, a])));
         setPratinjau(isi.pratinjau);
       } catch (e) {
@@ -128,11 +138,26 @@ export function StudioTemplate({ onTutup, onTersimpan }: Props) {
   const gambar = useGambarAset(api.fetch, refsGambar);
 
   // ---------- perubahan & riwayat ----------
+  // mulaiUbah (pointerdown/fokus) hanya menyiapkan snapshot; `ubah` mencatatnya pada perubahan nyata pertama.
+  // Klik elemen setelah Ctrl+Z tidak lagi membuang tumpukan ulangi atau menambah langkah kosong.
   const mulaiUbah = useCallback(() => {
     const d = dokRef.current;
-    if (d) setRiwayat((r) => catatRiwayat(r, d));
+    tundaRef.current = d ? JSON.stringify(d) : null;
   }, []);
-  const ubah = useCallback((fn: (d: DokStudio) => DokStudio) => setDok((d) => (d ? fn(d) : d)), []);
+  const ubah = useCallback((fn: (d: DokStudio) => DokStudio) => {
+    const d = dokRef.current;
+    if (!d) return;
+    const baru = fn(d);
+    if (baru === d) return;
+    // dokRef dimutakhirkan langsung supaya beberapa `ubah` sebelum render berikutnya saling melihat hasilnya.
+    dokRef.current = baru;
+    const tunda = tundaRef.current;
+    if (perluCatat(tunda, baru)) {
+      tundaRef.current = null;
+      setRiwayat((r) => catatRiwayat(r, tunda));
+    }
+    setDok(baru);
+  }, []);
   const ubahTercatat = useCallback(
     (fn: (d: DokStudio) => DokStudio) => {
       mulaiUbah();
@@ -145,6 +170,8 @@ export function StudioTemplate({ onTutup, onTersimpan }: Props) {
     if (!d) return;
     const h = urungkan(riwayat, d);
     if (!h) return;
+    tundaRef.current = null;
+    dokRef.current = h.dok;
     setRiwayat(h.riwayat);
     setDok(h.dok);
   }, [riwayat]);
@@ -153,6 +180,8 @@ export function StudioTemplate({ onTutup, onTersimpan }: Props) {
     if (!d) return;
     const h = ulangi(riwayat, d);
     if (!h) return;
+    tundaRef.current = null;
+    dokRef.current = h.dok;
     setRiwayat(h.riwayat);
     setDok(h.dok);
   }, [riwayat]);
@@ -273,6 +302,7 @@ export function StudioTemplate({ onTutup, onTersimpan }: Props) {
       const d = await bacaJson(res);
       if (!res.ok) throw new Error(pesanGalat(res.status, d, "Template gagal disimpan."));
       setTersimpan(JSON.stringify(dok));
+      setBelumDitetapkan(false);
       toast("sukses", "Template tersimpan", "Video berikutnya memakai template ini.");
       onTersimpan();
     } catch (e) {
@@ -291,9 +321,13 @@ export function StudioTemplate({ onTutup, onTersimpan }: Props) {
   };
 
   // ---------- papan ketik ----------
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    const tag = (e.target as HTMLElement).tagName;
-    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Event sintetis React ikut naik dari portal anak (dialog Video pratinjau): abaikan yang asalnya di luar
+    // pohon DOM editor ini, juga kolom isian & kontrol video.
+    const target = e.target as HTMLElement;
+    if (!e.currentTarget.contains(target)) return;
+    const tag = target.tagName;
+    if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA" || tag === "VIDEO" || tag === "AUDIO" || target.isContentEditable) return;
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === "z") {
       e.preventDefault();
@@ -317,8 +351,8 @@ export function StudioTemplate({ onTutup, onTersimpan }: Props) {
       const n = e.shiftKey ? 10 : 1;
       ubahTercatat((d) =>
         pilih === PILIH_TEKS
-          ? { ...d, elemen: d.elemen.map((x) => (x.jenis === "berita" && x.teks ? { ...x, teks: { ...x.teks, x: x.teks.x + g[0] * n, y: x.teks.y + g[1] * n } } : x)) }
-          : ubahElemen(d, pilih, (x) => ({ ...x, rect: { ...x.rect, x: x.rect.x + g[0] * n, y: x.rect.y + g[1] * n } })),
+          ? { ...d, elemen: d.elemen.map((x) => (x.jenis === "berita" && x.teks ? { ...x, teks: jepitKanvas({ ...x.teks, x: x.teks.x + g[0] * n, y: x.teks.y + g[1] * n }) } : x)) }
+          : ubahElemen(d, pilih, (x) => ({ ...x, rect: jepitRect({ ...x.rect, x: x.rect.x + g[0] * n, y: x.rect.y + g[1] * n }) })),
       );
     }
   };
@@ -541,10 +575,10 @@ export function StudioTemplate({ onTutup, onTersimpan }: Props) {
               <span
                 className={cn(
                   "shrink-0 rounded-full border px-2 py-0.5 text-[10.5px] font-bold",
-                  berubah ? "border-amber-300 bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200" : "border-emerald-300 bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200",
+                  berubah || belumDitetapkan ? "border-amber-300 bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200" : "border-emerald-300 bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200",
                 )}
               >
-                {berubah ? "Belum disimpan" : "Tersimpan"}
+                {berubah ? "Belum disimpan" : belumDitetapkan ? "Belum ditetapkan" : "Tersimpan"}
               </span>
             )}
           </div>
@@ -569,7 +603,7 @@ export function StudioTemplate({ onTutup, onTersimpan }: Props) {
         <button
           type="button"
           onClick={() => void simpan()}
-          disabled={kosong || menyimpan || (!berubah && Boolean(tersimpan))}
+          disabled={kosong || menyimpan || (!berubah && !belumDitetapkan)}
           className="btn-tekan flex h-10 items-center gap-1.5 rounded-xl bg-pri px-3 text-[12.5px] font-bold text-white disabled:opacity-40"
         >
           {menyimpan && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}

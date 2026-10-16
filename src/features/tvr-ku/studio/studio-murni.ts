@@ -28,6 +28,31 @@ export const PEGANGAN_SUDUT: readonly Pegangan[] = ["nw", "ne", "sw", "se"];
 export const PEGANGAN_SISI: readonly Pegangan[] = ["n", "s", "e", "w"];
 export const UKURAN_MIN = 16;
 
+// Batas skema `Rect` di studio-model.ts (z.object tidak diekspor — dicerminkan di sini; ubah bersama).
+// Rect di luar batas ini ditolak server (422) saat menyimpan.
+export const BATAS_RECT = {
+  xMin: -LEBAR_KANVAS,
+  xMaks: LEBAR_KANVAS * 2,
+  yMin: -TINGGI_KANVAS,
+  yMaks: TINGGI_KANVAS * 2,
+  ukuranMin: 8,
+  wMaks: LEBAR_KANVAS * 3,
+  hMaks: TINGGI_KANVAS * 3,
+} as const;
+
+const jepit = (v: number, min: number, maks: number) => Math.min(maks, Math.max(min, Math.round(Number.isFinite(v) ? v : 0)));
+
+/** Jepit rect ke batas yang diterima skema server (bilangan bulat, posisi & ukuran dalam rentang). */
+export function jepitRect(r: Rect): Rect {
+  const b = BATAS_RECT;
+  return {
+    x: jepit(r.x, b.xMin, b.xMaks),
+    y: jepit(r.y, b.yMin, b.yMaks),
+    w: jepit(r.w, b.ukuranMin, b.wMaks),
+    h: jepit(r.h, b.ukuranMin, b.hMaks),
+  };
+}
+
 // ---------- kanvas: tempel ke garis bantu ----------
 
 /** Titik tempel tetap kanvas: tepi & tengah. */
@@ -72,7 +97,7 @@ export function geserRect(awal: Rect, dx: number, dy: number, garis: { v: number
   const aktif: Garis[] = [];
   if (tx.pos !== null) aktif.push({ arah: "v", pos: tx.pos });
   if (ty.pos !== null) aktif.push({ arah: "h", pos: ty.pos });
-  return { rect: { ...awal, x: Math.round(x + tx.geser), y: Math.round(y + ty.geser) }, garis: aktif };
+  return { rect: jepitRect({ ...awal, x: x + tx.geser, y: y + ty.geser }), garis: aktif };
 }
 
 /**
@@ -114,7 +139,7 @@ export function ubahUkuran(
     if (pegangan.includes("n")) atas = bawah - h;
     aktif.length = 0;
   }
-  return { rect: { x: Math.round(kiri), y: Math.round(atas), w: Math.round(w), h: Math.round(h) }, garis: aktif };
+  return { rect: jepitRect({ x: kiri, y: atas, w, h }), garis: aktif };
 }
 
 /** Rata cepat terhadap kanvas. */
@@ -134,10 +159,10 @@ export function rataKanvas(r: Rect, posisi: "kiri" | "tengah-h" | "kanan" | "ata
  * tetap menempel ke dasar, yang menempel ke atas tetap di atas, selain itu titik tengahnya diam.
  */
 export function sesuaikanTinggi(r: Rect, hBaru: number): Rect {
-  const h = Math.max(UKURAN_MIN, Math.round(hBaru));
-  if (r.y + r.h >= TINGGI_KANVAS - 1) return { ...r, y: TINGGI_KANVAS - h, h };
-  if (r.y <= 0) return { ...r, h };
-  return { ...r, y: Math.round(r.y + r.h / 2 - h / 2), h };
+  const h = Math.min(BATAS_RECT.hMaks, Math.max(UKURAN_MIN, Math.round(hBaru)));
+  if (r.y + r.h >= TINGGI_KANVAS - 1) return jepitRect({ ...r, y: TINGGI_KANVAS - h, h });
+  if (r.y <= 0) return jepitRect({ ...r, h });
+  return jepitRect({ ...r, y: r.y + r.h / 2 - h / 2, h });
 }
 
 /** Area tulisan berita dijaga tetap di dalam kanvas. */
@@ -170,8 +195,9 @@ export function tempelDetik(t: number, titik: readonly number[], ambang: number,
 }
 
 /**
- * Seret batang timeline: ujung kiri/kanan (ubah durasi) atau tengah (geser, durasi tetap). Hasilnya dipatok
- * ulang (paruh awal = dari awal, paruh akhir = sebelum akhir, mentok = akhir video).
+ * Seret batang timeline: ujung kiri/kanan (ubah durasi) atau tengah (geser, durasi tetap). Ujung yang
+ * diseret dipatok ulang (paruh awal = dari awal, paruh akhir = sebelum akhir, mentok = akhir video);
+ * ujung yang tidak disentuh mempertahankan patokannya (seret satu ujung tidak memindah patokan ujung lain).
  */
 export function seretWaktu(
   awal: Waktu,
@@ -196,7 +222,10 @@ export function seretWaktu(
     m = Math.max(0, Math.min(durasi - panjang, Math.abs(tm - mentah) <= Math.abs(ts - mentah) ? tm : ts));
     s = m + panjang;
   }
-  return { mulai: m <= 0.05 ? { dari: "awal", d: 0 } : patokDari(m, durasi), selesai: patokDari(s, durasi) };
+  const patokMulai = () => (m <= 0.05 ? { dari: "awal" as const, d: 0 } : patokDari(m, durasi));
+  if (mode === "kiri") return { mulai: patokMulai(), selesai: awal.selesai };
+  if (mode === "kanan") return { mulai: awal.mulai, selesai: patokDari(s, durasi) };
+  return { mulai: patokMulai(), selesai: patokDari(s, durasi) };
 }
 
 /** Titik tempel timeline: awal/akhir video, garis putar, ujung elemen lain. */
@@ -290,12 +319,22 @@ export function ubahElemen(dok: DokStudio, id: string, ubah: (e: ElemenStudio) =
 export type Riwayat = { lalu: string[]; nanti: string[] };
 export const MAKS_RIWAYAT = 60;
 
-/** Simpan keadaan sebelum perubahan (sebagai JSON) — perubahan berturut-turut yang sama tidak menumpuk. */
-export function catatRiwayat(r: Riwayat, sebelum: DokStudio): Riwayat {
-  const j = JSON.stringify(sebelum);
+/**
+ * Simpan keadaan sebelum perubahan (dokumen atau JSON-nya) — perubahan berturut-turut yang sama tidak menumpuk.
+ * Panggil HANYA bila dokumen benar-benar berubah (lihat `perluCatat`): mencatat mengosongkan tumpukan ulangi.
+ */
+export function catatRiwayat(r: Riwayat, sebelum: DokStudio | string): Riwayat {
+  const j = typeof sebelum === "string" ? sebelum : JSON.stringify(sebelum);
   if (r.lalu[r.lalu.length - 1] === j) return r;
   return { lalu: [...r.lalu, j].slice(-MAKS_RIWAYAT), nanti: [] };
 }
+
+/**
+ * Riwayat malas: `tunda` = JSON keadaan saat gerakan/ketikan dimulai (pointerdown, fokus). Baru dicatat bila
+ * dokumen hasil perubahan berbeda darinya — klik/fokus tanpa perubahan tidak menambah langkah urungkan dan
+ * tidak membuang tumpukan ulangi.
+ */
+export const perluCatat = (tunda: string | null, baru: DokStudio): tunda is string => tunda !== null && JSON.stringify(baru) !== tunda;
 
 export function urungkan(r: Riwayat, kini: DokStudio): { riwayat: Riwayat; dok: DokStudio } | null {
   const j = r.lalu[r.lalu.length - 1];

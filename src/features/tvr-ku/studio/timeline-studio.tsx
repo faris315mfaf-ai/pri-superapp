@@ -133,8 +133,12 @@ export function TimelineStudio(p: Props) {
           aria-valuetext={fmtDetik(putar)}
           onPointerDown={(e) => mulai(e, "putar", null)}
           onKeyDown={(e) => {
+            if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+            // Jangan sampai ke pintasan editor (panah = geser elemen terpilih + langkah urungkan).
+            e.stopPropagation();
+            e.preventDefault();
             if (e.key === "ArrowRight") p.onPutar(Math.min(total, Math.round((putar + 0.5) * 10) / 10));
-            if (e.key === "ArrowLeft") p.onPutar(Math.max(0, Math.round((putar - 0.5) * 10) / 10));
+            else p.onPutar(Math.max(0, Math.round((putar - 0.5) * 10) / 10));
           }}
           className="relative h-6 cursor-ew-resize touch-none rounded-md bg-black/5 dark:bg-white/10"
         >

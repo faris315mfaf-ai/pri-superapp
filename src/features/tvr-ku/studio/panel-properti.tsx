@@ -7,6 +7,7 @@
 // Juga pengaturan area tulisan berita dan outro.
 // ============================================================
 
+import { useState } from "react";
 import { ArrowDown, ArrowUp, Eye, EyeOff, Loader2, Replace, Trash2, Wand2 } from "lucide-react";
 import {
   OUTRO_MIN,
@@ -23,7 +24,7 @@ import {
 import { cn } from "@/lib/utils";
 import { PILIH_OUTRO, PILIH_TEKS } from "./kanvas-studio";
 import type { AsetStudio } from "./studio-tipe";
-import { PRESET_WAKTU, fmtDurasi, jepitKanvas, namaElemen, rataKanvas, ubahElemen } from "./studio-murni";
+import { PRESET_WAKTU, UKURAN_MIN, fmtDurasi, jepitKanvas, jepitRect, namaElemen, rataKanvas, ubahElemen } from "./studio-murni";
 
 type Props = {
   dok: DokStudio;
@@ -52,6 +53,9 @@ const judulBagian = "text-[12px] font-bold text-teks-utama";
 
 function InputRect({ r, onUbah, mulai }: { r: Rect; onUbah: (r: Rect) => void; mulai: () => void }) {
   const kolom: [keyof Rect, string][] = [["x", "X"], ["y", "Y"], ["w", "Lebar"], ["h", "Tinggi"]];
+  // Teks ketikan per kolom selama fokus: kolom boleh kosong / "-" sementara; angka sah langsung dipakai,
+  // saat blur kembali menampilkan nilai dokumen.
+  const [draf, setDraf] = useState<Partial<Record<keyof Rect, string>>>({});
   return (
     <div className="grid grid-cols-4 gap-1.5">
       {kolom.map(([k, n]) => (
@@ -60,12 +64,22 @@ function InputRect({ r, onUbah, mulai }: { r: Rect; onUbah: (r: Rect) => void; m
           <input
             type="number"
             inputMode="numeric"
-            value={r[k]}
+            value={draf[k] ?? String(r[k])}
             onFocus={mulai}
             onChange={(e) => {
-              const v = Math.round(Number(e.target.value));
-              if (Number.isFinite(v)) onUbah({ ...r, [k]: k === "w" || k === "h" ? Math.max(16, v) : v });
+              const teks = e.target.value;
+              setDraf((d) => ({ ...d, [k]: teks }));
+              if (teks.trim() === "") return;
+              const v = Math.round(Number(teks));
+              if (Number.isFinite(v)) onUbah(jepitRect({ ...r, [k]: k === "w" || k === "h" ? Math.max(UKURAN_MIN, v) : v }));
             }}
+            onBlur={() =>
+              setDraf((d) => {
+                const salin = { ...d };
+                delete salin[k];
+                return salin;
+              })
+            }
             className={masukan}
           />
         </label>
@@ -168,7 +182,7 @@ export function PanelProperti(p: Props) {
           <p className="m-0 font-heading text-[16px] font-extrabold text-teks-utama">Area tulisan berita</p>
         </div>
         <span className={judulBagian}>Posisi & ukuran (px)</span>
-        <InputRect r={teks} mulai={p.mulaiUbah} onUbah={(r) => p.ubah((d) => ({ ...d, elemen: d.elemen.map((e) => (e.jenis === "berita" ? { ...e, teks: jepitKanvas(r) } : e)) }))} />
+        <InputRect key="teks" r={teks} mulai={p.mulaiUbah} onUbah={(r) => p.ubah((d) => ({ ...d, elemen: d.elemen.map((e) => (e.jenis === "berita" ? { ...e, teks: jepitKanvas(r) } : e)) }))} />
         <div className="flex flex-col gap-1.5">
           <span className={judulBagian}>Warna tulisan</span>
           <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Warna tulisan berita">
@@ -352,7 +366,7 @@ export function PanelProperti(p: Props) {
 
       <div className="flex flex-col gap-2">
         <span className={judulBagian}>{el.jenis === "kategori" ? "Letak tulisan kategori (px)" : "Posisi & ukuran (px)"}</span>
-        <InputRect r={el.rect} mulai={p.mulaiUbah} onUbah={(r) => ubahIni((x) => ({ ...x, rect: r }))} />
+        <InputRect key={el.id} r={el.rect} mulai={p.mulaiUbah} onUbah={(r) => ubahIni((x) => ({ ...x, rect: r }))} />
         <div className="grid grid-cols-6 gap-1" role="group" aria-label="Rata cepat">
           {(
             [

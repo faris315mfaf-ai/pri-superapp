@@ -23,6 +23,8 @@ import {
   garisDari,
   geserRect,
   jepitKanvas,
+  jepitRect,
+  perluCatat,
   pindahUrutan,
   rataKanvas,
   seretWaktu,
@@ -168,6 +170,11 @@ console.log("Editor: kanvas");
   cek("tinggi baru: menempel atas tetap di atas", JSON.stringify(sesuaikanTinggi({ x: 0, y: 0, w: 100, h: 50 }, 80)) === JSON.stringify({ x: 0, y: 0, w: 100, h: 80 }));
   cek("tinggi baru: titik tengah diam", JSON.stringify(sesuaikanTinggi({ x: 10, y: 500, w: 100, h: 100 }, 60)) === JSON.stringify({ x: 10, y: 520, w: 100, h: 60 }));
   cek("rata cepat", rataKanvas({ x: 5, y: 5, w: 100, h: 40 }, "kanan").x === 620 && rataKanvas({ x: 5, y: 5, w: 100, h: 40 }, "bawah").y === 1240 && rataKanvas({ x: 5, y: 5, w: 100, h: 40 }, "tengah-h").x === 310);
+  cek("jepit rect ke batas skema server", sama(jepitRect({ x: -5000, y: 9999, w: 1, h: 99999 }), { x: -720, y: 2560, w: 8, h: 3840 }) && sama(jepitRect({ x: 10.4, y: 20.6, w: 100, h: 50 }), { x: 10, y: 21, w: 100, h: 50 }));
+  const jauh = geserRect({ x: 100, y: 100, w: 100, h: 100 }, 99999, -99999, { v: [], h: [] }, 8);
+  cek("geser jauh keluar kanvas tetap lolos skema", sama(jauh.rect, { x: 1440, y: -1280, w: 100, h: 100 }) && DokStudio.safeParse(dok([el("berita", "berita"), el("pernak-1", "pernak", { rect: jauh.rect })])).success, jauh.rect);
+  const besar = ubahUkuran({ x: 0, y: 0, w: 200, h: 100 }, "se", 99999, 99999, null, { v: [], h: [] }, 8);
+  cek("ubah ukuran raksasa dijepit", besar.rect.w === 2160 && besar.rect.h === 3840, besar.rect);
   cek("jepit area tulisan ke kanvas", JSON.stringify(jepitKanvas({ x: -20, y: 1250, w: 900, h: 100 })) === JSON.stringify({ w: 720, h: 100, x: 0, y: 1180 }));
 }
 
@@ -186,6 +193,15 @@ console.log("Editor: timeline");
   cek("geser tengah: durasi tetap", JSON.stringify(geser) === JSON.stringify({ mulai: { dari: "awal", d: 10 }, selesai: { dari: "awal", d: 13 } }), geser);
   const keUjung = seretWaktu({ mulai: { dari: "awal", d: 0 }, selesai: { dari: "awal", d: 3 } }, "tengah", 99, 40, [], 0.2, false);
   cek("geser tengah mentok akhir", JSON.stringify(keUjung) === JSON.stringify({ mulai: { dari: "akhir", d: 3 }, selesai: { dari: "akhir", d: 0 } }), keUjung);
+  // Seret SATU ujung tidak boleh memindah patokan ujung yang lain (dulu: paruh akhir -> "akhir 15").
+  const wMid = { mulai: { dari: "awal" as const, d: 25 }, selesai: { dari: "akhir" as const, d: 3 } };
+  const kananSaja = seretWaktu(wMid, "kanan", 1, 40, [], 0.2, false);
+  cek("tarik kanan: mulai 'awal 25' tetap (tidak jadi 'akhir 15')", sama(kananSaja, { mulai: { dari: "awal", d: 25 }, selesai: { dari: "akhir", d: 2 } }), kananSaja);
+  const wAwal = { mulai: { dari: "awal" as const, d: 2 }, selesai: { dari: "awal" as const, d: 8 } };
+  const kiriSaja = seretWaktu(wAwal, "kiri", 1, 10, [], 0.05, false);
+  cek("tarik kiri: selesai 'awal 8' tetap (tidak jadi 'akhir 2')", sama(kiriSaja, { mulai: { dari: "awal", d: 3 }, selesai: { dari: "awal", d: 8 } }), kiriSaja);
+  const tengahMid = seretWaktu(wMid, "tengah", -20, 40, [], 0.05, false);
+  cek("geser tengah: kedua ujung dipatok ulang", sama(tengahMid, { mulai: { dari: "awal", d: 5 }, selesai: { dari: "awal", d: 17 } }), tengahMid);
   cek("balik patok mulai", JSON.stringify(balikPatok(w0, "mulai", 40).mulai) === JSON.stringify({ dari: "akhir", d: 35 }) && JSON.stringify(balikPatok(w0, "selesai", 40).selesai) === JSON.stringify({ dari: "awal", d: 37 }));
 }
 
@@ -209,6 +225,16 @@ console.log("Editor: elemen & riwayat");
   cek("urungkan", JSON.stringify(u.dok) === JSON.stringify(d0) && u.riwayat.nanti.length === 1);
   const ul = ulangi(u.riwayat, u.dok)!;
   cek("ulangi", JSON.stringify(ul.dok) === JSON.stringify(d1) && ulangi({ lalu: [], nanti: [] }, d0) === null);
+  // Riwayat malas: urungkan lalu klik elemen (snapshot tanpa perubahan) tidak membuang ulangi.
+  const sesudahUrung = u.riwayat;
+  const tunda = JSON.stringify(u.dok);
+  cek("klik tanpa perubahan: tidak perlu dicatat", !perluCatat(tunda, u.dok) && !perluCatat(null, d1));
+  cek("klik tanpa perubahan: ulangi masih bisa", ulangi(sesudahUrung, u.dok) !== null && sesudahUrung.nanti.length === 1);
+  const d2 = { ...u.dok, teks_warna: "black" as const };
+  cek("perubahan nyata: dicatat & ulangi dikosongkan", perluCatat(tunda, d2) && (() => {
+    const r2 = catatRiwayat(sesudahUrung, tunda);
+    return r2.nanti.length === 0 && r2.lalu[r2.lalu.length - 1] === tunda;
+  })());
 }
 
 console.log(`\nHasil: ${lulus} lulus, ${gagal} gagal`);
