@@ -101,6 +101,16 @@ const MAKS_PER_MENIT = Math.max(20, Math.min(600, Number(process.env.METRIK_VIDE
 const PARALEL = 24;
 /** Bagian jatah satu putaran robot untuk jalur cepat (video hari ini). */
 const BAGIAN_JALUR_CEPAT = 0.15;
+// JALUR JANGKAUAN (16 Okt 2026): isi ulang jangkauan (sql/82) video TikTok,
+// Instagram & Facebook yang belum ditarik sejak kolomnya ada — TAYANGAN
+// TERBESAR DULU, supaya total jangkauan cepat mencerminkan video yang paling
+// banyak dilihat. Threads, X & YouTube tidak melaporkan jangkauan per video →
+// dilewati (hemat kuota). Selesai sendiri saat semua video sudah ditarik ulang.
+const PLATFORM_JANGKAUAN = ["tiktok", "instagram", "facebook"];
+const BAGIAN_JALUR_JANGKAUAN = Math.max(0, Math.min(0.8, Number(process.env.METRIK_BAGIAN_JANGKAUAN ?? 0.5) || 0));
+/** Waktu kode penyimpan jangkauan aktif (deploy c09e2d4); ditarik sesudahnya = sudah punya jangkauan bila dilaporkan. */
+const SEJAK_JANGKAUAN = "2026-10-16T15:30:00Z";
+const JENDELA_JANGKAUAN = 1500;
 /** Maks permintaan per akun sosmed per putaran (batas laju platform per akun). */
 const MAKS_PER_AKUN_PUTARAN = 40;
 /** Unggahan semuda ini belum ditanya: platform masih memproses/menerbitkan. */
@@ -1119,6 +1129,25 @@ async function kandidatTingkat(db: Db, t: Tingkat, setelah: PosisiAntrean | null
   return (data ?? []) as BarisKandidat[];
 }
 
+/** Kandidat jalur jangkauan: belum ditarik sejak SEJAK_JANGKAUAN, tayangan terbesar dulu. */
+async function kandidatJangkauan(db: Db): Promise<BarisKandidat[]> {
+  const { data, error } = await db
+    .from("tvr_video_metrik")
+    .select("kode, platform, user_id, url, diperbarui_pada")
+    .not("user_id", "is", null)
+    .in("platform", PLATFORM_JANGKAUAN)
+    .is("jangkauan", null)
+    .lt("diperbarui_pada", SEJAK_JANGKAUAN)
+    .order("tayangan", { ascending: false })
+    .order("kode", { ascending: true })
+    .limit(JENDELA_JANGKAUAN);
+  if (error) {
+    console.error("[metrik-video] kandidat jangkauan:", error.message);
+    return [];
+  }
+  return (data ?? []) as BarisKandidat[];
+}
+
 async function kerjakanVideo(
   it: ItemVideo,
   ctx: Konteks,
@@ -1208,7 +1237,7 @@ async function segarkanTingkat(
     maksJendela: MAKS_JENDELA_TINGKAT,
     boleh: () => ctrl.bolehLanjut(12_000),
     ambil: (setelah) => kandidatTingkat(db, t, setelah),
-    kerjakan: (baris) => kerjakanJendela(baris, ctx, ctrl, draf, catat, bantu, hasilPutaran, t, simpanBerkala),
+    kerjakan: (baris) => kerjakanJendela(baris, ctx, ctrl, draf, catat, bantu, hasilPutaran, t.selangMs, simpanBerkala),
   });
   if (posisi) kursor[t.nama] = posisi;
   else delete kursor[t.nama];
@@ -1223,7 +1252,7 @@ async function kerjakanJendela(
   catat: Catatan,
   bantu: Bantu,
   hasilPutaran: Map<string, DraftBaris>,
-  t: Tingkat,
+  selangMs: number,
   simpanBerkala: () => Promise<void>,
 ): Promise<boolean> {
   const kini = Date.now();
@@ -1243,7 +1272,7 @@ async function kerjakanJendela(
   const dikerjakan = await jalankanAntre(
     urut,
     async (it) => {
-      await kerjakanVideo(it, ctx, ctrl, draf, catat, bantu, hasilPutaran, t.selangMs);
+      await kerjakanVideo(it, ctx, ctrl, draf, catat, bantu, hasilPutaran, selangMs);
       await simpanBerkala();
     },
     ctrl,
@@ -1904,6 +1933,16 @@ export async function putaranSegarMetrik(
       await segarkanUnggahan(db, ctx, ctrl, draf, catat, bantu, "kemarin", simpanBerkala);
     });
     await simpanDraf(true);
+    // 2b. JALUR JANGKAUAN: video TikTok/IG/FB tayangan terbesar yang belum punya jangkauan.
+    if (ctx.kolom.jangkauan && BAGIAN_JALUR_JANGKAUAN > 0) {
+      await ctrl.denganJatah(Math.max(20, Math.ceil(maks * BAGIAN_JALUR_JANGKAUAN)), async () => {
+        const baris = await kandidatJangkauan(db);
+        if (baris.length > 0) {
+          await kerjakanJendela(baris, ctx, ctrl, draf, catat, bantu, hasilPutaran, SELANG_GAGAL_SIKLUS, simpanBerkala);
+        }
+      });
+      await simpanDraf(true);
+    }
     // 1b. Video baru di daftar media akun (halaman pertama, tiap jam).
     await kenaliVideoBaru(db, ctx, ctrl, bantu, catat);
     // 1c. Isi katalog: video lama tiap akun, halaman demi halaman.
