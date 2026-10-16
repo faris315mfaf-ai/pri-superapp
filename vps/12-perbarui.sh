@@ -145,8 +145,26 @@ fi
 # socket-nya. Semua langkah Auto Edit boleh gagal tanpa menghentikan
 # pembaruan aplikasi — yang terganggu hanya modul itu sendiri.
 AUTOEDIT_SIAP=1
+# Mesin dipilih lewat berkas $APP/autoedit-mesin ("python" | "ts" | "jauh").
+# Tanpa berkas itu tetap Python — peralihan ke TS dilakukan sengaja.
+MESIN_AUTOEDIT="$(tr -dc 'a-z' < "$APP/autoedit-mesin" 2>/dev/null || true)"
+case "$MESIN_AUTOEDIT" in ts|jauh) ;; *) MESIN_AUTOEDIT="python" ;; esac
+# Socket jembatan (mode jauh). JANGAN hapus /srv/godam di VPS ini (16 Okt 2026:
+# `rm -rf /srv/godam` memutus Auto Edit — jembatan masih memegang folder lama,
+# aplikasi memasang folder baru yang kosong, semua permintaan 503).
+SOCK_AUTOEDIT=/srv/godam/sock/api.sock
+jembatan_sehat() {
+  curl -fsS --max-time 10 --unix-socket "$SOCK_AUTOEDIT" http://mesin/health >/dev/null 2>&1
+}
 siapkan_autoedit() {
-  bash "$SKRIP/autoedit/siapkan-disk.sh" 60 >/dev/null || return 1
+  if [ "$MESIN_AUTOEDIT" = "jauh" ]; then
+    # Data Auto Edit (template, stok, antrean) ada di VPS mesin: di sini cukup
+    # folder socket jembatan — TIDAK membuat ulang disk media 60 GB.
+    install -d -o root -g root -m 755 /srv/godam || return 1
+    install -d -o 10001 -g 10001 -m 755 /srv/godam/sock || return 1
+  else
+    bash "$SKRIP/autoedit/siapkan-disk.sh" 60 >/dev/null || return 1
+  fi
   install -m 755 "$SKRIP/autoedit/firewall-keluar.sh" /usr/local/sbin/pri-autoedit-firewall || return 1
   cat > /etc/systemd/system/pri-autoedit-firewall.service <<'UNIT' || return 1
 [Unit]
@@ -171,13 +189,22 @@ UNIT
   {
     echo 'SHELL=/bin/bash'
     echo 'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
-    echo "50 2 * * * root bash $SKRIP/autoedit/cadangan-template.sh >> /var/log/pri-autoedit-cadangan.log 2>&1"
+    if [ "$MESIN_AUTOEDIT" = "jauh" ]; then
+      # Penjaga jembatan: socket hilang (folder dihapus/dibuat ulang) -> container jembatan dibuat ulang.
+      echo "* * * * * root [ -S $SOCK_AUTOEDIT ] || (cd $APP && docker compose --profile jauh up -d --force-recreate --no-deps autoedit-jembatan >/dev/null 2>&1 && logger -t pri-autoedit 'socket jembatan hilang: jembatan dibuat ulang')"
+    else
+      echo "50 2 * * * root bash $SKRIP/autoedit/cadangan-template.sh >> /var/log/pri-autoedit-cadangan.log 2>&1"
+    fi
   } > /etc/cron.d/pri-autoedit || return 1
   chmod 644 /etc/cron.d/pri-autoedit
 }
 echo "== Auto Edit: disk, socket, firewall =="
 if siapkan_autoedit; then
-  echo "  siap ($(df -h --output=avail /srv/godam/media | tail -1 | tr -d ' ') bebas di disk media)"
+  if [ "$MESIN_AUTOEDIT" = "jauh" ]; then
+    echo "  siap (mode jauh: folder socket jembatan)"
+  else
+    echo "  siap ($(df -h --output=avail /srv/godam/media | tail -1 | tr -d ' ') bebas di disk media)"
+  fi
 else
   AUTOEDIT_SIAP=0
   echo "  PERINGATAN: persiapan Auto Edit gagal — aplikasi tetap diperbarui, modul Auto Edit menunggu." >&2
@@ -315,19 +342,16 @@ nyalakan_autoedit_jauh() {
   "${MESIN_SSH[@]}" "cd $MESIN_DIR && docker compose up -d >/dev/null 2>&1 \
     && for i in \$(seq 1 30); do [ \"\$(docker inspect -f '{{.State.Health.Status}}' pri-autoedit-ts-api 2>/dev/null)\" = healthy ] && exit 0; sleep 3; done; exit 1" || return 1
   docker compose --profile jauh up -d autoedit-jembatan >/dev/null 2>&1 || return 1
-  # Ujung ke ujung, lewat socket yang sama dengan yang dipakai aplikasi.
-  for i in $(seq 1 10); do
-    curl -fsS --max-time 10 --unix-socket /srv/godam/sock/api.sock http://mesin/health >/dev/null 2>&1 && return 0
-    sleep 2
-  done
+  # Ujung ke ujung, lewat socket yang sama dengan yang dipakai aplikasi. Bila socket tidak ada /
+  # tidak menjawab (mis. folder socket dibuat ulang saat jembatan menyala), jembatan dibuat ulang sekali.
+  for _ in $(seq 1 5); do jembatan_sehat && return 0; sleep 2; done
+  echo "  socket jembatan tidak menjawab — jembatan dibuat ulang"
+  docker compose --profile jauh up -d --force-recreate --no-deps autoedit-jembatan >/dev/null 2>&1 || return 1
+  for _ in $(seq 1 10); do jembatan_sehat && return 0; sleep 2; done
   return 1
 }
 
 if [ "$AUTOEDIT_SIAP" = "1" ]; then
-  # Mesin dipilih lewat berkas $APP/autoedit-mesin ("python" | "ts" | "jauh").
-  # Tanpa berkas itu tetap Python — peralihan ke TS dilakukan sengaja.
-  MESIN_AUTOEDIT="$(tr -dc 'a-z' < "$APP/autoedit-mesin" 2>/dev/null || true)"
-  case "$MESIN_AUTOEDIT" in ts|jauh) ;; *) MESIN_AUTOEDIT="python" ;; esac
   echo "== Auto Edit: membangun & menyalakan (mesin $MESIN_AUTOEDIT) =="
   if [ "$MESIN_AUTOEDIT" = "jauh" ]; then
     # TIDAK jatuh ke mesin lokal bila gagal: data (template, stok, antrean)

@@ -47,7 +47,11 @@ rahasia (password, kunci API, isi env) di berkas ini atau di repo.**
   `10.77.0.2:7700` (hanya terbuka di wg0). VPS aplikasi berjalan mode
   `autoedit-mesin = jauh`: image mesin dibangun di VPS aplikasi lalu dikirim ke VPS mesin
   (kunci `/root/.ssh/pri-mesin`, hanya diterima dari 10.77.0.1).
-- Disk media lama 60 GB di VPS aplikasi dibiarkan sebagai cadangan rollback.
+- **Jangan hapus `/srv/godam` di VPS aplikasi**: folder socket jembatan (`/srv/godam/sock`) tinggal di sana.
+  16 Okt 2026 `rm -rf /srv/godam` (membuang disk media lama) membuat semua Auto Edit 503 ±3 jam — jembatan
+  memegang folder lama, aplikasi memasang folder baru kosong. Pulihkan: `cd /opt/pri-superapp/aplikasi &&
+  docker compose --profile jauh up -d --force-recreate --no-deps autoedit-jembatan`. Sejak itu mode `jauh`
+  tidak membuat disk media 60 GB lagi dan cron `/etc/cron.d/pri-autoedit` membuat ulang jembatan bila socket hilang.
 - R2 (Cloudflare) BELUM diatur; penyimpanan video memakai bucket privat Supabase `tvrku`.
 
 ## Fitur penting & letak kode
