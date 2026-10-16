@@ -9,6 +9,7 @@
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { adalahPimred, adalahTvrNasional } from "@/lib/jabatan";
+import { adalahSuperuser } from "@/lib/peran";
 import { hitungKenaikan, rentangSah, RENTANG_KENAIKAN } from "@/lib/tvr-nasional";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,8 @@ export async function GET(request: Request) {
   return bungkus(async () => {
     const user = await userDariToken(tokenDari(request));
     if (!user) throw Object.assign(new Error("Sesi tidak berlaku."), { status: 401 });
-    if (!adalahTvrNasional(user) && !adalahPimred(user)) {
+    // Superuser (mode lihat, 16 Okt 2026): TV Nasional ringkas.
+    if (!adalahTvrNasional(user) && !adalahPimred(user) && !adalahSuperuser(user)) {
       throw Object.assign(
         new Error("Hanya jabatan TV Rakyat Nasional & Pimpinan Redaksi yang bisa membuka angka ini."),
         { status: 403 },

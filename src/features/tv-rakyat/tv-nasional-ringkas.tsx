@@ -2,23 +2,43 @@
 
 // ============================================================
 // TV Rakyat Nasional — RINGKAS untuk Superuser (mode lihat, 16 Okt 2026).
-// Satu tampilan analisis tanpa fitur lain: tujuh angka gabungan seluruh akun
-// TV Rakyat — jumlah video (katalog Analisis Video, semua waktu) dan pengikut,
-// tayangan, jangkauan, suka, komentar, dibagikan (Dashboard TV Nasional).
-// Hanya membaca: GET /api/tv-nasional/analisis & GET /api/dashboard/tv-nasional.
+// Satu tampilan analisis tanpa fitur lain:
+//   • pilihan periode Hari ini / 1 minggu / 1 bulan / Selamanya;
+//   • tujuh angka gabungan seluruh akun TV Rakyat — jumlah video, tayangan,
+//     pengikut, jangkauan, suka, komentar, dibagikan. Selain "Selamanya"
+//     angkanya KENAIKAN dalam periode itu (sama dengan panel Kenaikan
+//     Nasional); jumlah video = video yang terbit dalam periode;
+//   • jumlah akun sosmed terdaftar di SuperApp + rinciannya per sosmed.
+// Hanya membaca: /api/tv-nasional/kenaikan, /api/tv-nasional/video-harian,
+// /api/tv-nasional/analisis, /api/dashboard/tv-nasional.
 // ============================================================
 
-import { useEffect, useState } from "react";
-import { Eye, Film, Heart, MessageCircle, Radio, Radar, Share2, Users } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, ExternalLink, Eye, Film, Heart, MessageCircle, Radar, Radio, Share2, Users } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
+import { PlatformIcon } from "@/components/platform-icon";
 import { FadeInUp, GlassSkeleton, ThemeToggle } from "@/components/pri-ui";
 import { TombolLonceng } from "@/components/tombol-lonceng";
-import { formatAngkaRingkas } from "@/lib/format";
-import { getAnalisisVideo, getTvNasional, type MetrikNasional } from "@/services";
+import { formatAngkaRingkas, urlProfilSosmed } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import {
+  getAnalisisVideo,
+  getKenaikanNasional,
+  getTvNasional,
+  getVideoHarian,
+  type IndikatorNasional,
+  type TvNasional,
+} from "@/services";
 
-type Angka = { video: number | null; total: MetrikNasional | null };
+const PERIODE = [
+  { kunci: "hari_ini", label: "Hari ini" },
+  { kunci: "minggu", label: "1 minggu" },
+  { kunci: "bulan", label: "1 bulan" },
+  { kunci: "semua", label: "Selamanya" },
+] as const;
+type Periode = (typeof PERIODE)[number]["kunci"];
 
-const KARTU: { kunci: "video" | keyof MetrikNasional; label: string; Ikon: typeof Film; warna: string }[] = [
+const KARTU: { kunci: "video" | IndikatorNasional; label: string; Ikon: typeof Film; warna: string }[] = [
   { kunci: "video", label: "Jumlah video", Ikon: Film, warna: "#7C3AED" },
   { kunci: "tayangan", label: "Tayangan", Ikon: Eye, warna: "#0A84FF" },
   { kunci: "pengikut", label: "Pengikut total", Ikon: Users, warna: "#DC2626" },
@@ -28,30 +48,87 @@ const KARTU: { kunci: "video" | keyof MetrikNasional; label: string; Ikon: typeo
   { kunci: "bagikan", label: "Dibagikan", Ikon: Share2, warna: "#10B981" },
 ];
 
-export function TvNasionalRingkas({ onBukaNotifikasi }: { onBukaNotifikasi: () => void }) {
-  const [angka, setAngka] = useState<Angka | null>(null);
-  const [galat, setGalat] = useState("");
+const NAMA_PLATFORM: Record<string, string> = {
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  facebook: "Facebook",
+  threads: "Threads",
+  twitter: "X (Twitter)",
+  x: "X (Twitter)",
+};
 
+type Angka = { metrik: Record<IndikatorNasional, number | null> | null; video: number | null; catatan: string };
+
+/** Jumlah video yang terbit dalam periode. */
+async function jumlahVideo(p: Periode): Promise<number | null> {
+  if (p === "hari_ini") return (await getVideoHarian()).total.video;
+  const d = await getAnalisisVideo({ rentang: p === "minggu" ? "7" : p === "bulan" ? "30" : "semua" });
+  return d.ringkas ? d.ringkas.video : null;
+}
+
+export function TvNasionalRingkas({ onBukaNotifikasi }: { onBukaNotifikasi: () => void }) {
+  const [periode, setPeriode] = useState<Periode>("semua");
+  const [angka, setAngka] = useState<{ periode: Periode; isi: Angka } | null>(null);
+  const [galat, setGalat] = useState("");
+  const [nasional, setNasional] = useState<TvNasional | null>(null);
+  const [buka, setBuka] = useState<string | null>(null);
+
+  // Angka per periode.
   useEffect(() => {
     let hidup = true;
     void (async () => {
-      const [nas, ana] = await Promise.allSettled([getTvNasional(), getAnalisisVideo({ rentang: "semua" })]);
+      const [ken, vid] = await Promise.allSettled([getKenaikanNasional(periode), jumlahVideo(periode)]);
       if (!hidup) return;
-      const total = nas.status === "fulfilled" ? nas.value.total : null;
-      const video = ana.status === "fulfilled" && ana.value.ringkas ? ana.value.ringkas.video : null;
-      if (!total && video === null) {
-        const e = nas.status === "rejected" ? nas.reason : ana.status === "rejected" ? ana.reason : null;
+      const k = ken.status === "fulfilled" ? ken.value : null;
+      const metrik = k ? (periode === "semua" ? k.sekarang : k.kenaikan) : null;
+      const video = vid.status === "fulfilled" ? vid.value : null;
+      if (!metrik && video === null) {
+        const e = ken.status === "rejected" ? ken.reason : vid.status === "rejected" ? vid.reason : null;
         setGalat(e instanceof Error ? e.message : "Data belum bisa dimuat.");
+      } else {
+        setGalat("");
       }
-      setAngka({ video, total });
+      setAngka({ periode, isi: { metrik, video, catatan: k?.catatan ?? "" } });
     })();
+    return () => {
+      hidup = false;
+    };
+  }, [periode]);
+
+  // Akun terdaftar (sekali).
+  useEffect(() => {
+    let hidup = true;
+    getTvNasional()
+      .then((d) => hidup && setNasional(d))
+      .catch(() => undefined);
     return () => {
       hidup = false;
     };
   }, []);
 
+  /** Akun anggota per sosmed: [{platform, akun:[{handle, nama}]}], urut terbanyak. */
+  const perSosmed = useMemo(() => {
+    const peta = new Map<string, { handle: string; nama: string }[]>();
+    for (const a of nasional?.anggota ?? []) {
+      for (const [platform, handle] of Object.entries(a.akun ?? {})) {
+        if (!handle) continue;
+        const daftar = peta.get(platform) ?? [];
+        daftar.push({ handle: handle.replace(/^@/, ""), nama: a.nama });
+        peta.set(platform, daftar);
+      }
+    }
+    return [...peta.entries()]
+      .map(([platform, akun]) => ({ platform, akun: akun.sort((x, y) => x.handle.localeCompare(y.handle)) }))
+      .sort((x, y) => y.akun.length - x.akun.length);
+  }, [nasional]);
+  const jumlahAkun = nasional?.akun_terhubung?.total ?? perSosmed.reduce((n, s) => n + s.akun.length, 0);
+  const jumlahOrang = nasional?.akun_terhubung?.orang ?? nasional?.anggota.length ?? 0;
+
+  const isi = angka && angka.periode === periode ? angka.isi : null;
   const nilai = (k: (typeof KARTU)[number]["kunci"]): number | null =>
-    !angka ? null : k === "video" ? angka.video : (angka.total?.[k] ?? null);
+    !isi ? null : k === "video" ? isi.video : (isi.metrik?.[k] ?? null);
+  const kenaikan = periode !== "semua";
 
   return (
     <div className="kolom-aplikasi px-4 pb-32">
@@ -75,9 +152,27 @@ export function TvNasionalRingkas({ onBukaNotifikasi }: { onBukaNotifikasi: () =
         </div>
       </header>
 
-      {galat && <p className="mt-4 rounded-xl bg-gagal/10 px-3 py-2 text-[12px] text-gagal">{galat}</p>}
+      <div role="tablist" aria-label="Periode" className="glass mt-5 grid grid-cols-4 gap-1 rounded-2xl p-1">
+        {PERIODE.map((p) => (
+          <button
+            key={p.kunci}
+            type="button"
+            role="tab"
+            aria-selected={periode === p.kunci}
+            onClick={() => setPeriode(p.kunci)}
+            className={cn(
+              "btn-tekan min-h-10 rounded-xl text-[13px] font-bold",
+              periode === p.kunci ? "bg-pri/15 text-pri" : "text-teks-sekunder",
+            )}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
 
-      <FadeInUp delay={0.03} className="mt-5">
+      {galat && <p className="mt-3 rounded-xl bg-gagal/10 px-3 py-2 text-[12px] text-gagal">{galat}</p>}
+
+      <FadeInUp delay={0.03} className="mt-4">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {KARTU.map(({ kunci, label, Ikon, warna }) => {
             const v = nilai(kunci);
@@ -87,11 +182,11 @@ export function TvNasionalRingkas({ onBukaNotifikasi }: { onBukaNotifikasi: () =
                   <Ikon className="h-4 w-4 shrink-0" style={{ color: warna }} aria-hidden="true" />
                   <span className="truncate">{label}</span>
                 </span>
-                {angka === null ? (
+                {isi === null ? (
                   <GlassSkeleton className="h-8 w-24 rounded-lg" />
                 ) : (
                   <span className="angka-tab font-heading text-[26px] leading-none font-extrabold text-teks-utama">
-                    {v === null ? "–" : formatAngkaRingkas(v)}
+                    {v === null ? "–" : `${kenaikan && kunci !== "video" && v > 0 ? "+" : ""}${formatAngkaRingkas(v)}`}
                   </span>
                 )}
               </GlassCard>
@@ -99,9 +194,79 @@ export function TvNasionalRingkas({ onBukaNotifikasi }: { onBukaNotifikasi: () =
           })}
         </div>
       </FadeInUp>
-      <p className="mt-3 text-[11px] text-teks-sekunder">
-        Jumlah video dari katalog Analisis Video (semua waktu). Angka lain gabungan akun Official & anggota yang terhubung.
+      <p className="mt-3 text-[11px] leading-relaxed text-teks-sekunder">
+        {kenaikan
+          ? "Jumlah video = video yang terbit dalam periode ini. Angka lain = kenaikan dalam periode ini."
+          : "Jumlah video dari katalog Analisis Video (semua waktu). Angka lain = total saat ini."}{" "}
+        Gabungan akun Official & anggota yang terhubung.
+        {isi?.catatan && kenaikan ? ` ${isi.catatan}` : ""}
       </p>
+
+      {/* Akun sosmed terdaftar di SuperApp */}
+      <FadeInUp delay={0.05} className="mt-6">
+        <GlassCard className="rounded-2xl p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="font-heading text-[15px] font-bold text-teks-utama">Akun sosmed terdaftar</p>
+            {nasional ? (
+              <p className="text-[12px] text-teks-sekunder">
+                <b className="angka-tab text-teks-utama">{jumlahAkun.toLocaleString("id-ID")}</b> akun dari{" "}
+                <b className="angka-tab text-teks-utama">{jumlahOrang.toLocaleString("id-ID")}</b> orang
+              </p>
+            ) : (
+              <GlassSkeleton className="h-4 w-40 rounded" />
+            )}
+          </div>
+
+          {nasional && (
+            <div className="mt-3 flex flex-col gap-2">
+              {perSosmed.length === 0 ? (
+                <p className="text-[12px] text-teks-sekunder">Belum ada akun anggota yang terhubung.</p>
+              ) : (
+                perSosmed.map(({ platform, akun }) => {
+                  const terbuka = buka === platform;
+                  const official = nasional.akun_terhubung?.per_platform?.[platform]?.official;
+                  return (
+                    <div key={platform} className="glass-soft rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setBuka(terbuka ? null : platform)}
+                        aria-expanded={terbuka}
+                        className="btn-tekan flex w-full items-center gap-2.5 px-3 py-2.5 text-left"
+                      >
+                        <PlatformIcon platform={platform} size={18} />
+                        <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-teks-utama">
+                          {NAMA_PLATFORM[platform] ?? platform}
+                          {official ? <span className="ml-1.5 text-[10.5px] font-semibold text-emerald-600 dark:text-emerald-400">+ Official</span> : null}
+                        </span>
+                        <span className="angka-tab text-[13px] font-bold text-teks-utama">{akun.length.toLocaleString("id-ID")}</span>
+                        <ChevronDown className={cn("h-4 w-4 text-teks-sekunder transition-transform", terbuka && "rotate-180")} aria-hidden="true" />
+                      </button>
+                      {terbuka && (
+                        <ul className="scrollbar-tipis max-h-80 overflow-y-auto border-t border-black/5 px-3 py-1.5 dark:border-white/10">
+                          {akun.map((a) => (
+                            <li key={`${a.handle}-${a.nama}`} className="flex min-w-0 items-center gap-2 py-1.5">
+                              <a
+                                href={urlProfilSosmed(platform, a.handle)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex min-w-0 flex-1 items-center gap-1.5 text-[12.5px] font-semibold text-teks-utama"
+                              >
+                                <span className="truncate">@{a.handle}</span>
+                                <ExternalLink className="h-3 w-3 shrink-0 text-teks-sekunder" aria-hidden="true" />
+                              </a>
+                              <span className="max-w-[45%] truncate text-[11.5px] text-teks-sekunder">{a.nama}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </GlassCard>
+      </FadeInUp>
     </div>
   );
 }
