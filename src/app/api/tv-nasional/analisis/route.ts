@@ -13,7 +13,7 @@ import { userDariToken } from "@/lib/sesi";
 import { adalahPimred, adalahTvrNasional } from "@/lib/jabatan";
 import { adalahSuperuser } from "@/lib/peran";
 import { platformApp } from "@/lib/metrik-video-up";
-import { DAFTAR_RENTANG, type Rentang } from "@/lib/analisis-video";
+import { RENTANG_SAH, type Rentang } from "@/lib/analisis-video";
 import { katalogAnalisis, tampilanAnalisis } from "@/lib/analisis-video-data";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     }
     const url = new URL(request.url);
     const r = url.searchParams.get("rentang") ?? "30";
-    const rentang: Rentang = (DAFTAR_RENTANG as string[]).includes(r) ? (r as Rentang) : "30";
+    const rentang: Rentang = (RENTANG_SAH as string[]).includes(r) ? (r as Rentang) : "30";
     const platform = platformApp(url.searchParams.get("platform") ?? "");
     const akunMentah = (url.searchParams.get("akun") ?? "").trim();
     const akun = /^\d+\|[a-z]+$/.test(akunMentah) ? akunMentah : "";

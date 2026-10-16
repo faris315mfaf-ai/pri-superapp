@@ -58,10 +58,13 @@ export type BarisSiap = {
   bagikan: number;
 };
 
-export type Rentang = "7" | "30" | "90" | "semua";
+export type Rentang = "1" | "7" | "30" | "90" | "semua";
 /** Titik tren: per hari (7/30/90), per pekan (semua ≤ 6 bulan), per bulan (lebih panjang). */
 export type SatuanTren = "hari" | "pekan" | "bulan";
+/** Pilihan di layar Analisis Video. */
 export const DAFTAR_RENTANG: Rentang[] = ["7", "30", "90", "semua"];
+/** Rentang yang diterima API: + "1" = hari ini (TV Nasional ringkas superuser, 16 Okt 2026). */
+export const RENTANG_SAH: Rentang[] = ["1", ...DAFTAR_RENTANG];
 
 export type Ringkas = {
   video: number;

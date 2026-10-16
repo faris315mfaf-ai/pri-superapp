@@ -73,6 +73,8 @@ console.log("susunTampilan — rentang, saringan, ringkasan");
   cek("video = semua di rentang (termasuk yang belum berangka)", t.ringkas.video === 4 && t.ringkas.berangka === 3, t.ringkas);
   cek("tayangan hanya dari yang berangka (99.999 tidak ikut)", t.ringkas.tayangan === 4500, t.ringkas.tayangan);
   cek("rata-rata & median per video berangka", t.ringkas.rata_tayangan === 1500 && t.ringkas.median_tayangan === 1000, t.ringkas);
+  const h = susunTampilan(data, { rentang: "1", kiniMs: KINI });
+  cek("rentang 1 = hari ini saja (29 Sep), satu titik tren", h.dari === "2026-09-29" && h.sampai === "2026-09-29" && h.tren.length === 1, { dari: h.dari, tren: h.tren.length });
   cek("ER = interaksi / tayangan", t.ringkas.er === Math.round((310 / 4500) * 10_000) / 100, t.ringkas.er);
   cek("tren 28 Sep: 2 video, 1 berangka, 3.000 tayangan, 200 interaksi", JSON.stringify(t.tren[5]) === JSON.stringify({ t: "2026-09-28", video: 2, berangka: 1, tayangan: 3000, interaksi: 200 }), t.tren[5]);
   cek("per platform urut TikTok lalu Instagram", t.per_platform.map((p) => p.platform).join(",") === "tiktok,instagram" && t.per_platform[1].tayangan === 500);

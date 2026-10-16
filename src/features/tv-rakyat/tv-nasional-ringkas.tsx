@@ -4,10 +4,11 @@
 // TV Rakyat Nasional — RINGKAS untuk Superuser (mode lihat, 16 Okt 2026).
 // Satu tampilan analisis tanpa fitur lain:
 //   • pilihan periode Hari ini / 1 minggu / 1 bulan / Selamanya;
-//   • tujuh angka gabungan seluruh akun TV Rakyat — jumlah video, tayangan,
-//     pengikut, jangkauan, suka, komentar, dibagikan. Selain "Selamanya"
-//     angkanya KENAIKAN dalam periode itu (sama dengan panel Kenaikan
-//     Nasional); jumlah video = video yang terbit dalam periode;
+//   • tujuh angka gabungan seluruh akun TV Rakyat. Jumlah video, tayangan,
+//     suka, komentar, dibagikan = SAMA PERSIS dengan layar Analisis Video
+//     (katalog video mesin, video yang terbit dalam periode). Pengikut &
+//     jangkauan bukan angka per video → dari analitik akun (total, atau
+//     kenaikan dalam periode);
 //   • jumlah akun sosmed terdaftar di SuperApp + rinciannya per sosmed.
 // Hanya membaca: /api/tv-nasional/kenaikan, /api/tv-nasional/video-harian,
 // /api/tv-nasional/analisis, /api/dashboard/tv-nasional.
@@ -21,14 +22,7 @@ import { FadeInUp, GlassSkeleton, ThemeToggle } from "@/components/pri-ui";
 import { TombolLonceng } from "@/components/tombol-lonceng";
 import { formatAngkaRingkas, urlProfilSosmed } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import {
-  getAnalisisVideo,
-  getKenaikanNasional,
-  getTvNasional,
-  getVideoHarian,
-  type IndikatorNasional,
-  type TvNasional,
-} from "@/services";
+import { getAnalisisVideo, getKenaikanNasional, getTvNasional, type IndikatorNasional, type TvNasional } from "@/services";
 
 const PERIODE = [
   { kunci: "hari_ini", label: "Hari ini" },
@@ -58,14 +52,19 @@ const NAMA_PLATFORM: Record<string, string> = {
   x: "X (Twitter)",
 };
 
-type Angka = { metrik: Record<IndikatorNasional, number | null> | null; video: number | null; catatan: string };
+type Angka = {
+  /** Dari katalog Analisis Video (per video). null = belum tersedia. */
+  video: { video: number; tayangan: number; suka: number; komentar: number; bagikan: number } | null;
+  /** Pengikut & jangkauan dari analitik akun. */
+  akun: { pengikut: number | null; jangkauan: number | null } | null;
+  /** "13 Agu 2023 – 16 Okt 2026 · 778 akun" seperti layar Analisis Video. */
+  keterangan: string;
+  menyusun: boolean;
+};
 
-/** Jumlah video yang terbit dalam periode. */
-async function jumlahVideo(p: Periode): Promise<number | null> {
-  if (p === "hari_ini") return (await getVideoHarian()).total.video;
-  const d = await getAnalisisVideo({ rentang: p === "minggu" ? "7" : p === "bulan" ? "30" : "semua" });
-  return d.ringkas ? d.ringkas.video : null;
-}
+const RENTANG_ANALISIS = { hari_ini: "1", minggu: "7", bulan: "30", semua: "semua" } as const;
+const tanggalPendek = (t: string) =>
+  new Date(`${t}T00:00:00+07:00`).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
 
 export function TvNasionalRingkas({ onBukaNotifikasi }: { onBukaNotifikasi: () => void }) {
   const [periode, setPeriode] = useState<Periode>("semua");
@@ -74,25 +73,39 @@ export function TvNasionalRingkas({ onBukaNotifikasi }: { onBukaNotifikasi: () =
   const [nasional, setNasional] = useState<TvNasional | null>(null);
   const [buka, setBuka] = useState<string | null>(null);
 
-  // Angka per periode.
+  // Angka per periode. Katalog Analisis Video bisa sedang disusun (menyusun) → coba lagi sebentar.
   useEffect(() => {
     let hidup = true;
-    void (async () => {
-      const [ken, vid] = await Promise.allSettled([getKenaikanNasional(periode), jumlahVideo(periode)]);
+    let ulang: ReturnType<typeof setTimeout> | null = null;
+    const muat = async () => {
+      const [ana, ken] = await Promise.allSettled([
+        getAnalisisVideo({ rentang: RENTANG_ANALISIS[periode] }),
+        periode === "semua" ? Promise.resolve(null) : getKenaikanNasional(periode),
+      ]);
       if (!hidup) return;
+      const a = ana.status === "fulfilled" ? ana.value : null;
+      const menyusun = Boolean(a?.menyusun && !a.ringkas);
+      const video = a?.ringkas
+        ? { video: a.ringkas.video, tayangan: a.ringkas.tayangan, suka: a.ringkas.suka, komentar: a.ringkas.komentar, bagikan: a.ringkas.bagikan }
+        : null;
+      const keterangan =
+        a?.ringkas && "dari" in a
+          ? `${a.dari === a.sampai ? tanggalPendek(a.sampai) : `${tanggalPendek(a.dari)} – ${tanggalPendek(a.sampai)}`} · ${a.jumlah_akun.toLocaleString("id-ID")} akun`
+          : "";
       const k = ken.status === "fulfilled" ? ken.value : null;
-      const metrik = k ? (periode === "semua" ? k.sekarang : k.kenaikan) : null;
-      const video = vid.status === "fulfilled" ? vid.value : null;
-      if (!metrik && video === null) {
-        const e = ken.status === "rejected" ? ken.reason : vid.status === "rejected" ? vid.reason : null;
-        setGalat(e instanceof Error ? e.message : "Data belum bisa dimuat.");
+      const akun = k ? { pengikut: k.kenaikan.pengikut, jangkauan: k.kenaikan.jangkauan } : null;
+      if (!video && !menyusun && ana.status === "rejected") {
+        setGalat(ana.reason instanceof Error ? ana.reason.message : "Data belum bisa dimuat.");
       } else {
         setGalat("");
       }
-      setAngka({ periode, isi: { metrik, video, catatan: k?.catatan ?? "" } });
-    })();
+      setAngka({ periode, isi: { video, akun, keterangan, menyusun } });
+      if (menyusun) ulang = setTimeout(() => void muat(), 8000);
+    };
+    void muat();
     return () => {
       hidup = false;
+      if (ulang) clearTimeout(ulang);
     };
   }, [periode]);
 
@@ -126,9 +139,16 @@ export function TvNasionalRingkas({ onBukaNotifikasi }: { onBukaNotifikasi: () =
   const jumlahOrang = nasional?.akun_terhubung?.orang ?? nasional?.anggota.length ?? 0;
 
   const isi = angka && angka.periode === periode ? angka.isi : null;
-  const nilai = (k: (typeof KARTU)[number]["kunci"]): number | null =>
-    !isi ? null : k === "video" ? isi.video : (isi.metrik?.[k] ?? null);
   const kenaikan = periode !== "semua";
+  const nilai = (k: (typeof KARTU)[number]["kunci"]): number | null => {
+    if (!isi) return null;
+    if (k === "pengikut" || k === "jangkauan") {
+      return kenaikan ? (isi.akun?.[k] ?? null) : (nasional?.total[k] ?? null);
+    }
+    return isi.video ? isi.video[k] : null;
+  };
+  /** Tanda + hanya untuk angka kenaikan (pengikut & jangkauan di periode selain Selamanya). */
+  const plus = (k: (typeof KARTU)[number]["kunci"]) => kenaikan && (k === "pengikut" || k === "jangkauan");
 
   return (
     <div className="kolom-aplikasi px-4 pb-32">
@@ -182,11 +202,11 @@ export function TvNasionalRingkas({ onBukaNotifikasi }: { onBukaNotifikasi: () =
                   <Ikon className="h-4 w-4 shrink-0" style={{ color: warna }} aria-hidden="true" />
                   <span className="truncate">{label}</span>
                 </span>
-                {isi === null ? (
+                {isi === null || (isi.menyusun && kunci !== "pengikut" && kunci !== "jangkauan") ? (
                   <GlassSkeleton className="h-8 w-24 rounded-lg" />
                 ) : (
                   <span className="angka-tab font-heading text-[26px] leading-none font-extrabold text-teks-utama">
-                    {v === null ? "–" : `${kenaikan && kunci !== "video" && v > 0 ? "+" : ""}${formatAngkaRingkas(v)}`}
+                    {v === null ? "–" : `${plus(kunci) && v > 0 ? "+" : ""}${formatAngkaRingkas(v)}`}
                   </span>
                 )}
               </GlassCard>
@@ -195,11 +215,10 @@ export function TvNasionalRingkas({ onBukaNotifikasi }: { onBukaNotifikasi: () =
         </div>
       </FadeInUp>
       <p className="mt-3 text-[11px] leading-relaxed text-teks-sekunder">
-        {kenaikan
-          ? "Jumlah video = video yang terbit dalam periode ini. Angka lain = kenaikan dalam periode ini."
-          : "Jumlah video dari katalog Analisis Video (semua waktu). Angka lain = total saat ini."}{" "}
-        Gabungan akun Official & anggota yang terhubung.
-        {isi?.catatan && kenaikan ? ` ${isi.catatan}` : ""}
+        {isi?.keterangan ? <b className="font-semibold text-teks-utama">{isi.keterangan}. </b> : null}
+        {isi?.menyusun ? "Katalog video sedang disusun, angka muncul sebentar lagi. " : null}
+        Video, tayangan, suka, komentar & dibagikan = angka Analisis Video (video yang terbit dalam periode).
+        Pengikut & jangkauan dari analitik akun{kenaikan ? " (kenaikan dalam periode)" : " (total saat ini)"}.
       </p>
 
       {/* Akun sosmed terdaftar di SuperApp */}
