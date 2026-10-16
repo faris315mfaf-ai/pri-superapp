@@ -4,7 +4,8 @@
 // TvAnggotaPanel — PENGENDALI akun TV Rakyat anggota (upload-post)
 // di dashboard TV (rombakan TVR Saya, 31 Agu 2026):
 //  1. Kuota profil (terpakai / 225) + paket.
-//  2. GABUNGAN insight: pengikut Official (Ayrshare) + total anggota.
+//  2. GABUNGAN insight: pengikut Official (profil upload-post Official)
+//     + total anggota.
 //  3. Daftar SEMUA profil anggota (x/6 akun tertaut, pengikut) —
 //     klik = insight lengkap per profil (cache 15 menit, bisa paksa).
 // ============================================================
@@ -74,7 +75,7 @@ export function TvAnggotaPanel() {
     profil: ProfilTvAnggota[];
     belum_tertaut?: ProfilBelumTertaut[];
   } | null>(null);
-  // Pengikut Official per platform (Ayrshare, cache server).
+  // Pengikut Official per platform (upload-post, cache server bersama).
   const [official, setOfficial] = useState<Record<string, number | null> | null>(null);
   const [buka, setBuka] = useState<ProfilTvAnggota | null>(null);
   // Penautan profil upload-post → anggota (2 Sep 2026)
@@ -92,8 +93,9 @@ export function TvAnggotaPanel() {
       } catch {
         if (hidup) setData({ siap: false, kuota: 0, terpakai: 0, profil: [] });
       }
-      // Official per platform — tiap panggilan tercache di server; gagal
-      // satu platform tidak menggagalkan lainnya.
+      // Official per platform — server menarik keenam platform sekali lalu
+      // menyimpannya di cache bersama; gagal satu platform tidak
+      // menggagalkan lainnya.
       const hasil: Record<string, number | null> = {};
       await Promise.all(
         PLATFORM6.map(async (p) => {

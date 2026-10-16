@@ -1,14 +1,14 @@
 // GET /api/cron/jadwal-tayang — tutup lingkaran posting terjadwal
 // TV Rakyat Official (15 Sep 2026).
 //
-// Ayrshare menerbitkan postingan terjadwal sendiri dan tidak memberi tahu
-// siapa pun. Tugas berkala inilah yang menanyakan hasilnya, lalu
-// menyelesaikan catatan videonya — status, kanal Konten, kewajiban
-// komentar — dengan WAKTU JADWAL sebagai acuan.
+// upload-post menerbitkan postingan terjadwal sendiri (sejak 16 Okt 2026)
+// dan tidak memberi tahu siapa pun. Tugas berkala inilah yang menanyakan
+// hasilnya, lalu menyelesaikan catatan videonya — status, kanal Konten,
+// kewajiban komentar — dengan WAKTU JADWAL sebagai acuan.
 //
 // Keamanan sama dengan tugas berkala lain: Authorization: Bearer CRON_SECRET.
 import { rekonsiliasiJadwalTayang } from "@/lib/jadwal-tayang";
-import { ayrshareSiap } from "@/lib/ayrshare";
+import { uploadPostSiap } from "@/lib/upload-post";
 import { jalankanLatar, tundaKarenaMacet } from "@/lib/penjaga-supabase";
 
 export const dynamic = "force-dynamic";
@@ -24,8 +24,8 @@ export async function GET(request: Request) {
   const ua = (request.headers.get("user-agent") ?? "").toLowerCase();
   const sah = rahasia ? tokenDari(request) === rahasia : ua.includes("vercel-cron");
   if (!sah) return Response.json({ error: "Tidak berwenang." }, { status: 403 });
-  if (!ayrshareSiap()) {
-    return Response.json({ jalan: false, pesan: "Ayrshare belum diatur." });
+  if (!uploadPostSiap()) {
+    return Response.json({ jalan: false, pesan: "upload-post belum diatur." });
   }
   const tunda = tundaKarenaMacet("jadwal-tayang");
   if (tunda) return Response.json(tunda);

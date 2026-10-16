@@ -112,14 +112,16 @@ kosongkan = ["UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN",
              "KV_REST_API_URL", "KV_REST_API_TOKEN"]
 # NILAI BERBARIS-BARIS (12 Sep 2026).
 #
-# .env.local memuat kunci privat Ayrshare yang isinya 28 baris. Docker
-# TIDAK BISA membaca bentuk itu di env_file — ia menolak seluruh berkas
-# dengan galat 'unexpected character "+" in variable name', yang sama
-# sekali tidak menyebut baris mana penyebabnya.
+# Docker TIDAK BISA membaca nilai berbaris-banyak di env_file — ia menolak
+# seluruh berkas dengan galat 'unexpected character "+" in variable name',
+# yang sama sekali tidak menyebut baris mana penyebabnya. Jadi baris
+# lanjutan disatukan jadi satu baris memakai \n.
 #
-# Jadi baris lanjutan disatukan jadi satu baris memakai \n. Itu memang
-# bentuk yang diharapkan aplikasi: lib/ayrshare.ts sudah mengembalikan
-# \n menjadi baris baru sebelum memakainya.
+# 16 Okt 2026: Ayrshare dihentikan. Semua variabel AYRSHARE_* (termasuk
+# kunci privat 28 baris yang dulu jadi alasan perapian ini) DIBUANG dari
+# env.txt. Pengurai berbaris-banyak tetap ada supaya sisa kunci lama di
+# berkas kiriman tetap terbaca utuh — lalu dibuang — bukan bocor jadi
+# baris sampah yang membuat Docker menolak berkasnya.
 def bersihkan(nilai: str) -> str:
     nilai = nilai.strip()
     if len(nilai) >= 2 and nilai[0] == nilai[-1] and nilai[0] in "\"'":
@@ -143,6 +145,8 @@ def tutup():
     if nama_kini in paksa:
         gabung = paksa[nama_kini]; sudah.add(nama_kini)
         keluar.append(f"{nama_kini}={gabung}")
+    elif nama_kini.startswith("AYRSHARE_"):
+        pass  # Ayrshare dihentikan (16 Okt 2026) — kuncinya tidak dibawa lagi.
     elif nama_kini not in kosongkan:
         keluar.append(f"{nama_kini}={gabung}")
     nama_kini, nilai_kini = None, []

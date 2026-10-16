@@ -98,13 +98,20 @@ rahasia (password, kunci API, isi env) di berkas ini atau di repo.**
   `tvr-<id>`, tidak masuk Stok). Model bersama: `src/mesin-video/studio-model.ts`; rute `/api/tvr/studio*` di
   `src/mesin-video/server/tvr.ts`; UI `src/features/tvr-ku/studio/`; perender: `start_akhir`/`end_akhir`,
   `opacity`, `outro_durasi`. Aset Studio di `assets/studio/` (berkas editor 4-slot tidak disentuh). Tanpa SQL.
+- **Ayrshare DIHAPUS** (16 Okt 2026, akun Ayrshare ditangguhkan): SEMUA akun sosmed lewat upload-post (Postiz opsional per
+  anggota). Akun TV Rakyat Official = profil upload-post `tvrakyat-official` (`src/lib/official-up.ts`, kartu Tautkan di
+  TV Rakyat): unggah `/api/tv/unggah`, jadwal `/api/tv/jadwal` (`scheduled_date`; jadwal terkirim TIDAK bisa dibatalkan),
+  insight `src/lib/tvr-nasional.ts` (cache `up_official_*`), sinkron postingan `src/lib/sinkron-konten-tv.ts`. Hasil per
+  platform di `video_antrian.unggah_hasil` (`src/lib/unggah-hasil.ts`). Pemeriksaan KOMENTAR otomatis QC DIMATIKAN
+  (upload-post tak punya API komentar); riwayat lama hanya dibaca (`/api/analisis/riwayat`). Anggota yang dulu lewat
+  Ayrshare wajib hubungkan ulang. SQL: `sql/79` SEBELUM deploy, `sql/80` SESUDAH deploy (menghapus data Ayrshare).
 - **Tutorial interaktif**: mesin `src/features/tur/lapisan-tur.tsx`, langkah di `src/lib/tur.ts`
   (penanda `data-tur` di komponen asli).
 - **Akun TIM TV Rakyat Official**: identitas mesin `900000001` (`ID_TIM` di `src/lib/autoedit.ts`),
   header `X-Autoedit-Tim: tv` lewat context `src/features/auto-edit/tim.ts`. Kuota 5 GB,
   150 stok, 60 antrean (`KUOTA_KHUSUS_MB`, `TVR_MAKS_STOK_KHUSUS`, `TVR_JOB_AKTIF_KHUSUS`).
   Upload ke akun Official: `src/app/api/tv/stok-tim/route.ts` → `video_antrian` → pratinjau
-  & `/api/tv/unggah` (Ayrshare).
+  & `/api/tv/unggah` (upload-post, profil Official).
 - Render serentak diatur master di HR Center (Redis `videojob:slot`, 1..10); kini 10.
   Diukur: CPU jenuh di ±3–4 slot.
 

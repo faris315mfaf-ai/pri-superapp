@@ -84,7 +84,8 @@ DOMAIN_DB=pri-db.internal
 PORT_APLIKASI=$PORT
 CRON_SECRET=$CRON_SECRET
 EOF
-# Rapikan nilai berbaris-banyak (kunci privat Ayrshare) seperti 11-pasang.
+# Rapikan nilai berbaris-banyak seperti 11-pasang. Variabel AYRSHARE_*
+# dibuang (Ayrshare dihentikan 16 Okt 2026).
 python3 - "$APP/env.txt" <<'PY'
 import re, sys, pathlib
 berkas = pathlib.Path(sys.argv[1])
@@ -101,7 +102,8 @@ def tutup():
     gabung = "\\n".join(nilai_kini) if len(nilai_kini) > 1 else nilai_kini[0]
     if len(gabung) >= 2 and gabung[0] == gabung[-1] and gabung[0] in "\"'":
         gabung = gabung[1:-1]
-    keluar.append(f"{nama_kini}={gabung}")
+    if not nama_kini.startswith("AYRSHARE_"):
+        keluar.append(f"{nama_kini}={gabung}")
     nama_kini, nilai_kini = None, []
 for baris in berkas.read_text(encoding="utf-8", errors="replace").splitlines():
     m = re.match(r"^([A-Z0-9_]+)=(.*)$", baris)

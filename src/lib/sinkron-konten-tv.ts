@@ -1,36 +1,47 @@
 // ============================================================
-// Sinkronisasi konten TV Rakyat dari Ayrshare (KHUSUS SISI SERVER).
+// Sinkronisasi konten TV Rakyat OFFICIAL (KHUSUS SISI SERVER).
 //
-// Dua pemicu OTOMATIS (tanpa cron), memakai mesin lib/analisis-ayrshare:
+// 16 Okt 2026: Ayrshare dihapus. Sumbernya kini profil upload-post
+// Official (lib/official-up) — daftar media per platform. upload-post TIDAK
+// punya API komentar, jadi PEMERIKSAAN KOMENTAR OTOMATIS (komentar → rekap
+// "wajib komen" → koin komentar) DIMATIKAN. Yang tetap berjalan: postingan
+// Official periode ini masuk `postingan` (daftar wajib komen) dan
+// `feed_konten` (kanal konten). Data komentar/rekap lama tetap terbaca.
 //
-// 1. BERKALA — sinkronKontenTvTerjadwal(): menumpang after() di /api/sesi
-//    (dibuka tiap orang membuka aplikasi). Diklaim ATOMIK maksimal sekali
-//    per jendela (bawaan 30 menit, kunci pengaturan_sistem). Menarik
-//    postingan terbaru semua akun resmi → isi feed_konten + daftar
-//    `postingan` (wajib komen) + cek komentar (rekap). Menangkap juga
-//    postingan yang diposting langsung di luar aplikasi.
-//
-// 2. SAAT UNGGAH — daftarkanVideoUnggahan(): dipanggil setelah /api/tv/unggah
-//    berhasil. Mendaftarkan video yang BARU diposting ke feed + `postingan`
-//    SEKETIKA (tanpa menunggu jendela berkala, tanpa cek komentar — memang
-//    belum ada komentar). Komentarnya diperiksa pada sinkron berkala.
+// Tiga pemicu:
+// 1. BERKALA — sinkronKontenTvTerjadwal(): menumpang after() di /api/sesi.
+//    Diklaim ATOMIK maksimal sekali per jendela (bawaan 30 menit).
+// 2. CRON — sinkronKontenTvPaksa(): /api/cron/sinkron-komen (satu putaran
+//    per panggilan, dijaga lease atomik).
+// 3. SAAT UNGGAH — daftarkanVideoUnggahan(): dipanggil setelah unggah /
+//    jadwal tayang Official berhasil; mendaftarkan video SEKETIKA.
 // ============================================================
 import { supabase } from "@/lib/supabase";
-import { modulAktifServer } from "@/lib/sakelar";
-import { latarHarusBerhenti } from "@/lib/penjaga-supabase";
-import { ambilAkunTertaut, ayrshareSiap } from "@/lib/ayrshare";
-import {
-  idPostinganKanonik,
-  jalankanAnalisisAyrshare,
-  periodeHariIni,
-} from "@/lib/analisis-ayrshare";
+import { profilOfficialUp } from "@/lib/official-up";
+import { akunTertautUp, postinganTerbaruUp, uploadPostSiap } from "@/lib/upload-post";
+import { idPostinganKanonik, periodeHariIni } from "@/lib/periode-postingan";
+import { akhirPeriodeMsDari, awalPeriodeMsDari } from "@/lib/periode-qc";
 
 const KUNCI_KLAIM = "sinkron_konten_bucket";
 const KUNCI_INTERVAL = "sinkron_konten_interval_menit";
 const INTERVAL_BAWAAN = 30;
 const INTERVAL_MIN = 10;
+/** Postingan terbaru yang dibaca per platform sebelum disaring ke periode. */
+const AMBIL_PER_PLATFORM = 25;
+const PLATFORM_OFFICIAL = ["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"];
 
-async function bacaIntervalMenit(db: ReturnType<typeof supabase>): Promise<number> {
+/** Pesan bersama untuk layar/cron: komentar tidak lagi diperiksa otomatis. */
+export const PESAN_KOMENTAR_DIMATIKAN =
+  "Pemeriksaan komentar otomatis dimatikan: upload-post tidak menyediakan data komentar. Data komentar lama tetap bisa dibaca.";
+
+type Db = ReturnType<typeof supabase>;
+
+/** Handle tanpa "@" dan huruf kecil — seragam dengan akun_wajib. */
+function bersihkanHandle(u: string): string {
+  return u.trim().replace(/^@+/, "").toLowerCase();
+}
+
+async function bacaIntervalMenit(db: Db): Promise<number> {
   const { data } = await db
     .from("pengaturan_sistem")
     .select("nilai")
@@ -45,13 +56,164 @@ async function bacaIntervalMenit(db: ReturnType<typeof supabase>): Promise<numbe
 let intervalCache: { nilai: number; pada: number } | null = null;
 let bucketSelesaiInstance = "";
 
-async function bacaIntervalMenitCache(db: ReturnType<typeof supabase>): Promise<number> {
+async function bacaIntervalMenitCache(db: Db): Promise<number> {
   if (intervalCache && Date.now() - intervalCache.pada < 5 * 60_000) {
     return intervalCache.nilai;
   }
   const nilai = await bacaIntervalMenit(db);
   intervalCache = { nilai, pada: Date.now() };
   return nilai;
+}
+
+/**
+ * Akun Official per platform (nama APLIKASI → handle). Sumber utama: akun
+ * yang tertaut di profil upload-post Official; cadangan bila upload-post
+ * tak terbaca: akun_wajib berlabel "tv rakyat".
+ */
+async function akunOfficial(db: Db, profil: string): Promise<Map<string, string>> {
+  const hasil = new Map<string, string>();
+  if (profil && uploadPostSiap()) {
+    try {
+      for (const [pf, un] of Object.entries(await akunTertautUp(profil))) {
+        const h = bersihkanHandle(un);
+        if (PLATFORM_OFFICIAL.includes(pf) && h) hasil.set(pf, h);
+      }
+    } catch (e) {
+      console.error("[sinkron-konten] akun tertaut Official:", e instanceof Error ? e.message : e);
+    }
+  }
+  if (hasil.size === 0) {
+    const { data } = await db
+      .from("akun_wajib")
+      .select("platform, username")
+      .eq("aktif", true)
+      .ilike("nama_akun", "%tv rakyat%")
+      .order("id");
+    for (const b of data ?? []) {
+      const pf = String(b.platform ?? "").toLowerCase();
+      if (pf && !hasil.has(pf)) hasil.set(pf, bersihkanHandle(String(b.username ?? "")));
+    }
+  }
+  return hasil;
+}
+
+export type HasilSinkronKonten = {
+  periode: string;
+  profil: string;
+  akun_tercakup: string[];
+  postingan: number;
+  peringatan: string[];
+};
+
+/**
+ * Satu putaran sinkron konten Official: postingan periode ini (19:00→18:59
+ * WIB) per platform → `postingan` + `feed_konten`. Tanpa komentar.
+ * Melempar 409 bila Official belum ditautkan (pemanggil otomatis menangkapnya).
+ */
+async function sinkronKontenOfficial(): Promise<HasilSinkronKonten> {
+  const db = supabase();
+  const profil = await profilOfficialUp();
+  if (!profil) {
+    throw Object.assign(new Error("Akun TV Rakyat Official belum ditautkan ke upload-post."), { status: 409 });
+  }
+  const periode = periodeHariIni();
+  const batasMs = awalPeriodeMsDari(periode);
+  const batasAkhirMs = akhirPeriodeMsDari(periode);
+
+  const [akun, { data: akunWajib }] = await Promise.all([
+    akunOfficial(db, profil),
+    db.from("akun_wajib").select("username, platform, nama_akun").eq("aktif", true),
+  ]);
+  if (akun.size === 0) {
+    throw Object.assign(new Error("Profil upload-post Official belum punya akun sosmed tertaut."), { status: 409 });
+  }
+
+  // DAFTAR-OTOMATIS akun resmi ke akun_wajib (sama seperti sebelumnya): akun
+  // yang tertaut di profil Official langsung masuk daftar wajib, kecuali X
+  // (akunnya pernah kena banned). Usernamenya dari penautan asli.
+  const label = new Map<string, string>();
+  for (const a of akunWajib ?? []) {
+    label.set(`${a.platform}|${String(a.username).toLowerCase()}`, String(a.nama_akun ?? a.username));
+  }
+  const barisBaru = [...akun.entries()]
+    .filter(([pf, un]) => pf !== "twitter" && !label.has(`${pf}|${un}`))
+    .map(([pf, un]) => ({ username: un, platform: pf, nama_akun: "tv rakyat", aktif: true }));
+  if (barisBaru.length > 0) {
+    const { error } = await db
+      .from("akun_wajib")
+      .upsert(barisBaru, { onConflict: "platform,username", ignoreDuplicates: true });
+    if (error) console.error("[sinkron-konten] daftar-otomatis akun:", error.message);
+    else for (const b of barisBaru) label.set(`${b.platform}|${b.username}`, b.nama_akun);
+  }
+
+  const peringatan: string[] = [];
+  const tercakup: string[] = [];
+  let total = 0;
+  const kini = new Date().toISOString();
+  for (const [pf, un] of akun) {
+    const nama = label.get(`${pf}|${un}`);
+    if (!nama) continue; // bukan akun wajib → jangan buat baris yatim
+    tercakup.push(`${un} (${pf})`);
+    let daftar: Awaited<ReturnType<typeof postinganTerbaruUp>>;
+    try {
+      daftar = await postinganTerbaruUp(profil, pf, AMBIL_PER_PLATFORM);
+    } catch (e) {
+      peringatan.push(`${un} (${pf}): daftar postingan tak terbaca — ${e instanceof Error ? e.message : e}`);
+      continue;
+    }
+    const periodeIni = daftar.filter((p) => {
+      if (!p.permalink || !p.waktu) return false;
+      const t = new Date(p.waktu).getTime();
+      return t >= batasMs && t < batasAkhirMs;
+    });
+    if (daftar.length >= AMBIL_PER_PLATFORM && periodeIni.length === daftar.length) {
+      peringatan.push(`${un} (${pf}): lebih dari ${AMBIL_PER_PLATFORM} postingan hari ini — sebagian mungkin terlewat.`);
+    }
+    if (periodeIni.length === 0) continue;
+
+    // Satu id kanonik per postingan (PostgREST menolak kunci dobel sepayload).
+    const unik = new Map<string, (typeof periodeIni)[number]>();
+    for (const p of periodeIni) unik.set(idPostinganKanonik(pf, p.id, p.permalink), p);
+    total += unik.size;
+
+    // Angka suka/komentar SENGAJA tidak ditulis: daftar media upload-post
+    // tidak membawanya, dan menulis nol akan menimpa angka lama.
+    await db.from("postingan").upsert(
+      [...unik.entries()].map(([id, p]) => ({
+        id_postingan: id,
+        akun_wajib: un,
+        platform: pf,
+        url_postingan: p.permalink,
+        periode,
+        waktu_posting: p.waktu,
+        caption_asli: p.caption,
+        thumbnail_url: p.thumbnail,
+        updated_at: kini,
+        hilang_sejak: null,
+      })),
+      { onConflict: "id_postingan" },
+    );
+    try {
+      await db.from("feed_konten").upsert(
+        [...unik.entries()].map(([id, p]) => ({
+          id_postingan: id,
+          platform: pf,
+          akun_username: un,
+          akun_nama: nama,
+          url_postingan: p.permalink,
+          caption: p.caption,
+          thumbnail_url: p.thumbnail,
+          waktu_posting: p.waktu,
+          diperbarui_pada: kini,
+        })),
+        { onConflict: "platform,id_postingan" },
+      );
+    } catch (e) {
+      console.error("[sinkron-konten] feed_konten gagal:", e);
+    }
+  }
+
+  return { periode, profil, akun_tercakup: tercakup, postingan: total, peringatan };
 }
 
 /**
@@ -62,11 +224,9 @@ async function bacaIntervalMenitCache(db: ReturnType<typeof supabase>): Promise<
  */
 export async function sinkronKontenTvTerjadwal(): Promise<void> {
   try {
-    if (!ayrshareSiap()) return;
-    // Hubungan pendek per-instance (1 Sep 2026 — pemangkasan beban
-    // Supabase): /api/sesi dipanggil sangat sering; tanpa ini TIAP
-    // panggilan = 1 baca interval + 1 tulis klaim ke pengaturan_sistem.
-    // Instance yang sudah tahu jendela ini beres langsung pulang.
+    if (!uploadPostSiap()) return;
+    // Hubungan pendek per-instance: /api/sesi dipanggil sangat sering;
+    // instance yang sudah tahu jendela ini beres langsung pulang.
     const db = supabase();
     const intervalMenit = await bacaIntervalMenitCache(db);
     const bucket = String(Math.floor(Date.now() / (intervalMenit * 60_000)));
@@ -82,29 +242,22 @@ export async function sinkronKontenTvTerjadwal(): Promise<void> {
       .eq("kunci", KUNCI_KLAIM)
       .neq("nilai", bucket)
       .select("kunci");
-    // Klaim gagal ATAU menang — dua-duanya berarti jendela ini beres
-    // bagi instance ini; jangan sentuh database lagi sampai jendela baru.
     bucketSelesaiInstance = bucket;
     if (!klaim || klaim.length === 0) return; // jendela ini sudah dikerjakan
 
-    // Bila pekerja cron sedang memegang lease, jalur ini mengalah
-    // (dua pembaca Ayrshare bersamaan hanya memicu rate-limit).
+    // Pekerja cron sedang memegang lease → jalur ini mengalah.
     if (await leaseAktif(db)) {
       await lepasKlaim(db, KUNCI_KLAIM, bucket);
       bucketSelesaiInstance = "";
       return;
     }
-    // Mesin melempar 409 bila tak ada akun tertaut — itu normal (belum
-    // ditautkan), cukup dicatat, bukan alasan menggagalkan apa pun.
     try {
-      await jalankanAnalisisAyrshare({
-        olehUserId: null,
-        tanpaKomentar: !(await modulAktifServer("kepatuhan_komen")),
-      });
+      await sinkronKontenOfficial();
     } catch (e) {
-      // GAGAL → LEPASKAN klaim jendela ini (3 Sep 2026) supaya permintaan
-      // berikutnya di jendela yang sama boleh mencoba lagi; tanpa ini satu
-      // kegagalan sesaat memadamkan sinkron sampai 30 menit berikutnya.
+      // 409 = Official belum ditautkan: normal, bukan alasan mengulang.
+      if ((e as { status?: number })?.status === 409) return;
+      // GAGAL → lepaskan klaim supaya permintaan berikutnya di jendela yang
+      // sama boleh mencoba lagi.
       await lepasKlaim(db, KUNCI_KLAIM, bucket);
       bucketSelesaiInstance = "";
       throw e;
@@ -115,7 +268,7 @@ export async function sinkronKontenTvTerjadwal(): Promise<void> {
 }
 
 /** Lepaskan klaim jendela HANYA bila nilainya masih milik kita. */
-async function lepasKlaim(db: ReturnType<typeof supabase>, kunci: string, bucket: string) {
+async function lepasKlaim(db: Db, kunci: string, bucket: string) {
   await db
     .from("pengaturan_sistem")
     .update({ nilai: "" })
@@ -126,13 +279,13 @@ async function lepasKlaim(db: ReturnType<typeof supabase>, kunci: string, bucket
 
 /**
  * Daftarkan video yang BARU diunggah lewat aplikasi ke feed_konten +
- * `postingan` SEKETIKA. Dipakai jalur unggah (/api/tv/unggah) agar video
- * langsung muncul di kanal konten & jadi target wajib-komen tanpa
- * menunggu sinkron berkala. TIDAK memeriksa komentar (belum ada).
+ * `postingan` SEKETIKA. Dipakai jalur unggah (/api/tv/unggah) dan jadwal
+ * tayang Official agar video langsung muncul di kanal konten & jadi target
+ * wajib-komen tanpa menunggu sinkron berkala.
  *
- * Hanya mendaftarkan platform yang akun tertaut-nya benar-benar terdaftar
- * sebagai akun wajib (kalau tidak, baris postingan tak akan tergabung di
- * tampilan QC). TIDAK melempar.
+ * Hanya mendaftarkan platform yang akun Official-nya terdaftar sebagai
+ * akun wajib (kalau tidak, baris postingan tak akan tergabung di tampilan
+ * QC). TIDAK melempar.
  */
 export async function daftarkanVideoUnggahan(opsi: {
   posting: { platform: string; id: string; postUrl: string }[];
@@ -143,18 +296,14 @@ export async function daftarkanVideoUnggahan(opsi: {
     if (opsi.posting.length === 0) return;
     const db = supabase();
 
-    const [{ data: akunWajib }, tertaut] = await Promise.all([
+    const profil = await profilOfficialUp().catch(() => "");
+    const [{ data: akunWajib }, usernamePerPlatform] = await Promise.all([
       db.from("akun_wajib").select("username, platform, nama_akun").eq("aktif", true),
-      ambilAkunTertaut().catch(() => ({ akun: [] as { platform: string; username: string }[] })),
+      akunOfficial(db, profil),
     ]);
 
-    // platform → username akun resmi yang tertaut di profil Ayrshare.
-    const usernamePerPlatform = new Map<string, string>();
-    for (const a of tertaut.akun) {
-      usernamePerPlatform.set(a.platform, a.username.toLowerCase().replace(/^@/, ""));
-    }
     // (platform, username) yang sah sebagai akun wajib + label tampilannya.
-    const wajib = new Map<string, string>(); // "platform|username" → nama_tampilan
+    const wajib = new Map<string, string>(); // "platform|username" → nama tampilan
     for (const a of akunWajib ?? []) {
       wajib.set(
         `${a.platform}|${String(a.username).toLowerCase()}`,
@@ -184,8 +333,6 @@ export async function daftarkanVideoUnggahan(opsi: {
         caption_asli: opsi.caption,
         thumbnail_url: opsi.thumbnailUrl,
         updated_at: sekarang,
-        // komentar_status SENGAJA tak diisi → baris baru dapat default
-        // 'menunggu', dan komentarnya diperiksa sinkron berkala berikutnya.
       });
       barisFeed.push({
         id_postingan: idKanonik,
@@ -214,21 +361,18 @@ export async function daftarkanVideoUnggahan(opsi: {
 }
 
 const KUNCI_LEASE = "sinkron_lease";
-const KUNCI_MENIT = "sinkron_komen_menit";
 /** Umur lease pekerja (ms) — sedikit di atas maxDuration route cron. */
 const UMUR_LEASE_MS = 320_000;
-/** Postingan yang diperiksa < ini dilewati pada mode realtime (ms). */
-const SEGAR_REALTIME_MS = 3 * 60_000;
 
 /** true bila ada pekerja lain yang masih memegang lease. */
-export async function leaseAktif(db: ReturnType<typeof supabase>): Promise<boolean> {
+export async function leaseAktif(db: Db): Promise<boolean> {
   const { data } = await db.from("pengaturan_sistem").select("nilai").eq("kunci", KUNCI_LEASE).maybeSingle();
   const nilai = String(data?.nilai ?? "");
   return Boolean(nilai) && nilai > new Date().toISOString();
 }
 
 /** Ambil lease secara atomik; null bila sedang dipegang pekerja lain. */
-async function ambilLease(db: ReturnType<typeof supabase>): Promise<string | null> {
+async function ambilLease(db: Db): Promise<string | null> {
   const kini = new Date().toISOString();
   const sampai = new Date(Date.now() + UMUR_LEASE_MS).toISOString();
   await db
@@ -244,7 +388,7 @@ async function ambilLease(db: ReturnType<typeof supabase>): Promise<string | nul
   return data && data.length > 0 ? sampai : null;
 }
 
-async function lepasLease(db: ReturnType<typeof supabase>, lease: string) {
+async function lepasLease(db: Db, lease: string) {
   await db
     .from("pengaturan_sistem")
     .update({ nilai: "" })
@@ -253,99 +397,65 @@ async function lepasLease(db: ReturnType<typeof supabase>, lease: string) {
     .then(() => undefined, () => undefined);
 }
 
-/** Jeda minimal antar putaran penuh (menit), bisa diubah tanpa deploy. */
-async function bacaMenitRealtime(db: ReturnType<typeof supabase>): Promise<number> {
-  const { data } = await db.from("pengaturan_sistem").select("nilai").eq("kunci", KUNCI_MENIT).maybeSingle();
-  const n = Number(data?.nilai ?? 5);
-  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 5;
-}
-
 export type HasilPaksa = {
   jalan: boolean;
   alasan?: string;
   putaran?: number;
   sisa?: number;
   selesai?: boolean;
+  /** Komentar tidak diperiksa otomatis lagi (upload-post tanpa API komentar). */
+  komentar_dimatikan?: boolean;
   ringkas?: Record<string, unknown>;
 };
 
 /**
- * Sinkron REALTIME untuk Vercel Cron (3 Sep 2026): dipanggil tiap 5 menit,
- * lalu MENGULANG penarikan di dalam satu panggilan sampai semua postingan
- * periode selesai diperiksa atau anggaran waktu habis (`anggaranTotalMs`).
- * Bila masih ada sisa saat anggaran habis, pemanggil (route) menyambung ke
- * panggilan berikutnya ("rantai"). Satu lease atomik menjamin hanya SATU
- * pekerja Ayrshare pada satu waktu. Jejak ke pengaturan_sistem
- * `sinkron_komen_cron_terakhir` & `sinkron_komen_cron_status`.
+ * Sinkron untuk cron (/api/cron/sinkron-komen): SATU putaran sinkron konten
+ * Official per panggilan (tak ada lagi antrean komentar yang perlu dirantai).
+ * Lease atomik menjamin hanya satu pekerja pada satu waktu. Jejak ke
+ * pengaturan_sistem `sinkron_komen_cron_terakhir` & `sinkron_komen_cron_status`.
+ * `_anggaranTotalMs` dipertahankan demi kecocokan pemanggil lama.
  */
-export async function sinkronKontenTvPaksa(
-  pemicu: string,
-  anggaranTotalMs = 250_000,
-): Promise<HasilPaksa> {
+export async function sinkronKontenTvPaksa(pemicu: string, _anggaranTotalMs = 250_000): Promise<HasilPaksa> {
+  void _anggaranTotalMs;
   const db = supabase();
   const mulai = Date.now();
-  if (!ayrshareSiap()) return { jalan: false, alasan: "Ayrshare belum tersambung." };
+  if (!uploadPostSiap()) {
+    return { jalan: false, alasan: "upload-post belum diatur di server.", komentar_dimatikan: true };
+  }
   const lease = await ambilLease(db);
-  if (!lease) return { jalan: false, alasan: "Pekerja lain sedang menarik komentar (lease aktif)." };
-  const komenAktif = await modulAktifServer("kepatuhan_komen");
+  if (!lease) {
+    return { jalan: false, alasan: "Pekerja lain sedang menyinkronkan (lease aktif).", komentar_dimatikan: true };
+  }
 
-  let putaran = 0;
-  let terakhir: Awaited<ReturnType<typeof jalankanAnalisisAyrshare>> | null = null;
-  let galatTerakhir = "";
+  let hasil: HasilSinkronKonten | null = null;
+  let galat = "";
   try {
-    // Ulangi sampai tuntas atau anggaran habis. Tiap putaran hanya menyentuh
-    // postingan yang BELUM diperiksa dalam 3 menit terakhir, jadi putaran
-    // lanjutan langsung ke sisa yang belum sempat, bukan mengulang dari awal.
-    while (Date.now() - mulai < anggaranTotalMs) {
-      const sisaWaktu = anggaranTotalMs - (Date.now() - mulai);
-      if (sisaWaktu < 15_000) break;
-      // Database macet (28 Sep 2026): sisa putaran menunggu giliran cron
-      // berikutnya — kapasitas yang tersisa untuk pengguna.
-      if (putaran > 0 && latarHarusBerhenti()) break;
-      putaran += 1;
-      try {
-        terakhir = await jalankanAnalisisAyrshare({
-          olehUserId: null,
-          // Modul kepatuhan komentar mati → feed saja, komentar tidak ditarik.
-          tanpaKomentar: !komenAktif,
-          anggaranMs: Math.min(sisaWaktu - 10_000, 120_000),
-          segarMs: SEGAR_REALTIME_MS,
-        });
-        galatTerakhir = "";
-        if (terakhir.selesai || terakhir.sisa === 0) break;
-      } catch (e) {
-        galatTerakhir = e instanceof Error ? e.message : String(e);
-        console.error(`[sinkron-konten] realtime putaran ${putaran} gagal:`, galatTerakhir);
-        // Gagal sesaat → jeda 5 dtk lalu coba lagi selama anggaran masih ada.
-        await new Promise((r) => setTimeout(r, 5000));
-      }
-    }
+    hasil = await sinkronKontenOfficial();
+  } catch (e) {
+    galat = e instanceof Error ? e.message : String(e);
+    console.error("[sinkron-konten] cron gagal:", galat);
   } finally {
     await lepasLease(db, lease);
   }
 
   const kini = new Date().toISOString();
-  if (!terakhir) {
+  if (!hasil) {
     await db.from("pengaturan_sistem").upsert(
       [
         { kunci: "sinkron_komen_cron_terakhir", nilai: kini },
-        { kunci: "sinkron_komen_cron_status", nilai: `gagal ${pemicu} ${galatTerakhir}`.slice(0, 500) },
+        { kunci: "sinkron_komen_cron_status", nilai: `gagal ${pemicu} ${galat}`.slice(0, 500) },
       ],
       { onConflict: "kunci" },
     );
-    return { jalan: false, alasan: galatTerakhir || "Tidak ada putaran yang berhasil.", putaran };
+    return { jalan: false, alasan: galat || "Sinkron tidak berhasil.", putaran: 1, komentar_dimatikan: true };
   }
   const ringkas = {
-    periode: terakhir.periode,
-    postingan: terakhir.postingan,
-    komentar: terakhir.komentar,
-    comply: terakhir.comply,
-    gagal_cek: terakhir.gagal_cek,
-    sisa: terakhir.sisa,
-    selesai: terakhir.selesai,
-    putaran,
+    periode: hasil.periode,
+    postingan: hasil.postingan,
+    akun: hasil.akun_tercakup.length,
+    komentar: "dimatikan",
     detik: Math.round((Date.now() - mulai) / 1000),
-    peringatan: terakhir.peringatan.length,
+    peringatan: hasil.peringatan.length,
   };
   await db.from("pengaturan_sistem").upsert(
     [
@@ -354,10 +464,5 @@ export async function sinkronKontenTvPaksa(
     ],
     { onConflict: "kunci" },
   );
-  return { jalan: true, putaran, sisa: terakhir.sisa, selesai: terakhir.selesai, ringkas };
-}
-
-/** Menit jeda realtime (untuk route cron yang ingin mengecek tanpa menjalankan). */
-export async function menitRealtime(): Promise<number> {
-  return bacaMenitRealtime(supabase());
+  return { jalan: true, putaran: 1, sisa: 0, selesai: true, komentar_dimatikan: true, ringkas };
 }

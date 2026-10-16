@@ -1,17 +1,18 @@
-// GET /api/cron/sinkron-komen — penarik komentar REALTIME (3 Sep 2026).
+// GET /api/cron/sinkron-komen — sinkron konten TV Rakyat Official (cron).
 //
-// Dipanggil Vercel Cron tiap 5 menit (vercel.json → crons). Satu panggilan
-// MENGULANG penarikan sampai semua postingan periode selesai diperiksa atau
-// anggaran waktunya habis (±250 dtk dari maxDuration 300). Bila masih ada
-// sisa, route MENYAMBUNG dirinya sendiri (rantai) sampai tuntas — maksimal
-// 6 sambungan — sehingga rekap kepatuhan selalu sedekat mungkin dengan
-// keadaan sosmed, tanpa menunggu jadwal cron berikutnya.
+// Sejak 16 Okt 2026 (Ayrshare dihapus) sumbernya profil upload-post
+// Official dan PEMERIKSAAN KOMENTAR OTOMATIS DIMATIKAN — upload-post tidak
+// punya API komentar. Nama rute dipertahankan supaya jadwal cron yang sudah
+// terpasang tetap jalan; tiap panggilan kini menjalankan SATU putaran
+// sinkron konten (postingan periode ini → `postingan` + `feed_konten`).
+// Logika rantai di bawah tetap ada, tetapi tidak terpicu lagi karena satu
+// putaran selalu tuntas (`selesai: true`).
 //
 // Keamanan: bila env CRON_SECRET / ASISTEN_CRON_SECRET terpasang, wajib
 // `Authorization: Bearer <rahasia>`; tanpa rahasia, hanya user-agent resmi
 // Vercel Cron (dan sambungan internal) yang diterima. Pekerjaannya
-// idempoten (upsert) dan dijaga LEASE atomik: hanya satu pekerja Ayrshare
-// pada satu waktu, jadi tak bisa dipakai membanjiri Ayrshare.
+// idempoten (upsert) dan dijaga LEASE atomik: hanya satu pekerja pada satu
+// waktu, jadi tak bisa dipakai membanjiri upload-post.
 import { after } from "next/server";
 import { sinkronKontenTvPaksa } from "@/lib/sinkron-konten-tv";
 import { jalankanLatar, tundaKarenaMacet } from "@/lib/penjaga-supabase";

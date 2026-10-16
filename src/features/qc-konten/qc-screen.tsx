@@ -4,10 +4,12 @@
 // QcScreen — halaman utama Modul QC Konten Sosmed (HR Center).
 //
 // ROMBAKAN 31 Agu 2026 (permintaan user):
-// - Deteksi komentar kini SEPENUHNYA OTOMATIS (sinkron Ayrshare tiap
-//   ±30 menit — lihat lib/sinkron-konten-tv). Seluruh mesin analisis
-//   n8n DILEPAS dari layar ini: tombol Mulai Analisis, panel tahap,
-//   analisis akun belum tertaut, dan antrian n8n tidak ditampilkan lagi.
+// - Seluruh mesin analisis n8n DILEPAS dari layar ini: tombol Mulai
+//   Analisis, panel tahap, analisis akun belum tertaut, dan antrian n8n
+//   tidak ditampilkan lagi.
+// - 16 Okt 2026: PEMERIKSAAN KOMENTAR OTOMATIS DIMATIKAN (Ayrshare dihapus;
+//   upload-post tidak punya API komentar). Postingan Official tetap masuk
+//   daftar (lib/sinkron-konten-tv), data komentar/rekap lama tetap terbaca.
 // - "Periode Berjalan" (yang dulu hanya label tanpa efek) DIGANTI
 //   fitur RIWAYAT: pilih tanggal, atau klik salah satu entri riwayat
 //   pembaruan — SELURUH data layar berpindah ke periode itu.
@@ -252,9 +254,8 @@ function QcScreenPenuh({
     };
   }, [periodePilih, tik]);
 
-  // Baca kemajuan dari database; untuk HARI INI diulang tiap 30 detik —
-  // deteksi otomatis berjalan di latar (sinkron Ayrshare), jadi angka di
-  // layar ikut bergerak sendiri tanpa tombol apa pun.
+  // Baca kemajuan dari database; untuk HARI INI diulang tiap 60 detik —
+  // postingan baru Official masih masuk lewat sinkron konten di latar.
   useEffect(() => {
     let hidup = true;
 
@@ -320,7 +321,7 @@ function QcScreenPenuh({
             HR Center
           </h1>
           <p className="mt-0.5 text-xs text-teks-sekunder">
-            Kepatuhan komentar kader — deteksi berjalan otomatis
+            Kepatuhan komentar kader · pemeriksaan otomatis dimatikan
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -396,12 +397,9 @@ function QcScreenPenuh({
             )}
           </div>
           <p className="mt-2.5 flex items-center gap-1.5 text-[10.5px] leading-snug text-teks-sekunder">
-            <span className="relative flex h-1.5 w-1.5 shrink-0">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sukses opacity-60" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sukses" />
-            </span>
-            Deteksi komentar berjalan otomatis ±30 menit sekali — tanpa tombol,
-            tanpa n8n. Klik entri di bawah untuk membuka data pembaruan itu.
+            <span className="inline-flex h-1.5 w-1.5 shrink-0 rounded-full bg-kuning" />
+            Pemeriksaan komentar otomatis dimatikan — upload-post tidak menyediakan
+            data komentar. Klik entri di bawah untuk membuka data lama.
           </p>
         </GlassCard>
 
@@ -448,7 +446,7 @@ function QcScreenPenuh({
       </div>
 
       {/* Kemajuan pemeriksaan periode terpilih — angkanya dari DATABASE.
-          Tombol "Lanjutkan" (n8n) DIHAPUS: deteksi jalan sendiri. */}
+          Tombol "Lanjutkan" (n8n) DIHAPUS; pemeriksaan otomatis dimatikan. */}
       {antrian && antrian.total > 0 ? (
         <FadeInUp delay={0.12} className="mt-3">
           <GlassCard className="p-4">
@@ -506,8 +504,8 @@ function QcScreenPenuh({
             )}
             {hariIni && antrian.menunggu > 0 && (
               <p className="mt-2 text-[10.5px] text-teks-sekunder">
-                Sisa antrian diperiksa otomatis pada pembaruan berikutnya
-                (±30 menit) — tidak perlu menekan apa pun.
+                Komentar postingan yang masih menunggu tidak diperiksa otomatis
+                lagi — pemeriksaan komentar otomatis dimatikan.
               </p>
             )}
           </GlassCard>
@@ -680,7 +678,7 @@ function QcScreenPenuh({
                         </span>
                       </div>
 
-                      {/* Info akun. Ayrshare memberi NAMA TAMPILAN (bukan
+                      {/* Info akun. Penyedia bisa memberi NAMA TAMPILAN (bukan
                           @handle) untuk FB/Threads/YouTube — jangan
                           merender "@tv rakyat | medianya rakyat". */}
                       <div className="min-w-0 flex-1">
@@ -763,7 +761,7 @@ function QcScreenPenuh({
                 }
                 keterangan={
                   hariIni
-                    ? "Deteksi komentar berjalan otomatis ±30 menit sekali — data muncul sendiri begitu ada postingan baru. Tidak ada tombol yang perlu ditekan."
+                    ? "Postingan resmi baru masuk otomatis ±30 menit sekali. Pemeriksaan komentar otomatis dimatikan (upload-post tidak menyediakan data komentar)."
                     : "Tidak ada rekap tersimpan untuk tanggal ini. Pilih tanggal lain di seksi Riwayat."
                 }
               />
@@ -989,7 +987,7 @@ function MenuHrCenter({
 function AvatarAkunWajib({ akun, urut }: { akun: AkunWajibWithStats; urut: number }) {
   const [gagalGambar, setGagalGambar] = useState(false);
 
-  // Prioritas: thumbnail POSTINGAN TERBARU periode ini (data Ayrshare,
+  // Prioritas: thumbnail POSTINGAN TERBARU periode ini (sinkron konten,
   // permintaan 31 Agu 2026) → avatar profil → inisial.
   const gambar = akun.thumbnail_terbaru || akun.avatar_url;
   if (gambar && !gagalGambar) {

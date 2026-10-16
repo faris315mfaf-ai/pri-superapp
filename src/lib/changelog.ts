@@ -18,6 +18,17 @@ export type EntriChangelog = {
 
 export const CHANGELOG: EntriChangelog[] = [
   {
+    versi: "2.3.0",
+    tanggal: "16 Oktober 2026",
+    judul: "Ayrshare dihentikan — semua akun sosmed lewat upload-post",
+    poin: [
+      "Ayrshare dihentikan: semua akun sosmed, termasuk TV Rakyat Official, kini terhubung dan diunggah lewat upload-post",
+      "Akun yang dulu tersambung lewat Ayrshare WAJIB dihubungkan ulang: buka TVR Saya lalu tekan Hubungkan untuk menautkan sosmed Anda lewat upload-post",
+      "Pemeriksaan komentar otomatis QC dimatikan",
+      "Jadwal tayang TV Rakyat Official lewat upload-post tidak bisa dibatalkan setelah dikirim — periksa video, caption, dan jamnya sebelum menjadwalkan",
+    ],
+  },
+  {
     versi: "2.2.0",
     tanggal: "14 Oktober 2026",
     judul: "Ruang Bot terbuka untuk semua + Chat Global",

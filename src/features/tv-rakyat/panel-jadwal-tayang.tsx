@@ -5,9 +5,13 @@
 // tayang di TV Rakyat Official.
 //
 // Sebelum ini, menjadwalkan posting membuatnya lenyap dari pandangan:
-// datanya tersimpan dan Ayrshare menerbitkannya nanti, tapi tidak ada
+// datanya tersimpan dan penyedia menerbitkannya nanti, tapi tidak ada
 // satu layar pun yang menampilkannya. Tim tidak punya cara mengetahui
-// apa yang akan tayang malam nanti, apalagi membatalkannya.
+// apa yang akan tayang malam nanti.
+//
+// 16 Okt 2026: jadwal Official kini dikirim ke upload-post, yang TIDAK
+// menyediakan pembatalan (DELETE → 405). Tombol batal hanya muncul untuk
+// jadwal yang belum pernah dikirim (`bisa_dibatalkan` dari server).
 //
 // 9 Okt 2026: daftar diurut MENAIK (yang paling dekat tayang paling
 // atas) dengan hitung mundur ringkas ("3 jam lagi"), dan panel bisa
@@ -23,6 +27,11 @@ import { GlassSkeleton, StatusBadge } from "@/components/pri-ui";
 import { PlatformIcon } from "@/components/platform-icon";
 import { toast } from "@/hooks/use-app-store";
 import { batalkanJadwalPosting, getJadwalPosting, type JadwalPosting } from "@/services";
+
+/** `bisa_dibatalkan` dikirim /api/tv/jadwal (GET); false = sudah dikirim ke upload-post. */
+function bisaDibatalkan(j: JadwalPosting): boolean {
+  return (j as JadwalPosting & { bisa_dibatalkan?: boolean }).bisa_dibatalkan === true;
+}
 
 /** Nama peristiwa custom: daftar jadwal perlu dimuat ulang. */
 export const PERISTIWA_JADWAL_SEGAR = "pri:jadwal-tayang-segar";
@@ -177,9 +186,14 @@ export function PanelJadwalTayang() {
                 </div>
                 {lewat && (
                   // Waktunya lewat tapi statusnya belum berubah: pencocok
-                  // berkala menanyakan hasilnya ke Ayrshare tiap 5 menit.
+                  // berkala menanyakan hasilnya ke upload-post tiap 5 menit.
                   <p className="mt-1.5 text-[10.5px] leading-snug text-amber-600 dark:text-amber-400">
                     Waktunya sudah lewat — hasilnya sedang dipastikan.
+                  </p>
+                )}
+                {!lewat && !bisaDibatalkan(j) && (
+                  <p className="mt-1.5 text-[10.5px] leading-snug text-teks-sekunder">
+                    Sudah dikirim ke upload-post — jadwal ini tidak bisa dibatalkan dari aplikasi.
                   </p>
                 )}
               </div>
@@ -192,20 +206,22 @@ export function PanelJadwalTayang() {
                     warna="biru"
                   />
                 )}
-                <button
-                  type="button"
-                  onClick={() => void batalkan(j)}
-                  disabled={sibuk === j.id}
-                  aria-label={`Batalkan jadwal ${j.judul_youtube || j.id}`}
-                  title="Batalkan jadwal ini"
-                  className="glass btn-tekan flex h-7 w-7 items-center justify-center rounded-full text-[#DC2626] disabled:opacity-50"
-                >
-                  {sibuk === j.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                  )}
-                </button>
+                {bisaDibatalkan(j) && (
+                  <button
+                    type="button"
+                    onClick={() => void batalkan(j)}
+                    disabled={sibuk === j.id}
+                    aria-label={`Batalkan jadwal ${j.judul_youtube || j.id}`}
+                    title="Batalkan jadwal ini"
+                    className="glass btn-tekan flex h-7 w-7 items-center justify-center rounded-full text-[#DC2626] disabled:opacity-50"
+                  >
+                    {sibuk === j.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </GlassCard>

@@ -10,6 +10,7 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
+import { bacaHasilUnggah } from "@/lib/unggah-hasil";
 import { retensiJamTv, videoBaruTampil } from "@/lib/pengaturan-tv";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
     const [{ data: video }, { data: interaksi }] = await Promise.all([
       db
         .from("video_antrian")
-        .select("kode, judul, judul_overlay, link_instagram, thumbnail_url, diunggah_pada, ayrshare_hasil")
+        .select("kode, judul, judul_overlay, link_instagram, thumbnail_url, diunggah_pada, unggah_hasil")
         .eq("status", "SUDAH DIPROSES")
         .gte("diunggah_pada", batas)
         .order("diunggah_pada", { ascending: false })
@@ -65,14 +66,9 @@ export async function GET(request: Request) {
         // SELURUH tautan platform tempat video ini tayang, supaya
         // tombol bagikan bisa mengirim semuanya sekaligus — bukan
         // hanya tautan Instagram seperti sebelumnya.
-        tautan: (Array.isArray(v.ayrshare_hasil) ? v.ayrshare_hasil : [])
-          .filter(
-            (h): h is { platform: string; postUrl: string } =>
-              Boolean(h) &&
-              typeof (h as { postUrl?: unknown }).postUrl === "string" &&
-              Boolean((h as { postUrl?: string }).postUrl),
-          )
-          .map((h) => ({ platform: String(h.platform ?? ""), url: h.postUrl })),
+        tautan: bacaHasilUnggah(v.unggah_hasil)
+          .filter((h) => h.postUrl)
+          .map((h) => ({ platform: h.platform, url: h.postUrl })),
         thumbnail_url: v.thumbnail_url ?? "",
         diunggah_pada: v.diunggah_pada,
         sudah_komen: punya.has(`${v.kode}|komen`),

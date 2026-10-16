@@ -1,5 +1,10 @@
 // Penautan sosmed SUNGGUHAN untuk TVR Saya (spek 1.17):
-// 1 pengguna = 1 profil penyedia (Ayrshare; nanti upload-post).
+// 1 pengguna = 1 profil penyedia (upload-post; Postiz bila disetel master).
+//
+// 16 Okt 2026: Ayrshare dihentikan. Anggota yang profilnya masih baris
+// lama `penyedia = 'ayrshare'` dibaca BELUM terhubung; Hubungkan membuat
+// profil upload-post baru lalu MENIMPA baris lama itu (bukan menambah
+// baris kedua — satu anggota tetap tepat satu baris profil).
 //
 // POST → pastikan profilku ada (buat bila belum), lalu kembalikan URL
 //        halaman penautan white-label — pengguna login sosmednya di
@@ -11,8 +16,14 @@ import { supabase } from "@/lib/supabase";
 import { userEfektifTvr } from "@/lib/sebagai";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
-import { penyediaUntukAnggota } from "@/lib/sosmed-penyedia";
-import { koneksiTvr, lupakanKoneksiTvr, profilPenyediaKu, PLATFORM_TVR as URUTAN_PLATFORM } from "@/lib/koneksi-tvr";
+import { PENYEDIA_DIHENTIKAN, penyediaUntukAnggota } from "@/lib/sosmed-penyedia";
+import {
+  koneksiTvr,
+  lupakanKoneksiTvr,
+  profilAyrshareLama,
+  profilPenyediaKu,
+  PLATFORM_TVR as URUTAN_PLATFORM,
+} from "@/lib/koneksi-tvr";
 
 export const dynamic = "force-dynamic";
 
@@ -36,19 +47,37 @@ export async function POST(request: Request) {
       const dibuat = await penyedia.buatProfil(
         `${user.username || user.nama} (PRI ${user.id})`,
       );
-      const { data: baris, error } = await db
-        .from("sosmed_profile")
-        .insert({
-          penyedia: penyedia.id,
-          jenis: "pengguna",
-          judul: user.username || user.nama,
-          profile_key: dibuat.profileKey,
-          ref_id: dibuat.refId,
-          user_id: Number(user.id),
-          dibuat_oleh: Number(user.id),
-        })
-        .select("id, profile_key")
-        .single();
+      const kolom = {
+        penyedia: penyedia.id,
+        jenis: "pengguna",
+        judul: user.username || user.nama,
+        profile_key: dibuat.profileKey,
+        ref_id: dibuat.refId,
+        user_id: Number(user.id),
+      };
+      // Profil lama Ayrshare (dihentikan) ditimpa di tempat: id barisnya
+      // tetap, isinya diganti profil upload-post baru. Cache insight lama
+      // dibuang karena berasal dari akun Ayrshare.
+      const lama = await profilAyrshareLama(Number(user.id));
+      const { data: baris, error } = lama
+        ? await db
+            .from("sosmed_profile")
+            .update({
+              ...kolom,
+              insight_cache: null,
+              insight_pada: null,
+              penyedia_diubah_pada: new Date().toISOString(),
+              penyedia_diubah_oleh: Number(user.id),
+            })
+            .eq("id", lama.id)
+            .eq("penyedia", PENYEDIA_DIHENTIKAN)
+            .select("id, profile_key")
+            .single()
+        : await db
+            .from("sosmed_profile")
+            .insert({ ...kolom, dibuat_oleh: Number(user.id) })
+            .select("id, profile_key")
+            .single();
       if (error) {
         await penyedia.hapusProfil(dibuat.profileKey).catch(() => {});
         console.error("[tvr/hubungkan] simpan profil:", error.message);

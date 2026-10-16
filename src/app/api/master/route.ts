@@ -247,7 +247,8 @@ export async function GET(request: Request) {
       })),
       pengaturan: Object.fromEntries(
         (pengaturan ?? [])
-          .filter((p) => !String(p.kunci).startsWith("ayrshare_"))
+          // Cache insight/daftar postingan Official (JSON besar) bukan pengaturan.
+          .filter((p) => !String(p.kunci).startsWith("up_official_"))
           .map((p) => [p.kunci, p.nilai]),
       ),
     };

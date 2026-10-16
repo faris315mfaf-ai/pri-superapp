@@ -1,33 +1,32 @@
-// POST /api/tv/unggah — unggah video TV Rakyat ke sosmed lewat Ayrshare
+// POST /api/tv/unggah — unggah video TV Rakyat ke sosmed akun TV Rakyat
+// Official lewat profil upload-post Official (lib/official-up).
 // Body: { kode, platforms: ["instagram", ...] }
+// Balasan: { sukses, id_unggah, hasil: HasilUnggahPlatform[], berhasil,
+//            total, link, catatan_simpan }
 //
 // Ini menggantikan "unggah" versi lama yang sebenarnya hanya animasi
 // di layar: penghitung yang naik lalu berkata sukses, tanpa satu pun
 // video benar-benar terkirim. Sekarang videonya betul-betul diposting,
-// dan hasil per platform disimpan apa adanya — termasuk yang ditolak.
+// dan hasil per platform disimpan apa adanya (video_antrian.unggah_hasil)
+// — termasuk yang ditolak.
 //
-// Caption memakai bentuk objek Ayrshare ({default, instagram, ...})
-// sehingga caption khusus tiap platform yang disunting admin terpakai
-// dalam SATU permintaan, bukan mengunggah videonya berkali-kali.
+// 16 Okt 2026: Ayrshare dihapus (akun ditangguhkan). Caption khusus tiap
+// platform dikirim lewat `captionPer` upload-post dalam SATU permintaan;
+// judul video menjadi judul YouTube/Facebook.
 import { supabase } from "@/lib/supabase";
 import { bacaGalat, layakDiulang } from "@/lib/galat-unggah";
 import { pesanBagikanVideo } from "@/lib/format";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
-import { bolehProsesVideo } from "@/types";
-import {
-  ambilAkunTertaut,
-  unggahVideo,
-  ayrshareSiap,
-  type HasilUnggahPlatform,
-} from "@/lib/ayrshare";
+import { ambilKunciUnggah, unggahVideoUp } from "@/lib/upload-post";
+import { pastikanOfficialUp } from "@/lib/official-up";
+import { bacaHasilUnggah, tayangAtauDiproses, type HasilUnggahPlatform } from "@/lib/unggah-hasil";
+import { entriHasilUp, hasilPerPlatformUp } from "@/lib/jadwal-tayang";
 import { adalahPimred } from "@/lib/jabatan";
 import { bolehUploadVideo } from "@/lib/tv-tim";
 import { kirimKabar } from "@/lib/notifikasi";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 import { retensiJamTv } from "@/lib/pengaturan-tv";
-import { tayangAtauDiproses } from "@/lib/ayrshare-status";
-import { simpanSampul } from "@/lib/sampul";
 import { daftarkanVideoUnggahan } from "@/lib/sinkron-konten-tv";
 import { after } from "next/server";
 import { catatAudit } from "@/lib/audit";
@@ -69,18 +68,11 @@ async function siarkanKeRuangChat(
     console.error("[tv/unggah] siaran ruang chat:", e);
   }
 }
-// Mengunggah video ke Instagram/YouTube lewat Ayrshare bisa memakan
-// BEBERAPA MENIT (Ayrshare mengunduh video kita lalu mengunggahnya ke
-// tiap platform; Reels IG + YouTube paling lambat). Bila fungsi Vercel
-// mati sebelum Ayrshare menjawab, video TELANJUR tayang tapi status di
-// aplikasi berhenti di "SIAP DITINJAU" — persis bug yang dilaporkan.
-//
-// Dulu nilainya 60 dtk padahal batas tunggu Ayrshare 120 dtk: begitu
-// posting lewat 60 dtk, Vercel membunuh fungsi SEBELUM kode penyimpan
-// status ("SUDAH DIPROSES") sempat jalan, DAN sebelum catch pelepas
-// kunci jalan — jadi videonya tayang tapi aplikasi bilang gagal/ditinjau.
-// Kini 300 dtk (batas paket) > 230 dtk batas tunggu Ayrshare, jadi
-// unggahan lambat pun selesai lalu statusnya benar-benar tersimpan.
+// Unggah sinkron ke upload-post bisa memakan BEBERAPA MENIT (server mereka
+// mengunduh video kita lalu mengunggahnya ke tiap platform; Reels IG +
+// YouTube paling lambat). unggahVideoUp menunggu paling lama 180 dtk;
+// 300 dtk memberi ruang menyimpan status ("SUDAH DIPROSES") setelahnya,
+// supaya video yang tayang tidak tercatat "SIAP DITINJAU".
 export const maxDuration = 300;
 
 const PLATFORM_DIKENAL = new Set([
@@ -107,72 +99,21 @@ function tokenDari(request: Request): string {
   return h.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : "";
 }
 
-// Anggaran waktu TOTAL satu request (dtk) — sengaja di bawah maxDuration
-// (300) supaya kode penyimpan hasil masih sempat jalan sebelum fungsi mati.
-const ANGGARAN_TOTAL_MS = 285_000;
-/** Batas tunggu satu percobaan ke Ayrshare (sama dgn bawaan unggahVideo). */
-const TIMEOUT_PERCOBAAN_MS = 230_000;
-/** Sisa anggaran yang dicadangkan untuk menyimpan hasil setelah Ayrshare menjawab. */
-const CADANGAN_SIMPAN_MS = 15_000;
 /**
  * Umur kunci proses `sedang_unggah_pada` sebelum dianggap basi: maxDuration
  * (300 dtk) + margin. Harus > waktu hidup terlama satu request.
  */
 const KUNCI_BASI_MS = 6 * 60_000;
-/** Mengulang hanya bila setelah jeda masih tersisa waktu segini. */
-const SISA_MIN_ULANG_MS = 60_000;
-
 /**
- * Unggah ke Ayrshare dengan SATU kali ulang untuk kegagalan sementara
- * (jaringan / 5xx) — HANYA bila anggaran waktu request masih cukup.
- * Dulu tiap percobaan boleh 230 dtk + jeda, total ±462 dtk > maxDuration
- * 300: fungsi mati di tengah ulangan sebelum status sempat disimpan.
- * Kini timeout tiap percobaan = min(230 dtk, sisa anggaran − cadangan).
- *
- * Ulangan aman dari dobel-posting karena opsi memakai idempotencyKey yang
- * sama. Yang TIDAK diulang: galat 4xx (permintaan salah — hasil pasti
- * sama) dan TIMEOUT (Ayrshare mungkin sudah membuat postingan; kita tak
- * punya id-nya untuk ditanyakan lewat statusPostingan, jadi mengulang
- * buta bisa menggandakan). Setelah timeout penuh sisa anggaran memang
- * tinggal ±55 dtk, jadi aturan sisa-minimal pun sudah menahannya.
+ * Galat AMBIGU (timeout / jaringan / 5xx): video mungkin sudah terkirim.
+ * Kunci memori ditahan selama ini supaya "Ulangi" langsung tidak dobel.
  */
-async function unggahDenganUlang(
-  opsi: Parameters<typeof unggahVideo>[0],
-  batasAkhir: number,
-  maksUlang = 1,
-): Promise<{ idAyrshare: string; hasil: HasilUnggahPlatform[] }> {
-  let galatTerakhir: unknown;
-  for (let coba = 0; coba <= maksUlang; coba++) {
-    const timeoutMs = Math.min(
-      TIMEOUT_PERCOBAAN_MS,
-      batasAkhir - Date.now() - CADANGAN_SIMPAN_MS,
-    );
-    if (timeoutMs < 10_000) {
-      // Anggaran habis sebelum sempat mencoba (langkah awal terlalu lama).
-      throw galatTerakhir ?? new Error("Waktu permintaan habis sebelum video sempat diunggah. Coba lagi.");
-    }
-    try {
-      return await unggahVideo({ ...opsi, timeoutMs });
-    } catch (e) {
-      galatTerakhir = e;
-      const status = (e as { status?: number })?.status;
-      // 4xx = permintaan salah → berhenti, lempar apa adanya.
-      if (typeof status === "number" && status >= 400 && status < 500) throw e;
-      // Timeout = nasib postingan tak diketahui → jangan diulang buta.
-      if ((e as { timeout?: boolean })?.timeout) throw e;
-      // Ulang hanya bila jatah ada DAN sisa waktu setelah jeda masih lega.
-      if (coba >= maksUlang) break;
-      if (batasAkhir - Date.now() - 2500 < SISA_MIN_ULANG_MS) break;
-      await new Promise((r) => setTimeout(r, 2500));
-    }
-  }
-  throw galatTerakhir;
-}
+const TAHAN_AMBIGU_DETIK = 3 * 60;
+
+const PESAN_SEDANG_UNGGAH = "Video ini sedang diunggah proses lain. Tunggu sebentar lalu periksa hasilnya.";
 
 export async function POST(request: Request) {
   return bungkus(async () => {
-    // Patokan anggaran waktu total request (lihat unggahDenganUlang).
-    const mulai = Date.now();
     // Memposting atas nama akun partai adalah tindakan publik yang
     // tidak bisa ditarik kembali — dijaga di server, bukan sekadar
     // dengan menyembunyikan tombolnya.
@@ -189,18 +130,10 @@ export async function POST(request: Request) {
       "tv.upload",
       "Unggah video ke sosmed sedang dimatikan untuk peran Anda.",
     );
-    if (!ayrshareSiap()) {
-      throw Object.assign(
-        new Error("Ayrshare belum tersambung. Isi AYRSHARE_API_KEY di pengaturan lingkungan."),
-        { status: 503 },
-      );
-    }
 
     const body = (await request.json().catch(() => ({}))) as {
       kode?: string;
       platforms?: string[];
-      /** Sampul video base64 (jpg/png) — dipasang ke YT/IG/TikTok/FB. */
-      sampulDataUrl?: string;
     };
     const kode = (body.kode ?? "").trim();
     if (!kode) throw Object.assign(new Error("Video tidak disebutkan."), { status: 400 });
@@ -211,6 +144,11 @@ export async function POST(request: Request) {
     if (diminta.length === 0) {
       throw Object.assign(new Error("Pilih minimal satu platform tujuan."), { status: 400 });
     }
+
+    // Profil upload-post Official + platform yang tertaut & sehat. Melempar
+    // 503 (upload-post belum diatur) / 409 (Official belum ditautkan) dengan
+    // pesan yang mengarahkan ke kartu "Tautkan ke upload-post".
+    const official = await pastikanOfficialUp();
 
     // Ruang Bot (master): selama diposting ke akun Official, karakternya memasukkan surat ke kotak post.
     const tokenAkt = await mulaiAktivitas(pengguna.id, {
@@ -224,7 +162,7 @@ export async function POST(request: Request) {
     const { data: video, error: eBaca } = await db
       .from("video_antrian")
       .select(
-        "kode, judul, judul_overlay, caption_asli, caption_platform, hasil_render_url, status, platform_terunggah, persetujuan, tugas_id, diupload_oleh_id, ayrshare_hasil, thumbnail_url",
+        "kode, judul, judul_overlay, caption_asli, caption_platform, hasil_render_url, status, platform_terunggah, persetujuan, tugas_id, diupload_oleh_id, unggah_hasil, thumbnail_url",
       )
       .eq("kode", kode)
       .maybeSingle();
@@ -259,21 +197,16 @@ export async function POST(request: Request) {
     }
 
     // ---- PAGAR ANTI-DOBEL LAPIS 1 (fitur 1.20/9) ----
-    // Platform yang SUDAH tayang untuk video ini dibuang dari daftar
-    // kirim, apa pun yang diminta klien. Dengan begitu tombol Ulangi
-    // aman: hanya platform yang gagal yang dikirim ulang, dan video
-    // tidak mungkin terposting dua kali di platform yang sama.
-    const hasilLama = (Array.isArray(video.ayrshare_hasil) ? video.ayrshare_hasil : []) as {
-      platform?: string;
-      status?: string;
-      id?: string;
-      postUrl?: string;
-    }[];
+    // Platform yang SUDAH tayang (atau masih diproses) untuk video ini
+    // dibuang dari daftar kirim, apa pun yang diminta klien. Dengan begitu
+    // tombol Ulangi aman: hanya platform yang gagal yang dikirim ulang, dan
+    // video tidak mungkin terposting dua kali di platform yang sama.
+    const hasilLama = bacaHasilUnggah(video.unggah_hasil);
     const sudahTayang = new Set([
       ...((video.platform_terunggah ?? []) as string[]).map((p) => p.toLowerCase()),
       ...hasilLama
         .filter((h) => tayangAtauDiproses(h.status, h.id, h.postUrl))
-        .map((h) => String(h.platform ?? "").toLowerCase()),
+        .map((h) => h.platform.toLowerCase()),
     ]);
     const dobel = diminta.filter((p) => sudahTayang.has(p));
     const dimintaBersih = diminta.filter((p) => !sudahTayang.has(p));
@@ -286,48 +219,53 @@ export async function POST(request: Request) {
       );
     }
 
-    // Platform yang belum ditautkan di Ayrshare pasti ditolak. Lebih
-    // baik dicegat di sini dengan pesan yang jelas daripada membakar
-    // panggilan API untuk kepastian gagal.
-    const { platformAktif } = await ambilAkunTertaut();
-    const aktifSet = new Set(platformAktif.map((p) => p.toLowerCase()));
+    // Platform yang belum ditautkan (atau izinnya kedaluwarsa) di profil
+    // upload-post Official pasti ditolak. Lebih baik dicegat di sini dengan
+    // pesan yang jelas daripada membakar panggilan API untuk kepastian gagal.
+    const aktifSet = new Set(official.platform);
+    const perluUlangSet = new Set(official.perluUlang);
     const belumTertaut = dimintaBersih.filter((p) => !aktifSet.has(p));
     const siapKirim = dimintaBersih.filter((p) => aktifSet.has(p));
 
     if (siapKirim.length === 0) {
       throw Object.assign(
         new Error(
-          `Belum ada akun yang tertaut untuk ${belumTertaut.join(", ")}. Tautkan dulu di dasbor Ayrshare.`,
+          `Akun ${belumTertaut.join(", ")} TV Rakyat Official belum tertaut (atau perlu login ulang) di upload-post. Buka TV Rakyat → kartu "Tautkan ke upload-post" lalu tautkan akunnya.`,
         ),
-        { status: 400 },
+        { status: 409 },
       );
     }
 
-    // Susun caption bentuk objek: "default" dipakai platform yang
-    // tidak punya caption khusus. Validasi murah ini SENGAJA di atas
-    // perebutan kunci: dilempar setelah kunci direbut, kunci bocor dan
-    // video terblokir sampai kunci basi.
+    // Caption per platform: caption khusus bila disunting admin, selain itu
+    // caption utama. Dikirim lewat captionPer supaya TikTok/IG/Threads/X
+    // memakai caption apa adanya (tanpa judul di depannya), sedangkan
+    // YouTube/Facebook memakai judul video sebagai judul dan caption sebagai
+    // deskripsi. Validasi murah ini SENGAJA di atas perebutan kunci:
+    // dilempar setelah kunci direbut, kunci bocor dan video terblokir.
     const captionUtama = (video.caption_asli ?? "").trim();
     const khusus = (video.caption_platform ?? {}) as Record<string, string>;
-    const caption: Record<string, string> = { default: captionUtama };
+    const captionPer: Record<string, string> = {};
     for (const p of siapKirim) {
-      const teks = (khusus?.[p] ?? "").trim();
-      if (teks) caption[p] = teks.slice(0, BATAS_CAPTION[p] ?? 2200);
+      const teks = (khusus?.[p] ?? "").trim() || captionUtama;
+      if (teks) captionPer[p] = teks.slice(0, BATAS_CAPTION[p] ?? 2200);
     }
-    if (!captionUtama && Object.keys(caption).length === 1) {
+    if (Object.keys(captionPer).length === 0) {
       throw Object.assign(new Error("Caption masih kosong."), { status: 400 });
     }
+    const judulVideo = (video.judul_overlay || video.judul || "TV Rakyat").trim();
 
     // ---- PAGAR ANTI-DOBEL LAPIS 2: kunci proses (fitur 1.20/9) ----
-    // Dua permintaan bersamaan (klik ganda, dua admin) memperebutkan
-    // satu kunci; yang kalah ditolak. Kunci basi (proses sebelumnya mati
-    // di tengah jalan) boleh direbut. Umur basi = maxDuration (300 dtk) +
-    // margin = 6 menit: satu unggahan bisa memakan 230 dtk, jadi batas
-    // lama 2 menit membolehkan request kedua merebut kunci SAAT yang
-    // pertama masih berjalan lalu memposting dobel.
+    // (a) Kunci memori + Redis upload-post (ambilKunciUnggah) — pola yang
+    //     sama dengan unggahan anggota; menahan klik ganda di proses ini.
+    // (b) Kunci baris `sedang_unggah_pada` — menahan dua admin / dua proses.
+    //     Kunci basi (proses sebelumnya mati di tengah jalan) boleh direbut;
+    //     umur basi 6 menit > maxDuration, jadi request kedua tak mungkin
+    //     berjalan selagi yang pertama hidup.
+    const kunciProses = await ambilKunciUnggah(`tv-official:${kode}`, KUNCI_BASI_MS / 1000);
+    if (!kunciProses) throw Object.assign(new Error(PESAN_SEDANG_UNGGAH), { status: 409 });
+
     const batasBasi = new Date(Date.now() - KUNCI_BASI_MS).toISOString();
-    // Stempel percobaan ini. Dipakai DUA kali: sebagai kunci proses, dan
-    // sebagai pembeda kunci anti-dobel di bawah — lihat alasannya di sana.
+    // Stempel percobaan ini: kunci baris DAN pembeda Idempotency-Key.
     const stempelCoba = new Date().toISOString();
     const { data: kunciDapat } = await db
       .from("video_antrian")
@@ -336,68 +274,57 @@ export async function POST(request: Request) {
       .or(`sedang_unggah_pada.is.null,sedang_unggah_pada.lt.${batasBasi}`)
       .select("kode");
     if (!kunciDapat || kunciDapat.length === 0) {
-      throw Object.assign(
-        new Error("Video ini sedang diunggah proses lain. Tunggu sebentar lalu periksa hasilnya."),
-        { status: 409 },
-      );
+      await kunciProses.lepas();
+      throw Object.assign(new Error(PESAN_SEDANG_UNGGAH), { status: 409 });
     }
 
-    let idAyrshare: string;
-    let hasil: HasilUnggahPlatform[];
-    // KUNCI ANTI-DOBEL — perbaikan 15 Sep 2026.
-    //
-    // Dulu kuncinya `pri-<kode>-<platform>` saja: SAMA PERSIS setiap kali
-    // tombol "Ulangi" ditekan untuk kumpulan platform yang sama. Ayrshare
-    // mengenalinya sebagai permintaan kembar, jadi percobaan ULANG KEDUA
-    // dan seterusnya tidak pernah benar-benar dikirim — tombolnya tampak
-    // bekerja tapi tidak terjadi apa-apa. Itu bug yang terlihat di
-    // produksi: video yang sama gagal berhari-hari di platform yang sama.
-    //
-    // Sekarang kuncinya memuat STEMPEL PERCOBAAN. Tiap percobaan baru =
-    // permintaan baru yang sungguh dikirim; sementara perlindungan dari
-    // dobel-posting tetap utuh lewat tiga lapis yang lain:
-    //   1. platform yang SUDAH tayang dibuang dari daftar kirim (di atas),
-    //   2. kunci proses (basi 6 menit > maxDuration) menahan klik ganda /
-    //      dua admin bersamaan — karena kini cukup lama, request kedua tak
-    //      mungkin berjalan selagi yang pertama hidup, jadi kunci Ayrshare
-    //      yang berbeda per request tidak membuka celah dobel bersamaan,
-    //   3. `unggahDenganUlang` mengulang sekali dengan kunci yang SAMA,
-    //      sehingga gangguan jaringan di tengah tidak melahirkan dua post.
-    // Stempel TETAP dipertahankan: tanpanya "Ulangi" yang sah setelah
-    // gagal akan dikira kembar oleh Ayrshare dan tak pernah terkirim.
+    // Idempotency-Key memuat STEMPEL PERCOBAAN (perbaikan 15 Sep 2026):
+    // kunci yang sama persis tiap "Ulangi" membuat penyedia menganggap
+    // percobaan ulang yang sah sebagai kiriman kembar dan tak pernah
+    // mengirimnya. Perlindungan dobel tetap utuh lewat lapis 1 & 2 di atas;
+    // POST ke upload-post TIDAK pernah diulang otomatis.
     const kunciDobel = `pri-${kode}-${siapKirim.slice().sort().join("_")}-${stempelCoba}`;
+    let idUnggah: string;
+    let hasil: HasilUnggahPlatform[];
     try {
-      // Sampul kustom (fitur 31 Agu 2026): dipasang ke YT/IG/TikTok/FB;
-      // Threads & X tidak mendukung sampul. Tanpa sampul = perilaku lama.
-      const sampulUrl = await simpanSampul(kode, body.sampulDataUrl);
-
-      // Ulangi SEKALI bila gagal karena hal sementara (jaringan/5xx) dan
-      // anggaran waktu masih lega; kunci sama jadi tak membuat post ganda.
-      // Galat permintaan (4xx) dan timeout tidak diulang.
-      ({ idAyrshare, hasil } = await unggahDenganUlang(
-        {
-          videoUrl,
-          caption,
-          platforms: siapKirim,
-          judulYoutube: video.judul_overlay || video.judul || "TV Rakyat",
-          thumbnailUrl: sampulUrl ?? undefined,
-          // Kunci memuat daftar platform supaya percobaan ULANG untuk
-          // subset yang gagal tetap dianggap permintaan baru.
-          idempotencyKey: kunciDobel,
-        },
-        mulai + ANGGARAN_TOTAL_MS,
-      ));
+      const balasan = await unggahVideoUp({
+        profil: official.profil,
+        videoUrl,
+        judul: judulVideo,
+        caption: captionUtama,
+        platforms: siapKirim,
+        captionPer,
+        kunciIdempotensi: kunciDobel,
+      });
+      idUnggah = balasan.request_id ?? "";
+      const peta = hasilPerPlatformUp(balasan.mentah);
+      const pesanTolak = String(
+        (balasan.mentah as { message?: string; error?: string }).message ??
+          (balasan.mentah as { error?: string }).error ??
+          "",
+      ).slice(0, 300);
+      hasil = siapKirim.map((p) => {
+        const r = peta.get(p);
+        // Ditolak utuh tanpa rincian per platform.
+        if (!r && !balasan.sukses) {
+          return { platform: p, status: "error", id: "", postUrl: "", pesan: pesanTolak || "Ditolak upload-post." };
+        }
+        return entriHasilUp(p, r, "Diterima upload-post, sedang diproses.");
+      });
     } catch (e) {
-      // Setelah TIMEOUT nasib postingan tak diketahui (mungkin masih
-      // diproses/sudah tayang di Ayrshare): kunci sengaja DIBIARKAN sampai
-      // basi supaya "Ulangi" langsung tidak memposting dobel. Galat lain
-      // = pasti tak ada post → kunci dilepas agar bisa dicoba lagi.
-      if (!(e as { timeout?: boolean })?.timeout) {
+      // Galat AMBIGU (timeout 504 / jaringan 502 / 5xx / tanpa status):
+      // video mungkin sudah terkirim — kunci baris DIBIARKAN sampai basi
+      // dan kunci memori ditahan, supaya "Ulangi" langsung tidak memposting
+      // dobel. Penolakan jelas (4xx) = pasti tak ada post → kunci dilepas.
+      const st = Number((e as { status?: number })?.status);
+      const ambigu = !Number.isFinite(st) || st >= 500;
+      if (!ambigu) {
         await db
           .from("video_antrian")
           .update({ sedang_unggah_pada: null })
           .eq("kode", kode);
       }
+      await kunciProses.lepas(ambigu ? TAHAN_AMBIGU_DETIK : 0);
       throw e;
     }
 
@@ -409,13 +336,15 @@ export async function POST(request: Request) {
         status: "error",
         id: "",
         postUrl: "",
-        pesan: "Akun belum ditautkan di Ayrshare.",
+        pesan: perluUlangSet.has(p)
+          ? "Izin akun ini kedaluwarsa di upload-post — tautkan ulang lewat kartu \"Tautkan ke upload-post\"."
+          : "Akun belum ditautkan ke profil upload-post TV Rakyat Official.",
       });
     }
 
     const berhasil = hasil.filter((h) => tayangAtauDiproses(h.status, h.id, h.postUrl));
     const tautanUtama =
-      berhasil.find((h) => h.platform === "instagram")?.postUrl ??
+      berhasil.find((h) => h.platform === "instagram" && h.postUrl)?.postUrl ??
       berhasil.find((h) => h.postUrl)?.postUrl ??
       "";
 
@@ -425,13 +354,11 @@ export async function POST(request: Request) {
     // hasil terbarunya.
     const platformBaru = new Set(hasil.map((h) => h.platform.toLowerCase()));
     const hasilGabung = [
-      ...hasilLama.filter(
-        (h) => !platformBaru.has(String(h.platform ?? "").toLowerCase()),
-      ),
+      ...hasilLama.filter((h) => !platformBaru.has(h.platform.toLowerCase())),
       ...hasil,
     ];
     const perubahan: Record<string, unknown> = {
-      ayrshare_hasil: hasilGabung,
+      unggah_hasil: hasilGabung,
       diunggah_pada: new Date().toISOString(),
       // Riwayat (sql/65): yang terakhir memposting; percobaan baru membuka
       // lagi penanda "sudah ditangani manual".
@@ -465,10 +392,8 @@ export async function POST(request: Request) {
     }
 
     // SIMPAN SEKARANG, tepat setelah hasil unggah didapat — sebelum efek
-    // samping apa pun. Dulu penyimpanan ini paling akhir, setelah banyak
-    // await (chat, tugas_link, kabar): bila salah satunya melempar atau
-    // fungsi mati, video sudah tayang tapi status/ayrshare_hasil tak
-    // tersimpan dan kunci proses tak terlepas.
+    // samping apa pun. Bila salah satu efek samping melempar atau fungsi
+    // mati, status/unggah_hasil sudah tersimpan dan kunci proses terlepas.
     let eSimpan: { message: string } | null = null;
     try {
       const { error } = await db.from("video_antrian").update(perubahan).eq("kode", kode);
@@ -477,7 +402,7 @@ export async function POST(request: Request) {
       eSimpan = { message: e instanceof Error ? e.message : String(e) };
     }
     if (eSimpan) {
-      // Videonya SUDAH tayang; yang gagal cuma pencatatannya. Katakan
+      // Videonya SUDAH terkirim; yang gagal cuma pencatatannya. Katakan
       // apa adanya alih-alih melaporkan unggahan gagal.
       console.error("[tv/unggah] simpan hasil:", eSimpan.message);
       // Upaya terakhir melepas kunci proses supaya tak menggantung.
@@ -487,6 +412,9 @@ export async function POST(request: Request) {
         // kunci akan basi sendiri
       }
     }
+    // Hasil tak tersimpan = lapis 1 buta terhadap unggahan ini: tahan kunci
+    // memori supaya "Ulangi" langsung tidak memposting dobel.
+    await kunciProses.lepas(eSimpan ? TAHAN_AMBIGU_DETIK : 0);
 
     // ---- Efek samping sekunder: di latar (after), tiap langkah dibungkus
     // try/catch sendiri — kegagalan satu langkah tak menggagalkan respons
@@ -599,12 +527,13 @@ export async function POST(request: Request) {
           platforms: diminta,
           berhasil: berhasil.map((h) => ({ platform: h.platform, url: h.postUrl ?? null })),
           gagal: hasil.filter((h) => h.status === "error").map((h) => h.platform),
+          id_unggah: idUnggah || null,
         },
       },
     );
     return {
       sukses: berhasil.length > 0,
-      id_ayrshare: idAyrshare,
+      id_unggah: idUnggah,
       hasil,
       berhasil: berhasil.length,
       total: hasil.length,

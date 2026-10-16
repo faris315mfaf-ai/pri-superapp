@@ -5,26 +5,20 @@
 //
 // Profil upload-post "tvrakyat-official" dibuat saat pertama kali tim
 // menekan "Tautkan", lalu disimpan di pengaturan_sistem
-// (upload_post_profil_official) — galeri Konten (/api/konten/galeri)
-// otomatis memakai profil ini untuk video Official terbaru. Hanya untuk
-// yang berhak unggah ke akun Official (lib/tv-tim).
+// (KUNCI_PROFIL_OFFICIAL). Sejak 16 Okt 2026 profil inilah SATU-SATUNYA
+// jalur akun Official (unggah, jadwal, galeri Konten) — lihat
+// lib/official-up. Hanya untuk yang berhak unggah ke akun Official (lib/tv-tim).
 import { bungkus } from "@/lib/api-helper";
 import { supabase } from "@/lib/supabase";
 import { pastikanMasuk } from "@/lib/sesi";
 import { bolehUploadVideo } from "@/lib/tv-tim";
 import { buatProfilUp, daftarProfilUp, statusAkunUp, tautanHubungkanUp, uploadPostSiap } from "@/lib/upload-post";
+import { KUNCI_PROFIL_OFFICIAL, PROFIL_OFFICIAL_BAWAAN, profilOfficialUp } from "@/lib/official-up";
 import { catatAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
-const KUNCI = "upload_post_profil_official";
-const PROFIL_BAWAAN = "tvrakyat-official";
 const PLATFORM_BOLEH = new Set(["instagram", "tiktok", "youtube", "facebook", "threads", "twitter"]);
-
-async function profilTersimpan(): Promise<string> {
-  const { data } = await supabase().from("pengaturan_sistem").select("nilai").eq("kunci", KUNCI).maybeSingle();
-  return String(data?.nilai ?? "").trim();
-}
 
 async function pastikanBerhak(request: Request) {
   const user = await pastikanMasuk(request);
@@ -38,7 +32,7 @@ async function pastikanBerhak(request: Request) {
 export async function GET(request: Request) {
   return bungkus(async () => {
     await pastikanBerhak(request);
-    const profil = await profilTersimpan();
+    const profil = await profilOfficialUp();
     if (!profil) return { profil: "", akun: {}, perlu_ulang: [] };
     const { akun, perluUlang } = await statusAkunUp(profil);
     return { profil, akun, perlu_ulang: perluUlang };
@@ -51,14 +45,17 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as { platform?: string };
     const platform = String(body.platform ?? "").toLowerCase();
 
-    let profil = await profilTersimpan();
+    let profil = await profilOfficialUp();
     if (!profil) {
-      profil = PROFIL_BAWAAN;
+      profil = PROFIL_OFFICIAL_BAWAAN;
       const { profil: semua } = await daftarProfilUp();
       if (!semua.some((p) => p.username === profil)) await buatProfilUp(profil);
       const { error } = await supabase()
         .from("pengaturan_sistem")
-        .upsert({ kunci: KUNCI, nilai: profil, diubah_pada: new Date().toISOString() }, { onConflict: "kunci" });
+        .upsert(
+          { kunci: KUNCI_PROFIL_OFFICIAL, nilai: profil, diubah_pada: new Date().toISOString() },
+          { onConflict: "kunci" },
+        );
       if (error) throw new Error("Profil Official gagal disimpan.");
     }
 

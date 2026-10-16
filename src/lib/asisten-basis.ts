@@ -20,6 +20,7 @@ import { DIVISI } from "@/lib/struktur";
 import { periodeSaatIni } from "@/lib/periode-qc";
 
 import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
+import { bacaHasilUnggah, tayangAtauDiproses } from "@/lib/unggah-hasil";
 export const UMUR_SEGAR_MENIT = 60;
 // Aturan KPI 5x6 (31 Agu 2026): bawaan 5 video x 6 platform = 30/hari.
 // Snapshot memakai perkiraan total-based (banned per user tidak ditarik
@@ -230,20 +231,17 @@ export async function bangunSnapshot(): Promise<Record<string, unknown>> {
   try {
     const batas = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
     const [{ data: vids }, { data: interaksi }] = await Promise.all([
-      db.from("video_antrian").select("diunggah_pada, ayrshare_hasil").gte("jam_tanggal", batas).limit(500),
+      db.from("video_antrian").select("diunggah_pada, unggah_hasil").gte("jam_tanggal", batas).limit(500),
       db.from("interaksi_video").select("jenis").gte("pada", batas).limit(2000),
     ]);
     let sukses = 0;
     let gagal = 0;
     const perPlatform: Record<string, { sukses: number; gagal: number }> = {};
     for (const v of vids ?? []) {
-      for (const h of (Array.isArray(v.ayrshare_hasil) ? v.ayrshare_hasil : []) as {
-        status?: string;
-        platform?: string;
-      }[]) {
-        const p = String(h.platform ?? "?").toLowerCase();
+      for (const h of bacaHasilUnggah(v.unggah_hasil)) {
+        const p = h.platform.toLowerCase();
         const b = (perPlatform[p] ??= { sukses: 0, gagal: 0 });
-        if (h.status === "success") {
+        if (h.status === "success" || tayangAtauDiproses(h.status, h.id, h.postUrl)) {
           sukses += 1;
           b.sukses += 1;
         } else {

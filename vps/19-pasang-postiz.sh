@@ -7,7 +7,8 @@
 # dari orang lain (kuota 225 profil, tagihan bulanan, batas yang bisa
 # mereka ubah sepihak), Postiz berjalan di server kita sendiri.
 #
-# TV Rakyat OFFICIAL tetap lewat Ayrshare — tidak disentuh skrip ini.
+# TV Rakyat OFFICIAL lewat upload-post (Ayrshare dihentikan 16 Okt 2026)
+# — tidak disentuh skrip ini.
 #
 # YANG DIPASANG — tumpukan terpisah bernama "postiz":
 #   postiz     — aplikasinya (tampilan + API jadi satu)

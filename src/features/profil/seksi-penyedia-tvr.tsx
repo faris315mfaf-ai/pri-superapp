@@ -116,7 +116,7 @@ export function SeksiPenyediaTvr() {
                 : "Postiz belum diatur di server, jadi belum ada yang bisa dipindahkan. Pasang dulu di VPS dan isi alamat serta kuncinya di pengaturan server."}
             </p>
             <p className="mt-1.5 text-[11px] text-teks-sekunder">
-              TV Rakyat Official tetap lewat Ayrshare dan tidak terpengaruh layar ini.
+              Akun TV Rakyat Official memakai profil upload-post sendiri dan tidak terpengaruh layar ini.
             </p>
           </div>
         </div>

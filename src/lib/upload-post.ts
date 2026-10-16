@@ -695,9 +695,13 @@ export type StatusUp = {
   mentah: unknown;
 };
 
-/** GET /uploadposts/status?request_id=… (atau job_id untuk post terjadwal). */
-export async function statusUnggahUp(id: string, timeoutMs = 20000): Promise<StatusUp> {
-  const q = /^job_/i.test(id) ? `job_id=${encodeURIComponent(id)}` : `request_id=${encodeURIComponent(id)}`;
+/**
+ * GET /uploadposts/status?request_id=… (atau job_id untuk post terjadwal).
+ * `jenis` eksplisit dipakai bila pemanggil tahu jenis id-nya (job id terjadwal tidak selalu berawalan "job_").
+ */
+export async function statusUnggahUp(id: string, timeoutMs = 20000, jenis?: "request" | "job"): Promise<StatusUp> {
+  const pakaiJob = jenis ? jenis === "job" : /^job_/i.test(id);
+  const q = pakaiJob ? `job_id=${encodeURIComponent(id)}` : `request_id=${encodeURIComponent(id)}`;
   const d = await panggil<{ status?: string; completed?: number; total?: number; results?: Record<string, unknown>[] }>(
     `/uploadposts/status?${q}`,
     { method: "GET", timeoutMs: Math.max(3000, timeoutMs) },

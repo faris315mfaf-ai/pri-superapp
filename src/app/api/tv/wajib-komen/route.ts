@@ -2,7 +2,14 @@
 // hari ini + status komentar SAYA (terverifikasi dari rekap QC).
 //
 // Sumbernya `postingan` periode hari ini (semua akun wajib, termasuk TV
-// Rakyat yang di-scrape Ayrshare) DIGABUNG dengan `rekap` milik pemanggil.
+// Rakyat Official dari upload-post) DIGABUNG dengan `rekap` milik pemanggil.
+//
+// 16 Okt 2026 (Ayrshare dihapus): upload-post tidak punya API komentar,
+// jadi komentar TIDAK lagi diperiksa otomatis. Jawaban membawa
+// `komentar_otomatis: false` + `pesan_komentar` supaya layar bisa
+// menampilkan "Pemeriksaan komentar otomatis dimatikan"; status
+// `sudah_komentar` hanya berasal dari rekap yang sudah ada (data lama,
+// ajuan disetujui, atau pipeline lain).
 // Postingan yang baru terdaftar (belum sempat dicek komentarnya) otomatis
 // tampil "belum" — benar, karena memang belum ada yang komentar.
 //
@@ -12,7 +19,8 @@
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
-import { periodeHariIni } from "@/lib/analisis-ayrshare";
+import { periodeHariIni } from "@/lib/periode-postingan";
+import { PESAN_KOMENTAR_DIMATIKAN } from "@/lib/sinkron-konten-tv";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +85,8 @@ export async function GET(request: Request) {
       periode,
       belum: data.filter((d) => !d.sudah_komentar).length,
       data,
+      komentar_otomatis: false,
+      pesan_komentar: PESAN_KOMENTAR_DIMATIKAN,
     };
   });
 }

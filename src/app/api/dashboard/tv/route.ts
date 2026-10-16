@@ -9,12 +9,13 @@
 // yang diberi master akses dashboard "tv".
 //
 // Semua angka dihitung dari data yang BENAR-BENAR ada: pipeline
-// video_antrian (+ ayrshare_hasil per platform) dan interaksi_video
+// video_antrian (+ unggah_hasil per platform) dan interaksi_video
 // (komen/share di dalam aplikasi). Tidak ada metrik tebak-tebakan.
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
 import { bolehDashboard } from "@/lib/dashboard-akses";
+import { bacaHasilUnggah, tayangAtauDiproses } from "@/lib/unggah-hasil";
 
 export const dynamic = "force-dynamic";
 
@@ -42,8 +43,6 @@ function tanggalMundur(tanggal: string, mundur: number): string {
   t.setUTCDate(t.getUTCDate() - mundur);
   return t.toISOString().slice(0, 10);
 }
-
-type HasilAyr = { status?: string; platform?: string; postUrl?: string };
 
 export async function GET(request: Request) {
   return bungkus(async () => {
@@ -77,7 +76,7 @@ export async function GET(request: Request) {
       db
         .from("video_antrian")
         .select(
-          "id, kode, judul, status, thumbnail_url, jam_tanggal, diunggah_pada, digenerate_oleh, digenerate_user_id, diupload_oleh, diupload_oleh_id, platform_terunggah, ayrshare_hasil, pesan_error",
+          "id, kode, judul, status, thumbnail_url, jam_tanggal, diunggah_pada, digenerate_oleh, digenerate_user_id, diupload_oleh, diupload_oleh_id, platform_terunggah, unggah_hasil, pesan_error",
         )
         .gte("jam_tanggal", batasIso)
         .order("id", { ascending: false })
@@ -100,14 +99,15 @@ export async function GET(request: Request) {
       { platform: string; sukses: number; gagal: number; perHari: Map<string, number> }
     >();
     for (const v of semua) {
-      const hasil = (Array.isArray(v.ayrshare_hasil) ? v.ayrshare_hasil : []) as HasilAyr[];
+      const hasil = bacaHasilUnggah(v.unggah_hasil);
       const t = tanggalWib(v.diunggah_pada as string | null);
       for (const h of hasil) {
-        const p = String(h.platform ?? "").toLowerCase();
+        const p = h.platform.toLowerCase();
         if (!p) continue;
         const ada =
           perPlatform.get(p) ?? { platform: p, sukses: 0, gagal: 0, perHari: new Map() };
-        if (h.status === "success") {
+        // Diterima upload-post (tayang / masih diproses / terjadwal) = sukses.
+        if (h.status === "success" || tayangAtauDiproses(h.status, h.id, h.postUrl)) {
           ada.sukses += 1;
           postSukses += 1;
           if (t) ada.perHari.set(t, (ada.perHari.get(t) ?? 0) + 1);

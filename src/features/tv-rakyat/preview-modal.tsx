@@ -17,7 +17,6 @@ import {
   ChevronDown,
   Copy,
   ExternalLink,
-  ImagePlus,
   Loader2,
   Pause,
   Play,
@@ -34,8 +33,8 @@ import {
   putuskanVideo,
   simpanSuntinganVideo,
   unggahVideoSosmed,
-  type HasilUnggahPlatform,
 } from "@/services";
+import { STATUS_DIPROSES, tayangAtauDiproses, type HasilUnggahPlatform } from "@/lib/unggah-hasil";
 import type { HasilProsesVideo } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -144,6 +143,15 @@ async function salinTeks(teks: string): Promise<boolean> {
   }
 }
 
+/**
+ * Galat "akun Official belum tertaut ke upload-post" dari server (409,
+ * lib/official-up PESAN_OFFICIAL_BELUM_TERTAUT) — judul toast dibuat
+ * jelas; isi pesannya sudah memuat langkah penautan.
+ */
+function officialBelumTertaut(pesan: string): boolean {
+  return /belum (ditautkan|tertaut)/i.test(pesan) && /upload-post/i.test(pesan);
+}
+
 export function PreviewModal({
   hasil,
   onTutup,
@@ -203,11 +211,13 @@ export function PreviewModal({
   // Alur unggah
   const [modeUnggah, setModeUnggah] = useState(false);
   const [unggahSelesai, setUnggahSelesai] = useState(0);
-  // Hasil nyata per platform dari Ayrshare (null = belum ada hasil)
+  // Hasil nyata per platform dari upload-post (null = belum ada hasil)
   const [hasilUnggah, setHasilUnggah] = useState<HasilUnggahPlatform[] | null>(null);
   const [konfirmasiBuang, setKonfirmasiBuang] = useState(false);
   // Jadwal tayang (fitur 1.22.x/3, digabung ke sini) — bila diisi, video
-  // tidak diposting sekarang melainkan dijadwalkan lewat Ayrshare.
+  // tidak diposting sekarang melainkan dijadwalkan lewat upload-post
+  // (akun TV Rakyat Official). Jadwal yang sudah terkirim TIDAK bisa
+  // dibatalkan — upload-post tidak menyediakan pembatalan.
   const [jadwalMode, setJadwalMode] = useState(false);
   const [jadwalWaktu, setJadwalWaktu] = useState("");
   const [sedangJadwal, setSedangJadwal] = useState(false);
@@ -220,7 +230,7 @@ export function PreviewModal({
     const id = setInterval(() => setTickMenit(Math.floor(Date.now() / 60_000)), 30_000);
     return () => clearInterval(id);
   }, [jadwalMode]);
-  // Batas bawah input jadwal: sekarang + 5 menit (syarat Ayrshare), bulat
+  // Batas bawah input jadwal: sekarang + 5 menit (syarat server), bulat
   // ke menit.
   const minJadwal = formatDatetimeLokal(new Date(tickMenit * 60_000 + 5 * 60_000));
   // Pratinjau "akan tayang …" dalam WIB untuk waktu yang dipilih.
@@ -232,26 +242,6 @@ export function PreviewModal({
     jadwalTerpilih.getTime() < tickMenit * 60_000 + 5 * 60_000;
   const pratinjauWib =
     jadwalSah && jadwalTerpilih !== null ? waktuWibJadwal(jadwalTerpilih.toISOString()) : "";
-  // Sampul kustom (fitur 31 Agu 2026) — data URL jpg/png < 2 MB;
-  // dipasang ke YouTube/Instagram/TikTok/Facebook saat posting.
-  const [sampul, setSampul] = useState<string | null>(null);
-  const sampulInputRef = useRef<HTMLInputElement>(null);
-
-  function pilihSampul(f: File | null | undefined) {
-    if (!f) return;
-    if (!/^image\/(jpeg|png)$/.test(f.type)) {
-      toast("peringatan", "Sampul harus JPG/PNG");
-      return;
-    }
-    if (f.size > 2 * 1024 * 1024) {
-      toast("peringatan", "Sampul terlalu besar", "Maksimal 2 MB (syarat YouTube).");
-      return;
-    }
-    const r = new FileReader();
-    r.onload = () => setSampul(String(r.result ?? "") || null);
-    r.readAsDataURL(f);
-  }
-
   const timerRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const platformAktif = useMemo(
     () => PLATFORM_TUJUAN.filter((p) => aktif[p.platform]),
@@ -503,7 +493,6 @@ export function PreviewModal({
         const balasan = await unggahVideoSosmed(
           hasil.kode!,
           platformAktif.map((p) => p.platform),
-          sampul ?? undefined,
         );
         setHasilUnggah(balasan.hasil);
         setUnggahSelesai(balasan.berhasil);
@@ -523,7 +512,13 @@ export function PreviewModal({
             "Sisanya ditolak — lihat rinciannya di bawah.",
           );
         } else {
-          toast("sukses", `Video tayang di ${balasan.berhasil} platform`);
+          // "Diproses" = diterima upload-post, tayang beberapa menit lagi.
+          const adaDiproses = balasan.hasil.some((h) => !h.postUrl && STATUS_DIPROSES.has(h.status.toLowerCase()));
+          toast(
+            "sukses",
+            `Video terkirim ke ${balasan.berhasil} platform`,
+            adaDiproses ? "Yang berlabel Diproses akan tayang beberapa menit lagi." : undefined,
+          );
         }
 
         if (balasan.catatan_simpan) {
@@ -549,7 +544,7 @@ export function PreviewModal({
           /waktu|tidak menjawab|jaringan|server|fetch|timeout|gagal memuat/i.test(pesan);
         toast(
           "error",
-          "Gagal mengunggah",
+          officialBelumTertaut(pesan) ? "Akun Official belum tertaut" : "Gagal mengunggah",
           mungkinTerputus
             ? `${pesan} Jika video ternyata sudah tayang, cek Riwayat Video — statusnya akan benar sendiri.`
             : pesan,
@@ -558,7 +553,7 @@ export function PreviewModal({
     })();
   }
 
-  // Jadwalkan tayang lewat Ayrshare (fitur 1.22.x/3, kini bagian dari
+  // Jadwalkan tayang lewat upload-post (fitur 1.22.x/3, kini bagian dari
   // komposer ini) — pakai video, caption, & platform yang sama, hanya
   // ditambah waktu tayang. Gerbangnya disamakan dengan server
   // (/api/tv/jadwal): yang ditolak tidak boleh dijadwalkan siapa pun;
@@ -618,7 +613,6 @@ export function PreviewModal({
           platforms: platformAktif.map((p) => p.platform),
           judul_youtube: judulEdit.trim() || undefined,
           jadwal_pada: t.toISOString(),
-          sampulDataUrl: sampul ?? undefined,
           // Menjahit jadwal ke catatan videonya: tanpa kode ini, video
           // tayang di sosmed tapi di aplikasi tetap "Siap Ditinjau"
           // selamanya (lihat lib/jadwal-tayang).
@@ -634,7 +628,12 @@ export function PreviewModal({
         segarkanJadwalTayang();
         onSelesaiUnggah(platformAktif.length);
       } catch (e) {
-        toast("error", "Gagal menjadwalkan", e instanceof Error ? e.message : "Coba lagi.");
+        const pesan = e instanceof Error ? e.message : "Coba lagi.";
+        toast(
+          "error",
+          officialBelumTertaut(pesan) ? "Akun Official belum tertaut" : "Gagal menjadwalkan",
+          pesan,
+        );
       } finally {
         setSedangJadwal(false);
       }
@@ -1126,10 +1125,12 @@ export function PreviewModal({
               </div>
               <div className="mt-3 flex flex-col gap-2.5">
                 {platformAktif.map((p) => {
-                  // Sebelum Ayrshare menjawab: semuanya masih berjalan.
+                  // Sebelum upload-post menjawab: semuanya masih berjalan.
                   const r = hasilUnggah?.find((h) => h.platform === p.platform);
-                  const gagal = r?.status === "error";
-                  const sukses = Boolean(r) && !gagal;
+                  const sukses = Boolean(r) && tayangAtauDiproses(r?.status, r?.id, r?.postUrl);
+                  const gagal = Boolean(r) && !sukses;
+                  // Diterima upload-post tapi belum terbit (async).
+                  const diproses = sukses && !r?.postUrl && STATUS_DIPROSES.has(String(r?.status ?? "").toLowerCase());
                   return (
                     <div key={p.platform} className="flex items-start gap-3">
                       {!r ? (
@@ -1159,7 +1160,7 @@ export function PreviewModal({
                           </a>
                         ) : (
                           <span className="shrink-0 text-[11px] font-semibold text-sukses">
-                            Tayang
+                            {diproses ? "Diproses" : "Tayang"}
                           </span>
                         ))}
                     </div>
@@ -1263,63 +1264,12 @@ export function PreviewModal({
                     </p>
                   ) : (
                     <p className="text-[11px] text-teks-sekunder">
-                      Minimal 5 menit dari sekarang — Ayrshare yang akan menerbitkannya tepat waktu.
+                      Minimal 5 menit dari sekarang — upload-post yang menerbitkannya tepat waktu.
+                      Jadwal yang sudah dikirim tidak bisa dibatalkan dari aplikasi.
                     </p>
                   )}
                 </div>
               )}
-
-              {/* Sampul kustom (fitur 31 Agu 2026): dipasang ke YouTube,
-                  Instagram, TikTok, Facebook — Threads & X tak mendukung. */}
-              <div className="glass-soft flex items-center gap-2.5 rounded-xl p-2.5">
-                <input
-                  ref={sampulInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png"
-                  className="hidden"
-                  onChange={(e) => pilihSampul(e.target.files?.[0])}
-                />
-                {sampul ? (
-                  <img
-                    src={sampul}
-                    alt="Sampul video"
-                    className="h-12 w-9 shrink-0 rounded-md object-cover"
-                  />
-                ) : (
-                  <span className="flex h-12 w-9 shrink-0 items-center justify-center rounded-md bg-black/5 text-teks-sekunder dark:bg-white/10">
-                    <ImagePlus className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11.5px] font-bold text-teks-utama">
-                    Sampul video {sampul ? "" : "(opsional)"}
-                  </p>
-                  <p className="text-[10px] leading-snug text-teks-sekunder">
-                    JPG/PNG &lt; 2 MB · dipasang ke YT, IG, TikTok, FB
-                  </p>
-                </div>
-                {sampul ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSampul(null);
-                      if (sampulInputRef.current) sampulInputRef.current.value = "";
-                    }}
-                    className="btn-tekan shrink-0 rounded-lg p-1.5 text-gagal"
-                    aria-label="Hapus sampul"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => sampulInputRef.current?.click()}
-                    className="glass btn-tekan shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-teks-utama"
-                  >
-                    Pilih
-                  </button>
-                )}
-              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <button

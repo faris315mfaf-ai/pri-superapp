@@ -110,9 +110,11 @@ export function SeksiInsightTvr() {
           <GlassSkeleton className="mt-3 h-20 rounded-xl" />
         ) : !insight ? (
           <p className="mt-3 py-4 text-center text-xs leading-relaxed text-teks-sekunder">
-            {tertaut.size > 0 && !tertaut.has(platform)
-              ? "Akun untuk platform ini belum ditautkan di Ayrshare."
-              : "Insight belum tersedia untuk platform ini."}
+            {data && !data.siap && data.pesan
+              ? data.pesan
+              : tertaut.size > 0 && !tertaut.has(platform)
+                ? "Akun Official untuk platform ini belum ditautkan di upload-post."
+                : "Insight belum tersedia untuk platform ini."}
           </p>
         ) : (
           <>
@@ -147,7 +149,7 @@ export function SeksiInsightTvr() {
             </div>
             {insight.diperbarui && (
               <p className="mt-2 text-center text-[10px] text-teks-sekunder/80">
-                Diperbarui Ayrshare pukul {jamWIB(insight.diperbarui)} WIB
+                Diperbarui pukul {jamWIB(insight.diperbarui)} WIB (upload-post)
               </p>
             )}
           </>

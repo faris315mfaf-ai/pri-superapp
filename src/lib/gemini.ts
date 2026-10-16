@@ -17,6 +17,7 @@ import { DIVISI } from "@/lib/struktur";
 import { bacaBasis } from "@/lib/asisten-basis";
 
 import { PERAN_TERSEMBUNYI_IN } from "@/lib/peran";
+import { bacaHasilUnggah, tayangAtauDiproses } from "@/lib/unggah-hasil";
 import { denganCache } from "@/lib/cache-bersama";
 // Bawaan DIVERIFIKASI terhadap kunci user 28 Agu 2026: generasi 2.5
 // sudah ditutup untuk pengguna baru; 3.6-flash teruji menjawab, dan
@@ -612,7 +613,7 @@ export async function jalankanAlat(
       const [{ data: video }, { data: interaksi }] = await Promise.all([
         db
           .from("video_antrian")
-          .select("diunggah_pada, ayrshare_hasil")
+          .select("diunggah_pada, unggah_hasil")
           .gte("jam_tanggal", batas)
           .limit(500),
         db.from("interaksi_video").select("jenis").gte("pada", batas).limit(1000),
@@ -620,10 +621,8 @@ export async function jalankanAlat(
       let sukses = 0;
       let gagal = 0;
       for (const v of video ?? []) {
-        for (const h of (Array.isArray(v.ayrshare_hasil) ? v.ayrshare_hasil : []) as {
-          status?: string;
-        }[]) {
-          if (h.status === "success") sukses += 1;
+        for (const h of bacaHasilUnggah(v.unggah_hasil)) {
+          if (h.status === "success" || tayangAtauDiproses(h.status, h.id, h.postUrl)) sukses += 1;
           else gagal += 1;
         }
       }

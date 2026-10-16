@@ -6,7 +6,7 @@
 // disalin ke penyimpanan — R2 bila sudah diatur, selain itu bucket privat
 // Supabase "tvrku" (sama dengan TVR Saya) — lalu dicatat di video_antrian — sama seperti unggahan manual
 // — sehingga pratinjau & unggah Official yang sudah ada (/api/tv/unggah:
-// pilih platform, caption, jadwal, Ayrshare) langsung bisa dipakai.
+// pilih platform, caption, jadwal, upload-post) langsung bisa dipakai.
 //
 //   • Pengirim harus anggota tim TV (identitasTim) DAN berhak unggah ke
 //     sosmed Official (lib/tv-tim bolehUploadVideo).

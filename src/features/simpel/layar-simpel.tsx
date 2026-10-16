@@ -286,6 +286,8 @@ export function KomenVideoSimpel({ onKembali }: { onKembali: () => void }) {
   const [sibuk, setSibuk] = useState(false);
   const [realtime, setRealtime] = useState<"menyambung" | "tersambung" | "gagal">("menyambung");
   const [posisi, setPosisi] = useState(0);
+  // false = pemeriksaan komentar otomatis dimatikan (Ayrshare dihapus 16 Okt 2026).
+  const [otomatis, setOtomatis] = useState(true);
   const relRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -299,6 +301,7 @@ export function KomenVideoSimpel({ onKembali }: { onKembali: () => void }) {
         );
         setData(urut);
         setPeriode(r.periode);
+        setOtomatis(r.komentar_otomatis !== false);
       })
       .catch((e) => {
         if (!hidup) return;
@@ -412,7 +415,15 @@ export function KomenVideoSimpel({ onKembali }: { onKembali: () => void }) {
           className={cn("h-2 w-2 rounded-full", realtime === "tersambung" ? "bg-emerald-500" : realtime === "gagal" ? "bg-slate-400" : "bg-amber-400 animate-pulse")}
           aria-hidden="true"
         />
-        <span>{realtime === "tersambung" ? "Realtime aktif: video pindah otomatis setelah komentar terdeteksi" : realtime === "gagal" ? "Diperbarui tiap 1 menit" : "Menyambungkan realtime…"}</span>
+        <span>
+          {!otomatis
+            ? "Pemeriksaan komentar otomatis sedang dimatikan"
+            : realtime === "tersambung"
+              ? "Realtime aktif: video pindah otomatis setelah komentar terdeteksi"
+              : realtime === "gagal"
+                ? "Diperbarui tiap 1 menit"
+                : "Menyambungkan realtime…"}
+        </span>
         {periode ? <span className="ml-auto shrink-0">Periode {periode}</span> : null}
       </div>
       {data === null ? (
@@ -494,7 +505,7 @@ export function KomenVideoSimpel({ onKembali }: { onKembali: () => void }) {
                         )}
                       >
                         {item.sudah_komentar ? <Check className="h-3 w-3" aria-hidden="true" /> : menunggu ? <RefreshCw className="h-3 w-3 animate-spin" aria-hidden="true" /> : <X className="h-3 w-3" aria-hidden="true" />}
-                        {item.sudah_komentar ? "Sudah komen" : menunggu ? "Menunggu verifikasi" : "Belum komen"}
+                        {item.sudah_komentar ? "Sudah komen" : menunggu ? (otomatis ? "Menunggu verifikasi" : "Sudah dibuka") : "Belum komen"}
                       </span>
                     </div>
                     {item.caption ? <p className="mt-1.5 line-clamp-2 text-[12px] leading-snug text-slate-700 dark:text-slate-300">{item.caption}</p> : null}
@@ -512,7 +523,7 @@ export function KomenVideoSimpel({ onKembali }: { onKembali: () => void }) {
                       <ExternalLink className="h-4 w-4" aria-hidden="true" />
                       {item.sudah_komentar ? "Lihat postingan" : "Komentari sekarang"}
                     </a>
-                    {menunggu ? <p className="mt-1.5 text-center text-[10.5px] text-slate-500 dark:text-slate-400">Komentar Anda diperiksa robot beberapa menit sekali. Kartu pindah otomatis ke &quot;Sudah komen&quot;.</p> : null}
+                    {menunggu && otomatis ? <p className="mt-1.5 text-center text-[10.5px] text-slate-500 dark:text-slate-400">Komentar Anda diperiksa robot beberapa menit sekali. Kartu pindah otomatis ke &quot;Sudah komen&quot;.</p> : null}
                   </div>
                 </article>
               );

@@ -1,30 +1,40 @@
 // /api/tv/jadwal — Jadwal Posting TV Rakyat Official (fitur 1.22.x/3)
 //
 // POST   { caption, media_url, media_public_id?, is_video?, platforms[],
-//          judul_youtube?, jadwal_pada (ISO) } → jadwalkan posting lewat
-//          Ayrshare (scheduleDate) & simpan catatannya. Video yang DITOLAK
+//          judul_youtube?, jadwal_pada (ISO), kode? } → jadwalkan posting
+//          lewat profil upload-post Official (`scheduled_date`) & simpan
+//          catatannya (up_request_id / up_job_id). Video yang DITOLAK
 //          ditolak mentah; yang belum disetujui hanya lolos lewat hak ACC
 //          (jadwalnya sekaligus dicatat sebagai persetujuan tersirat).
+//          → { sukses, id, up_request_id, up_job_id, status, hasil }
 // GET    → daftar jadwal AKTIF (status terjadwal, paling dekat tayang dulu)
-//          + nama pembuatnya. Riwayat (tayang/gagal/batal) ada di Riwayat Video.
-// DELETE { id } → batalkan jadwal yang BELUM tayang (hapus di Ayrshare).
+//          + nama pembuatnya + `bisa_dibatalkan`. Riwayat (tayang/gagal/
+//          batal) ada di Riwayat Video.
+// DELETE { id } → hanya untuk jadwal yang BELUM pernah dikirim ke
+//          upload-post (jadwal lama). upload-post tidak menyediakan
+//          pembatalan lewat API (DELETE /uploadposts/schedule → 405), jadi
+//          jadwal yang sudah dikirim ditolak 409 dengan penjelasan.
 //
-// Ayrshare sendiri yang menerbitkan pada waktunya — TIDAK ada cron di
-// aplikasi. Memposting atas nama akun partai bersifat publik & tak bisa
-// ditarik: dijaga di server (bolehUploadVideo), bukan sekadar UI.
+// upload-post sendiri yang menerbitkan pada waktunya; cron jadwal-tayang
+// (lib/jadwal-tayang) menutup catatannya. Memposting atas nama akun partai
+// bersifat publik & tak bisa ditarik: dijaga di server (bolehUploadVideo),
+// bukan sekadar UI.
 import { createHash } from "node:crypto";
 import { supabase } from "@/lib/supabase";
 import { bungkus } from "@/lib/api-helper";
 import { userDariToken } from "@/lib/sesi";
-import { ambilAkunTertaut, hapusPostingan, unggahVideo, ayrshareSiap } from "@/lib/ayrshare";
+import { ambilKunciUnggah, unggahVideoUp } from "@/lib/upload-post";
+import { hasilPerPlatformUp } from "@/lib/jadwal-tayang";
+import { PESAN_OFFICIAL_BELUM_TERTAUT, pastikanOfficialUp } from "@/lib/official-up";
+import type { HasilUnggahPlatform } from "@/lib/unggah-hasil";
 import { adalahPimred } from "@/lib/jabatan";
 import { bolehAccVideo, bolehUploadVideo } from "@/lib/tv-tim";
-import { simpanSampul } from "@/lib/sampul";
 import { pastikanFiturAktif } from "@/lib/fitur-server";
 
 export const dynamic = "force-dynamic";
-// Panggilan Ayrshare bisa lambat — jangan diputus Vercel di 10 detik.
-export const maxDuration = 60;
+// unggahVideoUp menunggu paling lama 180 dtk (biasanya jadwal dijawab
+// dalam hitungan detik dengan job_id) — jangan diputus sebelum itu.
+export const maxDuration = 300;
 
 const PLATFORM_DIKENAL = new Set(["instagram", "tiktok", "youtube", "facebook", "twitter", "threads"]);
 const BATAS_CAPTION: Record<string, number> = {
@@ -35,6 +45,12 @@ const BATAS_CAPTION: Record<string, number> = {
   twitter: 25000,
   threads: 500,
 };
+
+/** Galat ambigu (timeout/jaringan/5xx): jadwal mungkin sudah diterima — tahan kunci selama ini. */
+const TAHAN_AMBIGU_DETIK = 3 * 60;
+
+const PESAN_TAK_BISA_BATAL = "Jadwal yang sudah dikirim ke upload-post tidak bisa dibatalkan dari aplikasi.";
+const PESAN_JADWAL_DOBEL = "Jadwal yang sama sedang/baru saja dikirim. Periksa daftar Menunggu Jadwal Tayang.";
 
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
@@ -53,6 +69,11 @@ async function pastikanBolehUpload(request: Request) {
   return pengguna;
 }
 
+/** Sudah dikirim ke upload-post = punya request_id atau job_id. */
+function sudahDikirim(j: { up_request_id?: string | null; up_job_id?: string | null }): boolean {
+  return Boolean(String(j.up_request_id ?? "").trim() || String(j.up_job_id ?? "").trim());
+}
+
 export async function GET(request: Request) {
   return bungkus(async () => {
     await pastikanBolehUpload(request);
@@ -60,7 +81,7 @@ export async function GET(request: Request) {
     const { data, error } = await db
       .from("jadwal_posting")
       .select(
-        "id, caption, media_url, is_video, platforms, judul_youtube, jadwal_pada, status, ayrshare_id, error, dibuat_pada, dibuat_oleh_id",
+        "id, caption, media_url, is_video, platforms, judul_youtube, jadwal_pada, status, up_request_id, up_job_id, error, dibuat_pada, dibuat_oleh_id",
       )
       // Hanya yang AKTIF. Tanpa saringan ini, setelah 100 baris riwayat
       // (tayang/gagal/dibatalkan) menumpuk di depan, jadwal BARU yang
@@ -104,6 +125,9 @@ export async function GET(request: Request) {
         error: j.error ?? null,
         oleh: peta.get(Number(j.dibuat_oleh_id)) ?? "",
         dibuat_pada: j.dibuat_pada,
+        // upload-post tak bisa membatalkan jadwal (405): hanya jadwal yang
+        // belum pernah dikirim ke sana yang boleh dibatalkan dari aplikasi.
+        bisa_dibatalkan: !sudahDikirim(j),
       })),
     };
   });
@@ -113,11 +137,6 @@ export async function POST(request: Request) {
   return bungkus(async () => {
     const pengguna = await pastikanBolehUpload(request);
     await pastikanFiturAktif(pengguna, "tv.upload", "Fitur posting sedang dimatikan untuk peran Anda.");
-    if (!ayrshareSiap()) {
-      throw Object.assign(new Error("Ayrshare belum diatur (AYRSHARE_API_KEY kosong)."), {
-        status: 503,
-      });
-    }
 
     const body = (await request.json().catch(() => ({}))) as {
       caption?: string;
@@ -127,34 +146,39 @@ export async function POST(request: Request) {
       platforms?: string[];
       judul_youtube?: string;
       jadwal_pada?: string;
-      /** Sampul video base64 (jpg/png) — YT/IG/TikTok/FB. */
-      sampulDataUrl?: string;
       /** Kode video di antrian produksi — menjahit jadwal ke catatannya. */
       kode?: string;
     };
 
     const caption = (body.caption ?? "").trim();
     const mediaUrl = (body.media_url ?? "").trim();
-    // Ayrshare butuh media (IG/TikTok/YouTube menolak posting tanpa media).
+    // Platform video (IG/TikTok/YouTube) menolak posting tanpa media.
     if (!/^https?:\/\/\S+$/i.test(mediaUrl)) {
       throw Object.assign(new Error("Media (foto/video) wajib diunggah dulu."), { status: 400 });
     }
-    const isVideo = body.is_video !== false;
+    // Jalur upload-post Official (unggahVideoUp) hanya untuk video.
+    if (body.is_video === false) {
+      throw Object.assign(new Error("Penjadwalan foto belum didukung — hanya video yang bisa dijadwalkan."), {
+        status: 400,
+      });
+    }
 
-    // Platform: hanya yang dikenal DAN benar-benar tertaut di Ayrshare —
-    // menjadwalkan ke akun yang tak tertaut hanya melahirkan galat nanti.
     const diminta = (body.platforms ?? [])
       .map((p) => String(p).toLowerCase())
       .filter((p) => PLATFORM_DIKENAL.has(p));
     if (diminta.length === 0) {
       throw Object.assign(new Error("Pilih minimal satu platform tujuan."), { status: 400 });
     }
-    const { platformAktif } = await ambilAkunTertaut();
-    const tertaut = new Set(platformAktif.map((p) => p.toLowerCase()));
+
+    // Platform: hanya yang dikenal DAN benar-benar tertaut (izinnya sehat)
+    // di profil upload-post Official — menjadwalkan ke akun yang tak
+    // tertaut hanya melahirkan galat nanti. 503/409 dilempar apa adanya.
+    const official = await pastikanOfficialUp();
+    const tertaut = new Set(official.platform);
     const platforms = diminta.filter((p) => tertaut.has(p));
     if (platforms.length === 0) {
       throw Object.assign(
-        new Error("Tak ada platform terpilih yang tertaut di Ayrshare. Tautkan akun resminya dulu."),
+        new Error(`Tak ada platform terpilih yang tertaut. ${PESAN_OFFICIAL_BELUM_TERTAUT}`),
         { status: 409 },
       );
     }
@@ -169,7 +193,7 @@ export async function POST(request: Request) {
     }
 
     // Jadwal wajib ISO valid & minimal 5 menit ke depan. Dikirim ke
-    // Ayrshare dalam format Zulu/UTC "YYYY-MM-DDThh:mm:ssZ".
+    // upload-post (`scheduled_date`) dalam format UTC "YYYY-MM-DDThh:mm:ssZ".
     const t = new Date(body.jadwal_pada ?? "");
     if (Number.isNaN(t.getTime())) {
       throw Object.assign(new Error("Waktu jadwal tidak sah."), { status: 400 });
@@ -183,9 +207,8 @@ export async function POST(request: Request) {
 
     // Hirarki TV Rakyat — DISAMAKAN dengan /api/tv/unggah: video yang
     // DITOLAK tidak boleh dijadwalkan siapa pun, dan video yang belum
-    // disetujui hanya boleh dijadwalkan Pimred/pemegang hak ACC. Dulu
-    // rute ini tidak memeriksa persetujuan sama sekali, sehingga video
-    // yang sudah DITOLAK bisa lolos masuk jadwal lewat pintu samping ini.
+    // disetujui hanya boleh dijadwalkan Pimred/pemegang hak ACC.
+    let accTersirat = false;
     if (kodeVideo) {
       const { data: video, error: eVideo } = await supabase()
         .from("video_antrian")
@@ -212,67 +235,112 @@ export async function POST(request: Request) {
             { status: 403 },
           );
         }
-        // Persetujuan tersirat: yang menjadwalkan berhak memutus, jadi
-        // keputusannya dicatat — pola yang sama dengan unggah langsung
-        // (lihat /api/tv/unggah). Tanpa ini Riwayat selamanya menampilkan
-        // "menunggu" untuk video yang jadwalnya sudah pasti.
-        const { error: eAcc } = await supabase()
-          .from("video_antrian")
-          .update({
-            persetujuan: "disetujui",
-            persetujuan_oleh: pengguna.nama,
-            persetujuan_pada: new Date().toISOString(),
-          })
-          .eq("kode", kodeVideo);
-        if (eAcc) console.error("[tv/jadwal] acc tersirat:", eAcc.message);
+        accTersirat = true;
       }
     }
 
-    // idempotencyKey mencegah dobel jadwal bila permintaan diulang. Sidik
-    // media+kode WAJIB ikut: tanpanya dua video BERBEDA yang dijadwalkan
-    // pada menit & platform yang sama dianggap kembar oleh Ayrshare, dan
-    // video kedua diam-diam tak pernah terbit.
+    // Sidik jadwal: pengguna + waktu + platform + media/kode. Dipakai sebagai
+    // Idempotency-Key upload-post DAN kunci proses — sidik media+kode WAJIB
+    // ikut supaya dua video BERBEDA pada menit & platform yang sama tidak
+    // dianggap kembar (video kedua diam-diam tak pernah terbit).
+    const platformUrut = [...platforms].sort().join(",");
     const sidikMedia = createHash("sha1").update(`${mediaUrl}|${kodeVideo}`).digest("hex").slice(0, 12);
-    const idemp = `jadwal-${pengguna.id}-${t.getTime()}-${[...platforms].sort().join(",")}-${sidikMedia}`;
-    // Sampul kustom ikut dijadwalkan (fitur 31 Agu 2026).
-    const sampulUrl = await simpanSampul(`jadwal-${pengguna.id}`, body.sampulDataUrl);
+    const idemp = `jadwal-${pengguna.id}-${t.getTime()}-${platformUrut}-${sidikMedia}`;
 
-    const hasil = await unggahVideo({
-      videoUrl: mediaUrl,
-      caption: caption || " ", // Ayrshare menolak post kosong.
-      platforms,
-      isVideo,
-      scheduleDate,
-      judulYoutube: body.judul_youtube,
-      thumbnailUrl: sampulUrl ?? undefined,
-      idempotencyKey: idemp,
-    });
+    // PAGAR DOBEL lapis 1: kunci proses (klik ganda / permintaan diulang).
+    const kunciProses = await ambilKunciUnggah(`tv-jadwal:${idemp}`, 6 * 60);
+    if (!kunciProses) throw Object.assign(new Error(PESAN_JADWAL_DOBEL), { status: 409 });
 
-    // Klik ganda / permintaan diulang: Ayrshare mengembalikan id yang SAMA
-    // untuk idempotencyKey yang sama. Jangan buat baris catatan kedua —
-    // membatalkan salah satunya akan membatalkan postingan yang dipakai
-    // keduanya. Pakai baris yang sudah ada. (Tanpa batasan unik di DB;
-    // dua permintaan yang benar-benar serentak tetap bisa lolos keduanya.)
-    if (hasil.idAyrshare) {
-      const { data: ada } = await supabase()
+    // PAGAR DOBEL lapis 2: catatan. Jadwal identik yang sudah terkirim
+    // dikembalikan apa adanya — upload-post tak bisa membatalkan jadwal,
+    // jadi kiriman kedua berarti video tayang DUA kali. Gagal baca = lanjut
+    // (kunci proses tetap melindungi).
+    try {
+      let q = supabase()
         .from("jadwal_posting")
-        .select("id")
-        .eq("ayrshare_id", hasil.idAyrshare)
-        .order("id", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (ada) {
+        .select("id, platforms, up_request_id, up_job_id, hasil")
+        .eq("status", "terjadwal")
+        .eq("media_url", mediaUrl)
+        .eq("jadwal_pada", t.toISOString());
+      q = kodeVideo ? q.eq("video_kode", kodeVideo) : q.is("video_kode", null);
+      const { data: ada } = await q.limit(10);
+      const kembar = (ada ?? []).find(
+        (b) =>
+          sudahDikirim(b) &&
+          (Array.isArray(b.platforms) ? (b.platforms as unknown[]).map(String).sort().join(",") : "") === platformUrut,
+      );
+      if (kembar) {
+        await kunciProses.lepas();
         return {
           sukses: true,
-          id: String(ada.id),
-          ayrshare_id: hasil.idAyrshare,
+          id: String(kembar.id),
+          up_request_id: kembar.up_request_id ?? null,
+          up_job_id: kembar.up_job_id ?? null,
           status: "terjadwal",
-          hasil: hasil.hasil,
+          hasil: (Array.isArray(kembar.hasil) ? kembar.hasil : []) as HasilUnggahPlatform[],
         };
       }
+    } catch (e) {
+      console.error("[tv/jadwal] cek dobel:", e instanceof Error ? e.message : e);
     }
 
-    const galat = hasil.hasil.filter((h) => h.status === "error");
+    // Persetujuan tersirat dicatat SETELAH semua pemeriksaan murah lolos
+    // (pola yang sama dengan unggah langsung, lihat /api/tv/unggah). Tanpa
+    // ini Riwayat selamanya menampilkan "menunggu" untuk video yang
+    // jadwalnya sudah pasti.
+    if (accTersirat) {
+      const { error: eAcc } = await supabase()
+        .from("video_antrian")
+        .update({
+          persetujuan: "disetujui",
+          persetujuan_oleh: pengguna.nama,
+          persetujuan_pada: new Date().toISOString(),
+        })
+        .eq("kode", kodeVideo);
+      if (eAcc) console.error("[tv/jadwal] acc tersirat:", eAcc.message);
+    }
+
+    // Caption apa adanya di semua platform (lewat captionPer, supaya
+    // TikTok/IG/Threads/X tidak mendapat judul di depan caption); judul
+    // YouTube/Facebook = judul_youtube (cadangan: baris pertama caption).
+    const judul = (body.judul_youtube ?? "").trim() || caption.split("\n")[0]?.trim() || "TV Rakyat";
+    let balasan: Awaited<ReturnType<typeof unggahVideoUp>>;
+    try {
+      balasan = await unggahVideoUp({
+        profil: official.profil,
+        videoUrl: mediaUrl,
+        judul,
+        caption,
+        platforms,
+        scheduleDate,
+        captionPer: caption ? Object.fromEntries(platforms.map((p) => [p, caption])) : undefined,
+        kunciIdempotensi: idemp,
+      });
+    } catch (e) {
+      // Galat AMBIGU (timeout/jaringan/5xx): jadwal mungkin sudah diterima —
+      // tahan kunci supaya "Coba lagi" langsung tidak menjadwalkan dobel.
+      const st = Number((e as { status?: number })?.status);
+      const ambigu = !Number.isFinite(st) || st >= 500;
+      await kunciProses.lepas(ambigu ? TAHAN_AMBIGU_DETIK : 0);
+      throw e;
+    }
+
+    // Jadwal dibalas job_id (HTTP 202); request_id disimpan bila ada.
+    const mentah = balasan.mentah as { request_id?: unknown; job_id?: unknown; message?: unknown; error?: unknown };
+    const upRequestId = String(mentah.request_id ?? "").trim() || null;
+    const upJobId = String(mentah.job_id ?? "").trim() || null;
+    const peta = hasilPerPlatformUp(balasan.mentah);
+    const pesanTolak = String(mentah.message ?? mentah.error ?? "").slice(0, 300);
+    const hasil: HasilUnggahPlatform[] = platforms.map((p) => {
+      const r = peta.get(p);
+      if (r?.sukses === false || (!r && !balasan.sukses)) {
+        return { platform: p, status: "error", id: "", postUrl: "", pesan: r?.pesan || pesanTolak || "Ditolak upload-post." };
+      }
+      return { platform: p, status: "scheduled", id: "", postUrl: "", pesan: "" };
+    });
+    const galat = hasil.filter((h) => h.status === "error");
+    const diterima = Boolean(upRequestId || upJobId) && galat.length < hasil.length;
+
     const { data: baris, error } = await supabase()
       .from("jadwal_posting")
       .insert({
@@ -280,33 +348,52 @@ export async function POST(request: Request) {
         caption,
         media_url: mediaUrl,
         media_public_id: (body.media_public_id ?? "").trim() || null,
-        is_video: isVideo,
+        is_video: true,
         platforms,
         judul_youtube: (body.judul_youtube ?? "").trim() || null,
         jadwal_pada: t.toISOString(),
         // Tanpa ini, video yang dijadwalkan tayang tidak pernah kembali
         // menyentuh catatannya sendiri (lihat lib/jadwal-tayang).
         video_kode: kodeVideo || null,
-        status: hasil.idAyrshare ? "terjadwal" : "gagal",
-        ayrshare_id: hasil.idAyrshare || null,
-        hasil: hasil.hasil,
+        status: diterima ? "terjadwal" : "gagal",
+        up_request_id: upRequestId,
+        up_job_id: upJobId,
+        hasil,
         error:
           galat.length > 0
             ? galat.map((h) => `${h.platform}: ${h.pesan}`).join("; ").slice(0, 500)
-            : null,
+            : diterima
+              ? null
+              : "upload-post tidak memberi id jadwal.",
       })
       .select("id")
       .single();
     if (error) {
       console.error("[tv/jadwal] simpan:", error.message);
-      throw new Error("Terjadwal di Ayrshare, tetapi catatannya gagal disimpan.");
+      // Catatan tak tersimpan = lapis 2 buta terhadap jadwal ini: tahan kunci.
+      await kunciProses.lepas(diterima ? TAHAN_AMBIGU_DETIK : 0);
+      throw new Error(
+        diterima
+          ? "Terjadwal di upload-post, tetapi catatannya gagal disimpan. Jangan jadwalkan ulang."
+          : "Jadwal ditolak upload-post dan catatannya gagal disimpan.",
+      );
+    }
+    // Tahan sebentar sampai baris catatan pasti terbaca proses lain.
+    await kunciProses.lepas(diterima ? 90 : 0);
+
+    if (!diterima) {
+      throw Object.assign(
+        new Error(
+          `Jadwal ditolak upload-post${galat.length > 0 ? `: ${galat.map((h) => `${h.platform} (${h.pesan})`).join("; ")}` : "."}`.slice(0, 600),
+        ),
+        { status: 502 },
+      );
     }
 
     // Tandai videonya "menunggu jadwal" supaya Riwayat Video menampilkan
-    // kapan ia akan tayang — tanpa ini videonya terlihat seperti belum
-    // diapa-apakan sampai jadwalnya tiba. Gagal menandai bukan alasan
-    // menggagalkan jadwal yang sudah diterima Ayrshare.
-    if (kodeVideo && hasil.idAyrshare) {
+    // kapan ia akan tayang. Gagal menandai bukan alasan menggagalkan
+    // jadwal yang sudah diterima upload-post.
+    if (kodeVideo) {
       const { error: eTandai } = await supabase()
         .from("video_antrian")
         .update({ jadwal_pada: t.toISOString() })
@@ -317,9 +404,10 @@ export async function POST(request: Request) {
     return {
       sukses: true,
       id: String(baris.id),
-      ayrshare_id: hasil.idAyrshare,
-      status: hasil.idAyrshare ? "terjadwal" : "gagal",
-      hasil: hasil.hasil,
+      up_request_id: upRequestId,
+      up_job_id: upJobId,
+      status: "terjadwal",
+      hasil,
     };
   });
 }
@@ -334,7 +422,7 @@ export async function DELETE(request: Request) {
     const db = supabase();
     const { data: row } = await db
       .from("jadwal_posting")
-      .select("id, status, ayrshare_id")
+      .select("id, status, up_request_id, up_job_id")
       .eq("id", id)
       .maybeSingle();
     if (!row) throw Object.assign(new Error("Jadwal tidak ditemukan."), { status: 404 });
@@ -343,30 +431,20 @@ export async function DELETE(request: Request) {
         status: 409,
       });
     }
-
-    // Batalkan di Ayrshare DULU. Bila gagal, JANGAN tandai dibatalkan —
-    // postingannya masih akan tayang, dan menandai "dibatalkan" secara
-    // lokal justru menyesatkan.
-    if (row.ayrshare_id) {
-      try {
-        await hapusPostingan(String(row.ayrshare_id));
-      } catch (e) {
-        throw Object.assign(
-          new Error(
-            `Gagal membatalkan di Ayrshare — jadwal masih aktif. ${
-              e instanceof Error ? e.message : ""
-            }`.trim(),
-          ),
-          { status: 502 },
-        );
-      }
+    // upload-post tidak menyediakan pembatalan lewat API (DELETE ditolak
+    // 405). Menandai "dibatalkan" secara lokal justru menyesatkan: postingan
+    // tetap tayang pada waktunya.
+    if (sudahDikirim(row)) {
+      throw Object.assign(new Error(PESAN_TAK_BISA_BATAL), { status: 409 });
     }
 
+    // Jadwal yang tak pernah dikirim ke upload-post (jadwal lama) cukup
+    // ditutup di aplikasi — tidak ada yang akan menerbitkannya.
     const { error } = await db
       .from("jadwal_posting")
       .update({ status: "dibatalkan", diperbarui_pada: new Date().toISOString() })
       .eq("id", id);
-    if (error) throw new Error("Dibatalkan di Ayrshare, tetapi status gagal diperbarui.");
+    if (error) throw new Error("Status jadwal gagal diperbarui.");
     return { sukses: true };
   });
 }

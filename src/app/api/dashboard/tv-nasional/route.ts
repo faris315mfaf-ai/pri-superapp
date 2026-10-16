@@ -1,16 +1,17 @@
 // GET /api/dashboard/tv-nasional — dashboard "TV Rakyat Nasional"
 // (permintaan 1 Sep 2026): statistik SANGAT rinci gabungan
-//   • TV Rakyat OFFICIAL (induk, sumber: Ayrshare) dan
+//   • TV Rakyat OFFICIAL (induk, profil upload-post Official) dan
 //   • TV Rakyat PENGGUNA (akun pribadi anggota, sumber: upload-post),
 // dipisah per 6 sosial media, 6 indikator: pengikut, tayangan,
 // jangkauan, suka, komentar, bagikan — plus data per anggota untuk
 // leaderboard per sosmed per indikator (diurutkan di klien).
 //
 // Sumber angka & kesegaran (jujur, bukan "realtime" palsu):
-// - Official: cache bersama `ayrshare_insight_<platform>` yang sudah
-//   dipelihara /api/tv/insight; bila belum ada, maksimal 2 platform
-//   ditarik langsung per permintaan (sisanya menyusul) agar tidak
-//   menabrak batas waktu fungsi.
+// - Official: cache bersama `up_official_insight` (lib/tvr-nasional →
+//   insightOfficialUp, TTL 15 menit). Satu panggilan /analytics memuat
+//   keenam platform; Official belum ditautkan = kolom Official kosong.
+//   (16 Okt 2026: Ayrshare dihapus; cache `ayrshare_insight_*` dan
+//   `tvnas_official_*` tidak dibaca lagi.)
 // - Pengguna: `sosmed_profile.insight_cache` (terisi saat anggota
 //   membuka Insight); profil yang basi >6 jam disegarkan bertahap di
 //   latar (after(), maks 5 per permintaan) — konvergen tanpa cron.
@@ -23,7 +24,7 @@ import { userDariToken } from "@/lib/sesi";
 import { bolehDashboard } from "@/lib/dashboard-akses";
 import { semuaBaris } from "@/lib/semua-baris";
 import { jalankanLatar } from "@/lib/penjaga-supabase";
-import { ambilInsight, ayrshareSiap, type InsightProfil } from "@/lib/ayrshare";
+import { bacaCacheInsightOfficial, insightOfficialUp, metrikOfficial } from "@/lib/tvr-nasional";
 import {
   INDIKATOR_TVR,
   jumlahkanMetrikTvr,
@@ -44,81 +45,12 @@ type Metrik = MetrikTvr;
 const metrikKosong = metrikTvrKosong;
 const jumlahkan = jumlahkanMetrikTvr;
 
-/** Maks platform Official yang ditarik langsung bila cache kosong. */
-const MAKS_OFFICIAL_LANGSUNG = 2;
+/** Timeout penarikan Official dari dashboard (sisa waktu untuk anggota). */
+const TIMEOUT_OFFICIAL_MS = 20_000;
 
 function tokenDari(request: Request): string {
   const h = request.headers.get("authorization") ?? "";
   return h.toLowerCase().startsWith("bearer ") ? h.slice(7).trim() : "";
-}
-
-function metrikDariOfficial(i: InsightProfil | null): Metrik | null {
-  if (!i) return null;
-  return {
-    pengikut: i.pengikut,
-    tayangan: i.tayangan,
-    jangkauan: i.jangkauan,
-    suka: i.suka,
-    komentar: i.komentar,
-    bagikan: i.bagikan ?? null,
-  };
-}
-
-type IsiCacheOfficial = { insight: InsightProfil | null; diambil: string };
-
-/**
- * Kedua cache Official SEMUA platform dalam SATU kueri (28 Sep 2026).
- * Dulu dibaca per platform, berurutan: hingga 12 kueri tiap dashboard
- * dibuka (pola N+1). Kunci yang tidak ada = cache kosong.
- */
-async function bacaSemuaCache(platforms: readonly string[]): Promise<Map<string, string>> {
-  const kunci = platforms.flatMap((p) => [`ayrshare_insight_${p}`, `tvnas_official_${p}`]);
-  try {
-    const { data } = await supabase().from("pengaturan_sistem").select("kunci, nilai").in("kunci", kunci);
-    return new Map((data ?? []).map((b) => [String(b.kunci), String(b.nilai ?? "")]));
-  } catch {
-    return new Map();
-  }
-}
-
-/** Cache Official milik /api/tv/insight (dibaca-saja, bentuk longgar). */
-function uraiCacheOfficial(nilai: string | undefined): InsightProfil | null {
-  if (!nilai) return null;
-  try {
-    const isi = JSON.parse(nilai) as { insight?: InsightProfil | null };
-    return isi.insight ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/** Cache milik dashboard ini sendiri (untuk platform yang ditarik langsung). */
-function uraiCacheSendiri(nilai: string | undefined): InsightProfil | null {
-  if (!nilai) return null;
-  try {
-    const isi = JSON.parse(nilai) as IsiCacheOfficial;
-    // TTL 30 menit — Ayrshare toh menyegarkan menurut jadwalnya sendiri.
-    if (Date.now() - new Date(isi.diambil).getTime() > 30 * 60_000) return null;
-    return isi.insight;
-  } catch {
-    return null;
-  }
-}
-
-async function simpanCacheSendiri(platform: string, insight: InsightProfil | null) {
-  try {
-    await supabase()
-      .from("pengaturan_sistem")
-      .upsert(
-        {
-          kunci: `tvnas_official_${platform}`,
-          nilai: JSON.stringify({ insight, diambil: new Date().toISOString() }),
-        },
-        { onConflict: "kunci" },
-      );
-  } catch {
-    // Cache gagal ditulis bukan alasan menggagalkan dashboard.
-  }
 }
 
 export async function GET(request: Request) {
@@ -131,24 +63,20 @@ export async function GET(request: Request) {
         { status: 403 },
       );
     }
-    // ---------- OFFICIAL (Ayrshare) ----------
+    // ---------- OFFICIAL (upload-post, cache bersama) ----------
+    // Gagal menarik (upload-post sibuk) tidak menggagalkan dashboard:
+    // cache terakhir — bila ada — tetap dipakai. Pengguna virtual uji beban
+    // hanya membaca cache (tidak menghubungi upload-post).
+    const cacheOfficial = user.ujiBeban
+      ? await bacaCacheInsightOfficial()
+      : await insightOfficialUp({ timeoutMs: TIMEOUT_OFFICIAL_MS })
+          .then((h) => h.cache)
+          .catch(async (e) => {
+            console.error("[tv-nasional] insight Official:", e instanceof Error ? e.message : e);
+            return bacaCacheInsightOfficial();
+          });
     const official: Record<string, Metrik | null> = {};
-    let tarikLangsung = 0;
-    const cache = await bacaSemuaCache(PLATFORMS);
-    for (const p of PLATFORMS) {
-      let insight =
-        uraiCacheOfficial(cache.get(`ayrshare_insight_${p}`)) ?? uraiCacheSendiri(cache.get(`tvnas_official_${p}`));
-      if (!insight && ayrshareSiap() && tarikLangsung < MAKS_OFFICIAL_LANGSUNG) {
-        tarikLangsung++;
-        try {
-          insight = await ambilInsight(p);
-        } catch {
-          insight = null;
-        }
-        await simpanCacheSendiri(p, insight);
-      }
-      official[p] = metrikDariOfficial(insight);
-    }
+    for (const p of PLATFORMS) official[p] = metrikOfficial(cacheOfficial, p);
 
     // ---------- PENGGUNA (upload-post, dari cache — lib bersama) ----------
     const anggota = await kumpulkanAnggotaTvr();
@@ -185,7 +113,7 @@ export async function GET(request: Request) {
     // Dihitung dari akun_tvr_user (terhubung = login upload-post), BUKAN
     // dari akun yang angkanya sudah terbaca — akun baru tersambung ikut
     // terhitung walau insight-nya belum ditarik. Official dihitung satu
-    // per sosmed bila akun resminya terbaca lewat Ayrshare.
+    // per sosmed bila akun resminya terbaca lewat profil upload-post Official.
     const barisAkun = await semuaBaris<{ user_id: unknown; platform: unknown }>((a, b) =>
       supabase()
         .from("akun_tvr_user")

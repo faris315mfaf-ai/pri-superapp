@@ -95,8 +95,8 @@ export function KartuVideoBaru({ lebar = false }: { lebar?: boolean } = {}) {
 
   function bagikan(v: VideoInteraksi) {
     // Kirim SELURUH tautan platform, dikelompokkan per platform.
-    // Kalau daftar tautannya kosong (video lama sebelum hasil Ayrshare
-    // tersimpan), jatuh ke tautan utama supaya tombolnya tetap berguna.
+    // Kalau daftar tautannya kosong (video lama sebelum hasil unggah
+    // per platform tersimpan), jatuh ke tautan utama supaya tombolnya tetap berguna.
     const tautan =
       v.tautan.length > 0
         ? v.tautan

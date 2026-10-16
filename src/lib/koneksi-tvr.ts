@@ -7,10 +7,18 @@
 // "Sehat" = tertaut di penyedia DAN tidak ditandai perlu login ulang
 // (upload-post: reauth_required). Hasilnya disimpan 10 menit per orang
 // (cache bersama); tombol Segarkan dan Hubungkan memaksa data baru.
+//
+// 16 Okt 2026: Ayrshare dihentikan. Anggota yang profilnya masih baris
+// lama `penyedia = 'ayrshare'` dibaca BELUM terhubung, dengan pesan untuk
+// menghubungkan ulang lewat upload-post (`perlu_hubungkan_ulang`).
 // ============================================================
 import { supabase } from "@/lib/supabase";
 import { sinkronkanAkunTertaut } from "@/lib/sinkron-akun-tertaut";
-import { penyediaUntukAnggota } from "@/lib/sosmed-penyedia";
+import {
+  PENYEDIA_DIHENTIKAN,
+  PESAN_AYRSHARE_DIHENTIKAN,
+  penyediaUntukAnggota,
+} from "@/lib/sosmed-penyedia";
 import { denganCache, hapusCacheBersama } from "@/lib/cache-bersama";
 
 /** Enam sosmed TVR Saya, urut seperti di layar. */
@@ -35,6 +43,10 @@ export type KoneksiTvr = {
   status: StatusAkunTvr[];
   /** Akun terhubung yang sehat (tidak perlu login ulang). */
   jumlah_terhubung: number;
+  /** true bila profilnya masih Ayrshare (dihentikan) — wajib hubungkan ulang. */
+  perlu_hubungkan_ulang?: boolean;
+  /** Pesan untuk ditampilkan ke pengguna (mis. Ayrshare dihentikan). */
+  pesan?: string;
 };
 
 function bersihkan(u: string): string {
@@ -62,7 +74,8 @@ function susunStatus(
  * tidak perlu bertanya ke penyedia di setiap buka layar.
  */
 export function kunciCacheTertaut(userId: number): string {
-  return `tvr-hubungkan:${userId}`;
+  // v2 (16 Okt 2026): simpanan lama bisa berisi akun dari profil Ayrshare.
+  return `tvr-hubungkan:v2:${userId}`;
 }
 
 export function lupakanKoneksiTvr(userId: number): Promise<void> {
@@ -77,6 +90,24 @@ export async function profilPenyediaKu(userId: number, penyediaId: string) {
     .eq("jenis", "pengguna")
     .eq("penyedia", penyediaId)
     .eq("user_id", userId)
+    .maybeSingle();
+  return data ?? null;
+}
+
+/**
+ * Baris profil LAMA Ayrshare milik user ini, atau null. Ayrshare dihentikan
+ * 16 Okt 2026: baris ini tidak pernah dipakai mengunggah lagi — hanya
+ * dikenali supaya pemiliknya diminta menghubungkan ulang, dan supaya
+ * Hubungkan menimpanya (satu anggota tetap TEPAT SATU baris profil).
+ */
+export async function profilAyrshareLama(userId: number) {
+  const { data } = await supabase()
+    .from("sosmed_profile")
+    .select("id, profile_key")
+    .eq("jenis", "pengguna")
+    .eq("penyedia", PENYEDIA_DIHENTIKAN)
+    .eq("user_id", userId)
+    .limit(1)
     .maybeSingle();
   return data ?? null;
 }
@@ -96,7 +127,13 @@ async function tertautTersimpan(userId: number): Promise<{ platform: string; use
 async function bacaDanSinkron(userId: number): Promise<KoneksiTvr> {
   const penyedia = await penyediaUntukAnggota(userId);
   const profil = await profilPenyediaKu(userId, penyedia.id);
-  if (!profil) return { terhubung: [], tersinkron: 0, konflik: [], ...susunStatus([]) };
+  if (!profil) {
+    const kosong: KoneksiTvr = { terhubung: [], tersinkron: 0, konflik: [], ...susunStatus([]) };
+    if (await profilAyrshareLama(userId)) {
+      return { ...kosong, perlu_hubungkan_ulang: true, pesan: PESAN_AYRSHARE_DIHENTIKAN };
+    }
+    return kosong;
+  }
 
   let tertaut: { platform: string; username: string; perluSambungUlang?: boolean }[];
   try {

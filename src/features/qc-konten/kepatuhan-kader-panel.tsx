@@ -150,7 +150,7 @@ export function KepatuhanKaderPanel({
           <GlassSkeleton className="h-24 rounded-xl" />
         ) : perKader.length === 0 ? (
           <p className="py-5 text-center text-xs text-teks-sekunder">
-            Belum ada data kepatuhan periode hari ini — jalankan analisis dulu.
+            Belum ada data kepatuhan periode ini — pemeriksaan komentar otomatis dimatikan.
           </p>
         ) : (
           <>

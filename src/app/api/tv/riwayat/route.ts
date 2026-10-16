@@ -10,7 +10,7 @@ import { bungkus } from "@/lib/api-helper";
 import { supabase } from "@/lib/supabase";
 import { pastikanMasuk } from "@/lib/sesi";
 import { bolehUploadVideo } from "@/lib/tv-tim";
-import { tayangAtauDiproses } from "@/lib/ayrshare-status";
+import { bacaHasilUnggah, tayangAtauDiproses, type HasilUnggahPlatform } from "@/lib/unggah-hasil";
 import { catatAudit } from "@/lib/audit";
 import { siarkanTv } from "@/lib/tv-langsung";
 
@@ -19,8 +19,6 @@ export const dynamic = "force-dynamic";
 const PER_HALAMAN = 30;
 /** Jendela pencarian kegagalan untuk lencana (video lebih lama dianggap usang). */
 const JENDELA_GAGAL_HARI = 30;
-
-type HasilPlatform = { platform?: string; status?: string; id?: string; postUrl?: string; pesan?: string };
 
 type Baris = {
   kode: string;
@@ -46,25 +44,25 @@ type Baris = {
   diedit_oleh: string | null;
   diposting_oleh: string | null;
   platform_terunggah: string[] | null;
-  ayrshare_hasil: HasilPlatform[] | null;
+  unggah_hasil: unknown;
   gagal_ditangani_pada: string | null;
   gagal_ditangani_oleh: string | null;
 };
 
 const KOLOM =
-  "kode, judul, judul_overlay, highlight, caption_asli, caption_platform, thumbnail_url, hasil_render_url, video_asli, link, link_instagram, jenis, status, persetujuan, persetujuan_oleh, sumber_upload, jam_tanggal, diunggah_pada, diupload_oleh, digenerate_oleh, diedit_oleh, diposting_oleh, platform_terunggah, ayrshare_hasil, gagal_ditangani_pada, gagal_ditangani_oleh";
+  "kode, judul, judul_overlay, highlight, caption_asli, caption_platform, thumbnail_url, hasil_render_url, video_asli, link, link_instagram, jenis, status, persetujuan, persetujuan_oleh, sumber_upload, jam_tanggal, diunggah_pada, diupload_oleh, digenerate_oleh, diedit_oleh, diposting_oleh, platform_terunggah, unggah_hasil, gagal_ditangani_pada, gagal_ditangani_oleh";
 
 /** Platform yang gagal dan BELUM tayang lewat percobaan lain. */
-function platformGagal(b: Pick<Baris, "ayrshare_hasil" | "platform_terunggah">): HasilPlatform[] {
+function platformGagal(b: Pick<Baris, "unggah_hasil" | "platform_terunggah">): HasilUnggahPlatform[] {
   const tayang = new Set((b.platform_terunggah ?? []).map((p) => p.toLowerCase()));
-  return (Array.isArray(b.ayrshare_hasil) ? b.ayrshare_hasil : []).filter(
-    (h) => !tayangAtauDiproses(h.status, h.id, h.postUrl) && !tayang.has(String(h.platform ?? "").toLowerCase()),
+  return bacaHasilUnggah(b.unggah_hasil).filter(
+    (h) => !tayangAtauDiproses(h.status, h.id, h.postUrl) && !tayang.has(h.platform.toLowerCase()),
   );
 }
 
 function ringkas(b: Baris) {
   const gagal = platformGagal(b);
-  const hasil = Array.isArray(b.ayrshare_hasil) ? b.ayrshare_hasil : [];
+  const hasil = bacaHasilUnggah(b.unggah_hasil);
   const tayang = hasil.filter((h) => tayangAtauDiproses(h.status, h.id, h.postUrl));
   const adaTayang = tayang.length > 0 || (b.platform_terunggah ?? []).length > 0;
   const hasilAkhir = gagal.length === 0 ? (adaTayang ? "berhasil" : "belum") : adaTayang ? "sebagian" : "gagal";
@@ -88,7 +86,7 @@ function ringkas(b: Baris) {
     sumber_upload: b.sumber_upload ?? "manual",
     jam_tanggal: b.jam_tanggal,
     platform_terunggah: b.platform_terunggah ?? [],
-    ayrshare_hasil: hasil,
+    unggah_hasil: hasil,
     diupload_oleh: b.diupload_oleh,
     // Riwayat
     diedit_oleh: b.diedit_oleh || b.digenerate_oleh || b.diupload_oleh,
@@ -96,10 +94,10 @@ function ringkas(b: Baris) {
     diunggah_pada: b.diunggah_pada,
     hasil_akhir: hasilAkhir as "berhasil" | "sebagian" | "gagal" | "belum",
     platform: hasil.map((h) => ({
-      platform: String(h.platform ?? ""),
+      platform: h.platform,
       berhasil: tayangAtauDiproses(h.status, h.id, h.postUrl),
-      url: h.postUrl ?? "",
-      pesan: h.pesan ?? "",
+      url: h.postUrl,
+      pesan: h.pesan,
     })),
     perlu_manual: gagal.length > 0 && !b.gagal_ditangani_pada,
     ditangani_oleh: b.gagal_ditangani_pada ? b.gagal_ditangani_oleh : null,

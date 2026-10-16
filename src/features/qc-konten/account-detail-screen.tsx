@@ -157,7 +157,7 @@ export function AccountDetailScreen({
             </div>
             <div className="min-w-0">
               <h2 className="truncate font-heading text-lg font-extrabold text-teks-utama">
-                {/* Akun hasil tarik Ayrshare (FB/Threads/YT) memakai NAMA
+                {/* Akun hasil tarik penyedia (FB/Threads/YT) memakai NAMA
                     TAMPILAN berspasi — jangan ditempeli "@" seolah username. */}
                 {akunWajib.includes(" ") ? akunWajib : `@${akunWajib}`}
               </h2>
@@ -298,7 +298,7 @@ export function AccountDetailScreen({
                       <div className="mb-1.5 flex items-center justify-between text-[11px]">
                         <span className="text-teks-sekunder">
                           {belumDiperiksa ? (
-                            "Komentar belum diperiksa sinkron"
+                            "Komentar tidak diperiksa (pemeriksaan otomatis dimatikan)"
                           ) : (
                             <>
                               <span className="angka-tab font-bold text-teks-utama">

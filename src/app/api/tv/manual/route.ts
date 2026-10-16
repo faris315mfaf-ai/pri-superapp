@@ -13,7 +13,7 @@
 // Retensi: media di Cloudinary dihapus PERMANEN 2 hari setelah unggah
 // (pembersihan berjalan di sini setiap kali fitur dipakai — tanpa
 // cron). Barisnya tetap ada sebagai riwayat; kalau videonya sudah
-// telanjur diunggah ke sosmed lewat Ayrshare sebelum jatuh tempo,
+// telanjur diunggah ke sosmed (upload-post) sebelum jatuh tempo,
 // tayangannya aman — sosmed menyimpan salinannya sendiri.
 import { after } from "next/server";
 import { supabase } from "@/lib/supabase";

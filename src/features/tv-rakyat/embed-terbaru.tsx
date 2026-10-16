@@ -7,7 +7,9 @@
 // Hemat kuota & ringan: kartu menampilkan THUMBNAIL dulu; iframe
 // embed resmi (IG/TikTok/YT/FB — diizinkan frame-src CSP) baru
 // dimuat saat kartunya diketuk. Threads/X tanpa embed -> tautan.
-// Datanya dari cache server 15 menit (Ayrshare /history).
+// Datanya dari cache server 15 menit (daftar media profil upload-post
+// Official). upload-post tidak memberi angka per postingan di daftar media,
+// jadi metrik bisa kosong — ditampilkan apa adanya, bukan nol palsu.
 // ============================================================
 
 import { useEffect, useMemo, useState } from "react";
@@ -22,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { Clapperboard } from "lucide-react";
 
 // Segmentasi per platform (fitur 1.22/bug 4). "cocok" menormalkan
-// nama platform dari Ayrshare (mis. "twitter" untuk X, "youtube" untuk
+// nama platform dari penyedia (mis. "twitter" untuk X, "youtube" untuk
 // YT Short) supaya satu chip menangkap semua variannya.
 type Segmen = { id: string; label: string; cocok: (p: string) => boolean };
 const SEGMEN: Segmen[] = [
@@ -225,7 +227,7 @@ export function EmbedTerbaru() {
                     </div>
                   ) : (
                     <p className="mt-1.5 text-[10px] text-teks-sekunder/70">
-                      Platform ini tidak membagikan angka per postingan.
+                      Angka per postingan belum tersedia.
                     </p>
                   )}
                 </div>

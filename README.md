@@ -9,7 +9,7 @@ Aplikasi internal partai: absensi, KPI video, QC komentar sosmed, TV Rakyat
 
 - Next.js (App Router) + TypeScript + Tailwind
 - Supabase (PostgreSQL, Storage) — skema di folder `sql/`
-- Vercel (hosting), upload-post & Ayrshare (posting sosmed), Cloudflare R2 / Supabase Storage (video), n8n (otomasi)
+- Vercel (hosting), upload-post (posting sosmed; Ayrshare dihentikan 16 Okt 2026), Cloudflare R2 / Supabase Storage (video), n8n (otomasi)
 
 ## Menjalankan di komputer sendiri
 

@@ -23,6 +23,7 @@ import type {
 import { PERIODE_AKTIF } from "@/types";
 import { buatPenggabungGet } from "@/lib/gabung-get";
 import type { AnggotaTautan } from "@/lib/tautan-profil";
+import type { HasilUnggahPlatform } from "@/lib/unggah-hasil";
 import type { BarisPantauWajib, KemajuanSaya, PolaWajib, RingkasKepatuhan } from "@/lib/video-wajib-perintah";
 
 // ------------------------------------------------------------
@@ -2370,7 +2371,7 @@ export async function hapusKerjaItem(id: string): Promise<void> {
 }
 
 // ------------------------------------------------------------
-// Ayrshare — insight profil & unggah sosmed sungguhan (TV Rakyat)
+// Akun TV Rakyat Official (upload-post) — insight profil & unggah sosmed sungguhan
 // ------------------------------------------------------------
 
 export type InsightProfil = {
@@ -2424,13 +2425,8 @@ export async function getInsightSosmed(
   return json as BalasanInsight;
 }
 
-export type HasilUnggahPlatform = {
-  platform: string;
-  status: string;
-  id: string;
-  postUrl: string;
-  pesan: string;
-};
+/** Hasil unggah per platform — kontrak bersama kolom video_antrian.unggah_hasil. */
+export type { HasilUnggahPlatform };
 
 export type BalasanUnggah = {
   sukses: boolean;
@@ -2439,6 +2435,8 @@ export type BalasanUnggah = {
   total: number;
   link: string;
   catatan_simpan: string | null;
+  /** request_id upload-post ("" bila tidak ada). */
+  id_unggah?: string;
 };
 
 /**
@@ -2470,17 +2468,12 @@ export async function getStatusMesinAutoEdit(): Promise<StatusMesinAutoEdit> {
   return (await fetchJson("/api/master/mesin", { headers: headerToken() })) as StatusMesinAutoEdit;
 }
 
-/** Unggah video ke sosmed lewat Ayrshare — SUNGGUHAN, tidak bisa ditarik kembali. */
-export async function unggahVideoSosmed(
-  kode: string,
-  platforms: string[],
-  /** Sampul base64 jpg/png <2MB — dipasang ke YT/IG/TikTok/FB (opsional). */
-  sampulDataUrl?: string,
-): Promise<BalasanUnggah> {
+/** Unggah video akun TV Rakyat Official lewat upload-post — SUNGGUHAN, tidak bisa ditarik kembali. */
+export async function unggahVideoSosmed(kode: string, platforms: string[]): Promise<BalasanUnggah> {
   const json = await fetchJson("/api/tv/unggah", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ kode, platforms, sampulDataUrl }),
+    body: JSON.stringify({ kode, platforms }),
   });
   return json as BalasanUnggah;
 }
@@ -2993,6 +2986,8 @@ export type JadwalPosting = {
   error: string | null;
   oleh: string;
   dibuat_pada: string;
+  /** false = sudah dikirim ke upload-post, tidak bisa dibatalkan. */
+  bisa_dibatalkan?: boolean;
 };
 
 export async function getJadwalPosting(): Promise<JadwalPosting[]> {
@@ -3000,7 +2995,10 @@ export async function getJadwalPosting(): Promise<JadwalPosting[]> {
   return (json.data ?? []) as JadwalPosting[];
 }
 
-/** Jadwalkan satu posting ke Ayrshare (Ayrshare menerbitkan pada waktunya). */
+/**
+ * Jadwalkan satu posting akun Official lewat upload-post (upload-post menerbitkan pada waktunya).
+ * Jadwal yang sudah dikirim TIDAK bisa dibatalkan dari aplikasi. Penolakan upload-post = galat (502).
+ */
 export async function jadwalkanPosting(data: {
   caption: string;
   media_url: string;
@@ -3010,20 +3008,18 @@ export async function jadwalkanPosting(data: {
   judul_youtube?: string;
   /** ISO string waktu tayang (mis. dari input datetime-local, dikonversi). */
   jadwal_pada: string;
-  /** Sampul base64 jpg/png <2MB — YT/IG/TikTok/FB (opsional). */
-  sampulDataUrl?: string;
   /** Kode video di antrian produksi — agar catatannya ikut selesai saat tayang. */
   kode?: string;
-}): Promise<{ id: string; status: string; ayrshare_id: string }> {
+}): Promise<{ sukses: boolean; id: string; status: string; up_request_id: string | null; up_job_id: string | null; hasil: HasilUnggahPlatform[] }> {
   const json = await fetchJson("/api/tv/jadwal", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headerToken() },
     body: JSON.stringify(data),
   });
-  return json as { id: string; status: string; ayrshare_id: string };
+  return json as { sukses: boolean; id: string; status: string; up_request_id: string | null; up_job_id: string | null; hasil: HasilUnggahPlatform[] };
 }
 
-/** Batalkan jadwal yang belum tayang (dihapus juga di Ayrshare). */
+/** Batalkan jadwal yang BELUM dikirim ke upload-post (yang sudah dikirim → galat 409). */
 export async function batalkanJadwalPosting(id: string): Promise<void> {
   await fetchJson("/api/tv/jadwal", {
     method: "DELETE",
@@ -4731,6 +4727,9 @@ export type WajibKomen = {
   periode: string;
   belum: number;
   data: WajibKomenItem[];
+  /** false sejak Ayrshare dihapus: komentar tidak lagi diperiksa otomatis. */
+  komentar_otomatis?: boolean;
+  pesan_komentar?: string;
 };
 
 /** Daftar postingan wajib komen hari ini + status komentar saya (verified). */
@@ -4742,32 +4741,6 @@ export async function getWajibKomen(): Promise<WajibKomen> {
 }
 
 /** Sakelar mode perbaikan — khusus master (lihat /api/master). */
-/** Analisis ulang QC berbasis data Ayrshare (tanpa n8n/TikHub). */
-export type HasilAnalisisAyrshare = {
-  periode: string;
-  akun_tercakup: string[];
-  akun_terlewat: string[];
-  postingan: number;
-  komentar: number;
-  comply: number;
-  /** Catatan jujur bila ada postingan yang tidak terbaca sekali jalan */
-  peringatan?: string[];
-  /** Postingan yang belum sempat diperiksa pada panggilan ini */
-  sisa?: number;
-  /** false = perlu dipanggil lagi untuk menuntaskan sisanya */
-  selesai?: boolean;
-  /** Komentar terbaca hingga jam ini (spek 1.16) */
-  data_sampai?: string;
-};
-
-export async function analisisUlangAyrshare(): Promise<HasilAnalisisAyrshare> {
-  const json = await fetchJson("/api/analisis/ayrshare", {
-    method: "POST",
-    headers: headerToken(),
-  });
-  return json as HasilAnalisisAyrshare;
-}
-
 // ------------------------------------------------------------
 // Database anggota (detail aktivitas per pengguna)
 // ------------------------------------------------------------
@@ -4965,27 +4938,8 @@ export async function getKomentarSaya(
   }
 }
 
-/** Cakupan analisis Ayrshare: akun wajib mana yang sudah bisa dibaca. */
-export type CakupanAyrshare = {
-  siap: boolean;
-  tercakup: { username: string; platform: string }[];
-  terlewat: { username: string; platform: string }[];
-};
-
-export async function getCakupanAyrshare(): Promise<CakupanAyrshare> {
-  try {
-    const json = await fetchJson("/api/analisis/ayrshare", {
-      headers: headerToken(),
-    });
-    return json as CakupanAyrshare;
-  } catch {
-    // Cakupan hanya penjelas di layar — kegagalannya tidak boleh
-    // menggagalkan seluruh layar QC.
-    return { siap: false, tercakup: [], terlewat: [] };
-  }
-}
-
-// Riwayat "kapan Ayrshare memperbarui komentar" (fitur 1.22.x/3-perbaikan)
+// Riwayat pembaruan komentar QC (fitur 1.22.x/3-perbaikan). Pemeriksaan komentar
+// otomatis dimatikan sejak Ayrshare dihapus (16 Okt 2026): riwayat lama, hanya dibaca.
 export type RiwayatUpdateKomentar = {
   id: string;
   dijalankan_pada: string;
@@ -5002,7 +4956,7 @@ export async function getRiwayatUpdateKomentar(): Promise<
   RiwayatUpdateKomentar[]
 > {
   try {
-    const json = await fetchJson("/api/analisis/ayrshare?riwayat=1", {
+    const json = await fetchJson("/api/analisis/riwayat", {
       headers: headerToken(),
     });
     return (json.riwayat ?? []) as RiwayatUpdateKomentar[];
@@ -5731,58 +5685,6 @@ export async function resetKoinAnggota(userId: string): Promise<{ saldo_sebelum:
 
 export async function resetKoinSemua(): Promise<{ jumlah_orang: number }> {
   return (await aksiKoin({ aksi: "reset_semua", konfirmasi: "RESET" })) as unknown as { jumlah_orang: number };
-}
-
-// ------------------------------------------------------------
-// Profil sosmed penyedia (spek 1.17)
-// ------------------------------------------------------------
-
-export type ProfilAnalisis = {
-  id: string;
-  judul: string;
-  akun: { platform: string; username: string }[];
-  gagal: boolean;
-};
-
-/** Daftar profil QC + akun tertautnya (pengurus). */
-export async function getProfilAnalisis(): Promise<{
-  penyedia: string;
-  penautan_siap: boolean;
-  data: ProfilAnalisis[];
-}> {
-  const json = await fetchJson("/api/analisis/profil", {
-    headers: headerToken(),
-  });
-  return {
-    penyedia: (json.penyedia as string) ?? "ayrshare",
-    penautan_siap: json.penautan_siap === true,
-    data: (json.data ?? []) as ProfilAnalisis[],
-  };
-}
-
-export async function tambahProfilAnalisis(judul: string): Promise<void> {
-  await fetchJson("/api/analisis/profil", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ judul }),
-  });
-}
-
-export async function tautanProfilAnalisis(id: string): Promise<string> {
-  const json = await fetchJson("/api/analisis/profil", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ aksi: "tautan", id }),
-  });
-  return json.url as string;
-}
-
-export async function hapusProfilAnalisis(id: string): Promise<void> {
-  await fetchJson("/api/analisis/profil", {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json", ...headerToken() },
-    body: JSON.stringify({ id }),
-  });
 }
 
 /** TVR Saya: siapkan profilku + URL halaman penautan sosmed. */

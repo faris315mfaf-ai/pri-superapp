@@ -2,16 +2,18 @@
 
 // ============================================================
 // RiwayatUpdateKomentar (fitur 1.22.x/3-perbaikan) — riwayat KAPAN
-// Ayrshare memperbarui komentar QC (waktu + jumlah postingan/komentar/
-// comply tiap kali analisis dijalankan). Membuat fitur analisis terasa
-// SATU kesatuan: jalankan → lihat kapan terakhir di-update.
+// komentar QC diperbarui (waktu + jumlah postingan/komentar/comply).
+//
+// 16 Okt 2026: pemeriksaan komentar otomatis DIMATIKAN (Ayrshare dihapus;
+// upload-post tidak punya API komentar). Daftar ini kini BACA-SAJA:
+// riwayat lama tetap tampil, tetapi tidak bertambah dari jalur otomatis.
 //
 // Komentar mentahnya sendiri hanya disimpan sementara (2 hari, lalu
 // dihapus otomatis) — dijelaskan di catatan kecil di bawah daftar.
 // ============================================================
 
 import { useEffect, useState } from "react";
-import { History, RefreshCw } from "lucide-react";
+import { History, Info, RefreshCw } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { EmptyState, GlassSkeleton } from "@/components/pri-ui";
 import { getRiwayatUpdateKomentar, type RiwayatUpdateKomentar } from "@/services";
@@ -84,13 +86,22 @@ export function RiwayatUpdateKomentar({
         </button>
       </div>
 
+      <p className="mb-2 flex items-start gap-1.5 rounded-xl bg-kuning/10 px-3 py-2 text-[11px] leading-snug text-teks-sekunder">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-kuning" aria-hidden="true" />
+        <span>
+          <b className="text-teks-utama">Pemeriksaan komentar otomatis dimatikan.</b> Sumber data
+          akun resmi kini upload-post, yang tidak menyediakan data komentar. Riwayat di bawah
+          adalah data lama.
+        </span>
+      </p>
+
       {data === null ? (
         <GlassSkeleton className="h-16 rounded-xl" />
       ) : data.length === 0 ? (
         <EmptyState
           ikon={History}
-          judul="Belum ada pembaruan"
-          keterangan="Deteksi komentar berjalan otomatis (±30 menit sekali) — setiap pembaruan tercatat di sini."
+          judul="Belum ada riwayat"
+          keterangan="Belum pernah ada pembaruan komentar yang tercatat."
           className="py-6"
         />
       ) : (

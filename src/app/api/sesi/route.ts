@@ -21,7 +21,7 @@ import { jalankanLatar } from "@/lib/penjaga-supabase";
 
 export const dynamic = "force-dynamic";
 // Respons /api/sesi tetap kembali seketika; nilai ini hanya memberi
-// ruang bagi pekerjaan after() (sinkron konten TV Rakyat, anggaran ~40 dtk)
+// ruang bagi pekerjaan after() (sinkron konten TV Rakyat Official)
 // agar tuntas tanpa dipotong. Hanya SATU pembukaan aplikasi per jendela
 // 30 menit yang benar-benar menjalankan sinkron (klaim atomik).
 export const maxDuration = 60;
@@ -68,7 +68,7 @@ export async function GET(request: Request) {
     await pastikanBukanPerbaikan(user.role);
 
     // Pengguna virtual uji beban (lib/uji-beban) berhenti di sini: tugas
-    // susulan di bawah (kabar & sinkron Ayrshare) bukan bagian yang diuji.
+    // susulan di bawah (kabar & sinkron konten Official) bukan bagian yang diuji.
     if (user.ujiBeban) return { user };
 
     // Ucapan ulang tahun global — sekali sehari, menumpang pembukaan
@@ -77,9 +77,10 @@ export async function GET(request: Request) {
     // Ajakan verifikasi berkala (fitur 1.22.x/1) — sekali per jendela
     // (bawaan 60 menit) ke anggota yang WA/Google/Wajah-nya belum lengkap.
     after(() => jalankanLatar("ajakan-verifikasi", siaranVerifikasiBerkala));
-    // Sinkron konten TV Rakyat dari Ayrshare — sekali per jendela (bawaan
-    // 30 menit): isi kanal konten + daftar postingan wajib-komen + cek
-    // komentar. Tanpa cron; menumpang pembukaan aplikasi.
+    // Sinkron konten TV Rakyat Official dari upload-post — sekali per jendela
+    // (bawaan 30 menit): isi kanal konten + daftar postingan wajib-komen
+    // (komentar tidak diperiksa otomatis lagi). Tanpa cron; menumpang
+    // pembukaan aplikasi.
     // Lajur latar (28 Sep 2026): mengalah pada permintaan pengguna.
     after(() => jalankanLatar("sinkron-konten-sesi", sinkronKontenTvTerjadwal));
 

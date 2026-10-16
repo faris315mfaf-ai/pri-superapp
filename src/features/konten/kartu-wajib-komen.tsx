@@ -3,8 +3,11 @@
 // ============================================================
 // KartuWajibKomen — daftar postingan resmi yang WAJIB dikomentari kader
 // hari ini, dengan status komentar yang DIVERIFIKASI dari komentar asli
-// (rekap QC), bukan laporan-diri. Sumbernya postingan yang di-scrape
-// otomatis dari Ayrshare (+ pipeline n8n). Tampil di modul Konten.
+// (rekap QC), bukan laporan-diri. Sejak Ayrshare dihapus (16 Okt 2026)
+// komentar TIDAK lagi diperiksa otomatis (upload-post tak punya API
+// komentar): kartu tetap menampilkan postingan wajib dari akun Official,
+// status "Sudah" hanya dari data lama, dan hitungan "belum" disembunyikan.
+// Tampil di modul Konten.
 //
 // Beda dari KartuVideoBaru: kartu itu laporan-diri untuk video unggahan
 // aplikasi; kartu ini kepatuhan komentar terverifikasi untuk SEMUA
@@ -40,13 +43,20 @@ export function KartuWajibKomen() {
   // Postingan yang tombol "Komentari"-nya sudah diklik: tampilkan
   // "menunggu verifikasi" sampai sinkron berikutnya memastikan komentarnya.
   const [diklik, setDiklik] = useState<Set<string>>(() => new Set());
+  // null = belum dimuat; false = pemeriksaan komentar otomatis dimatikan.
+  const [otomatis, setOtomatis] = useState<boolean | null>(null);
+  const [pesanKomentar, setPesanKomentar] = useState("");
 
   useEffect(() => {
     let hidup = true;
     void (async () => {
       try {
         const hasil = await getWajibKomen();
-        if (hidup) setData(hasil.data);
+        if (hidup) {
+          setData(hasil.data);
+          setOtomatis(hasil.komentar_otomatis !== false);
+          setPesanKomentar(hasil.pesan_komentar ?? "");
+        }
       } catch {
         if (hidup) setData([]);
       }
@@ -63,6 +73,8 @@ export function KartuWajibKomen() {
     getWajibKomen()
       .then((hasil) => {
         setData(hasil.data);
+        setOtomatis(hasil.komentar_otomatis !== false);
+        setPesanKomentar(hasil.pesan_komentar ?? "");
         // Status sudah diverifikasi ulang — tanda "menunggu" boleh dilepas
         // untuk yang kini tercatat sudah komentar (otomatis lewat sudah_komentar).
       })
@@ -90,7 +102,7 @@ export function KartuWajibKomen() {
           <p className="font-heading text-sm font-bold text-teks-utama">
             Wajib Dikomentari Hari Ini
           </p>
-          {belum > 0 && (
+          {belum > 0 && otomatis !== false && (
             <span className="angka-tab rounded-full bg-gagal/15 px-2 text-[11px] font-bold text-gagal">
               {belum} belum
             </span>
@@ -107,8 +119,9 @@ export function KartuWajibKomen() {
           </button>
         </div>
         <p className="mt-1 text-[11px] leading-snug text-teks-sekunder">
-          Beri komentar di tiap postingan resmi. Status dicek otomatis dari komentar asli
-          Anda — tak perlu menandai sendiri. Ketuk ↻ untuk memeriksa ulang.
+          {otomatis === false
+            ? pesanKomentar || "Beri komentar di tiap postingan resmi. Pemeriksaan komentar otomatis sedang dimatikan."
+            : "Beri komentar di tiap postingan resmi. Status dicek otomatis dari komentar asli Anda — tak perlu menandai sendiri. Ketuk ↻ untuk memeriksa ulang."}
         </p>
 
         <div className="scrollbar-tipis mt-3 flex max-h-96 flex-col gap-2 overflow-y-auto">
@@ -153,7 +166,7 @@ export function KartuWajibKomen() {
                     </span>
                   ) : menunggu ? (
                     <span className="flex shrink-0 items-center gap-1 rounded-lg bg-black/5 px-2 py-1.5 text-[11px] font-semibold text-teks-sekunder dark:bg-white/10">
-                      <Clock className="h-3.5 w-3.5" /> Menunggu
+                      <Clock className="h-3.5 w-3.5" /> {otomatis === false ? "Dibuka" : "Menunggu"}
                     </span>
                   ) : (
                     <button

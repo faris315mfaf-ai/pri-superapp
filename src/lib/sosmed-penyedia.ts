@@ -2,22 +2,18 @@
 // Abstraksi PENYEDIA SOSMED (spek 1.17).
 //
 // Semua fitur profil & penautan sosmed berbicara lewat antarmuka
-// ini, BUKAN langsung ke Ayrshare — supaya migrasi ke upload-post
-// (rencana dekat) tinggal menulis satu adaptor dan mengganti env
-// SOSMED_PENYEDIA, tanpa menyentuh route ataupun UI.
+// ini, BUKAN langsung ke API penyedia — supaya route & UI tidak ikut
+// berubah bila penyedianya berganti.
 //
 // Adaptor tersedia:
-// - ayrshare     : aktif sekarang (lib/ayrshare.ts).
-// - upload-post  : KODE SIMPANAN — kerangkanya siap, menyala begitu
-//                  UPLOAD_POST_API_KEY diisi dan TODO-nya dilengkapi.
+// - upload-post  : penyedia utama (lib/upload-post) — bawaan semua akun.
+// - postiz       : uji coba swakelola per anggota (lib/postiz).
+//
+// 16 Okt 2026: AYRSHARE DIHENTIKAN (keputusan pemilik). Adaptornya
+// dihapus. Baris lama `sosmed_profile.penyedia = 'ayrshare'` dianggap
+// BELUM TERHUBUNG — pemiliknya wajib menghubungkan ulang lewat
+// upload-post. Tidak ada jalur yang boleh mengembalikan adaptor Ayrshare.
 // ============================================================
-import {
-  ambilAkunTertaut,
-  buatProfilAyrshare,
-  buatTautanHubungkan,
-  hapusProfilAyrshare,
-} from "@/lib/ayrshare";
-
 export type ProfilPenyedia = { profileKey: string; refId: string };
 export type AkunTertautPenyedia = {
   platform: string;
@@ -26,7 +22,18 @@ export type AkunTertautPenyedia = {
   perluSambungUlang?: boolean;
 };
 
-export type IdPenyedia = "ayrshare" | "upload-post" | "postiz";
+export type IdPenyedia = "upload-post" | "postiz";
+
+/**
+ * Penyedia yang sudah DIHENTIKAN (16 Okt 2026). Baris `sosmed_profile`
+ * dengan nilai ini masih bisa tersisa di database; perlakukan sebagai
+ * belum terhubung dan minta pemiliknya menghubungkan ulang.
+ */
+export const PENYEDIA_DIHENTIKAN = "ayrshare";
+
+/** Pesan untuk pemilik profil lama Ayrshare. */
+export const PESAN_AYRSHARE_DIHENTIKAN =
+  "Ayrshare dihentikan — hubungkan ulang akun sosmed Anda lewat upload-post.";
 
 /**
  * Penyedia yang boleh dipakai AKUN PRIBADI ANGGOTA (TV Rakyat Saya).
@@ -42,7 +49,8 @@ export type IdPenyedia = "ayrshare" | "upload-post" | "postiz";
  * layar itu tanpa satu pun pesan galat — laporannya hilang, KPI-nya
  * nol, dan kelihatannya seperti dia berhenti bekerja.
  *
- * Ayrshare TIDAK masuk daftar ini: itu dunia TV Rakyat Official.
+ * Ayrshare sudah dihentikan (16 Okt 2026) dan tidak pernah boleh masuk
+ * daftar ini — baris lamanya dianggap belum terhubung.
  */
 export const PENYEDIA_ANGGOTA: readonly string[] = ["upload-post", "postiz"];
 
@@ -60,24 +68,8 @@ export interface PenyediaSosmed {
 }
 
 // ------------------------------------------------------------
-// Adaptor Ayrshare (aktif)
-// ------------------------------------------------------------
-
-const ayrshare: PenyediaSosmed = {
-  id: "ayrshare",
-  buatProfil: (judul) => buatProfilAyrshare(judul),
-  hapusProfil: (profileKey) => hapusProfilAyrshare(profileKey),
-  tautanHubungkan: (profileKey) => buatTautanHubungkan(profileKey),
-  async akunTertaut(profileKey) {
-    const d = await ambilAkunTertaut(profileKey);
-    return d.akun
-      .filter((a) => a.platform && a.username)
-      .map((a) => ({ platform: a.platform, username: a.username }));
-  },
-};
-
-// ------------------------------------------------------------
-// Adaptor upload-post (AKTIF sejak rombakan TVR Saya, 31 Agu 2026)
+// Adaptor upload-post (AKTIF sejak rombakan TVR Saya, 31 Agu 2026;
+// satu-satunya penyedia bawaan sejak Ayrshare dihentikan 16 Okt 2026)
 // "profileKey" pada penyedia ini = username profil upload-post.
 // Implementasi API-nya di lib/upload-post (kontrak diverifikasi live).
 // ------------------------------------------------------------
@@ -118,19 +110,32 @@ const uploadPost: PenyediaSosmed = {
   },
 };
 
-/** Penyedia aktif — env SOSMED_PENYEDIA ("ayrshare" bawaan). */
+/**
+ * Penyedia aktif — selalu upload-post sejak Ayrshare dihentikan
+ * (16 Okt 2026). Env SOSMED_PENYEDIA tidak lagi dibaca: nilai lama
+ * "ayrshare" di server tidak boleh menghidupkan jalur yang sudah mati.
+ */
 export function penyediaAktif(): PenyediaSosmed {
-  return process.env.SOSMED_PENYEDIA === "upload-post" ? uploadPost : ayrshare;
+  return uploadPost;
+}
+
+/** Galat 503 bila kunci upload-post belum dipasang di server. */
+function galatUploadPostBelumSiap(): Error {
+  return Object.assign(
+    new Error("upload-post belum diatur (UPLOAD_POST_API_KEY kosong). Hubungi pengelola."),
+    // pesanAman: pesan ini memang untuk pengguna — jangan disamarkan bungkus().
+    { status: 503, pesanAman: true },
+  );
 }
 
 /**
- * Penyedia untuk AKUN PRIBADI ANGGOTA (TVR Saya): upload-post begitu
- * kuncinya terpasang, tanpa menyentuh jalur Official/QC yang tetap
- * Ayrshare. Dipisah dari penyediaAktif() supaya dua dunia itu tidak
- * saling menular lewat satu env global.
+ * Penyedia bawaan untuk AKUN PRIBADI ANGGOTA (TVR Saya): upload-post.
+ * TIDAK ada cadangan lain — bila kuncinya belum terpasang, melempar galat
+ * 503 yang jelas daripada diam-diam beralih ke penyedia lain.
  */
 export function penyediaAnggota(): PenyediaSosmed {
-  return uploadPostSiap() ? uploadPost : penyediaAktif();
+  if (!uploadPostSiap()) throw galatUploadPostBelumSiap();
+  return uploadPost;
 }
 
 // ------------------------------------------------------------
@@ -192,7 +197,8 @@ const postiz: PenyediaSosmed = {
 export function penyediaDenganId(id: string | null | undefined): PenyediaSosmed {
   if (id === "postiz") return postiz;
   if (id === "upload-post") return uploadPost;
-  if (id === "ayrshare") return ayrshare;
+  // Termasuk "ayrshare" (dihentikan): pemiliknya dianggap belum terhubung
+  // dan dihubungkan ulang lewat penyedia bawaan, bukan adaptor lama.
   return penyediaAnggota();
 }
 
@@ -204,8 +210,8 @@ export function postizTersedia(): boolean {
 // ============================================================
 // PENYEDIA PER ANGGOTA (15 Sep 2026)
 //
-// Postiz BUKAN pengganti upload-post — ia pilihan ketiga di samping
-// Ayrshare (TV Rakyat Official) dan upload-post. Yang menentukan siapa
+// Postiz BUKAN pengganti upload-post — ia pilihan kedua di samping
+// upload-post (Ayrshare dihentikan 16 Okt 2026). Yang menentukan siapa
 // memakai apa adalah MASTER, per orang, lewat Panel Master.
 //
 // Sumber kebenarannya satu: kolom `sosmed_profile.penyedia` pada baris
@@ -223,14 +229,19 @@ import { supabase } from "@/lib/supabase";
 import { unggahVideoPostiz } from "@/lib/postiz";
 import { gagalDariBalasan, unggahVideoUp } from "@/lib/upload-post";
 
-/** Penyedia bawaan untuk anggota yang belum pernah disetel master. */
+/**
+ * Penyedia bawaan untuk anggota yang belum pernah disetel master.
+ * Selalu "upload-post" — tidak melempar walau kuncinya kosong (dipakai
+ * juga untuk tampilan Panel Master); galatnya muncul saat dipakai.
+ */
 export function idPenyediaBawaan(): IdPenyedia {
-  return penyediaAnggota().id;
+  return "upload-post";
 }
 
 /**
  * Penyedia yang dipakai SATU anggota. Membaca baris profilnya; anggota
- * yang belum punya baris memakai bawaan.
+ * yang belum punya baris — atau barisnya masih Ayrshare (dihentikan) —
+ * memakai bawaan, sehingga profil lamanya terbaca BELUM terhubung.
  */
 export async function idPenyediaAnggota(userId: number): Promise<IdPenyedia> {
   const { data } = await supabase()
@@ -240,7 +251,7 @@ export async function idPenyediaAnggota(userId: number): Promise<IdPenyedia> {
     .eq("user_id", userId)
     .maybeSingle();
   const id = String(data?.penyedia ?? "");
-  if (id === "postiz" || id === "upload-post" || id === "ayrshare") return id;
+  if (id === "postiz" || id === "upload-post") return id;
   return idPenyediaBawaan();
 }
 
@@ -289,12 +300,7 @@ export async function unggahVideoAnggota(
     return { sukses: h.sukses, mentah: h.mentah, request_id: h.request_id, gagalAwal: h.gagalAwal };
   }
 
-  if (!uploadPostSiap()) {
-    throw Object.assign(
-      new Error("upload-post belum diatur (UPLOAD_POST_API_KEY kosong). Hubungi pengelola."),
-      { status: 503 },
-    );
-  }
+  if (!uploadPostSiap()) throw galatUploadPostBelumSiap();
   const h = await unggahVideoUp(opsi);
   return {
     sukses: h.sukses,
