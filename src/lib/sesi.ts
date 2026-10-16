@@ -136,13 +136,18 @@ export function keUserPublik(b: BarisUser): UserPublik {
   // KECUALI Panel Master. Satu titik pemetaan ini membuat ratusan
   // pemeriksaan `role === "master"` berlaku juga baginya; Panel Master
   // sendiri memeriksa adalahMasterAsli() yang menolak penanda ini.
-  const superadmin = b.role === "superadmin";
+  // SUPERUSER (16 Okt 2026): dilihat seperti superadmin (semua yang
+  // dikecualikan dari superadmin ikut dikecualikan), plus penanda mode lihat
+  // yang membuat proxy menolak semua perubahan data (lib/hanya-lihat).
+  const superuser = b.role === "superuser";
+  const superadmin = b.role === "superadmin" || superuser;
   return {
     id: String(b.id),
     nama: b.nama,
     email: b.email,
     role: (superadmin ? "master" : b.role) as Role,
     superadmin,
+    ...(superuser ? { superuser: true } : {}),
     avatar_url: b.avatar_url ?? "",
     jabatan: b.jabatan ?? "",
     status: b.status,
@@ -212,7 +217,7 @@ async function userUjiBeban(token: string): Promise<UserPublik | null> {
   const u = data as BarisUser | null;
   if (!u || !u.aktif || u.status !== "aktif") return null;
   // Peran efektif sama persis dengan jalur sesi sungguhan.
-  if (u.role !== "master" && u.role !== "superadmin" && (u.jabatan ?? "").trim() === "Ketua Umum") {
+  if (u.role !== "master" && u.role !== "superadmin" && u.role !== "superuser" && (u.jabatan ?? "").trim() === "Ketua Umum") {
     u.role = "super_admin";
   }
   const publik: UserPublik = { ...keUserPublik(u), ujiBeban: true };

@@ -228,6 +228,7 @@ const TAB_AWAL: Record<Role, KunciTab> = {
   master: "beranda",
   super_admin: "beranda",
   superadmin: "beranda",
+  superuser: "beranda",
   admin_hr: "qc",
   admin_tv: "tv",
   ketua: "beranda",
@@ -339,6 +340,8 @@ const TAB_ROLE: Record<Role, KunciTab[]> = {
   // tab Dashboard ditambahkan dinamis (aksesPenuh). Tanpa TV Official,
   // chat, robot, dan perintah suara.
   superadmin: ["beranda", "konten", "profil"],
+  // superuser: sesi memetakannya ke master (entri ini hanya pelengkap tipe).
+  superuser: ["beranda", "konten", "profil"],
   admin_hr: ["konten", "qc", "ruangbot", "chat", "profil"],
   admin_tv: ["konten", "tv", "ruangbot", "chat", "profil"],
   ketua: ["beranda", "konten", "tvrku", "ruangbot", "chat", "profil"],

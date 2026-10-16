@@ -26,6 +26,7 @@ const DILARANG = new Set([
   "administrator",
   "master",
   "superadmin",
+  "superuser",
   "super_admin",
   "developer",
   "dev",

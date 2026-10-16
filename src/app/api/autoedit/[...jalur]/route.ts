@@ -18,6 +18,7 @@ import { catatAudit } from "@/lib/audit";
 import type { JenisAudit } from "@/lib/audit-jenis";
 import { siarkanTv } from "@/lib/tv-langsung";
 import { akhiriAktivitas, mulaiAktivitas } from "@/lib/dunia";
+import { bolehTulisSuperuser, PESAN_HANYA_LIHAT } from "@/lib/hanya-lihat";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -127,6 +128,10 @@ async function tangani(
   // memanggilnya (lib/bot-template); lewat proxy ini selalu tidak ada.
   if (j[0] === "tvr" && j[1] === "pustaka") return galatAutoEdit(404, "Tidak ditemukan");
   // Studio Template (16 Okt 2026): uji coba akun tertentu, hanya template pribadi (bukan jalur tim).
+  // Superuser = mode lihat (16 Okt 2026): rute ini tidak lewat proxy, jadi dijaga di sini.
+  if (user.superuser && !bolehTulisSuperuser(request.method, "/api/autoedit")) {
+    return galatAutoEdit(403, PESAN_HANYA_LIHAT);
+  }
   if (j[0] === "tvr" && j[1] === "studio" && (!bolehStudioTemplate(user) || (request.headers.get("x-autoedit-tim") ?? "").trim())) {
     return galatAutoEdit(404, "Tidak ditemukan");
   }

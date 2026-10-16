@@ -33,6 +33,8 @@
 // ============================================================
 import { NextRequest, NextResponse } from "next/server";
 import { adalahTokenUji, ruteUjiBoleh } from "@/lib/uji-beban-skenario";
+import { bolehTulisSuperuser, PESAN_HANYA_LIHAT } from "@/lib/hanya-lihat";
+import { tokenDariRequest, userDariToken } from "@/lib/sesi";
 
 // Origin Supabase untuk connect-src: unggah video TVR Saya naik LANGSUNG
 // peramban→storage lewat URL tertandatangan (unggah-sosmed-saya.tsx).
@@ -62,7 +64,7 @@ const ASAL_R2 = process.env.R2_ACCOUNT_ID
   ? `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
   : "";
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // Token UJI BEBAN (29 Sep 2026, lib/uji-beban): pengguna virtual hanya
   // boleh MEMBACA rute uji. Apa pun selain GET/HEAD ke daftar itu ditolak
   // di pintu depan — sebelum menyentuh rute mana pun.
@@ -71,6 +73,18 @@ export function proxy(request: NextRequest) {
     !ruteUjiBoleh(request.method, request.nextUrl.pathname)
   ) {
     return NextResponse.json({ error: "Token uji beban hanya boleh membaca rute uji." }, { status: 403 });
+  }
+
+  // SUPERUSER = MODE LIHAT (16 Okt 2026, lib/hanya-lihat): perubahan data apa
+  // pun ke /api ditolak di sini, satu tempat untuk ±120 rute. Hanya permintaan
+  // ber-token selain GET/HEAD yang dicek; sesi diambil dari cache (lib/sesi).
+  const jalur = request.nextUrl.pathname;
+  if (jalur.startsWith("/api/") && !bolehTulisSuperuser(request.method, jalur)) {
+    const token = tokenDariRequest(request);
+    if (token && !adalahTokenUji(request.headers.get("authorization"))) {
+      const pengguna = await userDariToken(token).catch(() => null);
+      if (pengguna?.superuser) return NextResponse.json({ error: PESAN_HANYA_LIHAT }, { status: 403 });
+    }
   }
 
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");

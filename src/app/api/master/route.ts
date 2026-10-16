@@ -365,7 +365,7 @@ export async function POST(request: Request) {
         throw Object.assign(new Error("Username 3–30 huruf kecil, angka, titik, atau garis bawah."), { status: 400 });
       }
       if (sandi.length < 6) throw Object.assign(new Error("Sandi minimal 6 karakter."), { status: 400 });
-      if (!["anggota", "ketua", "superadmin", ...PERAN_KHUSUS].includes(role)) {
+      if (!["anggota", "ketua", "superadmin", "superuser", ...PERAN_KHUSUS].includes(role)) {
         throw Object.assign(new Error("Peran tidak dikenal."), { status: 400 });
       }
       if (jabatan && !(JABATAN_PARTAI as readonly string[]).includes(jabatan)) {

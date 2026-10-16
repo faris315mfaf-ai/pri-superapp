@@ -216,6 +216,16 @@ const KONFIG_ROLE: Record<
     kelasTeks: "text-pri",
     warnaIkon: "#DC2626",
   },
+  // superuser (16 Okt 2026): mode lihat, tersembunyi.
+  superuser: {
+    label: "Superuser (mode lihat)",
+    ikon: Zap,
+    latar:
+      "linear-gradient(135deg, rgba(37,99,235,0.14), rgba(14,165,233,0.2))",
+    tepi: "rgba(37, 99, 235, 0.3)",
+    kelasTeks: "text-sky-700 dark:text-sky-300",
+    warnaIkon: "#2563EB",
+  },
 };
 
 // ------------------------------------------------------------
@@ -519,7 +529,7 @@ export function ProfilScreen({
   const [modalChangelog, setModalChangelog] = useState(false);
   const [modalKeluar, setModalKeluar] = useState(false);
   const gelap = tema === "dark";
-  const peran = KONFIG_ROLE[user.role];
+  const peran = KONFIG_ROLE[user.superuser ? "superuser" : user.role];
   // Efek meriah + topi avatar khusus di hari ulang tahun pemilik profil.
   const ultah = ulangTahunHariIni(user);
   const IkonPeran = peran.ikon;

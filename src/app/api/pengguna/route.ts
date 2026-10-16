@@ -336,7 +336,8 @@ export async function PATCH(request: Request) {
     // SUPERADMIN (24 Sep 2026): jabatan ini HANYA diberi/dicabut/diubah
     // oleh master asli. Superadmin lain maupun HR tidak bisa menyentuh
     // akun superadmin (tersembunyi seperti master).
-    if (sasaran?.role === "superadmin" && !adalahMasterAsli(pemanggil)) {
+    // Superuser (16 Okt 2026) dijaga sama: tersembunyi, hanya master asli.
+    if ((sasaran?.role === "superadmin" || sasaran?.role === "superuser") && !adalahMasterAsli(pemanggil)) {
       throw Object.assign(new Error("Akun tidak ditemukan"), { status: 404 });
     }
     if (body.tindakan === "ubah_superadmin") {

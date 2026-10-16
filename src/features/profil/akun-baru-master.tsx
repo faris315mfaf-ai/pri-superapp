@@ -27,6 +27,7 @@ const PERAN_BARU = [
   { id: "anggota", label: "Anggota" },
   { id: "ketua", label: "Ketua" },
   { id: "superadmin", label: "Superadmin (tersembunyi)" },
+  { id: "superuser", label: "Superuser (mode lihat, tersembunyi)" },
 ] as const;
 
 type Keadaan = "ikut" | "buka" | "tutup";

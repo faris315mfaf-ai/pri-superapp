@@ -44,6 +44,7 @@ export const PERAN_LAMA: typeof PERAN = [
   { id: "admin_tv", label: "Admin TV Rakyat", singkat: "TV", ikon: Tv, warna: "#10B981" },
   { id: "admin_hr", label: "Admin HR", singkat: "HR", ikon: Users, warna: "#F59E0B" },
   { id: "superadmin", label: "Superadmin", singkat: "SA", ikon: ShieldCheck, warna: "#7C3AED" },
+  { id: "superuser", label: "Superuser (mode lihat)", singkat: "SU", ikon: ShieldCheck, warna: "#2563EB" },
 ];
 
 export function labelPeran(id: string): string {

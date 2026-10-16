@@ -16,13 +16,18 @@
 
 import { adalahPimred } from "@/lib/jabatan";
 
-export const PERAN_TERSEMBUNYI = ["master", "superadmin"] as const;
+export const PERAN_TERSEMBUNYI = ["master", "superadmin", "superuser"] as const;
 
 /** Nilai untuk `.not("role", "in", PERAN_TERSEMBUNYI_IN)` di supabase-js. */
 export const PERAN_TERSEMBUNYI_IN = `(${PERAN_TERSEMBUNYI.join(",")})`;
 
 export function peranTersembunyi(role?: string | null): boolean {
   return (PERAN_TERSEMBUNYI as readonly string[]).includes(role ?? "");
+}
+
+/** SUPERUSER (16 Okt 2026): mode lihat — semua perubahan data ditolak (lib/hanya-lihat). */
+export function adalahSuperuser(u: { role?: string | null; superuser?: boolean } | null | undefined): boolean {
+  return u?.superuser === true || u?.role === "superuser";
 }
 
 export function adalahSuperadmin(u: { role?: string | null; superadmin?: boolean } | null | undefined): boolean {
