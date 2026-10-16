@@ -22,20 +22,56 @@ type Manifest = {
   warnaDasar: { kulit: string; terangRambut: number; terangBaju: number; terangCelana: number; terangSepatu: number; terangAtasan: number };
 };
 
+/**
+ * Catatan gagal muat dengan jeda coba ulang berlipat (10 dtk → 20 → 40 → 60 dtk paling lama).
+ * Tanpa ini, gagal muat (luring / atlas 404) dicoba ulang di setiap frame rAF untuk tiap karakter.
+ */
+export function buatPenahanGagal(awal = 10_000, maks = 60_000) {
+  const peta = new Map<string, { sampai: number; jeda: number }>();
+  return {
+    /** true bila kunci ini baru gagal dan masa jedanya belum lewat. */
+    tahan: (kunci: string, kini: number) => {
+      const g = peta.get(kunci);
+      return !!g && kini < g.sampai;
+    },
+    gagal: (kunci: string, kini: number) => {
+      const g = peta.get(kunci);
+      // Beberapa permintaan serentak yang gagal bersama dihitung sekali (jeda tidak melonjak).
+      if (g && kini < g.sampai) return;
+      const lama = g?.jeda;
+      const jeda = lama === undefined ? awal : Math.min(maks, lama * 2);
+      if (peta.size >= 2000 && !peta.has(kunci)) peta.delete(peta.keys().next().value!);
+      peta.set(kunci, { sampai: kini + jeda, jeda });
+    },
+    berhasil: (kunci: string) => { peta.delete(kunci); },
+  };
+}
+
 const DASAR = "/karakter/v1";
 let manifestJanji: Promise<Manifest> | null = null;
 const dataJanji = new Map<string, Promise<ImageData>>();
+const penahan = buatPenahanGagal();
+const KUNCI_MANIFEST = "\0manifest";
 const frameCache = new Map<string, HTMLCanvasElement>();
-// Satu frame 64x96 RGBA ±24 KB; 1200 frame ±29 MB paling banyak (dunia v2 untuk semua akun: banyak rupa sekaligus).
+// Satu frame 1x (64×96 RGBA) ±24 KB → 1200 frame ±29 MB; frame 2x (potret, 128×192) ±96 KB, tapi potret
+// hanya satu frame per rupa. Atlas sumber (ImageData per berkas) di-cache terpisah di `dataJanji`.
 const MAKS_CACHE = 1200;
 
 export function muatManifestKarakter(): Promise<Manifest> {
   if (!manifestJanji) {
-    manifestJanji = fetch(`${DASAR}/manifest.json`).then((r) => {
+    if (penahan.tahan(KUNCI_MANIFEST, performance.now())) return Promise.reject(new Error("manifest karakter: menunggu coba ulang"));
+    const j = fetch(`${DASAR}/manifest.json`).then((r) => {
       if (!r.ok) throw new Error(`manifest karakter ${r.status}`);
       return r.json() as Promise<Manifest>;
     });
-    manifestJanji.catch(() => { manifestJanji = null; });
+    manifestJanji = j;
+    j.then(
+      () => penahan.berhasil(KUNCI_MANIFEST),
+      () => {
+        if (manifestJanji === j) manifestJanji = null;
+        penahan.gagal(KUNCI_MANIFEST, performance.now());
+      },
+    );
   }
   return manifestJanji;
 }
@@ -43,6 +79,7 @@ export function muatManifestKarakter(): Promise<Manifest> {
 function dataGambar(berkas: string): Promise<ImageData> {
   let j = dataJanji.get(berkas);
   if (!j) {
+    if (penahan.tahan(berkas, performance.now())) return Promise.reject(new Error(`gagal memuat ${berkas}: menunggu coba ulang`));
     j = new Promise<ImageData>((ok, gagal) => {
       const img = new Image();
       img.onload = () => {
@@ -57,7 +94,13 @@ function dataGambar(berkas: string): Promise<ImageData> {
       img.onerror = () => gagal(new Error(`gagal memuat ${berkas}`));
       img.src = `${DASAR}/${berkas}`;
     });
-    j.catch(() => dataJanji.delete(berkas));
+    j.then(
+      () => penahan.berhasil(berkas),
+      () => {
+        dataJanji.delete(berkas);
+        penahan.gagal(berkas, performance.now());
+      },
+    );
     dataJanji.set(berkas, j);
   }
   return j;
@@ -85,11 +128,16 @@ function warnaiKulit(d: Uint8ClampedArray, o: number, kulit: [number, number, nu
 
 const akhiran = (kali: 1 | 2) => (kali === 2 ? "@2x" : "");
 
-/** Muat semua berkas yang dibutuhkan konfig ini (sekali; selanjutnya dari cache). */
-export async function siapkanKarakter(k: KonfigKarakter, kali: 1 | 2 = 1): Promise<void> {
+const SEMUA_ANIM: readonly AnimKarakter[] = ["idle", "walk", "sit", "work"];
+
+/**
+ * Muat berkas yang dibutuhkan konfig ini (sekali; selanjutnya dari cache).
+ * `anims` membatasi pose badan yang dimuat (bawaan: semua; potret cukup "idle").
+ */
+export async function siapkanKarakter(k: KonfigKarakter, kali: 1 | 2 = 1, anims: readonly AnimKarakter[] = SEMUA_ANIM): Promise<void> {
   const s = akhiran(kali);
   const berkas: string[] = [];
-  for (const anim of ["idle", "walk", "sit", "work"] as const) {
+  for (const anim of anims) {
     berkas.push(`badan_${anim}${s}.png`, `badan_${anim}_kulit${s}.png`, `badan_${anim}_baju${s}.png`, `badan_${anim}_celana${s}.png`, `badan_${anim}_sepatu${s}.png`);
   }
   if (k.rambut > 0) berkas.push(`rambut_${String(k.rambut).padStart(2, "0")}${s}.png`);
@@ -221,7 +269,7 @@ export async function infoAnimasi(anim: AnimKarakter): Promise<{ frames: number;
  */
 export async function rakitPotret(k: KonfigKarakter, kali: 1 | 2 = 1): Promise<HTMLCanvasElement> {
   const m = await muatManifestKarakter();
-  await siapkanKarakter(k, kali);
+  await siapkanKarakter(k, kali, ["idle"]);
   const frame = await rakitFrame(k, "idle", "SE", 0, kali);
   const h = m.kepala.idle.SE[0] ?? [32, 20];
   const ukuran = 30 * kali;

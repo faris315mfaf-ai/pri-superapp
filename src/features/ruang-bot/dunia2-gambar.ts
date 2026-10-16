@@ -26,7 +26,7 @@ import {
   type ModeDinding,
   type PoseKarakter2,
 } from "./dunia2-murni";
-import { infoAnimasiSegera, rakitFrame, siapkanKarakter, type AnimKarakter, type ArahKarakter } from "./karakter-sprite";
+import { buatPenahanGagal, infoAnimasiSegera, rakitFrame, siapkanKarakter, type AnimKarakter, type ArahKarakter } from "./karakter-sprite";
 import type { SimulasiBot } from "./simulasi-bot";
 import type { Penghuni, SimulasiPenghuni } from "./simulasi-penghuni";
 
@@ -62,11 +62,13 @@ export type Adegan2 = {
 const siap = new Map<string, HTMLCanvasElement | "proses">();
 // Merujuk kanvas yang sama dengan cache perakit (tidak menggandakan memori).
 const MAKS_SIAP = 1200;
+const penahanRupa = buatPenahanGagal();
 const kunciKonfig = (k: KonfigKarakter) => `${k.kulit}${k.rambut}${k.warnaRambut}${k.atasan}${k.warnaAtasan}${k.warnaCelana}${k.warnaSepatu}`;
 
 /** Frame karakter bila sudah dirakit; bila belum, minta dirakit (muncul di frame berikutnya). */
 function frameSegera(k: KonfigKarakter, anim: AnimKarakter, arah: ArahKarakter, frame: number): HTMLCanvasElement | null {
-  const kunci = `${kunciKonfig(k)}|${anim}|${arah}|${frame}`;
+  const konfig = kunciKonfig(k);
+  const kunci = `${konfig}|${anim}|${arah}|${frame}`;
   const ada = siap.get(kunci);
   if (ada && ada !== "proses") {
     // LRU: frame yang dipakai pindah ke paling baru, jadi yang dibuang selalu yang lama tak terpakai.
@@ -74,13 +76,20 @@ function frameSegera(k: KonfigKarakter, anim: AnimKarakter, arah: ArahKarakter, 
     siap.set(kunci, ada);
     return ada;
   }
-  if (!ada) {
+  // Rupa yang baru gagal dirakit (luring / atlas 404) tidak diminta ulang tiap frame: tunggu jeda coba ulang.
+  if (!ada && !penahanRupa.tahan(konfig, performance.now())) {
     if (siap.size >= MAKS_SIAP) siap.delete(siap.keys().next().value!);
     siap.set(kunci, "proses");
     siapkanKarakter(k)
       .then(() => rakitFrame(k, anim, arah, frame))
-      .then((c) => siap.set(kunci, c))
-      .catch(() => siap.delete(kunci));
+      .then((c) => {
+        siap.set(kunci, c);
+        penahanRupa.berhasil(konfig);
+      })
+      .catch(() => {
+        siap.delete(kunci);
+        penahanRupa.gagal(konfig, performance.now());
+      });
   }
   return null;
 }

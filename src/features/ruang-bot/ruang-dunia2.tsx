@@ -204,8 +204,12 @@ export function RuangDunia2({
   }, []);
 
   // Dipilih dari luar kanvas (panel Online / daftar bot) → kamera menyusul bila orangnya di luar layar.
+  // Pilihan dilepas (atau dipilih lewat kanvas) → susulan kamera yang masih menunggu dibatalkan.
   useEffect(() => {
-    if (performance.now() - klikKanvasRef.current < 400) return;
+    if ((terpilihPenghuniId === null && !terpilihId) || performance.now() - klikKanvasRef.current < 400) {
+      ikutiRef.current = null;
+      return;
+    }
     const sampai = performance.now() + TUNGGU_IKUTI_MS;
     if (terpilihPenghuniId !== null) ikutiRef.current = { jenis: "anggota", id: terpilihPenghuniId, sampai };
     else if (terpilihId) ikutiRef.current = { jenis: "bot", id: terpilihId, sampai };
@@ -297,6 +301,8 @@ export function RuangDunia2({
       if (!awalRef.current) {
         awalRef.current = true;
         if (ruangAwal && skalaPas(w, h) < PAS_TERLALU_KECIL) {
+          // keRuang tidak memperkecil di bawah skala kini; skala awal 0.5 memotong ruang di layar < 360 px.
+          kameraRef.current = { ...kameraRef.current, s: skalaRuang(w, h) };
           keRuang(ruangAwal, false);
           return;
         }
@@ -571,8 +577,15 @@ export function RuangDunia2({
   const naik = (e: React.PointerEvent<HTMLDivElement>) => {
     const s = seret.current;
     const klik = e.type === "pointerup" && penunjuk.current.size === 1 && s && !s.pinch && s.jauh < AMBANG_SERET;
-    penunjuk.current.delete(e.pointerId);
+    const lepas = penunjuk.current.delete(e.pointerId);
     if (penunjuk.current.size === 0) seret.current = null;
+    else if (lepas && s && penunjuk.current.size === 1) {
+      // Satu jari diangkat dari pinch: seret dilanjutkan dari posisi jari tersisa & kamera kini
+      // (dasar lama = titik tengah & kamera awal pinch → kamera melompat). jauh besar: bukan klik.
+      const [sisa] = [...penunjuk.current.values()];
+      const k = kameraRef.current;
+      seret.current = { x: sisa!.x, y: sisa!.y, cx: k.cx, cy: k.cy, jauh: Math.max(s.jauh, 99) };
+    }
     if (klik) {
       const p = titikLatar(e);
       pilihDi(p.x, p.y);

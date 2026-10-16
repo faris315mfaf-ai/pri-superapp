@@ -21,6 +21,7 @@ import {
   validasiKonfig,
   type KonfigKarakter,
 } from "@/lib/karakter-murni";
+import { buatPenahanGagal } from "@/features/ruang-bot/karakter-sprite";
 
 let lulus = 0;
 let gagal = 0;
@@ -87,6 +88,27 @@ console.log("Bentuk kit");
 const kit = keKonfigKit({ ...contoh, kulit: KULIT[3]![0], rambut: 7, warnaRambut: WARNA_RAMBUT[11]![0], atasan: 9 }, 176);
 cek("skinTone & rambut ber-ID kit", kit.skinTone === "skin_04" && kit.hairStyle === "hair_07" && kit.hairColor === "hair_color_12" && kit.top === "top_09");
 cek("tanpa rambut → hairStyle null", keKonfigKit({ ...contoh, rambut: 0 }, 1).hairStyle === null);
+
+console.log("Jeda coba ulang gagal muat (sprite)");
+{
+  const p = buatPenahanGagal(10_000, 60_000);
+  cek("belum pernah gagal → tidak ditahan", !p.tahan("a", 0));
+  p.gagal("a", 0);
+  cek("baru gagal → ditahan 10 dtk", p.tahan("a", 9_999) && !p.tahan("a", 10_000));
+  p.gagal("a", 5_000);
+  cek("gagal serentak dalam jeda tidak melipatgandakan", !p.tahan("a", 10_000));
+  p.gagal("a", 10_000);
+  cek("gagal lagi → jeda 20 dtk", p.tahan("a", 29_999) && !p.tahan("a", 30_000));
+  p.gagal("a", 30_000);
+  p.gagal("a", 70_000);
+  p.gagal("a", 150_000);
+  cek("jeda dibatasi 60 dtk", p.tahan("a", 209_999) && !p.tahan("a", 210_000));
+  cek("kunci lain tidak ikut ditahan", !p.tahan("b", 150_000));
+  p.berhasil("a");
+  cek("berhasil → catatan gagal dihapus", !p.tahan("a", 150_001));
+  p.gagal("a", 300_000);
+  cek("gagal sesudah berhasil mulai lagi dari 10 dtk", !p.tahan("a", 310_000));
+}
 
 console.log(`\nHasil: ${lulus} lulus, ${gagal} gagal`);
 process.exit(gagal > 0 ? 1 : 0);
