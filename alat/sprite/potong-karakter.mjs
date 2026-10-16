@@ -253,6 +253,33 @@ function masker(img, uji) {
 }
 
 /**
+ * Masker per zona tubuh untuk pakaian dasar badan (kaus putih, celana abu tua,
+ * sepatu putih). Tiap frame diukur kotak siluetnya; `uji(r,g,b,rel)` menerima
+ * posisi relatif baris (0 = puncak kepala, 1 = alas kaki).
+ */
+function maskerZona(atlas, fw, fh, uji) {
+  const m = baru(atlas.w, atlas.h);
+  for (let fy = 0; fy < atlas.h; fy += fh) {
+    for (let fx = 0; fx < atlas.w; fx += fw) {
+      let y0 = -1, y1 = -1;
+      for (let y = fy; y < fy + fh; y++) for (let x = fx; x < fx + fw; x++) if (atlas.d[(y * atlas.w + x) * 4 + 3]) { if (y0 < 0) y0 = y; y1 = y; }
+      if (y0 < 0) continue;
+      for (let y = y0; y <= y1; y++) {
+        const rel = (y - y0) / Math.max(1, y1 - y0);
+        for (let x = fx; x < fx + fw; x++) {
+          const o = (y * atlas.w + x) * 4;
+          if (atlas.d[o + 3] && uji(atlas.d[o], atlas.d[o + 1], atlas.d[o + 2], rel)) { m.d[o] = m.d[o + 1] = m.d[o + 2] = 255; m.d[o + 3] = 255; }
+        }
+      }
+    }
+  }
+  return m;
+}
+const sepatuKah = (r, g, b, rel) => netralKah(r, g, b) && terang(r, g, b) > 140 && rel >= 0.84;
+const celanaKah = (r, g, b, rel) => netralKah(r, g, b) && terang(r, g, b) >= 45 && terang(r, g, b) <= 125 && rel >= 0.5 && rel < 0.93;
+const bajuKah = (r, g, b, rel) => netralKah(r, g, b) && terang(r, g, b) > 140 && rel >= 0.28 && rel < 0.84;
+
+/**
  * Kepala di bingkai tujuan: puncak siluet (kepala selalu bagian tertinggi; garis
  * tepinya stabil, tidak seperti piksel kulit yang bergeser saat palet dirapikan)
  * + pusat-x dari pita atas kepala.
@@ -346,6 +373,9 @@ async function main() {
       }
       await tulis(atlas, path.join(KELUAR, `badan_${an.nama}${S.akhiran}.png`), 64);
       await tulis(masker(atlas, kulitKah), path.join(KELUAR, `badan_${an.nama}_kulit${S.akhiran}.png`), 2);
+      await tulis(maskerZona(atlas, S.fw, S.fh, bajuKah), path.join(KELUAR, `badan_${an.nama}_baju${S.akhiran}.png`), 2);
+      await tulis(maskerZona(atlas, S.fw, S.fh, celanaKah), path.join(KELUAR, `badan_${an.nama}_celana${S.akhiran}.png`), 2);
+      await tulis(maskerZona(atlas, S.fw, S.fh, sepatuKah), path.join(KELUAR, `badan_${an.nama}_sepatu${S.akhiran}.png`), 2);
       if (S.kali === 1) {
         hasil[`badan_${an.nama}`] = atlas;
         // offset kepala tiap frame terhadap idle arah yang sama
@@ -435,9 +465,37 @@ async function main() {
       if (img.d[o + 3]) { const l = terang(img.d[o], img.d[o + 1], img.d[o + 2]); if (l > 45) lumRambut.push(l); }
     }
   }
-  manifest.warnaDasar = { kulit: hex(median(kulit[0]), median(kulit[1]), median(kulit[2])), terangRambut: Math.round(median(lumRambut)) };
+  // Terang median tiap zona pakaian: acuan pewarnaan ulang (warna baru × terang piksel / acuan).
+  const terangZona = (img, m) => {
+    const ls = [];
+    for (let i = 0; i < img.w * img.h; i++) if (m.d[i * 4 + 3]) ls.push(terang(img.d[i * 4], img.d[i * 4 + 1], img.d[i * 4 + 2]));
+    return Math.round(median(ls));
+  };
+  const lumAtasan = [];
+  for (const [n, img] of Object.entries(hasil)) {
+    if (!n.startsWith("atasan_")) continue;
+    for (let i = 0; i < img.w * img.h; i++) {
+      const o = i * 4;
+      if (img.d[o + 3] && netralKah(img.d[o], img.d[o + 1], img.d[o + 2])) { const l = terang(img.d[o], img.d[o + 1], img.d[o + 2]); if (l > 45) lumAtasan.push(l); }
+    }
+  }
+  manifest.warnaDasar = {
+    kulit: hex(median(kulit[0]), median(kulit[1]), median(kulit[2])),
+    terangRambut: Math.round(median(lumRambut)),
+    terangBaju: terangZona(idle, maskerZona(idle, 64, 96, bajuKah)),
+    terangCelana: terangZona(idle, maskerZona(idle, 64, 96, celanaKah)),
+    terangSepatu: terangZona(idle, maskerZona(idle, 64, 96, sepatuKah)),
+    terangAtasan: Math.round(median(lumAtasan)),
+  };
   manifest.layers = {
-    badan: { file: "badan_{animation}.png", kulit: "badan_{animation}_kulit.png", animations: ANIMASI.map((a) => a.nama) },
+    badan: {
+      file: "badan_{animation}.png",
+      kulit: "badan_{animation}_kulit.png",
+      baju: "badan_{animation}_baju.png",
+      celana: "badan_{animation}_celana.png",
+      sepatu: "badan_{animation}_sepatu.png",
+      animations: ANIMASI.map((a) => a.nama),
+    },
     rambut: { jumlah: LEMBAR.rambut.bar, file: "rambut_{nn}.png", frames: 1, ikutKepala: true, warna: "abu-abu netral; warnai ulang di klien" },
     atasan: { jumlah: LEMBAR.atasan.bar, file: "atasan_{nn}_idle.png", kulit: "atasan_{nn}_idle_kulit.png", animations: ["idle"], warna: "abu-abu netral; warnai ulang di klien" },
   };

@@ -28,6 +28,8 @@ import { AntreanAccView } from "./antrean-acc-view";
 import { AntreanAccNyata } from "./antrean-acc-nyata";
 import { ChatBotView } from "./chat-bot-view";
 import { KoordinatorTab } from "./koordinator-tab";
+import { KarakterSayaPanel } from "./karakter-saya";
+import { bolehKarakterSaya } from "@/lib/karakter-murni";
 import { LacakSumberView } from "@/features/lacak-sumber/lacak-sumber-view";
 import { MAKS_KUOTA_AWAL } from "./data-contoh";
 import { DetailBotView } from "./detail-bot-view";
@@ -51,6 +53,7 @@ import type {
 
 const TAB: { kunci: TampilanBot; label: string }[] = [
   { kunci: "ruang", label: "Ruang" },
+  { kunci: "karakter", label: "Karakter Saya" },
   { kunci: "detail", label: "Detail Bot" },
   { kunci: "acc", label: "Antrean ACC" },
   { kunci: "sumber", label: "Sumber & Kuota" },
@@ -428,7 +431,7 @@ function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber, onBukaKelolaBo
         aria-label="Tampilan Ruang Bot"
         className="tanpa-scrollbar glass mb-4 flex gap-1 overflow-x-auto rounded-2xl p-1"
       >
-        {TAB.filter((t) => (t.kunci !== "chat" && t.kunci !== "koordinator") || nyata).map((t) => {
+        {TAB.filter((t) => ((t.kunci !== "chat" && t.kunci !== "koordinator") || nyata) && (t.kunci !== "karakter" || bolehKarakterSaya({ id: sayaId }))).map((t) => {
           const aktif = tampilan === t.kunci;
           return (
             <button
@@ -538,6 +541,12 @@ function RuangBotIsi({ server, nyata, sibuk, kendali, ubahSumber, onBukaKelolaBo
       {lacakDibuka && (
         <div id="rb-panel-lacak" role="tabpanel" aria-labelledby="rb-tab-lacak" hidden={tampilan !== "lacak"}>
           <LacakSumberView />
+        </div>
+      )}
+
+      {tampilan === "karakter" && bolehKarakterSaya({ id: sayaId }) && (
+        <div id="rb-panel-karakter" role="tabpanel" aria-labelledby="rb-tab-karakter">
+          <KarakterSayaPanel />
         </div>
       )}
 

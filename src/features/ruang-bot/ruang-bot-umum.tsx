@@ -21,7 +21,9 @@ import type { PesanGlobal } from "@/lib/chat-global-murni";
 import type { PenghuniDunia } from "@/lib/dunia-murni";
 import type { BotUmum, StatusRuangUmum } from "@/lib/ruang-umum-murni";
 import { cn } from "@/lib/utils";
+import { bolehKarakterSaya } from "@/lib/karakter-murni";
 import { ChatGlobal } from "./chat-global";
+import { KarakterSayaPanel } from "./karakter-saya";
 import { WARNA_STASIUN } from "./dunia-sayap";
 import { PanelOnline } from "./panel-online";
 import { petaSasaran } from "./peta-nyata";
@@ -190,6 +192,8 @@ export function RuangBotUmumScreen({ sayaId }: { sayaId: number }) {
   const lebar = useLebarWadah(wadahRef) ?? 0;
   const duaKolom = lebar >= BATAS_DUA_KOLOM;
   const [tab, setTab] = useState<TabPonsel>("chat");
+  const bolehKarakter = bolehKarakterSaya({ id: sayaId });
+  const [layar, setLayar] = useState<"ruang" | "karakter">("ruang");
   const [terpilihPenghuniId, setTerpilihPenghuniId] = useState<number | null>(null);
 
   const botsUmum = status?.bots;
@@ -309,7 +313,37 @@ export function RuangBotUmumScreen({ sayaId }: { sayaId: number }) {
       <p className="-mt-2 mb-3 text-[12px] text-teks-sekunder">
         Anda melihat ruangan secara langsung. Kendali bot, antrean ACC, dan sumber hanya untuk master.
       </p>
-      {isi}
+      {bolehKarakter && (
+        <div role="tablist" aria-label="Tampilan Ruang Bot" className="glass mb-3 grid grid-cols-2 gap-1 rounded-2xl p-1">
+          {(
+            [
+              ["ruang", "Ruang"],
+              ["karakter", "Karakter Saya"],
+            ] as const
+          ).map(([kunci, label]) => (
+            <button
+              key={kunci}
+              id={`rbu-layar-${kunci}`}
+              role="tab"
+              type="button"
+              aria-selected={layar === kunci}
+              aria-controls={`rbu-isi-${kunci}`}
+              onClick={() => setLayar(kunci)}
+              className={cn("btn-tekan min-h-10 rounded-xl text-[13px] font-bold", layar === kunci ? "bg-pri/15 text-pri" : "text-teks-sekunder")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      <div id="rbu-isi-ruang" role={bolehKarakter ? "tabpanel" : undefined} hidden={bolehKarakter && layar !== "ruang"}>
+        {isi}
+      </div>
+      {bolehKarakter && layar === "karakter" && (
+        <div id="rbu-isi-karakter" role="tabpanel" aria-labelledby="rbu-layar-karakter">
+          <KarakterSayaPanel ringkas={!duaKolom} />
+        </div>
+      )}
     </div>
   );
 }

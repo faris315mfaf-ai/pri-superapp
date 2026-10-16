@@ -7642,3 +7642,24 @@ export async function getSiaranSaya(): Promise<SiaranSaya[]> {
   const json = await fetchJson("/api/tvr/siaran-saya", { headers: headerToken() });
   return (json.data ?? []) as SiaranSaya[];
 }
+
+// ------------------------------------------------------------
+// KARAKTER SAYA (16 Okt 2026) — Ruang Bot, uji coba akun Faris
+// ------------------------------------------------------------
+import type { KonfigKarakter } from "@/lib/karakter-murni";
+import type { KarakterSaya } from "@/lib/karakter";
+export type { KarakterSaya };
+
+export async function getKarakterSaya(): Promise<KarakterSaya> {
+  const json = await fetchJson("/api/ruang/karakter", { headers: headerToken(), cache: "no-store" });
+  return json as KarakterSaya;
+}
+
+export async function simpanKarakterSaya(konfig: KonfigKarakter): Promise<KarakterSaya> {
+  const json = await fetchJson("/api/ruang/karakter", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...headerToken() },
+    body: JSON.stringify({ konfig }),
+  });
+  return json as KarakterSaya;
+}

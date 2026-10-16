@@ -74,6 +74,11 @@ rahasia (password, kunci API, isi env) di berkas ini atau di repo.**
   satu video ke akun upload-post anggota (persetujuan saat pendaftaran); bawaan serentak (upload-post asinkron,
   ±150 akun/menit), opsi bertahap/terjadwal; karakter anggota dipanggil ke Ruang Bot. Wajib
   `sql/77_siaran_koordinator.sql`; cron `/api/cron/siaran` tiap menit. Panduan: `docs/SIARAN-KOORDINATOR.md`.
+- **Karakter Saya** (16 Okt 2026, tahap 1, uji coba akun Faris #4/#176 — `bolehKarakterSaya` di `src/lib/karakter-murni.ts`):
+  tab Ruang Bot untuk memilih rupa pixel art (kulit, rambut 20, atasan 9, warna pakaian). Aset `public/karakter|ruang|perabot/v1`
+  dibuat dari lembar ChatGPT oleh `alat/sprite/potong-*.mjs` (ruang memakai `alat/sprite/kalibrasi-ruang.json`). Perakit klien:
+  `src/features/ruang-bot/karakter-sprite.ts`; API `/api/ruang/karakter`; wajib `sql/78_karakter_pengguna.sql`.
+  Tahap 2 (belum): dunia Ruang Bot baru di tile 64×32 memakai modul ruang & perabot.
 - **Tutorial interaktif**: mesin `src/features/tur/lapisan-tur.tsx`, langkah di `src/lib/tur.ts`
   (penanda `data-tur` di komponen asli).
 - **Akun TIM TV Rakyat Official**: identitas mesin `900000001` (`ID_TIM` di `src/lib/autoedit.ts`),

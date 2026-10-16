@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "tvr_ai_v1",
   "artStatus": "AI_DRAFT",
-  "dibuat": "2026-10-15T18:49:21.371Z",
+  "dibuat": "2026-10-16T04:13:58.383Z",
   "frame": {
     "width": 64,
     "height": 96,
@@ -54,6 +54,9 @@
     "badan": {
       "file": "badan_{animation}.png",
       "kulit": "badan_{animation}_kulit.png",
+      "baju": "badan_{animation}_baju.png",
+      "celana": "badan_{animation}_celana.png",
+      "sepatu": "badan_{animation}_sepatu.png",
       "animations": [
         "idle",
         "walk",
@@ -314,7 +317,11 @@
   },
   "warnaDasar": {
     "kulit": "#cd8558",
-    "terangRambut": 91
+    "terangRambut": 91,
+    "terangBaju": 252,
+    "terangCelana": 69,
+    "terangSepatu": 209,
+    "terangAtasan": 135
   },
   "sumber": {
     "badan": "Sprite Piksel Karakter Isometrik Magenta.png",
