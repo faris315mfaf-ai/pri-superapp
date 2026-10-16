@@ -58,6 +58,11 @@ select kode as id,
     digenerate_oleh,
     caption_platform,
     diunggah_pada,
+    persetujuan,
+    persetujuan_oleh,
+    sumber_upload,
+    diupload_oleh,
+    hapus_media_pada,
     unggah_hasil
 from public.video_antrian v;
 -- Sama seperti 07_tv_rakyat_pipeline.sql (view dibuat ulang = setelan & izin lama hilang).

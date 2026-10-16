@@ -20,6 +20,8 @@ alter table public.jadwal_posting
   add column if not exists up_job_id text;
 
 -- Kolom baru ditambahkan di UJUNG view (create or replace hanya boleh menambah di akhir).
+-- Daftar kolom = definisi PRODUKSI (diambil 16 Okt 2026 via pg_get_viewdef; repo
+-- tertinggal 5 kolom persetujuan..hapus_media_pada yang dulu ditambah langsung).
 create or replace view public.v_app_video_antrian as
 select kode as id,
     judul,
@@ -45,6 +47,11 @@ select kode as id,
     caption_platform,
     ayrshare_hasil,
     diunggah_pada,
+    persetujuan,
+    persetujuan_oleh,
+    sumber_upload,
+    diupload_oleh,
+    hapus_media_pada,
     unggah_hasil
 from public.video_antrian v;
 
