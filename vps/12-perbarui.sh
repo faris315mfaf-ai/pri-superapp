@@ -160,8 +160,10 @@ siapkan_autoedit() {
   if [ "$MESIN_AUTOEDIT" = "jauh" ]; then
     # Data Auto Edit (template, stok, antrean) ada di VPS mesin: di sini cukup
     # folder socket jembatan — TIDAK membuat ulang disk media 60 GB.
-    install -d -o root -g root -m 755 /srv/godam || return 1
-    install -d -o 10001 -g 10001 -m 755 /srv/godam/sock || return 1
+    # uid 10001 = user container (tidak ada di host): chown angka, bukan `install -o`.
+    mkdir -p /srv/godam/sock || return 1
+    chmod 755 /srv/godam /srv/godam/sock || return 1
+    chown 10001:10001 /srv/godam/sock || return 1
   else
     bash "$SKRIP/autoedit/siapkan-disk.sh" 60 >/dev/null || return 1
   fi
