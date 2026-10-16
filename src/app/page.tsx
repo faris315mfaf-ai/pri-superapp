@@ -36,6 +36,7 @@ import { useDetakGlobal } from "@/hooks/use-detak-global";
 import { KonteksTabAktif } from "@/hooks/use-tab-aktif";
 import dynamic from "next/dynamic";
 import { ScreenHeader } from "@/components/pri-ui";
+import { pathDariPosisi, perluGantiPath, posisiDariPath, type PosisiAlamat } from "@/lib/alamat-layar";
 
 // Layar KPI Video anggota (berat: grafik + tabel) — dimuat saat dibuka.
 const KpiAnggotaDashboard = dynamic(
@@ -283,11 +284,34 @@ function awalUntuk(u: { role: Role; divisi?: string | null } | null | undefined)
   return adalahBot(u) ? "tvrku" : TAB_AWAL[u.role];
 }
 
-/** Tab tersimpan hanya dipakai bila masih sah untuk peran ini. */
+/** Layar dari alamat URL saat ini (/tvrsaya, /absensi, ...); null = alamat akar / tidak dikenal. */
+function posisiDariAlamat(): PosisiAlamat | null {
+  if (typeof window === "undefined") return null;
+  const p = posisiDariPath(window.location.pathname);
+  // Akar "/" bukan permintaan khusus: biarkan posisi tersimpan / tab awal yang menang.
+  if (!p || (p.tab === "beranda" && window.location.pathname.replace(/\/+$/, "") === "")) return null;
+  return p;
+}
+
+/** Sub-layar dari alamat URL (hanya sub-layar pribadi beralamat). */
+function subLayarDariAlamat(): SubLayar | null {
+  const p = posisiDariAlamat();
+  return p?.subLayar ? ({ nama: p.subLayar } as SubLayar) : null;
+}
+
+/** Tab yang diminta alamat (bila ada & sah untuk peran ini). */
+function tabDariAlamat(role: Role): KunciTab | null {
+  const t = posisiDariAlamat()?.tab ?? null;
+  return t && (TAB_ROLE[role] ?? []).includes(t) ? t : null;
+}
+
+/** Tab tersimpan hanya dipakai bila masih sah untuk peran ini. Alamat URL (link /tvrsaya) menang. */
 function tabAwalDenganRestor(
   role: Role,
   userId: string | number | null | undefined,
 ): KunciTab {
+  const dariAlamat = tabDariAlamat(role);
+  if (dariAlamat) return dariAlamat;
   const tersimpan = bacaNavTersimpan(userId);
   if (tersimpan && (TAB_ROLE[role] ?? []).includes(tersimpan.tab))
     return tersimpan.tab;
@@ -363,9 +387,11 @@ export default function Page() {
   const [subLayar, setSubLayar] = useState<SubLayar | null>(() => {
     // Refresh peramban: buka lagi sub-layar terakhir (fitur 1 Sep 2026).
     const tersimpan = useAppStore.getState().user;
-    return tersimpan
-      ? (bacaNavTersimpan(tersimpan.id)?.subLayar ?? null)
-      : null;
+    if (!tersimpan) return null;
+    // Alamat sub-layar pribadi (/absensi) menang; alamat tab (/tvrsaya) menutup sub-layar tersimpan.
+    const dariAlamat = posisiDariAlamat();
+    if (dariAlamat) return subLayarDariAlamat();
+    return bacaNavTersimpan(tersimpan.id)?.subLayar ?? null;
   });
   // Audit (6 Okt 2026): layar yang sedang dibuka ditaruh di <html data-layar>;
   // detak berikutnya membawanya ke server (lama pemakaian per layar).
@@ -526,8 +552,11 @@ export default function Page() {
           setUser(tersimpan);
           // Hormati posisi navigasi tersimpan (refresh ≠ lempar ke awal).
           setTab(tabAwalDenganRestor(tersimpan.role, tersimpan.id));
-          const navTersimpan = bacaNavTersimpan(tersimpan.id);
-          if (navTersimpan?.subLayar) setSubLayar(navTersimpan.subLayar);
+          if (posisiDariAlamat()) setSubLayar(subLayarDariAlamat());
+          else {
+            const navTersimpan = bacaNavTersimpan(tersimpan.id);
+            if (navTersimpan?.subLayar) setSubLayar(navTersimpan.subLayar);
+          }
         } else if (useAppStore.getState().user) {
           // Ada sisa profil di penyimpanan lokal tapi tokennya sudah
           // tidak berlaku — bersihkan supaya tidak menampilkan data
@@ -918,10 +947,11 @@ export default function Page() {
     // Bila datang dari halaman tunggu (baru disetujui), tandanya dibuang.
     setMenungguUser(null);
     setUser(userBaru);
-    const awal = awalUntuk(userBaru);
+    // Datang dari link (/tvrsaya) lalu masuk: langsung ke layar itu.
+    const awal = tabDariAlamat(userBaru.role) ?? awalUntuk(userBaru);
     setTab(awal);
     setTabPernahDibuka(new Set([awal]));
-    setSubLayar(null);
+    setSubLayar(subLayarDariAlamat());
     // Sesi baru: lupakan daftar id yang pernah dilihat, supaya pemuatan
     // pertama milik pengguna berikutnya juga tidak memunculkan banner.
     idPernahDilihat.current = null;
@@ -940,6 +970,12 @@ export default function Page() {
     setSubLayar(null);
     setTab("beranda");
     setTabPernahDibuka(new Set(["beranda"]));
+    // Alamat kembali ke akar: link layar akun lama tidak terbawa ke login berikutnya.
+    try {
+      window.history.replaceState(null, "", "/");
+    } catch {
+      // peramban tanpa history: abaikan
+    }
     // Sesi baru: lupakan daftar id yang pernah dilihat, supaya pemuatan
     // pertama milik pengguna berikutnya juga tidak memunculkan banner.
     idPernahDilihat.current = null;
@@ -1061,6 +1097,19 @@ export default function Page() {
     }
     posisiKiniRef.current = { tab, subLayar };
   }, [tab, subLayar]);
+
+  // Alamat per layar (16 Okt 2026): URL mengikuti layar yang terlihat (/tvrsaya, /absensi, ...).
+  // replaceState (bukan pushState) — tumpukan riwayat tetap diurus penangan back di bawah.
+  useEffect(() => {
+    if (!user) return;
+    const semestinya = pathDariPosisi(tabEfektif, subLayar?.nama ?? null);
+    if (!perluGantiPath(window.location.pathname, semestinya)) return;
+    try {
+      window.history.replaceState(window.history.state, "", semestinya + window.location.hash);
+    } catch {
+      // peramban menolak: alamat tetap, navigasi tetap jalan
+    }
+  }, [user, tabEfektif, subLayar]);
 
   // Simpan posisi terakhir untuk restor saat refresh (fitur 1 Sep 2026).
   useEffect(() => {

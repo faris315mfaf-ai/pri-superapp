@@ -55,6 +55,10 @@ rahasia (password, kunci API, isi env) di berkas ini atau di repo.**
 - R2 (Cloudflare) BELUM diatur; penyimpanan video memakai bucket privat Supabase `tvrku`.
 
 ## Fitur penting & letak kode
+- **Alamat per layar** (16 Okt 2026): cangkang tetap satu (`src/app/page.tsx`, layar dimuat `dynamic` saat dibuka);
+  `src/app/[layar]/page.tsx` menyajikan cangkang yang sama untuk /tvrsaya, /ruangbot, /chat, /hr-center, ... dan 404
+  untuk alamat asing. Pemetaan & sub-layar pribadi beralamat: `src/lib/alamat-layar.ts`. URL diselaraskan dengan
+  `replaceState` (tombol back tetap diurus cangkang). Sub-layar pengurus sengaja TANPA alamat sendiri.
 - **Edit Otomatis TVR Saya**: terbuka untuk SEMUA akun sejak 6 Okt 2026 (syarat ≥5 akun sosmed
   sudah dicabut) — `bolehEditOtomatisTvr` di `src/lib/peran.ts`; master bisa menutupnya per akun
   (`modul_izin.autoedit = false`). Gerbang server: `src/lib/autoedit.ts`,
