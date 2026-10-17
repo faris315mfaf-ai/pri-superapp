@@ -6,12 +6,12 @@
 // Dibuka dari Profil. Isinya empat hal yang memang tidak pantas
 // dipegang peran lain:
 //
-// 1. PERAN ISTIMEWA — sejak v1.7 panel super admin hanya bisa
-//    memberi Ketua/Anggota. Peran Super Admin / Admin TV / Admin HR
-//    tetap perlu bisa diberikan, tapi hanya lewat sini.
-// 2. AKUN WAJIB QC — daftar akun yang komentarnya diwajibkan.
-// 3. LOG GALAT — laporan error dari perangkat pengguna (telemetri).
-// 4. PAKSA KELUAR — mencabut seluruh sesi seseorang.
+// Mode perbaikan, pendaftaran tanpa persetujuan, akun baru, galeri foto,
+// akun wajib QC, Asisten AI, ekspor data, uji beban, format laporan,
+// bebas kewajiban. (17 Okt 2026: tutorial, akurasi wajah, sedang online,
+// peran istimewa, log galat, kuota/Cloudinary, gerbang posting, server &
+// token AI, toko pet, sakelar modul, fitur berat dihapus dari panel atas
+// permintaan pemilik — pengaturannya yang tersimpan tetap berlaku.)
 //
 // Barisnya sendiri disembunyikan dari peran lain, dan server tetap
 // menolak dengan 404 bila ada yang mencoba memanggil langsung.
@@ -19,49 +19,31 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useVersiSegar } from "@/hooks/use-segar-otomatis";
-import { SeksiKuota } from "./seksi-kuota";
-import { SeksiPenyediaTvr } from "./seksi-penyedia-tvr";
-import { SeksiServer } from "./seksi-server";
 import { SeksiUjiBeban } from "./seksi-uji-beban";
 import { SeksiBebasKewajiban } from "./seksi-bebas-kewajiban";
-import { SeksiSakelarBerat } from "./seksi-sakelar-berat";
-import { SeksiSakelarModul } from "./seksi-sakelar-modul";
-import { SeksiTokoPet } from "./seksi-toko-pet";
 import { SeksiFormatLaporan } from "./seksi-format-laporan";
-import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   Bot,
-  Bug,
   Crown,
   Database,
   Download,
   FileText,
-  GraduationCap,
-  KeyRound,
   Loader2,
-  LogOut,
   Plus,
   RefreshCw,
-  ScanFace,
-  ShieldCheck,
   Trash2,
   Upload,
   UserCheck,
-  UserCog,
-  Users,
 } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
-import { FotoBulat } from "@/components/foto-bulat";
 import { SwitchKaca } from "./switch-kaca";
 import { KontrolPerbaikan } from "./kontrol-perbaikan";
 import {
-  AvatarInisial,
   FadeInUp,
   GlassSkeleton,
   SectionTitle,
   StatusBadge,
-  TitikOnline,
 } from "@/components/pri-ui";
 import { PlatformIcon } from "@/components/platform-icon";
 import { toast } from "@/hooks/use-app-store";
@@ -70,60 +52,41 @@ import {
   getBasisAI,
   getDataMaster,
   getLatihAsisten,
-  getPengguna,
   hapusBahanAjarAI,
   refreshBasisAI,
   simpanCatatanBasisAI,
   simpanLatihAsisten,
   tambahBahanAjarAI,
   type DataMaster,
-  type PenggunaAdmin,
   type StatusBasisAI,
   getFotoMaster,
   type FotoMaster,
   unduhEksporData,
 } from "@/services";
-import { jamWIB, tanggalIndonesia } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-import { ModalModulAkun, SeksiAkunBaru } from "./akun-baru-master";
-const PERAN_PILIHAN = [
-  { id: "super_admin", label: "Super Admin", warna: "#DC2626" },
-  { id: "admin_tv", label: "Admin TV Rakyat", warna: "#10B981" },
-  { id: "admin_hr", label: "Admin HR", warna: "#F59E0B" },
-  { id: "ketua", label: "Ketua", warna: "#F59E0B" },
-  { id: "anggota", label: "Anggota", warna: "#3B82F6" },
-] as const;
+import { SeksiAkunBaru } from "./akun-baru-master";
 
 export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
   const [data, setData] = useState<DataMaster | null>(null);
-  const [pengguna, setPengguna] = useState<PenggunaAdmin[]>([]);
   const [muatUlang, setMuatUlang] = useState(0);
   const versiSegar = useVersiSegar();
   const [sedangProses, setSedangProses] = useState(false);
-  const [pilihPeranUntuk, setPilihPeranUntuk] = useState<PenggunaAdmin | null>(
-    null,
-  );
   const [akunBaru, setAkunBaru] = useState("");
   const [platformBaru, setPlatformBaru] = useState<"instagram" | "tiktok">(
     "instagram",
   );
-  // Akun yang sedang di-reset sandinya (spek 1.15)
-  const [resetUntuk, setResetUntuk] = useState<PenggunaAdmin | null>(null);
-  // Modul per akun (10 Sep 2026): akun yang sedang diatur modulnya.
-  const [modulUntuk, setModulUntuk] = useState<PenggunaAdmin | null>(null);
 
   useEffect(() => {
     let hidup = true;
     void (async () => {
-      const [m, p] = await Promise.allSettled([getDataMaster(), getPengguna()]);
+      const [m] = await Promise.allSettled([getDataMaster()]);
       if (!hidup) return;
       if (m.status === "fulfilled") setData(m.value);
       else {
         setData(null);
         toast("error", "Panel master tidak bisa dimuat", "");
       }
-      if (p.status === "fulfilled") setPengguna(p.value.data);
     })();
     return () => {
       hidup = false;
@@ -140,7 +103,6 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
     try {
       await aksiMaster(aksi, isi);
       toast("sukses", pesan);
-      setPilihPeranUntuk(null);
       setMuatUlang((n) => n + 1);
     } catch (e) {
       toast("error", "Gagal", e instanceof Error ? e.message : "");
@@ -201,44 +163,6 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
             {/* Mode perbaikan: kontrol lengkap (jam selesai + pesan) */}
             <KontrolPerbaikan />
 
-            {/* Tutorial interaktif (4 Sep 2026): bisa dimatikan untuk semua pengguna. */}
-            <GlassCard className="mt-4 p-4">
-              <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-sky-500/12 text-sky-600 dark:text-sky-400">
-                  <GraduationCap className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-bold text-teks-utama">
-                      Tutorial interaktif
-                    </p>
-                    <SwitchKaca
-                      aktif={data.pengaturan.tur_aktif !== "false"}
-                      disabled={sedangProses}
-                      onUbah={() => {
-                        const nyala = data.pengaturan.tur_aktif !== "false";
-                        void jalankan(
-                          "tur_aktif",
-                          { nilai: !nyala },
-                          nyala
-                            ? "Tutorial DIMATIKAN untuk semua pengguna"
-                            : "Tutorial dinyalakan lagi",
-                        );
-                      }}
-                      labelAria="Tutorial interaktif"
-                    />
-                  </div>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-teks-sekunder">
-                    Panduan sorotan &quot;daftar akun sosmed → Kepatuhan
-                    Komen&quot; yang muncul otomatis (tiap 5 menit bagi yang
-                    belum punya akun tertaut). Bila dimatikan, tidak muncul
-                    untuk siapa pun; baris &quot;Tutorial&quot; di Profil tetap
-                    bisa dipakai manual.
-                  </p>
-                </div>
-              </div>
-            </GlassCard>
-
             {/* Bypass persetujuan pendaftaran: pengguna baru langsung aktif. */}
             <GlassCard className="mt-4 p-4">
               <div className="flex items-start gap-3">
@@ -276,165 +200,11 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
               </div>
             </GlassCard>
 
-            {/* Akurasi face recognition (31 Agu 2026) — memperketat ambang
-                tanpa deploy; obat bug "wajah beda bisa masuk". */}
-            <KontrolWajah
-              pengaturan={data.pengaturan}
-              sedangProses={sedangProses}
-              onSimpan={(kunci, persen) =>
-                jalankan(
-                  "wajah_akurasi",
-                  { username: kunci, nilai: String(persen) },
-                  "Akurasi wajah tersimpan — berlaku seketika",
-                )
-              }
-            />
-
-            {/* SIAPA YANG ONLINE (10 Sep 2026) — dari detak, jadi selalu
-                mutakhir tanpa kueri berkala tambahan. */}
-            <SectionTitle judul="Sedang Online" className="mt-6" />
-            <p className="mb-2 text-[11px] leading-relaxed text-teks-sekunder">
-              Yang aplikasinya sedang terbuka (±60 detik terakhir). Angkanya ikut
-              turun sendiri begitu mereka menutup aplikasi.
-            </p>
-            <GlassCard className="p-3.5">
-              <div className="flex items-center gap-2.5">
-                <span
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-white"
-                  style={{ background: "linear-gradient(135deg, #10B981, #059669)", boxShadow: "0 8px 18px rgba(16,185,129,0.35)" }}
-                  aria-hidden="true"
-                >
-                  <Users className="h-5 w-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="angka-tab font-heading text-xl font-extrabold text-teks-utama">
-                    {data.online?.jumlah ?? 0} orang
-                  </p>
-                  <p className="text-[11px] text-teks-sekunder">sedang membuka aplikasi</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setMuatUlang((n) => n + 1)}
-                  aria-label="Segarkan daftar online"
-                  className="glass btn-tekan flex h-9 w-9 items-center justify-center rounded-full text-teks-utama"
-                >
-                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                </button>
-              </div>
-              {(data.online?.orang ?? []).length > 0 ? (
-                // Saat ramai daftarnya bisa ratusan nama: dibatasi tinggi
-                // lalu digulir sendiri supaya panel tetap bisa dipakai.
-                <div className="mt-3 flex max-h-64 flex-col gap-1.5 overflow-y-auto pr-1">
-                  {(data.online?.orang ?? []).map((o) => (
-                    <div key={o.id} className="flex items-center gap-2.5">
-                      <span className="relative shrink-0">
-                        {o.avatar_url ? (
-                          <FotoBulat src={o.avatar_url} ukuran={30} />
-                        ) : (
-                          <AvatarInisial nama={o.nama} ukuran={30} />
-                        )}
-                        <TitikOnline ukuran={9} />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[12.5px] font-bold text-teks-utama">{o.nama}</span>
-                        {o.struktur && (
-                          <span className="block truncate text-[10.5px] text-teks-sekunder">{o.struktur}</span>
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-2.5 text-[11.5px] text-teks-sekunder">
-                  Belum ada yang terdeteksi membuka aplikasi saat ini.
-                </p>
-              )}
-            </GlassCard>
-
             {/* Buat akun baru lengkap (10 Sep 2026) */}
             <SeksiAkunBaru onSelesai={() => setMuatUlang((n) => n + 1)} />
 
-            <SectionTitle judul="Peran Istimewa" className="mt-6" />
-            <p className="mb-2 text-[11px] leading-relaxed text-teks-sekunder">
-              Panel super admin hanya bisa memberi Ketua/Anggota. Peran Super
-              Admin, Admin TV, dan Admin HR hanya bisa ditetapkan dari sini.
-            </p>
-            <div className="flex flex-col gap-2">
-              {pengguna
-                .filter((u) => u.status === "aktif")
-                .map((u) => (
-                  <GlassCard key={u.id} className="flex items-center gap-3 p-3">
-                    {u.avatar_url ? (
-                      <FotoBulat src={u.avatar_url} ukuran={36} />
-                    ) : (
-                      <AvatarInisial nama={u.nama} ukuran={36} />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-teks-utama">
-                        {u.nama}
-                      </p>
-                      <p className="text-[10.5px] text-teks-sekunder">
-                        {PERAN_PILIHAN.find((p) => p.id === u.role)?.label ??
-                          u.role}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setPilihPeranUntuk(u)}
-                      aria-label={`Ubah peran ${u.nama}`}
-                      className="glass btn-tekan flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-teks-utama"
-                    >
-                      <UserCog className="h-3.5 w-3.5" aria-hidden="true" />
-                      Peran
-                    </button>
-                    <button
-                      type="button"
-                      disabled={sedangProses || u.role === "master"}
-                      onClick={() => setModulUntuk(u)}
-                      aria-label={`Atur modul ${u.nama}`}
-                      className={cn(
-                        "glass btn-tekan rounded-xl px-2.5 py-1.5 text-[11px] font-bold disabled:opacity-40",
-                        u.modul_izin && Object.keys(u.modul_izin).length > 0 ? "text-pri" : "text-teks-utama",
-                      )}
-                    >
-                      Modul
-                    </button>
-                    <button
-                      type="button"
-                      disabled={sedangProses || u.role === "master"}
-                      onClick={() => setResetUntuk(u)}
-                      aria-label={`Reset sandi ${u.nama}`}
-                      className="btn-tekan p-1.5 text-teks-sekunder disabled:opacity-40"
-                    >
-                      <KeyRound className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={sedangProses}
-                      onClick={() =>
-                        void jalankan(
-                          "cabut_sesi",
-                          { user_id: u.id },
-                          `${u.nama} dikeluarkan dari semua perangkat`,
-                        )
-                      }
-                      aria-label={`Paksa keluar ${u.nama}`}
-                      className="btn-tekan p-1.5 text-gagal disabled:opacity-50"
-                    >
-                      <LogOut className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </GlassCard>
-                ))}
-            </div>
           </FadeInUp>
 
-          {modulUntuk && (
-            <ModalModulAkun
-              pengguna={modulUntuk}
-              onTutup={() => setModulUntuk(null)}
-              onTersimpan={() => setMuatUlang((n) => n + 1)}
-            />
-          )}
           {/* Database foto unggahan (spek 1.15) */}
           <FadeInUp delay={0.07}>
             <GaleriFotoMaster />
@@ -526,54 +296,6 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
             </div>
           </FadeInUp>
 
-          {/* 3. Log galat */}
-          <FadeInUp delay={0.12}>
-            <div className="mt-6 flex items-center justify-between">
-              <SectionTitle judul="Log Galat Aplikasi" className="!mt-0" />
-              {data.log.length > 0 && (
-                <button
-                  type="button"
-                  disabled={sedangProses}
-                  onClick={() =>
-                    void jalankan("bersihkan_log", {}, "Log dibersihkan")
-                  }
-                  className="btn-tekan rounded-full border border-gagal/40 bg-gagal/5 px-3 py-1.5 text-[11px] font-semibold text-gagal disabled:opacity-50"
-                >
-                  Bersihkan
-                </button>
-              )}
-            </div>
-            {data.log.length === 0 ? (
-              <GlassCard className="p-4">
-                <p className="text-center text-xs text-teks-sekunder">
-                  Tidak ada galat tercatat. Aplikasi berjalan bersih.
-                </p>
-              </GlassCard>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {data.log.map((l) => (
-                  <GlassCard key={l.id} className="p-3">
-                    <div className="flex items-start gap-2">
-                      <Bug
-                        className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gagal"
-                        aria-hidden="true"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[11.5px] leading-snug break-words text-teks-utama">
-                          {l.pesan}
-                        </p>
-                        <p className="mt-1 text-[10px] text-teks-sekunder">
-                          {tanggalIndonesia(l.waktu)} {jamWIB(l.waktu)}
-                          {l.versi ? ` · v${l.versi}` : ""}
-                        </p>
-                      </div>
-                    </div>
-                  </GlassCard>
-                ))}
-              </div>
-            )}
-          </FadeInUp>
-
           {/* 4. Latih Asisten AI (fitur 1.20.2) — khusus master */}
           <FadeInUp delay={0.16}>
             <SeksiLatihAsisten />
@@ -587,29 +309,9 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
           {/* 6. Kuota & Penyimpanan (2 Sep 2026) — pantauan pemakaian
               Supabase / Cloudinary / upload-post dalam satu layar. */}
           <FadeInUp delay={0.2}>
-            <SeksiKuota />
-            <SeksiPenyediaTvr />
             <SeksiEksporData />
-            <SeksiServer />
             {/* Uji beban ratusan orang sekaligus (29 Sep 2026) */}
             <SeksiUjiBeban />
-            {/* Fitur berat & mode hemat + format laporan upload (4 Sep 2026) */}
-            {/* Toko Pet (v5, 5 Sep 2026): master sebagai pedagang */}
-            <SeksiTokoPet
-              pengaturan={data.pengaturan}
-              sedangProses={sedangProses}
-              onSelesai={() => setMuatUlang((n) => n + 1)}
-            />
-            <SeksiSakelarModul
-              pengaturan={data.pengaturan}
-              sedangProses={sedangProses}
-              onJalankan={jalankan}
-            />
-            <SeksiSakelarBerat
-              pengaturan={data.pengaturan}
-              sedangProses={sedangProses}
-              onJalankan={jalankan}
-            />
             <SeksiFormatLaporan
               nilaiTersimpan={data.pengaturan.format_laporan_upload ?? ""}
               sedangProses={sedangProses}
@@ -626,173 +328,6 @@ export function PanelMasterScreen({ onKembali }: { onKembali: () => void }) {
         </>
       )}
 
-      {/* Modal pilih peran istimewa */}
-      <AnimatePresence>
-        {pilihPeranUntuk && (
-          <motion.div
-            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-6 backdrop-blur-md"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setPilihPeranUntuk(null)}
-          >
-            <motion.div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Pilih peran istimewa"
-              className="glass-strong w-full max-w-[340px] rounded-2xl p-5"
-              initial={{ scale: 0.92, opacity: 0, y: 14 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.94, opacity: 0, y: 10 }}
-              transition={{ type: "spring", stiffness: 360, damping: 30 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3 className="font-heading text-base font-bold text-teks-utama">
-                Peran untuk {pilihPeranUntuk.nama.split(" ")[0]}
-              </h3>
-              <p className="mt-1 text-xs leading-relaxed text-teks-sekunder">
-                Mengubah peran otomatis mengeluarkan yang bersangkutan dari
-                semua perangkat, supaya akses lamanya tidak terbawa.
-              </p>
-              <div className="mt-3.5 flex flex-col gap-2">
-                {PERAN_PILIHAN.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    disabled={sedangProses}
-                    onClick={() =>
-                      void jalankan(
-                        "beri_peran_khusus",
-                        { user_id: pilihPeranUntuk.id, role: p.id },
-                        `${pilihPeranUntuk.nama} kini ${p.label}`,
-                      )
-                    }
-                    className={cn(
-                      "glass-soft btn-tekan flex items-center gap-3 rounded-2xl px-3.5 py-3 text-left disabled:opacity-50",
-                      pilihPeranUntuk.role === p.id && "ring-2 ring-pri/60",
-                    )}
-                  >
-                    <span
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-                      style={{ background: `${p.warna}1A`, color: p.warna }}
-                    >
-                      <ShieldCheck className="h-4.5 w-4.5" />
-                    </span>
-                    <span className="flex-1 text-sm font-bold text-teks-utama">
-                      {p.label}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Modal reset sandi (spek 1.15): sandi TIDAK BISA dibaca siapa
-          pun (hash satu-arah) — master hanya bisa MENGGANTINYA. */}
-      {resetUntuk && (
-        <ModalResetSandi
-          target={resetUntuk}
-          sedang={sedangProses}
-          onTutup={() => setResetUntuk(null)}
-          onKirim={(sandiBaru) =>
-            void jalankan(
-              "reset_sandi",
-              { user_id: resetUntuk.id, nilai: sandiBaru },
-              `Sandi ${resetUntuk.nama.split(" ")[0]} diganti — semua sesinya dicabut`,
-            ).then(() => setResetUntuk(null))
-          }
-        />
-      )}
-    </div>
-  );
-}
-
-// ------------------------------------------------------------
-// ModalResetSandi — master mengganti sandi satu akun. Sandi lama
-// mustahil ditampilkan (hash satu-arah); yang ada hanya penggantian.
-// ------------------------------------------------------------
-
-function ModalResetSandi({
-  target,
-  sedang,
-  onTutup,
-  onKirim,
-}: {
-  target: PenggunaAdmin;
-  sedang: boolean;
-  onTutup: () => void;
-  onKirim: (sandiBaru: string) => void;
-}) {
-  const [sandi, setSandi] = useState("");
-
-  function acakSandi() {
-    // 10 karakter mudah dibacakan lewat WA/telepon (tanpa 0/O, 1/l).
-    const HURUF = "abcdefghjkmnpqrstuvwxyz23456789";
-    let hasil = "";
-    const acak = new Uint32Array(10);
-    crypto.getRandomValues(acak);
-    for (const n of acak) hasil += HURUF[n % HURUF.length];
-    setSandi(hasil);
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-[95] flex items-center justify-center px-8"
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Reset sandi ${target.nama}`}
-    >
-      <div
-        className="absolute inset-0 bg-black/55 backdrop-blur-sm"
-        onClick={onTutup}
-      />
-      <div className="glass-strong relative w-full max-w-[320px] rounded-2xl p-5">
-        <p className="text-sm font-bold text-teks-utama">
-          Reset sandi {target.nama}
-        </p>
-        <p className="mt-1 text-[11.5px] leading-relaxed text-teks-sekunder">
-          Sandi lama tidak bisa dilihat (tersimpan terenkripsi satu arah). Buat
-          sandi baru lalu sampaikan ke orangnya — semua sesi lamanya otomatis
-          keluar.
-        </p>
-        <div className="mt-3 flex gap-2">
-          <input
-            value={sandi}
-            onChange={(e) => setSandi(e.target.value)}
-            placeholder="Sandi baru (min 8)…"
-            aria-label="Sandi baru"
-            className="glass h-10 min-w-0 flex-1 rounded-xl px-3.5 font-mono text-sm text-teks-utama placeholder:font-sans placeholder:text-teks-sekunder/60 focus:outline-none"
-          />
-          <button
-            type="button"
-            onClick={acakSandi}
-            aria-label="Buat sandi acak"
-            className="glass btn-tekan rounded-xl px-3 text-[11px] font-bold text-teks-utama"
-          >
-            Acak
-          </button>
-        </div>
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            onClick={onTutup}
-            className="glass btn-tekan flex-1 rounded-xl py-2.5 text-sm font-semibold text-teks-utama"
-          >
-            Batal
-          </button>
-          <button
-            type="button"
-            disabled={sandi.length < 8 || sedang}
-            onClick={() => onKirim(sandi)}
-            className="btn-tekan flex-1 rounded-xl py-2.5 text-sm font-bold text-white disabled:opacity-50"
-            style={{ background: "linear-gradient(135deg, #DC2626, #B91C1C)" }}
-          >
-            Ganti Sandi
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1413,130 +948,6 @@ function SeksiBasisPengetahuan() {
         )}
       </GlassCard>
     </>
-  );
-}
-
-// ------------------------------------------------------------
-// KontrolWajah — akurasi face recognition (31 Agu 2026).
-//
-// Tiga ambang (disimpan desimal di pengaturan_sistem, tampil PERSEN):
-// - wajah_ambang_login : ketat login wajah 1:N (bawaan 85%)
-// - wajah_margin       : selisih anti-kembar kandidat 1 vs 2 (bawaan 10%)
-// - wajah_ambang       : verifikasi absen 1:1 (bawaan 75%)
-// Menaikkan angka = lebih ketat (lebih sulit wajah orang lain lolos).
-// ------------------------------------------------------------
-function KontrolWajah({
-  pengaturan,
-  sedangProses,
-  onSimpan,
-}: {
-  pengaturan: Record<string, string>;
-  sedangProses: boolean;
-  onSimpan: (kunci: string, persen: number) => Promise<void> | void;
-}) {
-  const BARIS = [
-    {
-      kunci: "wajah_ambang_login",
-      label: "Ketat login wajah",
-      ket: "Kemiripan minimal saat masuk pakai wajah (1:N).",
-      bawaan: 85,
-      min: 50,
-      maks: 99,
-    },
-    {
-      kunci: "wajah_margin",
-      label: "Jarak anti-mirip",
-      ket: "Selisih minimal kandidat teratas vs kedua — penangkal wajah mirip/kembar.",
-      bawaan: 10,
-      min: 0,
-      maks: 50,
-    },
-    {
-      kunci: "wajah_ambang",
-      label: "Ketat absen wajah",
-      ket: "Kemiripan minimal verifikasi absen (1:1).",
-      bawaan: 75,
-      min: 50,
-      maks: 99,
-    },
-  ] as const;
-
-  // Nilai tampil: dari pengaturan (desimal) → persen; kosong = bawaan.
-  const [nilai, setNilai] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      BARIS.map((b) => {
-        const d = Number(pengaturan[b.kunci]);
-        return [
-          b.kunci,
-          String(Number.isFinite(d) && d > 0 ? Math.round(d * 100) : b.bawaan),
-        ];
-      }),
-    ),
-  );
-
-  return (
-    <GlassCard className="mt-4 p-4">
-      <div className="flex items-center gap-2">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-500/12 text-blue-600 dark:text-blue-400">
-          <ScanFace className="h-5 w-5" aria-hidden="true" />
-        </span>
-        <div>
-          <p className="text-sm font-bold text-teks-utama">
-            Akurasi Face Recognition
-          </p>
-          <p className="text-[11px] text-teks-sekunder">
-            Semakin TINGGI semakin ketat — berlaku seketika tanpa deploy.
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-3 flex flex-col gap-2.5">
-        {BARIS.map((b) => (
-          <div key={b.kunci} className="glass-soft rounded-xl p-2.5">
-            <div className="flex items-center gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-[12px] font-bold text-teks-utama">
-                  {b.label}{" "}
-                  <span className="font-normal text-teks-sekunder">
-                    (bawaan {b.bawaan}%)
-                  </span>
-                </p>
-                <p className="text-[10px] leading-snug text-teks-sekunder">
-                  {b.ket}
-                </p>
-              </div>
-              <input
-                type="number"
-                min={b.min}
-                max={b.maks}
-                value={nilai[b.kunci] ?? ""}
-                onChange={(e) =>
-                  setNilai((lama) => ({ ...lama, [b.kunci]: e.target.value }))
-                }
-                aria-label={b.label}
-                className="glass-input h-9 w-16 shrink-0 rounded-lg text-center text-[13px] font-bold text-teks-utama"
-              />
-              <span className="text-[11px] text-teks-sekunder">%</span>
-              <button
-                type="button"
-                disabled={sedangProses}
-                onClick={() => {
-                  const n = Math.round(Number(nilai[b.kunci]));
-                  if (!Number.isFinite(n) || n < b.min || n > b.maks) {
-                    toast("peringatan", `Nilai harus ${b.min}-${b.maks}%`);
-                    return;
-                  }
-                  void onSimpan(b.kunci, n);
-                }}
-                className="glass btn-tekan shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-teks-utama disabled:opacity-50"
-              >
-                Simpan
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </GlassCard>
   );
 }
 
