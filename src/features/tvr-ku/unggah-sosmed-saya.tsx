@@ -16,7 +16,7 @@
 // ============================================================
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, CalendarClock, Check, ChevronDown, History, Link2, Loader2, RotateCcw, Send, Share2, UploadCloud, Wand2, X } from "lucide-react";
+import { AlertTriangle, CalendarClock, Check, ChevronDown, Film, History, Link2, Loader2, Lock, RotateCcw, Send, Share2, UploadCloud, Wand2, X } from "lucide-react";
 import { BATAS_CAPTION_TVR, LABEL_SOSMED, solusiGagal } from "@/lib/batas-caption";
 import { JADWAL_MAKS_HARI, JADWAL_MAKS_HARI_TANDA_TANGAN, JADWAL_MIN_MENIT, periksaJadwal } from "@/lib/jadwal-unggah";
 import { waktuJadwal } from "@/lib/jadwal-tvrku";
@@ -27,6 +27,7 @@ import { toast, useAppStore } from "@/hooks/use-app-store";
 import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import { adalahPalugodam } from "@/lib/struktur";
 import { ModalEditOtomatis } from "./modal-edit-otomatis";
+import { LABEL_JENIS_INTERNAL, PilihVideoInternal, ukuranRingkas } from "./pilih-video-internal";
 import {
   getKeywordWajib,
   kategoriBolehDipilih,
@@ -36,6 +37,7 @@ import {
   getRiwayatTvrkuPost,
   postTvrku,
   sinkronSosmedTvr,
+  type ItemVideoInternal,
   type JadwalTvrku,
   type TvrkuPost,
 } from "@/services";
@@ -44,6 +46,14 @@ import { adalahPembatalanUnggah, unggahVideoTvrku } from "@/lib/unggah-video-kli
 import { cn } from "@/lib/utils";
 import { useRefTabAktif } from "@/hooks/use-tab-aktif";
 import { usePerintahAktif } from "@/hooks/use-perintah-aktif";
+import type { PerintahAktif } from "@/lib/video-wajib-perintah";
+
+/**
+ * Sumber video formulir: berkas dari perangkat, tautan (khusus PALUGODAM),
+ * atau VIDEO INTERNAL (17 Okt 2026) — materi Video Wajib, Stok Official,
+ * Pustaka — yang diposting langsung dari penyimpanan SuperApp.
+ */
+type SumberVideo = "berkas" | "internal" | "link";
 
 const LABEL: Record<string, string> = {
   instagram: "Instagram",
@@ -207,7 +217,31 @@ export function UnggahSosmedSaya({
   // Disimpan sebagai id yang DITOLAK (bukan boolean) supaya perintah baru otomatis terpakai lagi.
   const [perintahDitolak, setPerintahDitolak] = useState("");
   const pakaiPerintah = !perintahAktif || perintahDitolak !== perintahAktif.id;
-  const perintahDipakai = perintahAktif && pakaiPerintah ? perintahAktif : null;
+  // VIDEO INTERNAL (17 Okt 2026): item terpilih dari pemilih video internal.
+  const [internal, setInternal] = useState<ItemVideoInternal | null>(null);
+  const [bukaPilihInternal, setBukaPilihInternal] = useState(false);
+  // PALUGODAM: boleh mengirim video cukup lewat TAUTAN (2 Sep 2026).
+  const user = useAppStore((st) => st.user);
+  const bolehLink = adalahPalugodam({ role: user?.role, divisi: user?.divisi });
+  // Sumber yang tersedia: tertanam di Stok (hanyaForm) videonya tetap; lewat
+  // Stok unggah berkas ditiadakan, tetapi VIDEO INTERNAL terbuka untuk SEMUA
+  // anggota (tidak ada berkas yang naik dari perangkat).
+  const sumberTersedia: SumberVideo[] = hanyaForm
+    ? ["berkas"]
+    : [...(lewatStok ? [] : (["berkas"] as const)), "internal", ...(bolehLink ? (["link"] as const) : [])];
+  const [sumberPilih, setSumber] = useState<SumberVideo>(() =>
+    hanyaForm ? "berkas" : lewatStok ? (bolehLink ? "link" : "internal") : "berkas",
+  );
+  const sumber = sumberTersedia.includes(sumberPilih) ? sumberPilih : sumberTersedia[0];
+  const modeLink = sumber === "link";
+  const modeInternal = sumber === "internal";
+  // Materi Video Wajib membawa nomor perintahnya sendiri: kategori terkunci
+  // ke perintah itu (server juga memaksanya), tanpa pilihan melepas.
+  const perintahInternal: PerintahAktif | null =
+    modeInternal && internal?.perintah_id && internal.kategori
+      ? { id: internal.perintah_id, judul: internal.judul, kategori: internal.kategori }
+      : null;
+  const perintahDipakai = perintahInternal ?? (perintahAktif && pakaiPerintah ? perintahAktif : null);
   const kategori = perintahDipakai ? perintahDipakai.kategori : kategoriPilih;
   const [caption, setCaption] = useState("");
   // CAPTION PER SOSMED (8 Sep 2026): teks khusus tiap platform — X 280,
@@ -220,12 +254,6 @@ export function UnggahSosmedSaya({
   const [tahap, setTahap] = useState<"" | "unggah" | "kompres" | "post">("");
   // Persentase unggah (progres XHR nyata).
   const [persen, setPersen] = useState(0);
-  // PALUGODAM (2 Sep 2026): boleh mengirim video cukup lewat TAUTAN
-  // hasil editannya sendiri — tanpa unggah berkas sama sekali.
-  const user = useAppStore((st) => st.user);
-  const bolehLink = adalahPalugodam({ role: user?.role, divisi: user?.divisi });
-  // Lewat Stok: PALUGODAM tinggal punya mode kirim tautan di sini.
-  const [modeLink, setModeLink] = useState(lewatStok && bolehLink);
   const [tautan, setTautan] = useState("");
   // Antrean posting terjadwal (2 Sep 2026) — dari upload-post.
   const [jadwalAntre, setJadwalAntre] = useState<JadwalTvrku[] | null>(null);
@@ -300,6 +328,17 @@ export function UnggahSosmedSaya({
     }
   }
 
+  /** Pasang video internal terpilih: judul & caption terisi (tetap bisa diubah). */
+  function pasangInternal(item: ItemVideoInternal) {
+    setInternal(item);
+    setBukaPilihInternal(false);
+    setJudul(item.judul.slice(0, 100));
+    setCaption(item.caption.slice(0, 2200));
+    setCaptionPer({});
+    // Tanpa nomor perintah: kategori item hanya diusulkan bila ada di daftar.
+    if (!item.perintah_id && item.kategori && daftarKategori.includes(item.kategori)) setKategori(item.kategori);
+  }
+
   function togglePlatform(p: string) {
     setPilih((lama) => {
       const baru = new Set(lama);
@@ -309,7 +348,7 @@ export function UnggahSosmedSaya({
     });
   }
 
-  const adaVideo = modeLink ? tautan.trim().startsWith("https://") : Boolean(berkas);
+  const adaVideo = modeLink ? tautan.trim().startsWith("https://") : modeInternal ? Boolean(internal) : Boolean(berkas);
   // Teks yang benar-benar dikirim ke tiap sosmed (judul + caption utama, atau khusus).
   const teksUtama = caption.trim() ? `${judul.trim()}\n\n${caption.trim()}` : judul.trim();
   const captionUntuk = (p: string) => captionPer[p] ?? teksUtama;
@@ -329,7 +368,15 @@ export function UnggahSosmedSaya({
   // ada yang belum lengkap — anggota tidak tahu apa yang kurang. Kini
   // tombol tetap bisa ditekan dan menyebutkan satu per satu yang kurang.
   const kekurangan: string[] = [];
-  if (!adaVideo) kekurangan.push(modeLink ? "Tautan video belum diisi (harus diawali https://)" : "Video belum dipilih");
+  if (!adaVideo) {
+    kekurangan.push(
+      modeLink
+        ? "Tautan video belum diisi (harus diawali https://)"
+        : modeInternal
+          ? "Video internal belum dipilih"
+          : "Video belum dipilih",
+    );
+  }
   if (judul.trim().length < 3) kekurangan.push("Judul video minimal 3 huruf");
   if (!kategori) kekurangan.push("Pilih kategori video");
   if (pilih.size === 0) kekurangan.push("Pilih minimal 1 sosmed tujuan");
@@ -403,7 +450,7 @@ export function UnggahSosmedSaya({
       toast("peringatan", "Sebagian gagal", "Cek rincian di riwayat — platform yang gagal bisa dicoba lagi.");
     }
     // Satu perintah = satu video: lepas supaya video berikutnya tidak ikut berlabel.
-    if (perintahDipakai && (h.sukses || h.terjadwal)) setPerintahAktif(null);
+    if (perintahAktif && perintahDipakai?.id === perintahAktif.id && (h.sukses || h.terjadwal)) setPerintahAktif(null);
     setRiwayat(await getRiwayatTvrkuPost().catch(() => riwayat ?? []));
     setJadwalAntre(await getJadwalTvrku().catch(() => jadwalAntre ?? []));
     useAppStore.getState().segarkanData();
@@ -454,6 +501,34 @@ export function UnggahSosmedSaya({
           jadwal: jadwalUntukKirim(),
         });
         setTautan("");
+        setJudul("");
+        setKategori("");
+        setCaption("");
+        setCaptionPer({});
+        setPilih(new Set());
+        setPakaiJadwal(false);
+        setJadwal("");
+        await setelahPost(h);
+        return;
+      }
+
+      // VIDEO INTERNAL: berkasnya sudah di penyimpanan SuperApp — server
+      // menyerahkan tautan bertanda tangannya ke upload-post, tanpa unggah.
+      if (modeInternal) {
+        if (!internal) return;
+        setTahap("post");
+        const h = await postTvrku({
+          sumber_internal: { jenis: internal.jenis, id: internal.id },
+          judul: judul.trim(),
+          keyword: kategori,
+          perintah_id: perintahDipakai?.id,
+          caption: caption.trim() || undefined,
+          caption_per: Object.keys(captionPerKirim).length > 0 ? captionPerKirim : undefined,
+          platforms: [...pilih],
+          jadwal: jadwalUntukKirim(),
+        });
+        if (!hidupRef.current) return;
+        setInternal(null);
         setJudul("");
         setKategori("");
         setCaption("");
@@ -586,47 +661,108 @@ export function UnggahSosmedSaya({
         <GlassCard className="p-3.5">
           <p className="text-[12px] leading-relaxed text-teks-sekunder">
             <b className="text-teks-utama">Posting video sekarang lewat Stok Video:</b> tambah video ke stok, ketuk
-            videonya, lalu pilih <b className="text-teks-utama">Upload</b>. Di sini tampil postingan yang menunggu
-            tayang dan riwayat post Anda.
+            videonya, lalu pilih <b className="text-teks-utama">Upload</b>. Atau pakai{" "}
+            <b className="text-teks-utama">Video Internal</b> di bawah — materi Video Wajib, Official TV Rakyat, dan
+            Pustaka langsung diposting tanpa unggah. Di sini juga tampil postingan yang menunggu tayang dan riwayat
+            post Anda.
           </p>
         </GlassCard>
       )}
 
-      {tertaut.length > 0 && (!lewatStok || bolehLink) && (
+      {bukaPilihInternal && (
+        <PilihVideoInternal
+          terpilihId={internal ? `${internal.jenis}:${internal.id}` : null}
+          onPilih={pasangInternal}
+          onTutup={() => setBukaPilihInternal(false)}
+        />
+      )}
+
+      {tertaut.length > 0 && (
       <GlassCard className="p-4">
-        {/* PALUGODAM: pilih cara kirim — unggah berkas atau tempel tautan */}
-        {bolehLink && !hanyaForm && !lewatStok && (
-          <div className="mb-3 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setModeLink(false)}
-              disabled={Boolean(tahap)}
-              aria-pressed={!modeLink}
-              className={cn(
-                "btn-tekan flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[12px] font-bold",
-                !modeLink ? "bg-pri/15 text-pri" : "glass text-teks-sekunder",
-              )}
-            >
-              <UploadCloud className="h-3.5 w-3.5" />
-              Unggah Berkas
-            </button>
-            <button
-              type="button"
-              onClick={() => setModeLink(true)}
-              disabled={Boolean(tahap)}
-              aria-pressed={modeLink}
-              className={cn(
-                "btn-tekan flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[12px] font-bold",
-                modeLink ? "bg-pri/15 text-pri" : "glass text-teks-sekunder",
-              )}
-            >
-              <Link2 className="h-3.5 w-3.5" />
-              Kirim Tautan
-            </button>
+        {/* Pilih sumber video: unggah berkas, video internal, atau (PALUGODAM) tautan */}
+        {sumberTersedia.length > 1 && (
+          <div
+            className={cn("mb-3 grid gap-2", sumberTersedia.length === 3 ? "grid-cols-3" : "grid-cols-2")}
+            role="group"
+            aria-label="Sumber video"
+          >
+            {sumberTersedia.map((m) => {
+              const Ikon = m === "berkas" ? UploadCloud : m === "internal" ? Film : Link2;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setSumber(m)}
+                  disabled={Boolean(tahap)}
+                  aria-pressed={sumber === m}
+                  className={cn(
+                    "btn-tekan flex items-center justify-center gap-1.5 rounded-xl px-1 py-2.5 text-[12px] font-bold",
+                    sumber === m ? "bg-pri/15 text-pri" : "glass text-teks-sekunder",
+                  )}
+                >
+                  <Ikon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {m === "berkas" ? "Unggah Berkas" : m === "internal" ? "Video Internal" : "Kirim Tautan"}
+                </button>
+              );
+            })}
           </div>
         )}
 
-        {modeLink && !hanyaForm ? (
+        {modeInternal ? (
+          internal ? (
+            <div className="glass-soft flex items-center gap-3 rounded-2xl p-2.5">
+              <span className="relative flex h-16 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-black/80">
+                {internal.thumbnail ? (
+                  <img src={internal.thumbnail} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <Film className="h-5 w-5 text-white/80" aria-hidden="true" />
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1 text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400">
+                  <Check className="h-3 w-3" aria-hidden="true" />
+                  {LABEL_JENIS_INTERNAL[internal.jenis]}
+                  {ukuranRingkas(internal.ukuran) && (
+                    <span className="font-semibold text-teks-sekunder">· {ukuranRingkas(internal.ukuran)}</span>
+                  )}
+                </span>
+                <span className="mt-0.5 line-clamp-2 block text-[12.5px] leading-snug font-semibold text-teks-utama">
+                  {internal.judul || "(tanpa judul)"}
+                </span>
+                {internal.kategori && (
+                  <span className="glass mt-1 inline-block rounded-full px-2 py-0.5 text-[9.5px] font-bold text-teks-utama">
+                    {internal.kategori}
+                  </span>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => setBukaPilihInternal(true)}
+                disabled={Boolean(tahap)}
+                aria-label="Ganti video internal"
+                className="glass btn-tekan shrink-0 rounded-lg px-3 py-1.5 text-[11.5px] font-bold text-teks-utama disabled:opacity-60"
+              >
+                Ganti
+              </button>
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setBukaPilihInternal(true)}
+                disabled={Boolean(tahap)}
+                className="glass btn-tekan flex w-full items-center justify-center gap-2 rounded-xl py-6 text-[13px] font-bold text-teks-utama disabled:opacity-60"
+              >
+                <Film className="h-5 w-5 text-pri" aria-hidden="true" />
+                Pilih Video Internal
+              </button>
+              <p className="mt-1.5 text-[10.5px] leading-relaxed text-teks-sekunder">
+                Materi Video Wajib, Official TV Rakyat, atau Pustaka — langsung diposting dari penyimpanan
+                SuperApp, tanpa unggah dari perangkat Anda.
+              </p>
+            </>
+          )
+        ) : modeLink && !hanyaForm ? (
           <>
             <input
               value={tautan}
@@ -721,7 +857,16 @@ export function UnggahSosmedSaya({
           disabled={Boolean(tahap)}
           className="glass-input mt-3 h-11 w-full rounded-xl px-3 text-sm text-teks-utama"
         />
-        {perintahAktif && (
+        {perintahInternal && (
+          <p className="mt-2 flex items-start gap-2 rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2 text-[11.5px] leading-snug text-[#1E3A8A] dark:border-[#1E3A8A] dark:bg-[#172554]/40 dark:text-[#BFDBFE]">
+            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span className="min-w-0">
+              <b>Materi Video Wajib</b> perintah #{perintahInternal.id} · kategori <b>{perintahInternal.kategori}</b>{" "}
+              terkunci.
+            </span>
+          </p>
+        )}
+        {perintahAktif && !perintahInternal && (
           <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-2 dark:border-[#1E3A8A] dark:bg-[#172554]/40">
             <input
               type="checkbox"
@@ -941,8 +1086,9 @@ export function UnggahSosmedSaya({
           </div>
         )}
         <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder">
-          Video diunggah ke penyimpanan sementara dan dihapus otomatis 2 jam
-          setelah tayang — postingan di sosmed Anda tetap ada.
+          {modeInternal
+            ? "Video internal diambil langsung dari penyimpanan SuperApp — tidak ada unggahan dari perangkat Anda."
+            : "Video diunggah ke penyimpanan sementara dan dihapus otomatis 2 jam setelah tayang — postingan di sosmed Anda tetap ada."}
         </p>
         <p className="mt-1 text-[10.5px] leading-relaxed text-emerald-600 dark:text-emerald-400">
           ✓ Video yang diunggah dari sini otomatis menambah KPI Anda — tak perlu
@@ -1001,8 +1147,8 @@ export function UnggahSosmedSaya({
         )}
         {tahap === "post" && (
           <p className="mt-2 text-[10.5px] leading-relaxed text-teks-sekunder" role="status">
-            Video sudah terunggah, kini antre di layanan posting (upload-post). Ini bisa memakan beberapa
-            menit — tetap buka halaman ini sampai selesai.
+            {modeInternal ? "Video internal sedang diserahkan" : "Video sudah terunggah, kini antre"} di layanan
+            posting (upload-post). Ini bisa memakan beberapa menit — tetap buka halaman ini sampai selesai.
           </p>
         )}
       </GlassCard>

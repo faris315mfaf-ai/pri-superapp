@@ -3862,6 +3862,12 @@ export async function postTvrku(data: {
   keyword: string;
   /** Nomor perintah Video Wajib: server mengunci kategori ke kategori perintah (15 Okt 2026). */
   perintah_id?: string;
+  /**
+   * Video INTERNAL (17 Okt 2026) — materi Video Wajib, Stok Official, atau
+   * Pustaka — dipakai langsung tanpa unggah berkas (pengganti r2_key/path).
+   * Untuk jenis "wajib" server memaksa perintah_id & kategori perintahnya.
+   */
+  sumber_internal?: { jenis: JenisVideoInternal; id: string };
   platforms: string[];
   jadwal?: string;
 }): Promise<{
@@ -3883,6 +3889,106 @@ export async function postTvrku(data: {
     riwayat_gagal?: boolean;
     hasil: Record<string, unknown>;
   };
+}
+
+// ---- Video INTERNAL untuk diposting langsung ke sosmed pribadi (17 Okt 2026) ----
+// Sumbernya: materi Video Wajib, Stok Video Tim Official, dan Pustaka Video
+// yang dikelola tim TV Rakyat. Server menyerahkan tautan bertanda tangan ke
+// upload-post — tidak ada berkas yang naik dari perangkat anggota.
+
+export type JenisVideoInternal = "wajib" | "official" | "pustaka";
+
+export type ItemVideoInternal = {
+  jenis: JenisVideoInternal;
+  id: string;
+  judul: string;
+  caption: string;
+  kategori: string | null;
+  perintah_id: string | null;
+  thumbnail: string | null;
+  ukuran: number | null;
+  /** URL bertanda tangan untuk pratinjau <video>. */
+  pratinjau: string | null;
+  dibuat_pada: string | null;
+};
+
+/** Daftar video internal satu jenis yang boleh diposting akun ini. */
+export async function getVideoInternal(jenis: JenisVideoInternal): Promise<ItemVideoInternal[]> {
+  const json = await fetchJson(`/api/tvr/video-internal?jenis=${encodeURIComponent(jenis)}`);
+  return (json?.item ?? []) as ItemVideoInternal[];
+}
+
+// ---- Pustaka Video (17 Okt 2026): video siap posting unggahan tim TV Rakyat ----
+
+export type ItemPustakaVideo = {
+  id: string;
+  judul: string;
+  keterangan: string;
+  kategori: string | null;
+  berkas_nama: string;
+  berkas_ukuran: number;
+  aktif: boolean;
+  dibuat_pada: string;
+};
+
+/** Daftar Pustaka untuk pengelola; `boleh` = akun ini boleh mengelola. */
+export async function getPustakaVideo(): Promise<{ item: ItemPustakaVideo[]; boleh: boolean; perlu_sql: boolean }> {
+  const json = await fetchJson("/api/tv/pustaka-video");
+  return {
+    item: (json?.item ?? []) as ItemPustakaVideo[],
+    boleh: Boolean(json?.boleh),
+    /** Tabel belum dibuat di database (sql/83 belum dijalankan). */
+    perlu_sql: Boolean(json?.perlu_sql),
+  };
+}
+
+/** Langkah 1: minta URL unggah bertanda tangan untuk berkas Pustaka. */
+export async function siapkanPustakaVideo(
+  nama: string,
+  ukuran: number,
+): Promise<{ cara: "r2" | "supabase"; key: string; url: string; token?: string }> {
+  const json = await fetchJson("/api/tv/pustaka-video", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ aksi: "siapkan", nama, ukuran }),
+  });
+  return json as { cara: "r2" | "supabase"; key: string; url: string; token?: string };
+}
+
+/** Langkah 2: simpan baris Pustaka setelah berkasnya terunggah. */
+export async function simpanPustakaVideo(data: {
+  judul: string;
+  keterangan: string;
+  kategori: string;
+  berkas_cara: "r2" | "supabase";
+  berkas_key: string;
+  berkas_nama: string;
+  berkas_ukuran: number;
+}): Promise<void> {
+  await fetchJson("/api/tv/pustaka-video", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ aksi: "simpan", ...data }),
+  });
+}
+
+export async function ubahPustakaVideo(
+  id: string,
+  ubah: { aktif?: boolean; judul?: string; keterangan?: string; kategori?: string },
+): Promise<void> {
+  await fetchJson("/api/tv/pustaka-video", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, ...ubah }),
+  });
+}
+
+export async function hapusPustakaVideo(id: string): Promise<void> {
+  await fetchJson("/api/tv/pustaka-video", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
 }
 
 /** Insight akun sosmed pribadi saya (per platform, cache 15 menit). */

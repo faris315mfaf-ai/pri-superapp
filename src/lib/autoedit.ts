@@ -67,7 +67,8 @@ export function keluargaAutoEdit(user: PenggunaGerbang): ReadonlySet<string> {
 
 /**
  * Bagian layanan TVR yang terbuka untuk SEMUA akun TVR Saya (5 Okt 2026):
- * Stok Video (daftar, tambah, berkas, sampul, tanda terunggah, hapus) dan
+ * Stok Video (daftar, tambah, berkas, sampul, tanda terunggah, hapus, dan
+ * "ambil" = video dari tautan Galeri Konten masuk Stok tanpa diedit) dan
  * ringkasan halaman. Template, sumber, tulisan, dan render butuh syarat
  * Edit Otomatis.
  */

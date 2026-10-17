@@ -11,6 +11,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
+import { fileURLToPath } from "node:url";
 
 const MEDIA = fs.mkdtempSync(path.join(os.tmpdir(), "autoedit-uji-"));
 // ab-av1 TIRUAN untuk uji Kompres Video: mencetak hasil crf-search seperti
@@ -1155,6 +1156,186 @@ await uji("studio: template lama diterjemahkan, aset, hapus latar, simpan, prati
   const ringkas = (await minta("GET", "/api/tvr/ringkas", { id: a })).json();
   pastikan(ringkas.stok.length === 0 && ringkas.jobs.length === 0 && ringkas.job === null, JSON.stringify(ringkas.stok));
 });
+
+// ---------------------------------------------------------------- ambil ke stok
+
+console.log("Ambil ke Stok (video dari tautan Galeri Konten)");
+{
+  // yt-dlp PALSU (sama dengan uji-media): "mengunduh" berkas dari folder PALSU_MEDIA.
+  const kerja = path.join(MEDIA, "palsu-ambil");
+  fs.mkdirSync(kerja, { recursive: true });
+  Object.assign(process.env, {
+    PALSU_MEDIA: kerja,
+    PALSU_LOG: path.join(kerja, "log.jsonl"),
+    PALSU_STATUS: path.join(kerja, "status"),
+    PALSU_SKENARIO: path.join(kerja, "skenario.json"),
+  });
+  unduh.pasangPerintahYtdlp([process.execPath, path.join(path.dirname(fileURLToPath(import.meta.url)), "palsu-ytdlp.mjs")]);
+  unduh.pasangTidur(async () => {});
+  const skenario = (balasan: unknown[]) => {
+    fs.writeFileSync(path.join(kerja, "skenario.json"), JSON.stringify(balasan));
+    fs.writeFileSync(path.join(kerja, "status"), "0");
+    fs.writeFileSync(path.join(kerja, "log.jsonl"), "");
+  };
+  // H.264 + AAC (cukup dibungkus ulang) dan MPEG-4 Part 2 (harus di-encode ke H.264).
+  fs.writeFileSync(path.join(kerja, "h264.mp4"), videoSumber(2));
+  ffmpeg(
+    "-f", "lavfi", "-i", "testsrc=size=321x241:rate=25:duration=2",
+    "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+    "-c:v", "mpeg4", "-c:a", "aac", "-shortest", path.join(kerja, "mpeg4.mkv"),
+  );
+  const kodekVideo = (berkas: string) =>
+    execFileSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", berkas]).toString().trim();
+  const bereskan = async () => {
+    for (const sisa of await job.redis().zrange(job.KUNCI_AKTIF, 0, -1)) await job.tulisStatus(sisa, { status: "error", log: "dibereskan uji" });
+  };
+  const ambil = (id: string, json: unknown) => minta("POST", "/api/tvr/stok/ambil", { id, json });
+
+  await uji("ambil ke stok: tautan tak sah / bukan daftar situs ditolak 400/422, tak masuk antrean", async () => {
+    const a = "8601";
+    TUGAS.length = 0;
+    for (const url of [
+      "http://127.0.0.1:3000/x.mp4",
+      "https://evil.example/a.mp4",
+      "https://instagram.com.evil.example/reel/x",
+      "https://jebakan.instagram.com/reel/x",
+      "upload://pri-8601/abc123",
+      "file:///etc/passwd",
+    ]) {
+      const r = await ambil(a, { url });
+      pastikan(r.status === 400, `${url} -> ${r.status} ${r.teks}`);
+    }
+    pastikan((await ambil(a, {})).status === 422);
+    pastikan((await ambil(a, { url: "https://www.tiktok.com/@a/video/1", judul: "x".repeat(201) })).status === 422);
+    pastikan(TUGAS.length === 0, JSON.stringify(TUGAS));
+    pastikan((await minta("GET", "/api/tvr/stok/ambil", { id: a })).json().ambil.length === 0);
+  });
+
+  await uji("ambil ke stok: antre → worker → item Stok sumber 'tautan' tanpa encode ulang", async () => {
+    const a = "8602";
+    await bereskan();
+    TUGAS.length = 0;
+    const url = "https://www.instagram.com/reel/AMBIL1/";
+    let r = await ambil(a, { url, judul: "  Banjir\n  Jakarta  " });
+    pastikan(r.status === 200, r.teks);
+    const d = r.json();
+    pastikan(d.status === "queued" && typeof d.job_id === "string" && d.judul === "Banjir Jakarta", r.teks);
+    const muatan = TUGAS.find((t) => t.job_id === d.job_id);
+    pastikan(muatan && muatan.jenis === "ambil" && muatan.url === url, JSON.stringify(TUGAS));
+    // Tautan yang sama selagi diambil → 409; tidak dianggap job Edit Otomatis, tapi tampil di antrean Stok.
+    pastikan((await ambil(a, { url })).status === 409);
+    let st = (await minta("GET", "/api/tvr/stok", { id: a })).json();
+    pastikan(st.job === null && st.stok.length === 0, JSON.stringify(st));
+    pastikan(st.jobs.length === 1 && st.jobs[0].jenis === "ambil" && st.jobs[0].judul === "Banjir Jakarta", JSON.stringify(st.jobs));
+    let daftar = (await minta("GET", "/api/tvr/stok/ambil", { id: a })).json().ambil;
+    pastikan(daftar.length === 1 && daftar[0].status === "queued" && daftar[0].id === d.job_id, JSON.stringify(daftar));
+    pastikan((await minta("GET", `/api/tvr/stok/ambil/${d.job_id}`, { id: "8603" })).status === 404);
+
+    skenario([{ kode: 0, tulis: [{ ext: "mp4", dari: "h264.mp4" }] }]);
+    const hasil = await pekerja.ambilJob(muatan!);
+    pastikan(hasil.status === "done", JSON.stringify(hasil));
+    const argv = JSON.parse(fs.readFileSync(path.join(kerja, "log.jsonl"), "utf8").split("\n")[0]) as string[];
+    pastikan(argv.at(-1) === url && argv.includes("--max-filesize"), JSON.stringify(argv));
+
+    const satu = (await minta("GET", `/api/tvr/stok/ambil/${d.job_id}`, { id: a })).json();
+    pastikan(satu.status === "done" && satu.progress === 100 && satu.size > 0, JSON.stringify(satu));
+    st = (await minta("GET", "/api/tvr/stok", { id: a })).json();
+    pastikan(st.jobs.length === 0 && st.stok.length === 1, JSON.stringify(st));
+    const item = st.stok[0];
+    pastikan(item.id === d.job_id && item.sumber === "tautan" && item.judul === "Banjir Jakarta" && item.durasi >= 1.9, JSON.stringify(item));
+    pastikan((await job.bacaStatus(d.job_id)).disalin === true);
+    const folder = path.join(jalur.jobsDir(), d.job_id);
+    pastikan(fs.readdirSync(folder).every((n) => !n.startsWith("source.")), JSON.stringify(fs.readdirSync(folder)));
+    const unduhan = await minta("GET", `/api/tvr/stok/${item.id}/berkas`, { id: a });
+    pastikan(unduhan.status === 200 && unduhan.isi.length === item.size, `${unduhan.status}`);
+    pastikan((await minta("GET", `/api/tvr/stok/${item.id}/berkas`, { id: "8603" })).status === 404);
+    daftar = (await minta("GET", "/api/tvr/stok/ambil", { id: a })).json().ambil;
+    pastikan(daftar.length === 0, JSON.stringify(daftar));
+    // Sudah jadi: batal ditolak, hapus lewat Stok.
+    pastikan((await minta("DELETE", `/api/tvr/stok/ambil/${d.job_id}`, { id: a })).status === 409);
+  });
+
+  await uji("ambil ke stok: video bukan H.264 di-encode ulang, judul bawaan dari situs", async () => {
+    const a = "8604";
+    await bereskan();
+    TUGAS.length = 0;
+    const r = await ambil(a, { url: "https://vt.tiktok.com/ZSAMBIL2/" });
+    pastikan(r.status === 200 && r.json().judul === "Video TikTok", r.teks);
+    skenario([{ kode: 0, tulis: [{ ext: "mkv", dari: "mpeg4.mkv" }] }]);
+    pastikan((await pekerja.ambilJob(TUGAS.at(-1)!)).status === "done");
+    const item = (await minta("GET", "/api/tvr/stok", { id: a })).json().stok[0];
+    pastikan(item && item.sumber === "tautan", JSON.stringify(item));
+    const berkas = path.join(jalur.jobsDir(), item.id, "output.mp4");
+    pastikan(kodekVideo(berkas) === "h264" && (await job.bacaStatus(item.id)).disalin === false);
+    const info = await media.probe(berkas);
+    pastikan(info.width % 2 === 0 && info.height % 2 === 0 && info.has_audio, JSON.stringify(info));
+  });
+
+  await uji("ambil ke stok: gagal unduh, batal, penahan 429, batas stok", async () => {
+    const a = "8605";
+    await bereskan();
+    // 1. yt-dlp gagal → status error berpesan ramah, tidak masuk Stok, tampil di daftar ambil.
+    TUGAS.length = 0;
+    let r = await ambil(a, { url: "https://www.instagram.com/reel/PRIVAT/" });
+    pastikan(r.status === 200, r.teks);
+    skenario([{ kode: 1, stderr: "ERROR: [Instagram] PRIVAT: This account is private" }]);
+    const gagalJob = await pekerja.ambilJob(TUGAS.at(-1)!);
+    pastikan(gagalJob.status === "error" && /privat/i.test(String(gagalJob.error)), JSON.stringify(gagalJob));
+    let daftar = (await minta("GET", "/api/tvr/stok/ambil", { id: a })).json().ambil;
+    pastikan(daftar.length === 1 && daftar[0].status === "error" && /privat/i.test(daftar[0].error), JSON.stringify(daftar));
+    pastikan((await minta("GET", "/api/tvr/stok", { id: a })).json().stok.length === 0);
+    pastikan((await minta("DELETE", `/api/tvr/stok/ambil/${daftar[0].id}`, { id: a })).json().ambil.length === 0);
+
+    // 2. Dibatalkan selagi antre → dibuang; worker melewatinya tanpa mengunduh.
+    TUGAS.length = 0;
+    r = await ambil(a, { url: "https://www.instagram.com/reel/BATAL/" });
+    const idBatal = r.json().job_id;
+    r = await minta("DELETE", `/api/tvr/stok/ambil/${idBatal}`, { id: a });
+    pastikan(r.status === 200 && r.json().ambil.length === 0, r.teks);
+    skenario([{ kode: 0, tulis: [{ ext: "mp4", dari: "h264.mp4" }] }]);
+    pastikan((await pekerja.ambilJob(TUGAS.at(-1)!)).status !== "done");
+    pastikan(fs.readFileSync(path.join(kerja, "log.jsonl"), "utf8") === "", "yt-dlp tidak boleh dipanggil");
+
+    // 3. Tanda batal (mis. dari DELETE /jobs/{id} saat berjalan) dipatuhi worker → dibatalkan, tak masuk Stok.
+    TUGAS.length = 0;
+    r = await ambil(a, { url: "https://www.instagram.com/reel/BERHENTI/" });
+    const idHenti = r.json().job_id;
+    await job.mintaBatal(idHenti);
+    pastikan((await pekerja.ambilJob(TUGAS.at(-1)!)).status === "dibatalkan");
+    pastikan((await job.bacaStatus(idHenti)).status === "dibatalkan");
+    pastikan((await minta("GET", "/api/tvr/stok", { id: a })).json().stok.length === 0);
+
+    // 4. Situs sedang ditahan (429) → ditolak 429 sebelum masuk antrean.
+    TUGAS.length = 0;
+    const urlTahan = "https://www.tiktok.com/@a/video/429";
+    await unduh.tahanSitus(urlTahan);
+    r = await ambil(a, { url: urlTahan });
+    pastikan(r.status === 429 && /429/.test(r.json().detail), r.teks);
+    pastikan(TUGAS.length === 0);
+    await unduh.bebaskanSitus(urlTahan);
+
+    // 5. Batas antrean pribadi (TVR_JOB_AKTIF bawaan 20) → 429.
+    await bereskan();
+    for (let i = 0; i < 20; i++) {
+      const x = await ambil("8606", { url: `https://www.instagram.com/reel/PENUH${i}/` });
+      pastikan(x.status === 200, `${i}: ${x.teks}`);
+    }
+    const lagi = await ambil("8606", { url: "https://www.instagram.com/reel/LAGI/" });
+    pastikan(lagi.status === 429 && /Antrean Anda penuh/.test(lagi.teks), lagi.teks);
+    await bereskan();
+
+    // 6. Batas stok (TVR_MAKS_STOK bawaan 50): stok penuh → 409.
+    for (let i = 0; i < 50; i++) {
+      await job.tulisStatus(`penuh8607x${i}`, { status: "done", owner: "pri-8607", output: "output.mp4", sumber_stok: "unggah" });
+    }
+    const penuh = await ambil("8607", { url: "https://www.instagram.com/reel/PENUH/" });
+    pastikan(penuh.status === 409 && /Stok video hampir penuh/.test(penuh.teks), penuh.teks);
+    for (let i = 0; i < 50; i++) await job.buangJob(`penuh8607x${i}`);
+  });
+
+  unduh.pasangPerintahYtdlp(null);
+  unduh.pasangTidur(null);
+}
 
 // ---------------------------------------------------------------- selesai
 

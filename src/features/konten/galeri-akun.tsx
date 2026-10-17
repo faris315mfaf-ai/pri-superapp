@@ -11,12 +11,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ExternalLink, Heart, MessageCircle, PlayCircle, Tv, X } from "lucide-react";
+import { ExternalLink, Film, Heart, Loader2, MessageCircle, PlayCircle, Tv, X } from "lucide-react";
 import { GlassCard } from "@/components/glass-card";
 import { AvatarInisial, EmptyState, GlassSkeleton, SectionTitle } from "@/components/pri-ui";
 import { FotoBulat } from "@/components/foto-bulat";
 import { PlatformIcon, labelPlatform } from "@/components/platform-icon";
-import { toast } from "@/hooks/use-app-store";
+import { toast, useAppStore } from "@/hooks/use-app-store";
 import { useVersiSegar } from "@/hooks/use-segar-otomatis";
 import {
   getGaleriKonten,
@@ -27,6 +27,10 @@ import {
 import { cn } from "@/lib/utils";
 import { formatAngkaRingkas } from "@/lib/format";
 import { hrefAman } from "@/lib/href-aman";
+import { bolehEditOtomatisTvr } from "@/lib/peran";
+import { adalahBot } from "@/lib/struktur";
+import { bacaJson, pesanGalat } from "@/features/auto-edit/api";
+import { useApiAutoEdit } from "@/features/auto-edit/tim";
 
 /** 6 kolom x 6 baris per halaman lingkaran. */
 const PER_HALAMAN = 36;
@@ -428,8 +432,41 @@ function PopupVideoAkun({ akun, onTutup }: { akun: LingkaranGaleri; onTutup: () 
   );
 }
 
+/** Judul stok dari caption: baris pertama, maks 100 huruf. */
+function judulDariCaption(caption: string): string | undefined {
+  const baris = caption.split("\n").map((b) => b.trim()).find(Boolean);
+  return baris ? baris.slice(0, 100) : undefined;
+}
+
 function KartuVideo({ video }: { video: VideoGaleri }) {
   const [gagal, setGagal] = useState(false);
+  // AMBIL KE STOK VIDEO (17 Okt 2026): video sosmed diunduh mesin ke Stok
+  // Video akun ini, lalu bisa diposting ulang dari TV Rakyat Saya. Hanya
+  // untuk akun yang Stok/Edit Otomatis-nya terbuka; akun bot tidak.
+  const api = useApiAutoEdit();
+  const user = useAppStore((st) => st.user);
+  const bolehAmbil = Boolean(user) && bolehEditOtomatisTvr(user) && !adalahBot(user);
+  const [mengambil, setMengambil] = useState(false);
+
+  async function ambilKeStok() {
+    if (mengambil) return;
+    setMengambil(true);
+    try {
+      const res = await api.fetch("/api/tvr/stok/ambil", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: video.url, judul: judulDariCaption(video.caption) }),
+      });
+      const d = await bacaJson(res);
+      if (!res.ok) throw new Error(pesanGalat(res.status, d, "Gagal mengambil video ke Stok."));
+      toast("sukses", "Sedang diambil ke Stok Video", "Cek TV Rakyat Saya › Stok Video.");
+    } catch (e) {
+      toast("error", "Gagal mengambil ke Stok", e instanceof Error ? e.message : "Coba lagi sebentar.");
+    } finally {
+      setMengambil(false);
+    }
+  }
+
   return (
     <article className="glass-soft flex flex-col overflow-hidden rounded-2xl">
       <a
@@ -496,6 +533,23 @@ function KartuVideo({ video }: { video: VideoGaleri }) {
           <ExternalLink className="h-3.5 w-3.5" />
           Tonton
         </a>
+        {bolehAmbil && (
+          <button
+            type="button"
+            onClick={() => void ambilKeStok()}
+            disabled={mengambil}
+            aria-busy={mengambil}
+            aria-label="Ambil video ini ke Stok Video"
+            className="glass btn-tekan flex h-8 w-full items-center justify-center gap-1.5 rounded-xl text-[11px] font-bold text-teks-utama disabled:opacity-60"
+          >
+            {mengambil ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <Film className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            {mengambil ? "Mengambil…" : "Ambil ke Stok Video"}
+          </button>
+        )}
       </div>
     </article>
   );

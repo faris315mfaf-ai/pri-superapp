@@ -17,8 +17,11 @@ export type MuatanRender = {
   template_id: string;
   texts: Record<string, string>;
   teks_warna?: string;
-  /** Jenis tugas (5 Okt 2026): kosong = render template; "kompres" = Kompres Video; "hapuslatar" = Hapus Latar Boom. */
-  jenis?: "kompres" | "hapuslatar" | "blur" | "pratinjau";
+  /**
+   * Jenis tugas (5 Okt 2026): kosong = render template; "kompres" = Kompres Video; "hapuslatar" = Hapus Latar Boom;
+   * "ambil" = video dari tautan (Galeri Konten) langsung masuk Stok tanpa diedit (17 Okt 2026).
+   */
+  jenis?: "kompres" | "hapuslatar" | "blur" | "pratinjau" | "ambil";
   mutu?: string;
   /** Bagian sumber yang dipakai (detik, 14 Okt 2026). Kosong = dari awal sampai batas durasi. */
   potong?: { mulai: number; akhir: number };

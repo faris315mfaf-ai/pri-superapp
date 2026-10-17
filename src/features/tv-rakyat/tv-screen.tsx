@@ -30,6 +30,7 @@ import { useAppStore } from "@/hooks/use-app-store";
 import type { Berita, HasilProsesVideo, User, VideoAntrian } from "@/types";
 import { adalahPimred } from "@/lib/jabatan";
 import { PanelVideoWajib } from "./panel-video-wajib";
+import { PanelPustakaVideo } from "./panel-pustaka-video";
 import { PanelJadwalTayang } from "./panel-jadwal-tayang";
 import { EditOtomatisTvr } from "@/features/tvr-ku/edit-otomatis-tvr";
 import { StokVideoTvr, segarkanStokTvr } from "@/features/tvr-ku/stok-video-tvr";
@@ -49,7 +50,9 @@ type FaseTv = "form" | "proses" | "pratinjau";
 // ini sebagai dasbor yang memenuhi layar — strip ringkasan, Keyword
 // Wajib di puncak, lalu bento berkolom sesuai lebar wadah. Akun lain
 // tetap memakai susunan TataLetakModul satu kolom seperti sebelumnya.
-// "video-wajib" bukan seksi TataLetakModul (dulu selalu di atas).
+// "video-wajib" bukan seksi TataLetakModul (dulu selalu di atas); begitu juga
+// "pustaka-video" (17 Okt 2026) — panelnya sendiri yang hilang bila akun ini
+// bukan pengelola Pustaka.
 // ------------------------------------------------------------
 // 7 Okt 2026: Sumber Berita, Log, Status Pipeline, Riwayat Pemrosesan, dan
 // Konten Terbaru Sosmed DIHAPUS — jejak video kini di tombol "Riwayat"
@@ -57,9 +60,9 @@ type FaseTv = "form" | "proses" | "pratinjau";
 // Stok Video Tim (beserta tombol Riwayat) selalu PALING ATAS, selebar modul —
 // tidak ikut bento.
 const BENTO_MASTER: Record<JumlahKolom, string[][]> = {
-  3: [["edit-otomatis-tim", "kompres-tim"], ["video-wajib", "blur-tim"], ["tim-langsung"]],
-  2: [["edit-otomatis-tim", "video-wajib", "kompres-tim"], ["tim-langsung", "blur-tim"]],
-  1: [["tim-langsung", "video-wajib", "edit-otomatis-tim", "blur-tim", "kompres-tim"]],
+  3: [["edit-otomatis-tim", "kompres-tim"], ["video-wajib", "pustaka-video", "blur-tim"], ["tim-langsung"]],
+  2: [["edit-otomatis-tim", "video-wajib", "pustaka-video", "kompres-tim"], ["tim-langsung", "blur-tim"]],
+  1: [["tim-langsung", "video-wajib", "pustaka-video", "edit-otomatis-tim", "blur-tim", "kompres-tim"]],
 };
 /** Seksi pendukung di bawah bento ("Akses cepat"), dua kolom di layar lebar. */
 const AKSES_MASTER = ["jadwal-tayang", "hasil-scraping", "bagi-tugas", "buat-video"];
@@ -482,6 +485,7 @@ export function TvScreen({
     const perId = new Map(daftarSeksi.map((s) => [s.id, s]));
     const tampilkan = (id: string): ReactNode => {
       if (id === "video-wajib") return <PanelVideoWajib key={id} />;
+      if (id === "pustaka-video") return <PanelPustakaVideo key={id} />;
       if (id === "tim-langsung") return bolehRuang ? <PanelTimLangsung key={id} langsung={langsung} /> : null;
       const s = perId.get(id);
       return s ? (
@@ -547,8 +551,11 @@ export function TvScreen({
       {/* Video wajib (12 Sep 2026): perintah video untuk seluruh anggota,
           DIKELOLA dari sini — di modul tempat tim TV Rakyat Official
           bekerja sehari-hari, bukan di modul dashboard. */}
-      <FadeInUp delay={0.03} className="mt-5">
+      {/* Pustaka Video (17 Okt 2026): hanya muncul untuk pengelola — panelnya
+          mengembalikan null bila server menyatakan akun ini tidak boleh. */}
+      <FadeInUp delay={0.03} className="mt-5 flex flex-col gap-3">
         <PanelVideoWajib />
+        <PanelPustakaVideo />
       </FadeInUp>
 
 

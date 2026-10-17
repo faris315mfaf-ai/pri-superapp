@@ -41,7 +41,7 @@ import {
   tulisStatus,
 } from "../job";
 import { kirimRender } from "../antrean";
-import { previewSource } from "../unduh";
+import { periksaUrl, previewSource, situs, tolakKalauDitahan } from "../unduh";
 import { buangAsetTakTerpakai, loadTemplate, namaSetUnik, saveTemplate, tulisJsonAtomik } from "../template";
 import { kotakKategoriBawaan } from "../teks";
 import { hapusLatarGambar } from "../hapus-latar";
@@ -505,6 +505,37 @@ function judulDariBerkas(nama: string): string {
   return huruf.length > 48 ? huruf.slice(0, 48).join("").trimEnd() + "…" : dasar || "Video";
 }
 
+const NAMA_SITUS: Readonly<Record<string, string>> = {
+  "instagram.com": "Instagram",
+  "cdninstagram.com": "Instagram",
+  "tiktok.com": "TikTok",
+  "tiktokcdn.com": "TikTok",
+  "tiktokv.com": "TikTok",
+  "youtube.com": "YouTube",
+  "youtu.be": "YouTube",
+  "googlevideo.com": "YouTube",
+  "facebook.com": "Facebook",
+  "fb.watch": "Facebook",
+  "fbcdn.net": "Facebook",
+  "x.com": "X",
+  "twitter.com": "X",
+  "twimg.com": "X",
+  "threads.net": "Threads",
+  "threads.com": "Threads",
+};
+
+/** Judul item Ambil ke Stok: judul dari Galeri Konten (dirapikan), atau "Video <situs>". */
+function judulAmbil(judul: string | null | undefined, url: string): string {
+  // Karakter kendali & baris baru dibuang; spasi dirapatkan; maksimal 60 huruf.
+  const t = String(judul ?? "").replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+  if (t) {
+    const huruf = Array.from(t);
+    return huruf.length > 60 ? huruf.slice(0, 60).join("").trimEnd() + "…" : t;
+  }
+  const nama = NAMA_SITUS[situs(url)];
+  return nama ? `Video ${nama}` : "Video dari tautan";
+}
+
 /** Job yang masih diproses (queued/downloading/rendering) milik akun, atau null. */
 /** Job Kompres Video berjalan di jalurnya sendiri — tidak memblokir Edit Otomatis. */
 const jobKompres = (j: Job) => (j as Record<string, unknown>).jenis === "kompres";
@@ -516,19 +547,24 @@ const jobBlur = (j: Job) => (j as Record<string, unknown>).jenis === "blur";
 /** Video pratinjau Studio Template: bukan video berita, tidak masuk Stok. */
 const jobPratinjauStudio = (j: Job) => (j as Record<string, unknown>).jenis === "pratinjau";
 const jobSampingan = (j: Job) => jobKompres(j) || jobHapusLatar(j) || jobBlur(j) || jobPratinjauStudio(j);
+/**
+ * Ambil ke Stok (17 Okt 2026): video dari tautan Galeri Konten masuk Stok tanpa diedit. Ikut daftar
+ * `jobs` (halaman Stok memantau progresnya) tetapi BUKAN "job" Edit Otomatis dan tidak memakai template.
+ */
+const jobAmbil = (j: Job) => (j as Record<string, unknown>).jenis === "ambil";
 
 async function jobAktif(a: string): Promise<Job | null> {
   for (const j of await daftarJob(50, a)) {
-    if (STATUS_AKTIF_JOB.includes(j.status) && !jobSampingan(j)) return segarkanKalauTerlantar(j);
+    if (STATUS_AKTIF_JOB.includes(j.status) && !jobSampingan(j) && !jobAmbil(j)) return segarkanKalauTerlantar(j);
   }
   return null;
 }
 
-/** Semua job aktif pemilik (akun tim bisa banyak), terbaru dulu. */
-async function semuaJobAktif(a: string): Promise<Job[]> {
+/** Semua job aktif pemilik (akun tim bisa banyak), terbaru dulu. `denganAmbil` = ikutkan Ambil ke Stok. */
+async function semuaJobAktif(a: string, denganAmbil = true): Promise<Job[]> {
   const hasil: Job[] = [];
   for (const j of await daftarJob(Math.max(50, maksJobAktif(a) * 3), a)) {
-    if (!STATUS_AKTIF_JOB.includes(j.status) || jobSampingan(j)) continue;
+    if (!STATUS_AKTIF_JOB.includes(j.status) || jobSampingan(j) || (!denganAmbil && jobAmbil(j))) continue;
     const segar = await segarkanKalauTerlantar(j);
     if (STATUS_AKTIF_JOB.includes(segar.status)) hasil.push(segar);
   }
@@ -540,7 +576,8 @@ async function dipakaiJobAktif(a: string, url: string): Promise<boolean> {
 }
 
 function ringkasJob(status: Job): Record<string, unknown> {
-  const kunci = ["job_id", "status", "progress", "message", "error", "durasi", "size", "created", "sumber_url", "texts", "anggota"];
+  // "jenis" & "judul": membedakan Ambil ke Stok (jenis "ambil") dari video Edit Otomatis di daftar antrean.
+  const kunci = ["job_id", "status", "progress", "message", "error", "durasi", "size", "created", "sumber_url", "texts", "anggota", "jenis", "judul"];
   return Object.fromEntries(kunci.map((k) => [k, (status as Record<string, unknown>)[k] ?? null]));
 }
 
@@ -858,7 +895,8 @@ export function pasangRuteTvr(r: Router): void {
     const p = penggunaTvr(pm);
     const a = akun(p);
     await denganKunci(a, async () => {
-      const pakai = (await semuaJobAktif(a)).length;
+      // Ambil ke Stok tidak memakai template — tidak menghalangi.
+      const pakai = (await semuaJobAktif(a, false)).length;
       if (pakai > 0) {
         throw new GalatHttp(409, `Masih ada ${pakai} video di antrean yang memakai template ini. Batalkan atau tunggu selesai dulu.`);
       }
@@ -1382,6 +1420,139 @@ export function pasangRuteTvr(r: Router): void {
 
   // ---- STOK VIDEO -------------------------------------------------
   r.get(`${A}/stok`, async (pm) => stokDanAntrean(penggunaTvr(pm)));
+
+  // ---- AMBIL KE STOK (17 Okt 2026) --------------------------------
+  // Video dari Galeri Konten (tautan postingan sosmed) masuk Stok TANPA diedit: job "ambil" di antrean
+  // bersama → worker mengunduh (yt-dlp, penjaga SSRF & daftar situs) → output.mp4 → item Stok
+  // sumber "tautan". Didaftarkan SEBELUM rute stok/{id} (rute pertama yang cocok menang).
+  const AmbilBody = z.object({
+    url: z.string().trim().min(5).max(2000),
+    judul: z.string().max(200).nullish(),
+  });
+
+  function ringkasAmbil(j: Job, antrean: unknown = null): Record<string, unknown> {
+    const r = j as Record<string, unknown>;
+    return {
+      id: j.job_id,
+      job_id: j.job_id,
+      status: j.status,
+      progress: j.progress ?? 0,
+      judul: r.judul ?? "Video",
+      sumber_url: j.sumber_url ?? null,
+      durasi: j.durasi ?? null,
+      size: j.size ?? null,
+      created: j.created ?? null,
+      log: j.message ?? null,
+      error: j.error ?? null,
+      antrean,
+    };
+  }
+
+  /** Yang sedang diambil, plus yang gagal/dibatalkan < 6 jam (yang selesai sudah ada di Stok). */
+  async function daftarAmbil(a: string): Promise<Record<string, unknown>[]> {
+    const hasil: Record<string, unknown>[] = [];
+    const peta = await petaAntrean();
+    for (const mentah of await daftarJob(100, a)) {
+      if (!jobAmbil(mentah)) continue;
+      const j = await segarkanKalauTerlantar(mentah);
+      const aktif = STATUS_AKTIF_JOB.includes(j.status);
+      if (!aktif && !(j.status === "error" || j.status === "dibatalkan")) continue;
+      if (!aktif && Date.now() / 1000 - Number(j.created ?? 0) > 6 * 3600) continue;
+      hasil.push(ringkasAmbil(j, aktif && j.status === "queued" ? (peta.get(j.job_id) ?? null) : null));
+    }
+    return hasil;
+  }
+
+  async function ambilMilik(p: Pengguna, id: string): Promise<Job> {
+    let j: Job;
+    try {
+      j = await bacaStatus(id);
+    } catch (e) {
+      if (e instanceof GalatVideo) throw new GalatHttp(404, "Video tidak ditemukan.");
+      throw e;
+    }
+    const pembuat = String((j as Record<string, unknown>).anggota ?? "");
+    if (String(j.owner ?? "") !== akun(p) || !jobAmbil(j) || (p.anggota && pembuat && pembuat !== p.anggota)) {
+      throw new GalatHttp(404, "Video tidak ditemukan.");
+    }
+    return j;
+  }
+
+  r.get(`${A}/stok/ambil`, async (pm) => ({ ambil: await daftarAmbil(akun(penggunaTvr(pm))) }));
+
+  r.post(`${A}/stok/ambil`, async (pm) => {
+    const p = penggunaTvr(pm);
+    const a = akun(p);
+    const body = await bacaJson(pm, AmbilBody);
+    // Hanya tautan situs video publik (bukan upload:// atau alamat internal): periksaUrl = penjaga SSRF
+    // + daftar situs VIDEO_SITUS_DIIZINKAN. Ditolak = 400.
+    let url: string;
+    try {
+      url = await periksaUrl(body.url);
+    } catch (e) {
+      return tangani(e);
+    }
+    // Situs yang baru menolak 429 tidak ditembak lagi sebelum jedanya habis (worker memeriksanya lagi).
+    try {
+      await tolakKalauDitahan(url);
+    } catch (e) {
+      if (e instanceof GalatVideo) throw new GalatHttp(429, e.message);
+      throw e;
+    }
+    const judul = judulAmbil(body.judul, url);
+    const id = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+    await denganKunci(a, async () => {
+      const kembar = (await semuaJobAktif(a)).find((j) => jobAmbil(j) && j.sumber_url === url);
+      if (kembar) throw new GalatHttp(409, "Video dari tautan ini sedang diambil ke Stok.");
+      await pastikanAntreanMuat(1, p, maksJobAktif(a));
+      await pastikanStokMuat(a);
+      await pastikanKuota(p);
+      await tulisStatus(id, {
+        status: "queued",
+        progress: 0,
+        owner: a,
+        jenis: "ambil",
+        url,
+        sumber_url: url,
+        template_id: "",
+        texts: {},
+        output: null,
+        error: null,
+        judul,
+        sumber_stok: "tautan",
+        // Akun tim: catat anggota pembuatnya (antrean tim & hak membatalkan).
+        ...(p.anggota ? { anggota: p.anggota } : {}),
+        log: "Masuk antrean ambil video.",
+      });
+      await kirimRender({ job_id: id, url, template_id: "", texts: {}, jenis: "ambil" });
+    });
+    lupakan(a);
+    return { job_id: id, status: "queued", judul, antrean: await posisiAntrean(id) };
+  });
+
+  r.get(`${A}/stok/ambil/{id}`, async (pm) => {
+    const p = penggunaTvr(pm);
+    const j = await segarkanKalauTerlantar(await ambilMilik(p, pm.params.id));
+    return ringkasAmbil(j, j.status === "queued" ? await posisiAntrean(j.job_id) : null);
+  });
+
+  r.delete(`${A}/stok/ambil/{id}`, async (pm) => {
+    // Batalkan pengambilan (atau bersihkan yang gagal). Yang sudah jadi dihapus lewat DELETE stok/{id}.
+    const p = penggunaTvr(pm);
+    const a = akun(p);
+    const j = await ambilMilik(p, pm.params.id);
+    if (STATUS_BERJALAN_JOB.includes(j.status)) {
+      await mintaBatal(j.job_id);
+      await tulisStatus(j.job_id, { log: "Dibatalkan pembuatnya." });
+    } else if (j.status === "done") {
+      throw new GalatHttp(409, "Video ini sudah masuk Stok — hapus dari Stok bila tidak dipakai.");
+    } else {
+      if (j.status === "queued") await cabutTugas(j);
+      await buangJob(j.job_id);
+    }
+    lupakan(a);
+    return { ambil: await daftarAmbil(a) };
+  });
 
   /** Satu item stok milik akun ini (status done), atau galat. */
   async function stokMilik(a: string, id: string): Promise<Job> {

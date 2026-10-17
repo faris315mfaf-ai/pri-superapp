@@ -113,6 +113,13 @@ rahasia (password, kunci API, isi env) di berkas ini atau di repo.**
   keamanan akun, orientasi wajib — `src/lib/hanya-lihat.ts`); `/api/autoedit` (di luar proxy) menjaga sendiri.
   Dibuat master lewat Panel Master → Akun Baru. Wajib `sql/81_role_superuser.sql`. Rute GET yang menulis (sinkron
   latar) tetap jalan — bukan aksi pengguna.
+- **Unggah dari video internal** (17 Okt 2026): anggota (TVR Saya → Unggah → sumber "Video internal",
+  `src/features/tvr-ku/pilih-video-internal.tsx`) memposting tanpa unggah ulang berkas: Materi Video Wajib (otomatis
+  `perintah_id`), Official TV Rakyat (`hasil_render_url` disetujui, berumur pendek), Pustaka Video (baru, `sql/83`,
+  dikelola tim TV/master lewat `panel-pustaka-video.tsx`, rute `/api/tv/pustaka-video`). Resolver `src/lib/video-internal.ts`,
+  daftar `/api/tvr/video-internal`, `/api/tvr/unggah` field `sumber_internal` (`video_path` kosong → berkas bersama tidak
+  ikut dihapus pembersih). Galeri Konten: tombol "Ambil ke Stok Video" → mesin `POST /api/tvr/stok/ambil` (job `ambil`,
+  yt-dlp tanpa render, `src/mesin-video/ambil.ts`) → muncul di Stok (`sumber_stok: "tautan"`).
 - **Tutorial interaktif**: mesin `src/features/tur/lapisan-tur.tsx`, langkah di `src/lib/tur.ts`
   (penanda `data-tur` di komponen asli).
 - **Akun TIM TV Rakyat Official**: identitas mesin `900000001` (`ID_TIM` di `src/lib/autoedit.ts`),

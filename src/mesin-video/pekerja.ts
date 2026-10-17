@@ -27,6 +27,7 @@ import { loadTemplate } from "./template";
 import { downloadSource, pasangRedisBatas } from "./unduh";
 import { bersihkanJobLama } from "./volume";
 import { siapkanContoh } from "./contoh-video";
+import { siapkanVideoStok } from "./ambil";
 
 /** Durasi hasil render dalam detik; 0 kalau tidak terbaca. */
 async function durasiVideo(berkas: string): Promise<number> {
@@ -487,8 +488,73 @@ export async function pratinjauJob(m: MuatanRender): Promise<{ job_id: string; s
   }
 }
 
-/** Satu pintu worker: render template, Kompres Video, Hapus Latar Boom, Blur Watermark, Pratinjau Studio. */
+/**
+ * AMBIL KE STOK (17 Okt 2026): video dari tautan Galeri Konten → Stok Video tanpa diedit. Unduhan lewat
+ * downloadSource (penjaga SSRF, daftar situs, batas MB, penahan 429), lalu ../ambil.ts menyiapkan
+ * output.mp4 (H.264 dibungkus ulang, selain itu di-encode). Job "done" + output = item Stok
+ * (sumber_stok "tautan", ditulis API saat job dibuat).
+ */
+export async function ambilJob(m: MuatanRender): Promise<{ job_id: string; status: string; [k: string]: unknown }> {
+  const jobId = m.job_id;
+  const folder = jobPath(jobId);
+  const catat = (teks: string) => tulisStatus(jobId, { log: teks }).then(() => undefined);
+  try {
+    let keadaan: string | null;
+    try {
+      keadaan = (await bacaStatus(jobId)).status;
+    } catch (e) {
+      if (!(e instanceof GalatVideo)) throw e;
+      keadaan = null;
+    }
+    // Job yang dibuang/dibatalkan selagi antre tidak dikerjakan (catch di bawah tak boleh menghidupkannya lagi).
+    if (keadaan !== "queued") return { job_id: jobId, status: keadaan || "hilang" };
+    if (await dimintaBatal(jobId)) {
+      await lupakanBatal(jobId);
+      await tulisStatus(jobId, { status: "dibatalkan", progress: 0, log: "Dihentikan sebelum mulai." });
+      return { job_id: jobId, status: "dibatalkan" };
+    }
+    await tulisStatus(jobId, { status: "downloading", progress: 0, task_id: jobId, mulai_proses: Date.now() / 1000 });
+    const sumber = await downloadSource(m.url, folder, catat);
+    // Unduhan tidak bisa dihentikan di tengah; permintaan batal dipatuhi begitu selesai.
+    if (await dimintaBatal(jobId)) throw new Dibatalkan("Pengambilan video dihentikan.");
+    await tulisStatus(jobId, { status: "rendering", progress: 50, log: "Menyiapkan video untuk Stok…" });
+    const hasil = await siapkanVideoStok(sumber, folder, await durasiVideo(sumber), {
+      progress: (p) => tulisStatus(jobId, { progress: p }).then(() => undefined),
+      batal: () => dimintaBatal(jobId),
+      log: catat,
+    });
+    hapusDiam(sumber);
+    await tulisStatus(jobId, {
+      status: "done",
+      progress: 100,
+      output: path.basename(hasil.berkas),
+      url: "",
+      durasi: await durasiVideo(hasil.berkas),
+      size: hasil.size,
+      disalin: hasil.disalin,
+      log: "Video masuk Stok — siap diunggah.",
+    });
+    bersihkanBerkasKerja(folder);
+    await bersihkanJobLama();
+    return { job_id: jobId, status: "done", output: hasil.berkas };
+  } catch (e) {
+    const dibatal = e instanceof Dibatalkan;
+    const pesan = e instanceof GalatVideo ? e.message : e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    if (dibatal) await lupakanBatal(jobId);
+    else if (!(e instanceof GalatVideo)) console.error(`Ambil ke stok ${jobId} gagal tak terduga`, e);
+    else console.warn(`Ambil ke stok ${jobId} gagal: ${pesan}`);
+    await tulisStatus(
+      jobId,
+      dibatal ? { status: "dibatalkan", log: "Pengambilan video dihentikan." } : { status: "error", error: pesan, log: `Gagal: ${pesan}` },
+    );
+    await bersihkanSetelahGagal(jobId, folder);
+    return { job_id: jobId, status: dibatal ? "dibatalkan" : "error", ...(dibatal ? {} : { error: pesan }) };
+  }
+}
+
+/** Satu pintu worker: render template, Kompres Video, Hapus Latar Boom, Blur Watermark, Pratinjau Studio, Ambil ke Stok. */
 function kerjakan(m: MuatanRender) {
+  if (m.jenis === "ambil") return ambilJob(m);
   if (m.jenis === "pratinjau") return pratinjauJob(m);
   if (m.jenis === "kompres") return kompresJob(m);
   if (m.jenis === "blur") return blurJob(m);

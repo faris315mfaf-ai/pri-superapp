@@ -39,6 +39,9 @@ function aksiAudit(metode: string, j: string[]): { jenis: JenisAudit; ringkasan:
     if (metode === "DELETE" && a1 === "template" && !a2) return { jenis: "template", ringkasan: "Menghapus template Edit Otomatis" };
     if (metode === "PUT" && a1 === "studio" && !a2) return { jenis: "template", ringkasan: "Menyimpan template di Studio Template" };
     if (metode === "POST" && a1 === "stok" && !a2) return { jenis: "stok_tambah", ringkasan: "Menambah video ke Stok" };
+    // Ambil ke Stok (17 Okt 2026): video dari tautan Galeri Konten masuk Stok tanpa diedit; tautannya ikut di detail.
+    if (metode === "POST" && a1 === "stok" && a2 === "ambil" && !a3) return { jenis: "stok_tambah", ringkasan: "Mengambil video dari Galeri Konten ke Stok" };
+    if (metode === "DELETE" && a1 === "stok" && a2 === "ambil") return { jenis: "stok_hapus", ringkasan: "Membatalkan ambil video ke Stok" };
     if (metode === "DELETE" && a1 === "stok" && a2) return { jenis: "stok_hapus", ringkasan: "Menghapus video dari Stok" };
   }
   if (akar === "video" && metode === "POST" && a1 === "jobs" && (!a2 || a2 === "batch")) {

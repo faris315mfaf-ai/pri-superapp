@@ -11,6 +11,10 @@
 //   (schedule_date bila jadwal) → simpan riwayat tvrku_post +
 //   hapus_media_pada = tayang + 2 jam.
 // GET  → riwayat post saya (+ status berkas).
+// 17 Okt 2026: POST {aksi:"post", sumber_internal:{jenis,id}, ...} memposting
+//   video yang SUDAH ADA di sistem (bahan Video Wajib / Official / Pustaka —
+//   lib/video-internal) tanpa unggah ulang; riwayatnya video_path "" dan
+//   tanpa jadwal sapu karena berkasnya milik bersama.
 //
 // Media DIHAPUS otomatis dari Cloudinary 2 jam setelah tayang (postingan
 // di sosmed TETAP) — penyapu tanpa-cron. Jalur lama {aksi:"siapkan"} +
@@ -52,6 +56,13 @@ import { naikkanSinyal } from "@/lib/sinyal-pribadi";
 import { catatAudit } from "@/lib/audit";
 import { akhiriAktivitas, mulaiAktivitas } from "@/lib/dunia";
 import { ambilKunciUnggah } from "@/lib/upload-post";
+import {
+  bacaSumberInternal,
+  cekBatasBerlaku,
+  urlSumberInternal,
+  type JenisInternal,
+  type SumberInternal,
+} from "@/lib/video-internal";
 
 /** Batas berkas penyimpanan video (bucket "tvrku" & FILE_SIZE_LIMIT Supabase sendiri). */
 const BATAS_PENYIMPANAN_MB = 100;
@@ -250,6 +261,12 @@ export async function POST(request: Request) {
       perintah_id?: number | string;
       platforms?: string[];
       jadwal?: string;
+      /**
+       * VIDEO INTERNAL (17 Okt 2026): video yang sudah ada di sistem (bahan
+       * Video Wajib / Official / Pustaka) — pengganti r2_key/path/video_url/
+       * video_link, tidak boleh digabung dengan salah satunya.
+       */
+      sumber_internal?: { jenis: JenisInternal; id: string } | null;
     };
     const db = supabase();
 
@@ -360,6 +377,20 @@ export async function POST(request: Request) {
       const r2Key = String(body.r2_key ?? "").trim();
       const videoLink = String(body.video_link ?? "").trim();
       const path = String(body.path ?? "");
+      // VIDEO INTERNAL (17 Okt 2026): berkas milik bersama (bahan perintah,
+      // Official, Pustaka) — anggota tidak mengunggah apa pun. Satu sumber
+      // saja per posting supaya tidak ada tebakan berkas mana yang dipakai.
+      const sumberMinta = bacaSumberInternal(body.sumber_internal);
+      if (sumberMinta && (videoUrlCloud || publicId || r2Key || videoLink || path)) {
+        throw Object.assign(
+          new Error("Pilih satu sumber video saja: video internal atau berkas unggahan."),
+          { status: 400 },
+        );
+      }
+      const internal: SumberInternal | null = sumberMinta
+        ? await urlSumberInternal(user, sumberMinta)
+        : null;
+      const pakaiInternal = internal !== null;
       // PALUGODAM (2 Sep 2026): boleh menyerahkan TAUTAN video hasil
       // editannya sendiri — tanpa unggah berkas sama sekali, jadi tidak
       // memakai penyimpanan maupun kuota lalu-lintas kita.
@@ -367,7 +398,9 @@ export async function POST(request: Request) {
       const pakaiR2 = !pakaiLink && Boolean(r2Key);
       const pakaiCloudinary = !pakaiLink && !pakaiR2 && Boolean(videoUrlCloud);
 
-      if (pakaiLink) {
+      if (pakaiInternal) {
+        // Sudah diverifikasi urlSumberInternal (ada, aktif, berkasnya tersedia).
+      } else if (pakaiLink) {
         if (!adalahPalugodam(user)) {
           throw Object.assign(
             new Error("Kirim lewat tautan khusus anggota Divisi PALUGODAM."),
@@ -459,7 +492,11 @@ export async function POST(request: Request) {
       // `keyword` yang berbeda diabaikan, jadi satu perintah tidak mungkin
       // pecah ke kategori lain.
       let perintahId = 0;
-      const perintahMentah = Number(body.perintah_id ?? 0);
+      // Bahan Video Wajib SELALU membawa perintahnya sendiri (kiriman
+      // perintah_id lain diabaikan) — kategori ikut terkunci di bawah.
+      const perintahMentah = Number(
+        internal?.perintah_id && sumberMinta?.jenis === "wajib" ? internal.perintah_id : (body.perintah_id ?? 0),
+      );
       if (Number.isFinite(perintahMentah) && perintahMentah > 0) {
         const perintah = await muatPerintah(Math.floor(perintahMentah));
         if (!perintah || !perintah.aktif) {
@@ -474,6 +511,9 @@ export async function POST(request: Request) {
         perintahId = Number(perintah.id);
         kategori = perintah.kategori.slice(0, 120);
       }
+      // Video Pustaka/Official yang sudah berkategori mengisi kategori bila
+      // anggota belum memilih (tidak mengunci — pilihan anggota tetap menang).
+      if (!kategori && internal?.kategori) kategori = internal.kategori.slice(0, 120);
       if (!kategori) {
         throw Object.assign(new Error("Pilih kategori videonya dulu."), { status: 400 });
       }
@@ -530,15 +570,26 @@ export async function POST(request: Request) {
       // jadwalnya dibuka (15 Sep 2026).
       let jadwal: string | undefined;
       if (body.jadwal) {
-        const p = periksaJadwal(body.jadwal, !pakaiLink && !pakaiCloudinary);
+        const p = periksaJadwal(
+          body.jadwal,
+          internal ? internal.bertanda : !pakaiLink && !pakaiCloudinary,
+        );
         if (!p.sah) throw Object.assign(new Error(p.pesan), { status: 400 });
         jadwal = p.iso;
+      }
+      // Berkas Official disapu 1–6 hari setelah dibuat: jadwal harus jatuh
+      // sebelum berkasnya hilang (upload-post mengunduh saat menerbitkan).
+      if (internal?.berlaku_sampai) {
+        const pesan = cekBatasBerlaku(Date.parse(internal.berlaku_sampai), jadwal ? Date.parse(jadwal) : null);
+        if (pesan) throw Object.assign(new Error(pesan), { status: 400 });
       }
 
       // URL yang diserahkan ke upload-post. R2: tautan bertanda tangan
       // berumur 7 hari (batas SigV4) — cukup untuk post langsung maupun
       // terjadwal, karena jadwal dibatasi 7 hari juga.
-      const videoUrl = pakaiLink
+      const videoUrl = internal
+        ? internal.url
+        : pakaiLink
         ? videoLink
         : pakaiR2
           ? presignR2("GET", r2Key, MAKS_UMUR_URL_DETIK)
@@ -558,7 +609,11 @@ export async function POST(request: Request) {
       // lolos begitu saja (riwayat baru ditulis SETELAH unggah selesai).
       // Posting dianggap identik bila video + platform + jadwalnya sama;
       // jadwal berbeda atau platform berbeda tetap boleh.
-      const penunjukBerkas = pakaiLink ? videoLink : pakaiR2 ? r2Key : pakaiCloudinary ? publicId : path;
+      // Video internal: penanda stabil ("wajib:12") — URL bertanda tangannya
+      // berganti setiap kali dibuat, jadi tak bisa dipakai sebagai sidik.
+      const penunjukBerkas = internal
+        ? internal.penanda
+        : pakaiLink ? videoLink : pakaiR2 ? r2Key : pakaiCloudinary ? publicId : path;
       const platformUrut = [...platforms].sort().join(",");
       const sidikJadwal = jadwal ? String(Date.parse(jadwal)) : "-";
       const kunciDobel = createHash("sha1")
@@ -578,7 +633,7 @@ export async function POST(request: Request) {
           .from("tvrku_post")
           .select("platforms, jadwal")
           .eq("user_id", Number(user.id))
-          .eq(pakaiLink ? "video_url" : "video_path", penunjukBerkas)
+          .eq(internal ? "hasil->>sumber_internal" : pakaiLink ? "video_url" : "video_path", penunjukBerkas)
           .gte("dibuat_pada", sejak)
           .limit(10);
         const kembar = (baru ?? []).some((b) => {
@@ -623,9 +678,11 @@ export async function POST(request: Request) {
       // cloud), dan tanpa ini kategori setiap unggahan hilang diam-diam —
       // insight per kategori & laporan otomatis tidak tahu videonya milik
       // kategori apa. Rekonsiliasi KPI mempertahankan kunci ini.
+      // sumber_internal: penanda video bersama (pagar dobel + jejak asal video).
+      const tambahanSumber = internal ? { sumber_internal: internal.penanda } : {};
       const hasilSimpan = gagalAwal.length
-        ? { ...hasil.mentah, kategori, ...(perintahId ? { perintah_id: perintahId } : {}), kpi_gagal: gagalAwal.map((g) => g.platform), kpi_gagal_alasan: Object.fromEntries(gagalAwal.map((g) => [g.platform, g.pesan])) }
-        : { ...hasil.mentah, kategori, ...(perintahId ? { perintah_id: perintahId } : {}) };
+        ? { ...hasil.mentah, kategori, ...(perintahId ? { perintah_id: perintahId } : {}), ...tambahanSumber, kpi_gagal: gagalAwal.map((g) => g.platform), kpi_gagal_alasan: Object.fromEntries(gagalAwal.map((g) => [g.platform, g.pesan])) }
+        : { ...hasil.mentah, kategori, ...(perintahId ? { perintah_id: perintahId } : {}), ...tambahanSumber };
 
       // Berkas dihapus 2 jam setelah TAYANG: post langsung = sekarang+2j;
       // terjadwal = jadwal+2j (upload-post butuh URL-nya masih hidup
@@ -643,7 +700,9 @@ export async function POST(request: Request) {
           // video_path menampung penunjuk berkas sesuai generasinya:
           // R2 → key objek, Cloudinary → public_id, lama → path bucket.
           // Kiriman TAUTAN tidak punya berkas milik kita → kosong.
-          video_path: pakaiLink
+          // Video INTERNAL: berkas bersama, bukan milik anggota → kosong,
+          // supaya penyapu media tidak pernah menghapusnya.
+          video_path: pakaiLink || internal
             ? ""
             : pakaiR2
               ? r2Key
@@ -652,8 +711,9 @@ export async function POST(request: Request) {
                 : path,
           video_url: videoUrl,
           // Ukuran berkas dicatat untuk pantauan kuota Panel Master.
+          // Video internal tidak memakai penyimpanan anggota → tidak dihitung.
           ukuran_byte:
-            Number.isFinite(Number(body.ukuran)) && Number(body.ukuran) > 0
+            !internal && Number.isFinite(Number(body.ukuran)) && Number(body.ukuran) > 0
               ? Math.floor(Number(body.ukuran))
               : null,
           jadwal: jadwal ?? null,
@@ -661,7 +721,8 @@ export async function POST(request: Request) {
           request_id: hasil.request_id,
           // Kiriman TAUTAN: berkasnya milik anggota di layanan lain —
           // sistem tidak berhak menghapusnya, jadi tanpa jadwal sapu.
-          hapus_media_pada: pakaiLink ? null : hapusPada,
+          // Video INTERNAL: berkas bersama — tidak pernah dijadwalkan sapu.
+          hapus_media_pada: pakaiLink || internal ? null : hapusPada,
         };
       if (await kolomTabelAda("tvrku_post", "keyword")) isiRiwayat.keyword = kategori;
       // Tanpa kolomTabelAda: hasilnya disimpan seumur proses, jadi SQL 76 yang dijalankan sesudahnya
@@ -682,6 +743,7 @@ export async function POST(request: Request) {
           tvrku_post_id: baris?.id ?? null,
           gagal: gagalAwal.map((g) => g.platform),
           lewat_tautan: pakaiLink,
+          sumber_internal: internal?.penanda ?? null,
         },
       });
       // 5 Sep 2026: bonus koin unggah video.
